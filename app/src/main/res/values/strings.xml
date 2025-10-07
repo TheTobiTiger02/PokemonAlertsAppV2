@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">PokemonAlertsV2</string>
+    <string name="notification_channel_name">Pokemon Alerts</string>
+    <string name="notification_channel_description">Notifications for new Pokemon Go alerts nearby</string>
+    <string name="notification_default_body">New Pokemon alert available</string>
+    <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
+    <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
+    <string name="no_maps_app">No maps app found</string>
+    <string name="open_in_maps">Open in Google Maps</string>
+    <string name="refresh_alerts">Refresh alerts</string>
+    <string name="close">Close</string>
+    <string name="alert_end_time">Ends: %1$s</string>
 </resources>
