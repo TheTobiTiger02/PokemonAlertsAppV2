@@ -10,4 +10,9 @@
     <string name="refresh_alerts">Refresh alerts</string>
     <string name="close">Close</string>
     <string name="alert_end_time">Ends: %1$s</string>
+    <string name="exact_alarm_permission_title">Keep background alerts active</string>
+    <string name="exact_alarm_permission_message">Allow exact background alarms so we can check for new Pokemon alerts even when the app is closed.</string>
+    <string name="exact_alarm_permission_positive">Open settings</string>
+    <string name="exact_alarm_permission_negative">Maybe later</string>
+    <string name="exact_alarm_permission_granted">Exact alarms enabled. Background checks are now active.</string>
 </resources>

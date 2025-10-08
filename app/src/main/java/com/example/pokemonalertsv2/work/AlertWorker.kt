@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.work
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -10,8 +11,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.notifications.AlertNotifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
@@ -31,9 +32,20 @@ class AlertWorker(
                 AlertNotifier.notifyAlerts(applicationContext, newAlerts)
                 repository.markAlertsAsSeen(newAlerts)
             }
+            newAlerts
         }.fold(
-            onSuccess = { Result.success() },
+            onSuccess = { newAlerts ->
+                if (newAlerts.isNotEmpty()) {
+                    Log.d(TAG, "Delivered ${newAlerts.size} new alerts via background worker")
+                } else {
+                    Log.d(TAG, "Background worker ran with no new alerts")
+                }
+                AlertAlarmScheduler.onWorkFinished(applicationContext)
+                Result.success()
+            },
             onFailure = { exception ->
+                Log.w(TAG, "AlertWorker failed", exception)
+                AlertAlarmScheduler.onWorkFinished(applicationContext)
                 if (runAttemptCount >= MAX_RETRIES) Result.failure() else Result.retry()
             }
         )
@@ -43,6 +55,7 @@ class AlertWorker(
         private const val PERIODIC_WORK_NAME = "pokemon_alerts_periodic"
         private const val ONCE_WORK_NAME = "pokemon_alerts_once"
         private const val MAX_RETRIES = 3
+        private const val TAG = "AlertWorker"
         private val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
