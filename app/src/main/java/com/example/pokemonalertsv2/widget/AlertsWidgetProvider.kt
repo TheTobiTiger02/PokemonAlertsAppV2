@@ -81,13 +81,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     private fun buildViews(context: Context, alerts: List<com.example.pokemonalertsv2.data.PokemonAlert>): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_alerts)
 
-        // Title click opens app
+        // Title/logo click opens app
         val openIntent = Intent(context, MainActivity::class.java)
         val openPending = PendingIntent.getActivity(
             context, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
         views.setOnClickPendingIntent(R.id.tv_title, openPending)
+        views.setOnClickPendingIntent(R.id.img_logo, openPending)
 
         // Refresh button
         val refreshPending = PendingIntent.getBroadcast(
