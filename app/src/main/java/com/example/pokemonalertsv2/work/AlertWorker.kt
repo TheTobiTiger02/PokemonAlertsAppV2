@@ -14,6 +14,7 @@ import androidx.work.WorkerParameters
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import kotlinx.coroutines.Dispatchers
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
@@ -41,6 +42,8 @@ class AlertWorker(
                     Log.d(TAG, "Background worker ran with no new alerts")
                 }
                 AlertAlarmScheduler.onWorkFinished(applicationContext)
+                // Trigger widget refresh regardless of new alerts so timestamps/UI stay current
+                AlertsWidgetProvider.updateFromWorker(applicationContext)
                 Result.success()
             },
             onFailure = { exception ->
