@@ -43,6 +43,24 @@
         <receiver
             android:name=".work.AlertAlarmReceiver"
             android:exported="false" />
+
+        <receiver
+            android:name=".widget.AlertsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_REFRESH" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_TIMER_TICK" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/alerts_widget_info" />
+        </receiver>
     </application>
 
 </manifest>

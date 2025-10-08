@@ -15,4 +15,6 @@
     <string name="exact_alarm_permission_positive">Open settings</string>
     <string name="exact_alarm_permission_negative">Maybe later</string>
     <string name="exact_alarm_permission_granted">Exact alarms enabled. Background checks are now active.</string>
+    <string name="widget_title">Pokemon Alerts</string>
+    <string name="widget_updated_at">Updated %1$s</string>
 </resources>
