@@ -7,6 +7,10 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
@@ -15,6 +19,9 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import coil.ImageLoader
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,7 +86,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun buildViews(context: Context, alerts: List<com.example.pokemonalertsv2.data.PokemonAlert>): RemoteViews {
+    private suspend fun buildViews(context: Context, alerts: List<com.example.pokemonalertsv2.data.PokemonAlert>): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_alerts)
 
         // Title/logo click opens app
@@ -114,6 +121,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             rows.forEach { (row, _, _) -> views.setViewVisibility(row, android.view.View.GONE) }
         } else {
             views.setViewVisibility(R.id.tv_empty, android.view.View.GONE)
+            val imageLoader = ImageLoader(context)
+            val sizePx = (40 * context.resources.displayMetrics.density).toInt().coerceAtLeast(32)
             rows.forEachIndexed { index, triple ->
                 val (row, titleId, descId) = triple
                 val alert = alerts.getOrNull(index)
@@ -123,6 +132,35 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     val endText = if (alert.endTime.isNotBlank()) context.getString(R.string.alert_end_time, alert.endTime) else ""
                     val desc = listOfNotNull(alert.type, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
                     views.setTextViewText(descId, if (desc.isNotBlank()) desc else alert.description)
+
+                    // Load image into row's ImageView using imageUrl from API
+                    val imageUrl = alert.imageUrl
+                    val imageViewId = when (index) {
+                        0 -> R.id.row1_image
+                        1 -> R.id.row2_image
+                        else -> R.id.row3_image
+                    }
+                    if (!imageUrl.isNullOrBlank()) {
+                        try {
+                            val req = ImageRequest.Builder(context)
+                                .data(imageUrl)
+                                .size(sizePx, sizePx)
+                                .allowHardware(false)
+                                .build()
+                            val result = imageLoader.execute(req)
+                            if (result is SuccessResult) {
+                                val drawable = result.drawable
+                                val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, sizePx)
+                                views.setImageViewBitmap(imageViewId, bmp)
+                            } else {
+                                views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
+                            }
+                        } catch (_: Throwable) {
+                            views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
+                        }
+                    } else {
+                        views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
+                    }
 
                     // Row click opens specific alert details
                     val detailIntent = AlertDetailActivity.createIntent(context, alert)
@@ -141,6 +179,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
 
         return views
+    }
+
+    private fun drawableToBitmap(drawable: Drawable, size: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, size, size)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     private fun scheduleNextUpdate(context: Context) {
