@@ -14,6 +14,7 @@ import androidx.core.app.AlarmManagerCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -122,6 +123,17 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     val endText = if (alert.endTime.isNotBlank()) context.getString(R.string.alert_end_time, alert.endTime) else ""
                     val desc = listOfNotNull(alert.type, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
                     views.setTextViewText(descId, if (desc.isNotBlank()) desc else alert.description)
+
+                    // Row click opens specific alert details
+                    val detailIntent = AlertDetailActivity.createIntent(context, alert)
+                    val requestCode = (alert.uniqueId.hashCode() + index) and 0x7FFFFFFF
+                    val pending = PendingIntent.getActivity(
+                        context,
+                        requestCode,
+                        detailIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+                    )
+                    views.setOnClickPendingIntent(row, pending)
                 } else {
                     views.setViewVisibility(row, android.view.View.GONE)
                 }
