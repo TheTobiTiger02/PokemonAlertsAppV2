@@ -3,6 +3,8 @@ package com.example.pokemonalertsv2.ui.alerts
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.location.Location
+import android.location.LocationManager
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,11 +17,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ElevatedAssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,8 +42,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -46,10 +54,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +70,7 @@ fun PokemonAlertsRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val highlightedAlert = remember(uiState.alerts, uiState.highlightedAlertId) {
         uiState.alerts.firstOrNull { it.uniqueId == uiState.highlightedAlertId }
     }
@@ -78,6 +91,16 @@ fun PokemonAlertsRoute(
         }
     )
 
+    // Auto-refresh alerts every 30 seconds while the screen is STARTED
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.refreshAlerts()
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
+    }
+
     if (highlightedAlert != null) {
         AlertDetailDialog(alert = highlightedAlert, onDismiss = { viewModel.highlightAlert(null) })
     }
@@ -93,6 +116,11 @@ fun PokemonAlertsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var userLocation by remember { mutableStateOf<Location?>(null) }
+
+    LaunchedEffect(Unit) {
+        userLocation = getLastKnownLocation(context)
+    }
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -146,8 +174,15 @@ fun PokemonAlertsScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(uiState.alerts, key = { it.uniqueId }) { alert ->
+                            val distanceText: String? = userLocation?.let { loc ->
+                                val results = FloatArray(1)
+                                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                                val meters = results[0]
+                                if (meters.isNaN()) null else if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f) else String.format(Locale.getDefault(), "%.0f m", meters)
+                            }
                             AlertCard(
                                 alert = alert,
+                                distanceText = distanceText,
                                 onOpenMaps = { openMapForAlert(context, alert) },
                                 onShowDetails = { onAlertSelected(alert) }
                             )
@@ -163,6 +198,7 @@ fun PokemonAlertsScreen(
 @Composable
 private fun AlertCard(
     alert: PokemonAlert,
+    distanceText: String?,
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
     modifier: Modifier = Modifier
@@ -173,20 +209,33 @@ private fun AlertCard(
         onClick = onShowDetails
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = alert.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = alert.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!distanceText.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.padding(start = 8.dp))
+                    DistanceChip(text = distanceText)
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             AlertImage(alert = alert)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = alert.description,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+            if (alert.description.isNotBlank()) {
+                Text(
+                    text = alert.description,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Text(
                 text = stringResource(id = R.string.alert_end_time, alert.endTime),
                 style = MaterialTheme.typography.labelMedium
@@ -209,13 +258,14 @@ private fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier) {
                 .data(imageUrl)
                 .crossfade(true)
                 .build(),
-            contentDescription = "Alert location image",
+            contentDescription = stringResource(id = R.string.alert_image),
             placeholder = painterResource(id = R.drawable.ic_placeholder),
             error = painterResource(id = R.drawable.ic_placeholder),
             contentScale = ContentScale.Crop,
             modifier = modifier
                 .fillMaxWidth()
                 .height(200.dp)
+                .clip(RoundedCornerShape(12.dp))
         )
     } else {
         Box(
@@ -291,4 +341,35 @@ private fun openMapForAlert(context: Context, alert: PokemonAlert) {
     } catch (exception: ActivityNotFoundException) {
         Toast.makeText(context, context.getString(R.string.no_maps_app), Toast.LENGTH_SHORT).show()
     }
+}
+
+private fun getLastKnownLocation(context: Context): Location? {
+    return try {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (lm == null) return null
+        val providers = lm.getProviders(true)
+        var best: Location? = null
+        for (p in providers) {
+            val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
+            if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
+                best = l
+            }
+        }
+        best
+    } catch (_: Throwable) { null }
+}
+
+@Composable
+private fun DistanceChip(text: String) {
+    ElevatedAssistChip(
+        onClick = {},
+        label = { Text(text = text, style = MaterialTheme.typography.labelMedium) },
+        enabled = false,
+        colors = AssistChipDefaults.elevatedAssistChipColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            disabledContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            disabledLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    )
 }
