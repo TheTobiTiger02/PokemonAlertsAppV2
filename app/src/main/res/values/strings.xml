@@ -10,6 +10,9 @@
     <string name="refresh_alerts">Refresh alerts</string>
     <string name="close">Close</string>
     <string name="alert_end_time">Ends: %1$s</string>
+    <string name="countdown_short_prefix">%1$s left</string>
+    <string name="countdown_suffix_short">left</string>
+    <string name="widget_countdown_format">%1$s left</string>
     <string name="exact_alarm_permission_title">Keep background alerts active</string>
     <string name="exact_alarm_permission_message">Allow exact background alarms so we can check for new Pokemon alerts even when the app is closed.</string>
     <string name="exact_alarm_permission_positive">Open settings</string>

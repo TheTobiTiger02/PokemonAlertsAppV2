@@ -23,6 +23,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.util.TimeUtils
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -77,7 +78,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { repo.fetchAlerts() }
                 .onSuccess { alerts ->
-                    val topThree = alerts.sortedByDescending { it.endTime }.take(3)
+                    val topThree = alerts.sortedWith(compareByDescending<com.example.pokemonalertsv2.data.PokemonAlert> {
+                        // Prefer real time millis if available
+                        TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
+                    }.thenByDescending { it.endTime }).take(3)
                     ids.forEach { id ->
                         val views = buildViews(context, topThree)
                         appWidgetManager.updateAppWidget(id, views)
@@ -137,13 +141,18 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(row, android.view.View.VISIBLE)
                     views.setTextViewText(titleId, alert.name)
                     val endText = if (alert.endTime.isNotBlank()) context.getString(R.string.alert_end_time, alert.endTime) else ""
+                    val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
+                    val countdownText = endMillis?.let { ms ->
+                        val remaining = ms - System.currentTimeMillis()
+                        if (remaining > 0) context.getString(R.string.widget_countdown_format, TimeUtils.formatDurationShort(remaining)) else null
+                    }
                     val distanceText = lastLocation?.let { loc ->
                         val results = FloatArray(1)
                         Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
                         val meters = results[0]
                         if (meters >= 1000) String.format(Locale.getDefault(), "%.1f km", meters / 1000f) else String.format(Locale.getDefault(), "%.0f m", meters)
                     }
-                    val desc = listOfNotNull(alert.type, distanceText, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
+                    val desc = listOfNotNull(alert.type, distanceText, countdownText, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
                     views.setTextViewText(descId, if (desc.isNotBlank()) desc else alert.description)
 
                     // Load image into row's ImageView using imageUrl from API

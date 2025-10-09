@@ -61,6 +61,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.TimeUtils
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -236,10 +237,7 @@ private fun AlertCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            Text(
-                text = stringResource(id = R.string.alert_end_time, alert.endTime),
-                style = MaterialTheme.typography.labelMedium
-            )
+            CountdownAndEndTimeRow(alert = alert)
             Spacer(modifier = Modifier.height(12.dp))
             FilledTonalButton(onClick = onOpenMaps) {
                 Text(text = stringResource(id = R.string.open_in_maps))
@@ -324,10 +322,7 @@ private fun AlertDetailContent(alert: PokemonAlert, onOpenMaps: () -> Unit) {
         alert.type?.takeIf { it.isNotBlank() }?.let { type ->
             Text(text = type, style = MaterialTheme.typography.labelMedium)
         }
-        Text(
-            text = stringResource(id = R.string.alert_end_time, alert.endTime),
-            style = MaterialTheme.typography.labelMedium
-        )
+        CountdownAndEndTimeRow(alert = alert)
         FilledTonalButton(onClick = onOpenMaps) {
             Text(text = stringResource(id = R.string.open_in_maps))
         }
@@ -372,4 +367,45 @@ private fun DistanceChip(text: String) {
             labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
         )
     )
+}
+
+@Composable
+private fun CountdownAndEndTimeRow(alert: PokemonAlert) {
+    val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(endMillis) {
+        // Tick once per second while countdown is active
+        while (true) {
+            now = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+    val remaining = endMillis?.let { it - now } ?: -1
+    val remainingText = if (endMillis != null) {
+        if (remaining > 0) TimeUtils.formatDurationShort(remaining) else "0s"
+    } else null
+
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (!remainingText.isNullOrBlank()) {
+            ElevatedAssistChip(
+                onClick = {},
+                enabled = false,
+                label = { Text(text = stringResource(id = R.string.countdown_short_prefix, remainingText)) },
+                colors = AssistChipDefaults.elevatedAssistChipColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    disabledContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            )
+        }
+        Text(
+            text = stringResource(id = R.string.alert_end_time, alert.endTime),
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
 }
