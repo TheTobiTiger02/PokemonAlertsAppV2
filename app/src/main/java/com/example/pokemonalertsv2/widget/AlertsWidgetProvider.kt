@@ -11,7 +11,11 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.os.Build
+import android.location.Location
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.AlarmManagerCompat
@@ -122,7 +126,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         } else {
             views.setViewVisibility(R.id.tv_empty, android.view.View.GONE)
             val imageLoader = ImageLoader(context)
-            val sizePx = (40 * context.resources.displayMetrics.density).toInt().coerceAtLeast(32)
+            val sizePx = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
+            // Try to get last known location for distance display (safe: may be null if no permission)
+            val lastLocation = getLastKnownLocation(context)
+
             rows.forEachIndexed { index, triple ->
                 val (row, titleId, descId) = triple
                 val alert = alerts.getOrNull(index)
@@ -130,7 +137,13 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(row, android.view.View.VISIBLE)
                     views.setTextViewText(titleId, alert.name)
                     val endText = if (alert.endTime.isNotBlank()) context.getString(R.string.alert_end_time, alert.endTime) else ""
-                    val desc = listOfNotNull(alert.type, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
+                    val distanceText = lastLocation?.let { loc ->
+                        val results = FloatArray(1)
+                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                        val meters = results[0]
+                        if (meters >= 1000) String.format(Locale.getDefault(), "%.1f km", meters / 1000f) else String.format(Locale.getDefault(), "%.0f m", meters)
+                    }
+                    val desc = listOfNotNull(alert.type, distanceText, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
                     views.setTextViewText(descId, if (desc.isNotBlank()) desc else alert.description)
 
                     // Load image into row's ImageView using imageUrl from API
@@ -151,7 +164,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                             if (result is SuccessResult) {
                                 val drawable = result.drawable
                                 val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, sizePx)
-                                views.setImageViewBitmap(imageViewId, bmp)
+                                val rounded = roundCorners(bmp, radiusPx = (8 * context.resources.displayMetrics.density))
+                                views.setImageViewBitmap(imageViewId, rounded)
                             } else {
                                 views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
                             }
@@ -181,12 +195,40 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return views
     }
 
+    private fun getLastKnownLocation(context: Context): Location? {
+        return try {
+            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
+            if (lm == null) return null
+            val providers = lm.getProviders(true)
+            var best: Location? = null
+            for (p in providers) {
+                val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
+                if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
+                    best = l
+                }
+            }
+            best
+        } catch (_: Throwable) { null }
+    }
+
     private fun drawableToBitmap(drawable: Drawable, size: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, size, size)
         drawable.draw(canvas)
         return bitmap
+    }
+
+    private fun roundCorners(source: Bitmap, radiusPx: Float): Bitmap {
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val rect = RectF(0f, 0f, source.width.toFloat(), source.height.toFloat())
+        val path = Path()
+        path.addRoundRect(rect, radiusPx, radiusPx, Path.Direction.CW)
+        canvas.clipPath(path)
+        canvas.drawBitmap(source, 0f, 0f, paint)
+        return output
     }
 
     private fun scheduleNextUpdate(context: Context) {
