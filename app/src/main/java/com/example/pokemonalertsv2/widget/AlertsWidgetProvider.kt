@@ -7,26 +7,14 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
+import android.net.Uri
 import android.os.Build
-import android.location.Location
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.AlarmManagerCompat
-import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.MainActivity
-import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
-import com.example.pokemonalertsv2.util.TimeUtils
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -74,27 +62,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
         if (ids.isEmpty()) return
 
-        val repo = PokemonAlertsRepository.create(context)
         CoroutineScope(Dispatchers.IO).launch {
-            runCatching { repo.fetchAlerts() }
-                .onSuccess { alerts ->
-                    val topThree = alerts.sortedWith(compareByDescending<com.example.pokemonalertsv2.data.PokemonAlert> {
-                        // Prefer real time millis if available
-                        TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
-                    }.thenByDescending { it.endTime }).take(3)
-                    ids.forEach { id ->
-                        val views = buildViews(context, topThree)
-                        appWidgetManager.updateAppWidget(id, views)
-                    }
+            try {
+                ids.forEach { id ->
+                    val views = buildViews(context, id)
+                    appWidgetManager.updateAppWidget(id, views)
                 }
-                .onFailure {
-                    Log.w(TAG, "Widget update failed", it)
-                }
+                appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.list_alerts)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Widget update failed", t)
+            }
             if (scheduleNext) scheduleNextUpdate(context)
         }
     }
 
-    private suspend fun buildViews(context: Context, alerts: List<com.example.pokemonalertsv2.data.PokemonAlert>): RemoteViews {
+    private fun buildViews(context: Context, appWidgetId: Int): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_alerts)
 
         // Title/logo click opens app
@@ -117,127 +99,26 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
         views.setTextViewText(R.id.tv_last_updated, context.getString(R.string.widget_updated_at, time))
 
-        // Show rows or empty
-        val rows = listOf(
-            Triple(R.id.row1, R.id.row1_title, R.id.row1_desc),
-            Triple(R.id.row2, R.id.row2_title, R.id.row2_desc),
-            Triple(R.id.row3, R.id.row3_title, R.id.row3_desc)
-        )
+        // Empty view
+        views.setEmptyView(R.id.list_alerts, R.id.tv_empty)
 
-        if (alerts.isEmpty()) {
-            views.setViewVisibility(R.id.tv_empty, android.view.View.VISIBLE)
-            rows.forEach { (row, _, _) -> views.setViewVisibility(row, android.view.View.GONE) }
-        } else {
-            views.setViewVisibility(R.id.tv_empty, android.view.View.GONE)
-            val imageLoader = ImageLoader(context)
-            val sizePx = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
-            // Try to get last known location for distance display (safe: may be null if no permission)
-            val lastLocation = getLastKnownLocation(context)
-
-            rows.forEachIndexed { index, triple ->
-                val (row, titleId, descId) = triple
-                val alert = alerts.getOrNull(index)
-                if (alert != null) {
-                    views.setViewVisibility(row, android.view.View.VISIBLE)
-                    views.setTextViewText(titleId, alert.name)
-                    val endText = if (alert.endTime.isNotBlank()) context.getString(R.string.alert_end_time, alert.endTime) else ""
-                    val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-                    val countdownText = endMillis?.let { ms ->
-                        val remaining = ms - System.currentTimeMillis()
-                        if (remaining > 0) context.getString(R.string.widget_countdown_format, TimeUtils.formatDurationShort(remaining)) else null
-                    }
-                    val distanceText = lastLocation?.let { loc ->
-                        val results = FloatArray(1)
-                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
-                        val meters = results[0]
-                        if (meters >= 1000) String.format(Locale.getDefault(), "%.1f km", meters / 1000f) else String.format(Locale.getDefault(), "%.0f m", meters)
-                    }
-                    val desc = listOfNotNull(alert.type, distanceText, countdownText, endText.takeIf { it.isNotBlank() }).joinToString(" · ")
-                    views.setTextViewText(descId, if (desc.isNotBlank()) desc else alert.description)
-
-                    // Load image into row's ImageView using imageUrl from API
-                    val imageUrl = alert.imageUrl
-                    val imageViewId = when (index) {
-                        0 -> R.id.row1_image
-                        1 -> R.id.row2_image
-                        else -> R.id.row3_image
-                    }
-                    if (!imageUrl.isNullOrBlank()) {
-                        try {
-                            val req = ImageRequest.Builder(context)
-                                .data(imageUrl)
-                                .size(sizePx, sizePx)
-                                .allowHardware(false)
-                                .build()
-                            val result = imageLoader.execute(req)
-                            if (result is SuccessResult) {
-                                val drawable = result.drawable
-                                val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, sizePx)
-                                val rounded = roundCorners(bmp, radiusPx = (8 * context.resources.displayMetrics.density))
-                                views.setImageViewBitmap(imageViewId, rounded)
-                            } else {
-                                views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
-                            }
-                        } catch (_: Throwable) {
-                            views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
-                        }
-                    } else {
-                        views.setImageViewResource(imageViewId, R.drawable.ic_placeholder)
-                    }
-
-                    // Row click opens specific alert details
-                    val detailIntent = AlertDetailActivity.createIntent(context, alert)
-                    val requestCode = (alert.uniqueId.hashCode() + index) and 0x7FFFFFFF
-                    val pending = PendingIntent.getActivity(
-                        context,
-                        requestCode,
-                        detailIntent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-                    )
-                    views.setOnClickPendingIntent(row, pending)
-                } else {
-                    views.setViewVisibility(row, android.view.View.GONE)
-                }
-            }
+        // Remote adapter with unique data per widget id
+        val svcIntent = Intent(context, AlertsWidgetService::class.java).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+            data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
         }
+        views.setRemoteAdapter(R.id.list_alerts, svcIntent)
+
+        // PendingIntent template; items supply fill-in intents
+        val pendingTemplate = PendingIntent.getActivity(
+            context,
+            0,
+            Intent(context, AlertDetailActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setPendingIntentTemplate(R.id.list_alerts, pendingTemplate)
 
         return views
-    }
-
-    private fun getLastKnownLocation(context: Context): Location? {
-        return try {
-            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager
-            if (lm == null) return null
-            val providers = lm.getProviders(true)
-            var best: Location? = null
-            for (p in providers) {
-                val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
-                if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
-                    best = l
-                }
-            }
-            best
-        } catch (_: Throwable) { null }
-    }
-
-    private fun drawableToBitmap(drawable: Drawable, size: Int): Bitmap {
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, size, size)
-        drawable.draw(canvas)
-        return bitmap
-    }
-
-    private fun roundCorners(source: Bitmap, radiusPx: Float): Bitmap {
-        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val rect = RectF(0f, 0f, source.width.toFloat(), source.height.toFloat())
-        val path = Path()
-        path.addRoundRect(rect, radiusPx, radiusPx, Path.Direction.CW)
-        canvas.clipPath(path)
-        canvas.drawBitmap(source, 0f, 0f, paint)
-        return output
     }
 
     private fun scheduleNextUpdate(context: Context) {
