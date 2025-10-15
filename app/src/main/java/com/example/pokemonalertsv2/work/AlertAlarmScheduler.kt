@@ -16,7 +16,7 @@ object AlertAlarmScheduler {
     private const val TAG = "AlertAlarmScheduler"
     internal const val ACTION_POLL_ALERTS = "com.example.pokemonalertsv2.action.POLL_ALERTS"
     private const val REQUEST_CODE = 1001
-    private val INTERVAL_MILLIS = TimeUnit.MINUTES.toMillis(10)
+    private val INTERVAL_MILLIS = TimeUnit.SECONDS.toMillis(30)
 
     fun prime(context: Context) {
         if (!canScheduleExact(context)) {
