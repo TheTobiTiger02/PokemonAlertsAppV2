@@ -134,6 +134,14 @@ fun PokemonAlertsScreen(
                             contentDescription = stringResource(id = R.string.refresh_alerts)
                         )
                     }
+                    IconButton(onClick = {
+                        context.startActivity(android.content.Intent(context, AlertsMapActivity::class.java))
+                    }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_map),
+                            contentDescription = stringResource(id = R.string.open_map)
+                        )
+                    }
                 }
             )
         },

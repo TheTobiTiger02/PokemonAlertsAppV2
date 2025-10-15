@@ -44,6 +44,22 @@ The suite currently focuses on repository behaviour. Add more tests around UI or
 - If notifications are delayed, ensure battery optimizations are disabled for the app. WorkManager honours system constraints and may defer jobs under heavy restrictions.
 - Images in the feed come directly from the API payload. If an alert does not include an image URL, the app shows a placeholder tile.
 
+## Maps setup
+
+The app includes a map screen that shows active alerts with their images as markers.
+
+To enable Google Maps:
+
+1. Create a Google Maps API key for Android (Maps SDK for Android) in Google Cloud Console.
+2. Provide it locally so it isn't committed:
+	- Preferred: Set an environment variable `GOOGLE_MAPS_API_KEY` before building.
+	- Or update `local.properties` with a line `google.maps.api.key=YOUR_REAL_API_KEY` and adjust the Gradle placeholder to read it, if you prefer.
+3. Build and run the app. From the list screen, tap the map icon in the top right to open the map.
+
+Notes:
+- Markers try to load `imageUrl` (falling back to `thumbnailUrl`) as the icon. If loading fails, the default pin is used.
+- Tap a marker to show info; tap the info window to open the alert details.
+
 ## Next steps
 
 - Integrate a local database to show alert history when offline.

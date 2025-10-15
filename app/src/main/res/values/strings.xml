@@ -22,4 +22,8 @@
     <string name="widget_updated_at">Updated %1$s</string>
     <string name="widget_logo_cd">Pokemon Alerts logo</string>
     <string name="alert_image">Alert image</string>
+    <string name="map_title">Alerts Map</string>
+    <string name="back">Back</string>
+    <string name="open_map">Open map</string>
+    <string name="tap_for_details">Tap for details</string>
 </resources>
