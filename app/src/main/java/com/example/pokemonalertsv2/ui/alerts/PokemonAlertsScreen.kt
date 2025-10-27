@@ -6,6 +6,8 @@ import android.content.Intent
 import android.location.Location
 import android.location.LocationManager
 import android.widget.Toast
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +52,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -255,7 +261,7 @@ private fun AlertCard(
 }
 
 @Composable
-private fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier) {
+private fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Boolean = true) {
     val context = LocalContext.current
     val imageUrl by rememberUpdatedState(alert.imageUrl ?: alert.thumbnailUrl)
     if (imageUrl != null) {
@@ -271,7 +277,7 @@ private fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier) {
             modifier = modifier
                 .fillMaxWidth()
                 .height(200.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .let { m -> if (rounded) m.clip(RoundedCornerShape(12.dp)) else m }
         )
     } else {
         Box(
@@ -312,20 +318,44 @@ fun AlertDetailScreen(alert: PokemonAlert) {
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        AlertDetailContent(
-            alert = alert,
-            onOpenMaps = { openMapForAlert(context, alert) }
-        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            AlertDetailContent(
+                alert = alert,
+                onOpenMaps = { openMapForAlert(context, alert) }
+            )
+            TopStatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
+        }
     }
 }
 
 @Composable
+private fun TopStatusBarScrim(modifier: Modifier = Modifier) {
+    val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(topPadding + 56.dp)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.35f),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+}
+
+@Composable
 private fun AlertDetailContent(alert: PokemonAlert, onOpenMaps: () -> Unit) {
+    val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Column(
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = topPadding)
     ) {
-        AlertImage(alert = alert)
+    AlertImage(alert = alert, rounded = false)
         Text(text = alert.description)
         alert.type?.takeIf { it.isNotBlank() }?.let { type ->
             Text(text = type, style = MaterialTheme.typography.labelMedium)
