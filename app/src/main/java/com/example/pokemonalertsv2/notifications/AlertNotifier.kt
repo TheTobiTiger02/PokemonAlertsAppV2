@@ -34,17 +34,19 @@ object AlertNotifier {
         }
     }
 
-    fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
+    suspend fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
         if (alerts.isEmpty()) return
         ensureChannel(context)
         val notificationManager = NotificationManagerCompat.from(context)
-        val userLocation = getLastKnownLocation(context)
+        // Actively try to get a fresh location fix; keep it best-effort with short timeout
+        val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
 
         alerts.forEachIndexed { index, alert ->
             val notificationIntent = AlertDetailActivity.createIntent(context, alert)
             val pendingIntent = PendingIntent.getActivity(
                 context,
-                index,
+                // Use a stable, unique requestCode per alert to avoid PendingIntent collisions across runs
+                alert.uniqueId.hashCode(),
                 notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
@@ -87,20 +89,7 @@ object AlertNotifier {
 
     private fun immutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0
 
-    private fun getLastKnownLocation(context: Context): Location? {
-        return try {
-            val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
-            val providers = lm.getProviders(true)
-            var best: Location? = null
-            for (p in providers) {
-                val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
-                if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
-                    best = l
-                }
-            }
-            best
-        } catch (_: Throwable) { null }
-    }
+    // Removed last-known location method to honor the requirement to use an active fix.
 
     private fun formatDistance(meters: Float): String {
         return if (meters >= 1000f) String.format(java.util.Locale.getDefault(), "%.1f km", meters / 1000f)

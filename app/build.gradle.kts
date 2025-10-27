@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.coil.core)
     implementation(libs.google.play.services.maps)
     implementation(libs.google.maps.compose)
+    implementation(libs.google.play.services.location)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
