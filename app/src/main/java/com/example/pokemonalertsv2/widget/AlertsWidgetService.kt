@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import android.location.Location
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import coil.ImageLoader
@@ -14,6 +15,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.LocationUtils
 import kotlinx.coroutines.runBlocking
 import java.util.Locale
 
@@ -24,6 +26,7 @@ class AlertsWidgetService : RemoteViewsService() {
 private class AlertsFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
     private lateinit var imageLoader: ImageLoader
+    private var currentLocation: Location? = null
 
     override fun onCreate() {
         imageLoader = ImageLoader(context)
@@ -33,6 +36,8 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         runBlocking {
             val repo = PokemonAlertsRepository.create(context)
             val alerts = runCatching { repo.fetchAlerts() }.getOrElse { emptyList() }
+            // Try to actively get a fresh location fix with a short timeout for distance display
+            currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
             val sorted = alerts.sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
@@ -56,7 +61,15 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             val remaining = ms - System.currentTimeMillis()
             if (remaining > 0) context.getString(R.string.widget_countdown_format, TimeUtils.formatDurationShort(remaining)) else null
         }
-        val desc = listOfNotNull(alert.type, countdownText, alert.endTime.takeIf { it.isNotBlank() }?.let { context.getString(R.string.alert_end_time, it) })
+        val distanceText = currentLocation?.let { loc ->
+            val results = FloatArray(1)
+            runCatching {
+                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+            }.getOrNull()
+            val meters = results.getOrNull(0) ?: Float.NaN
+            if (meters.isNaN()) null else formatDistance(meters)
+        }
+        val desc = listOfNotNull(distanceText, alert.type, countdownText, alert.endTime.takeIf { it.isNotBlank() }?.let { context.getString(R.string.alert_end_time, it) })
             .joinToString(" · ")
         views.setTextViewText(R.id.item_desc, if (desc.isNotBlank()) desc else alert.description)
 
@@ -106,5 +119,10 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         drawable.setBounds(0, 0, size, size)
         drawable.draw(canvas)
         return bmp
+    }
+
+    private fun formatDistance(meters: Float): String {
+        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
+        else String.format(Locale.getDefault(), "%.0f m", meters)
     }
 }
