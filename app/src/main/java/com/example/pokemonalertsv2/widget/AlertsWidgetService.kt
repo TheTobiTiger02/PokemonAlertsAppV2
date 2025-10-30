@@ -61,15 +61,16 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             val remaining = ms - System.currentTimeMillis()
             if (remaining > 0) context.getString(R.string.widget_countdown_format, TimeUtils.formatDurationShort(remaining)) else null
         }
-        val distanceText = currentLocation?.let { loc ->
+        val distanceMeters: Float? = currentLocation?.let { loc ->
             val results = FloatArray(1)
             runCatching {
                 Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
             }.getOrNull()
-            val meters = results.getOrNull(0) ?: Float.NaN
-            if (meters.isNaN()) null else formatDistance(meters)
+            results.getOrNull(0)?.takeUnless { it.isNaN() }
         }
-        val desc = listOfNotNull(distanceText, alert.type, countdownText, alert.endTime.takeIf { it.isNotBlank() }?.let { context.getString(R.string.alert_end_time, it) })
+        val distanceText = distanceMeters?.let { formatDistance(it) }
+        val walkingText = distanceMeters?.let { formatWalkingTime(it) }
+        val desc = listOfNotNull(distanceText, walkingText, alert.type, countdownText, alert.endTime.takeIf { it.isNotBlank() }?.let { context.getString(R.string.alert_end_time, it) })
             .joinToString(" · ")
         views.setTextViewText(R.id.item_desc, if (desc.isNotBlank()) desc else alert.description)
 
@@ -124,5 +125,11 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     private fun formatDistance(meters: Float): String {
         return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
         else String.format(Locale.getDefault(), "%.0f m", meters)
+    }
+
+    private fun formatWalkingTime(meters: Float): String {
+        // ~5 km/h walking speed (~83.33 m/min)
+        val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
+        return String.format(Locale.getDefault(), "%d min walk", minutes)
     }
 }
