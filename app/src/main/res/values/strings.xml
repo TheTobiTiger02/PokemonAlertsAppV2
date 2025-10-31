@@ -26,4 +26,5 @@
     <string name="back">Back</string>
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
+    <string name="notification_action_directions">Directions</string>
 </resources>
