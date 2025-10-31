@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
@@ -96,15 +97,27 @@ fun AlertsMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = stringResource(R.string.map_title)) },
+                title = { 
+                    Text(
+                        text = stringResource(R.string.map_title),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                    ) 
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_back),
-                            contentDescription = stringResource(id = R.string.back)
+                            contentDescription = stringResource(id = R.string.back),
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                }
+                },
+                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
+                )
             )
         }
     ) { padding ->
@@ -135,11 +148,16 @@ fun AlertsMapScreen(
                         }
                     ) {
                         // Custom info window content
-                        ElevatedCard {
+                        ElevatedCard(
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                            elevation = androidx.compose.material3.CardDefaults.elevatedCardElevation(
+                                defaultElevation = 8.dp
+                            )
+                        ) {
                             Column(
                                 modifier = Modifier
-                                    .padding(8.dp)
-                                    .widthIn(max = 220.dp)
+                                    .padding(12.dp)
+                                    .widthIn(max = 240.dp)
                             ) {
                                 // Thumbnail
                                 val thumbUrl = alert.thumbnailUrl ?: alert.imageUrl
@@ -153,29 +171,40 @@ fun AlertsMapScreen(
                                         contentDescription = null,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(100.dp),
+                                            .height(120.dp)
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
                                         contentScale = ContentScale.Crop
                                     )
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
-                                Spacer(modifier = Modifier.height(6.dp))
                                 androidx.compose.material3.Text(
                                     text = alert.name,
-                                    style = MaterialTheme.typography.titleSmall,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                                     maxLines = 2
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
                                 val subtitle = alert.description.takeIf { it.isNotBlank() } ?: alert.endTime
                                 if (subtitle.isNotBlank()) {
                                     androidx.compose.material3.Text(
                                         text = subtitle,
                                         style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 3
+                                        maxLines = 3,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                androidx.compose.material3.Text(
-                                    text = stringResource(id = R.string.tap_for_details),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    androidx.compose.material3.Text(
+                                        text = stringResource(id = R.string.tap_for_details),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
                             }
                         }
                     }
