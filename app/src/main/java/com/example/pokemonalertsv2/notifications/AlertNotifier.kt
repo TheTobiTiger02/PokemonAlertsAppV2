@@ -51,17 +51,21 @@ object AlertNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
 
-            val distanceText = userLocation?.let { loc ->
+            val distancePair = userLocation?.let { loc ->
                 val results = FloatArray(1)
                 runCatching {
                     Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
                 }.getOrNull()
                 val meters = results.getOrNull(0) ?: Float.NaN
-                if (meters.isNaN()) null else formatDistance(meters)
+                if (meters.isNaN()) null else meters to formatDistance(meters)
             }
+            val distanceText = distancePair?.second
+            val walkingText = distancePair?.first?.let { formatWalkingTime(it) }
 
             val baseText = alert.type ?: context.getString(R.string.notification_default_body)
-            val contentText = if (!distanceText.isNullOrBlank()) "$distanceText • $baseText" else baseText
+            val chips = listOfNotNull(distanceText, walkingText)
+            val prefix = if (chips.isNotEmpty()) chips.joinToString(" • ") + " • " else ""
+            val contentText = prefix + baseText
 
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_poke_notification)
@@ -70,8 +74,8 @@ object AlertNotifier {
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(
                         buildString {
-                            if (!distanceText.isNullOrBlank()) {
-                                append(distanceText)
+                            if (!distanceText.isNullOrBlank() || !walkingText.isNullOrBlank()) {
+                                listOfNotNull(distanceText, walkingText).joinTo(this, separator = " • ")
                                 append(" • ")
                             }
                             if (alert.description.isNotBlank()) append(alert.description) else append(baseText)
@@ -94,5 +98,11 @@ object AlertNotifier {
     private fun formatDistance(meters: Float): String {
         return if (meters >= 1000f) String.format(java.util.Locale.getDefault(), "%.1f km", meters / 1000f)
         else String.format(java.util.Locale.getDefault(), "%.0f m", meters)
+    }
+
+    private fun formatWalkingTime(meters: Float): String {
+        // Assume ~5 km/h walking speed => ~83.33 m/min
+        val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
+        return String.format(java.util.Locale.getDefault(), "%d min walk", minutes)
     }
 }
