@@ -7,5 +7,13 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="pokemon_red">#FFDC0A2D</color>
+
+    <!-- Pokémon Colors matching Color.kt -->
+    <color name="pokemon_red">#EE1515</color>
+    <color name="pokemon_red_dark">#FF5252</color>
+    <color name="pokemon_blue">#3B4CCA</color>
+    <color name="pokemon_yellow">#FFDE00</color>
+    <color name="pokemon_bg_dark">#121212</color>
+    <color name="pokemon_surface_dark">#1E1E1E</color>
+    <color name="pokemon_surface_light">#FFFFFF</color>
 </resources>

@@ -56,6 +56,9 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.android.gms.maps.model.MapStyleOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -93,6 +96,17 @@ fun AlertsMapScreen(
         position = CameraPosition.fromLatLngZoom(defaultLatLng, 2f)
     }
     var mapLoaded by remember { mutableStateOf(false) }
+    val mapProperties = remember {
+        MapProperties(
+            mapStyleOptions = MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_pokemon)
+        )
+    }
+    val mapUiSettings = remember {
+        MapUiSettings(
+            zoomControlsEnabled = false,
+            myLocationButtonEnabled = false
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -125,6 +139,8 @@ fun AlertsMapScreen(
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
+                properties = mapProperties,
+                uiSettings = mapUiSettings,
                 contentPadding = padding,
                 onMapLoaded = { mapLoaded = true }
             ) {
@@ -195,13 +211,14 @@ fun AlertsMapScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 androidx.compose.material3.Surface(
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.primary
                                 ) {
                                     androidx.compose.material3.Text(
                                         text = stringResource(id = R.string.tap_for_details),
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                     )
                                 }

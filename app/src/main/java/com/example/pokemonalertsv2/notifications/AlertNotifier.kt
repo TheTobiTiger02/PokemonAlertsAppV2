@@ -20,6 +20,7 @@ import coil.size.Scale
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -79,8 +80,15 @@ object AlertNotifier {
             val distanceText = distancePair?.second
             val walkingText = distancePair?.first?.let { formatWalkingTime(it) }
 
+            // Calculate time remaining
+            val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
+            val remainingText = endMillis?.let { ms ->
+                val remaining = ms - System.currentTimeMillis()
+                if (remaining > 0) "Ends in ${TimeUtils.formatDurationShort(remaining)}" else "Expired"
+            }
+
             val baseText = alert.type ?: context.getString(R.string.notification_default_body)
-            val chips = listOfNotNull(distanceText, walkingText)
+            val chips = listOfNotNull(distanceText, walkingText, remainingText)
             val prefix = if (chips.isNotEmpty()) chips.joinToString(" • ") + " • " else ""
             val contentText = prefix + baseText
 
@@ -94,8 +102,8 @@ object AlertNotifier {
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(
                         buildString {
-                            if (!distanceText.isNullOrBlank() || !walkingText.isNullOrBlank()) {
-                                listOfNotNull(distanceText, walkingText).joinTo(this, separator = " • ")
+                            if (chips.isNotEmpty()) {
+                                chips.joinTo(this, separator = " • ")
                                 append(" • ")
                             }
                             if (alert.description.isNotBlank()) append(alert.description) else append(baseText)

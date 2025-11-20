@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <style name="Theme.PokemonAlertsV2" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Style for Widget Images to apply rounded corners if possible via XML,
+         though clipToOutline usually requires a background shape.
+         We'll define the background shape here or use a drawable. -->
+    <style name="WidgetImageStyle">
+        <item name="android:background">@drawable/widget_image_bg</item>
+    </style>
 </resources>
