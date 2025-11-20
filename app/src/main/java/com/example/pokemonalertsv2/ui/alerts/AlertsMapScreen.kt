@@ -71,6 +71,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.location.LocationManager
+import android.content.Context
+import android.annotation.SuppressLint
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -263,18 +266,18 @@ fun AlertsMapScreen(
     }
 
     // Auto-fit camera logic
-    LaunchedEffect(mapLoaded, alerts) {
+    LaunchedEffect(mapLoaded, filteredAlerts) {
         if (!mapLoaded) return@LaunchedEffect
-        if (alerts.isEmpty()) return@LaunchedEffect
+        if (filteredAlerts.isEmpty()) return@LaunchedEffect
         // Only animate once on load, not every refresh, unless we want to track "initialLoad"
         // We can check if camera is at 0,0
         if (cameraPositionState.position.target.latitude == 0.0 && cameraPositionState.position.target.longitude == 0.0) {
-             if (alerts.size == 1) {
-                val a = alerts.first()
+             if (filteredAlerts.size == 1) {
+                val a = filteredAlerts.first()
                 cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f))
             } else {
                 val builder = LatLngBounds.Builder()
-                alerts.forEach { a -> builder.include(LatLng(a.latitude, a.longitude)) }
+                filteredAlerts.forEach { a -> builder.include(LatLng(a.latitude, a.longitude)) }
                 val bounds = builder.build()
                 val paddingPx = kotlin.math.max(1, (64f * density.density).toInt())
                 runCatching {
@@ -309,6 +312,7 @@ private suspend fun createBitmapDescriptorFromUrl(context: android.content.Conte
     } catch (_: Throwable) { null }
 }
 
+@SuppressLint("MissingPermission")
 private fun getLastKnownLocation(context: Context): android.location.Location? {
     return try {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
