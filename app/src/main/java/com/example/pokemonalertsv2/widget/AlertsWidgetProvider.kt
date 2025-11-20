@@ -88,6 +88,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.tv_title, openPending)
         views.setOnClickPendingIntent(R.id.img_logo, openPending)
 
+        // Set logo tint programmatically for better compatibility
+        views.setInt(R.id.img_logo, "setColorFilter", context.getColor(R.color.pokemon_red_dark))
+
         // Refresh button
         val refreshPending = PendingIntent.getBroadcast(
             context, 1, Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH },

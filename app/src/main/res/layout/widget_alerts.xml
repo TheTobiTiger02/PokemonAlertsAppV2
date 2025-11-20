@@ -20,8 +20,7 @@
             android:layout_height="24dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/ic_poke_notification"
-            android:contentDescription="@string/widget_logo_cd"
-            android:tint="@color/pokemon_red_dark" />
+            android:contentDescription="@string/widget_logo_cd" />
 
         <TextView
             android:id="@+id/tv_title"
