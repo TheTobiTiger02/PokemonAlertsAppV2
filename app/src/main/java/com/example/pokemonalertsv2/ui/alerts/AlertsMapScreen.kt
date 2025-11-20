@@ -54,12 +54,22 @@ import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MarkerInfoWindowContent
+import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.android.gms.maps.model.MapStyleOptions
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,7 +88,7 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
-        onMarkerClick = { /* no-op, let info window show */ }
+        onMarkerClick = { /* No-op for map route, handled internally */ }
     )
 }
 
@@ -91,21 +101,35 @@ fun AlertsMapScreen(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
     val defaultLatLng = remember { LatLng(0.0, 0.0) }
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultLatLng, 2f)
     }
     var mapLoaded by remember { mutableStateOf(false) }
+    var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
+    var filterType by remember { mutableStateOf<String?>(null) }
+    val sheetState = rememberModalBottomSheetState()
+
     val mapProperties = remember {
         MapProperties(
-            mapStyleOptions = MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_pokemon)
+            mapStyleOptions = MapStyleOptions.loadRawResourceStyle(context, R.raw.map_style_pokemon),
+            isMyLocationEnabled = true // Re-enabled for modern feel
         )
     }
     val mapUiSettings = remember {
         MapUiSettings(
             zoomControlsEnabled = false,
-            myLocationButtonEnabled = false
+            myLocationButtonEnabled = false // We will use our own FAB
         )
+    }
+
+    val availableTypes = remember(alerts) {
+        alerts.mapNotNull { it.type }.filter { it.isNotBlank() }.distinct().sorted()
+    }
+
+    val filteredAlerts = remember(alerts, filterType) {
+        if (filterType == null) alerts else alerts.filter { it.type == filterType }
     }
 
     Scaffold(
@@ -135,16 +159,15 @@ fun AlertsMapScreen(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
                 properties = mapProperties,
                 uiSettings = mapUiSettings,
-                contentPadding = padding,
                 onMapLoaded = { mapLoaded = true }
             ) {
-                alerts.forEach { alert ->
+                filteredAlerts.forEach { alert ->
                     val position = LatLng(alert.latitude, alert.longitude)
                     var icon by remember(alert.imageUrl, alert.thumbnailUrl) { mutableStateOf<BitmapDescriptor?>(null) }
                     val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
@@ -152,99 +175,111 @@ fun AlertsMapScreen(
                     LaunchedEffect(imageUrl, markerSizePx) {
                         icon = imageUrl?.let { createBitmapDescriptorFromUrl(context, it, markerSizePx) }
                     }
-                    MarkerInfoWindowContent(
+
+                    // Use standard Marker instead of Window for cleaner interaction with BottomSheet
+                    Marker(
                         state = MarkerState(position = position),
                         icon = icon,
+                        title = alert.name,
                         onClick = {
-                            onMarkerClick(alert)
-                            false
-                        },
-                        onInfoWindowClick = {
-                            context.startActivity(AlertDetailActivity.createIntent(context, alert))
+                            selectedAlert = alert
+                            true // Consumed
                         }
-                    ) {
-                        // Custom info window content
-                        ElevatedCard(
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                            elevation = androidx.compose.material3.CardDefaults.elevatedCardElevation(
-                                defaultElevation = 8.dp
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .widthIn(max = 240.dp)
-                            ) {
-                                // Thumbnail
-                                val thumbUrl = alert.thumbnailUrl ?: alert.imageUrl
-                                if (thumbUrl != null) {
-                                    AsyncImage(
-                                        model = coil.request.ImageRequest.Builder(context)
-                                            .data(thumbUrl)
-                                            .allowHardware(false)
-                                            .crossfade(true)
-                                            .build(),
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(120.dp)
-                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
-                                androidx.compose.material3.Text(
-                                    text = alert.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                    maxLines = 2
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                val subtitle = alert.description.takeIf { it.isNotBlank() } ?: alert.endTime
-                                if (subtitle.isNotBlank()) {
-                                    androidx.compose.material3.Text(
-                                        text = subtitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 3,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                androidx.compose.material3.Surface(
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                ) {
-                                    androidx.compose.material3.Text(
-                                        text = stringResource(id = R.string.tap_for_details),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                    )
-                                }
-                            }
-                        }
+                    )
+                }
+            }
+
+            // Filter Chips Row
+            if (availableTypes.isNotEmpty()) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                        .align(androidx.compose.ui.Alignment.TopStart),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = filterType == null,
+                            onClick = { filterType = null },
+                            label = { Text("All") }
+                        )
+                    }
+                    items(availableTypes) { type ->
+                        FilterChip(
+                            selected = filterType == type,
+                            onClick = { filterType = if (filterType == type) null else type },
+                            label = { Text(type) }
+                        )
                     }
                 }
+            }
+
+            // My Location FAB
+            FloatingActionButton(
+                onClick = {
+                    val loc = getLastKnownLocation(context)
+                    if (loc != null) {
+                        scope.launch {
+                            cameraPositionState.animate(
+                                CameraUpdateFactory.newLatLngZoom(
+                                    LatLng(loc.latitude, loc.longitude), 15f
+                                )
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .align(androidx.compose.ui.Alignment.BottomEnd)
+                    .padding(24.dp),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map), // Should be my_location icon but ic_map is available
+                    contentDescription = "My Location"
+                )
+            }
+        }
+
+        if (selectedAlert != null) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedAlert = null },
+                sheetState = sheetState
+            ) {
+                AlertDetailContent(
+                    alert = selectedAlert!!,
+                    onOpenMaps = {
+                         val mapsIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, selectedAlert!!.googleMapsUri)
+                         try {
+                             context.startActivity(mapsIntent)
+                         } catch (e: Exception) {
+                             // ignore
+                         }
+                    }
+                )
+                Spacer(modifier = Modifier.height(32.dp)) // Bottom padding
             }
         }
     }
 
-    // Auto-fit camera to markers when map and data are ready
+    // Auto-fit camera logic
     LaunchedEffect(mapLoaded, alerts) {
         if (!mapLoaded) return@LaunchedEffect
         if (alerts.isEmpty()) return@LaunchedEffect
-        if (alerts.size == 1) {
-            val a = alerts.first()
-            cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f))
-        } else {
-            val builder = LatLngBounds.Builder()
-            alerts.forEach { a -> builder.include(LatLng(a.latitude, a.longitude)) }
-            val bounds = builder.build()
-            val paddingPx = kotlin.math.max(1, (64f * density.density).toInt())
-            // Try animate, if bounds invalid or map too small, ignore errors gracefully
-            runCatching {
-                cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx))
+        // Only animate once on load, not every refresh, unless we want to track "initialLoad"
+        // We can check if camera is at 0,0
+        if (cameraPositionState.position.target.latitude == 0.0 && cameraPositionState.position.target.longitude == 0.0) {
+             if (alerts.size == 1) {
+                val a = alerts.first()
+                cameraPositionState.animate(CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f))
+            } else {
+                val builder = LatLngBounds.Builder()
+                alerts.forEach { a -> builder.include(LatLng(a.latitude, a.longitude)) }
+                val bounds = builder.build()
+                val paddingPx = kotlin.math.max(1, (64f * density.density).toInt())
+                runCatching {
+                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx))
+                }
             }
         }
     }
@@ -271,5 +306,21 @@ private suspend fun createBitmapDescriptorFromUrl(context: android.content.Conte
             drawable.draw(canvas)
             BitmapDescriptorFactory.fromBitmap(bmp)
         } else null
+    } catch (_: Throwable) { null }
+}
+
+private fun getLastKnownLocation(context: Context): android.location.Location? {
+    return try {
+        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+        if (lm == null) return null
+        val providers = lm.getProviders(true)
+        var best: android.location.Location? = null
+        for (p in providers) {
+            val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
+            if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
+                best = l
+            }
+        }
+        best
     } catch (_: Throwable) { null }
 }

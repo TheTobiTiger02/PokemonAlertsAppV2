@@ -513,94 +513,105 @@ fun AlertDetailScreen(alert: PokemonAlert) {
         color = MaterialTheme.colorScheme.background
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(
+            AlertDetailContent(
+                alert = alert,
+                onOpenMaps = { openMapForAlert(context, alert) }
+            )
+            TopStatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
+        }
+    }
+}
+
+@Composable
+fun AlertDetailContent(
+    alert: PokemonAlert,
+    onOpenMaps: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+    ) {
+        // Hero image section
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+        ) {
+            AlertImage(alert = alert, rounded = false)
+
+            // Gradient overlay for readability
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                // Hero image section
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                ) {
-                    AlertImage(alert = alert, rounded = false)
-                    
-                    // Gradient overlay for readability
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .align(Alignment.BottomCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background
                             )
+                        )
                     )
-                }
-                
-                // Content section
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+            )
+        }
+
+        // Content section
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = alert.name,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            if (alert.description.isNotBlank()) {
+                Text(
+                    text = alert.description,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+            }
+
+            alert.type?.takeIf { it.isNotBlank() }?.let { type ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer
                 ) {
                     Text(
-                        text = alert.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        text = "Type: $type",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                     )
-                    
-                    if (alert.description.isNotBlank()) {
-                        Text(
-                            text = alert.description,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    
-                    alert.type?.takeIf { it.isNotBlank() }?.let { type ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text(
-                                text = "Type: $type",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                            )
-                        }
-                    }
-                    
-                    CountdownAndEndTimeRow(alert = alert)
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    FilledTonalButton(
-                        onClick = { openMapForAlert(context, alert) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(id = R.string.open_in_maps),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
                 }
             }
             
-            TopStatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
+            CountdownAndEndTimeRow(alert = alert)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            FilledTonalButton(
+                onClick = onOpenMaps,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map),
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 8.dp)
+                )
+                Text(
+                    text = stringResource(id = R.string.open_in_maps),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
         }
     }
 }

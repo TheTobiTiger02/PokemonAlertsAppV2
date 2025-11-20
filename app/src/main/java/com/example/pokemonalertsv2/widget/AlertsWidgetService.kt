@@ -10,6 +10,7 @@ import android.widget.RemoteViewsService
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import coil.transform.RoundedCornersTransformation
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
@@ -74,13 +75,14 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             .joinToString(" · ")
         views.setTextViewText(R.id.item_desc, if (desc.isNotBlank()) desc else alert.description)
 
-        val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
+        val imgSize = (64 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
             try {
                 val req = ImageRequest.Builder(context)
                     .data(imageUrl)
                     .size(imgSize, imgSize)
+                    .transformations(RoundedCornersTransformation(24f)) // 12dp approx
                     .allowHardware(false)
                     .build()
                 val result = runBlocking { imageLoader.execute(req) }
@@ -100,9 +102,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
 
         // Fill-in click intent to open details
         val fillInIntent = AlertDetailActivity.createIntent(context, alert)
-        views.setOnClickFillInIntent(R.id.item_title, fillInIntent)
-        views.setOnClickFillInIntent(R.id.item_desc, fillInIntent)
-        views.setOnClickFillInIntent(R.id.item_image, fillInIntent)
+        views.setOnClickFillInIntent(R.id.widget_item_root, fillInIntent)
         return views
     }
 
