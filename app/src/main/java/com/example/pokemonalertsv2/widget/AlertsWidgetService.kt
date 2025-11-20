@@ -10,9 +10,14 @@ import android.widget.RemoteViewsService
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import coil.transform.RoundedCornersTransformation
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Rect
+import android.graphics.RectF
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -82,14 +87,17 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
                 val req = ImageRequest.Builder(context)
                     .data(imageUrl)
                     .size(imgSize, imgSize)
-                    .transformations(RoundedCornersTransformation(24f)) // 12dp approx
                     .allowHardware(false)
+                    .bitmapConfig(Bitmap.Config.ARGB_8888)
                     .build()
                 val result = runBlocking { imageLoader.execute(req) }
                 if (result is SuccessResult) {
                     val drawable = result.drawable
                     val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
-                    views.setImageViewBitmap(R.id.item_image, bmp)
+                    // Apply rounded corners manually since coil-transformations might be missing
+                    val safeBmp = if (bmp.config == Bitmap.Config.HARDWARE) bmp.copy(Bitmap.Config.ARGB_8888, false) else bmp
+                    val roundedBmp = getRoundedCornerBitmap(safeBmp, 24f)
+                    views.setImageViewBitmap(R.id.item_image, roundedBmp)
                 } else {
                     views.setImageViewResource(R.id.item_image, R.drawable.ic_placeholder)
                 }
@@ -131,5 +139,24 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         // ~5 km/h walking speed (~83.33 m/min)
         val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
         return String.format(Locale.getDefault(), "%d min walk", minutes)
+    }
+
+    private fun getRoundedCornerBitmap(bitmap: Bitmap, pixels: Float): Bitmap {
+        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val color = -0xbdbdbe
+        val paint = Paint()
+        val rect = Rect(0, 0, bitmap.width, bitmap.height)
+        val rectF = RectF(rect)
+
+        paint.isAntiAlias = true
+        canvas.drawARGB(0, 0, 0, 0)
+        paint.color = color
+        canvas.drawRoundRect(rectF, pixels, pixels, paint)
+
+        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+        canvas.drawBitmap(bitmap, rect, rect, paint)
+
+        return output
     }
 }
