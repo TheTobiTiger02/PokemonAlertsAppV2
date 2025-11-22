@@ -17,56 +17,60 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = PokeRedDark,
+    primary = NebulaPurple,
     onPrimary = Color.White,
-    primaryContainer = PokeRedDarkVariant,
+    primaryContainer = AuroraViolet,
     onPrimaryContainer = Color.White,
-    
-    secondary = PokeBlueDark,
-    onSecondary = Color.White,
-    secondaryContainer = PokeBlueDarkVariant,
-    onSecondaryContainer = PokeBlack,
-    
-    tertiary = PokeYellowDark,
-    onTertiary = PokeBlack,
-    tertiaryContainer = PokeYellowDarkVariant,
-    onTertiaryContainer = PokeBlack,
-    
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFE1E1E1),
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE1E1E1),
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurfaceVariant = Color(0xFFCACACA),
-    
-    error = Color(0xFFCF6679),
+
+    secondary = StardustBlue,
+    onSecondary = Color(0xFF021221),
+    secondaryContainer = ElectricCyan,
+    onSecondaryContainer = Color(0xFF031B1B),
+
+    tertiary = LuminousAmber,
+    onTertiary = Color(0xFF2D1600),
+    tertiaryContainer = EmberOrange,
+    onTertiaryContainer = Color(0xFF2B0B00),
+
+    background = SurfaceBase,
+    onBackground = Color(0xFFE3E8FF),
+    surface = SurfaceElevated,
+    onSurface = Color(0xFFE8EAFF),
+    surfaceVariant = SurfaceHighest,
+    onSurfaceVariant = Color(0xFFB8C0FF),
+    outline = SurfaceOutline,
+    outlineVariant = Color(0xFF3F4C75),
+
+    error = DangerRed,
     onError = Color.White,
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = PokeRed,
+    primary = LightPrimary,
     onPrimary = Color.White,
-    primaryContainer = PokeRedLight,
+    primaryContainer = NebulaPurple,
     onPrimaryContainer = Color.White,
-    
-    secondary = PokeBlue,
+
+    secondary = LightSecondary,
     onSecondary = Color.White,
-    secondaryContainer = PokeBlueLight,
-    onSecondaryContainer = Color.White,
-    
-    tertiary = PokeYellow,
-    onTertiary = PokeBlack,
-    tertiaryContainer = PokeYellowLight,
-    onTertiaryContainer = PokeBlack,
-    
-    background = Color(0xFFFDFDFD),
-    onBackground = Color(0xFF1A1A1A),
-    surface = Color.White,
-    onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFF5F5F5),
-    onSurfaceVariant = Color(0xFF444444),
-    
-    error = Color(0xFFB00020),
+    secondaryContainer = StardustBlue,
+    onSecondaryContainer = Color(0xFF00152E),
+
+    tertiary = LuminousAmber,
+    onTertiary = Color(0xFF3A1A00),
+    tertiaryContainer = EmberOrange,
+    onTertiaryContainer = Color(0xFF2D0B00),
+
+    background = LightSky,
+    onBackground = Color(0xFF0B1026),
+    surface = LightSurface,
+    onSurface = Color(0xFF060A1A),
+    surfaceVariant = LightSurfaceVariant,
+    onSurfaceVariant = Color(0xFF303B63),
+    outline = LightOutline,
+    outlineVariant = Color(0xFFC8CEFF),
+
+    error = DangerRed,
     onError = Color.White,
 )
 
@@ -99,6 +103,7 @@ fun PokemonAlertsV2Theme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = PokemonShapes,
         content = content
     )
 }

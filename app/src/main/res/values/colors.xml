@@ -7,5 +7,25 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    <color name="pokemon_red">#FFDC0A2D</color>
+    
+    <!-- Neo-Pokedex Colors -->
+    <color name="poke_red">#F43F5E</color>
+    <color name="poke_red_dark">#BE123C</color>
+    <color name="poke_blue">#06B6D4</color>
+    <color name="poke_blue_dark">#0E7490</color>
+    <color name="poke_yellow">#FACC15</color>
+    <color name="poke_yellow_dark">#CA8A04</color>
+    <color name="poke_green">#10B981</color>
+    <color name="poke_green_dark">#059669</color>
+    
+    <color name="poke_dark_background">#0F172A</color>
+    <color name="poke_dark_surface">#1E293B</color>
+    <color name="poke_dark_surface_variant">#334155</color>
+    
+    <color name="poke_white">#F8FAFC</color>
+    <color name="poke_light_gray">#94A3B8</color>
+    <color name="poke_dark_gray">#475569</color>
+    
+    <!-- Legacy mapping -->
+    <color name="pokemon_red">@color/poke_red</color>
 </resources>

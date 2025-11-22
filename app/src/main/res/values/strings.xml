@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">PokemonAlertsV2</string>
     <string name="notification_channel_name">Pokemon Alerts</string>
@@ -27,4 +28,19 @@
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
     <string name="notification_action_directions">Directions</string>
+    <string name="loading_alerts">Scanning for nearby spawns…</string>
+    <string name="alerts_hero_title">Field radar</string>
+    <string name="alerts_hero_subtitle">Live intel from nearby trainers</string>
+    <string name="alerts_hero_active_label">Active alerts</string>
+    <string name="alerts_hero_ending_label">Ending soon</string>
+    <string name="alerts_last_updated">Updated %1$s</string>
+    <string name="alerts_featured_label">Featured alert</string>
+    <string name="alert_filter_all">All</string>
+    <string name="alert_filter_ending_soon">Ending soon</string>
+    <string name="alert_filter_nearby">Nearby</string>
+    <string name="alerts_nearby_permission_hint">Enable location access to sort alerts by distance.</string>
+    <string name="alerts_toolbar_tagline">Live Pokémon GO intel</string>
+    <string name="alerts_empty_title">All caught up</string>
+    <string name="alerts_empty_cta">Refresh feed</string>
+    <string name="alert_expired">Expired</string>
 </resources>

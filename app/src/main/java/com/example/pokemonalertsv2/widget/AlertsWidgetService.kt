@@ -74,7 +74,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             .joinToString(" · ")
         views.setTextViewText(R.id.item_desc, if (desc.isNotBlank()) desc else alert.description)
 
-        val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
+        val imgSize = (64 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
             try {
