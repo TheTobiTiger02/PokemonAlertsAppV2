@@ -8,7 +8,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.location.Location
-import android.location.LocationManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -105,9 +104,9 @@ object AlertNotifier {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
-                .setColor(context.getColor(R.color.pokemon_red))
+                .setColor(ContextCompat.getColor(context, R.color.poke_red))
                 .addAction(
-                    R.drawable.ic_poke_notification,
+                    R.drawable.ic_map,
                     context.getString(R.string.notification_action_directions),
                     mapsPendingIntent
                 )
@@ -121,24 +120,13 @@ object AlertNotifier {
                         .bigPicture(it)
                         .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
                         .setBigContentTitle(alert.name)
-                        .setSummaryText(
-                            buildString {
-                                if (!distanceText.isNullOrBlank() || !walkingText.isNullOrBlank()) {
-                                    listOfNotNull(distanceText, walkingText).joinTo(this, separator = " • ")
-                                }
-                                if (alert.description.isNotBlank()) {
-                                    if (isNotEmpty()) append(" • ")
-                                    append(alert.description)
-                                } else if (alert.type != null) {
-                                    if (isNotEmpty()) append(" • ")
-                                    append(alert.type)
-                                }
-                            }
-                        )
+                        .setSummaryText(contentText)
                 )
             }
 
-            notificationManager.notify(alert.uniqueId.hashCode(), notificationBuilder.build())
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                notificationManager.notify(alert.uniqueId.hashCode(), notificationBuilder.build())
+            }
         }
     }
 
@@ -168,8 +156,6 @@ object AlertNotifier {
             }
         }
     }
-
-    // Removed last-known location method to honor the requirement to use an active fix.
 
     private fun formatDistance(meters: Float): String {
         return if (meters >= 1000f) String.format(java.util.Locale.getDefault(), "%.1f km", meters / 1000f)
