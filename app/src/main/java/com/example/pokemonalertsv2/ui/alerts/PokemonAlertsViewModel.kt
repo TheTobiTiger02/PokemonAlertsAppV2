@@ -26,6 +26,11 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     init {
         refreshAlerts()
+        viewModelScope.launch {
+            repository.alerts.collect { alerts ->
+                _uiState.update { it.copy(alerts = alerts.sortedByDescending { it.endTime }) }
+            }
+        }
     }
 
     fun refreshAlerts() {
@@ -33,10 +38,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
                 repository.fetchAlerts()
-            }.onSuccess { alerts ->
-                _uiState.update { current ->
-                    current.copy(alerts = alerts.sortedByDescending { it.endTime }, isLoading = false)
-                }
+            }.onSuccess {
+                _uiState.update { current -> current.copy(isLoading = false) }
             }.onFailure { throwable ->
                 _uiState.update { current ->
                     current.copy(isLoading = false, errorMessage = throwable.localizedMessage ?: "Unknown error")

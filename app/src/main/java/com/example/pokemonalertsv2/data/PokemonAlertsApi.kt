@@ -15,6 +15,9 @@ private const val BASE_URL = "http://match-profiles.gl.at.ply.gg:1855/"
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
+
+    @GET("api/history")
+    suspend fun getHistory(): List<PokemonAlert>
 }
 
 object PokemonAlertsApi {

@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
@@ -28,9 +29,22 @@ import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.work.AlertAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import com.example.pokemonalertsv2.ui.settings.SettingsScreen
+import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
+import com.example.pokemonalertsv2.ui.history.AlertHistoryRoute
+import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+
+private enum class Screen { Onboarding, Alerts, Settings, History }
+
 class MainActivity : ComponentActivity() {
 
     private val alertsViewModel: PokemonAlertsViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
+    private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val exactAlarmPermissionNeeded = MutableStateFlow(false)
 
     private val notificationsPermissionLauncher =
@@ -59,14 +73,66 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
         exactAlarmPermissionNeeded.value = AlertAlarmScheduler.shouldPromptForPermission(this)
         setContent {
             val showExactAlarmDialog by exactAlarmPermissionNeeded.collectAsStateWithLifecycle()
-            PokemonAlertsV2Theme {
-                PokemonAlertsRoute(viewModel = alertsViewModel)
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+            val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
+            
+            val darkTheme = when (themeMode) {
+                1 -> false // Light
+                2 -> true  // Dark
+                else -> isSystemInDarkTheme()
+            }
+
+            var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
+
+            // Decide initial screen once onboarding state is loaded
+            if (currentScreen == null && onboardingCompleted != null) {
+                currentScreen = if (onboardingCompleted == true) Screen.Alerts else Screen.Onboarding
+            }
+
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
+                // Show nothing or splash while determining initial screen
+                if (currentScreen == null) {
+                    // Keep splash screen active or show empty box
+                    return@PokemonAlertsV2Theme
+                }
+
+                when (currentScreen!!) {
+                    Screen.Onboarding -> {
+                        com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
+                            onFinish = {
+                                settingsViewModel.completeOnboarding()
+                                currentScreen = Screen.Alerts
+                            }
+                        )
+                    }
+                    Screen.Alerts -> {
+                        PokemonAlertsRoute(
+                            viewModel = alertsViewModel,
+                            onSettingsClick = { currentScreen = Screen.Settings },
+                            onHistoryClick = { currentScreen = Screen.History }
+                        )
+                    }
+                    Screen.Settings -> {
+                        SettingsScreen(
+                            viewModel = settingsViewModel,
+                            onBackClick = { currentScreen = Screen.Alerts }
+                        )
+                    }
+                    Screen.History -> {
+                        AlertHistoryRoute(
+                            viewModel = historyViewModel,
+                            onBackClick = { currentScreen = Screen.Alerts }
+                        )
+                    }
+                }
+
                 if (showExactAlarmDialog) {
                     ExactAlarmPermissionDialog(
                         onDismiss = { exactAlarmPermissionNeeded.value = false },

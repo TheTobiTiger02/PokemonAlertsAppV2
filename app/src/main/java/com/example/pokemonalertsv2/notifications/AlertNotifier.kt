@@ -24,20 +24,52 @@ import kotlinx.coroutines.withContext
 
 object AlertNotifier {
     const val CHANNEL_ID = "pokemon_alerts_channel"
+    const val CHANNEL_RAIDS = "pokemon_alerts_raids"
+    const val CHANNEL_SPAWNS = "pokemon_alerts_spawns"
+    const val CHANNEL_QUESTS = "pokemon_alerts_quests"
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
+            
+            // Generic channel
             val name = context.getString(R.string.notification_channel_name)
-            val description = context.getString(R.string.notification_channel_description)
+            val channelDescription = context.getString(R.string.notification_channel_description)
             val channel = NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                this.description = description
+                this.description = channelDescription
                 enableLights(true)
                 lightColor = Color.RED
                 enableVibration(true)
             }
-            val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(channel)
+
+            // Raids channel
+            val raidsChannel = NotificationChannel(CHANNEL_RAIDS, "Raids", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Notifications for Raid Battles"
+                enableLights(true)
+                lightColor = Color.MAGENTA
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(raidsChannel)
+
+            // Spawns channel
+            val spawnsChannel = NotificationChannel(CHANNEL_SPAWNS, "Spawns", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Wild Spawns"
+                enableLights(true)
+                lightColor = Color.GREEN
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(spawnsChannel)
+
+            // Quests channel
+            val questsChannel = NotificationChannel(CHANNEL_QUESTS, "Quests", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Field Research"
+                enableLights(true)
+                lightColor = Color.CYAN
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(questsChannel)
         }
     }
 
@@ -86,7 +118,15 @@ object AlertNotifier {
             // Load the alert image using Coil
             val bitmap = loadImageBitmap(context, alert.imageUrl ?: alert.thumbnailUrl)
 
-            val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            // Select Channel ID based on type
+            val channelId = when {
+                alert.type?.contains("raid", ignoreCase = true) == true -> CHANNEL_RAIDS
+                alert.type?.contains("spawn", ignoreCase = true) == true -> CHANNEL_SPAWNS
+                alert.type?.contains("quest", ignoreCase = true) == true -> CHANNEL_QUESTS
+                else -> CHANNEL_ID
+            }
+
+            val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
                 .setContentTitle(alert.name)
                 .setContentText(contentText)
