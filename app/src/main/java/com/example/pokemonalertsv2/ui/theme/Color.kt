@@ -40,6 +40,11 @@ val AuroraGradientEnd = Color(0xFF1EC7FF)
 val EmberGradientStart = Color(0xFFFF6A3D)
 val EmberGradientEnd = Color(0xFFFFC154)
 
+// Text Colors
+val PokeWhite = Color(0xFFFFFFFF)
+val PokeLightGray = Color(0xFFE0E0E0)
+val PokeDarkGray = Color(0xFFAAAAAA)
+
 // Legacy colors (kept for compatibility / widgets)
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)

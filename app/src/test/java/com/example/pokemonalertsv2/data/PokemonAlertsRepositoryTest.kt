@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.data.database.AlertDao
+import com.example.pokemonalertsv2.data.database.AlertEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,13 +14,15 @@ import kotlinx.coroutines.test.runTest
 class PokemonAlertsRepositoryTest {
 
     private lateinit var preferences: FakeAlertPreferencesStore
+    private lateinit var dao: FakeAlertDao
     private lateinit var repository: PokemonAlertsRepository
     private val service = FakePokemonAlertsService()
 
     @Before
     fun setUp() {
         preferences = FakeAlertPreferencesStore()
-        repository = PokemonAlertsRepository(service, preferences)
+        dao = FakeAlertDao()
+        repository = PokemonAlertsRepository(service, preferences, dao)
     }
 
     @Test
@@ -46,13 +50,15 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
-    fun fetchAlerts_returnsServiceData() = runTest {
+    fun fetchAlerts_returnsServiceData_andInsertsToDao() = runTest {
         val alerts = listOf(sampleAlert("Service"))
         service.alerts = alerts
 
         val fetched = repository.fetchAlerts()
 
         assertEquals(alerts, fetched)
+        assertEquals(1, dao.alerts.value.size)
+        assertEquals("Service", dao.alerts.value.first().name)
     }
 
     private fun sampleAlert(name: String, endTime: String = "2025-10-07 23:59:59") = PokemonAlert(
@@ -74,6 +80,7 @@ class PokemonAlertsRepositoryTest {
 
     private class FakeAlertPreferencesStore(initial: Set<String> = emptySet()) : AlertPreferencesStore {
         private val state = MutableStateFlow(initial)
+        private val favoritesState = MutableStateFlow(emptySet<String>())
 
         override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
 
@@ -81,6 +88,34 @@ class PokemonAlertsRepositoryTest {
 
         override suspend fun updateSeenAlertIds(alertIds: Set<String>) {
             state.value = alertIds
+        }
+
+        override val favoriteAlertIds: Flow<Set<String>> = favoritesState.asStateFlow()
+
+        override suspend fun getFavoriteAlertIds(): Set<String> = favoritesState.value
+
+        override suspend fun updateFavoriteAlertIds(alertIds: Set<String>) {
+            favoritesState.value = alertIds
+        }
+    }
+
+    private class FakeAlertDao : AlertDao {
+        val alerts = MutableStateFlow<List<AlertEntity>>(emptyList())
+
+        override fun observeAllAlerts(): Flow<List<AlertEntity>> = alerts.asStateFlow()
+
+        override suspend fun getAllAlerts(): List<AlertEntity> = alerts.value
+
+        override suspend fun insertAlerts(newAlerts: List<AlertEntity>) {
+            alerts.value = newAlerts
+        }
+
+        override suspend fun clearAll() {
+            alerts.value = emptyList()
+        }
+
+        override suspend fun deleteExpired(currentTime: String) {
+            // No-op for test
         }
     }
 }

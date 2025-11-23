@@ -38,6 +38,7 @@
     <string name="alert_filter_all">All</string>
     <string name="alert_filter_ending_soon">Ending soon</string>
     <string name="alert_filter_nearby">Nearby</string>
+    <string name="alert_filter_favorites">Favorites</string>
     <string name="alerts_nearby_permission_hint">Enable location access to sort alerts by distance.</string>
     <string name="alerts_toolbar_tagline">Live Pokémon GO intel</string>
     <string name="alerts_empty_title">All caught up</string>
