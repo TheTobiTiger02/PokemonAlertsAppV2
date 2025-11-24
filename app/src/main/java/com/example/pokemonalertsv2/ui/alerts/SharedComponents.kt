@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,8 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -238,7 +240,10 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
         AsyncImage(
             model = ImageRequest.Builder(context)
                 .data(imageUrl)
-                .crossfade(true)
+                .crossfade(300)
+                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                .networkCachePolicy(coil.request.CachePolicy.ENABLED)
                 .build(),
             contentDescription = stringResource(id = R.string.alert_image),
             placeholder = painterResource(id = R.drawable.ic_placeholder),
@@ -281,103 +286,189 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
 }
 
 @Composable
-fun AlertDetailDialog(
-    alert: PokemonAlert, 
-    onDismiss: () -> Unit,
-    onShareClick: () -> Unit
-) {
+fun AlertDetailScreen(alert: PokemonAlert) {
     val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            FilledTonalButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.close))
-            }
-        },
-        title = {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+    val containerGradient = remember {
+        Brush.verticalGradient(
+            listOf(
+                AuroraGradientStart,
+                AuroraGradientMid,
+                AuroraGradientEnd.copy(alpha = 0.85f)
+            )
+        )
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent // Let the Box gradient show through
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(containerGradient)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
             ) {
-                Text(
-                    text = alert.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Hero image section
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
+                ) {
+                    AlertImage(alert = alert, rounded = false, modifier = Modifier.fillMaxSize())
+                    
+                    // Top Bar Scrim
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.6f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                    
+                    // Bottom Gradient for text readability
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xFF0F172A) // Match the midnight theme background start
+                                    )
+                                )
+                            )
+                    )
+                    
+                    // Back Button (Overlay)
+                    val activity = LocalContext.current as? android.app.Activity
                     FilledIconButton(
-                        onClick = onShareClick,
+                        onClick = { activity?.finish() },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .statusBarsPadding()
+                            .padding(16.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            containerColor = Color.Black.copy(alpha = 0.3f),
+                            contentColor = Color.White
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.Share,
-                            contentDescription = "Share"
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = stringResource(id = R.string.back)
                         )
                     }
                 }
-            }
-        },
-        text = {
-            AlertDetailDialogContent(
-                alert = alert,
-                onOpenMaps = { openMapForAlert(context, alert) }
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(24.dp)
-    )
-}
+                
+                // Content section - scrollable
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f) // Fill remaining space
+                        .verticalScroll(rememberScrollState())
+                        .background(Color(0xFF0F172A)) // Solid background for text area
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = alert.name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
+                        // Type Badge
+                        val detailType = alert.type?.takeIf { it.isNotBlank() }
+                        if (!detailType.isNullOrBlank()) {
+                             Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                modifier = Modifier.padding(start = 8.dp)
+                            ) {
+                                Text(
+                                    text = detailType.uppercase(),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
 
-@Composable
-fun AlertDetailDialogContent(alert: PokemonAlert, onOpenMaps: () -> Unit) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        AlertImage(alert = alert, rounded = true)
-        
-        if (alert.description.isNotBlank()) {
-            Text(
-                text = alert.description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        
-        val typeLabel = alert.type?.takeIf { it.isNotBlank() }
-        if (!typeLabel.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text = "Type: $typeLabel",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+                    // Description
+                    if (alert.description.isNotBlank()) {
+                        Text(
+                            text = alert.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2
+                        )
+                    }
+                    
+                    // Time & Status
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Status",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CountdownAndEndTimeRow(alert = alert)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Action Button
+                    FilledTonalButton(
+                        onClick = { openMapForAlert(context, alert) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_map),
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Text(
+                            text = stringResource(id = R.string.open_in_maps),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
-        }
-        
-        CountdownAndEndTimeRow(alert = alert)
-        
-        FilledTonalButton(
-            onClick = onOpenMaps,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_map),
-                contentDescription = null,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(text = stringResource(id = R.string.open_in_maps))
         }
     }
 }
@@ -455,7 +546,11 @@ fun CountdownAndEndTimeRow(alert: PokemonAlert) {
         }
     }
     val remaining = endMillis?.let { it - now } ?: -1
-    val expiredLabel = stringResource(id = R.string.alert_expired)
+    val expiredLabel = if (endMillis != null && remaining <= 0) {
+        "Expired ${TimeUtils.formatTimeAgo(endMillis)}"
+    } else {
+        stringResource(id = R.string.alert_expired)
+    }
     val remainingText = if (endMillis != null) {
         if (remaining > 0) TimeUtils.formatDurationShort(remaining) else expiredLabel
     } else null
@@ -569,123 +664,4 @@ fun formatWalkingTime(meters: Float): String {
 fun formatDistance(meters: Float): String {
     return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
     else String.format(Locale.getDefault(), "%.0f m", meters)
-}
-
-@Composable
-fun AlertDetailScreen(alert: PokemonAlert) {
-    val context = LocalContext.current
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                // Hero image section
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                ) {
-                    AlertImage(alert = alert, rounded = false)
-                    
-                    // Gradient overlay for readability
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
-                    )
-                }
-                
-                // Content section
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = alert.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    
-                    if (alert.description.isNotBlank()) {
-                        Text(
-                            text = alert.description,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                    }
-                    
-                    val detailType = alert.type?.takeIf { it.isNotBlank() }
-                    if (!detailType.isNullOrBlank()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text(
-                                text = "Type: $detailType",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                            )
-                        }
-                    }
-                    
-                    CountdownAndEndTimeRow(alert = alert)
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    FilledTonalButton(
-                        onClick = { openMapForAlert(context, alert) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(id = R.string.open_in_maps),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-            }
-            
-            TopStatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
-        }
-    }
-}
-
-@Composable
-private fun TopStatusBarScrim(modifier: Modifier = Modifier) {
-    val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(topPadding + 80.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Black.copy(alpha = 0.5f),
-                        Color.Transparent
-                    )
-                )
-            )
-    )
 }
