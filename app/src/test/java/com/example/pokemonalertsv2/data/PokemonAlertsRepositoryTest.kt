@@ -76,11 +76,15 @@ class PokemonAlertsRepositoryTest {
         var alerts: List<PokemonAlert> = emptyList()
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
+        override suspend fun getHistory(): List<PokemonAlert> = emptyList()
     }
 
     private class FakeAlertPreferencesStore(initial: Set<String> = emptySet()) : AlertPreferencesStore {
         private val state = MutableStateFlow(initial)
         private val favoritesState = MutableStateFlow(emptySet<String>())
+        private val themeModeState = MutableStateFlow(0)
+        private val imperialState = MutableStateFlow(false)
+        private val onboardingState = MutableStateFlow(false)
 
         override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
 
@@ -96,6 +100,24 @@ class PokemonAlertsRepositoryTest {
 
         override suspend fun updateFavoriteAlertIds(alertIds: Set<String>) {
             favoritesState.value = alertIds
+        }
+
+        override val themeMode: Flow<Int> = themeModeState.asStateFlow()
+
+        override suspend fun updateThemeMode(mode: Int) {
+            themeModeState.value = mode
+        }
+
+        override val useImperialUnits: Flow<Boolean> = imperialState.asStateFlow()
+
+        override suspend fun updateUseImperialUnits(useImperial: Boolean) {
+            imperialState.value = useImperial
+        }
+
+        override val onboardingCompleted: Flow<Boolean> = onboardingState.asStateFlow()
+
+        override suspend fun setOnboardingCompleted(completed: Boolean) {
+            onboardingState.value = completed
         }
     }
 

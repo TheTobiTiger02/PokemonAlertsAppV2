@@ -35,10 +35,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
-import com.example.pokemonalertsv2.ui.history.AlertHistoryRoute
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 
-private enum class Screen { Onboarding, Alerts, Settings, History }
+private enum class Screen { Onboarding, Alerts, Settings }
 
 class MainActivity : ComponentActivity() {
 
@@ -46,6 +45,45 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val exactAlarmPermissionNeeded = MutableStateFlow(false)
+    private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
+
+    private val locationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+            
+            if (fineLocationGranted || coarseLocationGranted) {
+                // Foreground location granted, now request background location if Android 10+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    requestBackgroundLocationPermission()
+                } else {
+                    Toast.makeText(
+                        this,
+                        "Location permission granted",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            } else {
+                Toast.makeText(
+                    this,
+                    "Location permission is needed for distance calculations and map features",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+    private val backgroundLocationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                Toast.makeText(
+                    this,
+                    "Background location access granted",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                backgroundLocationPermissionNeeded.value = true
+            }
+        }
 
     private val notificationsPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -77,9 +115,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
+        requestLocationPermissionIfNeeded()
         exactAlarmPermissionNeeded.value = AlertAlarmScheduler.shouldPromptForPermission(this)
         setContent {
             val showExactAlarmDialog by exactAlarmPermissionNeeded.collectAsStateWithLifecycle()
+            val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
             val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
@@ -115,19 +155,14 @@ class MainActivity : ComponentActivity() {
                     Screen.Alerts -> {
                         PokemonAlertsRoute(
                             viewModel = alertsViewModel,
+                            historyViewModel = historyViewModel,
                             onSettingsClick = { currentScreen = Screen.Settings },
-                            onHistoryClick = { currentScreen = Screen.History }
+                            onHistoryClick = { /* Now handled by tabs in PokemonAlertsRoute */ }
                         )
                     }
                     Screen.Settings -> {
                         SettingsScreen(
                             viewModel = settingsViewModel,
-                            onBackClick = { currentScreen = Screen.Alerts }
-                        )
-                    }
-                    Screen.History -> {
-                        AlertHistoryRoute(
-                            viewModel = historyViewModel,
                             onBackClick = { currentScreen = Screen.Alerts }
                         )
                     }
@@ -143,6 +178,19 @@ class MainActivity : ComponentActivity() {
                                     data = Uri.parse("package:$packageName")
                                 }
                             exactAlarmPermissionLauncher.launch(intent)
+                        }
+                    )
+                }
+
+                if (showBackgroundLocationDialog) {
+                    BackgroundLocationPermissionDialog(
+                        onDismiss = { backgroundLocationPermissionNeeded.value = false },
+                        onOpenSettings = {
+                            backgroundLocationPermissionNeeded.value = false
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:$packageName")
+                            }
+                            startActivity(intent)
                         }
                     )
                 }
@@ -171,6 +219,43 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun requestLocationPermissionIfNeeded() {
+        val fineLocationGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        val coarseLocationGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!fineLocationGranted && !coarseLocationGranted) {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Already have foreground location, check background
+            requestBackgroundLocationPermission()
+        }
+    }
+
+    private fun requestBackgroundLocationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val backgroundLocationGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!backgroundLocationGranted) {
+                backgroundLocationPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }
+        }
+    }
 }
 
 @Composable
@@ -190,6 +275,30 @@ private fun ExactAlarmPermissionDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(text = stringResource(R.string.exact_alarm_permission_negative))
+            }
+        }
+    )
+}
+
+@Composable
+private fun BackgroundLocationPermissionDialog(
+    onDismiss: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "Background Location Access") },
+        text = { 
+            Text(text = "To get accurate distances and enable location-based features even when the app is in the background, please grant 'Allow all the time' location permission in settings.") 
+        },
+        confirmButton = {
+            TextButton(onClick = onOpenSettings) {
+                Text(text = "Open Settings")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Not Now")
             }
         }
     )

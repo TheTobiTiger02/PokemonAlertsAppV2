@@ -35,12 +35,23 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     override fun onDataSetChanged() {
         runBlocking {
             val repo = PokemonAlertsRepository.create(context)
-            val alerts = runCatching { repo.fetchAlerts() }.getOrElse { emptyList() }
+            // Get alerts from local DB to ensure consistency with the app
+            val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
+            
             // Try to actively get a fresh location fix with a short timeout for distance display
             currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
-            val sorted = alerts.sortedWith(compareByDescending<PokemonAlert> {
+            
+            // Filter expired and sort
+            val now = System.currentTimeMillis()
+            val activeAlerts = alerts.filter {
+                val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
+                end > now
+            }
+            
+            val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
+            
             items.clear()
             items.addAll(sorted)
         }

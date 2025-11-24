@@ -21,6 +21,13 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     }
 
     /**
+     * Returns the current list of alerts from the local database without triggering a network call.
+     */
+    suspend fun getLocalAlerts(): List<PokemonAlert> {
+        return alertDao.getAllAlerts().map { it.toDomain() }
+    }
+
+    /**
      * Fetches alerts from the API and updates the local database.
      * Returns the fresh list for callers who need it immediately (like WorkManager),
      * but UI should generally observe [alerts].

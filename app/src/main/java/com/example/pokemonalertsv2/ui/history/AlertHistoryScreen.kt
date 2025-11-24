@@ -11,6 +11,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,13 +22,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AssistChipDefaults
@@ -70,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertUiModel
 import com.example.pokemonalertsv2.ui.alerts.AlertCard
@@ -93,6 +99,58 @@ private enum class HistoryFilter(val label: String) {
     KECLEON("Kecleon")
 }
 
+data class AlertStatistics(
+    val totalAlerts: Int,
+    val raidCount: Int,
+    val questCount: Int,
+    val spawnCount: Int,
+    val hundoCount: Int,
+    val pvpCount: Int,
+    val nundoCount: Int,
+    val rocketCount: Int,
+    val kecleonCount: Int,
+    val otherCount: Int
+)
+
+private fun calculateStatistics(alerts: List<PokemonAlert>): AlertStatistics {
+    var raids = 0
+    var quests = 0
+    var spawns = 0
+    var hundos = 0
+    var pvp = 0
+    var nundos = 0
+    var rocket = 0
+    var kecleon = 0
+    var other = 0
+    
+    alerts.forEach { alert ->
+        when (alert.type?.lowercase()) {
+            "raid" -> raids++
+            "quest" -> quests++
+            "rare", "spawn" -> spawns++
+            "hundo" -> hundos++
+            "pvp" -> pvp++
+            "nundo" -> nundos++
+            "rocket" -> rocket++
+            "kecleon" -> kecleon++
+            else -> other++
+        }
+    }
+    
+    return AlertStatistics(
+        totalAlerts = alerts.size,
+        raidCount = raids,
+        questCount = quests,
+        spawnCount = spawns,
+        hundoCount = hundos,
+        pvpCount = pvp,
+        nundoCount = nundos,
+        rocketCount = rocket,
+        kecleonCount = kecleon,
+        otherCount = other
+    )
+}
+
 @Composable
 fun AlertHistoryRoute(
     viewModel: AlertHistoryViewModel,
@@ -100,6 +158,7 @@ fun AlertHistoryRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     uiState.errorMessage?.let { message ->
         LaunchedEffect(message) {
@@ -112,7 +171,10 @@ fun AlertHistoryRoute(
         uiState = uiState,
         snackbarHostState = snackbarHostState,
         onRefresh = viewModel::fetchHistory,
-        onBackClick = onBackClick
+        onBackClick = onBackClick,
+        onAlertClick = { alert ->
+            context.startActivity(AlertDetailActivity.createIntent(context, alert))
+        }
     )
 }
 
@@ -122,6 +184,7 @@ fun AlertHistoryScreen(
     snackbarHostState: SnackbarHostState,
     onRefresh: () -> Unit,
     onBackClick: () -> Unit,
+    onAlertClick: (PokemonAlert) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -181,8 +244,12 @@ fun AlertHistoryScreen(
             }
         }
         
-        // Sort by time descending
-        filtered.sortedByDescending { TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L }
+        // Sort by time descending and convert to immutable list for stability
+        filtered.sortedByDescending { TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L }.toList()
+    }
+    
+    val statistics = remember(filteredAlerts) {
+        calculateStatistics(filteredAlerts)
     }
 
     val containerGradient = remember {
@@ -263,6 +330,13 @@ fun AlertHistoryScreen(
                                 availableFilters = availableFilters
                             )
                         }
+                        
+                        item {
+                            StatisticsCard(
+                                statistics = statistics,
+                                selectedDate = selectedDateMillis
+                            )
+                        }
 
                         if (filteredAlerts.isEmpty() && !uiState.isLoading) {
                              item {
@@ -276,9 +350,12 @@ fun AlertHistoryScreen(
                             }
                         }
 
-                        items(filteredAlerts, key = { it.uniqueId }) { alert ->
-                            // Reuse AlertCard but disable some interactions if needed, or keep them
-                            // Since it's history, maybe "Share" is still useful. "Open Map" might be useful to see where it was.
+                        items(
+                            items = filteredAlerts,
+                            // No key parameter - let Compose use positional identity
+                            // This prevents crashes with duplicate alert data
+                            contentType = { "alert_card" }
+                        ) { alert ->
                             AlertCard(
                                 alert = alert,
                                 distanceInfo = AlertDistanceInfo(null, null, null), // No distance for history
@@ -291,8 +368,9 @@ fun AlertHistoryScreen(
                                         // Ignore
                                     }
                                 },
-                                onShowDetails = {}, // Maybe no details for history items if they are simple
-                                onShareClick = { /* Share implementation */ }
+                                onShowDetails = { onAlertClick(alert) },
+                                onShareClick = { /* Share implementation */ },
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }
@@ -326,6 +404,132 @@ private fun FilterRow(
                 )
             )
         }
+    }
+}
+
+@Composable
+private fun StatisticsCard(
+    statistics: AlertStatistics,
+    selectedDate: Long?,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by rememberSaveable { mutableStateOf(true) }
+    
+    val dateText = if (selectedDate != null) {
+        val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
+        String.format(
+            "%02d/%02d/%04d",
+            calendar.get(Calendar.DAY_OF_MONTH),
+            calendar.get(Calendar.MONTH) + 1,
+            calendar.get(Calendar.YEAR)
+        )
+    } else {
+        "All Time"
+    }
+    
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+        ),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Statistics for $dateText",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "${statistics.totalAlerts} total alerts",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            // Expandable breakdown
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier.padding(top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (statistics.raidCount > 0) {
+                        StatRow("Raids", statistics.raidCount, Color(0xFFE91E63))
+                    }
+                    if (statistics.questCount > 0) {
+                        StatRow("Quests", statistics.questCount, Color(0xFF2196F3))
+                    }
+                    if (statistics.spawnCount > 0) {
+                        StatRow("Spawns", statistics.spawnCount, Color(0xFF4CAF50))
+                    }
+                    if (statistics.hundoCount > 0) {
+                        StatRow("Hundos", statistics.hundoCount, Color(0xFFFFD700))
+                    }
+                    if (statistics.pvpCount > 0) {
+                        StatRow("PvP", statistics.pvpCount, Color(0xFF9C27B0))
+                    }
+                    if (statistics.nundoCount > 0) {
+                        StatRow("Nundos", statistics.nundoCount, Color(0xFF607D8B))
+                    }
+                    if (statistics.rocketCount > 0) {
+                        StatRow("Rocket", statistics.rocketCount, Color(0xFFFF5722))
+                    }
+                    if (statistics.kecleonCount > 0) {
+                        StatRow("Kecleon", statistics.kecleonCount, Color(0xFF00BCD4))
+                    }
+                    if (statistics.otherCount > 0) {
+                        StatRow("Other", statistics.otherCount, Color(0xFF757575))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, count: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(color, CircleShape)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

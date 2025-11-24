@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import com.example.pokemonalertsv2.ui.alerts.AlertsMapRoute
 
 class AlertsMapActivity : ComponentActivity() {
     private val alertsViewModel: PokemonAlertsViewModel by viewModels()
