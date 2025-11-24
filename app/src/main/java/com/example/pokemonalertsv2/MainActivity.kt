@@ -29,7 +29,6 @@ import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.work.AlertAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -120,14 +119,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val showExactAlarmDialog by exactAlarmPermissionNeeded.collectAsStateWithLifecycle()
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
-            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
-            val darkTheme = when (themeMode) {
-                1 -> false // Light
-                2 -> true  // Dark
-                else -> isSystemInDarkTheme()
-            }
+            // Force Dark Theme regardless of settings/system
+            val darkTheme = true
 
             var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
 

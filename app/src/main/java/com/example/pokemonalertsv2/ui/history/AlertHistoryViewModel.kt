@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.ui.history
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -30,11 +31,14 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
     fun fetchHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            Log.d("AlertHistoryVM", "Fetching history...")
             runCatching {
                 repository.getHistory()
             }.onSuccess { history ->
+                Log.d("AlertHistoryVM", "History fetched: ${history.size} alerts")
                 _uiState.update { it.copy(isLoading = false, alerts = history) }
             }.onFailure { throwable ->
+                Log.e("AlertHistoryVM", "Failed to fetch history", throwable)
                 _uiState.update { it.copy(isLoading = false, errorMessage = throwable.localizedMessage ?: "Failed to load history") }
             }
         }
