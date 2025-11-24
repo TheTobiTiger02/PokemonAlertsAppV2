@@ -48,25 +48,25 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = LightPrimary,
     onPrimary = Color.White,
-    primaryContainer = NebulaPurple,
-    onPrimaryContainer = Color.White,
+    primaryContainer = LavenderMist,
+    onPrimaryContainer = MidnightViolet,
 
     secondary = LightSecondary,
     onSecondary = Color.White,
-    secondaryContainer = StardustBlue,
-    onSecondaryContainer = Color(0xFF00152E),
+    secondaryContainer = SkyMist,
+    onSecondaryContainer = DeepOcean,
 
-    tertiary = LuminousAmber,
-    onTertiary = Color(0xFF3A1A00),
-    tertiaryContainer = EmberOrange,
-    onTertiaryContainer = Color(0xFF2D0B00),
+    tertiary = EmberOrange,
+    onTertiary = Color.White,
+    tertiaryContainer = PeachMist,
+    onTertiaryContainer = BurntSienna,
 
     background = LightSky,
     onBackground = Color(0xFF0B1026),
     surface = LightSurface,
     onSurface = Color(0xFF060A1A),
     surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = Color(0xFF303B63),
+    onSurfaceVariant = Color(0xFF44474F),
     outline = LightOutline,
     outlineVariant = Color(0xFFC8CEFF),
 
@@ -76,7 +76,7 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun PokemonAlertsV2Theme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Forced Dark Mode
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = false, // Disabled by default to use Pokémon colors
     content: @Composable () -> Unit
@@ -84,11 +84,9 @@ fun PokemonAlertsV2Theme(
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            dynamicDarkColorScheme(context) // Force dark dynamic if used
         }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+        else -> DarkColorScheme
     }
     
     val view = LocalView.current
@@ -96,7 +94,7 @@ fun PokemonAlertsV2Theme(
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
             window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false // Always light text (dark bg)
         }
     }
 

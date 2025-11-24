@@ -39,7 +39,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     }
 
     suspend fun getHistory(): List<PokemonAlert> {
-        return service.getHistory()
+        val response = service.getHistory()
+        return response.data
     }
     
     /**

@@ -49,8 +49,6 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBackClick: () -> Unit
 ) {
-    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
-
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
 
     val containerGradient = Brush.verticalGradient(
@@ -97,13 +95,6 @@ fun SettingsScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                SettingsSection(title = "Appearance") {
-                    ThemeSelector(
-                        currentMode = themeMode,
-                        onModeSelected = viewModel::setThemeMode
-                    )
-                }
-                
                 SettingsSection(title = "About") {
                    Text(
                        text = "PokemonAlerts v1.0.0",
@@ -140,59 +131,6 @@ fun SettingsSection(
         ) {
             content()
         }
-    }
-}
-
-@Composable
-fun ThemeSelector(
-    currentMode: Int,
-    onModeSelected: (Int) -> Unit
-) {
-    Column {
-        Text(
-            text = "Theme",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        RadioButtonOption(
-            text = "System Default",
-            selected = currentMode == 0,
-            onClick = { onModeSelected(0) }
-        )
-        RadioButtonOption(
-            text = "Light",
-            selected = currentMode == 1,
-            onClick = { onModeSelected(1) }
-        )
-        RadioButtonOption(
-            text = "Dark",
-            selected = currentMode == 2,
-            onClick = { onModeSelected(2) }
-        )
-    }
-}
-
-@Composable
-fun RadioButtonOption(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp)
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 8.dp)
-        )
     }
 }
 

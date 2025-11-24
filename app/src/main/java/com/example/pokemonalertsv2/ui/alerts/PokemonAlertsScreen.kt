@@ -18,6 +18,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -103,6 +104,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -125,8 +127,10 @@ import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
-import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
-import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -517,7 +521,13 @@ private fun FilterRow(
     Column {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { _, _ ->
+                        // Consume horizontal drag to prevent parent pager from intercepting
+                    }
+                }
         ) {
             items(AlertFilter.values().filter { it in availableFilters }) { filter ->
                 ElevatedAssistChip(

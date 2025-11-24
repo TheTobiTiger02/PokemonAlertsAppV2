@@ -72,6 +72,10 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
 import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
