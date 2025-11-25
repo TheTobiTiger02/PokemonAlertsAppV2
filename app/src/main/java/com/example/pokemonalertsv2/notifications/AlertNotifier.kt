@@ -18,8 +18,10 @@ import coil.request.SuccessResult
 import coil.size.Scale
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 object AlertNotifier {
@@ -76,11 +78,48 @@ object AlertNotifier {
     suspend fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
         if (alerts.isEmpty()) return
         ensureChannel(context)
+        
+        // Check global notification preference
+        val repository = PokemonAlertsRepository.create(context)
+        val notificationsEnabled = repository.alertPreferences.notificationsEnabled.first()
+        if (!notificationsEnabled) return
+        
+        // Check if notifications are silenced
+        val silenceUntil = repository.alertPreferences.silenceUntil.first()
+        if (silenceUntil > System.currentTimeMillis()) {
+            return
+        }
+        
+        val raidsEnabled = repository.alertPreferences.raidsNotifications.first()
+        val spawnsEnabled = repository.alertPreferences.spawnsNotifications.first()
+        val questsEnabled = repository.alertPreferences.questsNotifications.first()
+        val hundosEnabled = repository.alertPreferences.hundosNotifications.first()
+        val pvpEnabled = repository.alertPreferences.pvpNotifications.first()
+        val nundosEnabled = repository.alertPreferences.nundosNotifications.first()
+        val kecleonEnabled = repository.alertPreferences.kecleonNotifications.first()
+        val rocketEnabled = repository.alertPreferences.rocketNotifications.first()
+        val vibrateEnabled = repository.alertPreferences.notificationVibrate.first()
+        
         val notificationManager = NotificationManagerCompat.from(context)
         // Actively try to get a fresh location fix; keep it best-effort with short timeout
         val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
 
         alerts.forEachIndexed { index, alert ->
+            // Filter based on alert type and user preferences
+            val shouldNotify = when {
+                alert.type?.contains("raid", ignoreCase = true) == true -> raidsEnabled
+                alert.type?.contains("spawn", ignoreCase = true) == true || 
+                    alert.type?.contains("rare", ignoreCase = true) == true -> spawnsEnabled
+                alert.type?.contains("quest", ignoreCase = true) == true -> questsEnabled
+                alert.type?.equals("hundo", ignoreCase = true) == true -> hundosEnabled
+                alert.type?.equals("pvp", ignoreCase = true) == true -> pvpEnabled
+                alert.type?.equals("nundo", ignoreCase = true) == true -> nundosEnabled
+                alert.type?.equals("kecleon", ignoreCase = true) == true -> kecleonEnabled
+                alert.type?.equals("rocket", ignoreCase = true) == true -> rocketEnabled
+                else -> true // Default to sending for unknown types
+            }
+            
+            if (!shouldNotify) return@forEachIndexed
             val notificationIntent = AlertDetailActivity.createIntent(context, alert)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -145,6 +184,7 @@ object AlertNotifier {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(ContextCompat.getColor(context, R.color.poke_red))
+                .setVibrate(if (vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
                     context.getString(R.string.notification_action_directions),

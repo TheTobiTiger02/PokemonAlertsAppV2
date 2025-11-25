@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class PokemonAlert(
+    @SerialName("id")
+    val id: String? = null,
     val name: String,
     val description: String = "",
     @SerialName("imageUrl")
