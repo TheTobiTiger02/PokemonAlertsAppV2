@@ -7,21 +7,18 @@ import androidx.core.content.ContextCompat
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
-import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.Rect
-import android.graphics.RectF
-import android.graphics.Shader
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,19 +27,28 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
@@ -53,14 +59,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,33 +79,39 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import coil.ImageLoader
+import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
-import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,6 +119,8 @@ import kotlinx.coroutines.withContext
 fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    
+    // Periodic refresh logic
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
@@ -115,10 +129,11 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
             }
         }
     }
+    
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
-        onMarkerClick = { /* no-op, let info window show */ }
+        onRefresh = { viewModel.refreshAlerts() }
     )
 }
 
@@ -127,465 +142,373 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
 fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
-    onMarkerClick: (PokemonAlert) -> Unit,
+    onRefresh: () -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    
+    // State
     val defaultLatLng = remember { LatLng(0.0, 0.0) }
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultLatLng, 2f)
     }
     var mapLoaded by remember { mutableStateOf(false) }
-    var showInsights by remember { mutableStateOf(false) } // Start closed by default
-    var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) } // For popup
+    var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
+    var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var mapType by rememberSaveable { mutableStateOf(MapType.NORMAL) }
 
-    // Check if location permission is granted
+    // Permissions
     val hasLocationPermission = remember {
-        ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Real-time filtering for map markers
+    // Time for expiration checks
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1000)
+            kotlinx.coroutines.delay(5000) // Check every 5s
         }
     }
 
-    val activeAlerts = remember(alerts, now) {
-        alerts.filter {
+    // Filtering Logic
+    val filteredAlerts = remember(alerts, selectedFilter, now) {
+        // 1. Filter by time (active only)
+        val active = alerts.filter {
             val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
             end > now
         }
+        // 2. Filter by type
+        when (selectedFilter) {
+            AlertFilter.ALL -> active
+            AlertFilter.RAIDS -> active.filter { it.type?.equals("Raid", ignoreCase = true) == true }
+            AlertFilter.QUESTS -> active.filter { it.type?.equals("Quest", ignoreCase = true) == true }
+            AlertFilter.SPAWNS -> active.filter { 
+                val t = it.type
+                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
+            }
+            AlertFilter.HUNDOS -> active.filter { it.type?.equals("Hundo", ignoreCase = true) == true }
+            AlertFilter.PVP -> active.filter { it.type?.equals("PvP", ignoreCase = true) == true }
+            AlertFilter.NUNDOS -> active.filter { it.type?.equals("Nundo", ignoreCase = true) == true }
+            AlertFilter.KECLEON -> active.filter { it.type?.equals("Kecleon", ignoreCase = true) == true }
+            AlertFilter.ROCKET -> active.filter { it.type?.equals("Rocket", ignoreCase = true) == true }
+        }
+    }
+    
+    // Determine available filters for UI
+    val availableFilters = remember(alerts) {
+        val set = mutableSetOf(AlertFilter.ALL)
+        if (alerts.any { it.type?.equals("Raid", ignoreCase = true) == true }) set.add(AlertFilter.RAIDS)
+        if (alerts.any { it.type?.equals("Quest", ignoreCase = true) == true }) set.add(AlertFilter.QUESTS)
+        if (alerts.any { it.type?.equals("Rare", ignoreCase = true) == true || it.type?.equals("Spawn", ignoreCase = true) == true }) set.add(AlertFilter.SPAWNS)
+        if (alerts.any { it.type?.equals("Hundo", ignoreCase = true) == true }) set.add(AlertFilter.HUNDOS)
+        if (alerts.any { it.type?.equals("PvP", ignoreCase = true) == true }) set.add(AlertFilter.PVP)
+        if (alerts.any { it.type?.equals("Nundo", ignoreCase = true) == true }) set.add(AlertFilter.NUNDOS)
+        if (alerts.any { it.type?.equals("Kecleon", ignoreCase = true) == true }) set.add(AlertFilter.KECLEON)
+        if (alerts.any { it.type?.equals("Rocket", ignoreCase = true) == true }) set.add(AlertFilter.ROCKET)
+        set
     }
 
-    // Map UI Settings with smooth controls and location enabled only if permission granted
+    // Map Configuration
     val mapUiSettings = remember(hasLocationPermission) {
         MapUiSettings(
             zoomControlsEnabled = false,
-            myLocationButtonEnabled = hasLocationPermission, // Only show if permission granted
+            myLocationButtonEnabled = false, // We'll implement a custom FAB
             compassEnabled = true,
-            mapToolbarEnabled = false
+            mapToolbarEnabled = false,
+            rotationGesturesEnabled = true,
+            tiltGesturesEnabled = true
         )
     }
 
-    val mapProperties = remember(hasLocationPermission) {
+    val mapProperties = remember(hasLocationPermission, mapType) {
         MapProperties(
-            isMyLocationEnabled = hasLocationPermission, // Only enable if permission granted
+            isMyLocationEnabled = hasLocationPermission,
+            mapType = mapType,
             minZoomPreference = 3f,
             maxZoomPreference = 20f,
-            mapStyleOptions = com.google.android.gms.maps.model.MapStyleOptions(
-                """
-                [
-                  {
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#212121"}]
-                  },
-                  {
-                    "elementType": "labels.icon",
-                    "stylers": [{"visibility": "off"}]
-                  },
-                  {
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#757575"}]
-                  },
-                  {
-                    "elementType": "labels.text.stroke",
-                    "stylers": [{"color": "#212121"}]
-                  },
-                  {
-                    "featureType": "administrative",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#757575"}]
-                  },
-                  {
-                    "featureType": "administrative.country",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#9e9e9e"}]
-                  },
-                  {
-                    "featureType": "administrative.locality",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#bdbdbd"}]
-                  },
-                  {
-                    "featureType": "poi",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#757575"}]
-                  },
-                  {
-                    "featureType": "poi.park",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#181818"}]
-                  },
-                  {
-                    "featureType": "poi.park",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#616161"}]
-                  },
-                  {
-                    "featureType": "poi.park",
-                    "elementType": "labels.text.stroke",
-                    "stylers": [{"color": "#1b1b1b"}]
-                  },
-                  {
-                    "featureType": "road",
-                    "elementType": "geometry.fill",
-                    "stylers": [{"color": "#2c2c2c"}]
-                  },
-                  {
-                    "featureType": "road",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#8a8a8a"}]
-                  },
-                  {
-                    "featureType": "road.arterial",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#373737"}]
-                  },
-                  {
-                    "featureType": "road.highway",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#3c3c3c"}]
-                  },
-                  {
-                    "featureType": "road.highway.controlled_access",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#4e4e4e"}]
-                  },
-                  {
-                    "featureType": "road.local",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#616161"}]
-                  },
-                  {
-                    "featureType": "transit",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#757575"}]
-                  },
-                  {
-                    "featureType": "water",
-                    "elementType": "geometry",
-                    "stylers": [{"color": "#000000"}]
-                  },
-                  {
-                    "featureType": "water",
-                    "elementType": "labels.text.fill",
-                    "stylers": [{"color": "#3d3d3d"}]
-                  }
-                ]
-                """.trimIndent()
-            )
+            // Apply dark style only if in Normal mode
+            mapStyleOptions = if (mapType == MapType.NORMAL) MapStyleOptions(DarkMapStyle) else null
         )
     }
 
-    Scaffold(
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                    )
-            ) {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = stringResource(R.string.map_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                            )
-                            Text(
-                                text = stringResource(id = R.string.alerts_toolbar_tagline),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_back),
-                                contentDescription = stringResource(id = R.string.back),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
-                    )
+    // Root Container
+    Box(modifier = Modifier.fillMaxSize()) {
+        
+        // 1. Google Map
+        GoogleMap(
+            modifier = Modifier.fillMaxSize(),
+            cameraPositionState = cameraPositionState,
+            // Add padding for top bar and bottom sheets
+            contentPadding = PaddingValues(top = 100.dp, bottom = 100.dp),
+            onMapLoaded = { mapLoaded = true },
+            properties = mapProperties,
+            uiSettings = mapUiSettings
+        ) {
+            filteredAlerts.forEach { alert ->
+                MapMarker(
+                    alert = alert,
+                    now = now,
+                    density = density,
+                    context = context,
+                    onClick = { selectedAlert = alert }
                 )
             }
         }
-    ) { padding ->
-        val topInset = padding.calculateTopPadding()
-        Box(modifier = Modifier.fillMaxSize()) {
-            GoogleMap(
-                modifier = Modifier.fillMaxSize(),
-                cameraPositionState = cameraPositionState,
-                contentPadding = padding,
-                onMapLoaded = { 
-                    mapLoaded = true 
-                },
-                properties = mapProperties,
-                uiSettings = mapUiSettings
+
+        // 2. Top Floating UI (Back, Title, Refresh, Layers)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(WindowInsets.statusBars.asPaddingValues())
+                .padding(top = 12.dp)
+        ) {
+            // Top Bar Pill
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
             ) {
-                activeAlerts.forEach { alert ->
-                    val position = LatLng(alert.latitude, alert.longitude)
-                    
-                    // Detect alert type for badge
-                    val alertType = remember(alert) { detectAlertType(alert) }
-                    
-                    // Calculate if under 10 minutes (for triggering regeneration)
-                    val timeRemainingMs = remember(now, alert.endTime) {
-                        (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) - now
-                    }
-                    val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000)
-                    
-                    // Load custom marker icon asynchronously with type badge
-                    // Regenerate when crossing the 10-minute threshold
-                    var customIcon by remember(alert.imageUrl, alert.thumbnailUrl, alertType, isExpiringSoon) { 
-                        mutableStateOf<BitmapDescriptor?>(null) 
-                    }
-                    
-                    LaunchedEffect(alert.imageUrl, alert.thumbnailUrl, alertType, isExpiringSoon) {
-                        val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
-                        val markerSizePx = with(density) { 64.dp.toPx().toInt() }
-                        customIcon = imageUrl?.let { 
-                            withContext(Dispatchers.IO) {
-                                createBitmapDescriptorFromUrl(context, it, markerSizePx, alertType, alert.endTime)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .shadow(8.dp, RoundedCornerShape(28.dp)),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                        
+                        Text(
+                            text = stringResource(R.string.map_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row {
+                            IconButton(onClick = onRefresh) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Refresh"
+                                )
+                            }
+                            IconButton(onClick = {
+                                mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
+                            }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_layers),
+                                    contentDescription = "Layers",
+                                    tint = if (mapType == MapType.HYBRID) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
                             }
                         }
                     }
-                    
-                    // Use custom icon marker with popup and type badge
-                    MarkerInfoWindowContent(
-                        state = MarkerState(position = position),
-                        icon = customIcon,
-                        title = if (alertType.displayName != null) "${alertType.displayName} ${alert.name}" else alert.name,
-                        snippet = TimeUtils.formatDurationShort(
-                            (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: 0L) - System.currentTimeMillis()
-                        ),
-                        onClick = {
-                            // Show popup overlay instead of opening new screen
-                            selectedAlert = alert
-                            true
-                        }
-                    ) {
-                        // Simple info window
-                        Text(
-                            text = alert.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(4.dp)
-                        )
-                    }
                 }
             }
             
-            // Animated insights overlay
-            AnimatedVisibility(
-                visible = showInsights && mapLoaded,
-                enter = fadeIn(animationSpec = tween(400)) + slideInVertically(
-                    animationSpec = tween(400, easing = FastOutSlowInEasing),
-                    initialOffsetY = { -it }
-                ),
-                exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
-                    animationSpec = tween(300),
-                    targetOffsetY = { -it }
-                ),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 16.dp)
-                    .padding(top = topInset + 12.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Filter Chips
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MapInsightsOverlay(
-                    alerts = activeAlerts,
-                    onDismiss = { showInsights = false }
-                )
-            }
-            
-            // Alert detail popup overlay
-            AnimatedVisibility(
-                visible = selectedAlert != null,
-                enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    initialOffsetY = { it }
-                ),
-                exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(
-                    animationSpec = tween(200),
-                    targetOffsetY = { it }
-                ),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-            ) {
-                selectedAlert?.let { alert ->
-                    AlertDetailPopup(
-                        alert = alert,
-                        onDismiss = { selectedAlert = null },
-                        onOpenFullDetail = {
-                            context.startActivity(AlertDetailActivity.createIntent(context, alert))
-                        }
+                items(AlertFilter.values().filter { it in availableFilters }) { filter ->
+                    ElevatedAssistChip(
+                        onClick = { selectedFilter = filter },
+                        label = { Text(filter.label) },
+                        colors = AssistChipDefaults.elevatedAssistChipColors(
+                            containerColor = if (selectedFilter == filter) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                            labelColor = if (selectedFilter == filter) 
+                                MaterialTheme.colorScheme.onPrimary 
+                            else 
+                                MaterialTheme.colorScheme.onSurface
+                        ),
+                        border = null,
+                        elevation = AssistChipDefaults.elevatedAssistChipElevation(elevation = 4.dp)
                     )
                 }
             }
-            
-            // Floating action button to recenter
-            AnimatedVisibility(
-                visible = mapLoaded,
-                enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-            ) {
-                FilledIconButton(
-                    onClick = {
-                        showInsights = !showInsights
+        }
+        
+        // 3. Bottom Controls (Recenter FAB)
+        AnimatedVisibility(
+            visible = mapLoaded,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .padding(bottom = if (selectedAlert != null) 320.dp else 0.dp), // Move up if popup shows
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                 FilledIconButton(
+                    onClick = { 
+                        scope.launch {
+                             // Try to zoom to bounds of visible alerts, or simple user location?
+                             // Let's just zoom to the alerts for now as user location might be null
+                             if (filteredAlerts.isNotEmpty()) {
+                                 if (filteredAlerts.size == 1) {
+                                     val a = filteredAlerts.first()
+                                     try {
+                                         cameraPositionState.animate(
+                                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f),
+                                             1000
+                                         )
+                                     } catch (_: Exception) {}
+                                 } else {
+                                     val builder = LatLngBounds.Builder()
+                                     filteredAlerts.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+                                     val bounds = builder.build()
+                                     val results = FloatArray(1)
+                                     android.location.Location.distanceBetween(
+                                         bounds.northeast.latitude, bounds.northeast.longitude,
+                                         bounds.southwest.latitude, bounds.southwest.longitude,
+                                         results
+                                     )
+                                     try {
+                                         if (results[0] < 2000) {
+                                             cameraPositionState.animate(
+                                                 CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
+                                                 1000
+                                             )
+                                         } else {
+                                             cameraPositionState.animate(
+                                                 CameraUpdateFactory.newLatLngBounds(bounds, 300),
+                                                 1000
+                                             )
+                                         }
+                                     } catch (_: Exception) {}
+                                 }
+                             }
+                        }
                     },
-                    modifier = Modifier
-                        .size(56.dp)
-                        .shadow(8.dp, CircleShape),
+                    modifier = Modifier.size(56.dp).shadow(8.dp, CircleShape),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    Icon(
-                        imageVector = if (showInsights) Icons.Filled.Close else Icons.Filled.Info,
-                        contentDescription = if (showInsights) "Hide insights" else "Show insights"
-                    )
+                    Icon(Icons.Default.LocationOn, "Fit to Alerts")
                 }
             }
         }
-    }
 
-    // Auto-fit camera to markers with smooth animation
-    LaunchedEffect(mapLoaded, activeAlerts) {
-        if (!mapLoaded) return@LaunchedEffect
-        if (activeAlerts.isEmpty()) return@LaunchedEffect
-        
-        kotlinx.coroutines.delay(500) // Small delay for smoother initial load
-        
-        if (activeAlerts.size == 1) {
-            val a = activeAlerts.first()
-            cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 15f),
-                durationMs = 800
-            )
-        } else {
-            val builder = LatLngBounds.Builder()
-            activeAlerts.forEach { a -> builder.include(LatLng(a.latitude, a.longitude)) }
-            val bounds = builder.build()
-            val paddingPx = kotlin.math.max(1, (80f * density.density).toInt())
-            runCatching {
-                cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLngBounds(bounds, paddingPx),
-                    durationMs = 1000
+        // 4. Alert Detail Popup
+        AnimatedVisibility(
+            visible = selectedAlert != null,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            selectedAlert?.let { alert ->
+                AlertDetailPopup(
+                    alert = alert,
+                    onDismiss = { selectedAlert = null },
+                    onOpenFullDetail = {
+                        context.startActivity(AlertDetailActivity.createIntent(context, alert))
+                    }
                 )
             }
         }
     }
+    
+    // Auto-fit camera logic on first load or filter change (optional, but good UX)
+    // Only run once on load
+    LaunchedEffect(mapLoaded) {
+        if (mapLoaded && filteredAlerts.isNotEmpty()) {
+             kotlinx.coroutines.delay(500)
+             if (filteredAlerts.size == 1) {
+                 val a = filteredAlerts.first()
+                 try {
+                     cameraPositionState.animate(
+                         CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f),
+                         1000
+                     )
+                 } catch (_: Exception) {}
+             } else {
+                 val builder = LatLngBounds.Builder()
+                 filteredAlerts.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+                 val bounds = builder.build()
+                 val results = FloatArray(1)
+                 android.location.Location.distanceBetween(
+                     bounds.northeast.latitude, bounds.northeast.longitude,
+                     bounds.southwest.latitude, bounds.southwest.longitude,
+                     results
+                 )
+                 try {
+                     if (results[0] < 2000) {
+                         cameraPositionState.animate(
+                             CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
+                             1000
+                         )
+                     } else {
+                         cameraPositionState.animate(
+                             CameraUpdateFactory.newLatLngBounds(bounds, 300),
+                             1000
+                         )
+                     }
+                 } catch (_: Exception) {}
+             }
+        }
+    }
 }
 
 @Composable
-private fun MapInsightsOverlay(
-    alerts: List<PokemonAlert>, 
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+private fun MapMarker(
+    alert: PokemonAlert,
+    now: Long,
+    density: androidx.compose.ui.unit.Density,
+    context: android.content.Context,
+    onClick: () -> Unit
 ) {
-    val endingSoonCount = remember(alerts) {
-        alerts.count {
-            val millis = TimeUtils.parseEndTimeToMillis(it.endTime) ?: return@count false
-            val remaining = millis - System.currentTimeMillis()
-            remaining in 1..(20 * 60 * 1000)
-        }
+    val position = LatLng(alert.latitude, alert.longitude)
+    val alertType = remember(alert) { detectAlertType(alert) }
+    val timeRemainingMs = remember(now, alert.endTime) {
+        (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) - now
     }
-    Column(modifier = modifier.fillMaxWidth()) {
-        ElevatedCard(
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp),
-            colors = CardDefaults.elevatedCardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp)
-            ),
-            modifier = Modifier.shadow(12.dp, RoundedCornerShape(24.dp))
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(id = R.string.alerts_hero_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Close",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    InsightMetric(label = stringResource(id = R.string.alerts_hero_active_label), value = alerts.size)
-                    InsightMetric(label = stringResource(id = R.string.alerts_hero_ending_label), value = endingSoonCount)
-                }
+    val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000)
+    
+    var customIcon by remember { mutableStateOf<BitmapDescriptor?>(null) }
+    
+    LaunchedEffect(alert.imageUrl, alert.thumbnailUrl, alertType, isExpiringSoon) {
+        val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
+        val markerSizePx = with(density) { 64.dp.toPx().toInt() }
+        customIcon = imageUrl?.let { 
+            withContext(Dispatchers.IO) {
+                createBitmapDescriptorFromUrl(context, it, markerSizePx, alertType, alert.endTime)
             }
         }
     }
-}
-
-@Composable
-private fun InsightMetric(label: String, value: Int) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-        modifier = Modifier.shadow(4.dp, RoundedCornerShape(16.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = value.toString(), 
-                style = MaterialTheme.typography.headlineMedium, 
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = label, 
-                style = MaterialTheme.typography.labelMedium, 
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+    
+    MarkerInfoWindowContent(
+        state = MarkerState(position = position),
+        icon = customIcon,
+        title = alert.name,
+        visible = true,
+        onClick = { 
+            onClick()
+            true // Consume click
         }
+    ) {
+         // Empty info window, we use the custom popup
     }
 }
 
@@ -597,196 +520,120 @@ private fun AlertDetailPopup(
 ) {
     val context = LocalContext.current
     
-    // Live timer update
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1000) // Update every second
+            kotlinx.coroutines.delay(1000)
         }
     }
     
-    // Scrim background to dim the map
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                onClick = onDismiss,
-                indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            )
-    )
-    
-    // Bottom sheet style card
-    ElevatedCard(
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 12.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 280.dp) // More map visible
+            .background(Color.Black.copy(alpha = 0.3f)) // Dim background slightly
+            .clickable(onClick = onDismiss)
     ) {
-        Column(
+        ElevatedCard(
             modifier = Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(20.dp) // Reduced padding
+                .padding(16.dp)
+                .clickable(enabled = false) {}, // Prevent clicks passing through card
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f) // Glassy look
+            ),
+            elevation = CardDefaults.elevatedCardElevation(defaultElevation = 16.dp)
         ) {
-            // Handle bar at top
-            Box(
-                modifier = Modifier
-                    .width(36.dp)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                    .align(Alignment.CenterHorizontally)
-            )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Alert image - smaller
-            val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
-            if (imageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(140.dp) // Reduced from 200dp
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            
-            // Alert name with type badge (only for special types)
-            val alertType = detectAlertType(alert)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    text = alert.name,
-                    style = MaterialTheme.typography.titleLarge, // Reduced from headlineSmall
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2
-                )
-                
-                // Only show badge for Hundo, PVP, and Nundo
-                alertType.badgeColor?.let { color ->
-                    alertType.displayName?.let { name ->
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                         Text(
+                            text = alert.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // Time Remaining Pill
+                        val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
+                        val remaining = endMillis?.let { it - currentTime } ?: 0L
+                        
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(color)
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (remaining < 0) 
+                                MaterialTheme.colorScheme.errorContainer 
+                            else 
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                         ) {
                             Text(
-                                text = name,
+                                text = if (remaining > 0) 
+                                    "Ends in ${TimeUtils.formatDurationShort(remaining)}" 
+                                else 
+                                    "Expired",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp)
+                                color = if (remaining < 0)
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                else
+                                    MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Time remaining with live updates
-            val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-            if (endMillis != null && endMillis > currentTime) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                ) {
-                    Text(
-                        text = "⏱️ ${TimeUtils.formatDurationShort(endMillis - currentTime)}",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            
-            // Description - more compact
-            if (alert.description.isNotBlank()) {
-                Text(
-                    text = alert.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2 // Reduced from 4
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            
-            // Action buttons - more compact
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Google Maps Directions button
-                androidx.compose.material3.Button(
-                    onClick = {
-                        onDismiss()
-                        openMapForAlert(context, alert)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ),
-                    contentPadding = PaddingValues(vertical = 10.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp).padding(end = 6.dp)
-                    )
-                    Text("Get Directions", style = MaterialTheme.typography.labelLarge)
+                    
+                    // Close
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    ) {
+                        Icon(Icons.Default.Close, "Close", modifier = Modifier.size(18.dp))
+                    }
                 }
                 
+                // Action Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Close button
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(vertical = 10.dp)
-                    ) {
-                        Text("Close", style = MaterialTheme.typography.labelLarge)
-                    }
-                    
-                    // Full details button
-                    androidx.compose.material3.FilledTonalButton(
+                     androidx.compose.material3.Button(
                         onClick = {
-                            onDismiss()
-                            onOpenFullDetail()
+                            openMapForAlert(context, alert)
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("Full Details")
+                         Icon(
+                             painter = painterResource(id = R.drawable.ic_map),
+                             contentDescription = null,
+                             modifier = Modifier.size(18.dp).padding(end = 8.dp)
+                         )
+                         Text("Directions")
+                    }
+                    
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = onOpenFullDetail,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                         Text("Details")
                     }
                 }
             }
         }
     }
 }
+
 
 // Helper to detect alert type from name and description
 private fun detectAlertType(alert: PokemonAlert): AlertType {
@@ -819,7 +666,7 @@ private suspend fun createBitmapDescriptorFromUrl(
             it - System.currentTimeMillis() 
         } ?: Long.MAX_VALUE
         val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000) // 10 minutes in ms
-        val globalAlpha = if (isExpiringSoon) 128 else 255 // 50% transparent if expiring soon
+        val globalAlpha = if (isExpiringSoon) 150 else 255
         
         val loader = ImageLoader(context)
         val request = ImageRequest.Builder(context)
@@ -831,72 +678,165 @@ private suspend fun createBitmapDescriptorFromUrl(
         val result = loader.execute(request)
         if (result is SuccessResult) {
             val drawable = result.drawable
-            val width = drawable.intrinsicWidth.coerceAtLeast(1)
-            val height = drawable.intrinsicHeight.coerceAtLeast(1)
             
             // Create bitmap with smaller padding for tighter glow effect
-            val padding = (sizePx * 0.10f).toInt()
+            val padding = (sizePx * 0.15f).toInt()
             val totalSize = sizePx + (padding * 2)
             val bmp = Bitmap.createBitmap(totalSize, totalSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             
-            // Draw glowing backlight for special types (smaller, tighter glow)
+            val centerX = totalSize / 2f
+            val centerY = totalSize / 2f
+            val imageRadius = sizePx / 2f
+
+            // 1. Draw Shadow/Glow
             alertType.badgeColor?.let { color ->
-                val centerX = totalSize / 2f
-                val centerY = totalSize / 2f
-                val baseRadius = sizePx / 2f
-                
-                // Outer glow (most diffuse) - reduced radius
-                val outerGlowPaint = Paint().apply {
+                val paint = Paint().apply {
                     this.color = color
-                    alpha = (45 * globalAlpha / 255) // Apply transparency
+                    alpha = 180
                     style = Paint.Style.FILL
                     isAntiAlias = true
                     maskFilter = android.graphics.BlurMaskFilter(
-                        padding.toFloat() * 0.5f,
+                        padding.toFloat(),
                         android.graphics.BlurMaskFilter.Blur.NORMAL
                     )
                 }
-                canvas.drawCircle(centerX, centerY, baseRadius + padding * 0.35f, outerGlowPaint)
-                
-                // Mid glow - reduced radius
-                val midGlowPaint = Paint().apply {
-                    this.color = color
-                    alpha = (80 * globalAlpha / 255) // Apply transparency
-                    style = Paint.Style.FILL
-                    isAntiAlias = true
-                    maskFilter = android.graphics.BlurMaskFilter(
-                        padding.toFloat() * 0.3f,
-                        android.graphics.BlurMaskFilter.Blur.NORMAL
-                    )
-                }
-                canvas.drawCircle(centerX, centerY, baseRadius + padding * 0.2f, midGlowPaint)
-                
-                // Inner glow (brightest) - reduced radius
-                val innerGlowPaint = Paint().apply {
-                    this.color = color
-                    alpha = (110 * globalAlpha / 255) // Apply transparency
-                    style = Paint.Style.FILL
-                    isAntiAlias = true
-                    maskFilter = android.graphics.BlurMaskFilter(
-                        padding.toFloat() * 0.15f,
-                        android.graphics.BlurMaskFilter.Blur.NORMAL
-                    )
-                }
-                canvas.drawCircle(centerX, centerY, baseRadius + padding * 0.1f, innerGlowPaint)
+                canvas.drawCircle(centerX, centerY, imageRadius, paint)
             }
             
-            // Draw the Pokemon image centered on the padded canvas with transparency if expiring
+            // 2. Circular Crop for Image
             val imagePaint = Paint().apply {
+                isAntiAlias = true
                 alpha = globalAlpha
+            }
+            
+            // Draw circle mask
+            val output = Bitmap.createBitmap(totalSize, totalSize, Bitmap.Config.ARGB_8888)
+            val outputCanvas = Canvas(output)
+            outputCanvas.drawCircle(centerX, centerY, imageRadius, imagePaint)
+            
+            // Set transfer mode to SRC_IN (keep only image inside circle)
+            imagePaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+            
+            // Draw image into the circle
+            drawable.setBounds(padding, padding, padding + sizePx, padding + sizePx)
+            drawable.draw(outputCanvas)
+            
+            // Draw output onto main canvas
+            canvas.drawBitmap(output, 0f, 0f, Paint().apply { isAntiAlias = true })
+            
+            // 3. Border Ring
+            val borderPaint = Paint().apply {
+                color = AndroidColor.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 4f
                 isAntiAlias = true
             }
-            drawable.setBounds(padding, padding, padding + sizePx, padding + sizePx)
-            canvas.saveLayer(null, imagePaint)
-            drawable.draw(canvas)
-            canvas.restore()
+            canvas.drawCircle(centerX, centerY, imageRadius, borderPaint)
             
             BitmapDescriptorFactory.fromBitmap(bmp)
         } else null
     } catch (_: Throwable) { null }
 }
+
+// Hardcoded Dark Map Style JSON
+private const val DarkMapStyle = """
+[
+  {
+    "elementType": "geometry",
+    "stylers": [{"color": "#212121"}]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [{"visibility": "off"}]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#757575"}]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [{"color": "#212121"}]
+  },
+  {
+    "featureType": "administrative",
+    "elementType": "geometry",
+    "stylers": [{"color": "#757575"}]
+  },
+  {
+    "featureType": "administrative.country",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#9e9e9e"}]
+  },
+  {
+    "featureType": "administrative.locality",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#bdbdbd"}]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#757575"}]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [{"color": "#181818"}]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#616161"}]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.stroke",
+    "stylers": [{"color": "#1b1b1b"}]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry.fill",
+    "stylers": [{"color": "#2c2c2c"}]
+  },
+  {
+    "featureType": "road",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#8a8a8a"}]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [{"color": "#373737"}]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [{"color": "#3c3c3c"}]
+  },
+  {
+    "featureType": "road.highway.controlled_access",
+    "elementType": "geometry",
+    "stylers": [{"color": "#4e4e4e"}]
+  },
+  {
+    "featureType": "road.local",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#616161"}]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#757575"}]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [{"color": "#000000"}]
+  },
+  {
+    "featureType": "water",
+    "elementType": "labels.text.fill",
+    "stylers": [{"color": "#3d3d3d"}]
+  }
+]
+"""
