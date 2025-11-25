@@ -28,6 +28,14 @@ val LightOutline = Color(0xFFE0E5FF)
 val LightPrimary = Color(0xFF4734FF)
 val LightSecondary = Color(0xFF0061FF)
 
+// Light Theme Containers & Content
+val LavenderMist = Color(0xFFEBE6FF)
+val MidnightViolet = Color(0xFF22005D)
+val SkyMist = Color(0xFFD6EFFF)
+val DeepOcean = Color(0xFF001E31)
+val PeachMist = Color(0xFFFFDCC2)
+val BurntSienna = Color(0xFF3A1A00)
+
 // Semantic colors
 val SuccessGreen = Color(0xFF34C473)
 val WarningAmber = Color(0xFFFFC85C)
@@ -40,6 +48,17 @@ val AuroraGradientEnd = Color(0xFF1EC7FF)
 val EmberGradientStart = Color(0xFFFF6A3D)
 val EmberGradientEnd = Color(0xFFFFC154)
 
+// Light Theme Gradients
+val DaySkyStart = Color(0xFFFFFFFF)
+val DaySkyMid = Color(0xFFF0F4FF)
+val DaySkyEnd = Color(0xFFE0E7FF)
+
+
+// Text Colors
+val PokeWhite = Color(0xFFFFFFFF)
+val PokeLightGray = Color(0xFFE0E0E0)
+val PokeDarkGray = Color(0xFFAAAAAA)
+
 // Legacy colors (kept for compatibility / widgets)
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
@@ -47,8 +66,3 @@ val Pink80 = Color(0xFFEFB8C8)
 val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
-
-// Typography colors
-val PokeWhite = Color(0xFFFFFFFF)
-val PokeLightGray = Color(0xFFE3E8FF) // Matching onBackground/onSurface somewhat
-val PokeDarkGray = Color(0xFFB8C0FF)  // Matching onSurfaceVariant somewhat

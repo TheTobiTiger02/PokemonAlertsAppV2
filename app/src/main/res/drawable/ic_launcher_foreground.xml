@@ -3,39 +3,47 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Scale 24x24 Material paths to 108x108 via group scale -->
-    <group
-        android:scaleX="4.4"
-        android:scaleY="4.4"
-        android:translateX="1"
-        android:translateY="1">
-        <!-- Map pin (Material Place icon shape) -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13c0,-3.87 -3.13,-7 -7,-7zM12,11.5c-1.38,0 -2.5,-1.12 -2.5,-2.5S10.62,6.5 12,6.5s2.5,1.12 2.5,2.5S13.38,11.5 12,11.5z"/>
-        <!-- Accent star centered on pin -->
-        <path
-            android:fillColor="#FFFFD54F"
-            android:strokeColor="#33000000"
-            android:strokeWidth="0.4"
-            android:pathData="M12,7.2l1.04,2.12 2.34,0.34 -1.69,1.65 0.4,2.33L12,12.67l-2.09,1.11 0.4,-2.33 -1.69,-1.65 2.34,-0.34z"/>
-    </group>
-    <!-- Subtle shadow at the base of the pin -->
+    
+    <!-- Drop Shadow (Simulated) -->
     <path
         android:fillColor="#33000000"
-        android:pathData="M20,92c0,4.42 15.43,8 34.44,8 19.01,0 34.44,-3.58 34.44,-8 0,-4.42 -15.43,-8 -34.44,-8 -19.01,0 -34.44,3.58 -34.44,8z"/>
-    <!-- Outline to improve contrast on any bg -->
-    <group
-        android:scaleX="4.5"
-        android:scaleY="4.5">
+        android:pathData="M54,94 C70,94 86,90 86,86 C86,82 70,84 54,84 C38,84 22,82 22,86 C22,90 38,94 54,94 Z" />
+
+    <!-- Pokeball Group -->
+    <group>
+        <!-- Top Half (Red) -->
         <path
-            android:strokeWidth="0.8"
-            android:strokeColor="#33000000"
-            android:fillColor="#00000000"
-            android:pathData="M12,2C8.13,2 5,5.13 5,9c0,5.25 7,13 7,13s7,-7.75 7,-13c0,-3.87 -3.13,-7 -7,-7z"/>
+            android:fillColor="#F44336"
+            android:pathData="M18,54 A36,36 0 0 1 90,54 L90,54 L18,54 Z" />
+        
+        <!-- Bottom Half (White) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M18,54 A36,36 0 0 0 90,54 L90,54 L18,54 Z" />
+            
+        <!-- Center Band (Dark Blue-Grey) -->
+        <path
+            android:fillColor="#263238"
+            android:pathData="M18,50 L90,50 L90,58 L18,58 Z" />
+            
+        <!-- Button Outer (Dark Blue-Grey) -->
+        <path
+            android:fillColor="#263238"
+            android:pathData="M54,54m-12,0a12,12 0 1,1 24,0a12,12 0 1,1 -24,0" />
+            
+        <!-- Button Inner (White) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,54m-8,0a8,8 0 1,1 16,0a8,8 0 1,1 -16,0" />
+            
+        <!-- Button Core (Light Grey/Blink) -->
+        <path
+            android:fillColor="#ECEFF1"
+            android:pathData="M54,54m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0" />
+
+        <!-- Reflection/Highlight (Subtle) -->
+        <path
+            android:fillColor="#33FFFFFF"
+            android:pathData="M35,35 A20,20 0 0 1 50,25 L45,30 A15,15 0 0 0 35,35 Z" />
     </group>
-    <!-- Safe inset to avoid clipping on round masks -->
-    <path
-        android:fillColor="#00000000"
-        android:pathData="M4,4h100v100h-100z"/>
 </vector>

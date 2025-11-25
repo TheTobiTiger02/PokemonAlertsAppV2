@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.BuildConfig
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -12,9 +14,22 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 private const val BASE_URL = "http://match-profiles.gl.at.ply.gg:1855/"
 
+@Serializable
+data class HistoryResponse(
+    @SerialName("total") val total: Int,
+    @SerialName("limit") val limit: Int? = null,
+    @SerialName("offset") val offset: Int? = null,
+    @SerialName("count") val count: Int? = null,
+    @SerialName("unlimited") val unlimited: Boolean? = null,
+    @SerialName("data") val data: List<PokemonAlert>
+)
+
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
+
+    @GET("api/history/all")
+    suspend fun getHistory(): HistoryResponse
 }
 
 object PokemonAlertsApi {

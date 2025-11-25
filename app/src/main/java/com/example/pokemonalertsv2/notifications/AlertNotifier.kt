@@ -18,37 +18,108 @@ import coil.request.SuccessResult
 import coil.size.Scale
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 object AlertNotifier {
     const val CHANNEL_ID = "pokemon_alerts_channel"
+    const val CHANNEL_RAIDS = "pokemon_alerts_raids"
+    const val CHANNEL_SPAWNS = "pokemon_alerts_spawns"
+    const val CHANNEL_QUESTS = "pokemon_alerts_quests"
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
+            
+            // Generic channel
             val name = context.getString(R.string.notification_channel_name)
-            val description = context.getString(R.string.notification_channel_description)
+            val channelDescription = context.getString(R.string.notification_channel_description)
             val channel = NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_HIGH).apply {
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                this.description = description
+                this.description = channelDescription
                 enableLights(true)
                 lightColor = Color.RED
                 enableVibration(true)
             }
-            val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java)
-            notificationManager?.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(channel)
+
+            // Raids channel
+            val raidsChannel = NotificationChannel(CHANNEL_RAIDS, "Raids", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Notifications for Raid Battles"
+                enableLights(true)
+                lightColor = Color.MAGENTA
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(raidsChannel)
+
+            // Spawns channel
+            val spawnsChannel = NotificationChannel(CHANNEL_SPAWNS, "Spawns", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Wild Spawns"
+                enableLights(true)
+                lightColor = Color.GREEN
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(spawnsChannel)
+
+            // Quests channel
+            val questsChannel = NotificationChannel(CHANNEL_QUESTS, "Quests", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Field Research"
+                enableLights(true)
+                lightColor = Color.CYAN
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(questsChannel)
         }
     }
 
     suspend fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
         if (alerts.isEmpty()) return
         ensureChannel(context)
+        
+        // Check global notification preference
+        val repository = PokemonAlertsRepository.create(context)
+        val notificationsEnabled = repository.alertPreferences.notificationsEnabled.first()
+        if (!notificationsEnabled) return
+        
+        // Check if notifications are silenced
+        val silenceUntil = repository.alertPreferences.silenceUntil.first()
+        if (silenceUntil > System.currentTimeMillis()) {
+            return
+        }
+        
+        val raidsEnabled = repository.alertPreferences.raidsNotifications.first()
+        val spawnsEnabled = repository.alertPreferences.spawnsNotifications.first()
+        val questsEnabled = repository.alertPreferences.questsNotifications.first()
+        val hundosEnabled = repository.alertPreferences.hundosNotifications.first()
+        val pvpEnabled = repository.alertPreferences.pvpNotifications.first()
+        val nundosEnabled = repository.alertPreferences.nundosNotifications.first()
+        val kecleonEnabled = repository.alertPreferences.kecleonNotifications.first()
+        val rocketEnabled = repository.alertPreferences.rocketNotifications.first()
+        val vibrateEnabled = repository.alertPreferences.notificationVibrate.first()
+        
         val notificationManager = NotificationManagerCompat.from(context)
         // Actively try to get a fresh location fix; keep it best-effort with short timeout
         val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
 
         alerts.forEachIndexed { index, alert ->
+            // Filter based on alert type and user preferences
+            val shouldNotify = when {
+                alert.type?.contains("raid", ignoreCase = true) == true -> raidsEnabled
+                alert.type?.contains("spawn", ignoreCase = true) == true || 
+                    alert.type?.contains("rare", ignoreCase = true) == true -> spawnsEnabled
+                alert.type?.contains("quest", ignoreCase = true) == true -> questsEnabled
+                alert.type?.equals("hundo", ignoreCase = true) == true -> hundosEnabled
+                alert.type?.equals("pvp", ignoreCase = true) == true -> pvpEnabled
+                alert.type?.equals("nundo", ignoreCase = true) == true -> nundosEnabled
+                alert.type?.equals("kecleon", ignoreCase = true) == true -> kecleonEnabled
+                alert.type?.equals("rocket", ignoreCase = true) == true -> rocketEnabled
+                else -> true // Default to sending for unknown types
+            }
+            
+            if (!shouldNotify) return@forEachIndexed
             val notificationIntent = AlertDetailActivity.createIntent(context, alert)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -86,7 +157,15 @@ object AlertNotifier {
             // Load the alert image using Coil
             val bitmap = loadImageBitmap(context, alert.imageUrl ?: alert.thumbnailUrl)
 
-            val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
+            // Select Channel ID based on type
+            val channelId = when {
+                alert.type?.contains("raid", ignoreCase = true) == true -> CHANNEL_RAIDS
+                alert.type?.contains("spawn", ignoreCase = true) == true -> CHANNEL_SPAWNS
+                alert.type?.contains("quest", ignoreCase = true) == true -> CHANNEL_QUESTS
+                else -> CHANNEL_ID
+            }
+
+            val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
                 .setContentTitle(alert.name)
                 .setContentText(contentText)
@@ -105,6 +184,7 @@ object AlertNotifier {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(ContextCompat.getColor(context, R.color.poke_red))
+                .setVibrate(if (vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
                     context.getString(R.string.notification_action_directions),

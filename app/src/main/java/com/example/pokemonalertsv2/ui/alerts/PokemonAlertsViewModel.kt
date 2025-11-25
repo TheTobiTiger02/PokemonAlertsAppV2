@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -26,6 +27,16 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     init {
         refreshAlerts()
+        viewModelScope.launch {
+            repository.alerts.collect { alerts ->
+                val now = System.currentTimeMillis()
+                val activeAlerts = alerts.filter {
+                    val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
+                    end > now
+                }.sortedByDescending { it.endTime }
+                _uiState.update { it.copy(alerts = activeAlerts) }
+            }
+        }
     }
 
     fun refreshAlerts() {
@@ -33,10 +44,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             runCatching {
                 repository.fetchAlerts()
-            }.onSuccess { alerts ->
-                _uiState.update { current ->
-                    current.copy(alerts = alerts.sortedByDescending { it.endTime }, isLoading = false)
-                }
+            }.onSuccess {
+                _uiState.update { current -> current.copy(isLoading = false) }
             }.onFailure { throwable ->
                 _uiState.update { current ->
                     current.copy(isLoading = false, errorMessage = throwable.localizedMessage ?: "Unknown error")

@@ -56,4 +56,28 @@ object TimeUtils {
             else -> String.format("%ds", seconds)
         }
     }
+
+    /**
+     * Formats how long ago something expired, e.g. "5 mins ago", "2 hours ago", "3 days ago".
+     */
+    fun formatTimeAgo(pastMs: Long): String {
+        val elapsedMs = System.currentTimeMillis() - pastMs
+        val totalSeconds = (elapsedMs / 1000).coerceAtLeast(0)
+        
+        val years = totalSeconds / (365 * 24 * 3600)
+        val months = totalSeconds / (30 * 24 * 3600)
+        val days = totalSeconds / (24 * 3600)
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        
+        return when {
+            years > 0 -> if (years == 1L) "1 year ago" else "$years years ago"
+            months > 0 -> if (months == 1L) "1 month ago" else "$months months ago"
+            days > 0 -> if (days == 1L) "1 day ago" else "$days days ago"
+            hours > 0 -> if (hours == 1L) "1 hour ago" else "$hours hours ago"
+            minutes > 0 -> if (minutes == 1L) "1 min ago" else "$minutes mins ago"
+            else -> if (seconds <= 5) "just now" else "$seconds secs ago"
+        }
+    }
 }

@@ -1,14 +1,24 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.Manifest
+import android.app.DatePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.location.Location
 import android.location.LocationManager
+import android.widget.DatePicker
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,31 +36,59 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
@@ -58,19 +96,25 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,128 +122,61 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
+import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
-import com.example.pokemonalertsv2.ui.theme.DangerRed
-import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
-import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
-import com.example.pokemonalertsv2.ui.theme.SuccessGreen
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.ceil
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Locale
 
-private enum class AlertFilter(val titleRes: Int) {
-    ALL(R.string.alert_filter_all),
-    ENDING_SOON(R.string.alert_filter_ending_soon),
-    NEARBY(R.string.alert_filter_nearby)
-}
-
-private data class AlertDistanceInfo(
-    val distanceMeters: Float?,
-    val distanceText: String?,
-    val walkingText: String?
-)
-
-private data class AlertUiModel(
-    val alert: PokemonAlert,
-    val distanceInfo: AlertDistanceInfo
-)
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PokemonAlertsRoute(
-    viewModel: PokemonAlertsViewModel
+    viewModel: PokemonAlertsViewModel,
+    historyViewModel: AlertHistoryViewModel,
+    onSettingsClick: () -> Unit,
+    onHistoryClick: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val alertsUiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
-    val highlightedAlert = remember(uiState.alerts, uiState.highlightedAlertId) {
-        uiState.alerts.firstOrNull { it.uniqueId == uiState.highlightedAlertId }
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope = rememberCoroutineScope()
+
+    val onShareClick: (PokemonAlert) -> Unit = { alert ->
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${alert.name}")
+            val text = "Check out this ${alert.name}!\nEnds at: ${alert.endTime}\n${alert.googleMapsUri}"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
     }
 
-    uiState.errorMessage?.let { message ->
+    alertsUiState.errorMessage?.let { message ->
         LaunchedEffect(message) {
             snackbarHostState.showSnackbar(message)
             viewModel.consumeError()
         }
     }
 
-    PokemonAlertsScreen(
-        uiState = uiState,
-        snackbarHostState = snackbarHostState,
-        onRefresh = viewModel::refreshAlerts,
-        onAlertSelected = { alert ->
-            viewModel.highlightAlert(alert.uniqueId)
-        }
-    )
-
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                viewModel.refreshAlerts()
-                delay(30_000)
-            }
-        }
-    }
-
-    if (highlightedAlert != null) {
-        AlertDetailDialog(alert = highlightedAlert, onDismiss = { viewModel.highlightAlert(null) })
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PokemonAlertsScreen(
-    uiState: AlertsUiState,
-    snackbarHostState: SnackbarHostState,
-    onRefresh: () -> Unit,
-    onAlertSelected: (PokemonAlert) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    var userLocation by remember { mutableStateOf<Location?>(null) }
-    var lastUpdated by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
-    var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
-
-    LaunchedEffect(Unit) {
-        userLocation = getLastKnownLocation(context)
-    }
-    LaunchedEffect(uiState.alerts) {
-        if (uiState.alerts.isNotEmpty()) {
-            lastUpdated = System.currentTimeMillis()
-        }
-    }
-
-    val alertsWithDistance = remember(uiState.alerts, userLocation) {
-        uiState.alerts.map { alert ->
-            val distanceMeters: Float? = userLocation?.let { loc ->
-                val results = FloatArray(1)
-                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
-                results.getOrNull(0)?.takeUnless { it.isNaN() }
-            }
-            val distanceText = distanceMeters?.let { if (it >= 1000f) String.format(Locale.getDefault(), "%.1f km", it / 1000f) else String.format(Locale.getDefault(), "%.0f m", it) }
-            val walkingText = distanceMeters?.let { formatWalkingTime(it) }
-            AlertUiModel(alert, AlertDistanceInfo(distanceMeters, distanceText, walkingText))
-        }
-    }
-
-    val filteredAlerts = remember(alertsWithDistance, selectedFilter) {
-        when (selectedFilter) {
-            AlertFilter.ALL -> alertsWithDistance
-            AlertFilter.ENDING_SOON -> alertsWithDistance
-                .sortedBy { TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: Long.MAX_VALUE }
-                .take(25)
-            AlertFilter.NEARBY -> alertsWithDistance
-                .filter { it.distanceInfo.distanceMeters != null }
-                .sortedBy { it.distanceInfo.distanceMeters }
+    historyUiState.errorMessage?.let { message ->
+        LaunchedEffect(message) {
+            snackbarHostState.showSnackbar(message)
+            historyViewModel.consumeError()
         }
     }
 
@@ -214,7 +191,7 @@ fun PokemonAlertsScreen(
     }
 
     Box(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(containerGradient)
     ) {
@@ -226,30 +203,83 @@ fun PokemonAlertsScreen(
             contentColor = MaterialTheme.colorScheme.onBackground,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                AuroraToolbar(
-                    onRefresh = onRefresh,
-                    onOpenMap = { context.startActivity(Intent(context, AlertsMapActivity::class.java)) },
-                    scrollBehavior = scrollBehavior
-                )
+                Column {
+                    AuroraToolbar(
+                        onRefresh = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (pagerState.currentPage == 0) {
+                                viewModel.refreshAlerts()
+                            } else {
+                                historyViewModel.fetchHistory()
+                            }
+                        },
+                        onOpenMap = { context.startActivity(Intent(context, AlertsMapActivity::class.java)) },
+                        onSettingsClick = onSettingsClick,
+                        scrollBehavior = scrollBehavior
+                    )
+                    TabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        indicator = { tabPositions ->
+                            if (pagerState.currentPage < tabPositions.size) {
+                                TabRowDefaults.SecondaryIndicator(
+                                    modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
+                    ) {
+                        Tab(
+                            selected = pagerState.currentPage == 0,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            text = { Text("Active Alerts", fontWeight = FontWeight.Bold) }
+                        )
+                        Tab(
+                            selected = pagerState.currentPage == 1,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                            text = { Text("History", fontWeight = FontWeight.Bold) }
+                        )
+                    }
+                }
             }
         ) { paddingValues ->
-            Box(
+            HorizontalPager(
+                state = pagerState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                when {
-                    uiState.isLoading && uiState.alerts.isEmpty() -> LoadingState()
-                    filteredAlerts.isEmpty() -> EmptyState(onRefresh = onRefresh)
-                    else -> AlertsList(
-                        uiState = uiState,
-                        filteredAlerts = filteredAlerts,
-                        selectedFilter = selectedFilter,
-                        onFilterChanged = { selectedFilter = it },
-                        lastUpdated = lastUpdated,
-                        onAlertSelected = onAlertSelected,
-                        onOpenMaps = { alert -> openMapForAlert(context, alert) }
+                    .padding(paddingValues),
+                beyondViewportPageCount = 1
+            ) { page ->
+                when (page) {
+                    0 -> PokemonAlertsPage(
+                        uiState = alertsUiState,
+                        onRefresh = viewModel::refreshAlerts,
+                        onAlertSelected = { alert ->
+                            val intent = AlertDetailActivity.createIntent(context, alert)
+                            context.startActivity(intent)
+                        },
+                        onShareClick = onShareClick
                     )
+                    1 -> AlertHistoryPage(
+                        uiState = historyUiState,
+                        onRefresh = historyViewModel::fetchHistory,
+                        onAlertClick = { alert ->
+                            val intent = AlertDetailActivity.createIntent(context, alert)
+                            context.startActivity(intent)
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                delay(30_000)
+                if (pagerState.currentPage == 0) {
+                    viewModel.refreshAlerts()
                 }
             }
         }
@@ -257,172 +287,350 @@ fun PokemonAlertsScreen(
 }
 
 @Composable
-private fun AlertsList(
+fun PokemonAlertsPage(
     uiState: AlertsUiState,
+    onRefresh: () -> Unit,
+    onAlertSelected: (PokemonAlert) -> Unit,
+    onShareClick: (PokemonAlert) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var userLocation by remember { mutableStateOf<Location?>(null) }
+    var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
+    val haptic = LocalHapticFeedback.current
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions.values.all { it }) {
+            userLocation = getLastKnownLocation(context)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        userLocation = getLastKnownLocation(context)
+    }
+
+    val alertsWithDistance = remember(uiState.alerts, userLocation) {
+        uiState.alerts.map { alert ->
+            val distanceMeters: Float? = userLocation?.let { loc ->
+                val results = FloatArray(1)
+                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                results.getOrNull(0)?.takeUnless { it.isNaN() }
+            }
+            val distanceText = distanceMeters?.let { formatDistance(it) }
+            val walkingText = distanceMeters?.let { formatWalkingTime(it) }
+            AlertUiModel(
+                alert = alert, 
+                distanceInfo = AlertDistanceInfo(distanceMeters, distanceText, walkingText)
+            )
+        }
+    }
+
+    // Filter out expired alerts first
+    val activeAlerts = remember(alertsWithDistance) {
+        val now = System.currentTimeMillis()
+        alertsWithDistance.filter { model ->
+            val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
+            end > now
+        }
+    }
+
+    // Determine available filters based on active alerts content
+    val availableFilters = remember(activeAlerts) {
+        val filters = mutableSetOf(AlertFilter.ALL)
+        
+        if (activeAlerts.any { it.alert.type?.equals("Raid", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.RAIDS)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("Quest", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.QUESTS)
+        }
+        if (activeAlerts.any { 
+            val t = it.alert.type
+            t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
+        }) {
+            filters.add(AlertFilter.SPAWNS)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("Hundo", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.HUNDOS)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("PvP", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.PVP)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("Nundo", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.NUNDOS)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("Kecleon", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.KECLEON)
+        }
+        if (activeAlerts.any { it.alert.type?.equals("Rocket", ignoreCase = true) == true }) {
+            filters.add(AlertFilter.ROCKET)
+        }
+        filters
+    }
+
+    // Auto-reset filter if current selection is invalid
+    LaunchedEffect(availableFilters, selectedFilter) {
+        if (selectedFilter != AlertFilter.ALL && selectedFilter !in availableFilters) {
+            selectedFilter = AlertFilter.ALL
+        }
+    }
+
+    val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference) {
+        val filtered = when (selectedFilter) {
+            AlertFilter.ALL -> activeAlerts
+            AlertFilter.RAIDS -> activeAlerts.filter { it.alert.type?.equals("Raid", ignoreCase = true) == true }
+            AlertFilter.QUESTS -> activeAlerts.filter { it.alert.type?.equals("Quest", ignoreCase = true) == true }
+            AlertFilter.SPAWNS -> activeAlerts.filter { 
+                val t = it.alert.type
+                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
+            }
+            AlertFilter.HUNDOS -> activeAlerts.filter { it.alert.type?.equals("Hundo", ignoreCase = true) == true }
+            AlertFilter.PVP -> activeAlerts.filter { it.alert.type?.equals("PvP", ignoreCase = true) == true }
+            AlertFilter.NUNDOS -> activeAlerts.filter { it.alert.type?.equals("Nundo", ignoreCase = true) == true }
+            AlertFilter.KECLEON -> activeAlerts.filter { it.alert.type?.equals("Kecleon", ignoreCase = true) == true }
+            AlertFilter.ROCKET -> activeAlerts.filter { it.alert.type?.equals("Rocket", ignoreCase = true) == true }
+        }
+        
+        // Sort based on user preference
+        when (sortPreference) {
+            SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
+                // Higher ID = newer alert. Alerts without ID go to the end
+                it.alert.id?.toLongOrNull() ?: Long.MIN_VALUE
+            }.thenByDescending { 
+                // Secondary sort by end time for alerts without ID
+                TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: 0L
+            })
+            SortPreference.DISTANCE -> filtered.sortedBy { 
+                it.distanceInfo.distanceMeters ?: Float.MAX_VALUE 
+            }
+            SortPreference.TIME_REMAINING -> filtered.sortedBy { 
+                TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: Long.MAX_VALUE 
+            }
+            SortPreference.NAME -> filtered.sortedBy { 
+                it.alert.name.lowercase()
+            }
+        }
+    }
+    
+    // Continuously update to remove expired alerts
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000) // Check every 10 seconds
+            // This will trigger recomposition and re-filtering
+        }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onRefresh()
+        },
+        modifier = Modifier.fillMaxSize(),
+        state = rememberPullToRefreshState()
+    ) {
+        when {
+            uiState.isLoading && uiState.alerts.isEmpty() -> LoadingState()
+            uiState.alerts.isEmpty() && !uiState.isLoading -> EmptyState(onRefresh = onRefresh)
+            else -> AlertsList(
+                filteredAlerts = filteredAlerts,
+                selectedFilter = selectedFilter,
+                sortPreference = sortPreference,
+                onFilterChanged = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    selectedFilter = it 
+                },
+                onSortChanged = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    sortPreference = it
+                },
+                onAlertSelected = { 
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onAlertSelected(it) 
+                },
+                onOpenMaps = { alert -> openMapForAlert(context, alert) },
+                onShareClick = onShareClick,
+                onRequestLocationPermission = {
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                },
+                alertsAvailable = uiState.alerts.isNotEmpty(),
+                availableFilters = availableFilters
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun AlertsList(
     filteredAlerts: List<AlertUiModel>,
     selectedFilter: AlertFilter,
+    sortPreference: SortPreference,
     onFilterChanged: (AlertFilter) -> Unit,
-    lastUpdated: Long,
+    onSortChanged: (SortPreference) -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
-    onOpenMaps: (PokemonAlert) -> Unit
+    onOpenMaps: (PokemonAlert) -> Unit,
+    onShareClick: (PokemonAlert) -> Unit,
+    onRequestLocationPermission: () -> Unit,
+    alertsAvailable: Boolean,
+    availableFilters: Set<AlertFilter>
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        item(key = "hero") {
-            HeroHeader(
-                activeCount = uiState.alerts.size,
-                endingSoonCount = uiState.alerts.count {
-                    val millis = TimeUtils.parseEndTimeToMillis(it.endTime) ?: return@count false
-                    val remaining = millis - System.currentTimeMillis()
-                    remaining in 1..(30 * 60 * 1000)
-                },
-                lastUpdated = lastUpdated,
-                featuredAlert = uiState.alerts.firstOrNull(),
-                onFeaturedClick = { alert -> onAlertSelected(alert) }
-            )
-        }
-
         item(key = "filters") {
-            FilterRow(
-                selectedFilter = selectedFilter,
-                onFilterChanged = onFilterChanged,
-                locationAvailable = filteredAlerts.any { it.distanceInfo.distanceMeters != null }
-            )
-        }
-
-        items(filteredAlerts, key = { it.alert.uniqueId }) { model ->
-            AlertCard(
-                alert = model.alert,
-                distanceInfo = model.distanceInfo,
-                onOpenMaps = { onOpenMaps(model.alert) },
-                onShowDetails = { onAlertSelected(model.alert) }
-            )
-        }
-
-        if (uiState.isLoading) {
-            item(key = "loading_indicator") {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 32.dp),
-                    color = MaterialTheme.colorScheme.secondary,
-                    trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sort & Filter",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    SortingButton(
+                        currentSort = sortPreference,
+                        onSortChanged = onSortChanged
+                    )
+                }
+                FilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChanged = onFilterChanged,
+                    locationAvailable = alertsAvailable,
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    availableFilters = availableFilters
                 )
             }
         }
+        
+        if (filteredAlerts.isEmpty()) {
+            item {
+                 Text(
+                    text = "No alerts found for filter",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        items(filteredAlerts) { model ->
+            Box(modifier = Modifier.animateItem()) {
+                AlertCard(
+                    alert = model.alert,
+                    distanceInfo = model.distanceInfo,
+                    onOpenMaps = { onOpenMaps(model.alert) },
+                    onShowDetails = { onAlertSelected(model.alert) },
+                    onShareClick = { onShareClick(model.alert) }
+                )
+            }
+        }
+        
+        item {
+            Spacer(modifier = Modifier.height(80.dp))
+        }
     }
 }
 
 @Composable
-private fun HeroHeader(
-    activeCount: Int,
-    endingSoonCount: Int,
-    lastUpdated: Long,
-    featuredAlert: PokemonAlert?,
-    onFeaturedClick: (PokemonAlert) -> Unit
+private fun SortingButton(
+    currentSort: SortPreference,
+    onSortChanged: (SortPreference) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val formattedTime = remember(lastUpdated) {
-        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(lastUpdated))
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-        shape = RoundedCornerShape(30.dp)
-    ) {
-        Column(modifier = Modifier.padding(24.dp)) {
-            Text(
-                text = stringResource(id = R.string.alerts_hero_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = stringResource(id = R.string.alerts_hero_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val cardWidth = remember(maxWidth) { (maxWidth - 16.dp) / 2 }
+    var expanded by remember { mutableStateOf(false) }
+    
+    Box(modifier = modifier) {
+        ElevatedAssistChip(
+            onClick = { expanded = true },
+            label = {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    HeroStatCard(
-                        label = stringResource(id = R.string.alerts_hero_active_label),
-                        value = activeCount,
-                        brush = Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd)),
-                        modifier = Modifier.width(cardWidth)
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Sort",
+                        modifier = Modifier.size(16.dp)
                     )
-                    HeroStatCard(
-                        label = stringResource(id = R.string.alerts_hero_ending_label),
-                        value = endingSoonCount,
-                        brush = Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd)),
-                        modifier = Modifier.width(cardWidth)
+                    Text(
+                        text = when (currentSort) {
+                            SortPreference.POSTED_TIME -> "Posted"
+                            SortPreference.DISTANCE -> "Distance"
+                            SortPreference.TIME_REMAINING -> "Time"
+                            SortPreference.NAME -> "Name"
+                        }
                     )
                 }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = stringResource(id = R.string.alerts_last_updated, formattedTime),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            colors = AssistChipDefaults.elevatedAssistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                labelColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline
             )
-            val spotlight = featuredAlert
-            if (spotlight != null) {
-                Spacer(modifier = Modifier.height(24.dp))
-                FeaturedAlertPreview(alert = spotlight, onOpenDetails = { onFeaturedClick(spotlight) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun HeroStatCard(label: String, value: Int, brush: Brush, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(24.dp),
-        color = Color.Transparent
-    ) {
-        Column(
-            modifier = Modifier
-                .background(brush, RoundedCornerShape(24.dp))
-                .padding(vertical = 18.dp, horizontal = 16.dp)
+        )
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
         ) {
-            Text(text = value.toString(), style = MaterialTheme.typography.headlineSmall, color = Color.White)
-            Text(text = label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.8f))
-        }
-    }
-}
-
-@Composable
-private fun FeaturedAlertPreview(alert: PokemonAlert, onOpenDetails: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(id = R.string.alerts_featured_label),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.secondary
+            DropdownMenuItem(
+                text = { Text("Sort by Posted Time") },
+                onClick = {
+                    onSortChanged(SortPreference.POSTED_TIME)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.DateRange, contentDescription = null)
+                }
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = alert.name,
-                style = MaterialTheme.typography.titleLarge,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            DropdownMenuItem(
+                text = { Text("Sort by Distance") },
+                onClick = {
+                    onSortChanged(SortPreference.DISTANCE)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null)
+                }
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            FilledTonalButton(onClick = onOpenDetails, shape = RoundedCornerShape(16.dp)) {
-                Icon(painter = painterResource(id = R.drawable.ic_map), contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                Text(text = stringResource(id = R.string.open_in_maps))
-            }
+            DropdownMenuItem(
+                text = { Text("Sort by Time Remaining") },
+                onClick = {
+                    onSortChanged(SortPreference.TIME_REMAINING)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Warning, contentDescription = null)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Sort by Name") },
+                onClick = {
+                    onSortChanged(SortPreference.NAME)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Star, contentDescription = null)
+                }
+            )
         }
     }
 }
@@ -431,19 +639,25 @@ private fun FeaturedAlertPreview(alert: PokemonAlert, onOpenDetails: () -> Unit)
 private fun FilterRow(
     selectedFilter: AlertFilter,
     onFilterChanged: (AlertFilter) -> Unit,
-    locationAvailable: Boolean
+    locationAvailable: Boolean,
+    onRequestLocationPermission: () -> Unit,
+    availableFilters: Set<AlertFilter>
 ) {
     Column {
-        Row(
+        LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures { _, _ ->
+                        // Consume horizontal drag to prevent parent pager from intercepting
+                    }
+                }
         ) {
-            AlertFilter.values().forEach { filter ->
-                val enabled = filter != AlertFilter.NEARBY || locationAvailable
+            items(AlertFilter.values().filter { it in availableFilters }) { filter ->
                 ElevatedAssistChip(
-                    onClick = { if (enabled) onFilterChanged(filter) },
-                    label = { Text(text = stringResource(id = filter.titleRes)) },
-                    enabled = enabled,
+                    onClick = { onFilterChanged(filter) },
+                    label = { Text(text = filter.label) },
                     colors = AssistChipDefaults.elevatedAssistChipColors(
                         containerColor = if (selectedFilter == filter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
                         labelColor = if (selectedFilter == filter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
@@ -456,59 +670,24 @@ private fun FilterRow(
             }
         }
 
-        AnimatedVisibility(visible = selectedFilter == AlertFilter.NEARBY && !locationAvailable) {
-            Text(
-                text = stringResource(id = R.string.alerts_nearby_permission_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        val typeLabel = alert.type?.takeIf { it.isNotBlank() }?.uppercase(Locale.getDefault())
-        val distanceLabel = distanceInfo.distanceText
-        val walkingLabel = distanceInfo.walkingText
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (!typeLabel.isNullOrBlank()) {
-                AlertTag(text = typeLabel)
-            }
-            if (!distanceLabel.isNullOrBlank()) {
-                AlertTag(text = distanceLabel)
-            }
-            if (!walkingLabel.isNullOrBlank()) {
-                AlertTag(text = walkingLabel)
+        AnimatedVisibility(visible = !locationAvailable) {
+            TextButton(onClick = onRequestLocationPermission) {
+                Text(
+                    text = stringResource(id = R.string.alerts_nearby_permission_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
-        CountdownAndEndTimeRow(alert = alert)
     }
 }
 
-@Composable
-private fun AlertTag(text: String) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        tonalElevation = 4.dp
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AuroraToolbar(
     onRefresh: () -> Unit,
     onOpenMap: () -> Unit,
+    onSettingsClick: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
     TopAppBar(
@@ -533,11 +712,18 @@ private fun AuroraToolbar(
                     contentDescription = stringResource(id = R.string.refresh_alerts)
                 )
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(8.dp))
             FilledIconButton(onClick = onOpenMap, shape = CircleShape) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_map),
                     contentDescription = stringResource(id = R.string.open_map)
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            FilledIconButton(onClick = onSettingsClick, shape = CircleShape) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings"
                 )
             }
         },
@@ -555,16 +741,11 @@ private fun AuroraToolbar(
 private fun LoadingState() {
     Column(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        CircularProgressIndicator(color = MaterialTheme.colorScheme.secondary)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(id = R.string.loading_alerts),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        repeat(3) {
+            ShimmerAlertCard()
+        }
     }
 }
 
@@ -603,478 +784,421 @@ private fun EmptyState(onRefresh: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AlertCard(
-    alert: PokemonAlert,
-    distanceInfo: AlertDistanceInfo,
-    onOpenMaps: () -> Unit,
-    onShowDetails: () -> Unit,
-    modifier: Modifier = Modifier
+private fun AlertHistoryPage(
+    uiState: com.example.pokemonalertsv2.ui.history.HistoryUiState,
+    onRefresh: () -> Unit,
+    onAlertClick: (PokemonAlert) -> Unit
 ) {
-    val accentBrush = when {
-        alert.type?.contains("raid", ignoreCase = true) == true -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
-        alert.type?.contains("shadow", ignoreCase = true) == true -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
-        else -> Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
+    val context = LocalContext.current
+    var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
+    var userLocation by remember { mutableStateOf<Location?>(null) }
+    val haptic = LocalHapticFeedback.current
+    
+    LaunchedEffect(Unit) {
+        userLocation = getLastKnownLocation(context)
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)),
-        onClick = onShowDetails,
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(26.dp)
-    ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .background(accentBrush)
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-            ) {
-                AlertImage(alert = alert, rounded = false)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
-                            )
-                        )
-                )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp)
-                ) {
-                    Text(
-                        text = alert.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    val distanceText = distanceInfo.distanceText
-                    if (!distanceText.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        DistanceChip(text = distanceText)
-                    }
-                }
-                FilledIconButton(
-                    onClick = onOpenMaps,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp),
-                    shape = CircleShape
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map),
-                        contentDescription = stringResource(id = R.string.open_in_maps)
-                    )
-                }
+    val availableFilters = remember(uiState.alerts) {
+        val filters = mutableSetOf(AlertFilter.ALL)
+        val alerts = uiState.alerts
+        
+        if (alerts.any { it.type?.equals("Raid", ignoreCase = true) == true }) filters.add(AlertFilter.RAIDS)
+        if (alerts.any { it.type?.equals("Quest", ignoreCase = true) == true }) filters.add(AlertFilter.QUESTS)
+        if (alerts.any { 
+            val t = it.type
+            t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
+        }) filters.add(AlertFilter.SPAWNS)
+        if (alerts.any { it.type?.equals("Hundo", ignoreCase = true) == true }) filters.add(AlertFilter.HUNDOS)
+        if (alerts.any { it.type?.equals("PvP", ignoreCase = true) == true }) filters.add(AlertFilter.PVP)
+        if (alerts.any { it.type?.equals("Nundo", ignoreCase = true) == true }) filters.add(AlertFilter.NUNDOS)
+        if (alerts.any { it.type?.equals("Kecleon", ignoreCase = true) == true }) filters.add(AlertFilter.KECLEON)
+        if (alerts.any { it.type?.equals("Rocket", ignoreCase = true) == true }) filters.add(AlertFilter.ROCKET)
+        filters
+    }
+
+    val filteredAlerts = remember(uiState.alerts, selectedTypeFilter, selectedDateMillis, sortPreference, userLocation) {
+        var filtered = uiState.alerts
+
+        // Type Filter
+        filtered = when (selectedTypeFilter) {
+            AlertFilter.ALL -> filtered
+            AlertFilter.RAIDS -> filtered.filter { it.type?.equals("Raid", ignoreCase = true) == true }
+            AlertFilter.QUESTS -> filtered.filter { it.type?.equals("Quest", ignoreCase = true) == true }
+            AlertFilter.SPAWNS -> filtered.filter { 
+                val t = it.type
+                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
             }
-
-            Column(modifier = Modifier.padding(20.dp)) {
-                if (alert.description.isNotBlank()) {
-                    Text(
-                        text = alert.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                AlertMetaRow(alert = alert, distanceInfo = distanceInfo)
-                Spacer(modifier = Modifier.height(20.dp))
-                ElevatedButton(
-                    onClick = onOpenMaps,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map),
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(text = stringResource(id = R.string.open_in_maps))
+            AlertFilter.HUNDOS -> filtered.filter { it.type?.equals("Hundo", ignoreCase = true) == true }
+            AlertFilter.PVP -> filtered.filter { it.type?.equals("PvP", ignoreCase = true) == true }
+            AlertFilter.NUNDOS -> filtered.filter { it.type?.equals("Nundo", ignoreCase = true) == true }
+            AlertFilter.KECLEON -> filtered.filter { it.type?.equals("Kecleon", ignoreCase = true) == true }
+            AlertFilter.ROCKET -> filtered.filter { it.type?.equals("Rocket", ignoreCase = true) == true }
+        }
+        
+        // Date Filter
+        if (selectedDateMillis != null) {
+            val selectedCal = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+            filtered = filtered.filter { alert ->
+                val alertTime = TimeUtils.parseEndTimeToMillis(alert.endTime)
+                if (alertTime != null) {
+                    val alertCal = java.util.Calendar.getInstance().apply { timeInMillis = alertTime }
+                    alertCal.get(java.util.Calendar.YEAR) == selectedCal.get(java.util.Calendar.YEAR) &&
+                    alertCal.get(java.util.Calendar.DAY_OF_YEAR) == selectedCal.get(java.util.Calendar.DAY_OF_YEAR)
+                } else {
+                    false
                 }
             }
         }
+        
+        // Sort based on user preference
+        when (sortPreference) {
+            SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<PokemonAlert> { 
+                // Higher ID = newer alert. Alerts without ID go to the end
+                it.id?.toLongOrNull() ?: Long.MIN_VALUE
+            }.thenByDescending { 
+                // Secondary sort by end time for alerts without ID
+                TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+            })
+            SortPreference.DISTANCE -> {
+                userLocation?.let { loc ->
+                    filtered.sortedBy { alert ->
+                        val results = FloatArray(1)
+                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                        results.getOrNull(0)?.takeUnless { it.isNaN() } ?: Float.MAX_VALUE
+                    }
+                } ?: filtered.sortedWith(compareByDescending<PokemonAlert> { 
+                    it.id?.toLongOrNull() ?: Long.MIN_VALUE
+                }.thenByDescending { 
+                    TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+                })
+            }
+            SortPreference.TIME_REMAINING -> filtered.sortedBy { 
+                TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE 
+            }
+            SortPreference.NAME -> filtered.sortedBy { 
+                it.name.lowercase()
+            }
+        }
     }
-}
-
-@Composable
-private fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Boolean = true) {
-    val context = LocalContext.current
-    val imageUrl by rememberUpdatedState(alert.imageUrl ?: alert.thumbnailUrl)
-    if (imageUrl != null) {
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .crossfade(true)
-                .build(),
-            contentDescription = stringResource(id = R.string.alert_image),
-            placeholder = painterResource(id = R.drawable.ic_placeholder),
-            error = painterResource(id = R.drawable.ic_placeholder),
-            contentScale = ContentScale.Crop,
-            modifier = modifier
-                .fillMaxWidth()
-                .height(if (rounded) 200.dp else 220.dp)
-                .let { m -> if (rounded) m.clip(RoundedCornerShape(16.dp)) else m }
+    
+    val statistics = remember(filteredAlerts) {
+        var raids = 0
+        var quests = 0
+        var spawns = 0
+        var hundos = 0
+        var pvp = 0
+        var nundos = 0
+        var rocket = 0
+        var kecleon = 0
+        var other = 0
+        
+        filteredAlerts.forEach { alert ->
+            when (alert.type?.lowercase()) {
+                "raid" -> raids++
+                "quest" -> quests++
+                "rare", "spawn" -> spawns++
+                "hundo" -> hundos++
+                "pvp" -> pvp++
+                "nundo" -> nundos++
+                "rocket" -> rocket++
+                "kecleon" -> kecleon++
+                else -> other++
+            }
+        }
+        
+        mapOf(
+            "total" to filteredAlerts.size,
+            "raids" to raids,
+            "quests" to quests,
+            "spawns" to spawns,
+            "hundos" to hundos,
+            "pvp" to pvp,
+            "nundos" to nundos,
+            "rocket" to rocket,
+            "kecleon" to kecleon,
+            "other" to other
         )
-    } else {
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(if (rounded) 200.dp else 220.dp)
-                .background(
-                    Brush.linearGradient(listOf(AuroraGradientStart, AuroraGradientEnd)),
-                    if (rounded) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_placeholder),
-                    contentDescription = null,
-                    modifier = Modifier.padding(16.dp),
-                    tint = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = "No image available",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
-        }
     }
-}
 
-@Composable
-private fun AlertDetailDialog(alert: PokemonAlert, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            FilledTonalButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.close))
-            }
+    PullToRefreshBox(
+        isRefreshing = uiState.isLoading,
+        onRefresh = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onRefresh()
         },
-        title = { 
-            Text(
-                text = alert.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            ) 
-        },
-        text = {
-            AlertDetailDialogContent(
-                alert = alert,
-                onOpenMaps = { openMapForAlert(context, alert) }
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(24.dp)
-    )
-}
-
-@Composable
-private fun AlertDetailDialogContent(alert: PokemonAlert, onOpenMaps: () -> Unit) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        AlertImage(alert = alert, rounded = true)
-        
-        if (alert.description.isNotBlank()) {
-            Text(
-                text = alert.description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        
-        val typeLabel = alert.type?.takeIf { it.isNotBlank() }
-        if (!typeLabel.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text = "Type: $typeLabel",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
-        }
-        
-        CountdownAndEndTimeRow(alert = alert)
-        
-        FilledTonalButton(
-            onClick = onOpenMaps,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_map),
-                contentDescription = null,
-                modifier = Modifier.padding(end = 8.dp)
-            )
-            Text(text = stringResource(id = R.string.open_in_maps))
-        }
-    }
-}
-
-@Composable
-fun AlertDetailScreen(alert: PokemonAlert) {
-    val context = LocalContext.current
-    Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        state = rememberPullToRefreshState()
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                // Hero image section
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                ) {
-                    AlertImage(alert = alert, rounded = false)
-                    
-                    // Gradient overlay for readability
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        MaterialTheme.colorScheme.background
-                                    )
-                                )
-                            )
-                    )
-                }
-                
-                // Content section
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = alert.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    
-                    if (alert.description.isNotBlank()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = alert.description,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
+                            text = "Sort & Filter",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        SortingButton(
+                            currentSort = sortPreference,
+                            onSortChanged = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                sortPreference = it
+                            }
                         )
                     }
-                    
-                    val detailType = alert.type?.takeIf { it.isNotBlank() }
-                    if (!detailType.isNullOrBlank()) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text(
-                                text = "Type: $detailType",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                            )
-                        }
-                    }
-                    
-                    CountdownAndEndTimeRow(alert = alert)
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
+                    FilterRow(
+                        selectedFilter = selectedTypeFilter,
+                        onFilterChanged = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedTypeFilter = it 
+                        },
+                        locationAvailable = false,
+                        onRequestLocationPermission = { },
+                        availableFilters = availableFilters
+                    )
+                }
+            }
+            
+            // Date Filter Button
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     FilledTonalButton(
-                        onClick = { openMapForAlert(context, alert) },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp)
+                        onClick = {
+                            val calendar = java.util.Calendar.getInstance()
+                            if (selectedDateMillis != null) {
+                                calendar.timeInMillis = selectedDateMillis!!
+                            }
+                            DatePickerDialog(
+                                context,
+                                { _: DatePicker, year: Int, month: Int, day: Int ->
+                                    val selectedCalendar = java.util.Calendar.getInstance()
+                                    selectedCalendar.set(year, month, day)
+                                    selectedDateMillis = selectedCalendar.timeInMillis
+                                },
+                                calendar.get(java.util.Calendar.YEAR),
+                                calendar.get(java.util.Calendar.MONTH),
+                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                            ).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = if (selectedDateMillis != null) 
+                                MaterialTheme.colorScheme.primary 
+                            else 
+                                MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = "Filter by Date",
+                            modifier = Modifier.size(20.dp)
                         )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(id = R.string.open_in_maps),
-                            style = MaterialTheme.typography.labelLarge
+                            text = if (selectedDateMillis != null) {
+                                val cal = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+                                String.format(
+                                    "%02d/%02d/%04d",
+                                    cal.get(java.util.Calendar.DAY_OF_MONTH),
+                                    cal.get(java.util.Calendar.MONTH) + 1,
+                                    cal.get(java.util.Calendar.YEAR)
+                                )
+                            } else {
+                                "Select Date"
+                            }
                         )
+                    }
+                    
+                    if (selectedDateMillis != null) {
+                        FilledIconButton(
+                            onClick = { selectedDateMillis = null },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Date Filter",
+                                tint = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
                     }
                 }
             }
             
-            TopStatusBarScrim(modifier = Modifier.align(Alignment.TopCenter))
-        }
-    }
-}
-
-@Composable
-private fun TopStatusBarScrim(modifier: Modifier = Modifier) {
-    val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(topPadding + 80.dp)
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Black.copy(alpha = 0.5f),
-                        Color.Transparent
+            // Statistics Card
+            item {
+                var isExpanded by rememberSaveable { mutableStateOf(true) }
+                
+                val dateText = if (selectedDateMillis != null) {
+                    val calendar = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
+                    String.format(
+                        "%02d/%02d/%04d",
+                        calendar.get(java.util.Calendar.DAY_OF_MONTH),
+                        calendar.get(java.util.Calendar.MONTH) + 1,
+                        calendar.get(java.util.Calendar.YEAR)
                     )
-                )
-            )
-    )
-}
-
-private fun openMapForAlert(context: Context, alert: PokemonAlert) {
-    val mapsIntent = Intent(Intent.ACTION_VIEW, alert.googleMapsUri)
-    try {
-        context.startActivity(mapsIntent)
-    } catch (exception: ActivityNotFoundException) {
-        Toast.makeText(context, context.getString(R.string.no_maps_app), Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun getLastKnownLocation(context: Context): Location? {
-    return try {
-        val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
-        if (lm == null) return null
-        val providers = lm.getProviders(true)
-        var best: Location? = null
-        for (p in providers) {
-            val l = try { lm.getLastKnownLocation(p) } catch (_: SecurityException) { null }
-            if (l != null && (best == null || (l.accuracy < best!!.accuracy))) {
-                best = l
-            }
-        }
-        best
-    } catch (_: Throwable) { null }
-}
-
-@Composable
-private fun DistanceChip(text: String) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.15f),
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_map),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-private fun CountdownAndEndTimeRow(alert: PokemonAlert) {
-    val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(endMillis) {
-        // Tick once per second while countdown is active
-        while (true) {
-            now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1000)
-        }
-    }
-    val remaining = endMillis?.let { it - now } ?: -1
-    val expiredLabel = stringResource(id = R.string.alert_expired)
-    val remainingText = if (endMillis != null) {
-        if (remaining > 0) TimeUtils.formatDurationShort(remaining) else expiredLabel
-    } else null
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (!remainingText.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (remainingText == expiredLabel)
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                else
-                    MaterialTheme.colorScheme.secondaryContainer,
-                shadowElevation = 1.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                } else {
+                    "All Time"
+                }
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+                    ),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_refresh),
-                        contentDescription = null,
-                        modifier = Modifier.height(16.dp),
-                        tint = if (remainingText == expiredLabel)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                    )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Header
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isExpanded = !isExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Statistics for $dateText",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "${statistics["total"]} total alerts",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        // Expandable breakdown
+                        AnimatedVisibility(visible = isExpanded) {
+                            Column(
+                                modifier = Modifier.padding(top = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if ((statistics["raids"] ?: 0) > 0) {
+                                    StatRow("Raids", statistics["raids"] ?: 0, Color(0xFFE91E63))
+                                }
+                                if ((statistics["quests"] ?: 0) > 0) {
+                                    StatRow("Quests", statistics["quests"] ?: 0, Color(0xFF2196F3))
+                                }
+                                if ((statistics["spawns"] ?: 0) > 0) {
+                                    StatRow("Spawns", statistics["spawns"] ?: 0, Color(0xFF4CAF50))
+                                }
+                                if ((statistics["hundos"] ?: 0) > 0) {
+                                    StatRow("Hundos", statistics["hundos"] ?: 0, Color(0xFFFFD700))
+                                }
+                                if ((statistics["pvp"] ?: 0) > 0) {
+                                    StatRow("PvP", statistics["pvp"] ?: 0, Color(0xFF9C27B0))
+                                }
+                                if ((statistics["nundos"] ?: 0) > 0) {
+                                    StatRow("Nundos", statistics["nundos"] ?: 0, Color(0xFF607D8B))
+                                }
+                                if ((statistics["rocket"] ?: 0) > 0) {
+                                    StatRow("Rocket", statistics["rocket"] ?: 0, Color(0xFFFF5722))
+                                }
+                                if ((statistics["kecleon"] ?: 0) > 0) {
+                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, Color(0xFF00BCD4))
+                                }
+                                if ((statistics["other"] ?: 0) > 0) {
+                                    StatRow("Other", statistics["other"] ?: 0, Color(0xFF757575))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (filteredAlerts.isEmpty() && !uiState.isLoading) {
+                item {
                     Text(
-                        text = if (remainingText == expiredLabel) remainingText else "⏱ $remainingText",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (remainingText == expiredLabel)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Bold
+                        text = "No history found.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
+
+            items(filteredAlerts) { alert ->
+                AlertCard(
+                    alert = alert,
+                    distanceInfo = AlertDistanceInfo(null, null, null),
+                    onOpenMaps = { openMapForAlert(context, alert) },
+                    onShowDetails = { 
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAlertClick(alert) 
+                    },
+                    onShareClick = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${alert.name}")
+                            val text = "Check out this ${alert.name}!\nEnds at: ${alert.endTime}\n${alert.googleMapsUri}"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, count: Int, color: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(color, CircleShape)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
         Text(
-            text = stringResource(id = R.string.alert_end_time, alert.endTime),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = count.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
 
-private fun formatWalkingTime(meters: Float): String {
-    // ~5 km/h walking speed (~83.33 m/min)
-    val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
-    return String.format(Locale.getDefault(), "%d min walk", minutes)
-}
