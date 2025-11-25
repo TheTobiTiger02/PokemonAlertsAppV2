@@ -61,6 +61,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -122,6 +124,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
@@ -294,6 +297,7 @@ fun PokemonAlertsPage(
     val context = LocalContext.current
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     val haptic = LocalHapticFeedback.current
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -374,7 +378,7 @@ fun PokemonAlertsPage(
         }
     }
 
-    val filteredAlerts = remember(activeAlerts, selectedFilter) {
+    val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference) {
         val filtered = when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
             AlertFilter.RAIDS -> activeAlerts.filter { it.alert.type?.equals("Raid", ignoreCase = true) == true }
@@ -390,18 +394,37 @@ fun PokemonAlertsPage(
             AlertFilter.ROCKET -> activeAlerts.filter { it.alert.type?.equals("Rocket", ignoreCase = true) == true }
         }
         
-        // Sort by distance if available, otherwise time
-        filtered.sortedWith(
-            compareBy<AlertUiModel> { 
+        // Sort based on user preference
+        when (sortPreference) {
+            SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
+                // Higher ID = newer alert. Alerts without ID go to the end
+                it.alert.id?.toLongOrNull() ?: Long.MIN_VALUE
+            }.thenByDescending { 
+                // Secondary sort by end time for alerts without ID
+                TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: 0L
+            })
+            SortPreference.DISTANCE -> filtered.sortedBy { 
                 it.distanceInfo.distanceMeters ?: Float.MAX_VALUE 
-            }.thenBy { 
+            }
+            SortPreference.TIME_REMAINING -> filtered.sortedBy { 
                 TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: Long.MAX_VALUE 
             }
-        )
+            SortPreference.NAME -> filtered.sortedBy { 
+                it.alert.name.lowercase()
+            }
+        }
+    }
+    
+    // Continuously update to remove expired alerts
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(10_000) // Check every 10 seconds
+            // This will trigger recomposition and re-filtering
+        }
     }
 
     PullToRefreshBox(
-        isRefreshing = uiState.isLoading && uiState.alerts.isNotEmpty(),
+        isRefreshing = uiState.isLoading,
         onRefresh = {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onRefresh()
@@ -411,13 +434,18 @@ fun PokemonAlertsPage(
     ) {
         when {
             uiState.isLoading && uiState.alerts.isEmpty() -> LoadingState()
-            filteredAlerts.isEmpty() && !uiState.isLoading && selectedFilter == AlertFilter.ALL -> EmptyState(onRefresh = onRefresh)
+            uiState.alerts.isEmpty() && !uiState.isLoading -> EmptyState(onRefresh = onRefresh)
             else -> AlertsList(
                 filteredAlerts = filteredAlerts,
                 selectedFilter = selectedFilter,
+                sortPreference = sortPreference,
                 onFilterChanged = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     selectedFilter = it 
+                },
+                onSortChanged = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    sortPreference = it
                 },
                 onAlertSelected = { 
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -445,7 +473,9 @@ fun PokemonAlertsPage(
 private fun AlertsList(
     filteredAlerts: List<AlertUiModel>,
     selectedFilter: AlertFilter,
+    sortPreference: SortPreference,
     onFilterChanged: (AlertFilter) -> Unit,
+    onSortChanged: (SortPreference) -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
     onOpenMaps: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
@@ -459,13 +489,31 @@ private fun AlertsList(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item(key = "filters") {
-            FilterRow(
-                selectedFilter = selectedFilter,
-                onFilterChanged = onFilterChanged,
-                locationAvailable = alertsAvailable,
-                onRequestLocationPermission = onRequestLocationPermission,
-                availableFilters = availableFilters
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Sort & Filter",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    SortingButton(
+                        currentSort = sortPreference,
+                        onSortChanged = onSortChanged
+                    )
+                }
+                FilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChanged = onFilterChanged,
+                    locationAvailable = alertsAvailable,
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    availableFilters = availableFilters
+                )
+            }
         }
         
         if (filteredAlerts.isEmpty()) {
@@ -494,6 +542,95 @@ private fun AlertsList(
         
         item {
             Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
+}
+
+@Composable
+private fun SortingButton(
+    currentSort: SortPreference,
+    onSortChanged: (SortPreference) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Box(modifier = modifier) {
+        ElevatedAssistChip(
+            onClick = { expanded = true },
+            label = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Sort",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = when (currentSort) {
+                            SortPreference.POSTED_TIME -> "Posted"
+                            SortPreference.DISTANCE -> "Distance"
+                            SortPreference.TIME_REMAINING -> "Time"
+                            SortPreference.NAME -> "Name"
+                        }
+                    )
+                }
+            },
+            colors = AssistChipDefaults.elevatedAssistChipColors(
+                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                labelColor = MaterialTheme.colorScheme.onSurface
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline
+            )
+        )
+        
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Sort by Posted Time") },
+                onClick = {
+                    onSortChanged(SortPreference.POSTED_TIME)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.DateRange, contentDescription = null)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Sort by Distance") },
+                onClick = {
+                    onSortChanged(SortPreference.DISTANCE)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.LocationOn, contentDescription = null)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Sort by Time Remaining") },
+                onClick = {
+                    onSortChanged(SortPreference.TIME_REMAINING)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Warning, contentDescription = null)
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Sort by Name") },
+                onClick = {
+                    onSortChanged(SortPreference.NAME)
+                    expanded = false
+                },
+                leadingIcon = {
+                    Icon(Icons.Filled.Star, contentDescription = null)
+                }
+            )
         }
     }
 }
@@ -656,7 +793,13 @@ private fun AlertHistoryPage(
     val context = LocalContext.current
     var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
+    var userLocation by remember { mutableStateOf<Location?>(null) }
     val haptic = LocalHapticFeedback.current
+    
+    LaunchedEffect(Unit) {
+        userLocation = getLastKnownLocation(context)
+    }
 
     val availableFilters = remember(uiState.alerts) {
         val filters = mutableSetOf(AlertFilter.ALL)
@@ -676,7 +819,7 @@ private fun AlertHistoryPage(
         filters
     }
 
-    val filteredAlerts = remember(uiState.alerts, selectedTypeFilter, selectedDateMillis) {
+    val filteredAlerts = remember(uiState.alerts, selectedTypeFilter, selectedDateMillis, sortPreference, userLocation) {
         var filtered = uiState.alerts
 
         // Type Filter
@@ -710,7 +853,35 @@ private fun AlertHistoryPage(
             }
         }
         
-        filtered.sortedByDescending { TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L }
+        // Sort based on user preference
+        when (sortPreference) {
+            SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<PokemonAlert> { 
+                // Higher ID = newer alert. Alerts without ID go to the end
+                it.id?.toLongOrNull() ?: Long.MIN_VALUE
+            }.thenByDescending { 
+                // Secondary sort by end time for alerts without ID
+                TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+            })
+            SortPreference.DISTANCE -> {
+                userLocation?.let { loc ->
+                    filtered.sortedBy { alert ->
+                        val results = FloatArray(1)
+                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                        results.getOrNull(0)?.takeUnless { it.isNaN() } ?: Float.MAX_VALUE
+                    }
+                } ?: filtered.sortedWith(compareByDescending<PokemonAlert> { 
+                    it.id?.toLongOrNull() ?: Long.MIN_VALUE
+                }.thenByDescending { 
+                    TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+                })
+            }
+            SortPreference.TIME_REMAINING -> filtered.sortedBy { 
+                TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE 
+            }
+            SortPreference.NAME -> filtered.sortedBy { 
+                it.name.lowercase()
+            }
+        }
     }
     
     val statistics = remember(filteredAlerts) {
@@ -767,16 +938,37 @@ private fun AlertHistoryPage(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             item {
-                FilterRow(
-                    selectedFilter = selectedTypeFilter,
-                    onFilterChanged = { 
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        selectedTypeFilter = it 
-                    },
-                    locationAvailable = false,
-                    onRequestLocationPermission = { },
-                    availableFilters = availableFilters
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Sort & Filter",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        SortingButton(
+                            currentSort = sortPreference,
+                            onSortChanged = {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                sortPreference = it
+                            }
+                        )
+                    }
+                    FilterRow(
+                        selectedFilter = selectedTypeFilter,
+                        onFilterChanged = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedTypeFilter = it 
+                        },
+                        locationAvailable = false,
+                        onRequestLocationPermission = { },
+                        availableFilters = availableFilters
+                    )
+                }
             }
             
             // Date Filter Button

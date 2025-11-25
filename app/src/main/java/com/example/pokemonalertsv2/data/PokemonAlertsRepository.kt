@@ -15,6 +15,9 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val preferences: AlertPreferencesStore,
     private val alertDao: AlertDao
 ) {
+    
+    // Expose preferences for notification settings and other UI needs
+    val alertPreferences: AlertPreferencesStore get() = preferences
 
     val alerts: Flow<List<PokemonAlert>> = alertDao.observeAllAlerts().map { entities ->
         entities.map { it.toDomain() }

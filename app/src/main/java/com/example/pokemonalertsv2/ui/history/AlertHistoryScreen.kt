@@ -80,6 +80,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertUiModel
 import com.example.pokemonalertsv2.ui.alerts.AlertCard
 import com.example.pokemonalertsv2.ui.alerts.AlertDistanceInfo
+import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
@@ -338,7 +339,11 @@ fun AlertHistoryScreen(
                             )
                         }
 
-                        if (filteredAlerts.isEmpty() && !uiState.isLoading) {
+                        if (uiState.isLoading && uiState.alerts.isEmpty()) {
+                            items(3) {
+                                ShimmerAlertCard()
+                            }
+                        } else if (filteredAlerts.isEmpty() && !uiState.isLoading) {
                              item {
                                 Text(
                                     text = "No history found.",
