@@ -45,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,12 +84,14 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.ceil
 
+@Immutable
 data class AlertDistanceInfo(
     val distanceMeters: Float?,
     val distanceText: String?,
     val walkingText: String?
 )
 
+@Immutable
 data class AlertUiModel(
     val alert: PokemonAlert,
     val distanceInfo: AlertDistanceInfo

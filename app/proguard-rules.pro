@@ -19,3 +19,40 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep kotlinx.serialization classes
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Keep PokemonAlert data class for serialization
+-keep class com.example.pokemonalertsv2.data.PokemonAlert { *; }
+-keepclassmembers class com.example.pokemonalertsv2.data.PokemonAlert {
+    <init>(...);
+    *;
+}
+
+# Keep @Serializable and @SerialName annotations
+-keep,includedescriptorclasses class com.example.pokemonalertsv2.**$$serializer { *; }
+-keepclassmembers class com.example.pokemonalertsv2.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.example.pokemonalertsv2.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# Retrofit and OkHttp
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+-keepattributes Signature
+-keepattributes Exceptions
+
+# Coil
+-dontwarn coil.**

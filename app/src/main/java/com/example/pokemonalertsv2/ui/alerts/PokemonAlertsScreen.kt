@@ -528,7 +528,10 @@ private fun AlertsList(
             }
         }
 
-        items(filteredAlerts) { model ->
+        items(
+            items = filteredAlerts,
+            key = { it.alert.uniqueId }
+        ) { model ->
             Box(modifier = Modifier.animateItem()) {
                 AlertCard(
                     alert = model.alert,
@@ -1147,7 +1150,10 @@ private fun AlertHistoryPage(
                 }
             }
 
-            items(filteredAlerts) { alert ->
+            items(
+                items = filteredAlerts,
+                key = { it.uniqueId }
+            ) { alert ->
                 AlertCard(
                     alert = alert,
                     distanceInfo = AlertDistanceInfo(null, null, null),

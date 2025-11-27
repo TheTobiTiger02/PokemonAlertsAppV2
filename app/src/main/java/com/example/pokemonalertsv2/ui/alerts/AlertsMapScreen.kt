@@ -63,6 +63,7 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -248,13 +249,15 @@ fun AlertsMapScreen(
             uiSettings = mapUiSettings
         ) {
             filteredAlerts.forEach { alert ->
-                MapMarker(
-                    alert = alert,
-                    now = now,
-                    density = density,
-                    context = context,
-                    onClick = { selectedAlert = alert }
-                )
+                key(alert.uniqueId) {
+                    MapMarker(
+                        alert = alert,
+                        now = now,
+                        density = density,
+                        context = context,
+                        onClick = { selectedAlert = alert }
+                    )
+                }
             }
         }
 
@@ -479,27 +482,32 @@ private fun MapMarker(
     context: android.content.Context,
     onClick: () -> Unit
 ) {
-    val position = LatLng(alert.latitude, alert.longitude)
-    val alertType = remember(alert) { detectAlertType(alert) }
+    val position = remember(alert.latitude, alert.longitude) { 
+        LatLng(alert.latitude, alert.longitude) 
+    }
+    val alertType = remember(alert.uniqueId) { detectAlertType(alert) }
     val timeRemainingMs = remember(now, alert.endTime) {
         (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) - now
     }
     val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000)
     
-    var customIcon by remember { mutableStateOf<BitmapDescriptor?>(null) }
+    // Cache the image URL to avoid reloading
+    val imageUrl = remember(alert.uniqueId) { alert.thumbnailUrl ?: alert.imageUrl }
+    val markerSizePx = remember(density) { with(density) { 64.dp.toPx().toInt() } }
     
-    LaunchedEffect(alert.imageUrl, alert.thumbnailUrl, alertType, isExpiringSoon) {
-        val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
-        val markerSizePx = with(density) { 64.dp.toPx().toInt() }
-        customIcon = imageUrl?.let { 
-            withContext(Dispatchers.IO) {
-                createBitmapDescriptorFromUrl(context, it, markerSizePx, alertType, alert.endTime)
+    var customIcon by remember(alert.uniqueId) { mutableStateOf<BitmapDescriptor?>(null) }
+    
+    // Only reload icon when the alert itself changes, not on every time tick
+    LaunchedEffect(alert.uniqueId, alertType) {
+        if (imageUrl != null) {
+            customIcon = withContext(Dispatchers.IO) {
+                createBitmapDescriptorFromUrl(context, imageUrl, markerSizePx, alertType, alert.endTime)
             }
         }
     }
     
     MarkerInfoWindowContent(
-        state = MarkerState(position = position),
+        state = remember(position) { MarkerState(position = position) },
         icon = customIcon,
         title = alert.name,
         visible = true,
