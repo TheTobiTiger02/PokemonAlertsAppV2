@@ -20,7 +20,7 @@
             android:layout_marginEnd="8dp"
             android:src="@drawable/ic_poke_notification"
             android:contentDescription="@string/widget_logo_cd"
-            android:tint="#F43F5E" />
+            android:tint="@color/poke_red" />
 
         <TextView
             android:id="@+id/tv_title"
@@ -30,9 +30,19 @@
             android:text="@string/widget_title"
             android:textStyle="bold"
             android:textSize="16sp"
-            android:textColor="#F8FAFC"
+            android:textColor="@color/poke_white"
             android:maxLines="1"
             android:ellipsize="end" />
+
+        <ImageButton
+            android:id="@+id/btn_map"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:contentDescription="Open Map"
+            android:tint="@color/poke_blue"
+            android:src="@drawable/ic_map"
+            android:layout_marginEnd="4dp" />
 
         <ImageButton
             android:id="@+id/btn_refresh"
@@ -40,7 +50,7 @@
             android:layout_height="32dp"
             android:background="@android:color/transparent"
             android:contentDescription="@string/refresh_alerts"
-            android:tint="#06B6D4"
+            android:tint="@color/poke_blue"
             android:src="@drawable/ic_refresh" />
     </LinearLayout>
 
@@ -49,7 +59,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="#94A3B8"
+        android:textColor="@color/poke_light_gray"
         android:maxLines="1"
         android:ellipsize="end"
         android:paddingBottom="8dp"
@@ -59,11 +69,13 @@
         android:id="@+id/tv_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:textColor="#F8FAFC"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:textColor="@color/poke_white"
         android:text="@string/no_alerts_message"
         android:visibility="gone"
-        android:gravity="center" />
+        android:gravity="center"
+        android:textStyle="italic" />
 
     <ListView
         android:id="@+id/list_alerts"

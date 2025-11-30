@@ -15,6 +15,7 @@ import androidx.core.app.AlarmManagerCompat
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -88,9 +89,17 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.tv_title, openPending)
         views.setOnClickPendingIntent(R.id.img_logo, openPending)
 
+        // Map Button click
+        val mapIntent = Intent(context, AlertsMapActivity::class.java)
+        val mapPending = PendingIntent.getActivity(
+            context, 1, mapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.btn_map, mapPending)
+
         // Refresh button
         val refreshPending = PendingIntent.getBroadcast(
-            context, 1, Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH },
+            context, 2, Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH },
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
         views.setOnClickPendingIntent(R.id.btn_refresh, refreshPending)

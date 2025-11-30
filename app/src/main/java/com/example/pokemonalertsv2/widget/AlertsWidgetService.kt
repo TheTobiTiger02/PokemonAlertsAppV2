@@ -7,6 +7,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.location.Location
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
+import androidx.core.content.ContextCompat
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
@@ -28,6 +29,12 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     private lateinit var imageLoader: ImageLoader
     private var currentLocation: Location? = null
 
+    // Colors
+    private val colorWhite by lazy { ContextCompat.getColor(context, R.color.poke_white) }
+    private val colorRed by lazy { ContextCompat.getColor(context, R.color.poke_red) }
+    private val colorYellow by lazy { ContextCompat.getColor(context, R.color.poke_yellow) }
+    private val colorBlue by lazy { ContextCompat.getColor(context, R.color.poke_blue) }
+
     override fun onCreate() {
         imageLoader = ImageLoader(context)
     }
@@ -35,23 +42,21 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     override fun onDataSetChanged() {
         runBlocking {
             val repo = PokemonAlertsRepository.create(context)
-            // Get alerts from local DB to ensure consistency with the app
             val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
-            
-            // Try to actively get a fresh location fix with a short timeout for distance display
+
+            // Short timeout for location
             currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
-            
-            // Filter expired and sort
+
             val now = System.currentTimeMillis()
             val activeAlerts = alerts.filter {
                 val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
                 end > now
             }
-            
+
             val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
-            
+
             items.clear()
             items.addAll(sorted)
         }
@@ -66,12 +71,39 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     override fun getViewAt(position: Int): RemoteViews? {
         val alert = items.getOrNull(position) ?: return null
         val views = RemoteViews(context.packageName, R.layout.widget_alert_item)
+
+        // 1. Title
         views.setTextViewText(R.id.item_title, alert.name)
+
+        // 2. Time Logic & Coloring
         val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-        val countdownText = endMillis?.let { ms ->
-            val remaining = ms - System.currentTimeMillis()
-            if (remaining > 0) context.getString(R.string.widget_countdown_format, TimeUtils.formatDurationShort(remaining)) else null
+        if (endMillis != null) {
+            val remaining = endMillis - System.currentTimeMillis()
+            if (remaining > 0) {
+                val timeStr = TimeUtils.formatDurationShort(remaining)
+                views.setTextViewText(R.id.item_time, timeStr)
+
+                // Color coding for urgency
+                val minutesLeft = remaining / 1000 / 60
+                val timeColor = when {
+                    minutesLeft < 5 -> colorRed
+                    minutesLeft < 15 -> colorYellow
+                    else -> colorBlue
+                }
+                views.setTextColor(R.id.item_time, timeColor)
+            } else {
+                views.setTextViewText(R.id.item_time, "Ended")
+                views.setTextColor(R.id.item_time, colorWhite)
+            }
+        } else {
+            views.setTextViewText(R.id.item_time, "")
         }
+
+        // 3. Description (now cleaner)
+        val type = alert.type ?: "Alert"
+        views.setTextViewText(R.id.item_desc, "$type: ${alert.description}")
+
+        // 4. Meta Data (Distance and specifics)
         val distanceMeters: Float? = currentLocation?.let { loc ->
             val results = FloatArray(1)
             runCatching {
@@ -81,11 +113,15 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         }
         val distanceText = distanceMeters?.let { formatDistance(it) }
         val walkingText = distanceMeters?.let { formatWalkingTime(it) }
-        val desc = listOfNotNull(distanceText, walkingText, alert.type, countdownText, alert.endTime.takeIf { it.isNotBlank() }?.let { context.getString(R.string.alert_end_time, it) })
-            .joinToString(" · ")
-        views.setTextViewText(R.id.item_desc, if (desc.isNotBlank()) desc else alert.description)
 
-        val imgSize = (64 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
+        val metaParts = listOfNotNull(
+            distanceText,
+            walkingText
+        )
+        views.setTextViewText(R.id.item_meta, metaParts.joinToString(" • "))
+
+        // 5. Image Loading
+        val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
             try {
@@ -109,20 +145,18 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             views.setImageViewResource(R.id.item_image, R.drawable.ic_placeholder)
         }
 
-        // Fill-in click intent to open details
+        // Fill-in click intent
         val fillInIntent = AlertDetailActivity.createIntent(context, alert)
-        views.setOnClickFillInIntent(R.id.item_title, fillInIntent)
-        views.setOnClickFillInIntent(R.id.item_desc, fillInIntent)
         views.setOnClickFillInIntent(R.id.item_image, fillInIntent)
+        views.setOnClickFillInIntent(R.id.item_title, fillInIntent)
+        views.setOnClickFillInIntent(R.id.item_desc, fillInIntent) // Make whole card clickable usually
+
         return views
     }
 
     override fun getLoadingView(): RemoteViews? = null
-
     override fun getViewTypeCount(): Int = 1
-
     override fun getItemId(position: Int): Long = items.getOrNull(position)?.uniqueId?.hashCode()?.toLong() ?: position.toLong()
-
     override fun hasStableIds(): Boolean = true
 
     private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable, size: Int): Bitmap {
@@ -134,13 +168,12 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     }
 
     private fun formatDistance(meters: Float): String {
-        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
-        else String.format(Locale.getDefault(), "%.0f m", meters)
+        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1fkm", meters / 1000f)
+        else String.format(Locale.getDefault(), "%.0fm", meters)
     }
 
     private fun formatWalkingTime(meters: Float): String {
-        // ~5 km/h walking speed (~83.33 m/min)
         val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
-        return String.format(Locale.getDefault(), "%d min walk", minutes)
+        return "$minutes min walk"
     }
 }
