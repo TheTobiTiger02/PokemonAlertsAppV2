@@ -59,32 +59,43 @@ class AlertWorker(
         private const val ONCE_WORK_NAME = "pokemon_alerts_once"
         private const val MAX_RETRIES = 3
         private const val TAG = "AlertWorker"
-        private val constraints = Constraints.Builder()
+        
+        // Only use network constraint for periodic work, not for immediate syncs
+        private val periodicConstraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
         fun schedule(context: Context) {
-            val workRequest = PeriodicWorkRequestBuilder<AlertWorker>(15, TimeUnit.MINUTES)
-                .setConstraints(constraints)
-                .build()
+            try {
+                val workRequest = PeriodicWorkRequestBuilder<AlertWorker>(15, TimeUnit.MINUTES)
+                    .setConstraints(periodicConstraints)
+                    .build()
 
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                PERIODIC_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                workRequest
-            )
+                WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                    PERIODIC_WORK_NAME,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    workRequest
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to schedule periodic work", e)
+            }
         }
 
         fun triggerImmediateSync(context: Context) {
-            val workRequest = OneTimeWorkRequestBuilder<AlertWorker>()
-                .setConstraints(constraints)
-                .build()
+            try {
+                // No network constraint for immediate sync to avoid TooManyRequestsException
+                // The worker will handle network errors gracefully
+                val workRequest = OneTimeWorkRequestBuilder<AlertWorker>()
+                    .build()
 
-            WorkManager.getInstance(context).enqueueUniqueWork(
-                ONCE_WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
-                workRequest
-            )
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    ONCE_WORK_NAME,
+                    ExistingWorkPolicy.REPLACE,
+                    workRequest
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to trigger immediate sync", e)
+            }
         }
     }
 }

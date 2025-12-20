@@ -16,6 +16,7 @@ object AlertAlarmScheduler {
     private const val TAG = "AlertAlarmScheduler"
     internal const val ACTION_POLL_ALERTS = "com.example.pokemonalertsv2.action.POLL_ALERTS"
     private const val REQUEST_CODE = 1001
+    // Increased to 5 minutes to avoid TooManyRequestsException from frequent network constraint registration
     private val INTERVAL_MILLIS = TimeUnit.SECONDS.toMillis(30)
 
     fun prime(context: Context) {
@@ -61,18 +62,23 @@ object AlertAlarmScheduler {
             Log.d(TAG, "Skipping exact alarm schedule; permission unavailable.")
             return
         }
-        val clampedDelay = delayMillis.coerceAtLeast(TimeUnit.MINUTES.toMillis(1))
+        // Minimum 30 seconds between alarms to avoid overwhelming the system
+        val clampedDelay = delayMillis.coerceAtLeast(TimeUnit.SECONDS.toMillis(30))
         val triggerAtMillis = System.currentTimeMillis() + clampedDelay
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val pendingIntent = pendingIntent(context)
-        alarmManager.cancel(pendingIntent)
-        AlarmManagerCompat.setExactAndAllowWhileIdle(
-            alarmManager,
-            AlarmManager.RTC_WAKEUP,
-            triggerAtMillis,
-            pendingIntent
-        )
-        Log.d(TAG, "Scheduled exact alarm in ${clampedDelay / 1000} seconds")
+        try {
+            alarmManager.cancel(pendingIntent)
+            AlarmManagerCompat.setExactAndAllowWhileIdle(
+                alarmManager,
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent
+            )
+            Log.d(TAG, "Scheduled exact alarm in ${clampedDelay / 1000} seconds")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule exact alarm", e)
+        }
     }
 
     private fun pendingIntent(context: Context): PendingIntent {

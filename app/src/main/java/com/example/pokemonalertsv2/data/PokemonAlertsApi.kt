@@ -12,7 +12,7 @@ import retrofit2.http.GET
 import retrofit2.create
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-private const val BASE_URL = "http://match-profiles.gl.at.ply.gg:1855/"
+private const val BASE_URL = "http://api.alsbach-scanner.uk"
 
 @Serializable
 data class HistoryResponse(
@@ -36,6 +36,8 @@ object PokemonAlertsApi {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
     }
 
     private val client: OkHttpClient by lazy {

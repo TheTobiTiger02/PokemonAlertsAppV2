@@ -274,10 +274,11 @@ fun PokemonAlertsRoute(
         }
     }
 
+    // Refresh more frequently when the app is in foreground (every 10 seconds)
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                delay(30_000)
+                delay(10_000) // 10 seconds when app is open
                 if (pagerState.currentPage == 0) {
                     viewModel.refreshAlerts()
                 }
@@ -316,7 +317,7 @@ fun PokemonAlertsPage(
         uiState.alerts.map { alert ->
             val distanceMeters: Float? = userLocation?.let { loc ->
                 val results = FloatArray(1)
-                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
                 results.getOrNull(0)?.takeUnless { it.isNaN() }
             }
             val distanceText = distanceMeters?.let { formatDistance(it) }
@@ -341,31 +342,28 @@ fun PokemonAlertsPage(
     val availableFilters = remember(activeAlerts) {
         val filters = mutableSetOf(AlertFilter.ALL)
         
-        if (activeAlerts.any { it.alert.type?.equals("Raid", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Raid") }) {
             filters.add(AlertFilter.RAIDS)
         }
-        if (activeAlerts.any { it.alert.type?.equals("Quest", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Quest") }) {
             filters.add(AlertFilter.QUESTS)
         }
-        if (activeAlerts.any { 
-            val t = it.alert.type
-            t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-        }) {
+        if (activeAlerts.any { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }) {
             filters.add(AlertFilter.SPAWNS)
         }
-        if (activeAlerts.any { it.alert.type?.equals("Hundo", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Hundo") }) {
             filters.add(AlertFilter.HUNDOS)
         }
-        if (activeAlerts.any { it.alert.type?.equals("PvP", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("PvP") }) {
             filters.add(AlertFilter.PVP)
         }
-        if (activeAlerts.any { it.alert.type?.equals("Nundo", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Nundo") }) {
             filters.add(AlertFilter.NUNDOS)
         }
-        if (activeAlerts.any { it.alert.type?.equals("Kecleon", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Kecleon") }) {
             filters.add(AlertFilter.KECLEON)
         }
-        if (activeAlerts.any { it.alert.type?.equals("Rocket", ignoreCase = true) == true }) {
+        if (activeAlerts.any { it.alert.hasType("Rocket") }) {
             filters.add(AlertFilter.ROCKET)
         }
         filters
@@ -381,24 +379,21 @@ fun PokemonAlertsPage(
     val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference) {
         val filtered = when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
-            AlertFilter.RAIDS -> activeAlerts.filter { it.alert.type?.equals("Raid", ignoreCase = true) == true }
-            AlertFilter.QUESTS -> activeAlerts.filter { it.alert.type?.equals("Quest", ignoreCase = true) == true }
-            AlertFilter.SPAWNS -> activeAlerts.filter { 
-                val t = it.alert.type
-                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-            }
-            AlertFilter.HUNDOS -> activeAlerts.filter { it.alert.type?.equals("Hundo", ignoreCase = true) == true }
-            AlertFilter.PVP -> activeAlerts.filter { it.alert.type?.equals("PvP", ignoreCase = true) == true }
-            AlertFilter.NUNDOS -> activeAlerts.filter { it.alert.type?.equals("Nundo", ignoreCase = true) == true }
-            AlertFilter.KECLEON -> activeAlerts.filter { it.alert.type?.equals("Kecleon", ignoreCase = true) == true }
-            AlertFilter.ROCKET -> activeAlerts.filter { it.alert.type?.equals("Rocket", ignoreCase = true) == true }
+            AlertFilter.RAIDS -> activeAlerts.filter { it.alert.hasType("Raid") }
+            AlertFilter.QUESTS -> activeAlerts.filter { it.alert.hasType("Quest") }
+            AlertFilter.SPAWNS -> activeAlerts.filter { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }
+            AlertFilter.HUNDOS -> activeAlerts.filter { it.alert.hasType("Hundo") }
+            AlertFilter.PVP -> activeAlerts.filter { it.alert.hasType("PvP") }
+            AlertFilter.NUNDOS -> activeAlerts.filter { it.alert.hasType("Nundo") }
+            AlertFilter.KECLEON -> activeAlerts.filter { it.alert.hasType("Kecleon") }
+            AlertFilter.ROCKET -> activeAlerts.filter { it.alert.hasType("Rocket") }
         }
         
         // Sort based on user preference
         when (sortPreference) {
             SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
                 // Higher ID = newer alert. Alerts without ID go to the end
-                it.alert.id?.toLongOrNull() ?: Long.MIN_VALUE
+                it.alert.id?.toLong() ?: Long.MIN_VALUE
             }.thenByDescending { 
                 // Secondary sort by end time for alerts without ID
                 TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: 0L
@@ -808,17 +803,14 @@ private fun AlertHistoryPage(
         val filters = mutableSetOf(AlertFilter.ALL)
         val alerts = uiState.alerts
         
-        if (alerts.any { it.type?.equals("Raid", ignoreCase = true) == true }) filters.add(AlertFilter.RAIDS)
-        if (alerts.any { it.type?.equals("Quest", ignoreCase = true) == true }) filters.add(AlertFilter.QUESTS)
-        if (alerts.any { 
-            val t = it.type
-            t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-        }) filters.add(AlertFilter.SPAWNS)
-        if (alerts.any { it.type?.equals("Hundo", ignoreCase = true) == true }) filters.add(AlertFilter.HUNDOS)
-        if (alerts.any { it.type?.equals("PvP", ignoreCase = true) == true }) filters.add(AlertFilter.PVP)
-        if (alerts.any { it.type?.equals("Nundo", ignoreCase = true) == true }) filters.add(AlertFilter.NUNDOS)
-        if (alerts.any { it.type?.equals("Kecleon", ignoreCase = true) == true }) filters.add(AlertFilter.KECLEON)
-        if (alerts.any { it.type?.equals("Rocket", ignoreCase = true) == true }) filters.add(AlertFilter.ROCKET)
+        if (alerts.any { it.hasType("Raid") }) filters.add(AlertFilter.RAIDS)
+        if (alerts.any { it.hasType("Quest") }) filters.add(AlertFilter.QUESTS)
+        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) filters.add(AlertFilter.SPAWNS)
+        if (alerts.any { it.hasType("Hundo") }) filters.add(AlertFilter.HUNDOS)
+        if (alerts.any { it.hasType("PvP") }) filters.add(AlertFilter.PVP)
+        if (alerts.any { it.hasType("Nundo") }) filters.add(AlertFilter.NUNDOS)
+        if (alerts.any { it.hasType("Kecleon") }) filters.add(AlertFilter.KECLEON)
+        if (alerts.any { it.hasType("Rocket") }) filters.add(AlertFilter.ROCKET)
         filters
     }
 
@@ -828,17 +820,14 @@ private fun AlertHistoryPage(
         // Type Filter
         filtered = when (selectedTypeFilter) {
             AlertFilter.ALL -> filtered
-            AlertFilter.RAIDS -> filtered.filter { it.type?.equals("Raid", ignoreCase = true) == true }
-            AlertFilter.QUESTS -> filtered.filter { it.type?.equals("Quest", ignoreCase = true) == true }
-            AlertFilter.SPAWNS -> filtered.filter { 
-                val t = it.type
-                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-            }
-            AlertFilter.HUNDOS -> filtered.filter { it.type?.equals("Hundo", ignoreCase = true) == true }
-            AlertFilter.PVP -> filtered.filter { it.type?.equals("PvP", ignoreCase = true) == true }
-            AlertFilter.NUNDOS -> filtered.filter { it.type?.equals("Nundo", ignoreCase = true) == true }
-            AlertFilter.KECLEON -> filtered.filter { it.type?.equals("Kecleon", ignoreCase = true) == true }
-            AlertFilter.ROCKET -> filtered.filter { it.type?.equals("Rocket", ignoreCase = true) == true }
+            AlertFilter.RAIDS -> filtered.filter { it.hasType("Raid") }
+            AlertFilter.QUESTS -> filtered.filter { it.hasType("Quest") }
+            AlertFilter.SPAWNS -> filtered.filter { it.hasType("Rare") || it.hasType("Spawn") }
+            AlertFilter.HUNDOS -> filtered.filter { it.hasType("Hundo") }
+            AlertFilter.PVP -> filtered.filter { it.hasType("PvP") }
+            AlertFilter.NUNDOS -> filtered.filter { it.hasType("Nundo") }
+            AlertFilter.KECLEON -> filtered.filter { it.hasType("Kecleon") }
+            AlertFilter.ROCKET -> filtered.filter { it.hasType("Rocket") }
         }
         
         // Date Filter
@@ -860,7 +849,7 @@ private fun AlertHistoryPage(
         when (sortPreference) {
             SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<PokemonAlert> { 
                 // Higher ID = newer alert. Alerts without ID go to the end
-                it.id?.toLongOrNull() ?: Long.MIN_VALUE
+                it.id?.toLong() ?: Long.MIN_VALUE
             }.thenByDescending { 
                 // Secondary sort by end time for alerts without ID
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
@@ -869,11 +858,11 @@ private fun AlertHistoryPage(
                 userLocation?.let { loc ->
                     filtered.sortedBy { alert ->
                         val results = FloatArray(1)
-                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
                         results.getOrNull(0)?.takeUnless { it.isNaN() } ?: Float.MAX_VALUE
                     }
                 } ?: filtered.sortedWith(compareByDescending<PokemonAlert> { 
-                    it.id?.toLongOrNull() ?: Long.MIN_VALUE
+                    it.id?.toLong() ?: Long.MIN_VALUE
                 }.thenByDescending { 
                     TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
                 })
@@ -899,17 +888,16 @@ private fun AlertHistoryPage(
         var other = 0
         
         filteredAlerts.forEach { alert ->
-            when (alert.type?.lowercase()) {
-                "raid" -> raids++
-                "quest" -> quests++
-                "rare", "spawn" -> spawns++
-                "hundo" -> hundos++
-                "pvp" -> pvp++
-                "nundo" -> nundos++
-                "rocket" -> rocket++
-                "kecleon" -> kecleon++
-                else -> other++
-            }
+            var categorized = false
+            if (alert.hasType("Raid")) { raids++; categorized = true }
+            if (alert.hasType("Quest")) { quests++; categorized = true }
+            if (alert.hasType("Rare") || alert.hasType("Spawn")) { spawns++; categorized = true }
+            if (alert.hasType("Hundo")) { hundos++; categorized = true }
+            if (alert.hasType("PvP")) { pvp++; categorized = true }
+            if (alert.hasType("Nundo")) { nundos++; categorized = true }
+            if (alert.hasType("Rocket")) { rocket++; categorized = true }
+            if (alert.hasType("Kecleon")) { kecleon++; categorized = true }
+            if (!categorized) other++
         }
         
         mapOf(

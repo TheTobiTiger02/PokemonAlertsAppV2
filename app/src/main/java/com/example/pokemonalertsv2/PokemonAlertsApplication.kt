@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2
 
 import android.app.Application
+import android.util.Log
 import androidx.work.Configuration
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.work.AlertAlarmScheduler
@@ -10,10 +11,14 @@ class PokemonAlertsApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        AlertNotifier.ensureChannel(this)
-        AlertWorker.schedule(this)
-        AlertWorker.triggerImmediateSync(this)
-        AlertAlarmScheduler.prime(this)
+        try {
+            AlertNotifier.ensureChannel(this)
+            AlertWorker.schedule(this)
+            AlertWorker.triggerImmediateSync(this)
+            AlertAlarmScheduler.prime(this)
+        } catch (e: Exception) {
+            Log.e("PokemonAlertsApp", "Error during application initialization", e)
+        }
     }
 
     override val workManagerConfiguration: Configuration

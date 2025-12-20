@@ -125,17 +125,16 @@ private fun calculateStatistics(alerts: List<PokemonAlert>): AlertStatistics {
     var other = 0
     
     alerts.forEach { alert ->
-        when (alert.type?.lowercase()) {
-            "raid" -> raids++
-            "quest" -> quests++
-            "rare", "spawn" -> spawns++
-            "hundo" -> hundos++
-            "pvp" -> pvp++
-            "nundo" -> nundos++
-            "rocket" -> rocket++
-            "kecleon" -> kecleon++
-            else -> other++
-        }
+        var categorized = false
+        if (alert.hasType("Raid")) { raids++; categorized = true }
+        if (alert.hasType("Quest")) { quests++; categorized = true }
+        if (alert.hasType("Rare") || alert.hasType("Spawn")) { spawns++; categorized = true }
+        if (alert.hasType("Hundo")) { hundos++; categorized = true }
+        if (alert.hasType("PvP")) { pvp++; categorized = true }
+        if (alert.hasType("Nundo")) { nundos++; categorized = true }
+        if (alert.hasType("Rocket")) { rocket++; categorized = true }
+        if (alert.hasType("Kecleon")) { kecleon++; categorized = true }
+        if (!categorized) other++
     }
     
     return AlertStatistics(
@@ -197,17 +196,14 @@ fun AlertHistoryScreen(
         val filters = mutableSetOf(HistoryFilter.ALL)
         val alerts = uiState.alerts
         
-        if (alerts.any { it.type?.equals("Raid", ignoreCase = true) == true }) filters.add(HistoryFilter.RAIDS)
-        if (alerts.any { it.type?.equals("Quest", ignoreCase = true) == true }) filters.add(HistoryFilter.QUESTS)
-        if (alerts.any { 
-            val t = it.type
-            t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-        }) filters.add(HistoryFilter.SPAWNS)
-        if (alerts.any { it.type?.equals("Hundo", ignoreCase = true) == true }) filters.add(HistoryFilter.HUNDOS)
-        if (alerts.any { it.type?.equals("PvP", ignoreCase = true) == true }) filters.add(HistoryFilter.PVP)
-        if (alerts.any { it.type?.equals("Nundo", ignoreCase = true) == true }) filters.add(HistoryFilter.NUNDOS)
-        if (alerts.any { it.type?.equals("Kecleon", ignoreCase = true) == true }) filters.add(HistoryFilter.KECLEON)
-        if (alerts.any { it.type?.equals("Rocket", ignoreCase = true) == true }) filters.add(HistoryFilter.ROCKET)
+        if (alerts.any { it.hasType("Raid") }) filters.add(HistoryFilter.RAIDS)
+        if (alerts.any { it.hasType("Quest") }) filters.add(HistoryFilter.QUESTS)
+        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) filters.add(HistoryFilter.SPAWNS)
+        if (alerts.any { it.hasType("Hundo") }) filters.add(HistoryFilter.HUNDOS)
+        if (alerts.any { it.hasType("PvP") }) filters.add(HistoryFilter.PVP)
+        if (alerts.any { it.hasType("Nundo") }) filters.add(HistoryFilter.NUNDOS)
+        if (alerts.any { it.hasType("Kecleon") }) filters.add(HistoryFilter.KECLEON)
+        if (alerts.any { it.hasType("Rocket") }) filters.add(HistoryFilter.ROCKET)
         filters
     }
 
@@ -217,17 +213,14 @@ fun AlertHistoryScreen(
         // Type Filter
         filtered = when (selectedTypeFilter) {
             HistoryFilter.ALL -> filtered
-            HistoryFilter.RAIDS -> filtered.filter { it.type?.equals("Raid", ignoreCase = true) == true }
-            HistoryFilter.QUESTS -> filtered.filter { it.type?.equals("Quest", ignoreCase = true) == true }
-            HistoryFilter.SPAWNS -> filtered.filter { 
-                val t = it.type
-                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-            }
-            HistoryFilter.HUNDOS -> filtered.filter { it.type?.equals("Hundo", ignoreCase = true) == true }
-            HistoryFilter.PVP -> filtered.filter { it.type?.equals("PvP", ignoreCase = true) == true }
-            HistoryFilter.NUNDOS -> filtered.filter { it.type?.equals("Nundo", ignoreCase = true) == true }
-            HistoryFilter.KECLEON -> filtered.filter { it.type?.equals("Kecleon", ignoreCase = true) == true }
-            HistoryFilter.ROCKET -> filtered.filter { it.type?.equals("Rocket", ignoreCase = true) == true }
+            HistoryFilter.RAIDS -> filtered.filter { it.hasType("Raid") }
+            HistoryFilter.QUESTS -> filtered.filter { it.hasType("Quest") }
+            HistoryFilter.SPAWNS -> filtered.filter { it.hasType("Rare") || it.hasType("Spawn") }
+            HistoryFilter.HUNDOS -> filtered.filter { it.hasType("Hundo") }
+            HistoryFilter.PVP -> filtered.filter { it.hasType("PvP") }
+            HistoryFilter.NUNDOS -> filtered.filter { it.hasType("Nundo") }
+            HistoryFilter.KECLEON -> filtered.filter { it.hasType("Kecleon") }
+            HistoryFilter.ROCKET -> filtered.filter { it.hasType("Rocket") }
         }
 
         // Date Filter

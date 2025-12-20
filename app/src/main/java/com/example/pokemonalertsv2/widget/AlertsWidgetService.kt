@@ -15,6 +15,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.LocationUtils
 import kotlinx.coroutines.runBlocking
@@ -73,7 +74,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         val views = RemoteViews(context.packageName, R.layout.widget_alert_item)
 
         // 1. Title
-        views.setTextViewText(R.id.item_title, alert.name)
+        views.setTextViewText(R.id.item_title, formatAlertTitle(alert))
 
         // 2. Time Logic & Coloring
         val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
@@ -107,7 +108,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         val distanceMeters: Float? = currentLocation?.let { loc ->
             val results = FloatArray(1)
             runCatching {
-                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
             }.getOrNull()
             results.getOrNull(0)?.takeUnless { it.isNaN() }
         }

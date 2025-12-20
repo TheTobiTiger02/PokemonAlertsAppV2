@@ -20,6 +20,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -107,15 +108,14 @@ object AlertNotifier {
         alerts.forEachIndexed { index, alert ->
             // Filter based on alert type and user preferences
             val shouldNotify = when {
-                alert.type?.contains("raid", ignoreCase = true) == true -> raidsEnabled
-                alert.type?.contains("spawn", ignoreCase = true) == true || 
-                    alert.type?.contains("rare", ignoreCase = true) == true -> spawnsEnabled
-                alert.type?.contains("quest", ignoreCase = true) == true -> questsEnabled
-                alert.type?.equals("hundo", ignoreCase = true) == true -> hundosEnabled
-                alert.type?.equals("pvp", ignoreCase = true) == true -> pvpEnabled
-                alert.type?.equals("nundo", ignoreCase = true) == true -> nundosEnabled
-                alert.type?.equals("kecleon", ignoreCase = true) == true -> kecleonEnabled
-                alert.type?.equals("rocket", ignoreCase = true) == true -> rocketEnabled
+                alert.hasTypeContaining("raid") -> raidsEnabled
+                alert.hasTypeContaining("spawn") || alert.hasTypeContaining("rare") -> spawnsEnabled
+                alert.hasTypeContaining("quest") -> questsEnabled
+                alert.hasType("hundo") -> hundosEnabled
+                alert.hasType("pvp") -> pvpEnabled
+                alert.hasType("nundo") -> nundosEnabled
+                alert.hasType("kecleon") -> kecleonEnabled
+                alert.hasType("rocket") -> rocketEnabled
                 else -> true // Default to sending for unknown types
             }
             
@@ -141,7 +141,7 @@ object AlertNotifier {
             val distancePair = userLocation?.let { loc ->
                 val results = FloatArray(1)
                 runCatching {
-                    Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude, alert.longitude, results)
+                    Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
                 }.getOrNull()
                 val meters = results.getOrNull(0) ?: Float.NaN
                 if (meters.isNaN()) null else meters to formatDistance(meters)
@@ -159,15 +159,15 @@ object AlertNotifier {
 
             // Select Channel ID based on type
             val channelId = when {
-                alert.type?.contains("raid", ignoreCase = true) == true -> CHANNEL_RAIDS
-                alert.type?.contains("spawn", ignoreCase = true) == true -> CHANNEL_SPAWNS
-                alert.type?.contains("quest", ignoreCase = true) == true -> CHANNEL_QUESTS
+                alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
+                alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
+                alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
                 else -> CHANNEL_ID
             }
 
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
-                .setContentTitle(alert.name)
+                .setContentTitle(formatAlertTitle(alert))
                 .setContentText(contentText)
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(
@@ -199,7 +199,7 @@ object AlertNotifier {
                     NotificationCompat.BigPictureStyle()
                         .bigPicture(it)
                         .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
-                        .setBigContentTitle(alert.name)
+                        .setBigContentTitle(formatAlertTitle(alert))
                         .setSummaryText(contentText)
                 )
             }

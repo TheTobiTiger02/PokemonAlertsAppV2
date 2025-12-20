@@ -121,12 +121,12 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     
-    // Periodic refresh logic
+    // Refresh more frequently when map is open (every 10 seconds)
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 viewModel.refreshAlerts()
-                kotlinx.coroutines.delay(30_000)
+                kotlinx.coroutines.delay(10_000) // 10 seconds when map is open
             }
         }
     }
@@ -158,6 +158,7 @@ fun AlertsMapScreen(
     var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var mapType by rememberSaveable { mutableStateOf(MapType.NORMAL) }
+    var showTimeLabels by rememberSaveable { mutableStateOf(false) }
 
     // Permissions
     val hasLocationPermission = remember {
@@ -165,12 +166,12 @@ fun AlertsMapScreen(
         ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Time for expiration checks
+    // Time for expiration checks - update every second for accurate time labels
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(5000) // Check every 5s
+            kotlinx.coroutines.delay(1000) // Update every 1 second
         }
     }
 
@@ -184,31 +185,28 @@ fun AlertsMapScreen(
         // 2. Filter by type
         when (selectedFilter) {
             AlertFilter.ALL -> active
-            AlertFilter.RAIDS -> active.filter { it.type?.equals("Raid", ignoreCase = true) == true }
-            AlertFilter.QUESTS -> active.filter { it.type?.equals("Quest", ignoreCase = true) == true }
-            AlertFilter.SPAWNS -> active.filter { 
-                val t = it.type
-                t?.equals("Rare", ignoreCase = true) == true || t?.equals("Spawn", ignoreCase = true) == true 
-            }
-            AlertFilter.HUNDOS -> active.filter { it.type?.equals("Hundo", ignoreCase = true) == true }
-            AlertFilter.PVP -> active.filter { it.type?.equals("PvP", ignoreCase = true) == true }
-            AlertFilter.NUNDOS -> active.filter { it.type?.equals("Nundo", ignoreCase = true) == true }
-            AlertFilter.KECLEON -> active.filter { it.type?.equals("Kecleon", ignoreCase = true) == true }
-            AlertFilter.ROCKET -> active.filter { it.type?.equals("Rocket", ignoreCase = true) == true }
+            AlertFilter.RAIDS -> active.filter { it.hasType("Raid") }
+            AlertFilter.QUESTS -> active.filter { it.hasType("Quest") }
+            AlertFilter.SPAWNS -> active.filter { it.hasType("Rare") || it.hasType("Spawn") }
+            AlertFilter.HUNDOS -> active.filter { it.hasType("Hundo") }
+            AlertFilter.PVP -> active.filter { it.hasType("PvP") }
+            AlertFilter.NUNDOS -> active.filter { it.hasType("Nundo") }
+            AlertFilter.KECLEON -> active.filter { it.hasType("Kecleon") }
+            AlertFilter.ROCKET -> active.filter { it.hasType("Rocket") }
         }
     }
     
     // Determine available filters for UI
     val availableFilters = remember(alerts) {
         val set = mutableSetOf(AlertFilter.ALL)
-        if (alerts.any { it.type?.equals("Raid", ignoreCase = true) == true }) set.add(AlertFilter.RAIDS)
-        if (alerts.any { it.type?.equals("Quest", ignoreCase = true) == true }) set.add(AlertFilter.QUESTS)
-        if (alerts.any { it.type?.equals("Rare", ignoreCase = true) == true || it.type?.equals("Spawn", ignoreCase = true) == true }) set.add(AlertFilter.SPAWNS)
-        if (alerts.any { it.type?.equals("Hundo", ignoreCase = true) == true }) set.add(AlertFilter.HUNDOS)
-        if (alerts.any { it.type?.equals("PvP", ignoreCase = true) == true }) set.add(AlertFilter.PVP)
-        if (alerts.any { it.type?.equals("Nundo", ignoreCase = true) == true }) set.add(AlertFilter.NUNDOS)
-        if (alerts.any { it.type?.equals("Kecleon", ignoreCase = true) == true }) set.add(AlertFilter.KECLEON)
-        if (alerts.any { it.type?.equals("Rocket", ignoreCase = true) == true }) set.add(AlertFilter.ROCKET)
+        if (alerts.any { it.hasType("Raid") }) set.add(AlertFilter.RAIDS)
+        if (alerts.any { it.hasType("Quest") }) set.add(AlertFilter.QUESTS)
+        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) set.add(AlertFilter.SPAWNS)
+        if (alerts.any { it.hasType("Hundo") }) set.add(AlertFilter.HUNDOS)
+        if (alerts.any { it.hasType("PvP") }) set.add(AlertFilter.PVP)
+        if (alerts.any { it.hasType("Nundo") }) set.add(AlertFilter.NUNDOS)
+        if (alerts.any { it.hasType("Kecleon") }) set.add(AlertFilter.KECLEON)
+        if (alerts.any { it.hasType("Rocket") }) set.add(AlertFilter.ROCKET)
         set
     }
 
@@ -255,6 +253,7 @@ fun AlertsMapScreen(
                         now = now,
                         density = density,
                         context = context,
+                        showTimeLabel = showTimeLabels,
                         onClick = { selectedAlert = alert }
                     )
                 }
@@ -303,6 +302,13 @@ fun AlertsMapScreen(
                         )
 
                         Row {
+                            IconButton(onClick = { showTimeLabels = !showTimeLabels }) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_timer),
+                                    contentDescription = "Toggle time labels",
+                                    tint = if (showTimeLabels) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
                             IconButton(onClick = onRefresh) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
@@ -364,7 +370,7 @@ fun AlertsMapScreen(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                  FilledIconButton(
                     onClick = { 
-                        scope.launch {
+                        scope.launch(Dispatchers.Main) {
                              // Try to zoom to bounds of visible alerts, or simple user location?
                              // Let's just zoom to the alerts for now as user location might be null
                              if (filteredAlerts.isNotEmpty()) {
@@ -372,13 +378,13 @@ fun AlertsMapScreen(
                                      val a = filteredAlerts.first()
                                      try {
                                          cameraPositionState.animate(
-                                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f),
+                                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude ?: 0.0, a.longitude ?: 0.0), 14f),
                                              1000
                                          )
                                      } catch (_: Exception) {}
                                  } else {
                                      val builder = LatLngBounds.Builder()
-                                     filteredAlerts.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+                                     filteredAlerts.forEach { builder.include(LatLng(it.latitude ?: 0.0, it.longitude ?: 0.0)) }
                                      val bounds = builder.build()
                                      val results = FloatArray(1)
                                      android.location.Location.distanceBetween(
@@ -438,37 +444,39 @@ fun AlertsMapScreen(
     LaunchedEffect(mapLoaded) {
         if (mapLoaded && filteredAlerts.isNotEmpty()) {
              kotlinx.coroutines.delay(500)
-             if (filteredAlerts.size == 1) {
-                 val a = filteredAlerts.first()
-                 try {
-                     cameraPositionState.animate(
-                         CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude, a.longitude), 14f),
-                         1000
+             withContext(Dispatchers.Main) {
+                 if (filteredAlerts.size == 1) {
+                     val a = filteredAlerts.first()
+                     try {
+                         cameraPositionState.animate(
+                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude ?: 0.0, a.longitude ?: 0.0), 14f),
+                             1000
+                         )
+                     } catch (_: Exception) {}
+                 } else {
+                     val builder = LatLngBounds.Builder()
+                     filteredAlerts.forEach { builder.include(LatLng(it.latitude ?: 0.0, it.longitude ?: 0.0)) }
+                     val bounds = builder.build()
+                     val results = FloatArray(1)
+                     android.location.Location.distanceBetween(
+                         bounds.northeast.latitude, bounds.northeast.longitude,
+                         bounds.southwest.latitude, bounds.southwest.longitude,
+                         results
                      )
-                 } catch (_: Exception) {}
-             } else {
-                 val builder = LatLngBounds.Builder()
-                 filteredAlerts.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
-                 val bounds = builder.build()
-                 val results = FloatArray(1)
-                 android.location.Location.distanceBetween(
-                     bounds.northeast.latitude, bounds.northeast.longitude,
-                     bounds.southwest.latitude, bounds.southwest.longitude,
-                     results
-                 )
-                 try {
-                     if (results[0] < 2000) {
-                         cameraPositionState.animate(
-                             CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
-                             1000
-                         )
-                     } else {
-                         cameraPositionState.animate(
-                             CameraUpdateFactory.newLatLngBounds(bounds, 300),
-                             1000
-                         )
-                     }
-                 } catch (_: Exception) {}
+                     try {
+                         if (results[0] < 2000) {
+                             cameraPositionState.animate(
+                                 CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
+                                 1000
+                             )
+                         } else {
+                             cameraPositionState.animate(
+                                 CameraUpdateFactory.newLatLngBounds(bounds, 300),
+                                 1000
+                             )
+                         }
+                     } catch (_: Exception) {}
+                 }
              }
         }
     }
@@ -480,10 +488,11 @@ private fun MapMarker(
     now: Long,
     density: androidx.compose.ui.unit.Density,
     context: android.content.Context,
+    showTimeLabel: Boolean = false,
     onClick: () -> Unit
 ) {
     val position = remember(alert.latitude, alert.longitude) { 
-        LatLng(alert.latitude, alert.longitude) 
+        LatLng(alert.latitude ?: 0.0, alert.longitude ?: 0.0) 
     }
     val alertType = remember(alert.uniqueId) { detectAlertType(alert) }
     val timeRemainingMs = remember(now, alert.endTime) {
@@ -491,17 +500,52 @@ private fun MapMarker(
     }
     val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000)
     
+    // Format remaining time for label - this is what we display
+    val timeLabel = remember(timeRemainingMs) {
+        if (timeRemainingMs <= 0) "Expired" else TimeUtils.formatDurationShort(timeRemainingMs)
+    }
+    
     // Cache the image URL to avoid reloading
     val imageUrl = remember(alert.uniqueId) { alert.thumbnailUrl ?: alert.imageUrl }
     val markerSizePx = remember(density) { with(density) { 64.dp.toPx().toInt() } }
     
+    // Only regenerate icon when the displayed time label text changes, not every second
     var customIcon by remember(alert.uniqueId) { mutableStateOf<BitmapDescriptor?>(null) }
     
-    // Only reload icon when the alert itself changes, not on every time tick
-    LaunchedEffect(alert.uniqueId, alertType) {
+    // Track the last rendered time label to avoid unnecessary redraws
+    var lastRenderedTimeLabel by remember(alert.uniqueId) { mutableStateOf<String?>(null) }
+    var lastShowTimeLabel by remember(alert.uniqueId) { mutableStateOf(false) }
+    
+    // Only reload icon when the label text actually changes or toggle changes
+    LaunchedEffect(alert.uniqueId, alertType, showTimeLabel, timeLabel) {
+        val currentTimeLabel = if (showTimeLabel) timeLabel else null
+        // Skip if nothing changed
+        if (customIcon != null && lastShowTimeLabel == showTimeLabel && lastRenderedTimeLabel == currentTimeLabel) {
+            return@LaunchedEffect
+        }
+        
         if (imageUrl != null) {
-            customIcon = withContext(Dispatchers.IO) {
-                createBitmapDescriptorFromUrl(context, imageUrl, markerSizePx, alertType, alert.endTime)
+            try {
+                val icon = withContext(Dispatchers.IO) {
+                    createBitmapDescriptorFromUrl(
+                        context = context,
+                        url = imageUrl,
+                        sizePx = markerSizePx,
+                        alertType = alertType,
+                        endTime = alert.endTime,
+                        showTimeLabel = showTimeLabel,
+                        timeLabel = currentTimeLabel
+                    )
+                }
+                // Only update if coroutine wasn't cancelled
+                customIcon = icon
+                lastRenderedTimeLabel = currentTimeLabel
+                lastShowTimeLabel = showTimeLabel
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Coroutine was cancelled, don't update state
+                throw e
+            } catch (_: Exception) {
+                // Ignore other errors (network, image loading, etc.)
             }
         }
     }
@@ -509,7 +553,7 @@ private fun MapMarker(
     MarkerInfoWindowContent(
         state = remember(position) { MarkerState(position = position) },
         icon = customIcon,
-        title = alert.name,
+        title = formatAlertTitle(alert),
         visible = true,
         onClick = { 
             onClick()
@@ -566,7 +610,7 @@ private fun AlertDetailPopup(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                          Text(
-                            text = alert.name,
+                            text = formatAlertTitle(alert),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
@@ -643,30 +687,61 @@ private fun AlertDetailPopup(
 }
 
 
-// Helper to detect alert type from name and description
+// Helper to detect alert type from name and description - prioritizes type field
 private fun detectAlertType(alert: PokemonAlert): AlertType {
-    val text = "${alert.name} ${alert.description} ${alert.type ?: ""}".lowercase()
+    // First check the type field directly (most reliable)
+    alert.type?.forEach { typeStr ->
+        val typeLower = typeStr.lowercase()
+        when {
+            typeLower.contains("hundo") -> return AlertType.HUNDO
+            typeLower.contains("nundo") -> return AlertType.NUNDO
+            typeLower.contains("pvp") -> return AlertType.PVP
+            typeLower.contains("raid") -> return AlertType.RAID
+            typeLower.contains("quest") -> return AlertType.QUEST
+            typeLower.contains("rocket") -> return AlertType.ROCKET
+            typeLower.contains("kecleon") -> return AlertType.KECLEON
+            typeLower.contains("rare") || typeLower.contains("spawn") -> return AlertType.SPAWN
+        }
+    }
+    
+    // Fallback: check name and description text
+    val text = "${alert.name} ${alert.description}".lowercase()
     return when {
-        text.contains("hundo") || text.contains("100%") || text.contains("100 iv") -> AlertType.HUNDO
+        text.contains("hundo") || text.contains("100%") || text.contains("100 iv") || alert.isPerfect -> AlertType.HUNDO
+        text.contains("nundo") || text.contains("0%") || text.contains("0 iv") || alert.isNundo -> AlertType.NUNDO
         text.contains("pvp") || text.contains("rank") -> AlertType.PVP
-        text.contains("nundo") || text.contains("0%") || text.contains("0 iv") -> AlertType.NUNDO
-        else -> AlertType.NORMAL
+        text.contains("raid") || text.contains("tier") -> AlertType.RAID
+        text.contains("quest") || text.contains("research") -> AlertType.QUEST
+        text.contains("rocket") || text.contains("grunt") || text.contains("giovanni") || text.contains("leader") -> AlertType.ROCKET
+        text.contains("kecleon") -> AlertType.KECLEON
+        text.contains("rare") || text.contains("spawn") -> AlertType.SPAWN
+        else -> AlertType.SPAWN // Default to spawn for wild Pokemon
     }
 }
 
-private enum class AlertType(val displayName: String?, val badgeColor: Int?) {
-    HUNDO("💯", 0xFFFF4444.toInt()),     // Red
-    PVP("⚔️", 0xFF2196F3.toInt()),        // Blue  
-    NUNDO("0️⃣", 0xFFFF9800.toInt()),     // Orange
-    NORMAL(null, null)                    // No badge
+private enum class AlertType(
+    val displayName: String,
+    val badgeColor: Int,
+    val secondaryColor: Int? = null // For gradient effects
+) {
+    HUNDO("💯", 0xFFFFD700.toInt(), 0xFFFF4444.toInt()),      // Gold-Red (perfect IV) - gold badge for visibility
+    NUNDO("0️⃣", 0xFFFF9800.toInt(), 0xFF795548.toInt()),     // Orange-Brown (zero IV)
+    PVP("⚔️", 0xFF2196F3.toInt(), 0xFF9C27B0.toInt()),        // Blue-Purple (competitive)
+    RAID("⚔", 0xFFE91E63.toInt(), 0xFFFF5722.toInt()),       // Pink-Red (boss battle)
+    QUEST("📜", 0xFF4CAF50.toInt(), 0xFF8BC34A.toInt()),     // Green (research task)
+    ROCKET("🚀", 0xFF9C27B0.toInt(), 0xFF673AB7.toInt()),    // Purple (Team Rocket)
+    KECLEON("🦎", 0xFF00BCD4.toInt(), 0xFF009688.toInt()),   // Cyan-Teal (special)
+    SPAWN("✨", 0xFF607D8B.toInt(), null)                     // Blue-Grey (wild Pokemon)
 }
 
 private suspend fun createBitmapDescriptorFromUrl(
     context: android.content.Context, 
     url: String, 
     sizePx: Int,
-    alertType: AlertType = AlertType.NORMAL,
-    endTime: String? = null  // Add endTime parameter
+    alertType: AlertType = AlertType.SPAWN,
+    endTime: String? = null,
+    showTimeLabel: Boolean = false,
+    timeLabel: String? = null
 ): BitmapDescriptor? = withContext(Dispatchers.IO) {
     try {
         // Calculate if alert has less than 10 minutes remaining
@@ -687,64 +762,198 @@ private suspend fun createBitmapDescriptorFromUrl(
         if (result is SuccessResult) {
             val drawable = result.drawable
             
-            // Create bitmap with smaller padding for tighter glow effect
-            val padding = (sizePx * 0.15f).toInt()
-            val totalSize = sizePx + (padding * 2)
-            val bmp = Bitmap.createBitmap(totalSize, totalSize, Bitmap.Config.ARGB_8888)
+            // Create bitmap with padding for glow effect, badge, and time label
+            val padding = (sizePx * 0.2f).toInt()
+            val badgeSize = (sizePx * 0.35f).toInt()
+            val timeLabelHeight = if (showTimeLabel && timeLabel != null) (sizePx * 0.35f).toInt() else 0
+            val totalWidth = sizePx + (padding * 2)
+            val totalHeight = sizePx + (padding * 2) + timeLabelHeight
+            val bmp = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
             
-            val centerX = totalSize / 2f
-            val centerY = totalSize / 2f
+            val centerX = totalWidth / 2f
+            val centerY = padding + sizePx / 2f
             val imageRadius = sizePx / 2f
 
-            // 1. Draw Shadow/Glow
-            alertType.badgeColor?.let { color ->
-                val paint = Paint().apply {
-                    this.color = color
-                    alpha = 180
-                    style = Paint.Style.FILL
-                    isAntiAlias = true
-                    maskFilter = android.graphics.BlurMaskFilter(
-                        padding.toFloat(),
-                        android.graphics.BlurMaskFilter.Blur.NORMAL
-                    )
-                }
-                canvas.drawCircle(centerX, centerY, imageRadius, paint)
+            // 1. Draw Outer Glow with gradient effect
+            val glowPaint = Paint().apply {
+                color = alertType.badgeColor
+                alpha = 200
+                style = Paint.Style.FILL
+                isAntiAlias = true
+                maskFilter = android.graphics.BlurMaskFilter(
+                    padding.toFloat() * 1.2f,
+                    android.graphics.BlurMaskFilter.Blur.NORMAL
+                )
             }
+            canvas.drawCircle(centerX, centerY, imageRadius + 4f, glowPaint)
             
-            // 2. Circular Crop for Image
+            // 2. Draw colored border ring (thicker, more visible)
+            val borderPaint = Paint().apply {
+                color = alertType.badgeColor
+                style = Paint.Style.STROKE
+                strokeWidth = 6f
+                isAntiAlias = true
+            }
+            canvas.drawCircle(centerX, centerY, imageRadius, borderPaint)
+            
+            // 3. Circular Crop for Pokemon Image
             val imagePaint = Paint().apply {
                 isAntiAlias = true
                 alpha = globalAlpha
             }
             
             // Draw circle mask
-            val output = Bitmap.createBitmap(totalSize, totalSize, Bitmap.Config.ARGB_8888)
+            val output = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
             val outputCanvas = Canvas(output)
-            outputCanvas.drawCircle(centerX, centerY, imageRadius, imagePaint)
+            outputCanvas.drawCircle(centerX, centerY, imageRadius - 3f, imagePaint)
             
             // Set transfer mode to SRC_IN (keep only image inside circle)
             imagePaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
             
             // Draw image into the circle
-            drawable.setBounds(padding, padding, padding + sizePx, padding + sizePx)
+            drawable.setBounds(padding + 3, padding + 3, padding + sizePx - 3, padding + sizePx - 3)
             drawable.draw(outputCanvas)
             
             // Draw output onto main canvas
             canvas.drawBitmap(output, 0f, 0f, Paint().apply { isAntiAlias = true })
             
-            // 3. Border Ring
-            val borderPaint = Paint().apply {
+            // 4. Draw White inner border for polish
+            val innerBorderPaint = Paint().apply {
                 color = AndroidColor.WHITE
                 style = Paint.Style.STROKE
-                strokeWidth = 4f
+                strokeWidth = 2f
+                isAntiAlias = true
+                alpha = 180
+            }
+            canvas.drawCircle(centerX, centerY, imageRadius - 2f, innerBorderPaint)
+            
+            // 5. Draw Type Badge in bottom-right corner
+            val badgeRadius = badgeSize / 2f
+            val badgeCenterX = centerX + imageRadius * 0.6f
+            val badgeCenterY = centerY + imageRadius * 0.6f
+            
+            // Badge background with shadow
+            val badgeShadowPaint = Paint().apply {
+                color = AndroidColor.BLACK
+                alpha = 100
+                isAntiAlias = true
+                maskFilter = android.graphics.BlurMaskFilter(4f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            }
+            canvas.drawCircle(badgeCenterX + 2f, badgeCenterY + 2f, badgeRadius, badgeShadowPaint)
+            
+            // Badge background
+            val badgeBgPaint = Paint().apply {
+                color = alertType.badgeColor
+                style = Paint.Style.FILL
                 isAntiAlias = true
             }
-            canvas.drawCircle(centerX, centerY, imageRadius, borderPaint)
+            canvas.drawCircle(badgeCenterX, badgeCenterY, badgeRadius, badgeBgPaint)
+            
+            // Badge border
+            val badgeBorderPaint = Paint().apply {
+                color = AndroidColor.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = 2f
+                isAntiAlias = true
+            }
+            canvas.drawCircle(badgeCenterX, badgeCenterY, badgeRadius, badgeBorderPaint)
+            
+            // Badge emoji/text
+            val textPaint = Paint().apply {
+                color = AndroidColor.WHITE
+                textSize = badgeSize * 0.7f
+                textAlign = Paint.Align.CENTER
+                isAntiAlias = true
+            }
+            
+            // Draw type indicator emoji
+            val symbol = when (alertType) {
+                AlertType.HUNDO -> "💯"
+                AlertType.NUNDO -> "0️⃣"
+                AlertType.PVP -> "⚔️"
+                AlertType.RAID -> "👊"
+                AlertType.QUEST -> "🎁"
+                AlertType.ROCKET -> "🚀"
+                AlertType.KECLEON -> "🦎"
+                AlertType.SPAWN -> "✨"
+            }
+            val textY = badgeCenterY - (textPaint.descent() + textPaint.ascent()) / 2
+            canvas.drawText(symbol, badgeCenterX, textY, textPaint)
+            
+            // 6. Add expiring soon indicator (pulsing red dot in top-left)
+            if (isExpiringSoon) {
+                val warningRadius = badgeSize / 3f
+                val warningX = centerX - imageRadius * 0.6f
+                val warningY = centerY - imageRadius * 0.6f
+                
+                val warningPaint = Paint().apply {
+                    color = 0xFFFF0000.toInt()
+                    style = Paint.Style.FILL
+                    isAntiAlias = true
+                }
+                canvas.drawCircle(warningX, warningY, warningRadius, warningPaint)
+                
+                val warningBorderPaint = Paint().apply {
+                    color = AndroidColor.WHITE
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                    isAntiAlias = true
+                }
+                canvas.drawCircle(warningX, warningY, warningRadius, warningBorderPaint)
+            }
+            
+            // 7. Draw time label below the marker if enabled
+            if (showTimeLabel && timeLabel != null) {
+                val labelY = padding + sizePx + 4f // Below the circle
+                val labelPadding = 8f
+                val labelTextSize = timeLabelHeight * 0.6f
+                
+                // Measure text width
+                val labelPaint = Paint().apply {
+                    color = AndroidColor.WHITE
+                    textSize = labelTextSize
+                    textAlign = Paint.Align.CENTER
+                    isAntiAlias = true
+                    isFakeBoldText = true
+                }
+                val textWidth = labelPaint.measureText(timeLabel)
+                val bgWidth = textWidth + labelPadding * 2
+                val bgHeight = timeLabelHeight.toFloat()
+                val bgLeft = centerX - bgWidth / 2
+                val bgTop = labelY
+                
+                // Draw label background with rounded corners
+                val bgPaint = Paint().apply {
+                    color = if (isExpiringSoon) 0xFFD32F2F.toInt() else 0xFF424242.toInt()
+                    style = Paint.Style.FILL
+                    isAntiAlias = true
+                }
+                val bgRect = android.graphics.RectF(bgLeft, bgTop, bgLeft + bgWidth, bgTop + bgHeight)
+                canvas.drawRoundRect(bgRect, 8f, 8f, bgPaint)
+                
+                // Draw border
+                val borderPaint = Paint().apply {
+                    color = AndroidColor.WHITE
+                    style = Paint.Style.STROKE
+                    strokeWidth = 1.5f
+                    isAntiAlias = true
+                }
+                canvas.drawRoundRect(bgRect, 8f, 8f, borderPaint)
+                
+                // Draw text
+                val textY = bgTop + bgHeight / 2 - (labelPaint.descent() + labelPaint.ascent()) / 2
+                canvas.drawText(timeLabel, centerX, textY, labelPaint)
+            }
             
             BitmapDescriptorFactory.fromBitmap(bmp)
         } else null
-    } catch (_: Throwable) { null }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        // Rethrow cancellation exceptions so coroutine cancellation works properly
+        throw e
+    } catch (_: Throwable) { 
+        null 
+    }
 }
 
 // Hardcoded Dark Map Style JSON
