@@ -29,6 +29,15 @@ private val ROCKET_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.boole
 private val NOTIFICATION_VIBRATE_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notification_vibrate")
 private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
 
+// Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
+private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
+private val EXCLUDED_NUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_nundo_types")
+private val EXCLUDED_PVP_TYPES_KEY = stringSetPreferencesKey("excluded_pvp_types")
+private val EXCLUDED_SPAWN_TYPES_KEY = stringSetPreferencesKey("excluded_spawn_types")
+private val EXCLUDED_ROCKET_TYPES_KEY = stringSetPreferencesKey("excluded_rocket_types")
+private val EXCLUDED_RAID_TIERS_KEY = stringSetPreferencesKey("excluded_raid_tiers")
+private val DISMISSED_ALERTS_KEY = stringSetPreferencesKey("dismissed_alert_ids")
+
 val Context.alertPreferencesDataStore: DataStore<Preferences> by preferencesDataStore(name = DATA_STORE_NAME)
 
 enum class SortPreference {
@@ -88,6 +97,31 @@ interface AlertPreferencesStore {
     
     val silenceUntil: Flow<Long> // Timestamp in milliseconds, 0 means not silenced
     suspend fun updateSilenceUntil(timestampMillis: Long)
+    
+    // Sub-type filtering - Sets of excluded types
+    val excludedHundoTypes: Flow<Set<String>>
+    suspend fun updateExcludedHundoTypes(types: Set<String>)
+    
+    val excludedNundoTypes: Flow<Set<String>>
+    suspend fun updateExcludedNundoTypes(types: Set<String>)
+    
+    val excludedPvpTypes: Flow<Set<String>>
+    suspend fun updateExcludedPvpTypes(types: Set<String>)
+    
+    val excludedSpawnTypes: Flow<Set<String>>
+    suspend fun updateExcludedSpawnTypes(types: Set<String>)
+    
+    val excludedRocketTypes: Flow<Set<String>>
+    suspend fun updateExcludedRocketTypes(types: Set<String>)
+    
+    val excludedRaidTiers: Flow<Set<String>>
+    suspend fun updateExcludedRaidTiers(types: Set<String>)
+    
+    // Dismissed alerts
+    val dismissedAlertIds: Flow<Set<String>>
+    suspend fun addDismissedAlert(alertId: String)
+    suspend fun removeDismissedAlert(alertId: String)
+    suspend fun clearDismissedAlerts()
 }
 
 class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPreferencesStore {
@@ -275,8 +309,101 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             prefs[SILENCE_UNTIL_KEY] = timestampMillis
         }
     }
+    
+    // Sub-type filtering implementations
+    override val excludedHundoTypes: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_HUNDO_TYPES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedHundoTypes(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_HUNDO_TYPES_KEY] = types
+        }
+    }
+    
+    override val excludedNundoTypes: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_NUNDO_TYPES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedNundoTypes(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_NUNDO_TYPES_KEY] = types
+        }
+    }
+    
+    override val excludedPvpTypes: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_PVP_TYPES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedPvpTypes(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_PVP_TYPES_KEY] = types
+        }
+    }
+    
+    override val excludedSpawnTypes: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_SPAWN_TYPES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedSpawnTypes(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_SPAWN_TYPES_KEY] = types
+        }
+    }
+    
+    override val excludedRocketTypes: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_ROCKET_TYPES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedRocketTypes(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_ROCKET_TYPES_KEY] = types
+        }
+    }
+    
+    override val excludedRaidTiers: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[EXCLUDED_RAID_TIERS_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateExcludedRaidTiers(types: Set<String>) {
+        dataStore.edit { prefs ->
+            prefs[EXCLUDED_RAID_TIERS_KEY] = types
+        }
+    }
+    
+    // Dismissed alerts implementations
+    override val dismissedAlertIds: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[DISMISSED_ALERTS_KEY] ?: emptySet()
+    }
+    
+    override suspend fun addDismissedAlert(alertId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISMISSED_ALERTS_KEY] ?: emptySet()
+            // Limit to prevent unbounded growth, keep last 500
+            val updated = if (current.size >= 500) {
+                current.drop(current.size - 499).toSet() + alertId
+            } else {
+                current + alertId
+            }
+            prefs[DISMISSED_ALERTS_KEY] = updated
+        }
+    }
+    
+    override suspend fun removeDismissedAlert(alertId: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[DISMISSED_ALERTS_KEY] ?: emptySet()
+            prefs[DISMISSED_ALERTS_KEY] = current - alertId
+        }
+    }
+    
+    override suspend fun clearDismissedAlerts() {
+        dataStore.edit { prefs ->
+            prefs[DISMISSED_ALERTS_KEY] = emptySet()
+        }
+    }
 
     companion object {
         private const val MAX_SEEN_ALERTS = 200
     }
 }
+

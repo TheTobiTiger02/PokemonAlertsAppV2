@@ -68,6 +68,7 @@ import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -91,6 +92,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -157,13 +161,99 @@ fun PokemonAlertsRoute(
     val scope = rememberCoroutineScope()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${alert.name}")
-            val text = "Check out this ${alert.name}!\nEnds at: ${alert.endTime}\n${alert.googleMapsUri}"
-            putExtra(Intent.EXTRA_TEXT, text)
+        // Build formatted share text
+        val shareText = buildString {
+            append("🎮 Pokemon Alert: ${formatAlertTitle(alert)}\n\n")
+            
+            // Add key stats if available
+            alert.formattedIv?.let { append("📊 IV: $it\n") }
+            alert.cp?.let { append("⚡ CP: $it\n") }
+            alert.level?.let { append("📈 Level: $it\n") }
+            
+            // Add Pokemon types if available
+            alert.type?.takeIf { it.isNotEmpty() }?.let { types ->
+                val typeStr = types.filter { !it.equals("spawn", true) && !it.equals("hundo", true) && !it.equals("nundo", true) && !it.equals("pvp", true) }
+                    .joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
+                if (typeStr.isNotBlank()) {
+                    append("🏷 Type: $typeStr\n")
+                }
+            }
+            
+            append("\n⏱ Ends: ${alert.endTime}\n")
+            
+            // Add location details
+            alert.locationDisplay?.let { append("📍 $it\n") }
+            
+            // Add clickable Google Maps link
+            append("\n🗺 Open in Maps:\n${alert.googleMapsUri}")
         }
-        context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
+        
+        // Try to share with image, fallback to text-only
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val imageUrl = alert.imageUrl ?: alert.thumbnailUrl
+                var imageUri: android.net.Uri? = null
+                
+                if (!imageUrl.isNullOrBlank()) {
+                    // Download image to cache
+                    val sharedImagesDir = java.io.File(context.cacheDir, "shared_alerts")
+                    if (!sharedImagesDir.exists()) sharedImagesDir.mkdirs()
+                    
+                    val imageFile = java.io.File(sharedImagesDir, "pokemon_${alert.uniqueId.hashCode()}.png")
+                    
+                    // Use Coil to load and save the image
+                    val request = coil.request.ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .build()
+                    val result = coil.ImageLoader(context).execute(request)
+                    
+                    if (result is coil.request.SuccessResult) {
+                        val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                        if (bitmap != null) {
+                            java.io.FileOutputStream(imageFile).use { out ->
+                                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                            }
+                            imageUri = androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                imageFile
+                            )
+                        }
+                    }
+                }
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val shareIntent = if (imageUri != null) {
+                        // Share with image
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "image/*"
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    } else {
+                        // Fallback to text-only
+                        Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
+                }
+            } catch (e: Exception) {
+                // Fallback to text-only on any error
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
+                }
+            }
+        }
     }
 
     alertsUiState.errorMessage?.let { message ->
@@ -254,12 +344,26 @@ fun PokemonAlertsRoute(
                 when (page) {
                     0 -> PokemonAlertsPage(
                         uiState = alertsUiState,
+                        dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle(initialValue = emptySet()).value,
                         onRefresh = viewModel::refreshAlerts,
                         onAlertSelected = { alert ->
                             val intent = AlertDetailActivity.createIntent(context, alert)
                             context.startActivity(intent)
                         },
-                        onShareClick = onShareClick
+                        onShareClick = onShareClick,
+                        onDismissClick = { alertId ->
+                            viewModel.dismissAlert(alertId)
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "Alert dismissed",
+                                    actionLabel = "Undo",
+                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                )
+                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                    viewModel.undoDismissAlert(alertId)
+                                }
+                            }
+                        }
                     )
                     1 -> AlertHistoryPage(
                         uiState = historyUiState,
@@ -290,15 +394,18 @@ fun PokemonAlertsRoute(
 @Composable
 fun PokemonAlertsPage(
     uiState: AlertsUiState,
+    dismissedAlertIds: Set<String>,
     onRefresh: () -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
+    onDismissClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
+    var showDismissed by rememberSaveable { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -329,12 +436,15 @@ fun PokemonAlertsPage(
         }
     }
 
-    // Filter out expired alerts first
-    val activeAlerts = remember(alertsWithDistance) {
+    // Filter out expired and optionally dismissed alerts
+    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed) {
         val now = System.currentTimeMillis()
         alertsWithDistance.filter { model ->
             val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
-            end > now
+            // Filter out expired, optionally include dismissed based on toggle
+            val notExpired = end > now
+            val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
+            notExpired && notDismissed
         }
     }
 
@@ -434,6 +544,8 @@ fun PokemonAlertsPage(
                 filteredAlerts = filteredAlerts,
                 selectedFilter = selectedFilter,
                 sortPreference = sortPreference,
+                showDismissed = showDismissed,
+                dismissedAlertIds = dismissedAlertIds,
                 onFilterChanged = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     selectedFilter = it 
@@ -442,12 +554,24 @@ fun PokemonAlertsPage(
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     sortPreference = it
                 },
+                onShowDismissedChanged = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    showDismissed = it
+                },
                 onAlertSelected = { 
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onAlertSelected(it) 
                 },
                 onOpenMaps = { alert -> openMapForAlert(context, alert) },
                 onShareClick = onShareClick,
+                onDismissClick = { alertId ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDismissClick(alertId)
+                },
+                onRestoreClick = { alertId ->
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onDismissClick(alertId)  // Use same callback, it toggles
+                },
                 onRequestLocationPermission = {
                     locationPermissionLauncher.launch(
                         arrayOf(
@@ -463,17 +587,21 @@ fun PokemonAlertsPage(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AlertsList(
     filteredAlerts: List<AlertUiModel>,
     selectedFilter: AlertFilter,
     sortPreference: SortPreference,
+    showDismissed: Boolean,
+    dismissedAlertIds: Set<String>,
     onFilterChanged: (AlertFilter) -> Unit,
     onSortChanged: (SortPreference) -> Unit,
+    onShowDismissedChanged: (Boolean) -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
     onOpenMaps: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
+    onDismissClick: (String) -> Unit,
+    onRestoreClick: (String) -> Unit,
     onRequestLocationPermission: () -> Unit,
     alertsAvailable: Boolean,
     availableFilters: Set<AlertFilter>
@@ -508,6 +636,21 @@ private fun AlertsList(
                     onRequestLocationPermission = onRequestLocationPermission,
                     availableFilters = availableFilters
                 )
+                
+                // Show dismissed toggle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = showDismissed,
+                        onClick = { onShowDismissedChanged(!showDismissed) },
+                        label = { Text("Show Dismissed") },
+                        leadingIcon = if (showDismissed) {
+                            { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
             }
         }
         
@@ -527,7 +670,43 @@ private fun AlertsList(
             items = filteredAlerts,
             key = { it.alert.uniqueId }
         ) { model ->
-            Box(modifier = Modifier.animateItem()) {
+            val dismissState = rememberSwipeToDismissBoxState(
+                confirmValueChange = { dismissValue ->
+                    if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                        onDismissClick(model.alert.uniqueId)
+                        true
+                    } else {
+                        false
+                    }
+                }
+            )
+            
+            SwipeToDismissBox(
+                state = dismissState,
+                backgroundContent = {
+                    // Dismiss background - red with X icon
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                shape = RoundedCornerShape(26.dp)
+                            )
+                            .padding(end = 24.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Dismiss",
+                            tint = MaterialTheme.colorScheme.onError,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                },
+                enableDismissFromStartToEnd = false,
+                enableDismissFromEndToStart = true,
+                modifier = Modifier.animateItem()
+            ) {
                 AlertCard(
                     alert = model.alert,
                     distanceInfo = model.distanceInfo,
@@ -1196,3 +1375,123 @@ private fun StatRow(label: String, count: Int, color: Color) {
     }
 }
 
+/**
+ * Builds a styled HTML page for sharing an alert that can be opened in any browser.
+ * Uses dark theme styling matching the app's Midnight Sky theme.
+ */
+private fun buildAlertShareHtml(alert: PokemonAlert): String {
+    val title = formatAlertTitle(alert)
+    val imageUrl = alert.imageUrl ?: alert.thumbnailUrl ?: ""
+    val mapsUrl = alert.googleMapsUri.toString()
+    
+    return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Alert: $title</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0F172A 0%, #1E1E3F 50%, #2A1A4A 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #E2E8F0;
+        }
+        .card {
+            max-width: 480px;
+            margin: 0 auto;
+            background: rgba(30, 41, 59, 0.9);
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+        .image-container {
+            position: relative;
+            height: 280px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .content { padding: 24px; }
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            background: linear-gradient(90deg, #60A5FA, #A78BFA);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat {
+            background: rgba(100, 116, 139, 0.2);
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-value { font-size: 20px; font-weight: 700; color: #60A5FA; }
+        .stat-label { font-size: 12px; color: #94A3B8; margin-top: 4px; }
+        .time-badge {
+            display: inline-block;
+            background: linear-gradient(90deg, #F59E0B, #EF4444);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        .location { color: #94A3B8; font-size: 14px; margin-bottom: 16px; }
+        .maps-btn {
+            display: block;
+            width: 100%;
+            background: linear-gradient(90deg, #3B82F6, #8B5CF6);
+            color: white;
+            text-decoration: none;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        .maps-btn:hover { opacity: 0.9; }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #64748B;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="image-container">
+            ${if (imageUrl.isNotBlank()) "<img src=\"$imageUrl\" alt=\"$title\" onerror=\"this.style.display='none'\">" else ""}
+        </div>
+        <div class="content">
+            <h1>$title</h1>
+            <div class="time-badge">⏱ Ends: ${alert.endTime}</div>
+            <div class="stats">
+                ${alert.formattedIv?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>IV</div></div>" } ?: ""}
+                ${alert.cp?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>CP</div></div>" } ?: ""}
+                ${alert.level?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>Level</div></div>" } ?: ""}
+            </div>
+            ${alert.locationDisplay?.let { "<div class='location'>📍 $it</div>" } ?: ""}
+            <a href="$mapsUrl" class="maps-btn">📍 Open in Google Maps</a>
+        </div>
+    </div>
+    <div class="footer">Shared from Pokemon Alerts</div>
+</body>
+</html>
+    """.trimIndent()
+}

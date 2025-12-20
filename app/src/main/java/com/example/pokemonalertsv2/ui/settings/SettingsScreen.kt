@@ -71,6 +71,11 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -93,6 +98,14 @@ fun SettingsScreen(
     val rocketNotifications by viewModel.rocketNotifications.collectAsStateWithLifecycle(initialValue = true)
     val notificationVibrate by viewModel.notificationVibrate.collectAsStateWithLifecycle(initialValue = true)
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
+    
+    // Excluded types for granular filtering
+    val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
+    val excludedNundoTypes by viewModel.excludedNundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
+    val excludedPvpTypes by viewModel.excludedPvpTypes.collectAsStateWithLifecycle(initialValue = emptySet())
+    val excludedSpawnTypes by viewModel.excludedSpawnTypes.collectAsStateWithLifecycle(initialValue = emptySet())
+    val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
+    val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
     val containerGradient = Brush.verticalGradient(
         listOf(
@@ -153,6 +166,14 @@ fun SettingsScreen(
                             checked = raidsNotifications,
                             onCheckedChange = { viewModel.updateRaidsNotifications(it) }
                         )
+                        if (raidsNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Raid Tiers",
+                                types = listOf("1", "3", "5", "Mega", "Elite", "Primal"),
+                                excludedTypes = excludedRaidTiers,
+                                onToggleType = { viewModel.toggleExcludedRaidTier(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "Spawns",
@@ -160,6 +181,14 @@ fun SettingsScreen(
                             checked = spawnsNotifications,
                             onCheckedChange = { viewModel.updateSpawnsNotifications(it) }
                         )
+                        if (spawnsNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Pokemon Types",
+                                types = POKEMON_TYPES,
+                                excludedTypes = excludedSpawnTypes,
+                                onToggleType = { viewModel.toggleExcludedSpawnType(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "Quests",
@@ -174,6 +203,14 @@ fun SettingsScreen(
                             checked = hundosNotifications,
                             onCheckedChange = { viewModel.updateHundosNotifications(it) }
                         )
+                        if (hundosNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Pokemon Types",
+                                types = POKEMON_TYPES,
+                                excludedTypes = excludedHundoTypes,
+                                onToggleType = { viewModel.toggleExcludedHundoType(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "PvP",
@@ -181,6 +218,14 @@ fun SettingsScreen(
                             checked = pvpNotifications,
                             onCheckedChange = { viewModel.updatePvpNotifications(it) }
                         )
+                        if (pvpNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Pokemon Types",
+                                types = POKEMON_TYPES,
+                                excludedTypes = excludedPvpTypes,
+                                onToggleType = { viewModel.toggleExcludedPvpType(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "Nundos",
@@ -188,6 +233,14 @@ fun SettingsScreen(
                             checked = nundosNotifications,
                             onCheckedChange = { viewModel.updateNundosNotifications(it) }
                         )
+                        if (nundosNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Pokemon Types",
+                                types = POKEMON_TYPES,
+                                excludedTypes = excludedNundoTypes,
+                                onToggleType = { viewModel.toggleExcludedNundoType(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "Kecleon",
@@ -202,6 +255,14 @@ fun SettingsScreen(
                             checked = rocketNotifications,
                             onCheckedChange = { viewModel.updateRocketNotifications(it) }
                         )
+                        if (rocketNotifications) {
+                            TypeFilterSection(
+                                title = "Exclude Grunt Types",
+                                types = ROCKET_GRUNT_TYPES,
+                                excludedTypes = excludedRocketTypes,
+                                onToggleType = { viewModel.toggleExcludedRocketType(it) }
+                            )
+                        }
                         
                         SwitchSetting(
                             title = "Vibration",
@@ -1418,4 +1479,90 @@ private fun CustomDatePickerDialog(
 private fun isSameDay(cal1: Calendar, cal2: Calendar): Boolean {
     return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
             cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+}
+
+// Pokemon type constants for filtering
+private val POKEMON_TYPES = listOf(
+    "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
+    "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
+    "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy"
+)
+
+// Rocket grunt type constants
+private val ROCKET_GRUNT_TYPES = listOf(
+    "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
+    "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
+    "Rock", "Ghost", "Dragon", "Dark", "Fairy", "Mixed"
+)
+
+/**
+ * Expandable filter section showing type chips that can be toggled to exclude
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TypeFilterSection(
+    title: String,
+    types: List<String>,
+    excludedTypes: Set<String>,
+    onToggleType: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (excludedTypes.isNotEmpty()) {
+                    Text(
+                        text = "${excludedTypes.size} excluded",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        AnimatedVisibility(visible = expanded) {
+            FlowRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                types.forEach { type ->
+                    val isExcluded = excludedTypes.any { it.equals(type, ignoreCase = true) }
+                    FilterChip(
+                        selected = isExcluded,
+                        onClick = { onToggleType(type) },
+                        label = { Text(type) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    )
+                }
+            }
+        }
+    }
 }
