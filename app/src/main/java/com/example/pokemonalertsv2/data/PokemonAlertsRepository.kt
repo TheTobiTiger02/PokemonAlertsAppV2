@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.example.pokemonalertsv2.data.database.AlertDao
 import com.example.pokemonalertsv2.data.database.AppDatabase
+import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.toDomain
 import com.example.pokemonalertsv2.data.database.toEntity
+import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.LinkedHashSet
@@ -13,7 +15,8 @@ import java.util.LinkedHashSet
 class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
     private val preferences: AlertPreferencesStore,
-    private val alertDao: AlertDao
+    private val alertDao: AlertDao,
+    private val historyAlertDao: HistoryAlertDao
 ) {
     
     // Expose preferences for notification settings and other UI needs
@@ -44,6 +47,63 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun getHistory(): List<PokemonAlert> {
         val response = service.getHistory()
         return response.data
+    }
+
+    // ── History (offline-first with pagination + server-side filtering) ──
+
+    /** Observe the locally-cached history alerts (Room). */
+    val historyAlerts: Flow<List<PokemonAlert>> =
+        historyAlertDao.observeAll().map { entities -> entities.map { it.toDomain() } }
+
+    /**
+     * Replaces the local history cache with the first page from the API.
+     * Supports server-side date filtering via the [date] param (YYYY-MM-DD).
+     */
+    suspend fun refreshHistory(
+        pageSize: Int,
+        date: String? = null,
+        type: String? = null
+    ): HistoryResponse {
+        val response = service.getHistoryPaged(
+            limit = pageSize,
+            offset = 0,
+            date = date,
+            type = type
+        )
+        historyAlertDao.replaceAll(response.data.map { it.toHistoryEntity() })
+        return response
+    }
+
+    /**
+     * Fetches the next page of history and appends it to the local cache.
+     * Returns the raw [HistoryResponse] for pagination bookkeeping.
+     */
+    suspend fun fetchHistoryPage(
+        limit: Int,
+        offset: Int,
+        date: String? = null,
+        type: String? = null
+    ): HistoryResponse {
+        val response = service.getHistoryPaged(
+            limit = limit,
+            offset = offset,
+            date = date,
+            type = type
+        )
+        historyAlertDao.insertAll(response.data.map { it.toHistoryEntity() })
+        return response
+    }
+
+    /** Wipes the local history cache (e.g. on logout / data-reset). */
+    suspend fun clearHistoryCache() {
+        historyAlertDao.clearAll()
+    }
+
+    // ── Server statistics ────────────────────────────────────────────────
+
+    /** Fetches all-time stats from /api/stats/total. */
+    suspend fun getTotalStats(): TotalStatsResponse {
+        return service.getTotalStats()
     }
     
     /**
@@ -106,7 +166,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             return PokemonAlertsRepository(
                 service = PokemonAlertsApi.service,
                 preferences = preferences,
-                alertDao = database.alertDao()
+                alertDao = database.alertDao(),
+                historyAlertDao = database.historyAlertDao()
             )
         }
     }

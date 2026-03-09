@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -98,6 +100,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -300,7 +303,7 @@ fun PokemonAlertsRoute(
                             if (pagerState.currentPage == 0) {
                                 viewModel.refreshAlerts()
                             } else {
-                                historyViewModel.fetchHistory()
+                                historyViewModel.refreshHistory()
                             }
                         },
                         onOpenMap = { context.startActivity(Intent(context, AlertsMapActivity::class.java)) },
@@ -363,11 +366,23 @@ fun PokemonAlertsRoute(
                                     viewModel.undoDismissAlert(alertId)
                                 }
                             }
+                        },
+                        onUndoDismiss = { alertId ->
+                            viewModel.undoDismissAlert(alertId)
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    message = "Alert restored",
+                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                )
+                            }
                         }
                     )
                     1 -> AlertHistoryPage(
                         uiState = historyUiState,
-                        onRefresh = historyViewModel::fetchHistory,
+                        onRefresh = historyViewModel::refreshHistory,
+                        onLoadMore = historyViewModel::loadMore,
+                        onDateChanged = historyViewModel::setDateFilter,
+                        onTypeChanged = historyViewModel::setTypeFilter,
                         onAlertClick = { alert ->
                             val intent = AlertDetailActivity.createIntent(context, alert)
                             context.startActivity(intent)
@@ -399,6 +414,7 @@ fun PokemonAlertsPage(
     onAlertSelected: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
     onDismissClick: (String) -> Unit,
+    onUndoDismiss: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -570,7 +586,7 @@ fun PokemonAlertsPage(
                 },
                 onRestoreClick = { alertId ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onDismissClick(alertId)  // Use same callback, it toggles
+                    onUndoDismiss(alertId)
                 },
                 onRequestLocationPermission = {
                     locationPermissionLauncher.launch(
@@ -670,50 +686,98 @@ private fun AlertsList(
             items = filteredAlerts,
             key = { it.alert.uniqueId }
         ) { model ->
+            val isDismissed = model.alert.uniqueId in dismissedAlertIds
+            // rememberUpdatedState ensures the lambda inside rememberSwipeToDismissBoxState
+            // always reads the CURRENT value, even though the lambda itself is captured once.
+            val currentIsDismissed by rememberUpdatedState(isDismissed)
             val dismissState = rememberSwipeToDismissBoxState(
                 confirmValueChange = { dismissValue ->
-                    if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
-                        onDismissClick(model.alert.uniqueId)
-                        true
-                    } else {
-                        false
+                    when {
+                        dismissValue == SwipeToDismissBoxValue.EndToStart && !currentIsDismissed -> {
+                            onDismissClick(model.alert.uniqueId)
+                        }
+                        dismissValue == SwipeToDismissBoxValue.StartToEnd && currentIsDismissed -> {
+                            onRestoreClick(model.alert.uniqueId)
+                        }
                     }
+                    false
                 }
             )
+
+            // Force-reset stale swipe state every time this card (re-)enters composition.
+            // Without this, rememberSaveable restores EndToStart from a previous dismiss+undo
+            // cycle, leaving the card stuck and the gesture handler locked.
+            LaunchedEffect(Unit) {
+                dismissState.snapTo(SwipeToDismissBoxValue.Settled)
+            }
             
             SwipeToDismissBox(
                 state = dismissState,
                 backgroundContent = {
-                    // Dismiss background - red with X icon
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
-                                shape = RoundedCornerShape(26.dp)
+                    if (isDismissed) {
+                        // Restore background - green with check icon
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    color = Color(0xFF4CAF50).copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(26.dp)
+                                )
+                                .padding(start = 24.dp),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = "Restore",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
                             )
-                            .padding(end = 24.dp),
-                        contentAlignment = Alignment.CenterEnd
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Dismiss",
-                            tint = MaterialTheme.colorScheme.onError,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        }
+                    } else {
+                        // Dismiss background - red with X icon
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                    shape = RoundedCornerShape(26.dp)
+                                )
+                                .padding(end = 24.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Dismiss",
+                                tint = MaterialTheme.colorScheme.onError,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
                 },
-                enableDismissFromStartToEnd = false,
-                enableDismissFromEndToStart = true,
+                enableDismissFromStartToEnd = isDismissed,
+                enableDismissFromEndToStart = !isDismissed,
                 modifier = Modifier.animateItem()
             ) {
-                AlertCard(
-                    alert = model.alert,
-                    distanceInfo = model.distanceInfo,
-                    onOpenMaps = { onOpenMaps(model.alert) },
-                    onShowDetails = { onAlertSelected(model.alert) },
-                    onShareClick = { onShareClick(model.alert) }
-                )
+                Box {
+                    AlertCard(
+                        alert = model.alert,
+                        distanceInfo = model.distanceInfo,
+                        onOpenMaps = { onOpenMaps(model.alert) },
+                        onShowDetails = { onAlertSelected(model.alert) },
+                        onShareClick = { onShareClick(model.alert) }
+                    )
+                    // Dimmed overlay for dismissed alerts
+                    if (isDismissed) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(26.dp)
+                                )
+                        )
+                    }
+                }
             }
         }
         
@@ -965,6 +1029,9 @@ private fun EmptyState(onRefresh: () -> Unit) {
 private fun AlertHistoryPage(
     uiState: com.example.pokemonalertsv2.ui.history.HistoryUiState,
     onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onDateChanged: (String?) -> Unit,
+    onTypeChanged: (String?) -> Unit,
     onAlertClick: (PokemonAlert) -> Unit
 ) {
     val context = LocalContext.current
@@ -973,56 +1040,34 @@ private fun AlertHistoryPage(
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
     val haptic = LocalHapticFeedback.current
-    
+    val listState = rememberLazyListState()
+
     LaunchedEffect(Unit) {
         userLocation = getLastKnownLocation(context)
     }
 
-    val availableFilters = remember(uiState.alerts) {
-        val filters = mutableSetOf(AlertFilter.ALL)
-        val alerts = uiState.alerts
-        
-        if (alerts.any { it.hasType("Raid") }) filters.add(AlertFilter.RAIDS)
-        if (alerts.any { it.hasType("Quest") }) filters.add(AlertFilter.QUESTS)
-        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) filters.add(AlertFilter.SPAWNS)
-        if (alerts.any { it.hasType("Hundo") }) filters.add(AlertFilter.HUNDOS)
-        if (alerts.any { it.hasType("PvP") }) filters.add(AlertFilter.PVP)
-        if (alerts.any { it.hasType("Nundo") }) filters.add(AlertFilter.NUNDOS)
-        if (alerts.any { it.hasType("Kecleon") }) filters.add(AlertFilter.KECLEON)
-        if (alerts.any { it.hasType("Rocket") }) filters.add(AlertFilter.ROCKET)
-        filters
+    // Trigger pagination when the user scrolls near the bottom of the list.
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = listState.layoutInfo.totalItemsCount
+            lastVisible >= total - 5 && total > 0
+        }
+    }
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value && !uiState.isLoading && !uiState.isLoadingMore && uiState.canLoadMore) {
+            onLoadMore()
+        }
     }
 
-    val filteredAlerts = remember(uiState.alerts, selectedTypeFilter, selectedDateMillis, sortPreference, userLocation) {
-        var filtered = uiState.alerts
+    // Always show every type filter — server has alerts of all types but we
+    // only load one page at a time, so deriving chips from loaded items is incomplete.
+    val availableFilters = remember { AlertFilter.entries.toSet() }
 
-        // Type Filter
-        filtered = when (selectedTypeFilter) {
-            AlertFilter.ALL -> filtered
-            AlertFilter.RAIDS -> filtered.filter { it.hasType("Raid") }
-            AlertFilter.QUESTS -> filtered.filter { it.hasType("Quest") }
-            AlertFilter.SPAWNS -> filtered.filter { it.hasType("Rare") || it.hasType("Spawn") }
-            AlertFilter.HUNDOS -> filtered.filter { it.hasType("Hundo") }
-            AlertFilter.PVP -> filtered.filter { it.hasType("PvP") }
-            AlertFilter.NUNDOS -> filtered.filter { it.hasType("Nundo") }
-            AlertFilter.KECLEON -> filtered.filter { it.hasType("Kecleon") }
-            AlertFilter.ROCKET -> filtered.filter { it.hasType("Rocket") }
-        }
-        
-        // Date Filter
-        if (selectedDateMillis != null) {
-            val selectedCal = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
-            filtered = filtered.filter { alert ->
-                val alertTime = TimeUtils.parseEndTimeToMillis(alert.endTime)
-                if (alertTime != null) {
-                    val alertCal = java.util.Calendar.getInstance().apply { timeInMillis = alertTime }
-                    alertCal.get(java.util.Calendar.YEAR) == selectedCal.get(java.util.Calendar.YEAR) &&
-                    alertCal.get(java.util.Calendar.DAY_OF_YEAR) == selectedCal.get(java.util.Calendar.DAY_OF_YEAR)
-                } else {
-                    false
-                }
-            }
-        }
+    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation) {
+        // Type filtering is now server-side — uiState.alerts already contains
+        // only the selected type (or all types when no filter is active).
+        var filtered = uiState.alerts
         
         // Sort based on user preference
         when (sortPreference) {
@@ -1055,17 +1100,15 @@ private fun AlertHistoryPage(
         }
     }
     
-    val statistics = remember(filteredAlerts) {
-        var raids = 0
-        var quests = 0
-        var spawns = 0
-        var hundos = 0
-        var pvp = 0
-        var nundos = 0
-        var rocket = 0
-        var kecleon = 0
-        var other = 0
-        
+    // Statistics: prefer /api/stats/total (all-time), fall back to local counting.
+    val statistics = remember(filteredAlerts, uiState.totalStats, uiState.selectedDate, uiState.totalServerCount) {
+        val stats = uiState.totalStats
+        val serverTotal = uiState.totalServerCount
+        val byType = stats?.byType ?: emptyMap()
+
+        // Local breakdown from loaded alerts (always computed as fallback)
+        var raids = 0; var quests = 0; var spawns = 0; var hundos = 0
+        var pvp = 0; var nundos = 0; var rocket = 0; var kecleon = 0; var other = 0
         filteredAlerts.forEach { alert ->
             var categorized = false
             if (alert.hasType("Raid")) { raids++; categorized = true }
@@ -1078,19 +1121,38 @@ private fun AlertHistoryPage(
             if (alert.hasType("Kecleon")) { kecleon++; categorized = true }
             if (!categorized) other++
         }
-        
-        mapOf(
-            "total" to filteredAlerts.size,
-            "raids" to raids,
-            "quests" to quests,
-            "spawns" to spawns,
-            "hundos" to hundos,
-            "pvp" to pvp,
-            "nundos" to nundos,
-            "rocket" to rocket,
-            "kecleon" to kecleon,
-            "other" to other
-        )
+
+        if (uiState.selectedDate == null && byType.isNotEmpty()) {
+            // All-time view + server stats loaded → authoritative per-type from byType map
+            mapOf(
+                "total" to (stats?.totalAlerts ?: serverTotal),
+                "today" to (stats?.totalToday ?: 0),
+                "raids" to (byType["Raid"] ?: 0),
+                "quests" to (byType["Quest"] ?: 0),
+                "spawns" to (byType["Spawn"] ?: 0),
+                "hundos" to (byType["Hundo"] ?: 0),
+                "pvp" to (byType["PvP"] ?: 0),
+                "nundos" to (byType["Nundo"] ?: 0),
+                "rocket" to (byType["Rocket"] ?: 0),
+                "kecleon" to (byType["Kecleon"] ?: 0),
+                "other" to 0
+            )
+        } else {
+            // Date-filtered or stats not yet loaded → server total + local breakdown
+            mapOf(
+                "total" to if (serverTotal > 0) serverTotal else filteredAlerts.size,
+                "today" to 0,
+                "raids" to raids,
+                "quests" to quests,
+                "spawns" to spawns,
+                "hundos" to hundos,
+                "pvp" to pvp,
+                "nundos" to nundos,
+                "rocket" to rocket,
+                "kecleon" to kecleon,
+                "other" to other
+            )
+        }
     }
 
     PullToRefreshBox(
@@ -1103,6 +1165,7 @@ private fun AlertHistoryPage(
         state = rememberPullToRefreshState()
     ) {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -1130,9 +1193,22 @@ private fun AlertHistoryPage(
                     }
                     FilterRow(
                         selectedFilter = selectedTypeFilter,
-                        onFilterChanged = { 
+                        onFilterChanged = { filter ->
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedTypeFilter = it 
+                            selectedTypeFilter = filter
+                            // Map the UI filter enum to the server-side type string
+                            val apiType = when (filter) {
+                                AlertFilter.ALL -> null
+                                AlertFilter.RAIDS -> "Raid"
+                                AlertFilter.QUESTS -> "Quest"
+                                AlertFilter.SPAWNS -> "Spawn"
+                                AlertFilter.HUNDOS -> "Hundo"
+                                AlertFilter.PVP -> "PvP"
+                                AlertFilter.NUNDOS -> "Nundo"
+                                AlertFilter.KECLEON -> "Kecleon"
+                                AlertFilter.ROCKET -> "Rocket"
+                            }
+                            onTypeChanged(apiType)
                         },
                         locationAvailable = false,
                         onRequestLocationPermission = { },
@@ -1160,6 +1236,9 @@ private fun AlertHistoryPage(
                                     val selectedCalendar = java.util.Calendar.getInstance()
                                     selectedCalendar.set(year, month, day)
                                     selectedDateMillis = selectedCalendar.timeInMillis
+                                    // Format as YYYY-MM-DD for the server
+                                    val dateStr = String.format("%04d-%02d-%02d", year, month + 1, day)
+                                    onDateChanged(dateStr)
                                 },
                                 calendar.get(java.util.Calendar.YEAR),
                                 calendar.get(java.util.Calendar.MONTH),
@@ -1197,7 +1276,10 @@ private fun AlertHistoryPage(
                     
                     if (selectedDateMillis != null) {
                         FilledIconButton(
-                            onClick = { selectedDateMillis = null },
+                            onClick = {
+                                selectedDateMillis = null
+                                onDateChanged(null) // clear server-side date filter
+                            },
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer
                             )
@@ -1252,7 +1334,8 @@ private fun AlertHistoryPage(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${statistics["total"]} total alerts",
+                                    text = "${statistics["total"]} total alerts" +
+                                        if ((statistics["today"] ?: 0) > 0) " · ${statistics["today"]} today" else "",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1303,7 +1386,10 @@ private fun AlertHistoryPage(
                 }
             }
 
-            if (filteredAlerts.isEmpty() && !uiState.isLoading) {
+            // Shimmer placeholders while the first page is loading
+            if (uiState.isLoading && uiState.alerts.isEmpty()) {
+                items(3) { ShimmerAlertCard() }
+            } else if (filteredAlerts.isEmpty() && !uiState.isLoading) {
                 item {
                     Text(
                         text = "No history found.",
@@ -1319,7 +1405,7 @@ private fun AlertHistoryPage(
 
             items(
                 items = filteredAlerts,
-                key = { it.uniqueId }
+                contentType = { "alert_card" }
             ) { alert ->
                 AlertCard(
                     alert = alert,
@@ -1339,6 +1425,23 @@ private fun AlertHistoryPage(
                         context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
                     }
                 )
+            }
+
+            // Loading indicator while fetching the next page
+            if (uiState.isLoadingMore) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
     }

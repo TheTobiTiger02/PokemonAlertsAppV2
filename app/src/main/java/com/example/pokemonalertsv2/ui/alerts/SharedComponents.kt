@@ -9,15 +9,22 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -57,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -73,6 +81,7 @@ import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
+import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
@@ -82,7 +91,12 @@ import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.delay
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.floor
+import kotlin.math.ln
+import kotlin.math.tan
 
 @Immutable
 data class AlertDistanceInfo(
@@ -441,50 +455,253 @@ private fun WeatherBoostBadge() {
 @Composable
 fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Boolean = true) {
     val context = LocalContext.current
-    val imageUrl by rememberUpdatedState(alert.imageUrl ?: alert.thumbnailUrl)
-    if (imageUrl != null) {
-        AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imageUrl)
-                .crossfade(300)
-                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                .networkCachePolicy(coil.request.CachePolicy.ENABLED)
-                .build(),
-            contentDescription = stringResource(id = R.string.alert_image),
-            placeholder = painterResource(id = R.drawable.ic_placeholder),
-            error = painterResource(id = R.drawable.ic_placeholder),
-            contentScale = ContentScale.Crop,
-            modifier = modifier
-                .fillMaxWidth()
-                .height(if (rounded) 200.dp else 220.dp)
-                .let { m -> if (rounded) m.clip(RoundedCornerShape(16.dp)) else m }
-        )
-    } else {
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .height(if (rounded) 200.dp else 220.dp)
-                .background(
-                    Brush.linearGradient(listOf(AuroraGradientStart, AuroraGradientEnd)),
-                    if (rounded) RoundedCornerShape(24.dp) else RoundedCornerShape(0.dp)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+    val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
+    val thumbnailUrl = alert.thumbnailUrl
+    val lat = alert.latitude
+    val lon = alert.longitude
+    val hasValidCoords = lat != null && lon != null &&
+        lat.isFinite() && lon.isFinite() &&
+        lat in -85.0511..85.0511 && lon in -180.0..180.0 &&
+        !(abs(lat) < 0.0001 && abs(lon) < 0.0001)
+    var useFallback by remember(primaryUrl, thumbnailUrl) { mutableStateOf(false) }
+
+    val imageHeight = if (rounded) 200.dp else 220.dp
+    val shape = if (rounded) RoundedCornerShape(16.dp) else RoundedCornerShape(0.dp)
+    // When rounded=false the caller (detail hero) controls height via its own modifier
+    val heightModifier = if (rounded) Modifier.height(imageHeight) else Modifier.fillMaxHeight()
+    val showPrimaryImage = primaryUrl != null && !useFallback
+    val showMapFallback = !showPrimaryImage && hasValidCoords
+
+    when {
+        // Primary image available and not failed yet
+        showPrimaryImage -> {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(primaryUrl)
+                    .crossfade(300)
+                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                    .networkCachePolicy(coil.request.CachePolicy.ENABLED)
+                    .listener(onError = { _, _ -> useFallback = true })
+                    .build(),
+                contentDescription = stringResource(id = R.string.alert_image),
+                placeholder = painterResource(id = R.drawable.ic_placeholder),
+                error = painterResource(id = R.drawable.ic_placeholder),
+                contentScale = ContentScale.Crop,
+                modifier = modifier
+                    .fillMaxWidth()
+                    .then(heightModifier)
+                    .clip(shape)
+            )
+        }
+
+        // Fallback: composite map + thumbnail sprite overlay
+        showMapFallback -> {
+            val safeLat = lat!!
+            val safeLon = lon!!
+            val zoom = if (rounded) 16 else 17
+            val n = 1 shl zoom
+
+            // Exact fractional tile coordinates
+            val tileXExact = (safeLon + 180.0) / 360.0 * n
+            val latRad = Math.toRadians(safeLat)
+            val tileYExact = (1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / Math.PI) / 2.0 * n
+
+            // Integer tile coordinates (which tile the point falls in)
+            val centerTileX = floor(tileXExact).toInt()
+            val centerTileY = floor(tileYExact).toInt()
+
+            // Fractional position within the center tile (0.0–1.0)
+            val fracX = (tileXExact - centerTileX).toFloat()
+            val fracY = (tileYExact - centerTileY).toFloat()
+
+            BoxWithConstraints(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .then(heightModifier)
+                    .clipToBounds()
+                    .clip(shape)
             ) {
+                val density = LocalDensity.current
+                val viewWidthPx = constraints.maxWidth.toFloat()
+                val viewHeightPx = constraints.maxHeight.toFloat()
+
+                // Keep tile size near native OSM resolution to avoid over-zooming artifacts
+                val tileSizePx = 256f
+                val tileSizeDp = with(density) { tileSizePx.toDp() }
+                // Build a large enough odd-sized tile grid to fully cover the viewport after centering
+                val tilesAcross = ceil(viewWidthPx / tileSizePx).toInt() + 2
+                val tilesDown = ceil(viewHeightPx / tileSizePx).toInt() + 2
+                val radius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
+                val tileRange = -radius..radius
+                val gridCount = radius * 2 + 1
+                val gridSizeDp = with(density) { (tileSizePx * gridCount).toDp() }
+
+                // The coordinate sits at pixel (radius + fracX, radius + fracY) tiles
+                // into the grid. Shift the grid so that point lands at the view center.
+                val coordGridPxX = (radius + fracX) * tileSizePx
+                val coordGridPxY = (radius + fracY) * tileSizePx
+                val shiftXDp = with(density) { (viewWidthPx / 2f - coordGridPxX).toDp() }
+                val shiftYDp = with(density) { (viewHeightPx / 2f - coordGridPxY).toDp() }
+
+                // Map tile grid — requiredSize bypasses parent constraints
+                Row(
+                    modifier = Modifier
+                        .requiredSize(gridSizeDp)
+                        .offset(x = shiftXDp, y = shiftYDp)
+                ) {
+                    for (dx in tileRange) {
+                        Column {
+                            for (dy in tileRange) {
+                                val x = ((centerTileX + dx) % n + n) % n
+                                val y = (centerTileY + dy).coerceIn(0, n - 1)
+                                val tileUrl = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(tileUrl)
+                                        .crossfade(300)
+                                        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                        .addHeader("User-Agent", "PokemonAlertsV2/1.0")
+                                        .build(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillBounds,
+                                    modifier = Modifier
+                                        .requiredSize(tileSizeDp)
+                                        .background(Color(0xFF16213E))
+                                )
+                            }
+                        }
+                    }
+                }
+                // Scrim overlay — stronger vignette for detail view
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = if (rounded) 0.15f else 0.35f))
+                )
+                // Pokemon sprite overlay (centered = at the coordinate)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Exact coordinate marker (at view center = coordinate location)
+                    Box(
+                        modifier = Modifier
+                            .size(if (rounded) 8.dp else 10.dp)
+                            .background(Color(0xFFFFD700), CircleShape)
+                    )
+
+                    // Radial glow backdrop behind sprite
+                    Box(
+                        modifier = Modifier
+                            .size(if (rounded) 80.dp else 130.dp)
+                            .offset(y = if (rounded) (-8).dp else (-12).dp)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.30f else 0.40f),
+                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.10f else 0.15f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                    if (thumbnailUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(thumbnailUrl)
+                                .crossfade(300)
+                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = stringResource(id = R.string.alert_image),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier
+                                .size(if (rounded) 44.dp else 72.dp)
+                                .offset(y = if (rounded) (-8).dp else (-12).dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_placeholder),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .size(if (rounded) 36.dp else 56.dp)
+                                .offset(y = if (rounded) (-8).dp else (-12).dp),
+                            tint = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Fallback: thumbnail sprite with dark bg + gold glow
+        thumbnailUrl != null -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .then(heightModifier)
+                    .background(Color(0xFF1A1A2E), shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
+            ) {
+                // Gold radial glow behind sprite
+                Box(
+                    modifier = Modifier
+                        .size(if (rounded) 120.dp else 240.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.35f else 0.40f),
+                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.12f else 0.15f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(thumbnailUrl)
+                        .crossfade(300)
+                        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                        .build(),
+                    contentDescription = stringResource(id = R.string.alert_image),
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(if (rounded) 64.dp else 140.dp)
+                )
+            }
+        }
+
+        // No images at all — dark bg + gold glow + Pokéball icon
+        else -> {
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .then(heightModifier)
+                    .background(Color(0xFF1A1A2E), shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
+            ) {
+                // Gold radial glow
+                Box(
+                    modifier = Modifier
+                        .size(if (rounded) 100.dp else 200.dp)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.30f else 0.38f),
+                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.10f else 0.12f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                )
                 Icon(
                     painter = painterResource(id = R.drawable.ic_placeholder),
                     contentDescription = null,
-                    modifier = Modifier.padding(16.dp),
+                    modifier = Modifier.size(if (rounded) 48.dp else 80.dp),
                     tint = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = "No image available",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.8f)
                 )
             }
         }
@@ -544,13 +761,13 @@ fun AlertDetailScreen(alert: PokemonAlert) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(160.dp)
+                            .height(96.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         Color.Transparent,
-                                        Color(0xFF0F172A) // Match the midnight theme background start
+                                        Color(0xFF0F172A).copy(alpha = 0.85f) // Lighter so map remains visible
                                     )
                                 )
                             )
@@ -668,8 +885,8 @@ fun AlertDetailScreen(alert: PokemonAlert) {
                         }
                     }
                     
-                    // Stats Card (IVs, CP, Level)
-                    if (alert.formattedIv != null || alert.cp != null || alert.level != null) {
+                    // Stats Card (IVs, CP, Level, HundoCP)
+                    if (alert.formattedIv != null || alert.cp != null || alert.level != null || alert.hundoCP != null) {
                         StatsCard(alert = alert)
                     }
                     
@@ -697,8 +914,11 @@ fun AlertDetailScreen(alert: PokemonAlert) {
                     }
                     
                     // Rocket Info Card (for Rocket encounters)
-                    alert.gruntType?.takeIf { it.isNotBlank() }?.let { gruntType ->
-                        RocketCard(gruntType = gruntType)
+                    if (alert.gruntType?.isNotBlank() == true || alert.pokemonRewards?.isNotEmpty() == true) {
+                        RocketCard(
+                            gruntType = alert.gruntType,
+                            pokemonRewards = alert.pokemonRewards
+                        )
                     }
                     
                     // Time & Status
@@ -816,6 +1036,24 @@ private fun StatsCard(alert: PokemonAlert) {
                         value = cp.toString(),
                         subValue = alert.hundoCP?.formatted()
                     )
+                }
+                
+                // Hundo CP (standalone for raids when no individual CP)
+                if (alert.cp == null && alert.hundoCP != null) {
+                    alert.hundoCP.level20?.let { l20 ->
+                        StatItem(
+                            label = "100% L20",
+                            value = l20.toString(),
+                            highlightColor = Color(0xFFFFD700)
+                        )
+                    }
+                    alert.hundoCP.level25?.let { l25 ->
+                        StatItem(
+                            label = "100% L25",
+                            value = l25.toString(),
+                            highlightColor = Color(0xFFFFD700)
+                        )
+                    }
                 }
                 
                 // Level
@@ -1175,7 +1413,10 @@ private fun QuestCard(alert: PokemonAlert) {
 }
 
 @Composable
-private fun RocketCard(gruntType: String) {
+private fun RocketCard(
+    gruntType: String? = null,
+    pokemonRewards: List<PokemonReward>? = null
+) {
     Card(
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF1A1A2E)
@@ -1183,24 +1424,113 @@ private fun RocketCard(gruntType: String) {
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
+        Column(
             modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(text = "🚀", style = MaterialTheme.typography.headlineMedium)
-            Column {
+            // Header row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "🚀", style = MaterialTheme.typography.headlineMedium)
+                Column {
+                    Text(
+                        text = "Team GO Rocket",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color(0xFFE91E63)
+                    )
+                    if (gruntType?.isNotBlank() == true) {
+                        Text(
+                            text = gruntType,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            // Pokemon Rewards
+            if (!pokemonRewards.isNullOrEmpty()) {
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+
                 Text(
-                    text = "Team GO Rocket",
+                    text = "Possible Rewards",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFFE91E63)
+                    color = Color.White.copy(alpha = 0.7f)
                 )
-                Text(
-                    text = gruntType,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    fontWeight = FontWeight.Medium
-                )
+
+                pokemonRewards.forEach { reward ->
+                    val rarityColor = when (reward.rarity?.lowercase()) {
+                        "common" -> Color(0xFF4CAF50)
+                        "rare" -> Color(0xFFFFD700)
+                        "legendary", "ultra rare" -> Color(0xFFE040FB)
+                        else -> Color(0xFF90A4AE)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Rarity dot
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(rarityColor, CircleShape)
+                        )
+
+                        // Pokemon name
+                        Text(
+                            text = reward.pokemon ?: "Unknown",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        // Rarity label
+                        reward.rarity?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = rarityColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Percentage
+                        reward.percentage?.let { pct ->
+                            Text(
+                                text = "$pct%",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Percentage bar
+                    reward.percentage?.let { pct ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .background(
+                                    Color.White.copy(alpha = 0.08f),
+                                    RoundedCornerShape(2.dp)
+                                )
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction = (pct / 100f).coerceIn(0f, 1f))
+                                    .height(4.dp)
+                                    .background(rarityColor, RoundedCornerShape(2.dp))
+                            )
+                        }
+                    }
+                }
             }
         }
     }

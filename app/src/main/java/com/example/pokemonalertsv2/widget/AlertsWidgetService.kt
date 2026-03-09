@@ -3,6 +3,10 @@ package com.example.pokemonalertsv2.widget
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
 import android.widget.RemoteViews
@@ -18,6 +22,7 @@ import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.LocationUtils
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.util.Locale
 
@@ -44,6 +49,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         runBlocking {
             val repo = PokemonAlertsRepository.create(context)
             val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
+            val dismissedIds = runCatching { repo.alertPreferences.dismissedAlertIds.first() }.getOrElse { emptySet() }
 
             // Short timeout for location
             currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
@@ -51,7 +57,9 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             val now = System.currentTimeMillis()
             val activeAlerts = alerts.filter {
                 val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                end > now
+                val notExpired = end > now
+                val notDismissed = it.uniqueId !in dismissedIds
+                notExpired && notDismissed
             }
 
             val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
@@ -137,13 +145,13 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
                     val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
                     views.setImageViewBitmap(R.id.item_image, bmp)
                 } else {
-                    views.setImageViewResource(R.id.item_image, R.drawable.ic_placeholder)
+                    views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
                 }
             } catch (_: Throwable) {
-                views.setImageViewResource(R.id.item_image, R.drawable.ic_placeholder)
+                views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
             }
         } else {
-            views.setImageViewResource(R.id.item_image, R.drawable.ic_placeholder)
+            views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
         }
 
         // Fill-in click intent
@@ -165,6 +173,41 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         val canvas = android.graphics.Canvas(bmp)
         drawable.setBounds(0, 0, size, size)
         drawable.draw(canvas)
+        return bmp
+    }
+
+    /** Dark background + gold radial glow + Pokéball icon fallback for the widget. */
+    private fun createFallbackBitmap(size: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val cx = size / 2f
+        val cy = size / 2f
+
+        // Dark background
+        canvas.drawColor(0xFF1A1A2E.toInt())
+
+        // Gold radial glow
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val glowRadius = size * 0.55f
+        glowPaint.shader = RadialGradient(
+            cx, cy, glowRadius,
+            intArrayOf(0x66FFD700.toInt(), 0x26FFD700.toInt(), 0x00000000),
+            floatArrayOf(0f, 0.5f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, glowRadius, glowPaint)
+
+        // Draw Pokéball icon from vector drawable
+        val drawable = ContextCompat.getDrawable(context, R.drawable.ic_placeholder)
+        if (drawable != null) {
+            val iconSize = (size * 0.50f).toInt()
+            val left = ((size - iconSize) / 2f).toInt()
+            val top = ((size - iconSize) / 2f).toInt()
+            drawable.setBounds(left, top, left + iconSize, top + iconSize)
+            drawable.setTint(0xB3FFFFFF.toInt()) // White at ~70% opacity
+            drawable.draw(canvas)
+        }
+
         return bmp
     }
 

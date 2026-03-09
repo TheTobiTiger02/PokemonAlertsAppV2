@@ -10,9 +10,10 @@ import com.example.pokemonalertsv2.data.PvpRanking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-@Entity(tableName = "alerts")
-data class AlertEntity(
+@Entity(tableName = "history_alerts")
+data class HistoryAlertEntity(
     @PrimaryKey
+    val historyId: Int,
     val uniqueId: String,
     val name: String,
     val description: String,
@@ -22,56 +23,57 @@ data class AlertEntity(
     val endTime: String,
     val type: String?,
     val thumbnailUrl: String?,
-    val createdAt: Long = System.currentTimeMillis(),
-    
+    val cachedAt: Long = System.currentTimeMillis(),
+
     // Pokemon identification
     val pokemon: String? = null,
     val pokemonForm: String? = null,
     val pokedexId: Int? = null,
-    
+
     // IVs
     val iv: String? = null,
     val ivAttack: Int? = null,
     val ivDefense: Int? = null,
     val ivStamina: Int? = null,
-    
+
     // Pokemon details
     val gender: String? = null,
     val isShiny: Boolean? = null,
     val cp: Int? = null,
     val level: Int? = null,
-    
+
     // Weather
     val isWeatherBoosted: Boolean? = null,
     val currentWeather: String? = null,
-    
+
     // Location details
     val pokemonLocation: String? = null,
     val gym: String? = null,
     val pokestop: String? = null,
-    
+
     // Combat info
     val movesFast: String? = null,
     val movesCharged: String? = null,
     val hundoCPL20: Int? = null,
     val hundoCPL25: Int? = null,
     val pvpRankingsJson: String? = null,
-    
+
     // Team Rocket
     val gruntType: String? = null,
     val pokemonRewardsJson: String? = null,
-    
+
     // Quest info
     val questTask: String? = null,
     val questReward: String? = null,
     val requiresAR: Boolean? = null,
-    
+
     // Timestamps
     val alertCreatedAt: String? = null
 )
 
-fun AlertEntity.toDomain(): PokemonAlert {
+fun HistoryAlertEntity.toDomain(): PokemonAlert {
     return PokemonAlert(
+        id = historyId,
         name = name,
         description = description,
         imageUrl = imageUrl,
@@ -130,8 +132,14 @@ fun AlertEntity.toDomain(): PokemonAlert {
     )
 }
 
-fun PokemonAlert.toEntity(): AlertEntity {
-    return AlertEntity(
+/**
+ * Converts a [PokemonAlert] to a [HistoryAlertEntity] for Room caching.
+ * Uses the server [PokemonAlert.id] as the primary key; falls back to
+ * [PokemonAlert.uniqueId] hashCode when the server ID is absent.
+ */
+fun PokemonAlert.toHistoryEntity(): HistoryAlertEntity {
+    return HistoryAlertEntity(
+        historyId = id ?: uniqueId.hashCode(),
         uniqueId = uniqueId,
         name = name,
         description = description,
@@ -139,8 +147,8 @@ fun PokemonAlert.toEntity(): AlertEntity {
         longitude = longitude ?: 0.0,
         latitude = latitude ?: 0.0,
         endTime = endTime,
-        type = type?.let { 
-            if (it.isNotEmpty()) Json.encodeToString(it) else null 
+        type = type?.let {
+            if (it.isNotEmpty()) Json.encodeToString(it) else null
         },
         thumbnailUrl = thumbnailUrl,
         pokemon = pokemon,
@@ -163,8 +171,8 @@ fun PokemonAlert.toEntity(): AlertEntity {
         movesCharged = moves?.charged,
         hundoCPL20 = hundoCP?.level20,
         hundoCPL25 = hundoCP?.level25,
-        pvpRankingsJson = pvpRankings?.let { 
-            if (it.isNotEmpty()) Json.encodeToString(it) else null 
+        pvpRankingsJson = pvpRankings?.let {
+            if (it.isNotEmpty()) Json.encodeToString(it) else null
         },
         gruntType = gruntType,
         pokemonRewardsJson = pokemonRewards?.let {

@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
+import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.PvpRanking
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.serialization.encodeToString
@@ -37,8 +38,8 @@ class AlertDetailActivity : ComponentActivity() {
         val description = getStringExtra(EXTRA_ALERT_DESCRIPTION) ?: ""
         val imageUrl = getStringExtra(EXTRA_ALERT_IMAGE_URL)
         val thumbnailUrl = getStringExtra(EXTRA_ALERT_THUMBNAIL_URL)
-        val latitude = getDoubleExtra(EXTRA_ALERT_LATITUDE, 0.0)
-        val longitude = getDoubleExtra(EXTRA_ALERT_LONGITUDE, 0.0)
+        val latitude = getDoubleExtra(EXTRA_ALERT_LATITUDE, 0.0).takeIf { hasExtra(EXTRA_ALERT_LATITUDE) }
+        val longitude = getDoubleExtra(EXTRA_ALERT_LONGITUDE, 0.0).takeIf { hasExtra(EXTRA_ALERT_LONGITUDE) }
         val endTime = getStringExtra(EXTRA_ALERT_END_TIME) ?: ""
         val typeJson = getStringExtra(EXTRA_ALERT_TYPE)
         val type = typeJson?.let {
@@ -84,6 +85,12 @@ class AlertDetailActivity : ComponentActivity() {
             runCatching { json.decodeFromString<List<PvpRanking>>(it) }.getOrNull()
         }
 
+        // Pokemon Rewards (serialized as JSON)
+        val pokemonRewardsJson = getStringExtra(EXTRA_POKEMON_REWARDS)
+        val pokemonRewards = pokemonRewardsJson?.let {
+            runCatching { json.decodeFromString<List<PokemonReward>>(it) }.getOrNull()
+        }
+
         return PokemonAlert(
             name = name,
             description = description,
@@ -116,6 +123,7 @@ class AlertDetailActivity : ComponentActivity() {
             questTask = questTask,
             questReward = questReward,
             requiresAR = requiresAR,
+            pokemonRewards = pokemonRewards,
             createdAt = createdAt
         )
     }
@@ -157,6 +165,7 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_REQUIRES_AR = "extra_requires_ar"
         private const val EXTRA_CREATED_AT = "extra_created_at"
         private const val EXTRA_PVP_RANKINGS = "extra_pvp_rankings"
+        private const val EXTRA_POKEMON_REWARDS = "extra_pokemon_rewards"
 
         fun createIntent(context: Context, alert: PokemonAlert): Intent {
             return Intent(context, AlertDetailActivity::class.java).apply {
@@ -164,8 +173,8 @@ class AlertDetailActivity : ComponentActivity() {
                 putExtra(EXTRA_ALERT_NAME, alert.name)
                 putExtra(EXTRA_ALERT_DESCRIPTION, alert.description)
                 putExtra(EXTRA_ALERT_IMAGE_URL, alert.imageUrl)
-                putExtra(EXTRA_ALERT_LATITUDE, alert.latitude ?: 0.0)
-                putExtra(EXTRA_ALERT_LONGITUDE, alert.longitude ?: 0.0)
+                alert.latitude?.let { putExtra(EXTRA_ALERT_LATITUDE, it) }
+                alert.longitude?.let { putExtra(EXTRA_ALERT_LONGITUDE, it) }
                 putExtra(EXTRA_ALERT_END_TIME, alert.endTime)
                 alert.type?.let { types ->
                     if (types.isNotEmpty()) {
@@ -203,6 +212,11 @@ class AlertDetailActivity : ComponentActivity() {
                 alert.pvpRankings?.let { rankings ->
                     if (rankings.isNotEmpty()) {
                         putExtra(EXTRA_PVP_RANKINGS, Json.encodeToString(rankings))
+                    }
+                }
+                alert.pokemonRewards?.let { rewards ->
+                    if (rewards.isNotEmpty()) {
+                        putExtra(EXTRA_POKEMON_REWARDS, Json.encodeToString(rewards))
                     }
                 }
             }
