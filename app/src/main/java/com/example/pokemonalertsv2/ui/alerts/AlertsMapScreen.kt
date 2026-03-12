@@ -187,12 +187,13 @@ fun AlertsMapScreen(
             AlertFilter.ALL -> active
             AlertFilter.RAIDS -> active.filter { it.hasType("Raid") }
             AlertFilter.QUESTS -> active.filter { it.hasType("Quest") }
-            AlertFilter.SPAWNS -> active.filter { it.hasType("Rare") || it.hasType("Spawn") }
+            AlertFilter.RARES -> active.filter { it.hasType("Rare") || it.hasType("Spawn") }
             AlertFilter.HUNDOS -> active.filter { it.hasType("Hundo") }
             AlertFilter.PVP -> active.filter { it.hasType("PvP") }
             AlertFilter.NUNDOS -> active.filter { it.hasType("Nundo") }
             AlertFilter.KECLEON -> active.filter { it.hasType("Kecleon") }
             AlertFilter.ROCKET -> active.filter { it.hasType("Rocket") }
+            AlertFilter.WEATHER_CHANGE -> active.filter { it.hasType("WeatherChange") }
         }
     }
     
@@ -201,12 +202,13 @@ fun AlertsMapScreen(
         val set = mutableSetOf(AlertFilter.ALL)
         if (alerts.any { it.hasType("Raid") }) set.add(AlertFilter.RAIDS)
         if (alerts.any { it.hasType("Quest") }) set.add(AlertFilter.QUESTS)
-        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) set.add(AlertFilter.SPAWNS)
+        if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) set.add(AlertFilter.RARES)
         if (alerts.any { it.hasType("Hundo") }) set.add(AlertFilter.HUNDOS)
         if (alerts.any { it.hasType("PvP") }) set.add(AlertFilter.PVP)
         if (alerts.any { it.hasType("Nundo") }) set.add(AlertFilter.NUNDOS)
         if (alerts.any { it.hasType("Kecleon") }) set.add(AlertFilter.KECLEON)
         if (alerts.any { it.hasType("Rocket") }) set.add(AlertFilter.ROCKET)
+        if (alerts.any { it.hasType("WeatherChange") }) set.add(AlertFilter.WEATHER_CHANGE)
         set
     }
 
@@ -700,7 +702,7 @@ private fun detectAlertType(alert: PokemonAlert): AlertType {
             typeLower.contains("quest") -> return AlertType.QUEST
             typeLower.contains("rocket") -> return AlertType.ROCKET
             typeLower.contains("kecleon") -> return AlertType.KECLEON
-            typeLower.contains("rare") || typeLower.contains("spawn") -> return AlertType.SPAWN
+            typeLower.contains("rare") || typeLower.contains("spawn") -> return AlertType.RARE
         }
     }
     
@@ -714,8 +716,8 @@ private fun detectAlertType(alert: PokemonAlert): AlertType {
         text.contains("quest") || text.contains("research") -> AlertType.QUEST
         text.contains("rocket") || text.contains("grunt") || text.contains("giovanni") || text.contains("leader") -> AlertType.ROCKET
         text.contains("kecleon") -> AlertType.KECLEON
-        text.contains("rare") || text.contains("spawn") -> AlertType.SPAWN
-        else -> AlertType.SPAWN // Default to spawn for wild Pokemon
+        text.contains("rare") || text.contains("spawn") -> AlertType.RARE
+        else -> AlertType.RARE // Default to rare for wild Pokemon
     }
 }
 
@@ -731,14 +733,14 @@ private enum class AlertType(
     QUEST("📜", 0xFF4CAF50.toInt(), 0xFF8BC34A.toInt()),     // Green (research task)
     ROCKET("🚀", 0xFF9C27B0.toInt(), 0xFF673AB7.toInt()),    // Purple (Team Rocket)
     KECLEON("🦎", 0xFF00BCD4.toInt(), 0xFF009688.toInt()),   // Cyan-Teal (special)
-    SPAWN("✨", 0xFF607D8B.toInt(), null)                     // Blue-Grey (wild Pokemon)
+    RARE("✨", 0xFF607D8B.toInt(), null)                      // Blue-Grey (wild Pokemon)
 }
 
 private suspend fun createBitmapDescriptorFromUrl(
     context: android.content.Context, 
     url: String, 
     sizePx: Int,
-    alertType: AlertType = AlertType.SPAWN,
+    alertType: AlertType = AlertType.RARE,
     endTime: String? = null,
     showTimeLabel: Boolean = false,
     timeLabel: String? = null
@@ -876,7 +878,7 @@ private suspend fun createBitmapDescriptorFromUrl(
                 AlertType.QUEST -> "🎁"
                 AlertType.ROCKET -> "🚀"
                 AlertType.KECLEON -> "🦎"
-                AlertType.SPAWN -> "✨"
+                AlertType.RARE -> "✨"
             }
             val textY = badgeCenterY - (textPaint.descent() + textPaint.ascent()) / 2
             canvas.drawText(symbol, badgeCenterX, textY, textPaint)

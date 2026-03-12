@@ -4,22 +4,34 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface AlertDao {
+abstract class AlertDao {
     @Query("SELECT * FROM alerts ORDER BY endTime DESC")
-    fun observeAllAlerts(): Flow<List<AlertEntity>>
+    abstract fun observeAllAlerts(): Flow<List<AlertEntity>>
 
     @Query("SELECT * FROM alerts ORDER BY endTime DESC")
-    suspend fun getAllAlerts(): List<AlertEntity>
+    abstract suspend fun getAllAlerts(): List<AlertEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAlerts(alerts: List<AlertEntity>)
+    abstract suspend fun insertAlerts(alerts: List<AlertEntity>)
 
     @Query("DELETE FROM alerts")
-    suspend fun clearAll()
+    abstract suspend fun clearAll()
     
     @Query("DELETE FROM alerts WHERE endTime < :currentTime")
-    suspend fun deleteExpired(currentTime: String)
+    abstract suspend fun deleteExpired(currentTime: String)
+
+    /**
+     * Atomically replaces all cached alerts with the fresh server list.
+     * This ensures alerts removed server-side (e.g. replaced by a weather
+     * change alert) are also removed locally.
+     */
+    @Transaction
+    open suspend fun replaceAll(alerts: List<AlertEntity>) {
+        clearAll()
+        insertAlerts(alerts)
+    }
 }

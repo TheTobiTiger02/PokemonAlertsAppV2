@@ -135,7 +135,7 @@ object AlertNotifier {
                         raidTier == null || raidTier.lowercase() !in excludedRaidTiers.map { it.lowercase() }
                     }
                 }
-                alert.hasTypeContaining("spawn") || alert.hasTypeContaining("rare") -> 
+                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> 
                     spawnsEnabled && !isPokemonTypeExcluded(excludedSpawnTypes)
                 alert.hasTypeContaining("quest") -> questsEnabled
                 alert.hasType("hundo") -> hundosEnabled && !isPokemonTypeExcluded(excludedHundoTypes)
@@ -194,7 +194,7 @@ object AlertNotifier {
             // Select Channel ID based on type
             val channelId = when {
                 alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
-                alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
+                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
                 alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
                 else -> CHANNEL_ID
             }

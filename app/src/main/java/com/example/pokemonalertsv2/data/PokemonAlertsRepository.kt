@@ -40,7 +40,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
      */
     suspend fun fetchAlerts(): List<PokemonAlert> {
         val remoteAlerts = service.getPokemonAlerts()
-        alertDao.insertAlerts(remoteAlerts.map { it.toEntity() })
+        alertDao.replaceAll(remoteAlerts.map { it.toEntity() })
         return remoteAlerts
     }
 

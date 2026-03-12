@@ -123,6 +123,11 @@ fun formatAlertTitle(alert: PokemonAlert): String {
         return "$baseName Raid"
     }
     
+    // Handle weather change - show "Pokemon Weather Change"
+    if (alert.isWeatherChange) {
+        return "🌦️ $baseName Changed"
+    }
+    
     // Handle Team Rocket - show grunt type
     if (alert.hasTypeContaining("rocket") || alert.gruntType != null) {
         val gruntLabel = alert.gruntType?.replaceFirstChar { it.uppercaseChar() } ?: "Rocket"
@@ -181,6 +186,7 @@ fun AlertCard(
     modifier: Modifier = Modifier
 ) {
     val accentBrush = when {
+        alert.isWeatherChange -> Brush.horizontalGradient(listOf(Color(0xFFFF9800), Color(0xFFF57C00)))
         alert.hasTypeContaining("raid") -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
         alert.hasTypeContaining("shadow") -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
         alert.isPerfect -> Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000)))
@@ -260,19 +266,35 @@ fun AlertCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // IV Badge
-                        alert.formattedIv?.let { iv ->
+                        // IV Badge — show new IV for weather change alerts
+                        val displayCardIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
+                        displayCardIv?.let { iv ->
                             IvBadge(iv = iv, isPerfect = alert.isPerfect, isNundo = alert.isNundo)
                         }
                         
-                        // CP Badge
-                        alert.cp?.let { cp ->
+                        // CP Badge — show new CP for weather change alerts
+                        val displayCardCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
+                        displayCardCp?.let { cp ->
                             CpBadge(cp = cp, level = alert.level)
                         }
                         
                         // Weather boost indicator
                         if (alert.isWeatherBoosted == true) {
                             WeatherBoostBadge()
+                        }
+                        
+                        // Weather change indicator
+                        if (alert.isWeatherChange) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFF9800).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "🌦️",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                         
                         // Distance
@@ -412,7 +434,7 @@ private fun IvBadge(iv: String, isPerfect: Boolean, isNundo: Boolean) {
 }
 
 @Composable
-private fun CpBadge(cp: Int, level: Int?) {
+private fun CpBadge(cp: Int, level: Double?) {
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = Color.White.copy(alpha = 0.2f)
@@ -428,8 +450,9 @@ private fun CpBadge(cp: Int, level: Int?) {
                 color = Color.White
             )
             level?.let {
+                val levelText = if (it == it.toLong().toDouble()) "L${it.toLong()}" else "L$it"
                 Text(
-                    text = "L$it",
+                    text = levelText,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White.copy(alpha = 0.8f)
                 )
@@ -482,11 +505,11 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                     .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
                     .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                     .networkCachePolicy(coil.request.CachePolicy.ENABLED)
-                    .listener(onError = { _, _ -> useFallback = true })
                     .build(),
                 contentDescription = stringResource(id = R.string.alert_image),
                 placeholder = painterResource(id = R.drawable.ic_placeholder),
                 error = painterResource(id = R.drawable.ic_placeholder),
+                onError = { useFallback = true },
                 contentScale = ContentScale.Crop,
                 modifier = modifier
                     .fillMaxWidth()
@@ -993,6 +1016,7 @@ private fun getTypeColor(type: String): Color {
         "rare", "spawn" -> Color(0xFF4CAF50)
         "rocket" -> Color(0xFFFF5722)
         "kecleon" -> Color(0xFF00BCD4)
+        "weatherchange" -> Color(0xFFFF9800)
         else -> Color(0xFF757575)
     }
 }
@@ -1008,38 +1032,45 @@ private fun StatsCard(alert: PokemonAlert) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Stats",
+                text = if (alert.isWeatherChange) "🌦️ New Stats" else "Stats",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (alert.isWeatherChange) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
+            
+            // For weather change alerts, display the new stats as primary values
+            val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
+            val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 // IVs
-                alert.formattedIv?.let { iv ->
+                displayIv?.let { iv ->
+                    val isNewIv = alert.isWeatherChange && alert.newIv != null
                     StatItem(
-                        label = "IV",
+                        label = if (isNewIv) "New IV" else "IV",
                         value = iv,
-                        subValue = alert.ivPercentage?.let { "$it%" },
+                        subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
                         highlight = alert.isPerfect,
-                        highlightColor = if (alert.isPerfect) Color(0xFFFFD700) else if (alert.isNundo) Color(0xFF607D8B) else null
+                        highlightColor = if (isNewIv) Color(0xFFFF9800) else if (alert.isPerfect) Color(0xFFFFD700) else if (alert.isNundo) Color(0xFF607D8B) else null
                     )
                 }
                 
                 // CP
-                alert.cp?.let { cp ->
+                displayCp?.let { cp ->
+                    val isNewCp = alert.isWeatherChange && alert.newCp != null
                     StatItem(
-                        label = "CP",
+                        label = if (isNewCp) "New CP" else "CP",
                         value = cp.toString(),
-                        subValue = alert.hundoCP?.formatted()
+                        subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
+                        highlightColor = if (isNewCp) Color(0xFFFF9800) else null
                     )
                 }
                 
                 // Hundo CP (standalone for raids when no individual CP)
-                if (alert.cp == null && alert.hundoCP != null) {
+                if (displayCp == null && alert.hundoCP != null) {
                     alert.hundoCP.level20?.let { l20 ->
                         StatItem(
                             label = "100% L20",
@@ -1056,17 +1087,19 @@ private fun StatsCard(alert: PokemonAlert) {
                     }
                 }
                 
-                // Level
-                alert.level?.let { level ->
-                    StatItem(
-                        label = "Level",
-                        value = level.toString()
-                    )
+                // Level — hide for weather change alerts (old level is no longer relevant)
+                if (!alert.isWeatherChange) {
+                    alert.level?.let { level ->
+                        StatItem(
+                            label = "Level",
+                            value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString()
+                        )
+                    }
                 }
             }
-            
-            // Individual IVs breakdown
-            if (alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
+
+            // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
+            if (!alert.isWeatherChange && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

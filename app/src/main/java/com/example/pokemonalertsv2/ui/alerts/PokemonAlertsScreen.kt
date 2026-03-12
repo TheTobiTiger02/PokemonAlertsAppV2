@@ -171,11 +171,11 @@ fun PokemonAlertsRoute(
             // Add key stats if available
             alert.formattedIv?.let { append("📊 IV: $it\n") }
             alert.cp?.let { append("⚡ CP: $it\n") }
-            alert.level?.let { append("📈 Level: $it\n") }
+            alert.level?.let { append("📈 Level: ${if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()}\n") }
             
             // Add Pokemon types if available
             alert.type?.takeIf { it.isNotEmpty() }?.let { types ->
-                val typeStr = types.filter { !it.equals("spawn", true) && !it.equals("hundo", true) && !it.equals("nundo", true) && !it.equals("pvp", true) }
+                val typeStr = types.filter { !it.equals("rare", true) && !it.equals("spawn", true) && !it.equals("hundo", true) && !it.equals("nundo", true) && !it.equals("pvp", true) }
                     .joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
                 if (typeStr.isNotBlank()) {
                     append("🏷 Type: $typeStr\n")
@@ -475,7 +475,7 @@ fun PokemonAlertsPage(
             filters.add(AlertFilter.QUESTS)
         }
         if (activeAlerts.any { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }) {
-            filters.add(AlertFilter.SPAWNS)
+            filters.add(AlertFilter.RARES)
         }
         if (activeAlerts.any { it.alert.hasType("Hundo") }) {
             filters.add(AlertFilter.HUNDOS)
@@ -492,6 +492,9 @@ fun PokemonAlertsPage(
         if (activeAlerts.any { it.alert.hasType("Rocket") }) {
             filters.add(AlertFilter.ROCKET)
         }
+        if (activeAlerts.any { it.alert.hasType("WeatherChange") }) {
+            filters.add(AlertFilter.WEATHER_CHANGE)
+        }
         filters
     }
 
@@ -507,12 +510,13 @@ fun PokemonAlertsPage(
             AlertFilter.ALL -> activeAlerts
             AlertFilter.RAIDS -> activeAlerts.filter { it.alert.hasType("Raid") }
             AlertFilter.QUESTS -> activeAlerts.filter { it.alert.hasType("Quest") }
-            AlertFilter.SPAWNS -> activeAlerts.filter { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }
+            AlertFilter.RARES -> activeAlerts.filter { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }
             AlertFilter.HUNDOS -> activeAlerts.filter { it.alert.hasType("Hundo") }
             AlertFilter.PVP -> activeAlerts.filter { it.alert.hasType("PvP") }
             AlertFilter.NUNDOS -> activeAlerts.filter { it.alert.hasType("Nundo") }
             AlertFilter.KECLEON -> activeAlerts.filter { it.alert.hasType("Kecleon") }
             AlertFilter.ROCKET -> activeAlerts.filter { it.alert.hasType("Rocket") }
+            AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.alert.hasType("WeatherChange") }
         }
         
         // Sort based on user preference
@@ -1107,13 +1111,13 @@ private fun AlertHistoryPage(
         val byType = stats?.byType ?: emptyMap()
 
         // Local breakdown from loaded alerts (always computed as fallback)
-        var raids = 0; var quests = 0; var spawns = 0; var hundos = 0
+        var raids = 0; var quests = 0; var rares = 0; var hundos = 0
         var pvp = 0; var nundos = 0; var rocket = 0; var kecleon = 0; var other = 0
         filteredAlerts.forEach { alert ->
             var categorized = false
             if (alert.hasType("Raid")) { raids++; categorized = true }
             if (alert.hasType("Quest")) { quests++; categorized = true }
-            if (alert.hasType("Rare") || alert.hasType("Spawn")) { spawns++; categorized = true }
+            if (alert.hasType("Rare") || alert.hasType("Spawn")) { rares++; categorized = true }
             if (alert.hasType("Hundo")) { hundos++; categorized = true }
             if (alert.hasType("PvP")) { pvp++; categorized = true }
             if (alert.hasType("Nundo")) { nundos++; categorized = true }
@@ -1129,7 +1133,7 @@ private fun AlertHistoryPage(
                 "today" to (stats?.totalToday ?: 0),
                 "raids" to (byType["Raid"] ?: 0),
                 "quests" to (byType["Quest"] ?: 0),
-                "spawns" to (byType["Spawn"] ?: 0),
+                "rares" to (byType["Rare"] ?: 0),
                 "hundos" to (byType["Hundo"] ?: 0),
                 "pvp" to (byType["PvP"] ?: 0),
                 "nundos" to (byType["Nundo"] ?: 0),
@@ -1144,7 +1148,7 @@ private fun AlertHistoryPage(
                 "today" to 0,
                 "raids" to raids,
                 "quests" to quests,
-                "spawns" to spawns,
+                "rares" to rares,
                 "hundos" to hundos,
                 "pvp" to pvp,
                 "nundos" to nundos,
@@ -1201,12 +1205,13 @@ private fun AlertHistoryPage(
                                 AlertFilter.ALL -> null
                                 AlertFilter.RAIDS -> "Raid"
                                 AlertFilter.QUESTS -> "Quest"
-                                AlertFilter.SPAWNS -> "Spawn"
+                                AlertFilter.RARES -> "Rare"
                                 AlertFilter.HUNDOS -> "Hundo"
                                 AlertFilter.PVP -> "PvP"
                                 AlertFilter.NUNDOS -> "Nundo"
                                 AlertFilter.KECLEON -> "Kecleon"
                                 AlertFilter.ROCKET -> "Rocket"
+                                AlertFilter.WEATHER_CHANGE -> "WeatherChange"
                             }
                             onTypeChanged(apiType)
                         },
@@ -1359,8 +1364,8 @@ private fun AlertHistoryPage(
                                 if ((statistics["quests"] ?: 0) > 0) {
                                     StatRow("Quests", statistics["quests"] ?: 0, Color(0xFF2196F3))
                                 }
-                                if ((statistics["spawns"] ?: 0) > 0) {
-                                    StatRow("Spawns", statistics["spawns"] ?: 0, Color(0xFF4CAF50))
+                                if ((statistics["rares"] ?: 0) > 0) {
+                                    StatRow("Rare", statistics["rares"] ?: 0, Color(0xFF4CAF50))
                                 }
                                 if ((statistics["hundos"] ?: 0) > 0) {
                                     StatRow("Hundos", statistics["hundos"] ?: 0, Color(0xFFFFD700))
@@ -1587,7 +1592,7 @@ private fun buildAlertShareHtml(alert: PokemonAlert): String {
             <div class="stats">
                 ${alert.formattedIv?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>IV</div></div>" } ?: ""}
                 ${alert.cp?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>CP</div></div>" } ?: ""}
-                ${alert.level?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>Level</div></div>" } ?: ""}
+                ${alert.level?.let { val v = if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString(); "<div class='stat'><div class='stat-value'>$v</div><div class='stat-label'>Level</div></div>" } ?: ""}
             </div>
             ${alert.locationDisplay?.let { "<div class='location'>📍 $it</div>" } ?: ""}
             <a href="$mapsUrl" class="maps-btn">📍 Open in Google Maps</a>

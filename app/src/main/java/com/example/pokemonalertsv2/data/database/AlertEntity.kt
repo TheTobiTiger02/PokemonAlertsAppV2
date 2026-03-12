@@ -39,7 +39,7 @@ data class AlertEntity(
     val gender: String? = null,
     val isShiny: Boolean? = null,
     val cp: Int? = null,
-    val level: Int? = null,
+    val level: Double? = null,
     
     // Weather
     val isWeatherBoosted: Boolean? = null,
@@ -65,6 +65,10 @@ data class AlertEntity(
     val questTask: String? = null,
     val questReward: String? = null,
     val requiresAR: Boolean? = null,
+    
+    // Weather change
+    val newCp: Int? = null,
+    val newIv: String? = null,
     
     // Timestamps
     val alertCreatedAt: String? = null
@@ -126,6 +130,8 @@ fun AlertEntity.toDomain(): PokemonAlert {
         questTask = questTask,
         questReward = questReward,
         requiresAR = requiresAR,
+        newCp = newCp,
+        newIv = newIv,
         createdAt = alertCreatedAt
     )
 }
@@ -173,6 +179,8 @@ fun PokemonAlert.toEntity(): AlertEntity {
         questTask = questTask,
         questReward = questReward,
         requiresAR = requiresAR,
+        newCp = newCp,
+        newIv = newIv,
         alertCreatedAt = createdAt
     )
 }

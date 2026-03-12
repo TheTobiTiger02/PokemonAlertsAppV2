@@ -2,6 +2,8 @@ package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.data.database.AlertDao
 import com.example.pokemonalertsv2.data.database.AlertEntity
+import com.example.pokemonalertsv2.data.database.HistoryAlertDao
+import com.example.pokemonalertsv2.data.database.HistoryAlertEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +17,7 @@ class PokemonAlertsRepositoryTest {
 
     private lateinit var preferences: FakeAlertPreferencesStore
     private lateinit var dao: FakeAlertDao
+    private lateinit var historyDao: FakeHistoryAlertDao
     private lateinit var repository: PokemonAlertsRepository
     private val service = FakePokemonAlertsService()
 
@@ -22,7 +25,8 @@ class PokemonAlertsRepositoryTest {
     fun setUp() {
         preferences = FakeAlertPreferencesStore()
         dao = FakeAlertDao()
-        repository = PokemonAlertsRepository(service, preferences, dao)
+        historyDao = FakeHistoryAlertDao()
+        repository = PokemonAlertsRepository(service, preferences, dao, historyDao)
     }
 
     @Test
@@ -68,7 +72,7 @@ class PokemonAlertsRepositoryTest {
         longitude = 8.62,
         latitude = 49.74,
         endTime = endTime,
-        type = "Quest",
+        type = listOf("Quest"),
         thumbnailUrl = null
     )
 
@@ -76,7 +80,24 @@ class PokemonAlertsRepositoryTest {
         var alerts: List<PokemonAlert> = emptyList()
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
-        override suspend fun getHistory(): List<PokemonAlert> = emptyList()
+        override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?): HistoryResponse =
+            HistoryResponse(data = emptyList())
+        override suspend fun getHistoryPaged(limit: Int, offset: Int, type: String?, date: String?, startDate: String?, endDate: String?): HistoryResponse =
+            HistoryResponse(data = emptyList())
+        override suspend fun getTotalStats(): TotalStatsResponse = TotalStatsResponse()
+    }
+
+    private class FakeHistoryAlertDao : HistoryAlertDao() {
+        val alerts = MutableStateFlow<List<HistoryAlertEntity>>(emptyList())
+
+        override fun observeAll(): Flow<List<HistoryAlertEntity>> = alerts.asStateFlow()
+        override suspend fun count(): Int = alerts.value.size
+        override suspend fun insertAll(alerts: List<HistoryAlertEntity>) {
+            this.alerts.value = this.alerts.value + alerts
+        }
+        override suspend fun clearAll() {
+            alerts.value = emptyList()
+        }
     }
 
     private class FakeAlertPreferencesStore(initial: Set<String> = emptySet()) : AlertPreferencesStore {
@@ -85,43 +106,104 @@ class PokemonAlertsRepositoryTest {
         private val themeModeState = MutableStateFlow(0)
         private val imperialState = MutableStateFlow(false)
         private val onboardingState = MutableStateFlow(false)
+        private val sortState = MutableStateFlow(SortPreference.TIME_REMAINING)
+        private val notificationsEnabledState = MutableStateFlow(true)
+        private val raidsState = MutableStateFlow(true)
+        private val spawnsState = MutableStateFlow(true)
+        private val questsState = MutableStateFlow(true)
+        private val hundosState = MutableStateFlow(true)
+        private val pvpState = MutableStateFlow(true)
+        private val nundosState = MutableStateFlow(true)
+        private val kecleonState = MutableStateFlow(true)
+        private val rocketState = MutableStateFlow(true)
+        private val vibrateState = MutableStateFlow(true)
+        private val silenceState = MutableStateFlow(0L)
+        private val excludedHundoState = MutableStateFlow(emptySet<String>())
+        private val excludedNundoState = MutableStateFlow(emptySet<String>())
+        private val excludedPvpState = MutableStateFlow(emptySet<String>())
+        private val excludedSpawnState = MutableStateFlow(emptySet<String>())
+        private val excludedRocketState = MutableStateFlow(emptySet<String>())
+        private val excludedRaidTiersState = MutableStateFlow(emptySet<String>())
+        private val dismissedState = MutableStateFlow(emptySet<String>())
 
         override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
-
         override suspend fun getSeenAlertIds(): Set<String> = state.value
-
-        override suspend fun updateSeenAlertIds(alertIds: Set<String>) {
-            state.value = alertIds
-        }
+        override suspend fun updateSeenAlertIds(alertIds: Set<String>) { state.value = alertIds }
 
         override val favoriteAlertIds: Flow<Set<String>> = favoritesState.asStateFlow()
-
         override suspend fun getFavoriteAlertIds(): Set<String> = favoritesState.value
-
-        override suspend fun updateFavoriteAlertIds(alertIds: Set<String>) {
-            favoritesState.value = alertIds
-        }
+        override suspend fun updateFavoriteAlertIds(alertIds: Set<String>) { favoritesState.value = alertIds }
 
         override val themeMode: Flow<Int> = themeModeState.asStateFlow()
-
-        override suspend fun updateThemeMode(mode: Int) {
-            themeModeState.value = mode
-        }
+        override suspend fun updateThemeMode(mode: Int) { themeModeState.value = mode }
 
         override val useImperialUnits: Flow<Boolean> = imperialState.asStateFlow()
-
-        override suspend fun updateUseImperialUnits(useImperial: Boolean) {
-            imperialState.value = useImperial
-        }
+        override suspend fun updateUseImperialUnits(useImperial: Boolean) { imperialState.value = useImperial }
 
         override val onboardingCompleted: Flow<Boolean> = onboardingState.asStateFlow()
+        override suspend fun setOnboardingCompleted(completed: Boolean) { onboardingState.value = completed }
 
-        override suspend fun setOnboardingCompleted(completed: Boolean) {
-            onboardingState.value = completed
-        }
+        override val sortPreference: Flow<SortPreference> = sortState.asStateFlow()
+        override suspend fun updateSortPreference(preference: SortPreference) { sortState.value = preference }
+
+        override val notificationsEnabled: Flow<Boolean> = notificationsEnabledState.asStateFlow()
+        override suspend fun updateNotificationsEnabled(enabled: Boolean) { notificationsEnabledState.value = enabled }
+
+        override val raidsNotifications: Flow<Boolean> = raidsState.asStateFlow()
+        override suspend fun updateRaidsNotifications(enabled: Boolean) { raidsState.value = enabled }
+
+        override val spawnsNotifications: Flow<Boolean> = spawnsState.asStateFlow()
+        override suspend fun updateSpawnsNotifications(enabled: Boolean) { spawnsState.value = enabled }
+
+        override val questsNotifications: Flow<Boolean> = questsState.asStateFlow()
+        override suspend fun updateQuestsNotifications(enabled: Boolean) { questsState.value = enabled }
+
+        override val hundosNotifications: Flow<Boolean> = hundosState.asStateFlow()
+        override suspend fun updateHundosNotifications(enabled: Boolean) { hundosState.value = enabled }
+
+        override val pvpNotifications: Flow<Boolean> = pvpState.asStateFlow()
+        override suspend fun updatePvpNotifications(enabled: Boolean) { pvpState.value = enabled }
+
+        override val nundosNotifications: Flow<Boolean> = nundosState.asStateFlow()
+        override suspend fun updateNundosNotifications(enabled: Boolean) { nundosState.value = enabled }
+
+        override val kecleonNotifications: Flow<Boolean> = kecleonState.asStateFlow()
+        override suspend fun updateKecleonNotifications(enabled: Boolean) { kecleonState.value = enabled }
+
+        override val rocketNotifications: Flow<Boolean> = rocketState.asStateFlow()
+        override suspend fun updateRocketNotifications(enabled: Boolean) { rocketState.value = enabled }
+
+        override val notificationVibrate: Flow<Boolean> = vibrateState.asStateFlow()
+        override suspend fun updateNotificationVibrate(enabled: Boolean) { vibrateState.value = enabled }
+
+        override val silenceUntil: Flow<Long> = silenceState.asStateFlow()
+        override suspend fun updateSilenceUntil(timestampMillis: Long) { silenceState.value = timestampMillis }
+
+        override val excludedHundoTypes: Flow<Set<String>> = excludedHundoState.asStateFlow()
+        override suspend fun updateExcludedHundoTypes(types: Set<String>) { excludedHundoState.value = types }
+
+        override val excludedNundoTypes: Flow<Set<String>> = excludedNundoState.asStateFlow()
+        override suspend fun updateExcludedNundoTypes(types: Set<String>) { excludedNundoState.value = types }
+
+        override val excludedPvpTypes: Flow<Set<String>> = excludedPvpState.asStateFlow()
+        override suspend fun updateExcludedPvpTypes(types: Set<String>) { excludedPvpState.value = types }
+
+        override val excludedSpawnTypes: Flow<Set<String>> = excludedSpawnState.asStateFlow()
+        override suspend fun updateExcludedSpawnTypes(types: Set<String>) { excludedSpawnState.value = types }
+
+        override val excludedRocketTypes: Flow<Set<String>> = excludedRocketState.asStateFlow()
+        override suspend fun updateExcludedRocketTypes(types: Set<String>) { excludedRocketState.value = types }
+
+        override val excludedRaidTiers: Flow<Set<String>> = excludedRaidTiersState.asStateFlow()
+        override suspend fun updateExcludedRaidTiers(types: Set<String>) { excludedRaidTiersState.value = types }
+
+        override val dismissedAlertIds: Flow<Set<String>> = dismissedState.asStateFlow()
+        override suspend fun addDismissedAlert(alertId: String) { dismissedState.value = dismissedState.value + alertId }
+        override suspend fun removeDismissedAlert(alertId: String) { dismissedState.value = dismissedState.value - alertId }
+        override suspend fun clearDismissedAlerts() { dismissedState.value = emptySet() }
     }
 
-    private class FakeAlertDao : AlertDao {
+    private class FakeAlertDao : AlertDao() {
         val alerts = MutableStateFlow<List<AlertEntity>>(emptyList())
 
         override fun observeAllAlerts(): Flow<List<AlertEntity>> = alerts.asStateFlow()

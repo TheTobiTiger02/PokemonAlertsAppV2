@@ -99,7 +99,7 @@ data class PokemonAlert(
     val gender: String? = null,
     val isShiny: Boolean? = null,
     val cp: Int? = null,
-    val level: Int? = null,
+    val level: Double? = null,
     
     // Weather
     val isWeatherBoosted: Boolean? = null,
@@ -124,10 +124,17 @@ data class PokemonAlert(
     val requiresAR: Boolean? = null,
     val pokemonRewards: List<PokemonReward>? = null,
     
+    // Weather change info
+    val newCp: Int? = null,
+    val newIv: String? = null,
+    
     // Timestamps
     val createdAt: String? = null
 ) {
     val uniqueId: String get() = "${name.trim()}|${endTime.trim()}"
+    
+    /** Returns true if this is a weather-change alert */
+    val isWeatherChange: Boolean get() = hasType("WeatherChange")
 
     val googleMapsUri: Uri?
         get() = if (latitude != null && longitude != null) {

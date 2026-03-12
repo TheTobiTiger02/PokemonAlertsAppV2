@@ -57,7 +57,7 @@ class AlertDetailActivity : ComponentActivity() {
         val gender = getStringExtra(EXTRA_GENDER)
         val isShiny = getBooleanExtra(EXTRA_IS_SHINY, false).takeIf { hasExtra(EXTRA_IS_SHINY) }
         val cp = getIntExtra(EXTRA_CP, -1).takeIf { it >= 0 }
-        val level = getIntExtra(EXTRA_LEVEL, -1).takeIf { it >= 0 }
+        val level = getDoubleExtra(EXTRA_LEVEL, -1.0).takeIf { it >= 0 }
         val isWeatherBoosted = getBooleanExtra(EXTRA_IS_WEATHER_BOOSTED, false).takeIf { hasExtra(EXTRA_IS_WEATHER_BOOSTED) }
         val currentWeather = getStringExtra(EXTRA_CURRENT_WEATHER)
         val pokemonLocation = getStringExtra(EXTRA_POKEMON_LOCATION)
@@ -79,6 +79,10 @@ class AlertDetailActivity : ComponentActivity() {
         val requiresAR = getBooleanExtra(EXTRA_REQUIRES_AR, false).takeIf { hasExtra(EXTRA_REQUIRES_AR) }
         val createdAt = getStringExtra(EXTRA_CREATED_AT)
         
+        // Weather change fields
+        val newCp = getIntExtra(EXTRA_NEW_CP, -1).takeIf { it >= 0 }
+        val newIv = getStringExtra(EXTRA_NEW_IV)
+
         // PvP Rankings (serialized as JSON)
         val pvpRankingsJson = getStringExtra(EXTRA_PVP_RANKINGS)
         val pvpRankings = pvpRankingsJson?.let {
@@ -124,7 +128,9 @@ class AlertDetailActivity : ComponentActivity() {
             questReward = questReward,
             requiresAR = requiresAR,
             pokemonRewards = pokemonRewards,
-            createdAt = createdAt
+            createdAt = createdAt,
+            newCp = newCp,
+            newIv = newIv
         )
     }
 
@@ -166,6 +172,8 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_CREATED_AT = "extra_created_at"
         private const val EXTRA_PVP_RANKINGS = "extra_pvp_rankings"
         private const val EXTRA_POKEMON_REWARDS = "extra_pokemon_rewards"
+        private const val EXTRA_NEW_CP = "extra_new_cp"
+        private const val EXTRA_NEW_IV = "extra_new_iv"
 
         fun createIntent(context: Context, alert: PokemonAlert): Intent {
             return Intent(context, AlertDetailActivity::class.java).apply {
@@ -209,6 +217,8 @@ class AlertDetailActivity : ComponentActivity() {
                 putExtra(EXTRA_QUEST_REWARD, alert.questReward)
                 alert.requiresAR?.let { putExtra(EXTRA_REQUIRES_AR, it) }
                 putExtra(EXTRA_CREATED_AT, alert.createdAt)
+                alert.newCp?.let { putExtra(EXTRA_NEW_CP, it) }
+                putExtra(EXTRA_NEW_IV, alert.newIv)
                 alert.pvpRankings?.let { rankings ->
                     if (rankings.isNotEmpty()) {
                         putExtra(EXTRA_PVP_RANKINGS, Json.encodeToString(rankings))
