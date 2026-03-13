@@ -7,7 +7,13 @@ import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
@@ -57,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,7 +72,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -549,51 +558,46 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                 val viewWidthPx = constraints.maxWidth.toFloat()
                 val viewHeightPx = constraints.maxHeight.toFloat()
 
-                // Keep tile size near native OSM resolution to avoid over-zooming artifacts
+                // Keep tile size near native OSM resolution
                 val tileSizePx = 256f
                 val tileSizeDp = with(density) { tileSizePx.toDp() }
-                // Build a large enough odd-sized tile grid to fully cover the viewport after centering
+
+                // Build a large enough tile grid to fully cover the viewport
                 val tilesAcross = ceil(viewWidthPx / tileSizePx).toInt() + 2
                 val tilesDown = ceil(viewHeightPx / tileSizePx).toInt() + 2
                 val radius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
                 val tileRange = -radius..radius
-                val gridCount = radius * 2 + 1
-                val gridSizeDp = with(density) { (tileSizePx * gridCount).toDp() }
 
-                // The coordinate sits at pixel (radius + fracX, radius + fracY) tiles
-                // into the grid. Shift the grid so that point lands at the view center.
-                val coordGridPxX = (radius + fracX) * tileSizePx
-                val coordGridPxY = (radius + fracY) * tileSizePx
-                val shiftXDp = with(density) { (viewWidthPx / 2f - coordGridPxX).toDp() }
-                val shiftYDp = with(density) { (viewHeightPx / 2f - coordGridPxY).toDp() }
-
-                // Map tile grid — requiredSize bypasses parent constraints
-                Row(
-                    modifier = Modifier
-                        .requiredSize(gridSizeDp)
-                        .offset(x = shiftXDp, y = shiftYDp)
-                ) {
+                // For each tile, compute offset so the coordinate lands at view center.
+                // The coordinate is at (fracX, fracY) within the center tile (dx=0, dy=0).
+                // Center tile left edge in view px = viewWidth/2 - fracX * tileSizePx
+                // Tile at (dx, dy) left edge = viewWidth/2 + (dx - fracX) * tileSizePx
+                Box(modifier = Modifier.fillMaxSize()) {
                     for (dx in tileRange) {
-                        Column {
-                            for (dy in tileRange) {
-                                val x = ((centerTileX + dx) % n + n) % n
-                                val y = (centerTileY + dy).coerceIn(0, n - 1)
-                                val tileUrl = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
-                                AsyncImage(
-                                    model = ImageRequest.Builder(context)
-                                        .data(tileUrl)
-                                        .crossfade(300)
-                                        .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                        .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                        .addHeader("User-Agent", "PokemonAlertsV2/1.0")
-                                        .build(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillBounds,
-                                    modifier = Modifier
-                                        .requiredSize(tileSizeDp)
-                                        .background(Color(0xFF16213E))
-                                )
-                            }
+                        for (dy in tileRange) {
+                            val tileLeftPx = viewWidthPx / 2f + (dx - fracX) * tileSizePx
+                            val tileTopPx = viewHeightPx / 2f + (dy - fracY) * tileSizePx
+                            val tileLeftDp = with(density) { tileLeftPx.toDp() }
+                            val tileTopDp = with(density) { tileTopPx.toDp() }
+
+                            val x = ((centerTileX + dx) % n + n) % n
+                            val y = (centerTileY + dy).coerceIn(0, n - 1)
+                            val tileUrl = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(tileUrl)
+                                    .crossfade(300)
+                                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                    .addHeader("User-Agent", "PokemonAlertsV2/1.0")
+                                    .build(),
+                                contentDescription = null,
+                                contentScale = ContentScale.FillBounds,
+                                modifier = Modifier
+                                    .requiredSize(tileSizeDp)
+                                    .offset(x = tileLeftDp, y = tileTopDp)
+                                    .background(Color(0xFF16213E))
+                            )
                         }
                     }
                 }
@@ -732,7 +736,16 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
 }
 
 @Composable
-fun AlertDetailScreen(alert: PokemonAlert) {
+fun AlertDetailScreen(
+    alert: PokemonAlert,
+    isInPictureInPicture: Boolean = false,
+    onEnterPictureInPicture: (() -> Unit)? = null
+) {
+    if (isInPictureInPicture) {
+        AlertPictureInPictureContent(alert = alert)
+        return
+    }
+
     val context = LocalContext.current
     val containerGradient = remember {
         Brush.verticalGradient(
@@ -796,23 +809,68 @@ fun AlertDetailScreen(alert: PokemonAlert) {
                             )
                     )
                     
-                    // Back Button (Overlay)
+                    // Top-left actions
                     val activity = LocalContext.current as? android.app.Activity
-                    FilledIconButton(
-                        onClick = { activity?.finish() },
+                    Row(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .statusBarsPadding()
                             .padding(16.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.3f),
-                            contentColor = Color.White
-                        )
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.ArrowBack,
-                            contentDescription = stringResource(id = R.string.back)
-                        )
+                        FilledIconButton(
+                            onClick = { activity?.finish() },
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = Color.Black.copy(alpha = 0.3f),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.ArrowBack,
+                                contentDescription = stringResource(id = R.string.back)
+                            )
+                        }
+
+                        if (onEnterPictureInPicture != null) {
+                            Surface(
+                                onClick = { onEnterPictureInPicture() },
+                                modifier = Modifier.height(36.dp),
+                                shape = RoundedCornerShape(18.dp),
+                                color = Color.Black.copy(alpha = 0.45f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    Brush.horizontalGradient(
+                                        listOf(
+                                            AuroraGradientStart.copy(alpha = 0.6f),
+                                            AuroraGradientEnd.copy(alpha = 0.4f)
+                                        )
+                                    )
+                                ),
+                                contentColor = Color.White,
+                                tonalElevation = 2.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_pip),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                        tint = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(id = R.string.enter_pip_short),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
                     }
                     
                     // Shiny indicator in top right
@@ -999,6 +1057,139 @@ fun AlertDetailScreen(alert: PokemonAlert) {
                         )
                     }
                     Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlertPictureInPictureContent(alert: PokemonAlert) {
+    val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
+    var now by remember(endMillis) { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(endMillis) {
+        if (endMillis == null) return@LaunchedEffect
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+
+    val remainingMs = endMillis?.minus(now)
+    val isExpired = remainingMs != null && remainingMs <= 0
+    val pipTimerText = when {
+        endMillis == null -> null
+        isExpired -> stringResource(id = R.string.alert_expired)
+        else -> TimeUtils.formatDurationShort(remainingMs ?: 0L)
+    }
+
+    // Zoom & pan state
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    val isZoomed = scale > 1.05f
+
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+        // Clamp translation so the image can't be panned off-screen
+        val maxX = (newScale - 1f) * 500f / 2f
+        val maxY = (newScale - 1f) * 300f / 2f
+        val newOffset = Offset(
+            x = (offset.x + panChange.x).coerceIn(-maxX, maxX),
+            y = (offset.y + panChange.y).coerceIn(-maxY, maxY)
+        )
+        scale = newScale
+        offset = newOffset
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Black
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clipToBounds()
+                .transformable(state = transformableState)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    }
+            ) {
+                AlertImage(
+                    alert = alert,
+                    rounded = false,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            // Gradient scrim (not affected by zoom)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = if (isZoomed) 0.3f else 0.7f)
+                            )
+                        )
+                    )
+            )
+            // Info overlay (hidden when zoomed for cleaner view)
+            AnimatedVisibility(
+                visible = !isZoomed,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = formatAlertTitle(alert),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (pipTimerText != null) {
+                        Text(
+                            text = pipTimerText,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isExpired) MaterialTheme.colorScheme.error else Color.White
+                        )
+                    }
+                }
+            }
+            // Zoom level indicator (shown only when zoomed)
+            AnimatedVisibility(
+                visible = isZoomed,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.5f),
+                    contentColor = Color.White
+                ) {
+                    Text(
+                        text = "%.1f×".format(scale),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }

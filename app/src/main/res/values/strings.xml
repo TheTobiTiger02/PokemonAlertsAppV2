@@ -25,6 +25,7 @@
     <string name="alert_image">Alert image</string>
     <string name="map_title">Alerts Map</string>
     <string name="back">Back</string>
+    <string name="enter_pip_short">PiP</string>
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
     <string name="notification_action_directions">Directions</string>

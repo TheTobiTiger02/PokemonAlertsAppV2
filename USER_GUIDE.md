@@ -60,6 +60,14 @@ The widget shows:
 3. **Pull down to refresh** the history
 4. Tap any past alert to see details
 
+## 🖼️ Picture-in-Picture (PiP) for Alert Images
+
+1. Tap any alert to open the detail screen
+2. On the image header, tap the **PiP** button near the back button
+3. The app enters Picture-in-Picture with a compact, image-focused view
+
+Tip: You can keep the alert image visible while using other apps.
+
 ## 💡 Pro Tips
 
 ### Getting the Most Out of Sorting

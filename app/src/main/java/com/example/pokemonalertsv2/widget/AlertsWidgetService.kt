@@ -129,7 +129,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         )
         views.setTextViewText(R.id.item_meta, metaParts.joinToString(" • "))
 
-        // 5. Image Loading
+        // 5. Image Loading (with map+thumbnail composite fallback)
         val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
@@ -150,6 +150,19 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             } catch (_: Throwable) {
                 views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
             }
+        } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
+            // Generate composite map + thumbnail image for the widget
+            val mapBmp = runBlocking {
+                com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
+                    context = context,
+                    latitude = alert.latitude,
+                    longitude = alert.longitude,
+                    thumbnailUrl = alert.thumbnailUrl,
+                    outputWidth = imgSize,
+                    outputHeight = imgSize
+                )
+            }
+            views.setImageViewBitmap(R.id.item_image, mapBmp ?: createFallbackBitmap(imgSize))
         } else {
             views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
         }

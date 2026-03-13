@@ -1,11 +1,19 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.Bundle
+import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -18,19 +26,76 @@ import kotlinx.serialization.json.Json
 private val json = Json { ignoreUnknownKeys = true }
 
 class AlertDetailActivity : ComponentActivity() {
+    private var currentAlert: PokemonAlert? by mutableStateOf(null)
+    private var isInPipMode by mutableStateOf(false)
+    private var canEnterPictureInPicture: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val alert = intent?.toPokemonAlert() ?: run {
+        currentAlert = intent?.toPokemonAlert() ?: run {
             finish()
             return
         }
+        syncPictureInPictureState()
+        canEnterPictureInPicture =
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         setContent {
             PokemonAlertsV2Theme {
-                AlertDetailScreen(alert = alert)
+                currentAlert?.let { alert ->
+                    AlertDetailScreen(
+                        alert = alert,
+                        isInPictureInPicture = isInPipMode || isInPictureInPictureMode,
+                        onEnterPictureInPicture = if (canEnterPictureInPicture) {
+                            { enterImagePictureInPicture() }
+                        } else {
+                            null
+                        }
+                    )
+                }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        syncPictureInPictureState()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        syncPictureInPictureState()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        currentAlert = intent.toPokemonAlert() ?: currentAlert
+        syncPictureInPictureState()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode = isInPictureInPictureMode
+    }
+
+    private fun enterImagePictureInPicture() {
+        if (!canEnterPictureInPicture || isInPictureInPictureMode) return
+
+        val sourceRect = Rect()
+        window.decorView.getGlobalVisibleRect(sourceRect)
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .setSourceRectHint(sourceRect)
+            .build()
+        enterPictureInPictureMode(params)
+    }
+
+    private fun syncPictureInPictureState() {
+        isInPipMode = isInPictureInPictureMode
     }
 
     private fun Intent.toPokemonAlert(): PokemonAlert? {
@@ -177,7 +242,9 @@ class AlertDetailActivity : ComponentActivity() {
 
         fun createIntent(context: Context, alert: PokemonAlert): Intent {
             return Intent(context, AlertDetailActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_ALERT_NAME, alert.name)
                 putExtra(EXTRA_ALERT_DESCRIPTION, alert.description)
                 putExtra(EXTRA_ALERT_IMAGE_URL, alert.imageUrl)

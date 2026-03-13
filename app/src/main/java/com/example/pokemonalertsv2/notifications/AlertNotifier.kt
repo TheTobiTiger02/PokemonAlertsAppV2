@@ -188,8 +188,22 @@ object AlertNotifier {
             val prefix = if (chips.isNotEmpty()) chips.joinToString(" • ") + " • " else ""
             val contentText = prefix + baseText
 
-            // Load the alert image using Coil
-            val bitmap = loadImageBitmap(context, alert.imageUrl ?: alert.thumbnailUrl)
+            // Load the alert image using Coil, with map+thumbnail composite fallback
+            val bitmap = if (!alert.imageUrl.isNullOrBlank()) {
+                loadImageBitmap(context, alert.imageUrl)
+            } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
+                // Generate composite map + thumbnail image
+                com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
+                    context = context,
+                    latitude = alert.latitude,
+                    longitude = alert.longitude,
+                    thumbnailUrl = alert.thumbnailUrl,
+                    outputWidth = 512,
+                    outputHeight = 256
+                ) ?: loadImageBitmap(context, alert.thumbnailUrl)
+            } else {
+                loadImageBitmap(context, alert.thumbnailUrl)
+            }
 
             // Select Channel ID based on type
             val channelId = when {
