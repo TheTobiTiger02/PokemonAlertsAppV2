@@ -15,25 +15,27 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-fun Modifier.shimmerEffect(): Modifier = composed {
+/**
+ * Creates a shimmer brush that can be shared across multiple elements in a single
+ * composable, avoiding the overhead of `Modifier.composed{}` which creates a
+ * separate composition per usage.
+ */
+@Composable
+fun rememberShimmerBrush(): Brush {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val translateAnimation = transition.animateFloat(
         initialValue = 0f,
@@ -54,17 +56,18 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         Color.LightGray.copy(alpha = 0.6f),
     )
 
-    background(
-        brush = Brush.linearGradient(
-            colors = shimmerColors,
-            start = Offset.Zero,
-            end = Offset(x = translateAnimation.value, y = translateAnimation.value)
-        )
+    return Brush.linearGradient(
+        colors = shimmerColors,
+        start = Offset.Zero,
+        end = Offset(x = translateAnimation.value, y = translateAnimation.value)
     )
 }
 
 @Composable
 fun ShimmerAlertCard() {
+    // Single shared shimmer brush for all placeholder elements in this card
+    val shimmerBrush = rememberShimmerBrush()
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -78,7 +81,7 @@ fun ShimmerAlertCard() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
-                    .shimmerEffect()
+                    .background(shimmerBrush)
             )
             
             Column(modifier = Modifier.padding(20.dp)) {
@@ -88,7 +91,7 @@ fun ShimmerAlertCard() {
                         .fillMaxWidth(0.7f)
                         .height(24.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .shimmerEffect()
+                        .background(shimmerBrush)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -98,7 +101,7 @@ fun ShimmerAlertCard() {
                         .fillMaxWidth()
                         .height(16.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .shimmerEffect()
+                        .background(shimmerBrush)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(
@@ -106,7 +109,7 @@ fun ShimmerAlertCard() {
                         .fillMaxWidth(0.8f)
                         .height(16.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .shimmerEffect()
+                        .background(shimmerBrush)
                 )
                 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -118,14 +121,14 @@ fun ShimmerAlertCard() {
                             .width(60.dp)
                             .height(24.dp)
                             .clip(RoundedCornerShape(50))
-                            .shimmerEffect()
+                            .background(shimmerBrush)
                     )
                     Box(
                         modifier = Modifier
                             .width(80.dp)
                             .height(24.dp)
                             .clip(RoundedCornerShape(50))
-                            .shimmerEffect()
+                            .background(shimmerBrush)
                     )
                 }
                 
@@ -137,7 +140,7 @@ fun ShimmerAlertCard() {
                         .fillMaxWidth()
                         .height(48.dp)
                         .clip(RoundedCornerShape(18.dp))
-                        .shimmerEffect()
+                        .background(shimmerBrush)
                 )
             }
         }

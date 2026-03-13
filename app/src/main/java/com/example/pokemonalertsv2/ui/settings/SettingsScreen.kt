@@ -107,13 +107,15 @@ fun SettingsScreen(
     val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
-    val containerGradient = Brush.verticalGradient(
-        listOf(
-            AuroraGradientStart,
-            AuroraGradientMid,
-            AuroraGradientEnd.copy(alpha = 0.85f)
+    val containerGradient = remember {
+        Brush.verticalGradient(
+            listOf(
+                AuroraGradientStart,
+                AuroraGradientMid,
+                AuroraGradientEnd.copy(alpha = 0.85f)
+            )
         )
-    )
+    }
 
     Box(
         modifier = Modifier

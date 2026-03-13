@@ -424,6 +424,15 @@ fun PokemonAlertsPage(
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
 
+    // Shared 1-second ticker for all countdown timers — replaces per-card timers
+    var tickerNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            tickerNow = System.currentTimeMillis()
+        }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -453,12 +462,11 @@ fun PokemonAlertsPage(
     }
 
     // Filter out expired and optionally dismissed alerts
-    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed) {
-        val now = System.currentTimeMillis()
+    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, tickerNow) {
         alertsWithDistance.filter { model ->
             val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
             // Filter out expired, optionally include dismissed based on toggle
-            val notExpired = end > now
+            val notExpired = end > tickerNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
             notExpired && notDismissed
         }
@@ -540,13 +548,7 @@ fun PokemonAlertsPage(
         }
     }
     
-    // Continuously update to remove expired alerts
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(10_000) // Check every 10 seconds
-            // This will trigger recomposition and re-filtering
-        }
-    }
+    // Expired alerts are already filtered out in activeAlerts via tickerNow recomposition
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -566,6 +568,7 @@ fun PokemonAlertsPage(
                 sortPreference = sortPreference,
                 showDismissed = showDismissed,
                 dismissedAlertIds = dismissedAlertIds,
+                tickerNow = tickerNow,
                 onFilterChanged = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     selectedFilter = it 
@@ -614,6 +617,7 @@ private fun AlertsList(
     sortPreference: SortPreference,
     showDismissed: Boolean,
     dismissedAlertIds: Set<String>,
+    tickerNow: Long,
     onFilterChanged: (AlertFilter) -> Unit,
     onSortChanged: (SortPreference) -> Unit,
     onShowDismissedChanged: (Boolean) -> Unit,
@@ -688,7 +692,8 @@ private fun AlertsList(
 
         items(
             items = filteredAlerts,
-            key = { it.alert.uniqueId }
+            key = { it.alert.uniqueId },
+            contentType = { "alert_card" }
         ) { model ->
             val isDismissed = model.alert.uniqueId in dismissedAlertIds
             // rememberUpdatedState ensures the lambda inside rememberSwipeToDismissBoxState
@@ -766,6 +771,7 @@ private fun AlertsList(
                     AlertCard(
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
+                        tickerNow = tickerNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
                         onShareClick = { onShareClick(model.alert) }
@@ -1410,6 +1416,7 @@ private fun AlertHistoryPage(
 
             items(
                 items = filteredAlerts,
+                key = { it.uniqueId },
                 contentType = { "alert_card" }
             ) { alert ->
                 AlertCard(

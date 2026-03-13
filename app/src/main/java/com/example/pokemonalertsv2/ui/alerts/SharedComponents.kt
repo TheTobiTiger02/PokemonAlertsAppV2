@@ -192,15 +192,20 @@ fun AlertCard(
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
     onShareClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    tickerNow: Long = System.currentTimeMillis()
 ) {
-    val accentBrush = when {
-        alert.isWeatherChange -> Brush.horizontalGradient(listOf(Color(0xFFFF9800), Color(0xFFF57C00)))
-        alert.hasTypeContaining("raid") -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
-        alert.hasTypeContaining("shadow") -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
-        alert.isPerfect -> Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000)))
-        alert.isNundo -> Brush.horizontalGradient(listOf(Color(0xFF607D8B), Color(0xFF455A64)))
-        else -> Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary))
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val accentBrush = remember(alert.type, alert.isPerfect, alert.isNundo, primary, secondary) {
+        when {
+            alert.isWeatherChange -> Brush.horizontalGradient(listOf(Color(0xFFFF9800), Color(0xFFF57C00)))
+            alert.hasTypeContaining("raid") -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
+            alert.hasTypeContaining("shadow") -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
+            alert.isPerfect -> Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000)))
+            alert.isNundo -> Brush.horizontalGradient(listOf(Color(0xFF607D8B), Color(0xFF455A64)))
+            else -> Brush.horizontalGradient(listOf(primary, secondary))
+        }
     }
     val haptic = LocalHapticFeedback.current
 
@@ -379,7 +384,7 @@ fun AlertCard(
                     }
                 }
 
-                AlertMetaRow(alert = alert, distanceInfo = distanceInfo)
+                AlertMetaRow(alert = alert, distanceInfo = distanceInfo, tickerNow = tickerNow)
                 Spacer(modifier = Modifier.height(20.dp))
                 ElevatedButton(
                     onClick = {
@@ -565,7 +570,9 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                 // Build a large enough tile grid to fully cover the viewport
                 val tilesAcross = ceil(viewWidthPx / tileSizePx).toInt() + 2
                 val tilesDown = ceil(viewHeightPx / tileSizePx).toInt() + 2
-                val radius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
+                // Limit tile grid for card views (rounded=true) to reduce composable count
+                val rawRadius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
+                val radius = if (rounded) rawRadius.coerceAtMost(1) else rawRadius
                 val tileRange = -radius..radius
 
                 // For each tile, compute offset so the coordinate lands at view center.
@@ -1941,7 +1948,7 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
 }
 
 @Composable
-fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
+fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow: Long = System.currentTimeMillis()) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val typeLabel = alert.typeDisplay?.uppercase(Locale.getDefault())
         val distanceLabel = distanceInfo.distanceText
@@ -1969,7 +1976,7 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
                 AlertTag(text = walkingLabel, icon = null)
             }
         }
-        CountdownAndEndTimeRow(alert = alert)
+        CountdownAndEndTimeRow(alert = alert, now = tickerNow)
     }
 }
 
@@ -2003,15 +2010,8 @@ fun AlertTag(text: String, icon: ImageVector? = null) {
 }
 
 @Composable
-fun CountdownAndEndTimeRow(alert: PokemonAlert) {
+fun CountdownAndEndTimeRow(alert: PokemonAlert, now: Long = System.currentTimeMillis()) {
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(endMillis) {
-        while (true) {
-            now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1000)
-        }
-    }
     val remaining = endMillis?.let { it - now } ?: -1
     val expiredLabel = if (endMillis != null && remaining <= 0) {
         "Expired ${TimeUtils.formatTimeAgo(endMillis)}"
