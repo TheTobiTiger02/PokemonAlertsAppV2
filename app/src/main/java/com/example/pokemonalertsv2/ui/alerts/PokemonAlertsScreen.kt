@@ -52,6 +52,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -80,6 +81,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -132,6 +135,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
@@ -149,31 +153,21 @@ import java.util.Locale
 @Composable
 fun PokemonAlertsRoute(
     viewModel: PokemonAlertsViewModel,
-    historyViewModel: AlertHistoryViewModel,
-    onSettingsClick: () -> Unit,
-    onHistoryClick: () -> Unit
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
     val alertsUiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    
-    val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         // Build formatted share text
         val shareText = buildString {
             append("🎮 Pokemon Alert: ${formatAlertTitle(alert)}\n\n")
-            
-            // Add key stats if available
             alert.formattedIv?.let { append("📊 IV: $it\n") }
             alert.cp?.let { append("⚡ CP: $it\n") }
             alert.level?.let { append("📈 Level: ${if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()}\n") }
-            
-            // Add Pokemon types if available
             alert.type?.takeIf { it.isNotEmpty() }?.let { types ->
                 val typeStr = types.filter { !it.equals("rare", true) && !it.equals("spawn", true) && !it.equals("hundo", true) && !it.equals("nundo", true) && !it.equals("pvp", true) }
                     .joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
@@ -181,35 +175,24 @@ fun PokemonAlertsRoute(
                     append("🏷 Type: $typeStr\n")
                 }
             }
-            
             append("\n⏱ Ends: ${alert.endTime}\n")
-            
-            // Add location details
             alert.locationDisplay?.let { append("📍 $it\n") }
-            
-            // Add clickable Google Maps link
             append("\n🗺 Open in Maps:\n${alert.googleMapsUri}")
         }
         
-        // Try to share with image, fallback to text-only
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val imageUrl = alert.imageUrl ?: alert.thumbnailUrl
                 var imageUri: android.net.Uri? = null
                 
                 if (!imageUrl.isNullOrBlank()) {
-                    // Download image to cache
                     val sharedImagesDir = java.io.File(context.cacheDir, "shared_alerts")
                     if (!sharedImagesDir.exists()) sharedImagesDir.mkdirs()
-                    
                     val imageFile = java.io.File(sharedImagesDir, "pokemon_${alert.uniqueId.hashCode()}.png")
-                    
-                    // Use Coil to load and save the image
                     val request = coil.request.ImageRequest.Builder(context)
                         .data(imageUrl)
                         .build()
                     val result = coil.ImageLoader(context).execute(request)
-                    
                     if (result is coil.request.SuccessResult) {
                         val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
                         if (bitmap != null) {
@@ -227,7 +210,6 @@ fun PokemonAlertsRoute(
                 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     val shareIntent = if (imageUri != null) {
-                        // Share with image
                         Intent(Intent.ACTION_SEND).apply {
                             type = "image/*"
                             putExtra(Intent.EXTRA_STREAM, imageUri)
@@ -236,7 +218,6 @@ fun PokemonAlertsRoute(
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                     } else {
-                        // Fallback to text-only
                         Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
@@ -246,7 +227,6 @@ fun PokemonAlertsRoute(
                     context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
                 }
             } catch (e: Exception) {
-                // Fallback to text-only on any error
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     val shareIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -263,13 +243,6 @@ fun PokemonAlertsRoute(
         LaunchedEffect(message) {
             snackbarHostState.showSnackbar(message)
             viewModel.consumeError()
-        }
-    }
-
-    historyUiState.errorMessage?.let { message ->
-        LaunchedEffect(message) {
-            snackbarHostState.showSnackbar(message)
-            historyViewModel.consumeError()
         }
     }
 
@@ -294,101 +267,49 @@ fun PokemonAlertsRoute(
         Scaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
-                Column {
-                    AuroraToolbar(
-                        onRefresh = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            if (pagerState.currentPage == 0) {
-                                viewModel.refreshAlerts()
-                            } else {
-                                historyViewModel.refreshHistory()
-                            }
-                        },
-                        onOpenMap = { context.startActivity(Intent(context, AlertsMapActivity::class.java)) },
-                        onSettingsClick = onSettingsClick,
-                        scrollBehavior = scrollBehavior
-                    )
-                    TabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        indicator = { tabPositions ->
-                            if (pagerState.currentPage < tabPositions.size) {
-                                TabRowDefaults.SecondaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
-                        }
-                    ) {
-                        Tab(
-                            selected = pagerState.currentPage == 0,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            text = { Text("Active Alerts", fontWeight = FontWeight.Bold) }
-                        )
-                        Tab(
-                            selected = pagerState.currentPage == 1,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                            text = { Text("History", fontWeight = FontWeight.Bold) }
-                        )
-                    }
-                }
+                AuroraToolbar(
+                    onRefresh = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.refreshAlerts()
+                    },
+                    scrollBehavior = scrollBehavior
+                )
             }
         ) { paddingValues ->
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                beyondViewportPageCount = 1
-            ) { page ->
-                when (page) {
-                    0 -> PokemonAlertsPage(
-                        uiState = alertsUiState,
-                        dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle(initialValue = emptySet()).value,
-                        onRefresh = viewModel::refreshAlerts,
-                        onAlertSelected = { alert ->
-                            val intent = AlertDetailActivity.createIntent(context, alert)
-                            context.startActivity(intent)
-                        },
-                        onShareClick = onShareClick,
-                        onDismissClick = { alertId ->
-                            viewModel.dismissAlert(alertId)
-                            scope.launch {
-                                val result = snackbarHostState.showSnackbar(
-                                    message = "Alert dismissed",
-                                    actionLabel = "Undo",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                )
-                                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                    viewModel.undoDismissAlert(alertId)
-                                }
-                            }
-                        },
-                        onUndoDismiss = { alertId ->
-                            viewModel.undoDismissAlert(alertId)
-                            scope.launch {
-                                snackbarHostState.showSnackbar(
-                                    message = "Alert restored",
-                                    duration = androidx.compose.material3.SnackbarDuration.Short
-                                )
+            Box(modifier = Modifier.padding(paddingValues)) {
+                PokemonAlertsPage(
+                    uiState = alertsUiState,
+                    dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle(initialValue = emptySet()).value,
+                    onRefresh = viewModel::refreshAlerts,
+                    onAlertSelected = { alert ->
+                        val intent = AlertDetailActivity.createIntent(context, alert)
+                        context.startActivity(intent)
+                    },
+                    onShareClick = onShareClick,
+                    onDismissClick = { alertId ->
+                        viewModel.dismissAlert(alertId)
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Alert dismissed",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                viewModel.undoDismissAlert(alertId)
                             }
                         }
-                    )
-                    1 -> AlertHistoryPage(
-                        uiState = historyUiState,
-                        onRefresh = historyViewModel::refreshHistory,
-                        onLoadMore = historyViewModel::loadMore,
-                        onDateChanged = historyViewModel::setDateFilter,
-                        onTypeChanged = historyViewModel::setTypeFilter,
-                        onAlertClick = { alert ->
-                            val intent = AlertDetailActivity.createIntent(context, alert)
-                            context.startActivity(intent)
+                    },
+                    onUndoDismiss = { alertId ->
+                        viewModel.undoDismissAlert(alertId)
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = "Alert restored",
+                                duration = SnackbarDuration.Short
+                            )
                         }
-                    )
-                }
+                    }
+                )
             }
         }
     }
@@ -397,10 +318,109 @@ fun PokemonAlertsRoute(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                delay(10_000) // 10 seconds when app is open
-                if (pagerState.currentPage == 0) {
-                    viewModel.refreshAlerts()
-                }
+                delay(10_000)
+                viewModel.refreshAlerts()
+            }
+        }
+    }
+}
+
+/**
+ * Standalone route for the History tab, used by the bottom navigation bar.
+ */
+@Composable
+fun AlertHistoryRoute(
+    uiState: com.example.pokemonalertsv2.ui.history.HistoryUiState,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    onRefresh: () -> Unit,
+    onLoadMore: () -> Unit,
+    onDateChanged: (String?) -> Unit,
+    onTypeChanged: (String?) -> Unit,
+    consumeError: () -> Unit
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+
+    uiState.errorMessage?.let { message ->
+        LaunchedEffect(message) {
+            snackbarHostState.showSnackbar(message)
+            consumeError()
+        }
+    }
+
+    val containerGradient = remember {
+        Brush.verticalGradient(
+            listOf(
+                AuroraGradientStart,
+                AuroraGradientMid,
+                AuroraGradientEnd.copy(alpha = 0.85f)
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(containerGradient)
+    ) {
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+            rememberTopAppBarState()
+        )
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = "Alert History",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Browse past alerts",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            )
+                        }
+                    },
+                    actions = {
+                        FilledIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onRefresh()
+                            },
+                            shape = CircleShape
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_refresh),
+                                contentDescription = stringResource(id = R.string.refresh_alerts)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        scrolledContainerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            }
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues)) {
+                AlertHistoryPage(
+                    uiState = uiState,
+                    onRefresh = onRefresh,
+                    onLoadMore = onLoadMore,
+                    onDateChanged = onDateChanged,
+                    onTypeChanged = onTypeChanged,
+                    onAlertClick = { alert ->
+                        val intent = AlertDetailActivity.createIntent(context, alert)
+                        context.startActivity(intent)
+                    }
+                )
             }
         }
     }
@@ -422,6 +442,7 @@ fun PokemonAlertsPage(
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
 
     // Shared 1-second ticker for all countdown timers — replaces per-card timers
@@ -513,8 +534,8 @@ fun PokemonAlertsPage(
         }
     }
 
-    val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference) {
-        val filtered = when (selectedFilter) {
+    val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference, searchQuery) {
+        var filtered = when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
             AlertFilter.RAIDS -> activeAlerts.filter { it.alert.hasType("Raid") }
             AlertFilter.QUESTS -> activeAlerts.filter { it.alert.hasType("Quest") }
@@ -527,13 +548,22 @@ fun PokemonAlertsPage(
             AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.alert.hasType("WeatherChange") }
         }
         
+        // Apply text search
+        if (searchQuery.isNotBlank()) {
+            val query = searchQuery.trim().lowercase()
+            filtered = filtered.filter { model ->
+                model.alert.name.lowercase().contains(query) ||
+                    (model.alert.pokemon?.lowercase()?.contains(query) == true) ||
+                    (model.alert.cleanPokemonName.lowercase().contains(query)) ||
+                    (model.alert.locationDisplay?.lowercase()?.contains(query) == true)
+            }
+        }
+        
         // Sort based on user preference
         when (sortPreference) {
             SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
-                // Higher ID = newer alert. Alerts without ID go to the end
                 it.alert.id?.toLong() ?: Long.MIN_VALUE
             }.thenByDescending { 
-                // Secondary sort by end time for alerts without ID
                 TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: 0L
             })
             SortPreference.DISTANCE -> filtered.sortedBy { 
@@ -561,7 +591,12 @@ fun PokemonAlertsPage(
     ) {
         when {
             uiState.isLoading && uiState.alerts.isEmpty() -> LoadingState()
-            uiState.alerts.isEmpty() && !uiState.isLoading -> EmptyState(onRefresh = onRefresh)
+            uiState.alerts.isEmpty() && !uiState.isLoading -> AnimatedEmptyState(
+                    title = "All caught up",
+                    message = "No active alerts right now. Tap below to check again.",
+                    ctaText = "Refresh feed",
+                    onAction = onRefresh
+                )
             else -> AlertsList(
                 filteredAlerts = filteredAlerts,
                 selectedFilter = selectedFilter,
@@ -604,7 +639,9 @@ fun PokemonAlertsPage(
                     )
                 },
                 alertsAvailable = uiState.alerts.isNotEmpty(),
-                availableFilters = availableFilters
+                availableFilters = availableFilters,
+                searchQuery = searchQuery,
+                onSearchQueryChanged = { searchQuery = it }
             )
         }
     }
@@ -628,7 +665,9 @@ private fun AlertsList(
     onRestoreClick: (String) -> Unit,
     onRequestLocationPermission: () -> Unit,
     alertsAvailable: Boolean,
-    availableFilters: Set<AlertFilter>
+    availableFilters: Set<AlertFilter>,
+    searchQuery: String = "",
+    onSearchQueryChanged: (String) -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -675,6 +714,13 @@ private fun AlertsList(
                         } else null
                     )
                 }
+                
+                // Search bar
+                AlertSearchBar(
+                    query = searchQuery,
+                    onQueryChanged = onSearchQueryChanged,
+                    placeholder = "Search Pokémon…"
+                )
             }
         }
         
@@ -767,6 +813,26 @@ private fun AlertsList(
                 enableDismissFromEndToStart = !isDismissed,
                 modifier = Modifier.animateItem()
             ) {
+                // Progressive haptic feedback during swipe
+                val progress = dismissState.progress
+                val hapticFeedback = LocalHapticFeedback.current
+                var lastHapticThreshold by remember { mutableStateOf(0) }
+                
+                LaunchedEffect(progress) {
+                    val currentThreshold = when {
+                        progress >= 0.6f -> 2
+                        progress >= 0.3f -> 1
+                        else -> 0
+                    }
+                    if (currentThreshold > lastHapticThreshold) {
+                        when (currentThreshold) {
+                            1 -> hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            2 -> hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
+                    lastHapticThreshold = currentThreshold
+                }
+                
                 Box {
                     AlertCard(
                         alert = model.alert,
@@ -795,6 +861,53 @@ private fun AlertsList(
             Spacer(modifier = Modifier.height(80.dp))
         }
     }
+}
+
+@Composable
+private fun AlertSearchBar(
+    query: String,
+    onQueryChanged: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChanged,
+        modifier = modifier.fillMaxWidth(),
+        placeholder = {
+            Text(
+                text = placeholder,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = "Search",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                androidx.compose.material3.IconButton(onClick = { onQueryChanged("") }) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Clear search",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        shape = RoundedCornerShape(16.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+        ),
+        textStyle = MaterialTheme.typography.bodyMedium
+    )
 }
 
 @Composable
@@ -937,8 +1050,6 @@ private fun FilterRow(
 @Composable
 private fun AuroraToolbar(
     onRefresh: () -> Unit,
-    onOpenMap: () -> Unit,
-    onSettingsClick: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
     TopAppBar(
@@ -961,20 +1072,6 @@ private fun AuroraToolbar(
                 Icon(
                     painter = painterResource(id = R.drawable.ic_refresh),
                     contentDescription = stringResource(id = R.string.refresh_alerts)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            FilledIconButton(onClick = onOpenMap, shape = CircleShape) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_map),
-                    contentDescription = stringResource(id = R.string.open_map)
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            FilledIconButton(onClick = onSettingsClick, shape = CircleShape) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "Settings"
                 )
             }
         },
@@ -1049,6 +1146,7 @@ private fun AlertHistoryPage(
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
 
@@ -1074,10 +1172,21 @@ private fun AlertHistoryPage(
     // only load one page at a time, so deriving chips from loaded items is incomplete.
     val availableFilters = remember { AlertFilter.entries.toSet() }
 
-    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation) {
+    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation, searchQuery) {
         // Type filtering is now server-side — uiState.alerts already contains
         // only the selected type (or all types when no filter is active).
         var filtered = uiState.alerts
+        
+        // Apply text search
+        if (searchQuery.isNotBlank()) {
+            val query = searchQuery.trim().lowercase()
+            filtered = filtered.filter { alert ->
+                alert.name.lowercase().contains(query) ||
+                    (alert.pokemon?.lowercase()?.contains(query) == true) ||
+                    (alert.cleanPokemonName.lowercase().contains(query)) ||
+                    (alert.locationDisplay?.lowercase()?.contains(query) == true)
+            }
+        }
         
         // Sort based on user preference
         when (sortPreference) {
@@ -1224,6 +1333,13 @@ private fun AlertHistoryPage(
                         locationAvailable = false,
                         onRequestLocationPermission = { },
                         availableFilters = availableFilters
+                    )
+
+                    // Search bar for history
+                    AlertSearchBar(
+                        query = searchQuery,
+                        onQueryChanged = { searchQuery = it },
+                        placeholder = "Search history…"
                     )
                 }
             }
@@ -1402,14 +1518,9 @@ private fun AlertHistoryPage(
                 items(3) { ShimmerAlertCard() }
             } else if (filteredAlerts.isEmpty() && !uiState.isLoading) {
                 item {
-                    Text(
-                        text = "No history found.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    AnimatedEmptyState(
+                        title = "No history found",
+                        message = "There are no alerts matching your filters. Try changing the date or type."
                     )
                 }
             }

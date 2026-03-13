@@ -13,30 +13,82 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.core.content.ContextCompat
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
-import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
-import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import com.example.pokemonalertsv2.work.AlertAlarmScheduler
-import kotlinx.coroutines.flow.MutableStateFlow
-
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.AlertsMapRoute
+import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
+import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
+import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
-import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
+import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import com.example.pokemonalertsv2.work.AlertAlarmScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 
-private enum class Screen { Onboarding, Alerts, Settings }
+/**
+ * Bottom navigation destinations.
+ * Onboarding is handled separately and is not part of the nav bar.
+ */
+private data class NavDestination(
+    val label: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector
+)
+
+private val NAV_DESTINATIONS = listOf(
+    NavDestination("Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    NavDestination("History", Icons.Filled.DateRange, Icons.Outlined.DateRange),
+    NavDestination("Map", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
+    NavDestination("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+)
 
 class MainActivity : ComponentActivity() {
 
@@ -52,15 +104,10 @@ class MainActivity : ComponentActivity() {
             val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
             
             if (fineLocationGranted || coarseLocationGranted) {
-                // Foreground location granted, now request background location if Android 10+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     requestBackgroundLocationPermission()
                 } else {
-                    Toast.makeText(
-                        this,
-                        "Location permission granted",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Toast.makeText(
@@ -74,11 +121,7 @@ class MainActivity : ComponentActivity() {
     private val backgroundLocationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
-                Toast.makeText(
-                    this,
-                    "Background location access granted",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(this, "Background location access granted", Toast.LENGTH_SHORT).show()
             } else {
                 backgroundLocationPermissionNeeded.value = true
             }
@@ -121,46 +164,33 @@ class MainActivity : ComponentActivity() {
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
-            // Force Dark Theme regardless of settings/system
             val darkTheme = true
 
-            var currentScreen by rememberSaveable { mutableStateOf<Screen?>(null) }
-
-            // Decide initial screen once onboarding state is loaded
-            if (currentScreen == null && onboardingCompleted != null) {
-                currentScreen = if (onboardingCompleted == true) Screen.Alerts else Screen.Onboarding
+            // Track whether we should show onboarding or the main app
+            var showOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            if (showOnboarding == null && onboardingCompleted != null) {
+                showOnboarding = onboardingCompleted != true
             }
 
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
-                // Show nothing or splash while determining initial screen
-                if (currentScreen == null) {
-                    // Keep splash screen active or show empty box
+                // Keep splash while determining initial screen
+                if (showOnboarding == null) {
                     return@PokemonAlertsV2Theme
                 }
 
-                when (currentScreen!!) {
-                    Screen.Onboarding -> {
-                        com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
-                            onFinish = {
-                                settingsViewModel.completeOnboarding()
-                                currentScreen = Screen.Alerts
-                            }
-                        )
-                    }
-                    Screen.Alerts -> {
-                        PokemonAlertsRoute(
-                            viewModel = alertsViewModel,
-                            historyViewModel = historyViewModel,
-                            onSettingsClick = { currentScreen = Screen.Settings },
-                            onHistoryClick = { /* Now handled by tabs in PokemonAlertsRoute */ }
-                        )
-                    }
-                    Screen.Settings -> {
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBackClick = { currentScreen = Screen.Alerts }
-                        )
-                    }
+                if (showOnboarding == true) {
+                    com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
+                        onFinish = {
+                            settingsViewModel.completeOnboarding()
+                            showOnboarding = false
+                        }
+                    )
+                } else {
+                    MainScaffold(
+                        alertsViewModel = alertsViewModel,
+                        historyViewModel = historyViewModel,
+                        settingsViewModel = settingsViewModel
+                    )
                 }
 
                 if (showExactAlarmDialog) {
@@ -234,7 +264,6 @@ class MainActivity : ComponentActivity() {
                 )
             )
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Already have foreground location, check background
             requestBackgroundLocationPermission()
         }
     }
@@ -252,6 +281,116 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+// ── Main Scaffold with Bottom Navigation ─────────────────────────────────
+
+@Composable
+private fun MainScaffold(
+    alertsViewModel: PokemonAlertsViewModel,
+    historyViewModel: AlertHistoryViewModel,
+    settingsViewModel: SettingsViewModel
+) {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    val containerGradient = remember {
+        Brush.verticalGradient(
+            listOf(
+                AuroraGradientStart,
+                AuroraGradientMid,
+                AuroraGradientEnd.copy(alpha = 0.85f)
+            )
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(containerGradient)
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    tonalElevation = 3.dp
+                ) {
+                    NAV_DESTINATIONS.forEachIndexed { index, destination ->
+                        NavigationBarItem(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            icon = {
+                                Icon(
+                                    imageVector = if (selectedTab == index)
+                                        destination.selectedIcon
+                                    else
+                                        destination.unselectedIcon,
+                                    contentDescription = destination.label
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = destination.label,
+                                    fontWeight = if (selectedTab == index)
+                                        FontWeight.Bold
+                                    else
+                                        FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+            }
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues)) {
+                when (selectedTab) {
+                    0 -> {
+                        PokemonAlertsRoute(
+                            viewModel = alertsViewModel,
+                            snackbarHostState = snackbarHostState
+                        )
+                    }
+                    1 -> {
+                        val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
+                        com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
+                            uiState = historyUiState,
+                            snackbarHostState = snackbarHostState,
+                            onRefresh = historyViewModel::refreshHistory,
+                            onLoadMore = historyViewModel::loadMore,
+                            onDateChanged = historyViewModel::setDateFilter,
+                            onTypeChanged = historyViewModel::setTypeFilter,
+                            consumeError = historyViewModel::consumeError
+                        )
+                    }
+                    2 -> {
+                        AlertsMapRoute(
+                            viewModel = alertsViewModel,
+                            onBack = { selectedTab = 0 }
+                        )
+                    }
+                    3 -> {
+                        SettingsScreen(
+                            viewModel = settingsViewModel,
+                            onBackClick = { selectedTab = 0 }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Permission Dialogs ───────────────────────────────────────────────────
 
 @Composable
 private fun ExactAlarmPermissionDialog(

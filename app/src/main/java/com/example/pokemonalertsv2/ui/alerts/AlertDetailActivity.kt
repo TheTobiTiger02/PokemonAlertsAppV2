@@ -55,6 +55,10 @@ class AlertDetailActivity : ComponentActivity() {
                 }
             }
         }
+        // Auto-enter PiP if launched from notification action
+        if (intent?.getBooleanExtra(EXTRA_LAUNCH_PIP, false) == true && canEnterPictureInPicture) {
+            window.decorView.post { enterImagePictureInPicture() }
+        }
     }
 
     override fun onStart() {
@@ -72,6 +76,10 @@ class AlertDetailActivity : ComponentActivity() {
         setIntent(intent)
         currentAlert = intent.toPokemonAlert() ?: currentAlert
         syncPictureInPictureState()
+        // Auto-enter PiP if launched from notification action
+        if (intent.getBooleanExtra(EXTRA_LAUNCH_PIP, false) && canEnterPictureInPicture) {
+            window.decorView.post { enterImagePictureInPicture() }
+        }
     }
 
     override fun onPictureInPictureModeChanged(
@@ -239,6 +247,7 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_POKEMON_REWARDS = "extra_pokemon_rewards"
         private const val EXTRA_NEW_CP = "extra_new_cp"
         private const val EXTRA_NEW_IV = "extra_new_iv"
+        const val EXTRA_LAUNCH_PIP = "extra_launch_pip"
 
         fun createIntent(context: Context, alert: PokemonAlert): Intent {
             return Intent(context, AlertDetailActivity::class.java).apply {

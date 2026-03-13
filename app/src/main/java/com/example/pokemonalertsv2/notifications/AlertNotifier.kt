@@ -238,6 +238,18 @@ object AlertNotifier {
                     context.getString(R.string.notification_action_directions),
                     mapsPendingIntent
                 )
+                // Quick Action: Dismiss
+                .addAction(
+                    R.drawable.ic_poke_notification,
+                    "Dismiss",
+                    createDismissPendingIntent(context, alert)
+                )
+                // Quick Action: Open in PiP
+                .addAction(
+                    R.drawable.ic_pip,
+                    "PiP",
+                    createPipPendingIntent(context, alert)
+                )
 
             // Add the image as large icon and big picture if available
             bitmap?.let {
@@ -259,6 +271,32 @@ object AlertNotifier {
     }
 
     private fun immutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0
+
+    private fun createDismissPendingIntent(context: Context, alert: PokemonAlert): PendingIntent {
+        val dismissIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_DISMISS
+            putExtra(NotificationActionReceiver.EXTRA_ALERT_UNIQUE_ID, alert.uniqueId)
+            putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, alert.uniqueId.hashCode())
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            alert.uniqueId.hashCode() + 2000, // unique request code
+            dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+    }
+
+    private fun createPipPendingIntent(context: Context, alert: PokemonAlert): PendingIntent {
+        val pipIntent = AlertDetailActivity.createIntent(context, alert).apply {
+            putExtra(AlertDetailActivity.EXTRA_LAUNCH_PIP, true)
+        }
+        return PendingIntent.getActivity(
+            context,
+            alert.uniqueId.hashCode() + 3000, // unique request code
+            pipIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+    }
 
     private suspend fun loadImageBitmap(context: Context, imageUrl: String?): Bitmap? {
         if (imageUrl.isNullOrBlank()) return null

@@ -60,6 +60,13 @@
         <receiver
             android:name=".work.AlertAlarmReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".notifications.NotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.ACTION_DISMISS_ALERT" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".widget.AlertsWidgetProvider"
