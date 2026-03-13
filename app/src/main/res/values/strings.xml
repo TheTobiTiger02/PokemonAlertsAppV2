@@ -45,4 +45,14 @@
     <string name="alerts_empty_title">All caught up</string>
     <string name="alerts_empty_cta">Refresh feed</string>
     <string name="alert_expired">Expired</string>
+    <string name="widget_description">Shows active Pokémon alerts with countdown timers, distance info, and quick actions.</string>
+    <string name="widget_active_count">%1$d active</string>
+    <string name="widget_dismiss_cd">Dismiss alert</string>
+    <string name="widget_navigate_cd">Navigate to alert</string>
+    <string name="widget_compact_count">%1$d active alerts</string>
+    <string name="widget_config_title">Select Alert Types</string>
+    <string name="widget_config_show_all">Show all types</string>
+    <string name="widget_config_confirm">Done</string>
+    <string name="widget_empty_title">No active alerts</string>
+    <string name="widget_empty_subtitle">Tap refresh to check again</string>
 </resources>

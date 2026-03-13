@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/item_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
@@ -13,7 +14,7 @@
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:scaleType="centerCrop"
-        android:background="#1A1A2E"
+        android:background="@drawable/widget_image_bg"
         android:contentDescription="@string/alert_image"
         android:clipToOutline="true"
         android:layout_marginEnd="12dp" />
@@ -72,4 +73,27 @@
             android:ellipsize="end"
             android:layout_marginTop="1dp" />
     </LinearLayout>
+
+    <!-- Navigate button -->
+    <ImageButton
+        android:id="@+id/btn_navigate"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:background="@android:color/transparent"
+        android:contentDescription="@string/widget_navigate_cd"
+        android:src="@drawable/ic_navigate"
+        android:scaleType="centerInside"
+        android:layout_marginStart="4dp"
+        android:visibility="gone" />
+
+    <!-- Dismiss button -->
+    <ImageButton
+        android:id="@+id/btn_dismiss"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:background="@android:color/transparent"
+        android:contentDescription="@string/widget_dismiss_cd"
+        android:src="@drawable/ic_close_small"
+        android:scaleType="centerInside"
+        android:layout_marginStart="2dp" />
 </LinearLayout>

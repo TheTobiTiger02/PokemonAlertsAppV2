@@ -68,6 +68,16 @@
             </intent-filter>
         </receiver>
 
+        <activity
+            android:name=".widget.WidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.PokemonAlertsV2"
+            android:label="@string/widget_config_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.AlertsWidgetProvider"
             android:exported="true"
@@ -80,6 +90,15 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="com.example.pokemonalertsv2.widget.ACTION_TIMER_TICK" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_DISMISS_WIDGET" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_NAVIGATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_ITEM_CLICK" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

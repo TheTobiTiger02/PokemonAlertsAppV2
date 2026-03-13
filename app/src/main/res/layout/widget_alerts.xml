@@ -11,7 +11,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="8dp">
+        android:paddingBottom="4dp">
 
         <ImageView
             android:id="@+id/img_logo"
@@ -33,6 +33,17 @@
             android:textColor="@color/poke_white"
             android:maxLines="1"
             android:ellipsize="end" />
+
+        <!-- Active count badge -->
+        <TextView
+            android:id="@+id/tv_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/poke_blue"
+            android:layout_marginEnd="8dp"
+            android:maxLines="1" />
 
         <ImageButton
             android:id="@+id/btn_map"
@@ -65,17 +76,52 @@
         android:paddingBottom="8dp"
         android:text="" />
 
-    <TextView
-        android:id="@+id/tv_empty"
+    <!-- Empty state with icon -->
+    <LinearLayout
+        android:id="@+id/empty_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp"
-        android:textColor="@color/poke_white"
-        android:text="@string/no_alerts_message"
-        android:visibility="gone"
+        android:orientation="vertical"
         android:gravity="center"
-        android:textStyle="italic" />
+        android:paddingTop="24dp"
+        android:paddingBottom="24dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/ic_placeholder"
+            android:tint="#4D94A3B8"
+            android:contentDescription="@null"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:id="@+id/tv_empty_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/poke_white"
+            android:text="@string/widget_empty_title"
+            android:gravity="center"
+            android:textStyle="bold"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/tv_empty_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/poke_light_gray"
+            android:text="@string/widget_empty_subtitle"
+            android:gravity="center"
+            android:textSize="12sp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Hidden empty view for ListView's setEmptyView -->
+    <TextView
+        android:id="@+id/tv_empty"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
     <ListView
         android:id="@+id/list_alerts"

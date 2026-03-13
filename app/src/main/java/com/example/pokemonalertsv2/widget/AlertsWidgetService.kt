@@ -1,14 +1,18 @@
 package com.example.pokemonalertsv2.widget
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
+import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
@@ -27,10 +31,16 @@ import kotlinx.coroutines.runBlocking
 import java.util.Locale
 
 class AlertsWidgetService : RemoteViewsService() {
-    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = AlertsFactory(applicationContext)
+    override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
+        val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        return AlertsFactory(applicationContext, widgetId)
+    }
 }
 
-private class AlertsFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
+private class AlertsFactory(
+    private val context: Context,
+    private val appWidgetId: Int
+) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
     private lateinit var imageLoader: ImageLoader
     private var currentLocation: Location? = null
@@ -40,6 +50,9 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
     private val colorRed by lazy { ContextCompat.getColor(context, R.color.poke_red) }
     private val colorYellow by lazy { ContextCompat.getColor(context, R.color.poke_yellow) }
     private val colorBlue by lazy { ContextCompat.getColor(context, R.color.poke_blue) }
+
+    // Corner radius for image clipping (in pixels)
+    private val cornerRadiusPx by lazy { (12 * context.resources.displayMetrics.density) }
 
     override fun onCreate() {
         imageLoader = ImageLoader(context)
@@ -55,11 +68,21 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
 
             val now = System.currentTimeMillis()
-            val activeAlerts = alerts.filter {
+            var activeAlerts = alerts.filter {
                 val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
                 val notExpired = end > now
                 val notDismissed = it.uniqueId !in dismissedIds
                 notExpired && notDismissed
+            }
+
+            // Apply per-widget type filters
+            val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
+            if (filterTypes.isNotEmpty()) {
+                activeAlerts = activeAlerts.filter { alert ->
+                    val alertTypes = alert.type ?: emptyList()
+                    if (alertTypes.isEmpty()) true // Show alerts with no type
+                    else alertTypes.any { type -> filterTypes.any { filter -> type.contains(filter, ignoreCase = true) } }
+                }
             }
 
             val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
@@ -108,11 +131,11 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             views.setTextViewText(R.id.item_time, "")
         }
 
-        // 3. Description (now cleaner)
-        val type = alert.type ?: "Alert"
+        // 3. Description
+        val type = alert.type?.firstOrNull() ?: "Alert"
         views.setTextViewText(R.id.item_desc, "$type: ${alert.description}")
 
-        // 4. Meta Data (Distance and specifics)
+        // 4. Meta Data (Distance and walking time)
         val distanceMeters: Float? = currentLocation?.let { loc ->
             val results = FloatArray(1)
             runCatching {
@@ -123,13 +146,10 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
         val distanceText = distanceMeters?.let { formatDistance(it) }
         val walkingText = distanceMeters?.let { formatWalkingTime(it) }
 
-        val metaParts = listOfNotNull(
-            distanceText,
-            walkingText
-        )
+        val metaParts = listOfNotNull(distanceText, walkingText)
         views.setTextViewText(R.id.item_meta, metaParts.joinToString(" • "))
 
-        // 5. Image Loading (with map+thumbnail composite fallback)
+        // 5. Image Loading (with rounded corners)
         val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
@@ -143,7 +163,7 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
                 if (result is SuccessResult) {
                     val drawable = result.drawable
                     val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
-                    views.setImageViewBitmap(R.id.item_image, bmp)
+                    views.setImageViewBitmap(R.id.item_image, roundBitmap(bmp, cornerRadiusPx))
                 } else {
                     views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
                 }
@@ -151,7 +171,6 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
                 views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
             }
         } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
-            // Generate composite map + thumbnail image for the widget
             val mapBmp = runBlocking {
                 com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
                     context = context,
@@ -162,16 +181,38 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
                     outputHeight = imgSize
                 )
             }
-            views.setImageViewBitmap(R.id.item_image, mapBmp ?: createFallbackBitmap(imgSize))
+            views.setImageViewBitmap(R.id.item_image, roundBitmap(mapBmp ?: createFallbackBitmap(imgSize), cornerRadiusPx))
         } else {
             views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
         }
 
-        // Fill-in click intent
-        val fillInIntent = AlertDetailActivity.createIntent(context, alert)
-        views.setOnClickFillInIntent(R.id.item_image, fillInIntent)
-        views.setOnClickFillInIntent(R.id.item_title, fillInIntent)
-        views.setOnClickFillInIntent(R.id.item_desc, fillInIntent) // Make whole card clickable usually
+        // 6. Navigate button — show only if we have coordinates
+        if (alert.latitude != null && alert.longitude != null) {
+            views.setViewVisibility(R.id.btn_navigate, View.VISIBLE)
+            val navIntent = Intent().apply {
+                action = AlertsWidgetProvider.ACTION_NAVIGATE
+                putExtra(AlertsWidgetProvider.EXTRA_NAV_LAT, alert.latitude)
+                putExtra(AlertsWidgetProvider.EXTRA_NAV_LNG, alert.longitude)
+            }
+            views.setOnClickFillInIntent(R.id.btn_navigate, navIntent)
+        } else {
+            views.setViewVisibility(R.id.btn_navigate, View.GONE)
+        }
+
+        // 7. Dismiss button
+        val dismissIntent = Intent().apply {
+            action = AlertsWidgetProvider.ACTION_DISMISS_WIDGET
+            putExtra(AlertsWidgetProvider.EXTRA_DISMISS_ALERT_ID, alert.uniqueId)
+        }
+        views.setOnClickFillInIntent(R.id.btn_dismiss, dismissIntent)
+
+        // 8. Root layout click → open AlertDetailActivity (via broadcast to provider)
+        val detailExtras = AlertDetailActivity.createIntent(context, alert)
+        val fillInIntent = Intent().apply {
+            action = AlertsWidgetProvider.ACTION_ITEM_CLICK
+            putExtras(detailExtras)
+        }
+        views.setOnClickFillInIntent(R.id.item_root, fillInIntent)
 
         return views
     }
@@ -183,10 +224,24 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
 
     private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable, size: Int): Bitmap {
         val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(bmp)
+        val canvas = Canvas(bmp)
         drawable.setBounds(0, 0, size, size)
         drawable.draw(canvas)
         return bmp
+    }
+
+    /** Clips a bitmap to rounded corners. */
+    private fun roundBitmap(source: Bitmap, radius: Float): Bitmap {
+        val w = source.width
+        val h = source.height
+        val output = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val path = Path()
+        path.addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), radius, radius, Path.Direction.CW)
+        canvas.clipPath(path)
+        canvas.drawBitmap(source, 0f, 0f, paint)
+        return output
     }
 
     /** Dark background + gold radial glow + Pokéball icon fallback for the widget. */
@@ -221,7 +276,8 @@ private class AlertsFactory(private val context: Context) : RemoteViewsService.R
             drawable.draw(canvas)
         }
 
-        return bmp
+        // Apply rounded corners to fallback too
+        return roundBitmap(bmp, cornerRadiusPx)
     }
 
     private fun formatDistance(meters: Float): String {
