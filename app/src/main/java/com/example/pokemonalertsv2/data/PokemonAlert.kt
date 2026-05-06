@@ -128,6 +128,12 @@ data class PokemonAlert(
     val newCp: Int? = null,
     val newIv: String? = null,
     
+    // Species replacement info
+    val oldSpecies: String? = null,
+    val oldIv: String? = null,
+    val oldCp: Int? = null,
+    val newSpecies: String? = null,
+    
     // Timestamps
     val createdAt: String? = null
 ) {
@@ -135,6 +141,9 @@ data class PokemonAlert(
     
     /** Returns true if this is a weather-change alert */
     val isWeatherChange: Boolean get() = hasType("WeatherChange")
+    
+    /** Returns true if this is a species replacement alert (different species replaced the original) */
+    val isSpeciesReplacement: Boolean get() = oldSpecies != null && newSpecies != null
 
     val googleMapsUri: Uri?
         get() = if (latitude != null && longitude != null) {

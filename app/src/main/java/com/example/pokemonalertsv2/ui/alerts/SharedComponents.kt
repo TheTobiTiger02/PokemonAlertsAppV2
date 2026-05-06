@@ -132,6 +132,11 @@ fun formatAlertTitle(alert: PokemonAlert): String {
         return "$baseName Raid"
     }
     
+    // Handle species replacement — show "OldSpecies → NewSpecies"
+    if (alert.isSpeciesReplacement) {
+        return "🔄 ${alert.oldSpecies} → ${alert.newSpecies}"
+    }
+    
     // Handle weather change - show "Pokemon Weather Change"
     if (alert.isWeatherChange) {
         return "🌦️ $baseName Changed"
@@ -197,8 +202,9 @@ fun AlertCard(
 ) {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
-    val accentBrush = remember(alert.type, alert.isPerfect, alert.isNundo, primary, secondary) {
+    val accentBrush = remember(alert.type, alert.isPerfect, alert.isNundo, alert.isSpeciesReplacement, primary, secondary) {
         when {
+            alert.isSpeciesReplacement -> Brush.horizontalGradient(listOf(Color(0xFF26C6DA), Color(0xFF00ACC1)))
             alert.isWeatherChange -> Brush.horizontalGradient(listOf(Color(0xFFFF9800), Color(0xFFF57C00)))
             alert.hasTypeContaining("raid") -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
             alert.hasTypeContaining("shadow") -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
@@ -297,8 +303,20 @@ fun AlertCard(
                             WeatherBoostBadge()
                         }
                         
-                        // Weather change indicator
-                        if (alert.isWeatherChange) {
+                        // Species replacement indicator
+                        if (alert.isSpeciesReplacement) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF26C6DA).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "🔄",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                                )
+                            }
+                        } else if (alert.isWeatherChange) {
+                            // Weather change indicator
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = Color(0xFFFF9800).copy(alpha = 0.15f)
@@ -1221,6 +1239,10 @@ private fun getTypeColor(type: String): Color {
 
 @Composable
 private fun StatsCard(alert: PokemonAlert) {
+    val isReplacement = alert.isSpeciesReplacement
+    val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
+    val accentColor = if (isReplacement) Color(0xFF26C6DA) else Color(0xFFFF9800)
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
@@ -1229,16 +1251,59 @@ private fun StatsCard(alert: PokemonAlert) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // Section title
             Text(
-                text = if (alert.isWeatherChange) "🌦️ New Stats" else "Stats",
+                text = when {
+                    isReplacement -> "🔄 New Species"
+                    isChanged -> "🌦️ New Stats"
+                    else -> "Stats"
+                },
                 style = MaterialTheme.typography.labelMedium,
-                color = if (alert.isWeatherChange) Color(0xFFFF9800) else MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (isChanged) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Species replacement banner — shows old species info
+            if (isReplacement) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = accentColor.copy(alpha = 0.10f),
+                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "🔄", style = MaterialTheme.typography.titleMedium)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Replacing ${alert.oldSpecies}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val oldDetails = listOfNotNull(
+                                alert.oldIv?.let { "IV: $it" },
+                                alert.oldCp?.let { "CP: $it" }
+                            )
+                            if (oldDetails.isNotEmpty()) {
+                                Text(
+                                    text = oldDetails.joinToString(" • "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+            }
             
-            // For weather change alerts, display the new stats as primary values
-            val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
-            val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
+            // For weather change / replacement alerts, display the new stats as primary values
+            val displayIv = if (isChanged && alert.newIv != null) alert.newIv else alert.formattedIv
+            val displayCp = if (isChanged && alert.newCp != null) alert.newCp else alert.cp
             
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1246,24 +1311,24 @@ private fun StatsCard(alert: PokemonAlert) {
             ) {
                 // IVs
                 displayIv?.let { iv ->
-                    val isNewIv = alert.isWeatherChange && alert.newIv != null
+                    val isNewIv = isChanged && alert.newIv != null
                     StatItem(
                         label = if (isNewIv) "New IV" else "IV",
                         value = iv,
                         subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
                         highlight = alert.isPerfect,
-                        highlightColor = if (isNewIv) Color(0xFFFF9800) else if (alert.isPerfect) Color(0xFFFFD700) else if (alert.isNundo) Color(0xFF607D8B) else null
+                        highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) Color(0xFFFFD700) else if (alert.isNundo) Color(0xFF607D8B) else null
                     )
                 }
                 
                 // CP
                 displayCp?.let { cp ->
-                    val isNewCp = alert.isWeatherChange && alert.newCp != null
+                    val isNewCp = isChanged && alert.newCp != null
                     StatItem(
                         label = if (isNewCp) "New CP" else "CP",
                         value = cp.toString(),
                         subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
-                        highlightColor = if (isNewCp) Color(0xFFFF9800) else null
+                        highlightColor = if (isNewCp) accentColor else null
                     )
                 }
                 
@@ -1285,19 +1350,20 @@ private fun StatsCard(alert: PokemonAlert) {
                     }
                 }
                 
-                // Level — hide for weather change alerts (old level is no longer relevant)
-                if (!alert.isWeatherChange) {
+                // Level — show for species replacement (it's the new species' level), hide for weather-only change
+                if (!isChanged || isReplacement) {
                     alert.level?.let { level ->
                         StatItem(
-                            label = "Level",
-                            value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString()
+                            label = if (isReplacement) "New Level" else "Level",
+                            value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
+                            highlightColor = if (isReplacement) accentColor else null
                         )
                     }
                 }
             }
 
             // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
-            if (!alert.isWeatherChange && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
+            if (!isChanged && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

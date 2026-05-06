@@ -71,6 +71,12 @@ data class HistoryAlertEntity(
     val newCp: Int? = null,
     val newIv: String? = null,
     
+    // Species replacement
+    val oldSpecies: String? = null,
+    val oldIv: String? = null,
+    val oldCp: Int? = null,
+    val newSpecies: String? = null,
+    
     // Timestamps
     val alertCreatedAt: String? = null
 )
@@ -134,6 +140,10 @@ fun HistoryAlertEntity.toDomain(): PokemonAlert {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        oldSpecies = oldSpecies,
+        oldIv = oldIv,
+        oldCp = oldCp,
+        newSpecies = newSpecies,
         createdAt = alertCreatedAt
     )
 }
@@ -189,6 +199,10 @@ fun PokemonAlert.toHistoryEntity(): HistoryAlertEntity {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        oldSpecies = oldSpecies,
+        oldIv = oldIv,
+        oldCp = oldCp,
+        newSpecies = newSpecies,
         alertCreatedAt = createdAt
     )
 }

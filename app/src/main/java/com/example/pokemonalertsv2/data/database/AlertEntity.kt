@@ -70,6 +70,12 @@ data class AlertEntity(
     val newCp: Int? = null,
     val newIv: String? = null,
     
+    // Species replacement
+    val oldSpecies: String? = null,
+    val oldIv: String? = null,
+    val oldCp: Int? = null,
+    val newSpecies: String? = null,
+    
     // Timestamps
     val alertCreatedAt: String? = null
 )
@@ -132,6 +138,10 @@ fun AlertEntity.toDomain(): PokemonAlert {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        oldSpecies = oldSpecies,
+        oldIv = oldIv,
+        oldCp = oldCp,
+        newSpecies = newSpecies,
         createdAt = alertCreatedAt
     )
 }
@@ -181,6 +191,10 @@ fun PokemonAlert.toEntity(): AlertEntity {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        oldSpecies = oldSpecies,
+        oldIv = oldIv,
+        oldCp = oldCp,
+        newSpecies = newSpecies,
         alertCreatedAt = createdAt
     )
 }
