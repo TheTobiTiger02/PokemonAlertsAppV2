@@ -62,8 +62,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         _uiState.update { current -> current.copy(errorMessage = null) }
     }
     
-    // Dismissed alerts - exposed as Flow for screens to collect
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
+    
+    val selectedArea = repository.alertPreferences.selectedArea
+    val maxDistance = repository.alertPreferences.maxDistance
     
     fun dismissAlert(alertId: String) {
         viewModelScope.launch {

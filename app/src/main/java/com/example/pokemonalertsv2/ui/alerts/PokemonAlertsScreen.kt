@@ -278,9 +278,14 @@ fun PokemonAlertsRoute(
             }
         ) { paddingValues ->
             Box(modifier = Modifier.padding(paddingValues)) {
+                val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
+                val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
+                
                 PokemonAlertsPage(
                     uiState = alertsUiState,
                     dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle(initialValue = emptySet()).value,
+                    selectedArea = selectedArea,
+                    maxDistance = maxDistance,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -435,6 +440,8 @@ fun PokemonAlertsPage(
     onShareClick: (PokemonAlert) -> Unit,
     onDismissClick: (String) -> Unit,
     onUndoDismiss: (String) -> Unit,
+    selectedArea: String,
+    maxDistance: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -483,13 +490,20 @@ fun PokemonAlertsPage(
     }
 
     // Filter out expired and optionally dismissed alerts
-    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, tickerNow) {
+    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, tickerNow, selectedArea, maxDistance) {
         alertsWithDistance.filter { model ->
             val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
             // Filter out expired, optionally include dismissed based on toggle
             val notExpired = end > tickerNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
-            notExpired && notDismissed
+            
+            // Area Filter
+            val areaMatch = selectedArea == "All" || model.alert.area == selectedArea
+            
+            // Distance Filter (allow if maxDistance is 0 or if location is unknown)
+            val distanceMatch = maxDistance == 0 || model.distanceInfo.distanceMeters == null || model.distanceInfo.distanceMeters <= maxDistance * 1000
+            
+            notExpired && notDismissed && areaMatch && distanceMatch
         }
     }
 

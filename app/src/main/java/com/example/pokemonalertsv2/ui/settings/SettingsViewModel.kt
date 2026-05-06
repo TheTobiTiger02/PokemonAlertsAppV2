@@ -48,6 +48,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     
     val silenceUntil: StateFlow<Long> = repository.alertPreferences.silenceUntil
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+        
+    val selectedArea: StateFlow<String> = repository.alertPreferences.selectedArea
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "All")
+        
+    val maxDistance: StateFlow<Int> = repository.alertPreferences.maxDistance
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
     
     // Excluded type preferences
     val excludedHundoTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedHundoTypes
@@ -144,6 +150,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearNotificationSilence() {
         viewModelScope.launch {
             repository.alertPreferences.updateSilenceUntil(0L)
+        }
+    }
+    
+    fun updateSelectedArea(area: String) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateSelectedArea(area)
+        }
+    }
+    
+    fun updateMaxDistance(distance: Int) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMaxDistance(distance)
         }
     }
     

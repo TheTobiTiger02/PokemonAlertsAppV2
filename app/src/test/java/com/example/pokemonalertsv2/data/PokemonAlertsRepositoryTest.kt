@@ -118,6 +118,8 @@ class PokemonAlertsRepositoryTest {
         private val rocketState = MutableStateFlow(true)
         private val vibrateState = MutableStateFlow(true)
         private val silenceState = MutableStateFlow(0L)
+        private val areaState = MutableStateFlow("All")
+        private val distanceState = MutableStateFlow(0)
         private val excludedHundoState = MutableStateFlow(emptySet<String>())
         private val excludedNundoState = MutableStateFlow(emptySet<String>())
         private val excludedPvpState = MutableStateFlow(emptySet<String>())
@@ -178,6 +180,12 @@ class PokemonAlertsRepositoryTest {
 
         override val silenceUntil: Flow<Long> = silenceState.asStateFlow()
         override suspend fun updateSilenceUntil(timestampMillis: Long) { silenceState.value = timestampMillis }
+        
+        override val selectedArea: Flow<String> = areaState.asStateFlow()
+        override suspend fun updateSelectedArea(area: String) { areaState.value = area }
+        
+        override val maxDistance: Flow<Int> = distanceState.asStateFlow()
+        override suspend fun updateMaxDistance(distance: Int) { distanceState.value = distance }
 
         override val excludedHundoTypes: Flow<Set<String>> = excludedHundoState.asStateFlow()
         override suspend fun updateExcludedHundoTypes(types: Set<String>) { excludedHundoState.value = types }

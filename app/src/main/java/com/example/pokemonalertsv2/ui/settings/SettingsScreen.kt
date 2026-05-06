@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Notifications
@@ -98,6 +99,8 @@ fun SettingsScreen(
     val rocketNotifications by viewModel.rocketNotifications.collectAsStateWithLifecycle(initialValue = true)
     val notificationVibrate by viewModel.notificationVibrate.collectAsStateWithLifecycle(initialValue = true)
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
+    val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
+    val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
     
     // Excluded types for granular filtering
     val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -152,6 +155,79 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                SettingsSection(title = "Filters") {
+                    Column {
+                        Text(
+                            text = "Area",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("All", "Alsbach", "Darmstadt").forEach { area ->
+                                val isSelected = selectedArea == area
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { viewModel.updateSelectedArea(area) },
+                                    label = { Text(area) }
+                                )
+                            }
+                        }
+                    }
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Maximum Distance",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (maxDistance == 0) "Unlimited" else "$maxDistance km",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Hide alerts further than this distance",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        androidx.compose.material3.Slider(
+                            value = maxDistance.toFloat(),
+                            onValueChange = { viewModel.updateMaxDistance(kotlin.math.round(it).toInt()) },
+                            valueRange = 0f..50f
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            listOf("0", "10", "20", "30", "40", "50+").forEach { label ->
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 SettingsSection(title = "Notifications") {
                     SwitchSetting(

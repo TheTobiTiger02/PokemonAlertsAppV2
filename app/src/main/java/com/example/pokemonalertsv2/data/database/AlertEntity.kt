@@ -76,6 +76,9 @@ data class AlertEntity(
     val oldCp: Int? = null,
     val newSpecies: String? = null,
     
+    // Area
+    val area: String? = null,
+    
     // Timestamps
     val alertCreatedAt: String? = null
 )
@@ -142,6 +145,7 @@ fun AlertEntity.toDomain(): PokemonAlert {
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
+        area = area,
         createdAt = alertCreatedAt
     )
 }
@@ -195,6 +199,7 @@ fun PokemonAlert.toEntity(): AlertEntity {
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
+        area = area,
         alertCreatedAt = createdAt
     )
 }

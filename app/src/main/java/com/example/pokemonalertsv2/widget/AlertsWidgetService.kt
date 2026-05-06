@@ -67,12 +67,27 @@ private class AlertsFactory(
             // Short timeout for location
             currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
 
+            val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
+            val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
+
             val now = System.currentTimeMillis()
             var activeAlerts = alerts.filter {
                 val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
                 val notExpired = end > now
                 val notDismissed = it.uniqueId !in dismissedIds
-                notExpired && notDismissed
+                
+                val areaMatch = selectedArea == "All" || it.area == selectedArea
+                
+                var distanceMatch = true
+                if (maxDistance > 0 && currentLocation != null) {
+                    val results = FloatArray(1)
+                    Location.distanceBetween(currentLocation!!.latitude, currentLocation!!.longitude, it.latitude ?: 0.0, it.longitude ?: 0.0, results)
+                    if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                        distanceMatch = false
+                    }
+                }
+                
+                notExpired && notDismissed && areaMatch && distanceMatch
             }
 
             // Apply per-widget type filters

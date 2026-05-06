@@ -134,6 +134,9 @@ data class PokemonAlert(
     val oldCp: Int? = null,
     val newSpecies: String? = null,
     
+    // Area
+    val area: String? = null,
+    
     // Timestamps
     val createdAt: String? = null
 ) {

@@ -22,6 +22,7 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.LocationUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -271,10 +272,29 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 val dismissedIds = runCatching {
                     repo.alertPreferences.dismissedAlertIds.first()
                 }.getOrElse { emptySet() }
+                
+                val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
+                val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
+                val currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 2000, highAccuracy = false) }.getOrNull()
+                
                 val now = System.currentTimeMillis()
                 alerts.count {
                     val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                    end > now && it.uniqueId !in dismissedIds
+                    val notExpired = end > now
+                    val notDismissed = it.uniqueId !in dismissedIds
+                    
+                    val areaMatch = selectedArea == "All" || it.area == selectedArea
+                    
+                    var distanceMatch = true
+                    if (maxDistance > 0 && currentLocation != null) {
+                        val results = FloatArray(1)
+                        android.location.Location.distanceBetween(currentLocation.latitude, currentLocation.longitude, it.latitude ?: 0.0, it.longitude ?: 0.0, results)
+                        if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                            distanceMatch = false
+                        }
+                    }
+                    
+                    notExpired && notDismissed && areaMatch && distanceMatch
                 }
             }
         } catch (_: Throwable) { 0 }

@@ -28,6 +28,8 @@ private val KECLEON_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.bool
 private val ROCKET_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("rocket_notifications")
 private val NOTIFICATION_VIBRATE_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notification_vibrate")
 private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
+private val SELECTED_AREA_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_area")
+private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance")
 
 // Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
 private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
@@ -97,6 +99,12 @@ interface AlertPreferencesStore {
     
     val silenceUntil: Flow<Long> // Timestamp in milliseconds, 0 means not silenced
     suspend fun updateSilenceUntil(timestampMillis: Long)
+    
+    val selectedArea: Flow<String>
+    suspend fun updateSelectedArea(area: String)
+    
+    val maxDistance: Flow<Int>
+    suspend fun updateMaxDistance(distance: Int)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -307,6 +315,26 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateSilenceUntil(timestampMillis: Long) {
         dataStore.edit { prefs ->
             prefs[SILENCE_UNTIL_KEY] = timestampMillis
+        }
+    }
+    
+    override val selectedArea: Flow<String> = dataStore.data.map { preferences ->
+        preferences[SELECTED_AREA_KEY] ?: "All"
+    }
+    
+    override suspend fun updateSelectedArea(area: String) {
+        dataStore.edit { prefs ->
+            prefs[SELECTED_AREA_KEY] = area
+        }
+    }
+    
+    override val maxDistance: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[MAX_DISTANCE_KEY] ?: 0
+    }
+    
+    override suspend fun updateMaxDistance(distance: Int) {
+        dataStore.edit { prefs ->
+            prefs[MAX_DISTANCE_KEY] = distance
         }
     }
     

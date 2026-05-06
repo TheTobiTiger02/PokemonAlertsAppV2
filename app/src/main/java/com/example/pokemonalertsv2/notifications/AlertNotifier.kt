@@ -109,6 +109,9 @@ object AlertNotifier {
         val excludedRocketTypes = repository.alertPreferences.excludedRocketTypes.first()
         val excludedRaidTiers = repository.alertPreferences.excludedRaidTiers.first()
         
+        val selectedArea = repository.alertPreferences.selectedArea.first()
+        val maxDistance = repository.alertPreferences.maxDistance.first()
+        
         val notificationManager = NotificationManagerCompat.from(context)
         // Actively try to get a fresh location fix; keep it best-effort with short timeout
         val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
@@ -120,6 +123,18 @@ object AlertNotifier {
                 val alertTypes = alert.type ?: return false
                 return alertTypes.any { type -> 
                     type.lowercase() in excludedSet.map { it.lowercase() }
+                }
+            }
+            
+            // Area Filter
+            if (selectedArea != "All" && alert.area != selectedArea) return@forEachIndexed
+            
+            // Distance Filter (allow if maxDistance is 0 or if location is unknown)
+            if (maxDistance > 0 && userLocation != null) {
+                val results = FloatArray(1)
+                Location.distanceBetween(userLocation.latitude, userLocation.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
+                if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                    return@forEachIndexed
                 }
             }
             

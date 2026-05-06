@@ -77,6 +77,9 @@ data class HistoryAlertEntity(
     val oldCp: Int? = null,
     val newSpecies: String? = null,
     
+    // Area
+    val area: String? = null,
+    
     // Timestamps
     val alertCreatedAt: String? = null
 )
@@ -144,6 +147,7 @@ fun HistoryAlertEntity.toDomain(): PokemonAlert {
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
+        area = area,
         createdAt = alertCreatedAt
     )
 }
@@ -203,6 +207,7 @@ fun PokemonAlert.toHistoryEntity(): HistoryAlertEntity {
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
+        area = area,
         alertCreatedAt = createdAt
     )
 }

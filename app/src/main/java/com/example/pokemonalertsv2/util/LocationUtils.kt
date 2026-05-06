@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.util
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.location.Location
 import android.os.Build
@@ -18,6 +19,7 @@ object LocationUtils {
      * Returns null on timeout, lack of permission, or failure. Does NOT fall back to last-known
      * to respect the caller's requirement for a fresh reading.
      */
+    @SuppressLint("MissingPermission")
     suspend fun getCurrentLocationOrNull(
         context: Context,
         timeoutMs: Long = 5000,

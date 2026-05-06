@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -760,6 +761,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
     }
 }
 
+@SuppressLint("ContextCastToActivity")
 @Composable
 fun AlertDetailScreen(
     alert: PokemonAlert,
