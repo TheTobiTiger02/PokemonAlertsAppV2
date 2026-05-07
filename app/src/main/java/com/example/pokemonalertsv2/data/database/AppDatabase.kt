@@ -8,13 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [AlertEntity::class, HistoryAlertEntity::class],
-    version = 10,
+    entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class],
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alertDao(): AlertDao
     abstract fun historyAlertDao(): HistoryAlertDao
+    abstract fun pokemonSpeciesDao(): PokemonSpeciesDao
 
     companion object {
         @Volatile
@@ -324,6 +325,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 10 → 11: adds pokemon species table. */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pokemon_species` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, PRIMARY KEY(`id`))"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -331,7 +341,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pokemon_alerts_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

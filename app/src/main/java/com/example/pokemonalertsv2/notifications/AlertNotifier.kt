@@ -108,8 +108,12 @@ object AlertNotifier {
         val excludedSpawnTypes = repository.alertPreferences.excludedSpawnTypes.first()
         val excludedRocketTypes = repository.alertPreferences.excludedRocketTypes.first()
         val excludedRaidTiers = repository.alertPreferences.excludedRaidTiers.first()
-        
-        val selectedArea = repository.alertPreferences.selectedArea.first()
+                // Load allowed species sets for granular species filtering
+        val allowedHundoSpecies = repository.alertPreferences.allowedHundoSpecies.first()
+        val allowedNundoSpecies = repository.alertPreferences.allowedNundoSpecies.first()
+        val allowedPvpSpecies = repository.alertPreferences.allowedPvpSpecies.first()
+        val allowedSpawnSpecies = repository.alertPreferences.allowedSpawnSpecies.first()
+                val selectedArea = repository.alertPreferences.selectedArea.first()
         val maxDistance = repository.alertPreferences.maxDistance.first()
         
         val notificationManager = NotificationManagerCompat.from(context)
@@ -139,23 +143,29 @@ object AlertNotifier {
             }
             
             // Filter based on alert type and user preferences
+            fun isSpeciesAllowed(allowedSet: Set<String>): Boolean {
+                if (allowedSet.isEmpty()) return true
+                val alertPokemonName = alert.pokemon ?: alert.name
+                return alertPokemonName.lowercase() in allowedSet.map { it.lowercase() }
+            }
+
             val shouldNotify = when {
                 alert.hasTypeContaining("raid") -> {
                     if (!raidsEnabled) false
                     else {
                         // Check raid tier exclusions (e.g., "1", "3", "5", "mega")
                         val raidTier = alert.type?.find { 
-                            it.matches(Regex("\\d+|mega", RegexOption.IGNORE_CASE)) 
+                            it.matches(Regex("\\d+|mega", RegexOption.IGNORE_CASE))
                         }
                         raidTier == null || raidTier.lowercase() !in excludedRaidTiers.map { it.lowercase() }
                     }
                 }
                 alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> 
-                    spawnsEnabled && !isPokemonTypeExcluded(excludedSpawnTypes)
+                    spawnsEnabled && !isPokemonTypeExcluded(excludedSpawnTypes) && isSpeciesAllowed(allowedSpawnSpecies)
                 alert.hasTypeContaining("quest") -> questsEnabled
-                alert.hasType("hundo") -> hundosEnabled && !isPokemonTypeExcluded(excludedHundoTypes)
-                alert.hasType("pvp") -> pvpEnabled && !isPokemonTypeExcluded(excludedPvpTypes)
-                alert.hasType("nundo") -> nundosEnabled && !isPokemonTypeExcluded(excludedNundoTypes)
+                alert.hasType("hundo") -> hundosEnabled && !isPokemonTypeExcluded(excludedHundoTypes) && isSpeciesAllowed(allowedHundoSpecies)
+                alert.hasType("pvp") -> pvpEnabled && !isPokemonTypeExcluded(excludedPvpTypes) && isSpeciesAllowed(allowedPvpSpecies)
+                alert.hasType("nundo") -> nundosEnabled && !isPokemonTypeExcluded(excludedNundoTypes) && isSpeciesAllowed(allowedNundoSpecies)
                 alert.hasType("kecleon") -> kecleonEnabled
                 alert.hasType("rocket") -> {
                     if (!rocketEnabled) false

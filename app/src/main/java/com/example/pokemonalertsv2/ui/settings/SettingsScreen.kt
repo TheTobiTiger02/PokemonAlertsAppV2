@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Close
@@ -260,11 +261,9 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.updateSpawnsNotifications(it) }
                         )
                         if (spawnsNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Pokemon Types",
-                                types = POKEMON_TYPES,
-                                excludedTypes = excludedSpawnTypes,
-                                onToggleType = { viewModel.toggleExcludedSpawnType(it) }
+                            SpeciesFilterButton(
+                                title = "Filter Spawns by Species",
+                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "spawn")) }
                             )
                         }
                         
@@ -282,11 +281,9 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.updateHundosNotifications(it) }
                         )
                         if (hundosNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Pokemon Types",
-                                types = POKEMON_TYPES,
-                                excludedTypes = excludedHundoTypes,
-                                onToggleType = { viewModel.toggleExcludedHundoType(it) }
+                            SpeciesFilterButton(
+                                title = "Filter Hundos by Species",
+                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "hundo")) }
                             )
                         }
                         
@@ -297,11 +294,9 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.updatePvpNotifications(it) }
                         )
                         if (pvpNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Pokemon Types",
-                                types = POKEMON_TYPES,
-                                excludedTypes = excludedPvpTypes,
-                                onToggleType = { viewModel.toggleExcludedPvpType(it) }
+                            SpeciesFilterButton(
+                                title = "Filter PvP by Species",
+                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "pvp")) }
                             )
                         }
                         
@@ -312,11 +307,9 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.updateNundosNotifications(it) }
                         )
                         if (nundosNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Pokemon Types",
-                                types = POKEMON_TYPES,
-                                excludedTypes = excludedNundoTypes,
-                                onToggleType = { viewModel.toggleExcludedNundoType(it) }
+                            SpeciesFilterButton(
+                                title = "Filter Nundos by Species",
+                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "nundo")) }
                             )
                         }
                         
@@ -1642,5 +1635,31 @@ private fun TypeFilterSection(
                 }
             }
         }
+    }
+}
+@Composable
+private fun SpeciesFilterButton(
+    title: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp, horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

@@ -73,6 +73,9 @@ import com.example.pokemonalertsv2.work.AlertAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
+import androidx.lifecycle.lifecycleScope
+import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
+
 /**
  * Bottom navigation destinations.
  * Onboarding is handled separately and is not part of the nav bar.
@@ -156,6 +159,11 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        lifecycleScope.launch {
+            PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
+        }
+
         requestNotificationPermissionIfNeeded()
         requestLocationPermissionIfNeeded()
         exactAlarmPermissionNeeded.value = AlertAlarmScheduler.shouldPromptForPermission(this)

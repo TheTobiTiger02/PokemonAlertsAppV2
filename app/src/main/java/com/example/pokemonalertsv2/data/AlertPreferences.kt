@@ -40,6 +40,12 @@ private val EXCLUDED_ROCKET_TYPES_KEY = stringSetPreferencesKey("excluded_rocket
 private val EXCLUDED_RAID_TIERS_KEY = stringSetPreferencesKey("excluded_raid_tiers")
 private val DISMISSED_ALERTS_KEY = stringSetPreferencesKey("dismissed_alert_ids")
 
+// Pokemon species filtering - Sets of allowed pokemon species explicitly manually selected (empty = allow all)
+private val ALLOWED_HUNDO_SPECIES_KEY = stringSetPreferencesKey("allowed_hundo_species")
+private val ALLOWED_NUNDO_SPECIES_KEY = stringSetPreferencesKey("allowed_nundo_species")
+private val ALLOWED_PVP_SPECIES_KEY = stringSetPreferencesKey("allowed_pvp_species")
+private val ALLOWED_SPAWN_SPECIES_KEY = stringSetPreferencesKey("allowed_spawn_species")
+
 val Context.alertPreferencesDataStore: DataStore<Preferences> by preferencesDataStore(name = DATA_STORE_NAME)
 
 enum class SortPreference {
@@ -130,6 +136,18 @@ interface AlertPreferencesStore {
     suspend fun addDismissedAlert(alertId: String)
     suspend fun removeDismissedAlert(alertId: String)
     suspend fun clearDismissedAlerts()
+
+    val allowedHundoSpecies: Flow<Set<String>>
+    suspend fun updateAllowedHundoSpecies(species: Set<String>)
+
+    val allowedNundoSpecies: Flow<Set<String>>
+    suspend fun updateAllowedNundoSpecies(species: Set<String>)
+
+    val allowedPvpSpecies: Flow<Set<String>>
+    suspend fun updateAllowedPvpSpecies(species: Set<String>)
+
+    val allowedSpawnSpecies: Flow<Set<String>>
+    suspend fun updateAllowedSpawnSpecies(species: Set<String>)
 }
 
 class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPreferencesStore {
@@ -428,6 +446,38 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         dataStore.edit { prefs ->
             prefs[DISMISSED_ALERTS_KEY] = emptySet()
         }
+    }
+
+    override val allowedHundoSpecies: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[ALLOWED_HUNDO_SPECIES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateAllowedHundoSpecies(species: Set<String>) {
+        dataStore.edit { prefs -> prefs[ALLOWED_HUNDO_SPECIES_KEY] = species }
+    }
+
+    override val allowedNundoSpecies: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[ALLOWED_NUNDO_SPECIES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateAllowedNundoSpecies(species: Set<String>) {
+        dataStore.edit { prefs -> prefs[ALLOWED_NUNDO_SPECIES_KEY] = species }
+    }
+
+    override val allowedPvpSpecies: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[ALLOWED_PVP_SPECIES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateAllowedPvpSpecies(species: Set<String>) {
+        dataStore.edit { prefs -> prefs[ALLOWED_PVP_SPECIES_KEY] = species }
+    }
+
+    override val allowedSpawnSpecies: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[ALLOWED_SPAWN_SPECIES_KEY] ?: emptySet()
+    }
+    
+    override suspend fun updateAllowedSpawnSpecies(species: Set<String>) {
+        dataStore.edit { prefs -> prefs[ALLOWED_SPAWN_SPECIES_KEY] = species }
     }
 
     companion object {
