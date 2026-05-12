@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.google.play.services.maps)
     implementation(libs.google.maps.compose)
     implementation(libs.google.play.services.location)
+    implementation(libs.google.play.services.wearable)
     
     // Room
     implementation(libs.androidx.room.runtime)

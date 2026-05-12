@@ -35,6 +35,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                     end > now
                 }.sortedByDescending { it.endTime }
                 _uiState.update { it.copy(alerts = activeAlerts) }
+                repository.syncToWear(activeAlerts)
             }
         }
     }

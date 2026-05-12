@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "PokemonAlertsV2"
 include(":app")
- 
+include(":wear") 

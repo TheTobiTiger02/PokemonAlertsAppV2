@@ -16,7 +16,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
     private val preferences: AlertPreferencesStore,
     private val alertDao: AlertDao,
-    private val historyAlertDao: HistoryAlertDao
+    private val historyAlertDao: HistoryAlertDao,
+    private val wearDataSyncer: com.example.pokemonalertsv2.sync.WearDataSyncer? = null
 ) {
     
     // Expose preferences for notification settings and other UI needs
@@ -41,6 +42,14 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun fetchAlerts(): List<PokemonAlert> {
         val remoteAlerts = service.getPokemonAlerts()
         alertDao.replaceAll(remoteAlerts.map { it.toEntity() })
+        
+        val now = System.currentTimeMillis()
+        val activeAlerts = remoteAlerts.filter {
+            val end = com.example.pokemonalertsv2.util.TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
+            end > now
+        }.sortedByDescending { it.endTime }
+        
+        wearDataSyncer?.syncAlerts(activeAlerts)
         return remoteAlerts
     }
 
@@ -157,6 +166,10 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     fun observeOnboardingCompleted(): Flow<Boolean> = preferences.onboardingCompleted
     suspend fun setOnboardingCompleted(completed: Boolean) = preferences.setOnboardingCompleted(completed)
+    
+    fun syncToWear(activeAlerts: List<PokemonAlert>) {
+        wearDataSyncer?.syncAlerts(activeAlerts)
+    }
 
     companion object {
         fun create(context: Context): PokemonAlertsRepository {
@@ -167,7 +180,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
                 service = PokemonAlertsApi.service,
                 preferences = preferences,
                 alertDao = database.alertDao(),
-                historyAlertDao = database.historyAlertDao()
+                historyAlertDao = database.historyAlertDao(),
+                wearDataSyncer = com.example.pokemonalertsv2.sync.WearDataSyncer(appContext)
             )
         }
     }

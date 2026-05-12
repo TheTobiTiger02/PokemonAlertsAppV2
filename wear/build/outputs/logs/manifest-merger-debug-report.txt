@@ -1,0 +1,588 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:2:1-52:12
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:2:1-52:12
+MERGED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:17:1-27:12
+MERGED from [com.google.android.horologist:horologist-compose-layout:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3cc7ee3cd3ba22b53d2951c7726dd9d\transformed\horologist-compose-layout-0.5.25\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.wear.compose:compose-material-core:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b9e0669404f740c865188c1f8cbf9b9b\transformed\compose-material-core-1.3.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.wear.compose:compose-foundation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\214262e7ab0f0e3997b40333ddd753e5\transformed\compose-foundation-1.3.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.wear.compose:compose-material:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21b2c9ce100fbfca61acbc75d75afe64\transformed\compose-material-1.3.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.wear.compose:compose-navigation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ec7d30a1b4a4334c3249225a24e852e6\transformed\compose-navigation-1.3.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.navigation:navigation-common-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f522bb5c9f906db6e820ceba3ff7e9ea\transformed\navigation-common-ktx-2.7.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.navigation:navigation-ui:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\bd5fea4bbbfe538e81801201dbf068ed\transformed\navigation-ui-2.7.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.navigation:navigation-runtime-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cc982a3e1e6e60822972b75ebbbb5135\transformed\navigation-runtime-ktx-2.7.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.navigation:navigation-runtime:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cde12d0d11e13235026e766f043693b\transformed\navigation-runtime-2.7.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.navigation:navigation-common:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d051ecec569d8eb113b9fca2c43c6d9\transformed\navigation-common-2.7.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.navigation:navigation-ui-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\efcf315d45c3efbcaa360664e40b86d5\transformed\navigation-ui-ktx-2.7.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.navigation:navigation-compose:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5f40b3c9f82069737414291315a22b3a\transformed\navigation-compose-2.7.7\AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.horologist:horologist-images-base:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\996c3c53a6352294546a2bad5465a798\transformed\horologist-images-base-0.5.25\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.paging:paging-compose:3.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\7bda2d0c20641116452a9e8e22daca66\transformed\paging-compose-3.2.1\AndroidManifest.xml:2:1-7:12
+MERGED from [io.coil-kt:coil-compose:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\68bed504be66274086c0ff28c13da629\transformed\coil-compose-2.6.0\AndroidManifest.xml:2:1-7:12
+MERGED from [io.coil-kt:coil-compose-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0a1283c066e298d710e142ae70c1a674\transformed\coil-compose-base-2.6.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-ripple-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e319c395c23c38bccad04be7ccc551bc\transformed\material-ripple-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.animation:animation-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d92efe5e836262611007bb345b3c50bf\transformed\animation-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\79bcf5abab7175a881fd3ccae4ccf311\transformed\ui-tooling-data-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1813f0d41d364b0961dcf39ac76b9920\transformed\ui-geometry-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-util-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\05f5d7655c66048311195784a91be84f\transformed\ui-util-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\81d98c2a475c3f3b5b23b5b00292c9e2\transformed\ui-unit-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dd2a728a299e336341c322bc605a4b8\transformed\ui-tooling-preview-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.compose.ui:ui-text-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f17dee72506d677006f7b7b9aacce072\transformed\ui-text-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\eab1b63c324d984b69ff6406bfaddac9\transformed\ui-graphics-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:17:1-28:12
+MERGED from [androidx.compose.material:material-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9a5c2363e986794c22e515abc5cf6858\transformed\material-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e82832de557a0e40bcdce9e9ff419733\transformed\foundation-layout-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\660b32ae7f1f1d94cb7da2e988ac2ff7\transformed\foundation-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.animation:animation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c9601fdb4ee26e812752ee847ac796e4\transformed\animation-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9d41d7061bdda3fc974990fdba362f1d\transformed\material-icons-extended-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\31b00f3e620873e09ac7b0d1e731ab3b\transformed\material-icons-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\86e83bffc0eb74b2101e8fcf17857cfa\transformed\accompanist-drawablepainter-0.32.0\AndroidManifest.xml:17:1-23:12
+MERGED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:17:1-28:12
+MERGED from [com.google.android.material:material:1.4.0-beta01] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cced7f2b935f1573847884a792c02ac\transformed\material-1.4.0-beta01\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\16608923f4fe9675ebebc4d4f8ac0c23\transformed\dynamicanimation-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\416939edab4785df1b06701c84d31515\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [com.google.android.gms:play-services-wearable:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d8697277d2fd820730af120da0bcbb30\transformed\play-services-wearable-18.2.0\AndroidManifest.xml:2:1-8:12
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50aaf7a0b977ef001db9359fdfa110a2\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:2:1-5:12
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:2:1-9:12
+MERGED from [androidx.viewpager2:viewpager2:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c2c1c1d69a919032e7ae9002c43e095d\transformed\viewpager2-1.0.0\AndroidManifest.xml:17:1-24:12
+MERGED from [io.coil-kt:coil:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4e56ec311573bac0e6835e18ad3ef1d9\transformed\coil-2.6.0\AndroidManifest.xml:2:1-7:12
+MERGED from [io.coil-kt:coil-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c35eb77d0bf35c946d5b84876a4d89bb\transformed\coil-base-2.6.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1bd1d78f783ecafc54e3fd94001a6f6e\transformed\appcompat-resources-1.6.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1f604f2c5d63095e57f1400495a1aa9c\transformed\constraintlayout-2.0.1\AndroidManifest.xml:2:1-11:12
+MERGED from [androidx.appcompat:appcompat:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\657cc867f2ee2e3292e12c4f3c82c8a1\transformed\appcompat-1.6.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.fragment:fragment:1.3.6] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8610da79f7e203bf5baa63dcdd286d43\transformed\fragment-1.3.6\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8c4ca8b22d13849756214dd699e54337\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50fe0fde94ec2e22375b0a467c58411b\transformed\emoji2-views-helper-1.3.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.activity:activity:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\04a6d78f801e758598e4c7cc2b711740\transformed\activity-1.10.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.recyclerview:recyclerview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ebb20d8eee0fbc498bf9f39173e745e9\transformed\recyclerview-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\db8b0a7f17b30a14c9fdd76974119035\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4a4662df84cd2fc7e8eb274d1fe9b825\transformed\drawerlayout-1.1.1\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\18b7943f320d1cf79a47b82102a40f68\transformed\coordinatorlayout-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8629b34d2e0f6ccecfac7bb333022b57\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5890657d58242c54788c41fdc8b9b65b\transformed\customview-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.transition:transition:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9b557ee8a26df77d7391699b115f55c3\transformed\transition-1.3.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e473ffa9c13f3c720dc64626deb3e4d6\transformed\autofill-1.0.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a9b6faf1be4b15b7666381904f3c8c50\transformed\graphics-path-1.0.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e78de4e188dd0f977d169d8ae900dc13\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a0f1006d6279a7d5f6d3a4e8c320ef70\transformed\vectordrawable-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b074d15452725949e2967ffc3e9e1033\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c7f6f96f7fd38dc19d10dba36859602\transformed\savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d495b2e6adcb1e16e28f209f69e712e0\transformed\lifecycle-viewmodel-2.8.3\AndroidManifest.xml:2:1-5:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fc57887b33013c919a1748e11d5f4da\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0916c45fe89e01b42e3dc152e47e7002\transformed\lifecycle-livedata-core-ktx-2.8.3\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4c8068b51324763c3fa963fe1cb3daf0\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d064eb09290b6fcb7c6e2c0310d73f63\transformed\lifecycle-runtime-2.8.3\AndroidManifest.xml:2:1-5:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\de19cd69ee9c2af453c1132a0a7f55a3\transformed\lifecycle-runtime-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f78dce2436b4b8ad8825d1804d82c74\transformed\lifecycle-viewmodel-ktx-2.8.3\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a5fdd5a645dca7d54be0b4348f0672c2\transformed\lifecycle-viewmodel-savedstate-2.8.3\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\476aa480beaeab736d1e4fe66323205c\transformed\lifecycle-livedata-core-2.8.3\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\386b9c8761fd266b88ba3a104d808adb\transformed\lifecycle-livedata-2.8.3\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4f7f1824b8de3382f0bd6dc9e29dc090\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21e460c396b5818213b58e44a732930c\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\77e1459edd823cf8321c9bb8126b0316\transformed\ui-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-ktx:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f1942d456aa3adab5f648fb5badef506\transformed\activity-ktx-1.10.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-compose:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e130ad5e75b7acae143a663a8c48f2c4\transformed\activity-compose-1.10.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b824b3ca738a1831cf26e993a7f18db8\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:17:1-23:12
+MERGED from [androidx.core:core-ktx:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c99c1d1e7256999a747180608a86ef4\transformed\core-ktx-1.17.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.wear.tiles:tiles-material:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\fbed8fdc200b980e5b0bb7e3d4948833\transformed\tiles-material-1.3.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:2:1-13:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\739ef9a9dad8cfbad286723ad7182c72\transformed\localbroadcastmanager-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.wear.protolayout:protolayout-expression:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\012f43da146016d7215c68be4ee49fa7\transformed\protolayout-expression-1.1.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.wear.protolayout:protolayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d4b07cec7a61ecd0c3f073b3caae7f1\transformed\protolayout-1.1.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\11fe739d56da2e665971338882f5578d\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d628afa6e65677e53313152360fc25ce\transformed\tracing-1.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fe84c5a27c8b1d3bb58203671f7ca0b\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.compose.runtime:runtime-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1ef245e2938aea615340506c84deb692\transformed\runtime-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c48995157221daa52553d60a64bfce52\transformed\runtime-saveable-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b0d0cfea25f5f617523284e62fa07387\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\742d9b28b0eef13004a0f2a26350d7ce\transformed\exifinterface-1.3.7\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3e76a5edc70ba382353de13b4b725f2\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dc9316a92c71857ed569af5066640b7\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\87e5916193444832d4028df715653169\transformed\cardview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4d6f7b3cd09e8712458f4623ac731255\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4ffab3ca6987d1b6136282aedf5a1f36\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cbcadf4577333d5ca1414cda50df49ab\transformed\core-viewtree-1.0.0\AndroidManifest.xml:2:1-7:12
+	package
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+	android:versionName
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+	android:versionCode
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:2:11-69
+uses-feature#android.hardware.type.watch
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:4:5-64
+MERGED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:25:5-64
+MERGED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:25:5-64
+MERGED from [com.google.android.horologist:horologist-compose-layout:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3cc7ee3cd3ba22b53d2951c7726dd9d\transformed\horologist-compose-layout-0.5.25\AndroidManifest.xml:25:5-64
+MERGED from [com.google.android.horologist:horologist-compose-layout:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3cc7ee3cd3ba22b53d2951c7726dd9d\transformed\horologist-compose-layout-0.5.25\AndroidManifest.xml:25:5-64
+MERGED from [com.google.android.horologist:horologist-images-base:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\996c3c53a6352294546a2bad5465a798\transformed\horologist-images-base-0.5.25\AndroidManifest.xml:25:5-64
+MERGED from [com.google.android.horologist:horologist-images-base:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\996c3c53a6352294546a2bad5465a798\transformed\horologist-images-base-0.5.25\AndroidManifest.xml:25:5-64
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:4:19-61
+uses-permission#android.permission.WAKE_LOCK
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:5:5-68
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:5:22-65
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:6:5-67
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:6:22-64
+application
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:8:5-50:19
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:8:5-50:19
+MERGED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:22:5-26:19
+MERGED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:22:5-26:19
+MERGED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:22:5-26:19
+MERGED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:22:5-26:19
+MERGED from [com.google.android.material:material:1.4.0-beta01] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cced7f2b935f1573847884a792c02ac\transformed\material-1.4.0-beta01\AndroidManifest.xml:22:5-20
+MERGED from [com.google.android.material:material:1.4.0-beta01] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cced7f2b935f1573847884a792c02ac\transformed\material-1.4.0-beta01\AndroidManifest.xml:22:5-20
+MERGED from [com.google.android.gms:play-services-wearable:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d8697277d2fd820730af120da0bcbb30\transformed\play-services-wearable-18.2.0\AndroidManifest.xml:6:5-20
+MERGED from [com.google.android.gms:play-services-wearable:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d8697277d2fd820730af120da0bcbb30\transformed\play-services-wearable-18.2.0\AndroidManifest.xml:6:5-20
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:4:5-6:19
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:4:5-6:19
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50aaf7a0b977ef001db9359fdfa110a2\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50aaf7a0b977ef001db9359fdfa110a2\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:5:5-7:19
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:5:5-7:19
+MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1f604f2c5d63095e57f1400495a1aa9c\transformed\constraintlayout-2.0.1\AndroidManifest.xml:9:5-20
+MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1f604f2c5d63095e57f1400495a1aa9c\transformed\constraintlayout-2.0.1\AndroidManifest.xml:9:5-20
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fe84c5a27c8b1d3bb58203671f7ca0b\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fe84c5a27c8b1d3bb58203671f7ca0b\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+	android:extractNativeLibs
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:28:18-86
+	android:supportsRtl
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:12:9-35
+	android:label
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:11:9-39
+	android:icon
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:10:9-58
+	android:allowBackup
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:9:9-35
+	android:theme
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:13:9-59
+meta-data#com.google.android.wearable.standalone
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:15:9-17:37
+	android:value
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:17:13-34
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:16:13-66
+activity#com.example.pokemonalertsv2.wear.MainActivity
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:19:9-28:20
+	android:exported
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:21:13-36
+	android:theme
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:23:13-63
+	android:taskAffinity
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:22:13-36
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:20:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:24:13-27:29
+action#android.intent.action.MAIN
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:17-69
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:25-66
+category#android.intent.category.LAUNCHER
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:17-77
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:27-74
+service#com.example.pokemonalertsv2.wear.tile.AlertsTileService
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:30:9-39:19
+	android:label
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:33:13-48
+	android:exported
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:32:13-36
+	android:permission
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:34:13-91
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:31:13-51
+intent-filter#action:name:androidx.wear.tiles.action.BIND_TILE_PROVIDER
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:35:13-37:29
+action#androidx.wear.tiles.action.BIND_TILE_PROVIDER
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:17-88
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:25-85
+service#com.example.pokemonalertsv2.wear.data.DataLayerListenerService
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:42:9-49:19
+	android:exported
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:44:13-36
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:43:13-58
+intent-filter#action:name:com.google.android.gms.wearable.DATA_CHANGED+data:host:*+data:pathPrefix:/alerts+data:scheme:wear
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:45:13-48:29
+action#com.google.android.gms.wearable.DATA_CHANGED
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:17-87
+	android:name
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:25-84
+data
+ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:17-93
+	android:host
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:45-61
+	android:scheme
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:23-44
+	android:pathPrefix
+		ADDED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:62-90
+uses-sdk
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+MERGED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [com.google.android.horologist:horologist-compose-layout:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3cc7ee3cd3ba22b53d2951c7726dd9d\transformed\horologist-compose-layout-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [com.google.android.horologist:horologist-compose-layout:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3cc7ee3cd3ba22b53d2951c7726dd9d\transformed\horologist-compose-layout-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [androidx.wear.compose:compose-material-core:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b9e0669404f740c865188c1f8cbf9b9b\transformed\compose-material-core-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-material-core:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b9e0669404f740c865188c1f8cbf9b9b\transformed\compose-material-core-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-foundation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\214262e7ab0f0e3997b40333ddd753e5\transformed\compose-foundation-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-foundation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\214262e7ab0f0e3997b40333ddd753e5\transformed\compose-foundation-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-material:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21b2c9ce100fbfca61acbc75d75afe64\transformed\compose-material-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-material:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21b2c9ce100fbfca61acbc75d75afe64\transformed\compose-material-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-navigation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ec7d30a1b4a4334c3249225a24e852e6\transformed\compose-navigation-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.compose:compose-navigation:1.3.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ec7d30a1b4a4334c3249225a24e852e6\transformed\compose-navigation-1.3.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-common-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f522bb5c9f906db6e820ceba3ff7e9ea\transformed\navigation-common-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-common-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f522bb5c9f906db6e820ceba3ff7e9ea\transformed\navigation-common-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-ui:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\bd5fea4bbbfe538e81801201dbf068ed\transformed\navigation-ui-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-ui:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\bd5fea4bbbfe538e81801201dbf068ed\transformed\navigation-ui-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-runtime-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cc982a3e1e6e60822972b75ebbbb5135\transformed\navigation-runtime-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-runtime-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cc982a3e1e6e60822972b75ebbbb5135\transformed\navigation-runtime-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-runtime:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cde12d0d11e13235026e766f043693b\transformed\navigation-runtime-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-runtime:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cde12d0d11e13235026e766f043693b\transformed\navigation-runtime-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-common:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d051ecec569d8eb113b9fca2c43c6d9\transformed\navigation-common-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-common:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d051ecec569d8eb113b9fca2c43c6d9\transformed\navigation-common-2.7.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.navigation:navigation-ui-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\efcf315d45c3efbcaa360664e40b86d5\transformed\navigation-ui-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-ui-ktx:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\efcf315d45c3efbcaa360664e40b86d5\transformed\navigation-ui-ktx-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-compose:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5f40b3c9f82069737414291315a22b3a\transformed\navigation-compose-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.navigation:navigation-compose:2.7.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5f40b3c9f82069737414291315a22b3a\transformed\navigation-compose-2.7.7\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.horologist:horologist-images-base:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\996c3c53a6352294546a2bad5465a798\transformed\horologist-images-base-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [com.google.android.horologist:horologist-images-base:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\996c3c53a6352294546a2bad5465a798\transformed\horologist-images-base-0.5.25\AndroidManifest.xml:21:5-23:42
+MERGED from [androidx.paging:paging-compose:3.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\7bda2d0c20641116452a9e8e22daca66\transformed\paging-compose-3.2.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.paging:paging-compose:3.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\7bda2d0c20641116452a9e8e22daca66\transformed\paging-compose-3.2.1\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\68bed504be66274086c0ff28c13da629\transformed\coil-compose-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\68bed504be66274086c0ff28c13da629\transformed\coil-compose-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0a1283c066e298d710e142ae70c1a674\transformed\coil-compose-base-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-compose-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0a1283c066e298d710e142ae70c1a674\transformed\coil-compose-base-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e319c395c23c38bccad04be7ccc551bc\transformed\material-ripple-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e319c395c23c38bccad04be7ccc551bc\transformed\material-ripple-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d92efe5e836262611007bb345b3c50bf\transformed\animation-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d92efe5e836262611007bb345b3c50bf\transformed\animation-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\79bcf5abab7175a881fd3ccae4ccf311\transformed\ui-tooling-data-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-data-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\79bcf5abab7175a881fd3ccae4ccf311\transformed\ui-tooling-data-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1813f0d41d364b0961dcf39ac76b9920\transformed\ui-geometry-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1813f0d41d364b0961dcf39ac76b9920\transformed\ui-geometry-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\05f5d7655c66048311195784a91be84f\transformed\ui-util-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\05f5d7655c66048311195784a91be84f\transformed\ui-util-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\81d98c2a475c3f3b5b23b5b00292c9e2\transformed\ui-unit-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\81d98c2a475c3f3b5b23b5b00292c9e2\transformed\ui-unit-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dd2a728a299e336341c322bc605a4b8\transformed\ui-tooling-preview-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dd2a728a299e336341c322bc605a4b8\transformed\ui-tooling-preview-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f17dee72506d677006f7b7b9aacce072\transformed\ui-text-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f17dee72506d677006f7b7b9aacce072\transformed\ui-text-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\eab1b63c324d984b69ff6406bfaddac9\transformed\ui-graphics-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\eab1b63c324d984b69ff6406bfaddac9\transformed\ui-graphics-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.material:material-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9a5c2363e986794c22e515abc5cf6858\transformed\material-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9a5c2363e986794c22e515abc5cf6858\transformed\material-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e82832de557a0e40bcdce9e9ff419733\transformed\foundation-layout-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e82832de557a0e40bcdce9e9ff419733\transformed\foundation-layout-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\660b32ae7f1f1d94cb7da2e988ac2ff7\transformed\foundation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\660b32ae7f1f1d94cb7da2e988ac2ff7\transformed\foundation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c9601fdb4ee26e812752ee847ac796e4\transformed\animation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c9601fdb4ee26e812752ee847ac796e4\transformed\animation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9d41d7061bdda3fc974990fdba362f1d\transformed\material-icons-extended-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-extended-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9d41d7061bdda3fc974990fdba362f1d\transformed\material-icons-extended-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\31b00f3e620873e09ac7b0d1e731ab3b\transformed\material-icons-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\31b00f3e620873e09ac7b0d1e731ab3b\transformed\material-icons-core-release\AndroidManifest.xml:5:5-44
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\86e83bffc0eb74b2101e8fcf17857cfa\transformed\accompanist-drawablepainter-0.32.0\AndroidManifest.xml:21:5-44
+MERGED from [com.google.accompanist:accompanist-drawablepainter:0.32.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\86e83bffc0eb74b2101e8fcf17857cfa\transformed\accompanist-drawablepainter-0.32.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.material:material:1.4.0-beta01] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cced7f2b935f1573847884a792c02ac\transformed\material-1.4.0-beta01\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.material:material:1.4.0-beta01] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6cced7f2b935f1573847884a792c02ac\transformed\material-1.4.0-beta01\AndroidManifest.xml:20:5-44
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\16608923f4fe9675ebebc4d4f8ac0c23\transformed\dynamicanimation-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.dynamicanimation:dynamicanimation:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\16608923f4fe9675ebebc4d4f8ac0c23\transformed\dynamicanimation-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\416939edab4785df1b06701c84d31515\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\416939edab4785df1b06701c84d31515\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.gms:play-services-wearable:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d8697277d2fd820730af120da0bcbb30\transformed\play-services-wearable-18.2.0\AndroidManifest.xml:4:5-44
+MERGED from [com.google.android.gms:play-services-wearable:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d8697277d2fd820730af120da0bcbb30\transformed\play-services-wearable-18.2.0\AndroidManifest.xml:4:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50aaf7a0b977ef001db9359fdfa110a2\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50aaf7a0b977ef001db9359fdfa110a2\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:3:5-44
+MERGED from [androidx.viewpager2:viewpager2:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c2c1c1d69a919032e7ae9002c43e095d\transformed\viewpager2-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.viewpager2:viewpager2:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c2c1c1d69a919032e7ae9002c43e095d\transformed\viewpager2-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [io.coil-kt:coil:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4e56ec311573bac0e6835e18ad3ef1d9\transformed\coil-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4e56ec311573bac0e6835e18ad3ef1d9\transformed\coil-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c35eb77d0bf35c946d5b84876a4d89bb\transformed\coil-base-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [io.coil-kt:coil-base:2.6.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c35eb77d0bf35c946d5b84876a4d89bb\transformed\coil-base-2.6.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1bd1d78f783ecafc54e3fd94001a6f6e\transformed\appcompat-resources-1.6.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1bd1d78f783ecafc54e3fd94001a6f6e\transformed\appcompat-resources-1.6.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1f604f2c5d63095e57f1400495a1aa9c\transformed\constraintlayout-2.0.1\AndroidManifest.xml:5:5-7:41
+MERGED from [androidx.constraintlayout:constraintlayout:2.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1f604f2c5d63095e57f1400495a1aa9c\transformed\constraintlayout-2.0.1\AndroidManifest.xml:5:5-7:41
+MERGED from [androidx.appcompat:appcompat:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\657cc867f2ee2e3292e12c4f3c82c8a1\transformed\appcompat-1.6.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat:1.6.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\657cc867f2ee2e3292e12c4f3c82c8a1\transformed\appcompat-1.6.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.fragment:fragment:1.3.6] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8610da79f7e203bf5baa63dcdd286d43\transformed\fragment-1.3.6\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.fragment:fragment:1.3.6] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8610da79f7e203bf5baa63dcdd286d43\transformed\fragment-1.3.6\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8c4ca8b22d13849756214dd699e54337\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8c4ca8b22d13849756214dd699e54337\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50fe0fde94ec2e22375b0a467c58411b\transformed\emoji2-views-helper-1.3.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.emoji2:emoji2-views-helper:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\50fe0fde94ec2e22375b0a467c58411b\transformed\emoji2-views-helper-1.3.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.activity:activity:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\04a6d78f801e758598e4c7cc2b711740\transformed\activity-1.10.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\04a6d78f801e758598e4c7cc2b711740\transformed\activity-1.10.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ebb20d8eee0fbc498bf9f39173e745e9\transformed\recyclerview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.recyclerview:recyclerview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ebb20d8eee0fbc498bf9f39173e745e9\transformed\recyclerview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\db8b0a7f17b30a14c9fdd76974119035\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.swiperefreshlayout:swiperefreshlayout:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\db8b0a7f17b30a14c9fdd76974119035\transformed\swiperefreshlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4a4662df84cd2fc7e8eb274d1fe9b825\transformed\drawerlayout-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.drawerlayout:drawerlayout:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4a4662df84cd2fc7e8eb274d1fe9b825\transformed\drawerlayout-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\18b7943f320d1cf79a47b82102a40f68\transformed\coordinatorlayout-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.coordinatorlayout:coordinatorlayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\18b7943f320d1cf79a47b82102a40f68\transformed\coordinatorlayout-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8629b34d2e0f6ccecfac7bb333022b57\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8629b34d2e0f6ccecfac7bb333022b57\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5890657d58242c54788c41fdc8b9b65b\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.customview:customview:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\5890657d58242c54788c41fdc8b9b65b\transformed\customview-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9b557ee8a26df77d7391699b115f55c3\transformed\transition-1.3.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.transition:transition:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9b557ee8a26df77d7391699b115f55c3\transformed\transition-1.3.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e473ffa9c13f3c720dc64626deb3e4d6\transformed\autofill-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e473ffa9c13f3c720dc64626deb3e4d6\transformed\autofill-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a9b6faf1be4b15b7666381904f3c8c50\transformed\graphics-path-1.0.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a9b6faf1be4b15b7666381904f3c8c50\transformed\graphics-path-1.0.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e78de4e188dd0f977d169d8ae900dc13\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e78de4e188dd0f977d169d8ae900dc13\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a0f1006d6279a7d5f6d3a4e8c320ef70\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a0f1006d6279a7d5f6d3a4e8c320ef70\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b074d15452725949e2967ffc3e9e1033\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b074d15452725949e2967ffc3e9e1033\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c7f6f96f7fd38dc19d10dba36859602\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c7f6f96f7fd38dc19d10dba36859602\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d495b2e6adcb1e16e28f209f69e712e0\transformed\lifecycle-viewmodel-2.8.3\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d495b2e6adcb1e16e28f209f69e712e0\transformed\lifecycle-viewmodel-2.8.3\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fc57887b33013c919a1748e11d5f4da\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fc57887b33013c919a1748e11d5f4da\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0916c45fe89e01b42e3dc152e47e7002\transformed\lifecycle-livedata-core-ktx-2.8.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0916c45fe89e01b42e3dc152e47e7002\transformed\lifecycle-livedata-core-ktx-2.8.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4c8068b51324763c3fa963fe1cb3daf0\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4c8068b51324763c3fa963fe1cb3daf0\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d064eb09290b6fcb7c6e2c0310d73f63\transformed\lifecycle-runtime-2.8.3\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d064eb09290b6fcb7c6e2c0310d73f63\transformed\lifecycle-runtime-2.8.3\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\de19cd69ee9c2af453c1132a0a7f55a3\transformed\lifecycle-runtime-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\de19cd69ee9c2af453c1132a0a7f55a3\transformed\lifecycle-runtime-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f78dce2436b4b8ad8825d1804d82c74\transformed\lifecycle-viewmodel-ktx-2.8.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f78dce2436b4b8ad8825d1804d82c74\transformed\lifecycle-viewmodel-ktx-2.8.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a5fdd5a645dca7d54be0b4348f0672c2\transformed\lifecycle-viewmodel-savedstate-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\a5fdd5a645dca7d54be0b4348f0672c2\transformed\lifecycle-viewmodel-savedstate-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\476aa480beaeab736d1e4fe66323205c\transformed\lifecycle-livedata-core-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\476aa480beaeab736d1e4fe66323205c\transformed\lifecycle-livedata-core-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\386b9c8761fd266b88ba3a104d808adb\transformed\lifecycle-livedata-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\386b9c8761fd266b88ba3a104d808adb\transformed\lifecycle-livedata-2.8.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4f7f1824b8de3382f0bd6dc9e29dc090\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4f7f1824b8de3382f0bd6dc9e29dc090\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21e460c396b5818213b58e44a732930c\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\21e460c396b5818213b58e44a732930c\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\77e1459edd823cf8321c9bb8126b0316\transformed\ui-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\77e1459edd823cf8321c9bb8126b0316\transformed\ui-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f1942d456aa3adab5f648fb5badef506\transformed\activity-ktx-1.10.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\f1942d456aa3adab5f648fb5badef506\transformed\activity-ktx-1.10.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-compose:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e130ad5e75b7acae143a663a8c48f2c4\transformed\activity-compose-1.10.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-compose:1.10.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e130ad5e75b7acae143a663a8c48f2c4\transformed\activity-compose-1.10.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b824b3ca738a1831cf26e993a7f18db8\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b824b3ca738a1831cf26e993a7f18db8\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.core:core-ktx:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c99c1d1e7256999a747180608a86ef4\transformed\core-ktx-1.17.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\0c99c1d1e7256999a747180608a86ef4\transformed\core-ktx-1.17.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.tiles:tiles-material:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\fbed8fdc200b980e5b0bb7e3d4948833\transformed\tiles-material-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.wear.tiles:tiles-material:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\fbed8fdc200b980e5b0bb7e3d4948833\transformed\tiles-material-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\739ef9a9dad8cfbad286723ad7182c72\transformed\localbroadcastmanager-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\739ef9a9dad8cfbad286723ad7182c72\transformed\localbroadcastmanager-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.wear.protolayout:protolayout-expression:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\012f43da146016d7215c68be4ee49fa7\transformed\protolayout-expression-1.1.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.protolayout:protolayout-expression:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\012f43da146016d7215c68be4ee49fa7\transformed\protolayout-expression-1.1.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.protolayout:protolayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d4b07cec7a61ecd0c3f073b3caae7f1\transformed\protolayout-1.1.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.wear.protolayout:protolayout:1.1.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\6d4b07cec7a61ecd0c3f073b3caae7f1\transformed\protolayout-1.1.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\11fe739d56da2e665971338882f5578d\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\11fe739d56da2e665971338882f5578d\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d628afa6e65677e53313152360fc25ce\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d628afa6e65677e53313152360fc25ce\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fe84c5a27c8b1d3bb58203671f7ca0b\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9fe84c5a27c8b1d3bb58203671f7ca0b\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.compose.runtime:runtime-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1ef245e2938aea615340506c84deb692\transformed\runtime-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\1ef245e2938aea615340506c84deb692\transformed\runtime-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c48995157221daa52553d60a64bfce52\transformed\runtime-saveable-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\c48995157221daa52553d60a64bfce52\transformed\runtime-saveable-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b0d0cfea25f5f617523284e62fa07387\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\b0d0cfea25f5f617523284e62fa07387\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\742d9b28b0eef13004a0f2a26350d7ce\transformed\exifinterface-1.3.7\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.exifinterface:exifinterface:1.3.7] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\742d9b28b0eef13004a0f2a26350d7ce\transformed\exifinterface-1.3.7\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3e76a5edc70ba382353de13b4b725f2\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\d3e76a5edc70ba382353de13b4b725f2\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dc9316a92c71857ed569af5066640b7\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\2dc9316a92c71857ed569af5066640b7\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\87e5916193444832d4028df715653169\transformed\cardview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\87e5916193444832d4028df715653169\transformed\cardview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4d6f7b3cd09e8712458f4623ac731255\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4d6f7b3cd09e8712458f4623ac731255\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4ffab3ca6987d1b6136282aedf5a1f36\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\4ffab3ca6987d1b6136282aedf5a1f36\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cbcadf4577333d5ca1414cda50df49ab\transformed\core-viewtree-1.0.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-viewtree:1.0.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\cbcadf4577333d5ca1414cda50df49ab\transformed\core-viewtree-1.0.0\AndroidManifest.xml:5:5-44
+	android:targetSdkVersion
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+	tools:ignore
+		ADDED from [com.google.android.horologist:horologist-compose-material:0.5.25] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\02ed8420d39d7e252d6ff0a20dfff613\transformed\horologist-compose-material-0.5.25\AndroidManifest.xml:23:9-39
+	android:minSdkVersion
+		INJECTED from C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml
+activity#androidx.compose.ui.tooling.PreviewActivity
+ADDED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:23:9-25:39
+	android:exported
+		ADDED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:25:13-36
+	android:name
+		ADDED from [androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:24:13-71
+uses-library#com.google.android.wearable
+ADDED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:23:9-25:40
+	android:required
+		ADDED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:25:13-37
+	android:name
+		ADDED from [androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:24:13-55
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\85a7f4cdeceb174c17fe491f5949db1a\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:28:13-31
+	android:authorities
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+	android:exported
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+meta-data#androidx.emoji2.text.EmojiCompatInitializer
+ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:23:9-81
+permission#com.example.pokemonalertsv2.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
+uses-permission#com.example.pokemonalertsv2.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.17.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\455063a3b9beff7e541d260611ca0ddb\transformed\core-1.17.0\AndroidManifest.xml:26:22-94
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:30:17-78
+queries
+ADDED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:7:5-11:15
+intent#action:name:androidx.wear.tiles.action.BIND_UPDATE_REQUESTER
+ADDED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:8:9-10:18
+action#androidx.wear.tiles.action.BIND_UPDATE_REQUESTER
+ADDED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:9:13-87
+	android:name
+		ADDED from [androidx.wear.tiles:tiles:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\93c17c4f70dff42c69f79042e88a9bb2\transformed\tiles-1.3.0\AndroidManifest.xml:9:21-84
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+	android:permission
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+	android:directBootAware
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+action#androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+action#androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+action#androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+action#androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
