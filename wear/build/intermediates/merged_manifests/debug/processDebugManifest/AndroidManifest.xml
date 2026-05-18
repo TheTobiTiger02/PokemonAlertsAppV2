@@ -33,7 +33,6 @@
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="Pokemon Alerts"
         android:supportsRtl="true"
-        android:testOnly="true"
         android:theme="@android:style/Theme.DeviceDefault" >
         <meta-data
             android:name="com.google.android.wearable.standalone"

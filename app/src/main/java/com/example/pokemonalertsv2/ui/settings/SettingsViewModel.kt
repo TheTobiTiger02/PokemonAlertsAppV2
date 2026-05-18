@@ -54,6 +54,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         
     val maxDistance: StateFlow<Int> = repository.alertPreferences.maxDistance
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+        
+    val snoozeDuration: StateFlow<Int> = repository.alertPreferences.snoozeDuration
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 10)
     
     // Excluded type preferences
     val excludedHundoTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedHundoTypes
@@ -162,6 +165,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
             repository.alertPreferences.updateMaxDistance(distance)
+        }
+    }
+    
+    fun updateSnoozeDuration(minutes: Int) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateSnoozeDuration(minutes)
         }
     }
     

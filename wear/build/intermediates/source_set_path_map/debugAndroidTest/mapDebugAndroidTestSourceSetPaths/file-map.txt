@@ -1,0 +1,4 @@
+com.example.pokemonalertsv2.wear.test.wear-androidTest-0 C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\build\generated\res\resValues\androidTest\debug
+com.example.pokemonalertsv2.wear.test.wear-mergeDebugAndroidTestResources-1 C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+com.example.pokemonalertsv2.wear.test.wear-mergeDebugAndroidTestResources-2 C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+com.example.pokemonalertsv2.wear.test.wear-debugAndroidTest-3 C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources

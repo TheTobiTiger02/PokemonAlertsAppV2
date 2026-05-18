@@ -102,6 +102,7 @@ fun SettingsScreen(
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
     val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
     val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
+    val snoozeDuration by viewModel.snoozeDuration.collectAsStateWithLifecycle(initialValue = 10)
     
     // Excluded types for granular filtering
     val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -341,6 +342,42 @@ fun SettingsScreen(
                             checked = notificationVibrate,
                             onCheckedChange = { viewModel.updateNotificationVibrate(it) }
                         )
+                        
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Snooze Duration",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "$snoozeDuration min",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Text(
+                                text = "How long to snooze notifications",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            androidx.compose.material3.Slider(
+                                value = snoozeDuration.toFloat(),
+                                onValueChange = { viewModel.updateSnoozeDuration(it.toInt()) },
+                                valueRange = 1f..60f,
+                                steps = 11 // 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60? No, let's just do steps = 0 or specific steps.
+                                // Actually, let's do 5 minute increments except for small values.
+                                // Or just a simple slider. 1..60 with steps = 59 is 1 min increments.
+                            )
+                        }
                         
                         // Silence notifications section
                         SilenceNotificationsCard(

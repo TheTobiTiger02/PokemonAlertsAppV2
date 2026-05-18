@@ -120,6 +120,7 @@ class PokemonAlertsRepositoryTest {
         private val silenceState = MutableStateFlow(0L)
         private val areaState = MutableStateFlow("All")
         private val distanceState = MutableStateFlow(0)
+        private val snoozeDurationState = MutableStateFlow(10)
         private val excludedHundoState = MutableStateFlow(emptySet<String>())
         private val excludedNundoState = MutableStateFlow(emptySet<String>())
         private val excludedPvpState = MutableStateFlow(emptySet<String>())
@@ -127,6 +128,10 @@ class PokemonAlertsRepositoryTest {
         private val excludedRocketState = MutableStateFlow(emptySet<String>())
         private val excludedRaidTiersState = MutableStateFlow(emptySet<String>())
         private val dismissedState = MutableStateFlow(emptySet<String>())
+        private val allowedHundoSpeciesState = MutableStateFlow(emptySet<String>())
+        private val allowedNundoSpeciesState = MutableStateFlow(emptySet<String>())
+        private val allowedPvpSpeciesState = MutableStateFlow(emptySet<String>())
+        private val allowedSpawnSpeciesState = MutableStateFlow(emptySet<String>())
 
         override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
         override suspend fun getSeenAlertIds(): Set<String> = state.value
@@ -187,6 +192,9 @@ class PokemonAlertsRepositoryTest {
         override val maxDistance: Flow<Int> = distanceState.asStateFlow()
         override suspend fun updateMaxDistance(distance: Int) { distanceState.value = distance }
 
+        override val snoozeDuration: Flow<Int> = snoozeDurationState.asStateFlow()
+        override suspend fun updateSnoozeDuration(minutes: Int) { snoozeDurationState.value = minutes }
+
         override val excludedHundoTypes: Flow<Set<String>> = excludedHundoState.asStateFlow()
         override suspend fun updateExcludedHundoTypes(types: Set<String>) { excludedHundoState.value = types }
 
@@ -209,6 +217,18 @@ class PokemonAlertsRepositoryTest {
         override suspend fun addDismissedAlert(alertId: String) { dismissedState.value = dismissedState.value + alertId }
         override suspend fun removeDismissedAlert(alertId: String) { dismissedState.value = dismissedState.value - alertId }
         override suspend fun clearDismissedAlerts() { dismissedState.value = emptySet() }
+
+        override val allowedHundoSpecies: Flow<Set<String>> = allowedHundoSpeciesState.asStateFlow()
+        override suspend fun updateAllowedHundoSpecies(species: Set<String>) { allowedHundoSpeciesState.value = species }
+
+        override val allowedNundoSpecies: Flow<Set<String>> = allowedNundoSpeciesState.asStateFlow()
+        override suspend fun updateAllowedNundoSpecies(species: Set<String>) { allowedNundoSpeciesState.value = species }
+
+        override val allowedPvpSpecies: Flow<Set<String>> = allowedPvpSpeciesState.asStateFlow()
+        override suspend fun updateAllowedPvpSpecies(species: Set<String>) { allowedPvpSpeciesState.value = species }
+
+        override val allowedSpawnSpecies: Flow<Set<String>> = allowedSpawnSpeciesState.asStateFlow()
+        override suspend fun updateAllowedSpawnSpecies(species: Set<String>) { allowedSpawnSpeciesState.value = species }
     }
 
     private class FakeAlertDao : AlertDao() {

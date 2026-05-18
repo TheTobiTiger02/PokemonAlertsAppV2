@@ -54,175 +54,174 @@
 34-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:11:9-39
 35        android:supportsRtl="true"
 35-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:12:9-35
-36        android:testOnly="true"
-37        android:theme="@android:style/Theme.DeviceDefault" >
-37-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:13:9-59
-38        <meta-data
-38-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:15:9-17:37
-39            android:name="com.google.android.wearable.standalone"
-39-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:16:13-66
-40            android:value="false" />
-40-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:17:13-34
-41
-42        <activity
-42-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:19:9-28:20
-43            android:name="com.example.pokemonalertsv2.wear.MainActivity"
-43-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:20:13-41
-44            android:exported="true"
-44-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:21:13-36
-45            android:taskAffinity=""
-45-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:22:13-36
-46            android:theme="@android:style/Theme.DeviceDefault" >
-46-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:23:13-63
-47            <intent-filter>
-47-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:24:13-27:29
-48                <action android:name="android.intent.action.MAIN" />
-48-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:17-69
-48-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:25-66
-49
-50                <category android:name="android.intent.category.LAUNCHER" />
-50-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:17-77
-50-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:27-74
-51            </intent-filter>
-52        </activity>
-53
-54        <service
-54-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:30:9-39:19
-55            android:name="com.example.pokemonalertsv2.wear.tile.AlertsTileService"
-55-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:31:13-51
-56            android:exported="true"
-56-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:32:13-36
-57            android:label="Pokemon Alerts Tile"
-57-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:33:13-48
-58            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER" >
-58-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:34:13-91
-59            <intent-filter>
-59-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:35:13-37:29
-60                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
-60-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:17-88
-60-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:25-85
-61            </intent-filter>
-62        </service>
-63
-64        <!-- Service to receive DataItem changes from the phone -->
-65        <service
-65-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:42:9-49:19
-66            android:name="com.example.pokemonalertsv2.wear.data.DataLayerListenerService"
-66-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:43:13-58
-67            android:exported="true" >
-67-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:44:13-36
-68            <intent-filter>
-68-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:45:13-48:29
-69                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
-69-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:17-87
-69-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:25-84
-70
-71                <data
-71-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:17-93
-72                    android:host="*"
-72-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:45-61
-73                    android:pathPrefix="/alerts"
-73-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:62-90
-74                    android:scheme="wear" />
-74-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:23-44
-75            </intent-filter>
-76        </service>
-77
-78        <activity
-78-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:23:9-25:39
-79            android:name="androidx.compose.ui.tooling.PreviewActivity"
-79-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:24:13-71
-80            android:exported="true" />
-80-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:25:13-36
-81
-82        <uses-library
-82-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:23:9-25:40
-83            android:name="com.google.android.wearable"
-83-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:24:13-55
-84            android:required="false" />
-84-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:25:13-37
-85
-86        <activity
-86-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
-87            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-87-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
-88            android:exported="false"
-88-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
-89            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-89-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
-90
-91        <meta-data
-91-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
-92            android:name="com.google.android.gms.version"
-92-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
-93            android:value="@integer/google_play_services_version" />
-93-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
-94
-95        <provider
-95-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
-96            android:name="androidx.startup.InitializationProvider"
-96-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
-97            android:authorities="com.example.pokemonalertsv2.androidx-startup"
-97-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
-98            android:exported="false" >
-98-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
-99            <meta-data
-99-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
-100                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-100-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
-101                android:value="androidx.startup" />
-101-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
-102            <meta-data
-102-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:29:13-31:52
-103                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-103-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:30:17-78
-104                android:value="androidx.startup" />
-104-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:31:17-49
-105            <meta-data
-105-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
-106                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-106-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
-107                android:value="androidx.startup" />
-107-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
-108        </provider>
-109
-110        <receiver
-110-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
-111            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-111-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
-112            android:directBootAware="false"
-112-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
-113            android:enabled="true"
-113-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
-114            android:exported="true"
-114-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
-115            android:permission="android.permission.DUMP" >
-115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
-116            <intent-filter>
-116-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
-117                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
-117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
-118            </intent-filter>
-119            <intent-filter>
-119-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
-120                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
-120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
-121            </intent-filter>
-122            <intent-filter>
-122-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
-123                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-123-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
-123-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
-124            </intent-filter>
-125            <intent-filter>
-125-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
-126                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
-126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
-127            </intent-filter>
-128        </receiver>
-129    </application>
-130
-131</manifest>
+36        android:theme="@android:style/Theme.DeviceDefault" >
+36-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:13:9-59
+37        <meta-data
+37-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:15:9-17:37
+38            android:name="com.google.android.wearable.standalone"
+38-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:16:13-66
+39            android:value="false" />
+39-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:17:13-34
+40
+41        <activity
+41-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:19:9-28:20
+42            android:name="com.example.pokemonalertsv2.wear.MainActivity"
+42-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:20:13-41
+43            android:exported="true"
+43-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:21:13-36
+44            android:taskAffinity=""
+44-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:22:13-36
+45            android:theme="@android:style/Theme.DeviceDefault" >
+45-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:23:13-63
+46            <intent-filter>
+46-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:24:13-27:29
+47                <action android:name="android.intent.action.MAIN" />
+47-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:17-69
+47-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:25:25-66
+48
+49                <category android:name="android.intent.category.LAUNCHER" />
+49-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:17-77
+49-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:26:27-74
+50            </intent-filter>
+51        </activity>
+52
+53        <service
+53-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:30:9-39:19
+54            android:name="com.example.pokemonalertsv2.wear.tile.AlertsTileService"
+54-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:31:13-51
+55            android:exported="true"
+55-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:32:13-36
+56            android:label="Pokemon Alerts Tile"
+56-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:33:13-48
+57            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER" >
+57-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:34:13-91
+58            <intent-filter>
+58-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:35:13-37:29
+59                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+59-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:17-88
+59-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:36:25-85
+60            </intent-filter>
+61        </service>
+62
+63        <!-- Service to receive DataItem changes from the phone -->
+64        <service
+64-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:42:9-49:19
+65            android:name="com.example.pokemonalertsv2.wear.data.DataLayerListenerService"
+65-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:43:13-58
+66            android:exported="true" >
+66-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:44:13-36
+67            <intent-filter>
+67-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:45:13-48:29
+68                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+68-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:17-87
+68-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:46:25-84
+69
+70                <data
+70-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:17-93
+71                    android:host="*"
+71-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:45-61
+72                    android:pathPrefix="/alerts"
+72-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:62-90
+73                    android:scheme="wear" />
+73-->C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\wear\src\main\AndroidManifest.xml:47:23-44
+74            </intent-filter>
+75        </service>
+76
+77        <activity
+77-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:23:9-25:39
+78            android:name="androidx.compose.ui.tooling.PreviewActivity"
+78-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:24:13-71
+79            android:exported="true" />
+79-->[androidx.compose.ui:ui-tooling-android:1.7.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\8f5e76d88eb012b44bd7dc498855e7d6\transformed\ui-tooling-release\AndroidManifest.xml:25:13-36
+80
+81        <uses-library
+81-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:23:9-25:40
+82            android:name="com.google.android.wearable"
+82-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:24:13-55
+83            android:required="false" />
+83-->[androidx.wear:wear:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\e1a5473fc4be9bd580bde1fd59c430a3\transformed\wear-1.3.0\AndroidManifest.xml:25:13-37
+84
+85        <activity
+85-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
+86            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+86-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+87            android:exported="false"
+87-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
+88            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+88-->[com.google.android.gms:play-services-base:18.5.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\ddb7c2f965603cdc3890f9dd9a5651da\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
+89
+90        <meta-data
+90-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+91            android:name="com.google.android.gms.version"
+91-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+92            android:value="@integer/google_play_services_version" />
+92-->[com.google.android.gms:play-services-basement:18.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\61ab7e86c39fb9307d238fb7c37b3a11\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+93
+94        <provider
+94-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+95            android:name="androidx.startup.InitializationProvider"
+95-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:25:13-67
+96            android:authorities="com.example.pokemonalertsv2.androidx-startup"
+96-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:26:13-68
+97            android:exported="false" >
+97-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:27:13-37
+98            <meta-data
+98-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+99                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+99-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+100                android:value="androidx.startup" />
+100-->[androidx.emoji2:emoji2:1.3.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\84e18788ada4b109280c1a02bbcddacc\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+101            <meta-data
+101-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:29:13-31:52
+102                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+102-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:30:17-78
+103                android:value="androidx.startup" />
+103-->[androidx.lifecycle:lifecycle-process:2.8.3] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\9c6e4546866aa6087973234478279184\transformed\lifecycle-process-2.8.3\AndroidManifest.xml:31:17-49
+104            <meta-data
+104-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+105                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+105-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+106                android:value="androidx.startup" />
+106-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+107        </provider>
+108
+109        <receiver
+109-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+110            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+110-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+111            android:directBootAware="false"
+111-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+112            android:enabled="true"
+112-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+113            android:exported="true"
+113-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+114            android:permission="android.permission.DUMP" >
+114-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+115            <intent-filter>
+115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+116                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+116-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+116-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+117            </intent-filter>
+118            <intent-filter>
+118-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+119                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+119-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+119-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+120            </intent-filter>
+121            <intent-filter>
+121-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+122                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+122-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+122-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+123            </intent-filter>
+124            <intent-filter>
+124-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+125                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+125-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+125-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\GBT B450M-S2H\.gradle\caches\8.11.1\transforms\3325400da1ffce81d64961d6db14331f\transformed\profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+126            </intent-filter>
+127        </receiver>
+128    </application>
+129
+130</manifest>

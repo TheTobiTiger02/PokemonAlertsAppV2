@@ -30,6 +30,7 @@ private val NOTIFICATION_VIBRATE_KEY = androidx.datastore.preferences.core.boole
 private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
 private val SELECTED_AREA_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_area")
 private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance")
+private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
 
 // Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
 private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
@@ -111,6 +112,9 @@ interface AlertPreferencesStore {
     
     val maxDistance: Flow<Int>
     suspend fun updateMaxDistance(distance: Int)
+    
+    val snoozeDuration: Flow<Int> // In minutes
+    suspend fun updateSnoozeDuration(minutes: Int)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -353,6 +357,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateMaxDistance(distance: Int) {
         dataStore.edit { prefs ->
             prefs[MAX_DISTANCE_KEY] = distance
+        }
+    }
+    
+    override val snoozeDuration: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[SNOOZE_DURATION_KEY] ?: 10 // Default to 10 minutes
+    }
+    
+    override suspend fun updateSnoozeDuration(minutes: Int) {
+        dataStore.edit { prefs ->
+            prefs[SNOOZE_DURATION_KEY] = minutes
         }
     }
     
