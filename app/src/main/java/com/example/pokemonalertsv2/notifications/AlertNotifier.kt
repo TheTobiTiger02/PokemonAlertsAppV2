@@ -24,8 +24,6 @@ import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 object AlertNotifier {
     const val CHANNEL_ID = "pokemon_alerts_channel"
@@ -277,12 +275,6 @@ object AlertNotifier {
                     "PiP",
                     createPipPendingIntent(context, alert)
                 )
-                // Quick Action: Snooze
-                .addAction(
-                    R.drawable.ic_poke_notification, // Using notification icon for now, maybe find a better one
-                    "Snooze",
-                    createSnoozePendingIntent(context, alert)
-                )
 
             // Add the image as large icon and big picture if available
             bitmap?.let {
@@ -327,21 +319,6 @@ object AlertNotifier {
             context,
             alert.uniqueId.hashCode() + 3000, // unique request code
             pipIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
-        )
-    }
-
-    private fun createSnoozePendingIntent(context: Context, alert: PokemonAlert): PendingIntent {
-        val snoozeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionReceiver.ACTION_SNOOZE
-            val alertJson = Json.encodeToString(alert)
-            putExtra(NotificationActionReceiver.EXTRA_ALERT_JSON, alertJson)
-            putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, alert.uniqueId.hashCode())
-        }
-        return PendingIntent.getBroadcast(
-            context,
-            alert.uniqueId.hashCode() + 4000, // unique request code
-            snoozeIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
     }
