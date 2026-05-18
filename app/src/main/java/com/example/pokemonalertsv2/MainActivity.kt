@@ -323,8 +323,8 @@ private fun MainScaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-                    tonalElevation = 3.dp
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp),
+                    tonalElevation = 6.dp
                 ) {
                     NAV_DESTINATIONS.forEachIndexed { index, destination ->
                         NavigationBarItem(
@@ -350,10 +350,10 @@ private fun MainScaffold(
                             },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
                                 indicatorColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f),
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f)
                             )
                         )
                     }

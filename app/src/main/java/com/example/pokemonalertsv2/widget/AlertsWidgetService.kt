@@ -148,7 +148,14 @@ private class AlertsFactory(
 
         // 3. Description
         val type = alert.type?.firstOrNull() ?: "Alert"
-        views.setTextViewText(R.id.item_desc, "$type: ${alert.description}")
+        val descriptionText = alert.description
+            .takeIf { it.isNotBlank() }
+            ?: alert.locationDisplay
+            ?: type
+        views.setTextViewText(
+            R.id.item_desc,
+            if (descriptionText == type) type else "$type: $descriptionText"
+        )
 
         // 4. Meta Data (Distance and walking time)
         val distanceMeters: Float? = currentLocation?.let { loc ->
@@ -162,7 +169,12 @@ private class AlertsFactory(
         val walkingText = distanceMeters?.let { formatWalkingTime(it) }
 
         val metaParts = listOfNotNull(distanceText, walkingText)
-        views.setTextViewText(R.id.item_meta, metaParts.joinToString(" • "))
+        if (metaParts.isEmpty()) {
+            views.setViewVisibility(R.id.item_meta, View.GONE)
+        } else {
+            views.setViewVisibility(R.id.item_meta, View.VISIBLE)
+            views.setTextViewText(R.id.item_meta, metaParts.joinToString(" | "))
+        }
 
         // 5. Image Loading (with rounded corners)
         val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
@@ -300,8 +312,8 @@ private class AlertsFactory(
     }
 
     private fun formatDistance(meters: Float): String {
-        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1fkm", meters / 1000f)
-        else String.format(Locale.getDefault(), "%.0fm", meters)
+        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
+        else String.format(Locale.getDefault(), "%.0f m", meters)
     }
 
     private fun formatWalkingTime(meters: Float): String {

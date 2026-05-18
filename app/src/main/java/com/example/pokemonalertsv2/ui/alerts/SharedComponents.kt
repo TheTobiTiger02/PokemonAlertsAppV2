@@ -20,8 +20,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.rememberScrollState
@@ -44,10 +47,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedButton
@@ -57,8 +62,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -67,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,21 +87,27 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
@@ -99,7 +115,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
 import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -191,6 +211,7 @@ fun formatAlertTitle(alert: PokemonAlert): String {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AlertCard(
     alert: PokemonAlert,
@@ -198,6 +219,7 @@ fun AlertCard(
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
     onShareClick: () -> Unit,
+    onSnoozeClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     tickerNow: Long = System.currentTimeMillis()
 ) {
@@ -283,9 +305,9 @@ fun AlertCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     // Quick stats row
-                    Row(
+                    FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // IV Badge — show new IV for weather change alerts
                         val displayCardIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
@@ -306,28 +328,18 @@ fun AlertCard(
                         
                         // Species replacement indicator
                         if (alert.isSpeciesReplacement) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFF26C6DA).copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "🔄",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                                )
-                            }
+                            AlertPill(
+                                text = "Swap",
+                                containerColor = Color(0xFF26C6DA).copy(alpha = 0.22f),
+                                contentColor = Color.White
+                            )
                         } else if (alert.isWeatherChange) {
                             // Weather change indicator
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFFF9800).copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "🌦️",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                                )
-                            }
+                            AlertPill(
+                                text = "Weather",
+                                containerColor = Color(0xFFFF9800).copy(alpha = 0.25f),
+                                contentColor = Color.White
+                            )
                         }
                         
                         // Distance
@@ -405,20 +417,59 @@ fun AlertCard(
 
                 AlertMetaRow(alert = alert, distanceInfo = distanceInfo, tickerNow = tickerNow)
                 Spacer(modifier = Modifier.height(20.dp))
-                ElevatedButton(
-                    onClick = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                        onOpenMaps()
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map),
-                        contentDescription = null,
-                        modifier = Modifier.padding(end = 8.dp)
-                    )
-                    Text(text = stringResource(id = R.string.open_in_maps))
+                    if (onSnoozeClick != null) {
+                        FilledTonalButton(
+                            onClick = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                                onSnoozeClick()
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(18.dp),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Notifications,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 6.dp)
+                            )
+                            Text(
+                                text = "Snooze",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    ElevatedButton(
+                        onClick = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            onOpenMaps()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(18.dp),
+                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_map),
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                        Text(
+                            text = "Maps",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -426,17 +477,146 @@ fun AlertCard(
 }
 
 @Composable
-private fun ShinyBadge() {
+private fun AlertPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    painter: Painter? = null,
+    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    fontWeight: FontWeight = FontWeight.Bold
+) {
     Surface(
-        shape = CircleShape,
-        color = Color(0xFFFFD700).copy(alpha = 0.9f)
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = containerColor,
+        tonalElevation = 2.dp
     ) {
-        Text(
-            text = "✨",
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall
-        )
+        Row(
+            modifier = Modifier
+                .defaultMinSize(minHeight = 32.dp)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = contentColor
+                )
+            } else if (painter != null) {
+                Icon(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = contentColor
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = fontWeight,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
+}
+
+fun formatSnoozeDurationLabel(minutes: Int): String {
+    return if (minutes >= 60 && minutes % 60 == 0) {
+        val hours = minutes / 60
+        if (hours == 1) "1 hr" else "$hours hrs"
+    } else {
+        "$minutes min"
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun SnoozeDurationDialog(
+    defaultMinutes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    val quickDurations = remember { listOf(5, 10, 15, 30, 60) }
+    var customText by remember(defaultMinutes) {
+        mutableStateOf(defaultMinutes.coerceAtLeast(1).toString())
+    }
+    val customMinutes = customText.toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(24 * 60)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Snooze alert") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    quickDurations.forEach { minutes ->
+                        FilledTonalButton(
+                            onClick = { onConfirm(minutes) },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (minutes == defaultMinutes)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else
+                                    MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (minutes == defaultMinutes)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Text(formatSnoozeDurationLabel(minutes), maxLines = 1)
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = customText,
+                    onValueChange = { value ->
+                        customText = value.filter { it.isDigit() }.take(4)
+                    },
+                    singleLine = true,
+                    label = { Text("Custom minutes") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = customMinutes != null,
+                onClick = { customMinutes?.let(onConfirm) }
+            ) {
+                Text("Snooze")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+private suspend fun snoozeAlertFromUi(context: Context, alert: PokemonAlert, minutes: Int): Boolean {
+    val safeMinutes = minutes.coerceIn(1, 24 * 60)
+    return withContext(Dispatchers.IO) {
+        AlertPreferences(context.alertPreferencesDataStore).updateSnoozeDuration(safeMinutes)
+        AlertSnoozeScheduler.schedule(context.applicationContext, alert, safeMinutes)
+    }
+}
+
+@Composable
+private fun ShinyBadge() {
+    AlertPill(
+        text = "Shiny",
+        containerColor = Color(0xFFFFD700),
+        contentColor = Color.Black
+    )
 }
 
 @Composable
@@ -452,60 +632,28 @@ private fun IvBadge(iv: String, isPerfect: Boolean, isNundo: Boolean) {
         else -> Color.White
     }
     
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = backgroundColor
-    ) {
-        Text(
-            text = iv,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = textColor
-        )
-    }
+    AlertPill(text = iv, containerColor = backgroundColor, contentColor = textColor)
 }
 
 @Composable
 private fun CpBadge(cp: Int, level: Double?) {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = Color.White.copy(alpha = 0.2f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "CP $cp",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            level?.let {
-                val levelText = if (it == it.toLong().toDouble()) "L${it.toLong()}" else "L$it"
-                Text(
-                    text = levelText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-            }
-        }
-    }
+    val levelText = level?.let {
+        if (it == it.toLong().toDouble()) " L${it.toLong()}" else " L$it"
+    }.orEmpty()
+    AlertPill(
+        text = "CP $cp$levelText",
+        containerColor = Color.White.copy(alpha = 0.2f),
+        contentColor = Color.White
+    )
 }
 
 @Composable
 private fun WeatherBoostBadge() {
-    Surface(
-        shape = CircleShape,
-        color = Color(0xFF4FC3F7).copy(alpha = 0.9f)
-    ) {
-        Text(
-            text = "☁️",
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall
-        )
-    }
+    AlertPill(
+        text = "Boost",
+        containerColor = Color(0xFF4FC3F7),
+        contentColor = Color(0xFF031B1B)
+    )
 }
 
 @Composable
@@ -762,6 +910,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
 }
 
 @SuppressLint("ContextCastToActivity")
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AlertDetailScreen(
     alert: PokemonAlert,
@@ -774,6 +923,15 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    var showSnoozeDialog by remember { mutableStateOf(false) }
+    var defaultSnoozeMinutes by remember { mutableStateOf(10) }
+    LaunchedEffect(context) {
+        defaultSnoozeMinutes = withContext(Dispatchers.IO) {
+            AlertPreferences(context.alertPreferencesDataStore).snoozeDuration.first()
+        }
+    }
     val containerGradient = remember {
         Brush.verticalGradient(
             listOf(
@@ -971,23 +1129,17 @@ fun AlertDetailScreen(
                         // Type Badges
                         val typeList = alert.type?.takeIf { it.isNotEmpty() }
                         if (typeList != null) {
-                            Row(
+                            FlowRow(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.padding(start = 8.dp)
                             ) {
                                 typeList.forEach { typeName ->
-                                    Surface(
-                                        shape = RoundedCornerShape(50),
-                                        color = getTypeColor(typeName),
-                                    ) {
-                                        Text(
-                                            text = typeName.uppercase(),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.White,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                        )
-                                    }
+                                    AlertPill(
+                                        text = typeName.uppercase(),
+                                        containerColor = getTypeColor(typeName),
+                                        contentColor = Color.White
+                                    )
                                 }
                             }
                         }
@@ -1060,33 +1212,92 @@ fun AlertDetailScreen(
                     
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Action Button
-                    FilledTonalButton(
-                        onClick = { openMapForAlert(context, alert) },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(id = R.string.open_in_maps),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                        FilledTonalButton(
+                            onClick = { showSnoozeDialog = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Notifications,
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 6.dp)
+                            )
+                            Text(
+                                text = "Snooze",
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = { openMapForAlert(context, alert) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(56.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_map),
+                                contentDescription = null,
+                                modifier = Modifier.padding(end = 6.dp)
+                            )
+                            Text(
+                                text = "Maps",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            )
         }
+    }
+
+    if (showSnoozeDialog) {
+        SnoozeDurationDialog(
+            defaultMinutes = defaultSnoozeMinutes,
+            onDismiss = { showSnoozeDialog = false },
+            onConfirm = { minutes ->
+                showSnoozeDialog = false
+                scope.launch {
+                    val scheduled = snoozeAlertFromUi(context, alert, minutes)
+                    snackbarHostState.showSnackbar(
+                        if (scheduled) {
+                            "Snoozed for ${formatSnoozeDurationLabel(minutes)}"
+                        } else {
+                            "Alert ends before that snooze time"
+                        }
+                    )
+                }
+            }
+        )
     }
 }
 
@@ -2015,6 +2226,7 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow: Long = System.currentTimeMillis()) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -2033,7 +2245,10 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow
             else -> Icons.Filled.LocationOn
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             if (!typeLabel.isNullOrBlank()) {
                 AlertTag(text = typeLabel, icon = typeIcon)
             }
@@ -2050,31 +2265,7 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow
 
 @Composable
 fun AlertTag(text: String, icon: ImageVector? = null) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        tonalElevation = 4.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
+    AlertPill(text = text, icon = icon)
 }
 
 @Composable
@@ -2096,74 +2287,39 @@ fun CountdownAndEndTimeRow(alert: PokemonAlert, now: Long = System.currentTimeMi
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (!remainingText.isNullOrBlank()) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (remainingText == expiredLabel)
-                    MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                else
-                    MaterialTheme.colorScheme.secondaryContainer,
-                shadowElevation = 1.dp
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_refresh),
-                        contentDescription = null,
-                        modifier = Modifier.height(16.dp),
-                        tint = if (remainingText == expiredLabel)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                    Text(
-                        text = if (remainingText == expiredLabel) remainingText else "⏱ $remainingText",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (remainingText == expiredLabel)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.onSecondaryContainer,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            val countdownColor = if (remainingText == expiredLabel)
+                MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+            else
+                MaterialTheme.colorScheme.secondaryContainer
+            val countdownContentColor = if (remainingText == expiredLabel)
+                MaterialTheme.colorScheme.error
+            else
+                MaterialTheme.colorScheme.onSecondaryContainer
+            AlertPill(
+                text = remainingText,
+                painter = painterResource(id = R.drawable.ic_timer),
+                containerColor = countdownColor,
+                contentColor = countdownContentColor
+            )
         }
         Text(
             text = stringResource(id = R.string.alert_end_time, alert.endTime),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 @Composable
 fun DistanceChip(text: String) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.15f),
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_map),
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
+    AlertPill(
+        text = text,
+        painter = painterResource(id = R.drawable.ic_map),
+        containerColor = Color.White.copy(alpha = 0.15f),
+        contentColor = Color.White
+    )
 }
 
 fun openMapForAlert(context: Context, alert: PokemonAlert) {

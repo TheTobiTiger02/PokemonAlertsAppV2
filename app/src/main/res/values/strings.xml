@@ -29,6 +29,7 @@
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
     <string name="notification_action_directions">Directions</string>
+    <string name="notification_action_snooze">Snooze</string>
     <string name="loading_alerts">Scanning for nearby spawns…</string>
     <string name="alerts_hero_title">Field radar</string>
     <string name="alerts_hero_subtitle">Live intel from nearby trainers</string>

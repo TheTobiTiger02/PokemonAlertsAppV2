@@ -55,7 +55,7 @@ class AlertDetailActivity : ComponentActivity() {
                 }
             }
         }
-        // Auto-enter PiP if launched from notification action
+        // Auto-enter PiP if a caller explicitly requests it.
         if (intent?.getBooleanExtra(EXTRA_LAUNCH_PIP, false) == true && canEnterPictureInPicture) {
             window.decorView.post { enterImagePictureInPicture() }
         }
@@ -76,7 +76,7 @@ class AlertDetailActivity : ComponentActivity() {
         setIntent(intent)
         currentAlert = intent.toPokemonAlert() ?: currentAlert
         syncPictureInPictureState()
-        // Auto-enter PiP if launched from notification action
+        // Auto-enter PiP if a caller explicitly requests it.
         if (intent.getBooleanExtra(EXTRA_LAUNCH_PIP, false) && canEnterPictureInPicture) {
             window.decorView.post { enterImagePictureInPicture() }
         }

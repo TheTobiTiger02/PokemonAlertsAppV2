@@ -280,18 +280,34 @@ fun PokemonAlertsRoute(
             Box(modifier = Modifier.padding(paddingValues)) {
                 val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
                 val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
+                val defaultSnoozeMinutes by viewModel.snoozeDuration.collectAsStateWithLifecycle(initialValue = 10)
                 
                 PokemonAlertsPage(
                     uiState = alertsUiState,
                     dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle(initialValue = emptySet()).value,
                     selectedArea = selectedArea,
                     maxDistance = maxDistance,
+                    defaultSnoozeMinutes = defaultSnoozeMinutes,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
                         context.startActivity(intent)
                     },
                     onShareClick = onShareClick,
+                    onSnoozeAlert = { alert, minutes ->
+                        viewModel.snoozeAlert(alert, minutes) { scheduled ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (scheduled) {
+                                        "Snoozed for ${formatSnoozeDurationLabel(minutes)}"
+                                    } else {
+                                        "Alert ends before that snooze time"
+                                    },
+                                    duration = SnackbarDuration.Short
+                                )
+                            }
+                        }
+                    },
                     onDismissClick = { alertId ->
                         viewModel.dismissAlert(alertId)
                         scope.launch {
@@ -438,10 +454,12 @@ fun PokemonAlertsPage(
     onRefresh: () -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
+    onSnoozeAlert: (PokemonAlert, Int) -> Unit,
     onDismissClick: (String) -> Unit,
     onUndoDismiss: (String) -> Unit,
     selectedArea: String,
     maxDistance: Int,
+    defaultSnoozeMinutes: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -450,6 +468,7 @@ fun PokemonAlertsPage(
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
     val haptic = LocalHapticFeedback.current
 
     // Shared 1-second ticker for all countdown timers — replaces per-card timers
@@ -636,6 +655,10 @@ fun PokemonAlertsPage(
                 },
                 onOpenMaps = { alert -> openMapForAlert(context, alert) },
                 onShareClick = onShareClick,
+                onSnoozeClick = { alert ->
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    alertPendingSnooze = alert
+                },
                 onDismissClick = { alertId ->
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onDismissClick(alertId)
@@ -659,6 +682,17 @@ fun PokemonAlertsPage(
             )
         }
     }
+
+    alertPendingSnooze?.let { alert ->
+        SnoozeDurationDialog(
+            defaultMinutes = defaultSnoozeMinutes,
+            onDismiss = { alertPendingSnooze = null },
+            onConfirm = { minutes ->
+                alertPendingSnooze = null
+                onSnoozeAlert(alert, minutes)
+            }
+        )
+    }
 }
 
 @Composable
@@ -675,6 +709,7 @@ private fun AlertsList(
     onAlertSelected: (PokemonAlert) -> Unit,
     onOpenMaps: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
+    onSnoozeClick: (PokemonAlert) -> Unit,
     onDismissClick: (String) -> Unit,
     onRestoreClick: (String) -> Unit,
     onRequestLocationPermission: () -> Unit,
@@ -854,7 +889,8 @@ private fun AlertsList(
                         tickerNow = tickerNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
-                        onShareClick = { onShareClick(model.alert) }
+                        onShareClick = { onShareClick(model.alert) },
+                        onSnoozeClick = { onSnoozeClick(model.alert) }
                     )
                     // Dimmed overlay for dismissed alerts
                     if (isDismissed) {

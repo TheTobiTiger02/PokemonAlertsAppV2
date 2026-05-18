@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,6 +68,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     
     val selectedArea = repository.alertPreferences.selectedArea
     val maxDistance = repository.alertPreferences.maxDistance
+    val snoozeDuration = repository.alertPreferences.snoozeDuration
     
     fun dismissAlert(alertId: String) {
         viewModelScope.launch {
@@ -77,6 +79,15 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun undoDismissAlert(alertId: String) {
         viewModelScope.launch {
             repository.alertPreferences.removeDismissedAlert(alertId)
+        }
+    }
+
+    fun snoozeAlert(alert: PokemonAlert, minutes: Int, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val safeMinutes = minutes.coerceIn(1, 24 * 60)
+            repository.alertPreferences.updateSnoozeDuration(safeMinutes)
+            val scheduled = AlertSnoozeScheduler.schedule(getApplication(), alert, safeMinutes)
+            onResult(scheduled)
         }
     }
 }
