@@ -97,6 +97,7 @@ import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
@@ -373,42 +374,11 @@ fun AlertsMapScreen(
                  FilledIconButton(
                     onClick = { 
                         scope.launch(Dispatchers.Main) {
-                             // Try to zoom to bounds of visible alerts, or simple user location?
-                             // Let's just zoom to the alerts for now as user location might be null
-                             if (filteredAlerts.isNotEmpty()) {
-                                 if (filteredAlerts.size == 1) {
-                                     val a = filteredAlerts.first()
-                                     try {
-                                         cameraPositionState.animate(
-                                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude ?: 0.0, a.longitude ?: 0.0), 14f),
-                                             1000
-                                         )
-                                     } catch (_: Exception) {}
-                                 } else {
-                                     val builder = LatLngBounds.Builder()
-                                     filteredAlerts.forEach { builder.include(LatLng(it.latitude ?: 0.0, it.longitude ?: 0.0)) }
-                                     val bounds = builder.build()
-                                     val results = FloatArray(1)
-                                     android.location.Location.distanceBetween(
-                                         bounds.northeast.latitude, bounds.northeast.longitude,
-                                         bounds.southwest.latitude, bounds.southwest.longitude,
-                                         results
-                                     )
-                                     try {
-                                         if (results[0] < 2000) {
-                                             cameraPositionState.animate(
-                                                 CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
-                                                 1000
-                                             )
-                                         } else {
-                                             cameraPositionState.animate(
-                                                 CameraUpdateFactory.newLatLngBounds(bounds, 300),
-                                                 1000
-                                             )
-                                         }
-                                     } catch (_: Exception) {}
-                                 }
-                             }
+                            try {
+                                buildAlertsCameraUpdate(filteredAlerts)?.let { update ->
+                                    cameraPositionState.animate(update, 1000)
+                                }
+                            } catch (_: Exception) {}
                         }
                     },
                     modifier = Modifier.size(56.dp).shadow(8.dp, CircleShape),
@@ -441,45 +411,48 @@ fun AlertsMapScreen(
         }
     }
     
-    // Auto-fit camera logic on first load or filter change (optional, but good UX)
-    // Only run once on load
-    LaunchedEffect(mapLoaded) {
-        if (mapLoaded && filteredAlerts.isNotEmpty()) {
-             kotlinx.coroutines.delay(500)
-             withContext(Dispatchers.Main) {
-                 if (filteredAlerts.size == 1) {
-                     val a = filteredAlerts.first()
-                     try {
-                         cameraPositionState.animate(
-                             CameraUpdateFactory.newLatLngZoom(LatLng(a.latitude ?: 0.0, a.longitude ?: 0.0), 14f),
-                             1000
-                         )
-                     } catch (_: Exception) {}
-                 } else {
-                     val builder = LatLngBounds.Builder()
-                     filteredAlerts.forEach { builder.include(LatLng(it.latitude ?: 0.0, it.longitude ?: 0.0)) }
-                     val bounds = builder.build()
-                     val results = FloatArray(1)
-                     android.location.Location.distanceBetween(
-                         bounds.northeast.latitude, bounds.northeast.longitude,
-                         bounds.southwest.latitude, bounds.southwest.longitude,
-                         results
-                     )
-                     try {
-                         if (results[0] < 2000) {
-                             cameraPositionState.animate(
-                                 CameraUpdateFactory.newLatLngZoom(bounds.center, 14f),
-                                 1000
-                             )
-                         } else {
-                             cameraPositionState.animate(
-                                 CameraUpdateFactory.newLatLngBounds(bounds, 300),
-                                 1000
-                             )
-                         }
-                     } catch (_: Exception) {}
-                 }
-             }
+    var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(mapLoaded, filteredAlerts) {
+        if (mapLoaded && !initialCameraPositioned) {
+            buildAlertsCameraUpdate(filteredAlerts)?.let { update ->
+                try {
+                    cameraPositionState.move(update)
+                    initialCameraPositioned = true
+                } catch (_: Exception) {}
+            }
+        }
+    }
+}
+
+private fun buildAlertsCameraUpdate(alerts: List<PokemonAlert>): CameraUpdate? {
+    val positions = alerts.mapNotNull { alert ->
+        val latitude = alert.latitude
+        val longitude = alert.longitude
+        if (latitude != null && longitude != null) {
+            LatLng(latitude, longitude)
+        } else {
+            null
+        }
+    }
+
+    return when (positions.size) {
+        0 -> null
+        1 -> CameraUpdateFactory.newLatLngZoom(positions.first(), 14f)
+        else -> {
+            val builder = LatLngBounds.Builder()
+            positions.forEach(builder::include)
+            val bounds = builder.build()
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(
+                bounds.northeast.latitude, bounds.northeast.longitude,
+                bounds.southwest.latitude, bounds.southwest.longitude,
+                results
+            )
+            if (results[0] < 2000) {
+                CameraUpdateFactory.newLatLngZoom(bounds.center, 14f)
+            } else {
+                CameraUpdateFactory.newLatLngBounds(bounds, 300)
+            }
         }
     }
 }
