@@ -146,6 +146,8 @@ import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -464,6 +466,7 @@ fun PokemonAlertsPage(
 ) {
     val context = LocalContext.current
     var userLocation by remember { mutableStateOf<Location?>(null) }
+    var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
@@ -492,18 +495,39 @@ fun PokemonAlertsPage(
         userLocation = getLastKnownLocation(context)
     }
 
-    val alertsWithDistance = remember(uiState.alerts, userLocation) {
+    LaunchedEffect(userLocation, uiState.alerts) {
+        val location = userLocation
+        walkingRoutes = if (location == null) {
+            emptyMap()
+        } else {
+            WalkingRouteUtils.getWalkingRoutes(location, uiState.alerts)
+        }
+    }
+
+    val alertsWithDistance = remember(uiState.alerts, userLocation, walkingRoutes) {
         uiState.alerts.map { alert ->
             val distanceMeters: Float? = userLocation?.let { loc ->
-                val results = FloatArray(1)
-                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
-                results.getOrNull(0)?.takeUnless { it.isNaN() }
+                val latitude = alert.latitude
+                val longitude = alert.longitude
+                if (latitude != null && longitude != null) {
+                    val results = FloatArray(1)
+                    Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
+                    results.getOrNull(0)?.takeUnless { it.isNaN() }
+                } else {
+                    null
+                }
             }
-            val distanceText = distanceMeters?.let { formatDistance(it) }
-            val walkingText = distanceMeters?.let { formatWalkingTime(it) }
+            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+                straightLineDistanceMeters = distanceMeters,
+                routeInfo = walkingRoutes[alert.uniqueId]
+            )
             AlertUiModel(
                 alert = alert, 
-                distanceInfo = AlertDistanceInfo(distanceMeters, distanceText, walkingText)
+                distanceInfo = AlertDistanceInfo(
+                    distanceMeters = routeDisplayInfo.straightLineDistanceMeters,
+                    distanceText = routeDisplayInfo.distanceText,
+                    walkingText = routeDisplayInfo.walkingText
+                )
             )
         }
     }

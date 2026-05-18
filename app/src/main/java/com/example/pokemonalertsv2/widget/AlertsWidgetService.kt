@@ -26,9 +26,10 @@ import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.LocationUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import java.util.Locale
 
 class AlertsWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
@@ -44,6 +45,7 @@ private class AlertsFactory(
     private val items = mutableListOf<PokemonAlert>()
     private lateinit var imageLoader: ImageLoader
     private var currentLocation: Location? = null
+    private var walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 
     // Colors
     private val colorWhite by lazy { ContextCompat.getColor(context, R.color.poke_white) }
@@ -80,10 +82,14 @@ private class AlertsFactory(
                 
                 var distanceMatch = true
                 if (maxDistance > 0 && currentLocation != null) {
-                    val results = FloatArray(1)
-                    Location.distanceBetween(currentLocation!!.latitude, currentLocation!!.longitude, it.latitude ?: 0.0, it.longitude ?: 0.0, results)
-                    if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
-                        distanceMatch = false
+                    val latitude = it.latitude
+                    val longitude = it.longitude
+                    if (latitude != null && longitude != null) {
+                        val results = FloatArray(1)
+                        Location.distanceBetween(currentLocation!!.latitude, currentLocation!!.longitude, latitude, longitude, results)
+                        if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                            distanceMatch = false
+                        }
                     }
                 }
                 
@@ -106,11 +112,15 @@ private class AlertsFactory(
 
             items.clear()
             items.addAll(sorted)
+            walkingRoutes = currentLocation?.let { location ->
+                WalkingRouteUtils.getWalkingRoutes(location, sorted)
+            } ?: emptyMap()
         }
     }
 
     override fun onDestroy() {
         items.clear()
+        walkingRoutes = emptyMap()
     }
 
     override fun getCount(): Int = items.size
@@ -159,14 +169,21 @@ private class AlertsFactory(
 
         // 4. Meta Data (Distance and walking time)
         val distanceMeters: Float? = currentLocation?.let { loc ->
+            val latitude = alert.latitude
+            val longitude = alert.longitude
+            if (latitude == null || longitude == null) return@let null
             val results = FloatArray(1)
             runCatching {
-                Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
+                Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
             }.getOrNull()
             results.getOrNull(0)?.takeUnless { it.isNaN() }
         }
-        val distanceText = distanceMeters?.let { formatDistance(it) }
-        val walkingText = distanceMeters?.let { formatWalkingTime(it) }
+        val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+            straightLineDistanceMeters = distanceMeters,
+            routeInfo = walkingRoutes[alert.uniqueId]
+        )
+        val distanceText = routeDisplayInfo.distanceText
+        val walkingText = routeDisplayInfo.walkingText
 
         val metaParts = listOfNotNull(distanceText, walkingText)
         if (metaParts.isEmpty()) {
@@ -311,13 +328,4 @@ private class AlertsFactory(
         return roundBitmap(bmp, cornerRadiusPx)
     }
 
-    private fun formatDistance(meters: Float): String {
-        return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
-        else String.format(Locale.getDefault(), "%.0f m", meters)
-    }
-
-    private fun formatWalkingTime(meters: Float): String {
-        val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
-        return "$minutes min walk"
-    }
 }

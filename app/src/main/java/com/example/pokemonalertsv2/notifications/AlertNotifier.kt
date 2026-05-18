@@ -21,6 +21,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -119,6 +120,9 @@ object AlertNotifier {
         val notificationManager = NotificationManagerCompat.from(context)
         // Actively try to get a fresh location fix; keep it best-effort with short timeout
         val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
+        val walkingRoutes = userLocation?.let { location ->
+            WalkingRouteUtils.getWalkingRoutes(location, alerts)
+        } ?: emptyMap()
 
         alerts.forEachIndexed { index, alert ->
             // Helper function to check if any of the alert's Pokemon types are excluded
@@ -135,10 +139,14 @@ object AlertNotifier {
             
             // Distance Filter (allow if maxDistance is 0 or if location is unknown)
             if (maxDistance > 0 && userLocation != null) {
-                val results = FloatArray(1)
-                Location.distanceBetween(userLocation.latitude, userLocation.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
-                if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
-                    return@forEachIndexed
+                val latitude = alert.latitude
+                val longitude = alert.longitude
+                if (latitude != null && longitude != null) {
+                    val results = FloatArray(1)
+                    Location.distanceBetween(userLocation.latitude, userLocation.longitude, latitude, longitude, results)
+                    if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                        return@forEachIndexed
+                    }
                 }
             }
             
@@ -197,16 +205,23 @@ object AlertNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
 
-            val distancePair = userLocation?.let { loc ->
+            val straightLineDistanceMeters = userLocation?.let { loc ->
+                val latitude = alert.latitude
+                val longitude = alert.longitude
+                if (latitude == null || longitude == null) return@let null
                 val results = FloatArray(1)
                 runCatching {
-                    Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
+                    Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
                 }.getOrNull()
                 val meters = results.getOrNull(0) ?: Float.NaN
-                if (meters.isNaN()) null else meters to formatDistance(meters)
+                meters.takeUnless { it.isNaN() }
             }
-            val distanceText = distancePair?.second
-            val walkingText = distancePair?.first?.let { formatWalkingTime(it) }
+            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+                straightLineDistanceMeters = straightLineDistanceMeters,
+                routeInfo = walkingRoutes[alert.uniqueId]
+            )
+            val distanceText = routeDisplayInfo.distanceText
+            val walkingText = routeDisplayInfo.walkingText
 
             val baseText = alert.type ?: context.getString(R.string.notification_default_body)
             val chips = listOfNotNull(distanceText, walkingText)
@@ -348,14 +363,4 @@ object AlertNotifier {
         }
     }
 
-    private fun formatDistance(meters: Float): String {
-        return if (meters >= 1000f) String.format(java.util.Locale.getDefault(), "%.1f km", meters / 1000f)
-        else String.format(java.util.Locale.getDefault(), "%.0f m", meters)
-    }
-
-    private fun formatWalkingTime(meters: Float): String {
-        // Assume ~5 km/h walking speed => ~83.33 m/min
-        val minutes = kotlin.math.ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
-        return String.format(java.util.Locale.getDefault(), "%d min walk", minutes)
-    }
 }

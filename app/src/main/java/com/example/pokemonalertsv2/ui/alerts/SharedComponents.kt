@@ -115,6 +115,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
 import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -2347,12 +2348,6 @@ fun getLastKnownLocation(context: Context): Location? {
     } catch (_: Throwable) { null }
 }
 
-fun formatWalkingTime(meters: Float): String {
-    val minutes = ceil((meters / 83.333f).toDouble()).toInt().coerceAtLeast(1)
-    return String.format(Locale.getDefault(), "%d min walk", minutes)
-}
-
 fun formatDistance(meters: Float): String {
-    return if (meters >= 1000f) String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
-    else String.format(Locale.getDefault(), "%.0f m", meters)
+    return WalkingRouteUtils.formatDistanceMeters(meters)
 }

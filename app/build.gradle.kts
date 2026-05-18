@@ -6,6 +6,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+fun String.asBuildConfigString(): String =
+    "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -19,6 +22,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = System.getenv("GOOGLE_MAPS_API_KEY") ?: "YOUR_API_KEY_HERE"
+        val openRouteServiceApiKey = providers.gradleProperty("OPENROUTESERVICE_API_KEY")
+            .orElse(providers.gradleProperty("ORS_API_KEY"))
+            .orElse(providers.environmentVariable("OPENROUTESERVICE_API_KEY"))
+            .orElse(providers.environmentVariable("ORS_API_KEY"))
+            .getOrElse("")
+        buildConfigField("String", "OPENROUTESERVICE_API_KEY", openRouteServiceApiKey.asBuildConfigString())
     }
 
     buildTypes {
