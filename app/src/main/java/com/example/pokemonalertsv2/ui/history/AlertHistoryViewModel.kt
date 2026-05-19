@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.TotalStatsResponse
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -23,6 +25,8 @@ data class HistoryUiState(
     val selectedDate: String? = null,
     /** Currently active server-side type filter (e.g. "Raid") or null = all types. */
     val selectedType: String? = null,
+    /** Current server-side text search. Blank = no search. */
+    val searchQuery: String = "",
     /** All-time stats from /api/stats/total. */
     val totalStats: TotalStatsResponse? = null
 )
@@ -35,6 +39,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
     val uiState: StateFlow<HistoryUiState> = _uiState
 
     private var currentOffset = 0
+    private var searchJob: Job? = null
 
     init {
         // Observe cached history from Room — UI always reflects the local DB.
@@ -68,6 +73,20 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
         refreshHistory()
     }
 
+    /**
+     * Updates the server-side text search query. The visible query updates
+     * immediately, while the refresh is debounced to avoid one request per key.
+     */
+    fun setSearchQuery(query: String) {
+        currentOffset = 0
+        _uiState.update { it.copy(searchQuery = query, errorMessage = null, canLoadMore = false) }
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            refreshHistory()
+        }
+    }
+
     // ── Pagination ───────────────────────────────────────────────────────
 
     /**
@@ -82,8 +101,9 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
             val date = state.selectedDate
             val type = state.selectedType
             Log.d(TAG, "Refreshing history… date=$date, type=$type")
+            val query = state.searchQuery.trim().takeIf { it.isNotEmpty() }
             runCatching {
-                repository.refreshHistory(PAGE_SIZE, date = date, type = type)
+                repository.refreshHistory(PAGE_SIZE, date = date, type = type, q = query)
             }.onSuccess { response ->
                 currentOffset = PAGE_SIZE
                 val total = response.total ?: response.data.size
@@ -118,8 +138,9 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
             val date = state.selectedDate
             val type = state.selectedType
             Log.d(TAG, "Loading more – offset=$currentOffset, date=$date, type=$type")
+            val query = state.searchQuery.trim().takeIf { it.isNotEmpty() }
             runCatching {
-                repository.fetchHistoryPage(PAGE_SIZE, currentOffset, date = date, type = type)
+                repository.fetchHistoryPage(PAGE_SIZE, currentOffset, date = date, type = type, q = query)
             }.onSuccess { response ->
                 currentOffset += PAGE_SIZE
                 val total = response.total ?: _uiState.value.totalServerCount
@@ -161,5 +182,6 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
     private companion object {
         const val TAG = "AlertHistoryVM"
         const val PAGE_SIZE = 50
+        const val SEARCH_DEBOUNCE_MS = 300L
     }
 }

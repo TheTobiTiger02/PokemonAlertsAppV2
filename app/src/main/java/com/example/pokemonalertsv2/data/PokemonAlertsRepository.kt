@@ -53,8 +53,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         return remoteAlerts
     }
 
-    suspend fun getHistory(): List<PokemonAlert> {
-        val response = service.getHistory()
+    suspend fun getHistory(q: String? = null): List<PokemonAlert> {
+        val response = service.getHistory(q = normalizedHistoryQuery(q))
         return response.data
     }
 
@@ -71,13 +71,15 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun refreshHistory(
         pageSize: Int,
         date: String? = null,
-        type: String? = null
+        type: String? = null,
+        q: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = pageSize,
             offset = 0,
             date = date,
-            type = type
+            type = type,
+            q = normalizedHistoryQuery(q)
         )
         historyAlertDao.replaceAll(response.data.map { it.toHistoryEntity() })
         return response
@@ -91,17 +93,21 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         limit: Int,
         offset: Int,
         date: String? = null,
-        type: String? = null
+        type: String? = null,
+        q: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = limit,
             offset = offset,
             date = date,
-            type = type
+            type = type,
+            q = normalizedHistoryQuery(q)
         )
         historyAlertDao.insertAll(response.data.map { it.toHistoryEntity() })
         return response
     }
+
+    private fun normalizedHistoryQuery(q: String?): String? = q?.trim()?.takeIf { it.isNotEmpty() }
 
     /** Wipes the local history cache (e.g. on logout / data-reset). */
     suspend fun clearHistoryCache() {

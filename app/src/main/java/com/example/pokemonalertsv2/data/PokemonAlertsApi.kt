@@ -52,7 +52,8 @@ interface PokemonAlertsService {
         @Query("type") type: String? = null,
         @Query("date") date: String? = null,
         @Query("startDate") startDate: String? = null,
-        @Query("endDate") endDate: String? = null
+        @Query("endDate") endDate: String? = null,
+        @Query("q") q: String? = null
     ): HistoryResponse
 
     @GET("api/history")
@@ -62,7 +63,8 @@ interface PokemonAlertsService {
         @Query("type") type: String? = null,
         @Query("date") date: String? = null,
         @Query("startDate") startDate: String? = null,
-        @Query("endDate") endDate: String? = null
+        @Query("endDate") endDate: String? = null,
+        @Query("q") q: String? = null
     ): HistoryResponse
 
     @GET("api/stats/total")

@@ -359,6 +359,7 @@ fun AlertHistoryRoute(
     onLoadMore: () -> Unit,
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
+    onSearchChanged: (String) -> Unit,
     consumeError: () -> Unit
 ) {
     val context = LocalContext.current
@@ -439,6 +440,7 @@ fun AlertHistoryRoute(
                     onLoadMore = onLoadMore,
                     onDateChanged = onDateChanged,
                     onTypeChanged = onTypeChanged,
+                    onSearchChanged = onSearchChanged,
                     onAlertClick = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
                         context.startActivity(intent)
@@ -1213,6 +1215,7 @@ private fun AlertHistoryPage(
     onLoadMore: () -> Unit,
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
+    onSearchChanged: (String) -> Unit,
     onAlertClick: (PokemonAlert) -> Unit
 ) {
     val context = LocalContext.current
@@ -1220,7 +1223,6 @@ private fun AlertHistoryPage(
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
-    var searchQuery by rememberSaveable { mutableStateOf("") }
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
 
@@ -1246,21 +1248,10 @@ private fun AlertHistoryPage(
     // only load one page at a time, so deriving chips from loaded items is incomplete.
     val availableFilters = remember { AlertFilter.entries.toSet() }
 
-    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation, searchQuery) {
+    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation) {
         // Type filtering is now server-side — uiState.alerts already contains
-        // only the selected type (or all types when no filter is active).
+        // only the selected type/search result (or all types when no filter is active).
         var filtered = uiState.alerts
-        
-        // Apply text search
-        if (searchQuery.isNotBlank()) {
-            val query = searchQuery.trim().lowercase()
-            filtered = filtered.filter { alert ->
-                alert.name.lowercase().contains(query) ||
-                    (alert.pokemon?.lowercase()?.contains(query) == true) ||
-                    (alert.cleanPokemonName.lowercase().contains(query)) ||
-                    (alert.locationDisplay?.lowercase()?.contains(query) == true)
-            }
-        }
         
         // Sort based on user preference
         when (sortPreference) {
@@ -1294,7 +1285,14 @@ private fun AlertHistoryPage(
     }
     
     // Statistics: prefer /api/stats/total (all-time), fall back to local counting.
-    val statistics = remember(filteredAlerts, uiState.totalStats, uiState.selectedDate, uiState.totalServerCount) {
+    val statistics = remember(
+        filteredAlerts,
+        uiState.totalStats,
+        uiState.selectedDate,
+        uiState.selectedType,
+        uiState.searchQuery,
+        uiState.totalServerCount
+    ) {
         val stats = uiState.totalStats
         val serverTotal = uiState.totalServerCount
         val byType = stats?.byType ?: emptyMap()
@@ -1315,7 +1313,11 @@ private fun AlertHistoryPage(
             if (!categorized) other++
         }
 
-        if (uiState.selectedDate == null && byType.isNotEmpty()) {
+        if (uiState.selectedDate == null &&
+            uiState.selectedType == null &&
+            uiState.searchQuery.isBlank() &&
+            byType.isNotEmpty()
+        ) {
             // All-time view + server stats loaded → authoritative per-type from byType map
             mapOf(
                 "total" to (stats?.totalAlerts ?: serverTotal),
@@ -1411,8 +1413,8 @@ private fun AlertHistoryPage(
 
                     // Search bar for history
                     AlertSearchBar(
-                        query = searchQuery,
-                        onQueryChanged = { searchQuery = it },
+                        query = uiState.searchQuery,
+                        onQueryChanged = onSearchChanged,
                         placeholder = "Search history…"
                     )
                 }
@@ -1594,7 +1596,7 @@ private fun AlertHistoryPage(
                 item {
                     AnimatedEmptyState(
                         title = "No history found",
-                        message = "There are no alerts matching your filters. Try changing the date or type."
+                        message = "No alerts match your search or filters. Try changing the search, date, or type."
                     )
                 }
             }

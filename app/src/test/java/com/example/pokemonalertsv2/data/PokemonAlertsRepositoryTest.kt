@@ -4,6 +4,7 @@ import com.example.pokemonalertsv2.data.database.AlertDao
 import com.example.pokemonalertsv2.data.database.AlertEntity
 import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.HistoryAlertEntity
+import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,6 +66,70 @@ class PokemonAlertsRepositoryTest {
         assertEquals("Service", dao.alerts.value.first().name)
     }
 
+    @Test
+    fun refreshHistory_passesTrimmedSearchQuery_andReplacesCache() = runTest {
+        val alert = sampleAlert("Pikachu")
+        service.historyResponse = HistoryResponse(total = 1, limit = 50, offset = 0, count = 1, data = listOf(alert))
+
+        val response = repository.refreshHistory(
+            pageSize = 50,
+            date = "2026-05-19",
+            type = "Quest",
+            q = "  pikachu  "
+        )
+
+        assertEquals(listOf(alert), response.data)
+        assertEquals(1, historyDao.alerts.value.size)
+        assertEquals(
+            HistoryPagedRequest(
+                limit = 50,
+                offset = 0,
+                type = "Quest",
+                date = "2026-05-19",
+                startDate = null,
+                endDate = null,
+                q = "pikachu"
+            ),
+            service.pagedHistoryRequests.single()
+        )
+    }
+
+    @Test
+    fun refreshHistory_treatsBlankSearchQueryAsNull() = runTest {
+        repository.refreshHistory(pageSize = 50, q = "   ")
+
+        assertEquals(null, service.pagedHistoryRequests.single().q)
+    }
+
+    @Test
+    fun fetchHistoryPage_passesSearchQueryAndOffset_andAppendsCache() = runTest {
+        historyDao.alerts.value = listOf(sampleAlert("Existing").toHistoryEntity())
+        val alert = sampleAlert("Alsbach")
+        service.historyResponse = HistoryResponse(total = 75, limit = 50, offset = 50, count = 1, data = listOf(alert))
+
+        repository.fetchHistoryPage(
+            limit = 50,
+            offset = 50,
+            date = "2026-05-19",
+            type = "Raid",
+            q = "alsbach"
+        )
+
+        assertEquals(2, historyDao.alerts.value.size)
+        assertEquals(
+            HistoryPagedRequest(
+                limit = 50,
+                offset = 50,
+                type = "Raid",
+                date = "2026-05-19",
+                startDate = null,
+                endDate = null,
+                q = "alsbach"
+            ),
+            service.pagedHistoryRequests.single()
+        )
+    }
+
     private fun sampleAlert(name: String, endTime: String = "2025-10-07 23:59:59") = PokemonAlert(
         name = name,
         description = "description $name",
@@ -78,14 +143,36 @@ class PokemonAlertsRepositoryTest {
 
     private class FakePokemonAlertsService : PokemonAlertsService {
         var alerts: List<PokemonAlert> = emptyList()
+        var historyResponse: HistoryResponse = HistoryResponse(data = emptyList())
+        val pagedHistoryRequests = mutableListOf<HistoryPagedRequest>()
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
-        override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?): HistoryResponse =
-            HistoryResponse(data = emptyList())
-        override suspend fun getHistoryPaged(limit: Int, offset: Int, type: String?, date: String?, startDate: String?, endDate: String?): HistoryResponse =
-            HistoryResponse(data = emptyList())
+        override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
+            historyResponse
+        override suspend fun getHistoryPaged(
+            limit: Int,
+            offset: Int,
+            type: String?,
+            date: String?,
+            startDate: String?,
+            endDate: String?,
+            q: String?
+        ): HistoryResponse {
+            pagedHistoryRequests += HistoryPagedRequest(limit, offset, type, date, startDate, endDate, q)
+            return historyResponse
+        }
         override suspend fun getTotalStats(): TotalStatsResponse = TotalStatsResponse()
     }
+
+    private data class HistoryPagedRequest(
+        val limit: Int,
+        val offset: Int,
+        val type: String?,
+        val date: String?,
+        val startDate: String?,
+        val endDate: String?,
+        val q: String?
+    )
 
     private class FakeHistoryAlertDao : HistoryAlertDao() {
         val alerts = MutableStateFlow<List<HistoryAlertEntity>>(emptyList())

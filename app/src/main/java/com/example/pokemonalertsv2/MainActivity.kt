@@ -377,6 +377,7 @@ private fun MainScaffold(
                             onLoadMore = historyViewModel::loadMore,
                             onDateChanged = historyViewModel::setDateFilter,
                             onTypeChanged = historyViewModel::setTypeFilter,
+                            onSearchChanged = historyViewModel::setSearchQuery,
                             consumeError = historyViewModel::consumeError
                         )
                     }
