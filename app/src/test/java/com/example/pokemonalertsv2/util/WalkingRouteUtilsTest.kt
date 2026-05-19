@@ -1,10 +1,9 @@
 package com.example.pokemonalertsv2.util
 
+import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.Locale
@@ -24,29 +23,40 @@ class WalkingRouteUtilsTest {
     }
 
     @Test
-    fun routeInfoFromMatrixCells_roundsDistanceAndDurationUp() {
-        val routeInfo = WalkingRouteUtils.routeInfoFromMatrixCells(
-            durationSeconds = 159.2,
-            distanceMeters = 821.4
-        )
+    fun estimateWalkingRouteInfo_appliesDetourFactorAndWalkingSpeed() {
+        val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(800f)
 
-        assertEquals(WalkingRouteInfo(distanceMeters = 822, durationSeconds = 160), routeInfo)
+        assertEquals(WalkingRouteInfo(distanceMeters = 1_000, durationSeconds = 741), routeInfo)
     }
 
     @Test
-    fun routeInfoFromMatrixCells_returnsNullForFailedOrIncompleteRoutes() {
-        assertNull(
-            WalkingRouteUtils.routeInfoFromMatrixCells(
-                durationSeconds = null,
-                distanceMeters = 822.0
-            )
+    fun estimateWalkingRouteInfo_returnsNullForInvalidDistances() {
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(null))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(-1f))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(Float.NaN))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(Float.POSITIVE_INFINITY))
+    }
+
+    @Test
+    fun buildEstimatedWalkingRoutes_skipsAlertsWithoutCoordinates() {
+        val completeAlert = alert(name = "Complete", latitude = 52.1, longitude = 13.1)
+        val missingLatitude = alert(name = "Missing latitude", latitude = null, longitude = 13.1)
+        val missingLongitude = alert(name = "Missing longitude", latitude = 52.1, longitude = null)
+
+        val routes = WalkingRouteUtils.buildEstimatedWalkingRoutes(
+            alerts = listOf(completeAlert, missingLatitude, missingLongitude),
+            straightLineDistanceMeters = { _, _ -> 800f }
         )
-        assertNull(
-            WalkingRouteUtils.routeInfoFromMatrixCells(
-                durationSeconds = 160.0,
-                distanceMeters = null
-            )
-        )
+
+        assertEquals(setOf(completeAlert.uniqueId), routes.keys)
+        assertEquals(WalkingRouteInfo(distanceMeters = 1_000, durationSeconds = 741), routes[completeAlert.uniqueId])
+    }
+
+    @Test
+    fun formatWalkingDurationSeconds_keepsVeryShortRoutesAtOneMinute() {
+        val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(0.1f)
+
+        assertEquals("1 min walk", WalkingRouteUtils.formatWalkingDurationSeconds(routeInfo!!.durationSeconds))
     }
 
     @Test
@@ -73,10 +83,14 @@ class WalkingRouteUtilsTest {
         assertNull(displayInfo.walkingText)
     }
 
-    @Test
-    fun isRoutesApiKeyConfigured_rejectsBlankKeys() {
-        assertFalse(WalkingRouteUtils.isRoutesApiKeyConfigured(""))
-        assertFalse(WalkingRouteUtils.isRoutesApiKeyConfigured("   "))
-        assertTrue(WalkingRouteUtils.isRoutesApiKeyConfigured("routes-key"))
-    }
+    private fun alert(
+        name: String,
+        latitude: Double?,
+        longitude: Double?
+    ): PokemonAlert = PokemonAlert(
+        name = name,
+        latitude = latitude,
+        longitude = longitude,
+        endTime = name
+    )
 }
