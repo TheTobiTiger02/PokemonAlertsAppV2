@@ -603,7 +603,7 @@ fun SnoozeDurationDialog(
     )
 }
 
-private suspend fun snoozeAlertFromUi(context: Context, alert: PokemonAlert, minutes: Int): Boolean {
+suspend fun snoozeAlertFromUi(context: Context, alert: PokemonAlert, minutes: Int): Boolean {
     val safeMinutes = minutes.coerceIn(1, 24 * 60)
     return withContext(Dispatchers.IO) {
         AlertPreferences(context.alertPreferencesDataStore).updateSnoozeDuration(safeMinutes)
@@ -1211,72 +1211,24 @@ fun AlertDetailScreen(
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilledTonalButton(
-                            onClick = { showSnoozeDialog = true },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Notifications,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 6.dp)
-                            )
-                            Text(
-                                text = "Snooze",
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        FilledTonalButton(
-                            onClick = { openMapForAlert(context, alert) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_map),
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 6.dp)
-                            )
-                            Text(
-                                text = "Maps",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(96.dp))
                 }
             }
+            AlertDetailActionBar(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                onSnoozeClick = { showSnoozeDialog = true },
+                onNavigateClick = { openMapForAlert(context, alert) },
+                onShareClick = {
+                    scope.launch {
+                        AlertShareCard.share(context, alert)
+                    }
+                }
+            )
             SnackbarHost(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = 96.dp)
             )
         }
     }
@@ -1299,6 +1251,79 @@ fun AlertDetailScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun AlertDetailActionBar(
+    modifier: Modifier = Modifier,
+    onSnoozeClick: () -> Unit,
+    onNavigateClick: () -> Unit,
+    onShareClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFF0F172A).copy(alpha = 0.96f),
+        tonalElevation = 8.dp,
+        shadowElevation = 12.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp)
+                .height(54.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FilledTonalButton(
+                onClick = onSnoozeClick,
+                modifier = Modifier.weight(1f).height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Notifications,
+                    contentDescription = "Snooze",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            FilledTonalButton(
+                onClick = onNavigateClick,
+                modifier = Modifier.weight(1f).height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map),
+                    contentDescription = "Navigate",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            FilledTonalButton(
+                onClick = onShareClick,
+                modifier = Modifier.weight(1f).height(54.dp),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = "Share",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
     }
 }
 

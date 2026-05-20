@@ -164,80 +164,8 @@ fun PokemonAlertsRoute(
     val scope = rememberCoroutineScope()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
-        // Build formatted share text
-        val shareText = buildString {
-            append("🎮 Pokemon Alert: ${formatAlertTitle(alert)}\n\n")
-            alert.formattedIv?.let { append("📊 IV: $it\n") }
-            alert.cp?.let { append("⚡ CP: $it\n") }
-            alert.level?.let { append("📈 Level: ${if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()}\n") }
-            alert.type?.takeIf { it.isNotEmpty() }?.let { types ->
-                val typeStr = types.filter { !it.equals("rare", true) && !it.equals("spawn", true) && !it.equals("hundo", true) && !it.equals("nundo", true) && !it.equals("pvp", true) }
-                    .joinToString(", ") { it.replaceFirstChar { c -> c.uppercase() } }
-                if (typeStr.isNotBlank()) {
-                    append("🏷 Type: $typeStr\n")
-                }
-            }
-            append("\n⏱ Ends: ${alert.endTime}\n")
-            alert.locationDisplay?.let { append("📍 $it\n") }
-            append("\n🗺 Open in Maps:\n${alert.googleMapsUri}")
-        }
-        
-        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val imageUrl = alert.imageUrl ?: alert.thumbnailUrl
-                var imageUri: android.net.Uri? = null
-                
-                if (!imageUrl.isNullOrBlank()) {
-                    val sharedImagesDir = java.io.File(context.cacheDir, "shared_alerts")
-                    if (!sharedImagesDir.exists()) sharedImagesDir.mkdirs()
-                    val imageFile = java.io.File(sharedImagesDir, "pokemon_${alert.uniqueId.hashCode()}.png")
-                    val request = coil.request.ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .build()
-                    val result = coil.ImageLoader(context).execute(request)
-                    if (result is coil.request.SuccessResult) {
-                        val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
-                        if (bitmap != null) {
-                            java.io.FileOutputStream(imageFile).use { out ->
-                                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
-                            }
-                            imageUri = androidx.core.content.FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                imageFile
-                            )
-                        }
-                    }
-                }
-                
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    val shareIntent = if (imageUri != null) {
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "image/*"
-                            putExtra(Intent.EXTRA_STREAM, imageUri)
-                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
-                            putExtra(Intent.EXTRA_TEXT, shareText)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    } else {
-                        Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
-                            putExtra(Intent.EXTRA_TEXT, shareText)
-                        }
-                    }
-                    context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
-                }
-            } catch (e: Exception) {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${formatAlertTitle(alert)}")
-                        putExtra(Intent.EXTRA_TEXT, shareText)
-                    }
-                    context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
-                }
-            }
+        scope.launch {
+            AlertShareCard.share(context, alert)
         }
     }
 
@@ -1225,6 +1153,7 @@ private fun AlertHistoryPage(
     var userLocation by remember { mutableStateOf<Location?>(null) }
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         userLocation = getLastKnownLocation(context)
@@ -1615,13 +1544,9 @@ private fun AlertHistoryPage(
                         onAlertClick(alert) 
                     },
                     onShareClick = {
-                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, "Pokemon Alert: ${alert.name}")
-                            val text = "Check out this ${alert.name}!\nEnds at: ${alert.endTime}\n${alert.googleMapsUri}"
-                            putExtra(Intent.EXTRA_TEXT, text)
+                        scope.launch {
+                            AlertShareCard.share(context, alert)
                         }
-                        context.startActivity(Intent.createChooser(shareIntent, "Share Alert"))
                     }
                 )
             }

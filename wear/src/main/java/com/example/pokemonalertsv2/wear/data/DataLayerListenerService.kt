@@ -3,6 +3,8 @@ package com.example.pokemonalertsv2.wear.data
 import android.content.Intent
 import android.util.Log
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.wear.tiles.TileService
+import com.example.pokemonalertsv2.wear.tile.AlertsTileService
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
@@ -25,6 +27,9 @@ class DataLayerListenerService : WearableListenerService() {
                         // Save to SharedPreferences so MainActivity can read it
                         val prefs = getSharedPreferences("wear_prefs", MODE_PRIVATE)
                         prefs.edit().putString("alerts_json", jsonString).apply()
+
+                        TileService.getUpdater(applicationContext)
+                            .requestUpdate(AlertsTileService::class.java)
                         
                         // Notify UI if open
                         val intent = Intent("com.example.pokemonalertsv2.wear.ALERTS_UPDATED")

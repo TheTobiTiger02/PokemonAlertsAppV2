@@ -107,6 +107,7 @@ class AlertDetailActivity : ComponentActivity() {
     }
 
     private fun Intent.toPokemonAlert(): PokemonAlert? {
+        val id = getIntExtra(EXTRA_ALERT_ID, -1).takeIf { it >= 0 }
         val name = getStringExtra(EXTRA_ALERT_NAME) ?: return null
         val description = getStringExtra(EXTRA_ALERT_DESCRIPTION) ?: ""
         val imageUrl = getStringExtra(EXTRA_ALERT_IMAGE_URL)
@@ -155,6 +156,11 @@ class AlertDetailActivity : ComponentActivity() {
         // Weather change fields
         val newCp = getIntExtra(EXTRA_NEW_CP, -1).takeIf { it >= 0 }
         val newIv = getStringExtra(EXTRA_NEW_IV)
+        val oldSpecies = getStringExtra(EXTRA_OLD_SPECIES)
+        val oldIv = getStringExtra(EXTRA_OLD_IV)
+        val oldCp = getIntExtra(EXTRA_OLD_CP, -1).takeIf { it >= 0 }
+        val newSpecies = getStringExtra(EXTRA_NEW_SPECIES)
+        val area = getStringExtra(EXTRA_AREA)
 
         // PvP Rankings (serialized as JSON)
         val pvpRankingsJson = getStringExtra(EXTRA_PVP_RANKINGS)
@@ -169,6 +175,7 @@ class AlertDetailActivity : ComponentActivity() {
         }
 
         return PokemonAlert(
+            id = id,
             name = name,
             description = description,
             imageUrl = imageUrl,
@@ -203,12 +210,18 @@ class AlertDetailActivity : ComponentActivity() {
             pokemonRewards = pokemonRewards,
             createdAt = createdAt,
             newCp = newCp,
-            newIv = newIv
+            newIv = newIv,
+            oldSpecies = oldSpecies,
+            oldIv = oldIv,
+            oldCp = oldCp,
+            newSpecies = newSpecies,
+            area = area
         )
     }
 
     companion object {
         private const val EXTRA_ALERT_NAME = "extra_alert_name"
+        private const val EXTRA_ALERT_ID = "extra_alert_id"
         private const val EXTRA_ALERT_DESCRIPTION = "extra_alert_description"
         private const val EXTRA_ALERT_IMAGE_URL = "extra_alert_image"
         private const val EXTRA_ALERT_LATITUDE = "extra_alert_latitude"
@@ -247,6 +260,11 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_POKEMON_REWARDS = "extra_pokemon_rewards"
         private const val EXTRA_NEW_CP = "extra_new_cp"
         private const val EXTRA_NEW_IV = "extra_new_iv"
+        private const val EXTRA_OLD_SPECIES = "extra_old_species"
+        private const val EXTRA_OLD_IV = "extra_old_iv"
+        private const val EXTRA_OLD_CP = "extra_old_cp"
+        private const val EXTRA_NEW_SPECIES = "extra_new_species"
+        private const val EXTRA_AREA = "extra_area"
         const val EXTRA_LAUNCH_PIP = "extra_launch_pip"
 
         fun createIntent(context: Context, alert: PokemonAlert): Intent {
@@ -254,6 +272,7 @@ class AlertDetailActivity : ComponentActivity() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
+                alert.id?.let { putExtra(EXTRA_ALERT_ID, it) }
                 putExtra(EXTRA_ALERT_NAME, alert.name)
                 putExtra(EXTRA_ALERT_DESCRIPTION, alert.description)
                 putExtra(EXTRA_ALERT_IMAGE_URL, alert.imageUrl)
@@ -295,6 +314,11 @@ class AlertDetailActivity : ComponentActivity() {
                 putExtra(EXTRA_CREATED_AT, alert.createdAt)
                 alert.newCp?.let { putExtra(EXTRA_NEW_CP, it) }
                 putExtra(EXTRA_NEW_IV, alert.newIv)
+                putExtra(EXTRA_OLD_SPECIES, alert.oldSpecies)
+                putExtra(EXTRA_OLD_IV, alert.oldIv)
+                alert.oldCp?.let { putExtra(EXTRA_OLD_CP, it) }
+                putExtra(EXTRA_NEW_SPECIES, alert.newSpecies)
+                putExtra(EXTRA_AREA, alert.area)
                 alert.pvpRankings?.let { rankings ->
                     if (rankings.isNotEmpty()) {
                         putExtra(EXTRA_PVP_RANKINGS, Json.encodeToString(rankings))

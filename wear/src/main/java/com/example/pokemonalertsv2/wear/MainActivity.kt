@@ -8,6 +8,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -93,7 +94,12 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                             items(alerts) { alert ->
-                                AlertItem(alert = alert, onClick = { openOnPhone(alert) })
+                                AlertItem(
+                                    alert = alert,
+                                    onOpen = { sendAlertAction("/open_alert", alert) },
+                                    onNavigate = { sendAlertAction("/navigate_alert", alert) },
+                                    onSnooze = { sendAlertAction("/snooze_alert", alert) }
+                                )
                             }
                         }
                     }
@@ -147,22 +153,26 @@ class MainActivity : ComponentActivity() {
         }
     }
     
-    private fun openOnPhone(alert: PokemonAlertWearModel) {
+    private fun sendAlertAction(path: String, alert: PokemonAlertWearModel) {
         val messageClient = Wearable.getMessageClient(this)
         Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
+            val payload = alert.uniqueId.toByteArray()
             for (node in nodes) {
-                // Send a message to the phone to open this alert
-                val payload = alert.name.toByteArray()
-                messageClient.sendMessage(node.id, "/open_alert", payload)
+                messageClient.sendMessage(node.id, path, payload)
             }
         }
     }
 }
 
 @Composable
-fun AlertItem(alert: PokemonAlertWearModel, onClick: () -> Unit) {
+fun AlertItem(
+    alert: PokemonAlertWearModel,
+    onOpen: () -> Unit,
+    onNavigate: () -> Unit,
+    onSnooze: () -> Unit
+) {
     Card(
-        onClick = onClick,
+        onClick = onOpen,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
@@ -220,6 +230,41 @@ fun AlertItem(alert: PokemonAlertWearModel, onClick: () -> Unit) {
                 fontSize = 10.sp,
                 color = Color(0xFFF38BA8)
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                WearActionChip(label = "Open", modifier = Modifier.weight(1f), onClick = onOpen)
+                WearActionChip(label = "Nav", modifier = Modifier.weight(1f), onClick = onNavigate)
+                WearActionChip(label = "Snooze", modifier = Modifier.weight(1f), onClick = onSnooze)
+            }
         }
+    }
+}
+
+@Composable
+private fun WearActionChip(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(30.dp)
+            .background(Color(0xFF313244), RoundedCornerShape(15.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

@@ -546,6 +546,7 @@ private fun AlertDetailPopup(
     onOpenFullDetail: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     
     var currentTime by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -628,16 +629,18 @@ private fun AlertDetailPopup(
                     }
                 }
                 
-                // Action Row
+                // Primary actions
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                     androidx.compose.material3.Button(
+                    androidx.compose.material3.Button(
                         onClick = {
                             openMapForAlert(context, alert)
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
                          Icon(
@@ -645,16 +648,30 @@ private fun AlertDetailPopup(
                              contentDescription = null,
                              modifier = Modifier.size(18.dp).padding(end = 8.dp)
                          )
-                         Text("Directions")
+                         Text("Go")
                     }
-                    
+
                     androidx.compose.material3.FilledTonalButton(
-                        onClick = onOpenFullDetail,
-                        modifier = Modifier.weight(1f),
+                        onClick = {
+                            scope.launch {
+                                AlertShareCard.share(context, alert)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                         Text("Details")
+                         Text("Share")
                     }
+                }
+
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = onOpenFullDetail,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Open full detail")
                 }
             }
         }
