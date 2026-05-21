@@ -45,14 +45,24 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun detectNewAlerts_skipsAlertsSeenByServerId() = runTest {
+        val seenAlert = sampleAlert(name = "Seen", id = 6215)
+        preferences.updateSeenAlertIds(setOf("server:6215"))
+
+        val freshAlerts = repository.detectNewAlerts(listOf(seenAlert, sampleAlert("New", id = 6216)))
+
+        assertEquals(listOf(sampleAlert("New", id = 6216)), freshAlerts)
+    }
+
+    @Test
     fun markAlertsAsSeen_persistsIdentifiers() = runTest {
-        val alertA = sampleAlert("A")
+        val alertA = sampleAlert("A", id = 101)
         val alertB = sampleAlert("B", endTime = "2025-10-08 08:00:00")
 
         repository.markAlertsAsSeen(listOf(alertA, alertB))
 
         val storedIds = preferences.getSeenAlertIds()
-        assertTrue(storedIds.containsAll(listOf(alertA.uniqueId, alertB.uniqueId)))
+        assertTrue(storedIds.containsAll(listOf("server:101", alertA.uniqueId, alertB.uniqueId)))
     }
 
     @Test
@@ -77,6 +87,19 @@ class PokemonAlertsRepositoryTest {
 
         assertEquals(listOf(alert), fetched)
         assertEquals(0, dao.insertCalls)
+        assertEquals(0, dao.clearCalls)
+    }
+
+    @Test
+    fun upsertAlert_insertsSingleAlertWithoutClearingCache() = runTest {
+        val existing = sampleAlert("Existing", id = 1)
+        dao.alerts.value = listOf(existing.toEntity())
+        val pushed = sampleAlert("Pushed", id = 6215)
+
+        repository.upsertAlert(pushed)
+
+        assertEquals(listOf(existing.toEntity(), pushed.toEntity()), dao.alerts.value)
+        assertEquals(1, dao.insertCalls)
         assertEquals(0, dao.clearCalls)
     }
 
@@ -144,7 +167,12 @@ class PokemonAlertsRepositoryTest {
         )
     }
 
-    private fun sampleAlert(name: String, endTime: String = "2025-10-07 23:59:59") = PokemonAlert(
+    private fun sampleAlert(
+        name: String,
+        endTime: String = "2025-10-07 23:59:59",
+        id: Int? = null
+    ) = PokemonAlert(
+        id = id,
         name = name,
         description = "description $name",
         imageUrl = null,
@@ -343,7 +371,10 @@ class PokemonAlertsRepositoryTest {
 
         override suspend fun insertAlerts(newAlerts: List<AlertEntity>) {
             insertCalls++
-            alerts.value = newAlerts
+            val byId = LinkedHashMap<String, AlertEntity>()
+            alerts.value.forEach { byId[it.uniqueId] = it }
+            newAlerts.forEach { byId[it.uniqueId] = it }
+            alerts.value = byId.values.toList()
         }
 
         override suspend fun clearAll() {

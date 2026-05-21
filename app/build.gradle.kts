@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn("app/google-services.json not found; Firebase resources will be generated once it is provided.")
+}
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -71,6 +77,8 @@ dependencies {
     implementation(libs.google.play.services.maps)
     implementation(libs.google.maps.compose)
     implementation(libs.google.play.services.location)
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     
     // Room
     implementation(libs.androidx.room.runtime)

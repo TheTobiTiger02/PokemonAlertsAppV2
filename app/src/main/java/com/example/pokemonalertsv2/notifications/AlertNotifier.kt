@@ -277,6 +277,7 @@ object AlertNotifier {
         private val allowedSpawnSpeciesLower = allowedSpawnSpecies.lowercaseSet()
 
         fun shouldNotify(alert: PokemonAlert): Boolean {
+            if (!notificationsEnabled || isSilenced) return false
             return when {
                 alert.hasTypeContaining("raid") -> {
                     raidsEnabled && raidTierAllowed(alert)

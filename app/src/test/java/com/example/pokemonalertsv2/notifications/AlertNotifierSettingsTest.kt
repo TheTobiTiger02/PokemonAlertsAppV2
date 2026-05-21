@@ -23,11 +23,33 @@ class AlertNotifierSettingsTest {
         assertTrue(settings.shouldNotify(sampleAlert(name = "Tier 5 Raid", type = listOf("Raid", "5"))))
     }
 
+    @Test
+    fun shouldNotify_blocksWhenNotificationsDisabledOrSilenced() {
+        assertFalse(notificationSettings(notificationsEnabled = false).shouldNotify(sampleAlert()))
+        assertFalse(notificationSettings(silenceUntil = 2_000L, nowMillis = 1_000L).shouldNotify(sampleAlert()))
+    }
+
+
+
+    @Test
+    fun shouldNotify_appliesTypeToggles() {
+        val settings = notificationSettings(rocketEnabled = false)
+
+        assertFalse(settings.shouldNotify(sampleAlert(type = listOf("Rocket"))))
+        assertTrue(settings.shouldNotify(sampleAlert(type = listOf("Quest"))))
+    }
+
     private fun notificationSettings(
+        notificationsEnabled: Boolean = true,
+        rocketEnabled: Boolean = true,
+        silenceUntil: Long = 0L,
+        selectedArea: String = "All",
+        maxDistance: Int = 0,
         allowedHundoSpecies: Set<String> = emptySet(),
-        excludedRaidTiers: Set<String> = emptySet()
+        excludedRaidTiers: Set<String> = emptySet(),
+        nowMillis: Long = System.currentTimeMillis()
     ) = AlertNotifier.NotificationSettings(
-        notificationsEnabled = true,
+        notificationsEnabled = notificationsEnabled,
         raidsEnabled = true,
         spawnsEnabled = true,
         questsEnabled = true,
@@ -35,11 +57,11 @@ class AlertNotifierSettingsTest {
         pvpEnabled = true,
         nundosEnabled = true,
         kecleonEnabled = true,
-        rocketEnabled = true,
+        rocketEnabled = rocketEnabled,
         vibrateEnabled = true,
-        silenceUntil = 0L,
-        selectedArea = "All",
-        maxDistance = 0,
+        silenceUntil = silenceUntil,
+        selectedArea = selectedArea,
+        maxDistance = maxDistance,
         excludedHundoTypes = emptySet(),
         excludedNundoTypes = emptySet(),
         excludedPvpTypes = emptySet(),
@@ -49,11 +71,17 @@ class AlertNotifierSettingsTest {
         allowedHundoSpecies = allowedHundoSpecies,
         allowedNundoSpecies = emptySet(),
         allowedPvpSpecies = emptySet(),
-        allowedSpawnSpecies = emptySet()
+        allowedSpawnSpecies = emptySet(),
+        nowMillis = nowMillis
     )
 
-    private fun sampleAlert(name: String, type: List<String>) = PokemonAlert(
+    private fun sampleAlert(
+        name: String = "Pikachu",
+        type: List<String> = listOf("Hundo"),
+        area: String? = null
+    ) = PokemonAlert(
         name = name,
-        type = type
+        type = type,
+        area = area
     )
 }

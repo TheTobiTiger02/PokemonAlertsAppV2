@@ -8,9 +8,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.example.pokemonalertsv2.fcm.FcmTopicSubscriber
 import com.example.pokemonalertsv2.notifications.AlertNotifier
-import com.example.pokemonalertsv2.work.AlertAlarmScheduler
-import com.example.pokemonalertsv2.work.AlertWorker
 
 class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
@@ -18,9 +17,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         super.onCreate()
         try {
             AlertNotifier.ensureChannel(this)
-            AlertWorker.schedule(this)
-            AlertWorker.triggerImmediateSync(this)
-            AlertAlarmScheduler.prime(this)
+            FcmTopicSubscriber.subscribe(this)
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)
         }

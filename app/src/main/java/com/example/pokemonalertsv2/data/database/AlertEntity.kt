@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 data class AlertEntity(
     @PrimaryKey
     val uniqueId: String,
+    val id: Int? = null,
     val name: String,
     val description: String,
     val imageUrl: String?,
@@ -85,6 +86,7 @@ data class AlertEntity(
 
 fun AlertEntity.toDomain(): PokemonAlert {
     return PokemonAlert(
+        id = id,
         name = name,
         description = description,
         imageUrl = imageUrl,
@@ -153,6 +155,7 @@ fun AlertEntity.toDomain(): PokemonAlert {
 fun PokemonAlert.toEntity(): AlertEntity {
     return AlertEntity(
         uniqueId = uniqueId,
+        id = id,
         name = name,
         description = description,
         imageUrl = imageUrl,

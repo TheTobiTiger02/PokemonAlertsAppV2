@@ -57,6 +57,10 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         }
     }
 
+    suspend fun upsertAlert(alert: PokemonAlert) {
+        alertDao.insertAlerts(listOf(alert.toEntity()))
+    }
+
     suspend fun getHistory(q: String? = null): List<PokemonAlert> {
         val response = service.getHistory(q = normalizedHistoryQuery(q))
         return response.data
@@ -141,7 +145,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun detectNewAlerts(alerts: List<PokemonAlert>): List<PokemonAlert> {
         if (alerts.isEmpty()) return emptyList()
         val seenIds = preferences.getSeenAlertIds()
-        return alerts.filter { it.uniqueId !in seenIds }
+        return alerts.filter { alert -> alert.seenKeys().none { it in seenIds } }
     }
 
     suspend fun markAlertsAsSeen(alerts: Collection<PokemonAlert>) {
@@ -149,7 +153,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         val current = preferences.getSeenAlertIds()
         val updated = LinkedHashSet<String>(current.size + alerts.size).apply {
             addAll(current)
-            alerts.forEach { add(it.uniqueId) }
+            alerts.forEach { alert -> addAll(alert.seenKeys()) }
         }
         preferences.updateSeenAlertIds(updated)
     }
@@ -179,6 +183,13 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     companion object {
         private val fetchMutex = Mutex()
+
+        internal fun PokemonAlert.seenKeys(): Set<String> {
+            return buildSet {
+                id?.let { add("server:$it") }
+                add(uniqueId)
+            }
+        }
 
         private fun sameCachedAlerts(
             currentEntities: List<AlertEntity>,
