@@ -17,13 +17,20 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.PokemonAlertsApplication
+import com.example.pokemonalertsv2.data.AlertPreferencesStore
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.util.LocationUtils
+import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 object AlertNotifier {
@@ -81,112 +88,35 @@ object AlertNotifier {
         if (alerts.isEmpty()) return
         ensureChannel(context)
         
-        // Check global notification preference
         val repository = PokemonAlertsRepository.create(context)
-        val notificationsEnabled = repository.alertPreferences.notificationsEnabled.first()
-        if (!notificationsEnabled) return
-        
-        // Check if notifications are silenced
-        val silenceUntil = repository.alertPreferences.silenceUntil.first()
-        if (silenceUntil > System.currentTimeMillis()) {
-            return
-        }
-        
-        val raidsEnabled = repository.alertPreferences.raidsNotifications.first()
-        val spawnsEnabled = repository.alertPreferences.spawnsNotifications.first()
-        val questsEnabled = repository.alertPreferences.questsNotifications.first()
-        val hundosEnabled = repository.alertPreferences.hundosNotifications.first()
-        val pvpEnabled = repository.alertPreferences.pvpNotifications.first()
-        val nundosEnabled = repository.alertPreferences.nundosNotifications.first()
-        val kecleonEnabled = repository.alertPreferences.kecleonNotifications.first()
-        val rocketEnabled = repository.alertPreferences.rocketNotifications.first()
-        val vibrateEnabled = repository.alertPreferences.notificationVibrate.first()
-        
-        // Load excluded type sets for granular filtering
-        val excludedHundoTypes = repository.alertPreferences.excludedHundoTypes.first()
-        val excludedNundoTypes = repository.alertPreferences.excludedNundoTypes.first()
-        val excludedPvpTypes = repository.alertPreferences.excludedPvpTypes.first()
-        val excludedSpawnTypes = repository.alertPreferences.excludedSpawnTypes.first()
-        val excludedRocketTypes = repository.alertPreferences.excludedRocketTypes.first()
-        val excludedRaidTiers = repository.alertPreferences.excludedRaidTiers.first()
-                // Load allowed species sets for granular species filtering
-        val allowedHundoSpecies = repository.alertPreferences.allowedHundoSpecies.first()
-        val allowedNundoSpecies = repository.alertPreferences.allowedNundoSpecies.first()
-        val allowedPvpSpecies = repository.alertPreferences.allowedPvpSpecies.first()
-        val allowedSpawnSpecies = repository.alertPreferences.allowedSpawnSpecies.first()
-                val selectedArea = repository.alertPreferences.selectedArea.first()
-        val maxDistance = repository.alertPreferences.maxDistance.first()
+        val settings = NotificationSettings.load(repository.alertPreferences)
+        if (!settings.notificationsEnabled || settings.isSilenced) return
         
         val notificationManager = NotificationManagerCompat.from(context)
-        // Actively try to get a fresh location fix; keep it best-effort with short timeout
-        val userLocation = com.example.pokemonalertsv2.util.LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 5000, highAccuracy = false)
+        val imageLoader = PokemonAlertsApplication.imageLoader(context)
+        val userLocation = NotificationLocationCache.get(context)
         val walkingRoutes = userLocation?.let { location ->
             WalkingRouteUtils.getWalkingRoutes(location, alerts)
         } ?: emptyMap()
 
         alerts.forEachIndexed { index, alert ->
-            // Helper function to check if any of the alert's Pokemon types are excluded
-            fun isPokemonTypeExcluded(excludedSet: Set<String>): Boolean {
-                if (excludedSet.isEmpty()) return false
-                val alertTypes = alert.type ?: return false
-                return alertTypes.any { type -> 
-                    type.lowercase() in excludedSet.map { it.lowercase() }
-                }
-            }
-            
             // Area Filter
-            if (selectedArea != "All" && alert.area != selectedArea) return@forEachIndexed
+            if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEachIndexed
             
             // Distance Filter (allow if maxDistance is 0 or if location is unknown)
-            if (maxDistance > 0 && userLocation != null) {
+            if (settings.maxDistance > 0 && userLocation != null) {
                 val latitude = alert.latitude
                 val longitude = alert.longitude
                 if (latitude != null && longitude != null) {
                     val results = FloatArray(1)
                     Location.distanceBetween(userLocation.latitude, userLocation.longitude, latitude, longitude, results)
-                    if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
+                    if (!results[0].isNaN() && results[0] > settings.maxDistance * 1000) {
                         return@forEachIndexed
                     }
                 }
             }
-            
-            // Filter based on alert type and user preferences
-            fun isSpeciesAllowed(allowedSet: Set<String>): Boolean {
-                if (allowedSet.isEmpty()) return true
-                val alertPokemonName = alert.pokemon ?: alert.name
-                return alertPokemonName.lowercase() in allowedSet.map { it.lowercase() }
-            }
 
-            val shouldNotify = when {
-                alert.hasTypeContaining("raid") -> {
-                    if (!raidsEnabled) false
-                    else {
-                        // Check raid tier exclusions (e.g., "1", "3", "5", "mega")
-                        val raidTier = alert.type?.find { 
-                            it.matches(Regex("\\d+|mega", RegexOption.IGNORE_CASE))
-                        }
-                        raidTier == null || raidTier.lowercase() !in excludedRaidTiers.map { it.lowercase() }
-                    }
-                }
-                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> 
-                    spawnsEnabled && !isPokemonTypeExcluded(excludedSpawnTypes) && isSpeciesAllowed(allowedSpawnSpecies)
-                alert.hasTypeContaining("quest") -> questsEnabled
-                alert.hasType("hundo") -> hundosEnabled && !isPokemonTypeExcluded(excludedHundoTypes) && isSpeciesAllowed(allowedHundoSpecies)
-                alert.hasType("pvp") -> pvpEnabled && !isPokemonTypeExcluded(excludedPvpTypes) && isSpeciesAllowed(allowedPvpSpecies)
-                alert.hasType("nundo") -> nundosEnabled && !isPokemonTypeExcluded(excludedNundoTypes) && isSpeciesAllowed(allowedNundoSpecies)
-                alert.hasType("kecleon") -> kecleonEnabled
-                alert.hasType("rocket") -> {
-                    if (!rocketEnabled) false
-                    else {
-                        // Check grunt type exclusions (e.g., "fire", "water", "psychic")
-                        val gruntType = alert.gruntType?.lowercase()
-                        gruntType == null || gruntType !in excludedRocketTypes.map { it.lowercase() }
-                    }
-                }
-                else -> true // Default to sending for unknown types
-            }
-            
-            if (!shouldNotify) return@forEachIndexed
+            if (!settings.shouldNotify(alert)) return@forEachIndexed
             val notificationIntent = AlertDetailActivity.createIntent(context, alert)
             val pendingIntent = PendingIntent.getActivity(
                 context,
@@ -228,22 +158,19 @@ object AlertNotifier {
             val prefix = if (chips.isNotEmpty()) chips.joinToString(" • ") + " • " else ""
             val contentText = prefix + baseText
 
-            // Load the alert image using Coil, with map+thumbnail composite fallback
-            val bitmap = if (!alert.imageUrl.isNullOrBlank()) {
-                loadImageBitmap(context, alert.imageUrl)
-            } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
-                // Generate composite map + thumbnail image
-                com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
+            // Load primary first, then thumbnail, then a cached map composite so alerts keep an image.
+            val bitmap = loadImageBitmap(context, imageLoader, alert.imageUrl)
+                ?: loadImageBitmap(context, imageLoader, alert.thumbnailUrl)
+                ?: if (alert.latitude != null && alert.longitude != null) {
+                MapFallbackImageGenerator.generate(
                     context = context,
                     latitude = alert.latitude,
                     longitude = alert.longitude,
                     thumbnailUrl = alert.thumbnailUrl,
                     outputWidth = 512,
                     outputHeight = 256
-                ) ?: loadImageBitmap(context, alert.thumbnailUrl)
-            } else {
-                loadImageBitmap(context, alert.thumbnailUrl)
-            }
+                )
+            } else null
 
             // Select Channel ID based on type
             val channelId = when {
@@ -272,7 +199,7 @@ object AlertNotifier {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(ContextCompat.getColor(context, R.color.poke_red))
-                .setVibrate(if (vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
+                .setVibrate(if (settings.vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
                     context.getString(R.string.notification_action_directions),
@@ -310,6 +237,173 @@ object AlertNotifier {
         }
     }
 
+    internal data class NotificationSettings(
+        val notificationsEnabled: Boolean,
+        val raidsEnabled: Boolean,
+        val spawnsEnabled: Boolean,
+        val questsEnabled: Boolean,
+        val hundosEnabled: Boolean,
+        val pvpEnabled: Boolean,
+        val nundosEnabled: Boolean,
+        val kecleonEnabled: Boolean,
+        val rocketEnabled: Boolean,
+        val vibrateEnabled: Boolean,
+        val silenceUntil: Long,
+        val selectedArea: String,
+        val maxDistance: Int,
+        val excludedHundoTypes: Set<String>,
+        val excludedNundoTypes: Set<String>,
+        val excludedPvpTypes: Set<String>,
+        val excludedSpawnTypes: Set<String>,
+        val excludedRocketTypes: Set<String>,
+        val excludedRaidTiers: Set<String>,
+        val allowedHundoSpecies: Set<String>,
+        val allowedNundoSpecies: Set<String>,
+        val allowedPvpSpecies: Set<String>,
+        val allowedSpawnSpecies: Set<String>,
+        val nowMillis: Long = System.currentTimeMillis()
+    ) {
+        val isSilenced: Boolean get() = silenceUntil > nowMillis
+
+        private val excludedHundoTypesLower = excludedHundoTypes.lowercaseSet()
+        private val excludedNundoTypesLower = excludedNundoTypes.lowercaseSet()
+        private val excludedPvpTypesLower = excludedPvpTypes.lowercaseSet()
+        private val excludedSpawnTypesLower = excludedSpawnTypes.lowercaseSet()
+        private val excludedRocketTypesLower = excludedRocketTypes.lowercaseSet()
+        private val excludedRaidTiersLower = excludedRaidTiers.lowercaseSet()
+        private val allowedHundoSpeciesLower = allowedHundoSpecies.lowercaseSet()
+        private val allowedNundoSpeciesLower = allowedNundoSpecies.lowercaseSet()
+        private val allowedPvpSpeciesLower = allowedPvpSpecies.lowercaseSet()
+        private val allowedSpawnSpeciesLower = allowedSpawnSpecies.lowercaseSet()
+
+        fun shouldNotify(alert: PokemonAlert): Boolean {
+            return when {
+                alert.hasTypeContaining("raid") -> {
+                    raidsEnabled && raidTierAllowed(alert)
+                }
+                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> {
+                    spawnsEnabled &&
+                        !isPokemonTypeExcluded(alert, excludedSpawnTypesLower) &&
+                        isSpeciesAllowed(alert, allowedSpawnSpeciesLower)
+                }
+                alert.hasTypeContaining("quest") -> questsEnabled
+                alert.hasType("hundo") -> {
+                    hundosEnabled &&
+                        !isPokemonTypeExcluded(alert, excludedHundoTypesLower) &&
+                        isSpeciesAllowed(alert, allowedHundoSpeciesLower)
+                }
+                alert.hasType("pvp") -> {
+                    pvpEnabled &&
+                        !isPokemonTypeExcluded(alert, excludedPvpTypesLower) &&
+                        isSpeciesAllowed(alert, allowedPvpSpeciesLower)
+                }
+                alert.hasType("nundo") -> {
+                    nundosEnabled &&
+                        !isPokemonTypeExcluded(alert, excludedNundoTypesLower) &&
+                        isSpeciesAllowed(alert, allowedNundoSpeciesLower)
+                }
+                alert.hasType("kecleon") -> kecleonEnabled
+                alert.hasType("rocket") -> {
+                    rocketEnabled && alert.gruntType?.lowercase()?.let { it !in excludedRocketTypesLower } != false
+                }
+                else -> true
+            }
+        }
+
+        private fun raidTierAllowed(alert: PokemonAlert): Boolean {
+            val raidTier = alert.type?.find { it.matches(RAID_TIER_REGEX) }
+            return raidTier == null || raidTier.lowercase() !in excludedRaidTiersLower
+        }
+
+        private fun isPokemonTypeExcluded(alert: PokemonAlert, excludedSet: Set<String>): Boolean {
+            if (excludedSet.isEmpty()) return false
+            return alert.type?.any { it.lowercase() in excludedSet } == true
+        }
+
+        private fun isSpeciesAllowed(alert: PokemonAlert, allowedSet: Set<String>): Boolean {
+            if (allowedSet.isEmpty()) return true
+            return (alert.pokemon ?: alert.name).lowercase() in allowedSet
+        }
+
+        companion object {
+            private val RAID_TIER_REGEX = Regex("\\d+|mega", RegexOption.IGNORE_CASE)
+
+            suspend fun load(preferences: AlertPreferencesStore): NotificationSettings {
+                return NotificationSettings(
+                    notificationsEnabled = preferences.notificationsEnabled.first(),
+                    raidsEnabled = preferences.raidsNotifications.first(),
+                    spawnsEnabled = preferences.spawnsNotifications.first(),
+                    questsEnabled = preferences.questsNotifications.first(),
+                    hundosEnabled = preferences.hundosNotifications.first(),
+                    pvpEnabled = preferences.pvpNotifications.first(),
+                    nundosEnabled = preferences.nundosNotifications.first(),
+                    kecleonEnabled = preferences.kecleonNotifications.first(),
+                    rocketEnabled = preferences.rocketNotifications.first(),
+                    vibrateEnabled = preferences.notificationVibrate.first(),
+                    silenceUntil = preferences.silenceUntil.first(),
+                    selectedArea = preferences.selectedArea.first(),
+                    maxDistance = preferences.maxDistance.first(),
+                    excludedHundoTypes = preferences.excludedHundoTypes.first(),
+                    excludedNundoTypes = preferences.excludedNundoTypes.first(),
+                    excludedPvpTypes = preferences.excludedPvpTypes.first(),
+                    excludedSpawnTypes = preferences.excludedSpawnTypes.first(),
+                    excludedRocketTypes = preferences.excludedRocketTypes.first(),
+                    excludedRaidTiers = preferences.excludedRaidTiers.first(),
+                    allowedHundoSpecies = preferences.allowedHundoSpecies.first(),
+                    allowedNundoSpecies = preferences.allowedNundoSpecies.first(),
+                    allowedPvpSpecies = preferences.allowedPvpSpecies.first(),
+                    allowedSpawnSpecies = preferences.allowedSpawnSpecies.first()
+                )
+            }
+        }
+    }
+
+    private object NotificationLocationCache {
+        private const val FRESH_LOCATION_MS = 2 * 60 * 1000L
+        private const val STALE_LOCATION_MS = 10 * 60 * 1000L
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        @Volatile
+        private var cachedLocation: Location? = null
+
+        @Volatile
+        private var cachedAtMillis: Long = 0L
+
+        @Volatile
+        private var refreshInFlight: Boolean = false
+
+        fun get(context: Context): Location? {
+            val now = System.currentTimeMillis()
+            cachedLocation?.takeIf { now - cachedAtMillis <= FRESH_LOCATION_MS }?.let { return it }
+            refreshIfNeeded(context.applicationContext, now)
+            return cachedLocation?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }
+        }
+
+        private fun refreshIfNeeded(context: Context, now: Long) {
+            if (refreshInFlight || now - cachedAtMillis <= FRESH_LOCATION_MS) return
+            refreshInFlight = true
+            scope.launch {
+                try {
+                    val freshLocation = LocationUtils.getCurrentLocationOrNull(
+                        context = context,
+                        timeoutMs = 1500,
+                        highAccuracy = false
+                    )
+                    if (freshLocation != null) {
+                        cachedLocation = freshLocation
+                        cachedAtMillis = System.currentTimeMillis()
+                    }
+                } finally {
+                    refreshInFlight = false
+                }
+            }
+        }
+    }
+
+    private fun Set<String>.lowercaseSet(): Set<String> {
+        return mapTo(LinkedHashSet(size)) { it.lowercase() }
+    }
+
     private fun immutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0
 
     private fun createDismissPendingIntent(context: Context, alert: PokemonAlert): PendingIntent {
@@ -338,12 +432,11 @@ object AlertNotifier {
         )
     }
 
-    private suspend fun loadImageBitmap(context: Context, imageUrl: String?): Bitmap? {
+    private suspend fun loadImageBitmap(context: Context, imageLoader: ImageLoader, imageUrl: String?): Bitmap? {
         if (imageUrl.isNullOrBlank()) return null
         
         return withContext(Dispatchers.IO) {
             try {
-                val imageLoader = ImageLoader(context)
                 val request = ImageRequest.Builder(context)
                     .data(imageUrl)
                     .scale(Scale.FIT)

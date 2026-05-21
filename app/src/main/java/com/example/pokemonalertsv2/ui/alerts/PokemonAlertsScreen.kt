@@ -265,12 +265,12 @@ fun PokemonAlertsRoute(
         }
     }
 
-    // Refresh more frequently when the app is in foreground (every 10 seconds)
+    // Foreground refresh follows the same cadence as the background poll and skips if one is already running.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                delay(10_000)
-                viewModel.refreshAlerts()
+                delay(30_000)
+                viewModel.refreshAlertsInBackground()
             }
         }
     }
@@ -404,12 +404,12 @@ fun PokemonAlertsPage(
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
     val haptic = LocalHapticFeedback.current
 
-    // Shared 1-second ticker for all countdown timers — replaces per-card timers
-    var tickerNow by remember { mutableStateOf(System.currentTimeMillis()) }
+    // Expiration filtering only needs a coarse tick; visible countdown rows update themselves.
+    var filterNow by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(1000)
-            tickerNow = System.currentTimeMillis()
+            delay(30_000)
+            filterNow = System.currentTimeMillis()
         }
     }
 
@@ -463,11 +463,11 @@ fun PokemonAlertsPage(
     }
 
     // Filter out expired and optionally dismissed alerts
-    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, tickerNow, selectedArea, maxDistance) {
+    val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, filterNow, selectedArea, maxDistance) {
         alertsWithDistance.filter { model ->
             val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
             // Filter out expired, optionally include dismissed based on toggle
-            val notExpired = end > tickerNow
+            val notExpired = end > filterNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
             
             // Area Filter
@@ -565,7 +565,7 @@ fun PokemonAlertsPage(
         }
     }
     
-    // Expired alerts are already filtered out in activeAlerts via tickerNow recomposition
+    // Expired alerts are filtered by the coarse expiration tick above.
 
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
@@ -590,7 +590,6 @@ fun PokemonAlertsPage(
                 sortPreference = sortPreference,
                 showDismissed = showDismissed,
                 dismissedAlertIds = dismissedAlertIds,
-                tickerNow = tickerNow,
                 onFilterChanged = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     selectedFilter = it 
@@ -656,7 +655,6 @@ private fun AlertsList(
     sortPreference: SortPreference,
     showDismissed: Boolean,
     dismissedAlertIds: Set<String>,
-    tickerNow: Long,
     onFilterChanged: (AlertFilter) -> Unit,
     onSortChanged: (SortPreference) -> Unit,
     onShowDismissedChanged: (Boolean) -> Unit,
@@ -840,7 +838,6 @@ private fun AlertsList(
                     AlertCard(
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
-                        tickerNow = tickerNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
                         onShareClick = { onShareClick(model.alert) },

@@ -18,6 +18,7 @@ import androidx.core.content.FileProvider
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -166,9 +167,12 @@ object AlertShareCard {
     }
 
     private suspend fun loadHeroBitmap(context: Context, alert: PokemonAlert): Bitmap? {
-        val imageLoader = ImageLoader(context)
+        val imageLoader = PokemonAlertsApplication.imageLoader(context)
         val primary = loadBitmap(imageLoader, context, alert.imageUrl)
         if (primary != null) return primary
+
+        val thumbnail = loadBitmap(imageLoader, context, alert.thumbnailUrl)
+        if (thumbnail != null) return thumbnail
 
         val lat = alert.latitude
         val lon = alert.longitude
@@ -183,7 +187,7 @@ object AlertShareCard {
             )?.let { return it }
         }
 
-        return loadBitmap(imageLoader, context, alert.thumbnailUrl)
+        return null
     }
 
     private suspend fun loadBitmap(

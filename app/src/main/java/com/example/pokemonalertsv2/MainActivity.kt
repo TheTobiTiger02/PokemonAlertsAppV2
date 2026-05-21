@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -196,7 +197,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     MainScaffold(
                         alertsViewModel = alertsViewModel,
-                        historyViewModel = historyViewModel,
+                        historyViewModelProvider = { historyViewModel },
                         settingsViewModel = settingsViewModel
                     )
                 }
@@ -295,12 +296,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainScaffold(
     alertsViewModel: PokemonAlertsViewModel,
-    historyViewModel: AlertHistoryViewModel,
+    historyViewModelProvider: () -> AlertHistoryViewModel,
     settingsViewModel: SettingsViewModel
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val saveableStateHolder = rememberSaveableStateHolder()
 
     val containerGradient = remember {
         Brush.verticalGradient(
@@ -361,37 +363,40 @@ private fun MainScaffold(
             }
         ) { paddingValues ->
             Box(modifier = Modifier.padding(paddingValues)) {
-                when (selectedTab) {
-                    0 -> {
-                        PokemonAlertsRoute(
-                            viewModel = alertsViewModel,
-                            snackbarHostState = snackbarHostState
-                        )
-                    }
-                    1 -> {
-                        val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
-                        com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
-                            uiState = historyUiState,
-                            snackbarHostState = snackbarHostState,
-                            onRefresh = historyViewModel::refreshHistory,
-                            onLoadMore = historyViewModel::loadMore,
-                            onDateChanged = historyViewModel::setDateFilter,
-                            onTypeChanged = historyViewModel::setTypeFilter,
-                            onSearchChanged = historyViewModel::setSearchQuery,
-                            consumeError = historyViewModel::consumeError
-                        )
-                    }
-                    2 -> {
-                        AlertsMapRoute(
-                            viewModel = alertsViewModel,
-                            onBack = { selectedTab = 0 }
-                        )
-                    }
-                    3 -> {
-                        SettingsScreen(
-                            viewModel = settingsViewModel,
-                            onBackClick = { selectedTab = 0 }
-                        )
+                saveableStateHolder.SaveableStateProvider(selectedTab) {
+                    when (selectedTab) {
+                        0 -> {
+                            PokemonAlertsRoute(
+                                viewModel = alertsViewModel,
+                                snackbarHostState = snackbarHostState
+                            )
+                        }
+                        1 -> {
+                            val historyViewModel = historyViewModelProvider()
+                            val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
+                            com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
+                                uiState = historyUiState,
+                                snackbarHostState = snackbarHostState,
+                                onRefresh = historyViewModel::refreshHistory,
+                                onLoadMore = historyViewModel::loadMore,
+                                onDateChanged = historyViewModel::setDateFilter,
+                                onTypeChanged = historyViewModel::setTypeFilter,
+                                onSearchChanged = historyViewModel::setSearchQuery,
+                                consumeError = historyViewModel::consumeError
+                            )
+                        }
+                        2 -> {
+                            AlertsMapRoute(
+                                viewModel = alertsViewModel,
+                                onBack = { selectedTab = 0 }
+                            )
+                        }
+                        3 -> {
+                            SettingsScreen(
+                                viewModel = settingsViewModel,
+                                onBackClick = { selectedTab = 0 }
+                            )
+                        }
                     }
                 }
             }

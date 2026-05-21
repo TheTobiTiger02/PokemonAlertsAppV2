@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.data
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.example.pokemonalertsv2.data.database.AlertDao
+import com.example.pokemonalertsv2.data.database.AlertEntity
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.toDomain
@@ -10,14 +11,14 @@ import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
 import java.util.LinkedHashSet
 
 class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
     private val preferences: AlertPreferencesStore,
     private val alertDao: AlertDao,
-    private val historyAlertDao: HistoryAlertDao,
-    private val wearDataSyncer: com.example.pokemonalertsv2.sync.WearDataSyncer? = null
+    private val historyAlertDao: HistoryAlertDao
 ) {
     
     // Expose preferences for notification settings and other UI needs
@@ -40,17 +41,20 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
      * but UI should generally observe [alerts].
      */
     suspend fun fetchAlerts(): List<PokemonAlert> {
-        val remoteAlerts = service.getPokemonAlerts()
-        alertDao.replaceAll(remoteAlerts.map { it.toEntity() })
+        if (!fetchMutex.tryLock()) {
+            return getLocalAlerts()
+        }
         
-        val now = System.currentTimeMillis()
-        val activeAlerts = remoteAlerts.filter {
-            val end = com.example.pokemonalertsv2.util.TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-            end > now
-        }.sortedByDescending { it.endTime }
-        
-        wearDataSyncer?.syncAlerts(activeAlerts)
-        return remoteAlerts
+        return try {
+            val remoteAlerts = service.getPokemonAlerts()
+            val remoteEntities = remoteAlerts.map { it.toEntity() }
+            if (!sameCachedAlerts(alertDao.getAllAlerts(), remoteEntities)) {
+                alertDao.replaceAll(remoteEntities)
+            }
+            remoteAlerts
+        } finally {
+            fetchMutex.unlock()
+        }
     }
 
     suspend fun getHistory(q: String? = null): List<PokemonAlert> {
@@ -172,12 +176,23 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     fun observeOnboardingCompleted(): Flow<Boolean> = preferences.onboardingCompleted
     suspend fun setOnboardingCompleted(completed: Boolean) = preferences.setOnboardingCompleted(completed)
-    
-    fun syncToWear(activeAlerts: List<PokemonAlert>) {
-        wearDataSyncer?.syncAlerts(activeAlerts)
-    }
 
     companion object {
+        private val fetchMutex = Mutex()
+
+        private fun sameCachedAlerts(
+            currentEntities: List<AlertEntity>,
+            remoteEntities: List<AlertEntity>
+        ): Boolean {
+            return currentEntities.normalizedById() == remoteEntities.normalizedById()
+        }
+
+        private fun List<AlertEntity>.normalizedById(): Map<String, AlertEntity> {
+            return associate { entity ->
+                entity.uniqueId to entity.copy(createdAt = 0L)
+            }
+        }
+
         fun create(context: Context): PokemonAlertsRepository {
             val appContext = context.applicationContext
             val preferences = AlertPreferences(appContext.alertPreferencesDataStore)
@@ -186,8 +201,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
                 service = PokemonAlertsApi.service,
                 preferences = preferences,
                 alertDao = database.alertDao(),
-                historyAlertDao = database.historyAlertDao(),
-                wearDataSyncer = com.example.pokemonalertsv2.sync.WearDataSyncer(appContext)
+                historyAlertDao = database.historyAlertDao()
             )
         }
     }

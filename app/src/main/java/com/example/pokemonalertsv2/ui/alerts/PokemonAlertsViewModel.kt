@@ -7,6 +7,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -25,6 +26,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     private val _uiState = MutableStateFlow(AlertsUiState(isLoading = true))
     val uiState: StateFlow<AlertsUiState> = _uiState
+    private var refreshJob: Job? = null
 
     init {
         refreshAlerts()
@@ -36,18 +38,32 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                     end > now
                 }.sortedByDescending { it.endTime }
                 _uiState.update { it.copy(alerts = activeAlerts) }
-                repository.syncToWear(activeAlerts)
             }
         }
     }
 
     fun refreshAlerts() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        startRefresh(showLoading = true)
+    }
+
+    fun refreshAlertsInBackground() {
+        startRefresh(showLoading = false)
+    }
+
+    private fun startRefresh(showLoading: Boolean) {
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            if (showLoading) {
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            } else {
+                _uiState.update { it.copy(errorMessage = null) }
+            }
             runCatching {
                 repository.fetchAlerts()
             }.onSuccess {
-                _uiState.update { current -> current.copy(isLoading = false) }
+                if (showLoading) {
+                    _uiState.update { current -> current.copy(isLoading = false) }
+                }
             }.onFailure { throwable ->
                 _uiState.update { current ->
                     current.copy(isLoading = false, errorMessage = throwable.localizedMessage ?: "Unknown error")

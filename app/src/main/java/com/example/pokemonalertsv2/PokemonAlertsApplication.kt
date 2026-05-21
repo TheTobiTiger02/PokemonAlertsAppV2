@@ -1,13 +1,18 @@
 package com.example.pokemonalertsv2
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.work.AlertAlarmScheduler
 import com.example.pokemonalertsv2.work.AlertWorker
 
-class PokemonAlertsApplication : Application(), Configuration.Provider {
+class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
@@ -25,4 +30,31 @@ class PokemonAlertsApplication : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
+
+    override fun newImageLoader(): ImageLoader = imageLoader(this)
+
+    companion object {
+        @Volatile
+        private var sharedImageLoader: ImageLoader? = null
+
+        fun imageLoader(context: Context): ImageLoader {
+            return sharedImageLoader ?: synchronized(this) {
+                sharedImageLoader ?: ImageLoader.Builder(context.applicationContext)
+                    .memoryCache {
+                        MemoryCache.Builder(context.applicationContext)
+                            .maxSizePercent(0.25)
+                            .build()
+                    }
+                    .diskCache {
+                        DiskCache.Builder()
+                            .directory(context.applicationContext.cacheDir.resolve("image_cache"))
+                            .maxSizePercent(0.02)
+                            .build()
+                    }
+                    .crossfade(true)
+                    .build()
+                    .also { sharedImageLoader = it }
+            }
+        }
+    }
 }

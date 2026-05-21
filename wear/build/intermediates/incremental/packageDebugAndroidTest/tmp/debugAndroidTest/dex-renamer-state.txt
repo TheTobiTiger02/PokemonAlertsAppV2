@@ -1,4 +1,0 @@
-#Tue May 12 16:50:43 CEST 2026
-base.0=C\:\\Users\\GBT B450M-S2H\\AndroidStudioProjects\\PokemonAlertsV2\\wear\\build\\intermediates\\dex\\debugAndroidTest\\mergeProjectDexDebugAndroidTest\\0\\classes.dex
-path.0=0/classes.dex
-renamed.0=classes.dex

@@ -10,6 +10,7 @@ import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.util.LruCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -86,11 +87,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import coil.ImageLoader
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
@@ -122,12 +123,12 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     
-    // Refresh more frequently when map is open (every 10 seconds)
+    // Keep map data fresh without adding a second aggressive refresh cadence.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
-                viewModel.refreshAlerts()
-                kotlinx.coroutines.delay(10_000) // 10 seconds when map is open
+                viewModel.refreshAlertsInBackground()
+                kotlinx.coroutines.delay(30_000)
             }
         }
     }
@@ -167,12 +168,12 @@ fun AlertsMapScreen(
         ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Time for expiration checks - update every second for accurate time labels
+    // Keep expiration checks coarse unless visible labels or the detail popup need live time.
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(showTimeLabels, selectedAlert?.uniqueId) {
         while (true) {
             now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1000) // Update every 1 second
+            kotlinx.coroutines.delay(if (showTimeLabels || selectedAlert != null) 1000 else 30_000)
         }
     }
 
@@ -726,6 +727,8 @@ private enum class AlertType(
     RARE("✨", 0xFF607D8B.toInt(), null)                      // Blue-Grey (wild Pokemon)
 }
 
+private val markerIconCache = LruCache<String, BitmapDescriptor>(128)
+
 private suspend fun createBitmapDescriptorFromUrl(
     context: android.content.Context, 
     url: String, 
@@ -741,9 +744,18 @@ private suspend fun createBitmapDescriptorFromUrl(
             it - System.currentTimeMillis() 
         } ?: Long.MAX_VALUE
         val isExpiringSoon = timeRemainingMs < (10 * 60 * 1000) // 10 minutes in ms
+        val cacheKey = listOf(
+            url,
+            sizePx.toString(),
+            alertType.name,
+            showTimeLabel.toString(),
+            timeLabel.orEmpty(),
+            isExpiringSoon.toString()
+        ).joinToString("|")
+        markerIconCache.get(cacheKey)?.let { return@withContext it }
         val globalAlpha = if (isExpiringSoon) 150 else 255
         
-        val loader = ImageLoader(context)
+        val loader = PokemonAlertsApplication.imageLoader(context)
         val request = ImageRequest.Builder(context)
             .data(url)
             .allowHardware(false)
@@ -938,7 +950,7 @@ private suspend fun createBitmapDescriptorFromUrl(
                 canvas.drawText(timeLabel, centerX, textY, labelPaint)
             }
             
-            BitmapDescriptorFactory.fromBitmap(bmp)
+            BitmapDescriptorFactory.fromBitmap(bmp).also { markerIconCache.put(cacheKey, it) }
         } else null
     } catch (e: kotlinx.coroutines.CancellationException) {
         // Rethrow cancellation exceptions so coroutine cancellation works properly

@@ -7,10 +7,12 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
+import android.util.LruCache
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
+import com.example.pokemonalertsv2.PokemonAlertsApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -32,6 +34,15 @@ object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
     private const val DEFAULT_ZOOM = 16
+    private val bitmapCache = object : LruCache<String, Bitmap>(12 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int {
+            return value.byteCount / 1024
+        }
+
+        override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
+            if (evicted && !oldValue.isRecycled) oldValue.recycle()
+        }
+    }
 
     /**
      * Generates a composite map + thumbnail bitmap.
@@ -60,8 +71,12 @@ object MapFallbackImageGenerator {
             if (latitude !in -85.0511..85.0511 || longitude !in -180.0..180.0) return@withContext null
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
-            val imageLoader = ImageLoader.Builder(context)
-                .build()
+            val cacheKey = "$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
+            bitmapCache.get(cacheKey)
+                ?.takeUnless { it.isRecycled }
+                ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
+
+            val imageLoader = PokemonAlertsApplication.imageLoader(context)
 
             // --- Tile math (same as SharedComponents.kt) ---
             val n = 1 shl zoom
@@ -177,7 +192,8 @@ object MapFallbackImageGenerator {
             // Recycle tile bitmaps
             tiles.forEach { it.bitmap?.recycle() }
 
-            output
+            bitmapCache.put(cacheKey, output)
+            output.copy(Bitmap.Config.ARGB_8888, false)
         } catch (e: Exception) {
             null
         }

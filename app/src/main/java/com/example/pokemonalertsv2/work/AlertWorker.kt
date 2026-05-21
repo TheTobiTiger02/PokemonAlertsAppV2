@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.work
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -59,6 +60,9 @@ class AlertWorker(
         private const val ONCE_WORK_NAME = "pokemon_alerts_once"
         private const val MAX_RETRIES = 3
         private const val TAG = "AlertWorker"
+
+        @VisibleForTesting
+        internal val immediateSyncPolicy = ExistingWorkPolicy.KEEP
         
         // Only use network constraint for periodic work, not for immediate syncs
         private val periodicConstraints = Constraints.Builder()
@@ -90,7 +94,7 @@ class AlertWorker(
 
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     ONCE_WORK_NAME,
-                    ExistingWorkPolicy.REPLACE,
+                    immediateSyncPolicy,
                     workRequest
                 )
             } catch (e: Exception) {

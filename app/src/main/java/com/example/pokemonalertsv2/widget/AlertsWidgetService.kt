@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
@@ -57,7 +58,7 @@ private class AlertsFactory(
     private val cornerRadiusPx by lazy { (12 * context.resources.displayMetrics.density) }
 
     override fun onCreate() {
-        imageLoader = ImageLoader(context)
+        imageLoader = PokemonAlertsApplication.imageLoader(context)
     }
 
     override fun onDataSetChanged() {

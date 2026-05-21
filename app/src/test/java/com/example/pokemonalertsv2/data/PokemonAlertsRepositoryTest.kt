@@ -4,6 +4,7 @@ import com.example.pokemonalertsv2.data.database.AlertDao
 import com.example.pokemonalertsv2.data.database.AlertEntity
 import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.HistoryAlertEntity
+import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +65,19 @@ class PokemonAlertsRepositoryTest {
         assertEquals(alerts, fetched)
         assertEquals(1, dao.alerts.value.size)
         assertEquals("Service", dao.alerts.value.first().name)
+    }
+
+    @Test
+    fun fetchAlerts_skipsDaoReplaceWhenFetchedDataIsUnchanged() = runTest {
+        val alert = sampleAlert("Service")
+        service.alerts = listOf(alert)
+        dao.alerts.value = listOf(alert.toEntity().copy(createdAt = 123L))
+
+        val fetched = repository.fetchAlerts()
+
+        assertEquals(listOf(alert), fetched)
+        assertEquals(0, dao.insertCalls)
+        assertEquals(0, dao.clearCalls)
     }
 
     @Test
@@ -320,16 +334,20 @@ class PokemonAlertsRepositoryTest {
 
     private class FakeAlertDao : AlertDao() {
         val alerts = MutableStateFlow<List<AlertEntity>>(emptyList())
+        var insertCalls = 0
+        var clearCalls = 0
 
         override fun observeAllAlerts(): Flow<List<AlertEntity>> = alerts.asStateFlow()
 
         override suspend fun getAllAlerts(): List<AlertEntity> = alerts.value
 
         override suspend fun insertAlerts(newAlerts: List<AlertEntity>) {
+            insertCalls++
             alerts.value = newAlerts
         }
 
         override suspend fun clearAll() {
+            clearCalls++
             alerts.value = emptyList()
         }
 

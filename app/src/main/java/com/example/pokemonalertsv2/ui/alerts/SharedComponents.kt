@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
@@ -12,6 +13,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -87,6 +89,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -115,6 +118,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
 import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -221,8 +225,7 @@ fun AlertCard(
     onShowDetails: () -> Unit,
     onShareClick: () -> Unit,
     onSnoozeClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
-    tickerNow: Long = System.currentTimeMillis()
+    modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
@@ -416,7 +419,7 @@ fun AlertCard(
                     }
                 }
 
-                AlertMetaRow(alert = alert, distanceInfo = distanceInfo, tickerNow = tickerNow)
+                AlertMetaRow(alert = alert, distanceInfo = distanceInfo)
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -704,29 +707,89 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
         showMapFallback -> {
             val safeLat = lat!!
             val safeLon = lon!!
-            val zoom = if (rounded) 16 else 17
-            val n = 1 shl zoom
+            var fallbackBitmap by remember(safeLat, safeLon, thumbnailUrl, rounded) {
+                mutableStateOf<Bitmap?>(null)
+            }
+
+            LaunchedEffect(safeLat, safeLon, thumbnailUrl, rounded) {
+                fallbackBitmap = withContext(Dispatchers.IO) {
+                    MapFallbackImageGenerator.generate(
+                        context = context,
+                        latitude = safeLat,
+                        longitude = safeLon,
+                        thumbnailUrl = thumbnailUrl,
+                        outputWidth = if (rounded) 512 else 1024,
+                        outputHeight = if (rounded) 320 else 640,
+                        zoom = if (rounded) 16 else 17
+                    )
+                }
+            }
 
             // Exact fractional tile coordinates
-            val tileXExact = (safeLon + 180.0) / 360.0 * n
-            val latRad = Math.toRadians(safeLat)
-            val tileYExact = (1.0 - ln(tan(latRad) + 1.0 / cos(latRad)) / Math.PI) / 2.0 * n
+            
 
             // Integer tile coordinates (which tile the point falls in)
-            val centerTileX = floor(tileXExact).toInt()
-            val centerTileY = floor(tileYExact).toInt()
+            
 
             // Fractional position within the center tile (0.0–1.0)
-            val fracX = (tileXExact - centerTileX).toFloat()
-            val fracY = (tileYExact - centerTileY).toFloat()
+            
 
-            BoxWithConstraints(
+            Box(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
+                    .background(Color(0xFF1A1A2E), shape)
                     .clipToBounds()
-                    .clip(shape)
+                    .clip(shape),
+                contentAlignment = Alignment.Center
             ) {
+                val bitmap = fallbackBitmap
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = stringResource(id = R.string.alert_image),
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(if (rounded) 120.dp else 240.dp)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.35f else 0.40f),
+                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.12f else 0.15f),
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+                    if (thumbnailUrl != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(thumbnailUrl)
+                                .crossfade(300)
+                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
+                                .build(),
+                            contentDescription = stringResource(id = R.string.alert_image),
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.size(if (rounded) 64.dp else 140.dp)
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_placeholder),
+                            contentDescription = null,
+                            modifier = Modifier.size(if (rounded) 36.dp else 56.dp),
+                            tint = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+
+/*
                 val density = LocalDensity.current
                 val viewWidthPx = constraints.maxWidth.toFloat()
                 val viewHeightPx = constraints.maxHeight.toFloat()
@@ -837,6 +900,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
             }
         }
 
+*/
         // Fallback: thumbnail sprite with dark bg + gold glow
         thumbnailUrl != null -> {
             Box(
@@ -2254,7 +2318,7 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow: Long = System.currentTimeMillis()) {
+fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val typeLabel = alert.typeDisplay?.uppercase(Locale.getDefault())
         val distanceLabel = distanceInfo.distanceText
@@ -2285,7 +2349,7 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, tickerNow
                 AlertTag(text = walkingLabel, icon = null)
             }
         }
-        CountdownAndEndTimeRow(alert = alert, now = tickerNow)
+        CountdownAndEndTimeRow(alert = alert)
     }
 }
 
@@ -2295,8 +2359,18 @@ fun AlertTag(text: String, icon: ImageVector? = null) {
 }
 
 @Composable
-fun CountdownAndEndTimeRow(alert: PokemonAlert, now: Long = System.currentTimeMillis()) {
+fun CountdownAndEndTimeRow(alert: PokemonAlert) {
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
+    var now by remember(endMillis) { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(endMillis) {
+        if (endMillis == null) return@LaunchedEffect
+        while (true) {
+            delay(1000)
+            now = System.currentTimeMillis()
+        }
+    }
+
     val remaining = endMillis?.let { it - now } ?: -1
     val expiredLabel = if (endMillis != null && remaining <= 0) {
         "Expired ${TimeUtils.formatTimeAgo(endMillis)}"
