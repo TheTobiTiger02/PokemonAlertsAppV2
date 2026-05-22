@@ -12,6 +12,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
+import android.util.LruCache
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
@@ -25,8 +26,8 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.util.LocationUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.flow.first
@@ -66,47 +67,31 @@ private class AlertsFactory(
             val repo = PokemonAlertsRepository.create(context)
             val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
             val dismissedIds = runCatching { repo.alertPreferences.dismissedAlertIds.first() }.getOrElse { emptySet() }
-
-            // Short timeout for location
-            currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 4000, highAccuracy = false) }.getOrNull()
-
             val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
             val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
-
-            val now = System.currentTimeMillis()
-            var activeAlerts = alerts.filter {
-                val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                val notExpired = end > now
-                val notDismissed = it.uniqueId !in dismissedIds
-                
-                val areaMatch = selectedArea == "All" || it.area == selectedArea
-                
-                var distanceMatch = true
-                if (maxDistance > 0 && currentLocation != null) {
-                    val latitude = it.latitude
-                    val longitude = it.longitude
-                    if (latitude != null && longitude != null) {
-                        val results = FloatArray(1)
-                        Location.distanceBetween(currentLocation!!.latitude, currentLocation!!.longitude, latitude, longitude, results)
-                        if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
-                            distanceMatch = false
-                        }
-                    }
-                }
-                
-                notExpired && notDismissed && areaMatch && distanceMatch
-            }
-
-            // Apply per-widget type filters
             val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
-            if (filterTypes.isNotEmpty()) {
-                activeAlerts = activeAlerts.filter { alert ->
-                    val alertTypes = alert.type ?: emptyList()
-                    if (alertTypes.isEmpty()) true // Show alerts with no type
-                    else alertTypes.any { type -> filterTypes.any { filter -> type.contains(filter, ignoreCase = true) } }
-                }
+            val resolvedLocation = runCatching {
+                CachedLocationProvider.get(context, timeoutMs = 4000, highAccuracy = false)
+            }.getOrNull() ?: currentLocation
+
+            currentLocation = resolvedLocation
+
+            val filterResult = WidgetAlertFilter.filterAlerts(
+                alerts = alerts,
+                criteria = WidgetAlertFilter.Criteria(
+                    dismissedAlertIds = dismissedIds,
+                    selectedArea = selectedArea,
+                    maxDistanceKm = maxDistance,
+                    widgetFilterTypes = filterTypes
+                ),
+                origin = resolvedLocation?.let { WidgetAlertFilter.originFrom(it) }
+            )
+
+            if (filterResult is WidgetAlertFilter.Result.PreservePrevious) {
+                return@runBlocking
             }
 
+            val activeAlerts = (filterResult as WidgetAlertFilter.Result.Filtered).alerts
             val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
@@ -199,36 +184,46 @@ private class AlertsFactory(
         val imageUrl = alert.imageUrl
         if (!imageUrl.isNullOrBlank()) {
             try {
-                val req = ImageRequest.Builder(context)
-                    .data(imageUrl)
-                    .size(imgSize, imgSize)
-                    .allowHardware(false)
-                    .build()
-                val result = runBlocking { imageLoader.execute(req) }
-                if (result is SuccessResult) {
-                    val drawable = result.drawable
-                    val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
-                    views.setImageViewBitmap(R.id.item_image, roundBitmap(bmp, cornerRadiusPx))
-                } else {
-                    views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
+                val bitmap = cachedBitmap("image|$imageUrl|$imgSize|$cornerRadiusPx") {
+                    val req = ImageRequest.Builder(context)
+                        .data(imageUrl)
+                        .size(imgSize, imgSize)
+                        .allowHardware(false)
+                        .build()
+                    val result = runBlocking { imageLoader.execute(req) }
+                    if (result is SuccessResult) {
+                        val drawable = result.drawable
+                        val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
+                        roundBitmap(bmp, cornerRadiusPx)
+                    } else {
+                        createFallbackBitmap(imgSize)
+                    }
                 }
+                views.setImageViewBitmap(R.id.item_image, bitmap)
             } catch (_: Throwable) {
-                views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
+                views.setImageViewBitmap(R.id.item_image, cachedBitmap("fallback|$imgSize|$cornerRadiusPx") { createFallbackBitmap(imgSize) })
             }
         } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
-            val mapBmp = runBlocking {
-                com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
-                    context = context,
-                    latitude = alert.latitude,
-                    longitude = alert.longitude,
-                    thumbnailUrl = alert.thumbnailUrl,
-                    outputWidth = imgSize,
-                    outputHeight = imgSize
-                )
+            val latitude = alert.latitude
+            val longitude = alert.longitude
+            val thumbnailUrl = alert.thumbnailUrl
+            val mapKey = "map|$latitude|$longitude|$thumbnailUrl|$imgSize|$cornerRadiusPx"
+            val bitmap = cachedBitmap(mapKey) {
+                val mapBmp = runBlocking {
+                    com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
+                        context = context,
+                        latitude = latitude,
+                        longitude = longitude,
+                        thumbnailUrl = thumbnailUrl,
+                        outputWidth = imgSize,
+                        outputHeight = imgSize
+                    )
+                }
+                mapBmp?.let { roundBitmap(it, cornerRadiusPx) } ?: createFallbackBitmap(imgSize)
             }
-            views.setImageViewBitmap(R.id.item_image, roundBitmap(mapBmp ?: createFallbackBitmap(imgSize), cornerRadiusPx))
+            views.setImageViewBitmap(R.id.item_image, bitmap)
         } else {
-            views.setImageViewBitmap(R.id.item_image, createFallbackBitmap(imgSize))
+            views.setImageViewBitmap(R.id.item_image, cachedBitmap("fallback|$imgSize|$cornerRadiusPx") { createFallbackBitmap(imgSize) })
         }
 
         // 6. Navigate button — show only if we have coordinates
@@ -329,4 +324,20 @@ private class AlertsFactory(
         return roundBitmap(bmp, cornerRadiusPx)
     }
 
+    private companion object {
+        private val widgetBitmapCache = object : LruCache<String, Bitmap>(12 * 1024) {
+            override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
+
+            override fun entryRemoved(evicted: Boolean, key: String, oldValue: Bitmap, newValue: Bitmap?) {
+                if (evicted && !oldValue.isRecycled) oldValue.recycle()
+            }
+        }
+
+        private fun cachedBitmap(key: String, producer: () -> Bitmap): Bitmap {
+            widgetBitmapCache.get(key)?.takeUnless { it.isRecycled }?.let { return it }
+            return producer().also { bitmap ->
+                widgetBitmapCache.put(key, bitmap)
+            }
+        }
+    }
 }

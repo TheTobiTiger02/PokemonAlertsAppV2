@@ -143,8 +143,22 @@ data class AlertDistanceInfo(
 @Immutable
 data class AlertUiModel(
     val alert: PokemonAlert,
-    val distanceInfo: AlertDistanceInfo
+    val distanceInfo: AlertDistanceInfo,
+    val endMillis: Long? = null,
+    val typeKeys: Set<String> = emptySet()
 )
+
+@Composable
+fun rememberCountdownNow(tickMillis: Long = 1000L): Long {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(tickMillis) {
+        while (true) {
+            delay(tickMillis)
+            now = System.currentTimeMillis()
+        }
+    }
+    return now
+}
 
 /**
  * Generates a descriptive title for an alert based on its type.
@@ -225,6 +239,7 @@ fun AlertCard(
     onShowDetails: () -> Unit,
     onShareClick: () -> Unit,
     onSnoozeClick: (() -> Unit)? = null,
+    nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
@@ -419,7 +434,7 @@ fun AlertCard(
                     }
                 }
 
-                AlertMetaRow(alert = alert, distanceInfo = distanceInfo)
+                AlertMetaRow(alert = alert, distanceInfo = distanceInfo, nowMillis = nowMillis)
                 Spacer(modifier = Modifier.height(20.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1255,13 +1270,14 @@ fun AlertDetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
+                            val statusNow = rememberCountdownNow()
                             Text(
                                 text = "Status",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            CountdownAndEndTimeRow(alert = alert)
+                            CountdownAndEndTimeRow(alert = alert, nowMillis = statusNow)
                             
                             // Created at timestamp
                             alert.createdAt?.takeIf { it.isNotBlank() }?.let { created ->
@@ -2318,7 +2334,7 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
+fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, nowMillis: Long) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val typeLabel = alert.typeDisplay?.uppercase(Locale.getDefault())
         val distanceLabel = distanceInfo.distanceText
@@ -2349,7 +2365,7 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo) {
                 AlertTag(text = walkingLabel, icon = null)
             }
         }
-        CountdownAndEndTimeRow(alert = alert)
+        CountdownAndEndTimeRow(alert = alert, nowMillis = nowMillis)
     }
 }
 
@@ -2359,19 +2375,9 @@ fun AlertTag(text: String, icon: ImageVector? = null) {
 }
 
 @Composable
-fun CountdownAndEndTimeRow(alert: PokemonAlert) {
+fun CountdownAndEndTimeRow(alert: PokemonAlert, nowMillis: Long = System.currentTimeMillis()) {
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
-    var now by remember(endMillis) { mutableStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(endMillis) {
-        if (endMillis == null) return@LaunchedEffect
-        while (true) {
-            delay(1000)
-            now = System.currentTimeMillis()
-        }
-    }
-
-    val remaining = endMillis?.let { it - now } ?: -1
+    val remaining = endMillis?.let { it - nowMillis } ?: -1
     val expiredLabel = if (endMillis != null && remaining <= 0) {
         "Expired ${TimeUtils.formatTimeAgo(endMillis)}"
     } else {

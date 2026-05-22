@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.example.pokemonalertsv2" />
+                  <option name="mobileSdkAppId" value="1:794394073840:android:1b340ffd5b2d60c3074035" />
+                  <option name="projectId" value="pokemonalerts" />
+                  <option name="projectNumber" value="794394073840" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

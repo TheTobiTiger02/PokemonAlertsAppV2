@@ -195,13 +195,61 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             currentEntities: List<AlertEntity>,
             remoteEntities: List<AlertEntity>
         ): Boolean {
-            return currentEntities.normalizedById() == remoteEntities.normalizedById()
+            if (currentEntities.size != remoteEntities.size) return false
+
+            val currentSignatures = currentEntities.associate { entity ->
+                entity.uniqueId to entity.stableContentHash()
+            }
+            return remoteEntities.all { entity ->
+                currentSignatures[entity.uniqueId] == entity.stableContentHash()
+            }
         }
 
-        private fun List<AlertEntity>.normalizedById(): Map<String, AlertEntity> {
-            return associate { entity ->
-                entity.uniqueId to entity.copy(createdAt = 0L)
-            }
+        private fun AlertEntity.stableContentHash(): Int {
+            var result = id ?: 0
+            result = 31 * result + name.hashCode()
+            result = 31 * result + description.hashCode()
+            result = 31 * result + imageUrl.hashCode()
+            result = 31 * result + longitude.hashCode()
+            result = 31 * result + latitude.hashCode()
+            result = 31 * result + endTime.hashCode()
+            result = 31 * result + type.hashCode()
+            result = 31 * result + thumbnailUrl.hashCode()
+            result = 31 * result + pokemon.hashCode()
+            result = 31 * result + pokemonForm.hashCode()
+            result = 31 * result + pokedexId.hashCode()
+            result = 31 * result + iv.hashCode()
+            result = 31 * result + ivAttack.hashCode()
+            result = 31 * result + ivDefense.hashCode()
+            result = 31 * result + ivStamina.hashCode()
+            result = 31 * result + gender.hashCode()
+            result = 31 * result + isShiny.hashCode()
+            result = 31 * result + cp.hashCode()
+            result = 31 * result + level.hashCode()
+            result = 31 * result + isWeatherBoosted.hashCode()
+            result = 31 * result + currentWeather.hashCode()
+            result = 31 * result + pokemonLocation.hashCode()
+            result = 31 * result + gym.hashCode()
+            result = 31 * result + pokestop.hashCode()
+            result = 31 * result + movesFast.hashCode()
+            result = 31 * result + movesCharged.hashCode()
+            result = 31 * result + hundoCPL20.hashCode()
+            result = 31 * result + hundoCPL25.hashCode()
+            result = 31 * result + pvpRankingsJson.hashCode()
+            result = 31 * result + gruntType.hashCode()
+            result = 31 * result + pokemonRewardsJson.hashCode()
+            result = 31 * result + questTask.hashCode()
+            result = 31 * result + questReward.hashCode()
+            result = 31 * result + requiresAR.hashCode()
+            result = 31 * result + newCp.hashCode()
+            result = 31 * result + newIv.hashCode()
+            result = 31 * result + oldSpecies.hashCode()
+            result = 31 * result + oldIv.hashCode()
+            result = 31 * result + oldCp.hashCode()
+            result = 31 * result + newSpecies.hashCode()
+            result = 31 * result + area.hashCode()
+            result = 31 * result + alertCreatedAt.hashCode()
+            return result
         }
 
         fun create(context: Context): PokemonAlertsRepository {

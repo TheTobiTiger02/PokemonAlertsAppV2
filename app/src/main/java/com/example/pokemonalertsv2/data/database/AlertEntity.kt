@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.data.database
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -10,7 +11,14 @@ import com.example.pokemonalertsv2.data.PvpRanking
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-@Entity(tableName = "alerts")
+@Entity(
+    tableName = "alerts",
+    indices = [
+        Index(value = ["endTime"]),
+        Index(value = ["type"]),
+        Index(value = ["area"])
+    ]
+)
 data class AlertEntity(
     @PrimaryKey
     val uniqueId: String,

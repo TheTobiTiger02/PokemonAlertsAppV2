@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -334,6 +334,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 11 -> 12: adds indexes for common list ordering and filters. */
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                createPerformanceIndexes(db)
+            }
+        }
+
+        private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_area` ON `alerts` (`area`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_alerts_endTime` ON `history_alerts` (`endTime`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_alerts_type` ON `history_alerts` (`type`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_history_alerts_area` ON `history_alerts` (`area`)")
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -341,7 +357,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pokemon_alerts_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

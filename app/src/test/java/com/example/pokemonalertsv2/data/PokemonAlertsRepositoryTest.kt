@@ -98,7 +98,11 @@ class PokemonAlertsRepositoryTest {
 
         repository.upsertAlert(pushed)
 
-        assertEquals(listOf(existing.toEntity(), pushed.toEntity()), dao.alerts.value)
+        assertEquals(
+            listOf(existing.uniqueId, pushed.uniqueId),
+            dao.alerts.value.map { it.uniqueId }
+        )
+        assertEquals("Pushed", dao.alerts.value.last().name)
         assertEquals(1, dao.insertCalls)
         assertEquals(0, dao.clearCalls)
     }

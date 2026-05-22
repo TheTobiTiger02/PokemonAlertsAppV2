@@ -21,8 +21,7 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
-import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.util.LocationUtils
+import com.example.pokemonalertsv2.util.CachedLocationProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -31,6 +30,7 @@ import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 class AlertsWidgetProvider : AppWidgetProvider() {
@@ -47,14 +47,18 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
-        updateAll(context)
-        scheduleNextUpdate(context)
+        updateAll(context, scheduleNext = true)
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
         // Clean up per-widget filter prefs
         appWidgetIds.forEach { id -> WidgetFilterPrefs.removeFilters(context, id) }
+        appWidgetIds.forEach { id -> lastActiveAlertCounts.remove(id) }
+        lastActiveAlertCount = lastActiveAlertCounts.values.maxOrNull()
+        val remainingIds = AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
+        if (remainingIds.isEmpty()) cancelScheduledUpdate(context)
     }
 
     override fun onAppWidgetOptionsChanged(
@@ -156,7 +160,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val isCompact = appWidgetManager?.let { isCompactMode(it, appWidgetId) } ?: false
 
         // Get alert count for badge / compact display
-        val alertCount = getActiveAlertCount(context)
+        val alertCount = getActiveAlertCount(context, appWidgetId)
+        lastActiveAlertCounts[appWidgetId] = alertCount
+        lastActiveAlertCount = lastActiveAlertCounts.values.maxOrNull()
 
         if (isCompact) {
             return buildCompactViews(context, appWidgetId, alertCount)
@@ -264,7 +270,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return minHeight in 1..119
     }
 
-    private fun getActiveAlertCount(context: Context): Int {
+    private fun getActiveAlertCount(context: Context, appWidgetId: Int): Int {
         return try {
             runBlocking {
                 val repo = PokemonAlertsRepository.create(context)
@@ -275,37 +281,51 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 
                 val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
                 val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
-                val currentLocation = runCatching { LocationUtils.getCurrentLocationOrNull(context, timeoutMs = 2000, highAccuracy = false) }.getOrNull()
+                val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
+                val currentLocation = runCatching {
+                    CachedLocationProvider.get(context, timeoutMs = 2000, highAccuracy = false)
+                }.getOrNull()
                 
-                val now = System.currentTimeMillis()
-                alerts.count {
-                    val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                    val notExpired = end > now
-                    val notDismissed = it.uniqueId !in dismissedIds
-                    
-                    val areaMatch = selectedArea == "All" || it.area == selectedArea
-                    
-                    var distanceMatch = true
-                    if (maxDistance > 0 && currentLocation != null) {
-                        val results = FloatArray(1)
-                        android.location.Location.distanceBetween(currentLocation.latitude, currentLocation.longitude, it.latitude ?: 0.0, it.longitude ?: 0.0, results)
-                        if (!results[0].isNaN() && results[0] > maxDistance * 1000) {
-                            distanceMatch = false
-                        }
-                    }
-                    
-                    notExpired && notDismissed && areaMatch && distanceMatch
+                when (val filterResult = WidgetAlertFilter.filterAlerts(
+                    alerts = alerts,
+                    criteria = WidgetAlertFilter.Criteria(
+                        dismissedAlertIds = dismissedIds,
+                        selectedArea = selectedArea,
+                        maxDistanceKm = maxDistance,
+                        widgetFilterTypes = filterTypes
+                    ),
+                    origin = currentLocation?.let { WidgetAlertFilter.originFrom(it) }
+                )) {
+                    is WidgetAlertFilter.Result.Filtered -> filterResult.alerts.size
+                    WidgetAlertFilter.Result.PreservePrevious -> lastActiveAlertCounts[appWidgetId] ?: 0
                 }
             }
         } catch (_: Throwable) { 0 }
     }
 
     private fun scheduleNextUpdate(context: Context) {
+        val ids = AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
+        if (ids.isEmpty()) {
+            cancelScheduledUpdate(context)
+            return
+        }
+
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val intent = Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_TIMER_TICK }
         val pi = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, PendingIntent.FLAG_CANCEL_CURRENT or mutableFlag())
-        val triggerAt = System.currentTimeMillis() + UPDATE_INTERVAL_MS
-        AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        val hasActiveAlerts = (lastActiveAlertCount ?: 1) > 0
+        val triggerAt = System.currentTimeMillis() + if (hasActiveAlerts) {
+            UPDATE_INTERVAL_MS
+        } else {
+            IDLE_UPDATE_INTERVAL_MS
+        }
+
+        if (hasActiveAlerts) {
+            AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        } else {
+            AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        }
     }
 
     private fun cancelScheduledUpdate(context: Context) {
@@ -330,6 +350,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         const val EXTRA_NAV_LNG = "extra_nav_lng"
         private const val REQUEST_CODE = 2025
         private val UPDATE_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30)
+        private val IDLE_UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(15)
+        private val lastActiveAlertCounts = ConcurrentHashMap<Int, Int>()
+        @Volatile
+        private var lastActiveAlertCount: Int? = null
 
         private fun mutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
 

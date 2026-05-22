@@ -727,7 +727,7 @@ private enum class AlertType(
     RARE("✨", 0xFF607D8B.toInt(), null)                      // Blue-Grey (wild Pokemon)
 }
 
-private val markerIconCache = LruCache<String, BitmapDescriptor>(128)
+private val markerIconCache = LruCache<String, BitmapDescriptor>(256)
 
 private suspend fun createBitmapDescriptorFromUrl(
     context: android.content.Context, 

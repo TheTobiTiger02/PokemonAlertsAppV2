@@ -379,6 +379,17 @@ fun AlertHistoryRoute(
     }
 }
 
+private fun PokemonAlert.typeKeys(): Set<String> {
+    return type.orEmpty()
+        .asSequence()
+        .map { it.lowercase(Locale.ROOT) }
+        .toSet()
+}
+
+private fun AlertUiModel.hasCachedType(typeName: String): Boolean {
+    return typeName.lowercase(Locale.ROOT) in typeKeys
+}
+
 @Composable
 fun PokemonAlertsPage(
     uiState: AlertsUiState,
@@ -457,7 +468,9 @@ fun PokemonAlertsPage(
                     distanceMeters = routeDisplayInfo.straightLineDistanceMeters,
                     distanceText = routeDisplayInfo.distanceText,
                     walkingText = routeDisplayInfo.walkingText
-                )
+                ),
+                endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
+                typeKeys = alert.typeKeys()
             )
         }
     }
@@ -465,7 +478,7 @@ fun PokemonAlertsPage(
     // Filter out expired and optionally dismissed alerts
     val activeAlerts = remember(alertsWithDistance, dismissedAlertIds, showDismissed, filterNow, selectedArea, maxDistance) {
         alertsWithDistance.filter { model ->
-            val end = TimeUtils.parseEndTimeToMillis(model.alert.endTime) ?: Long.MAX_VALUE
+            val end = model.endMillis ?: Long.MAX_VALUE
             // Filter out expired, optionally include dismissed based on toggle
             val notExpired = end > filterNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
@@ -484,31 +497,31 @@ fun PokemonAlertsPage(
     val availableFilters = remember(activeAlerts) {
         val filters = mutableSetOf(AlertFilter.ALL)
         
-        if (activeAlerts.any { it.alert.hasType("Raid") }) {
+        if (activeAlerts.any { it.hasCachedType("Raid") }) {
             filters.add(AlertFilter.RAIDS)
         }
-        if (activeAlerts.any { it.alert.hasType("Quest") }) {
+        if (activeAlerts.any { it.hasCachedType("Quest") }) {
             filters.add(AlertFilter.QUESTS)
         }
-        if (activeAlerts.any { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }) {
+        if (activeAlerts.any { it.hasCachedType("Rare") || it.hasCachedType("Spawn") }) {
             filters.add(AlertFilter.RARES)
         }
-        if (activeAlerts.any { it.alert.hasType("Hundo") }) {
+        if (activeAlerts.any { it.hasCachedType("Hundo") }) {
             filters.add(AlertFilter.HUNDOS)
         }
-        if (activeAlerts.any { it.alert.hasType("PvP") }) {
+        if (activeAlerts.any { it.hasCachedType("PvP") }) {
             filters.add(AlertFilter.PVP)
         }
-        if (activeAlerts.any { it.alert.hasType("Nundo") }) {
+        if (activeAlerts.any { it.hasCachedType("Nundo") }) {
             filters.add(AlertFilter.NUNDOS)
         }
-        if (activeAlerts.any { it.alert.hasType("Kecleon") }) {
+        if (activeAlerts.any { it.hasCachedType("Kecleon") }) {
             filters.add(AlertFilter.KECLEON)
         }
-        if (activeAlerts.any { it.alert.hasType("Rocket") }) {
+        if (activeAlerts.any { it.hasCachedType("Rocket") }) {
             filters.add(AlertFilter.ROCKET)
         }
-        if (activeAlerts.any { it.alert.hasType("WeatherChange") }) {
+        if (activeAlerts.any { it.hasCachedType("WeatherChange") }) {
             filters.add(AlertFilter.WEATHER_CHANGE)
         }
         filters
@@ -524,15 +537,15 @@ fun PokemonAlertsPage(
     val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference, searchQuery) {
         var filtered = when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
-            AlertFilter.RAIDS -> activeAlerts.filter { it.alert.hasType("Raid") }
-            AlertFilter.QUESTS -> activeAlerts.filter { it.alert.hasType("Quest") }
-            AlertFilter.RARES -> activeAlerts.filter { it.alert.hasType("Rare") || it.alert.hasType("Spawn") }
-            AlertFilter.HUNDOS -> activeAlerts.filter { it.alert.hasType("Hundo") }
-            AlertFilter.PVP -> activeAlerts.filter { it.alert.hasType("PvP") }
-            AlertFilter.NUNDOS -> activeAlerts.filter { it.alert.hasType("Nundo") }
-            AlertFilter.KECLEON -> activeAlerts.filter { it.alert.hasType("Kecleon") }
-            AlertFilter.ROCKET -> activeAlerts.filter { it.alert.hasType("Rocket") }
-            AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.alert.hasType("WeatherChange") }
+            AlertFilter.RAIDS -> activeAlerts.filter { it.hasCachedType("Raid") }
+            AlertFilter.QUESTS -> activeAlerts.filter { it.hasCachedType("Quest") }
+            AlertFilter.RARES -> activeAlerts.filter { it.hasCachedType("Rare") || it.hasCachedType("Spawn") }
+            AlertFilter.HUNDOS -> activeAlerts.filter { it.hasCachedType("Hundo") }
+            AlertFilter.PVP -> activeAlerts.filter { it.hasCachedType("PvP") }
+            AlertFilter.NUNDOS -> activeAlerts.filter { it.hasCachedType("Nundo") }
+            AlertFilter.KECLEON -> activeAlerts.filter { it.hasCachedType("Kecleon") }
+            AlertFilter.ROCKET -> activeAlerts.filter { it.hasCachedType("Rocket") }
+            AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasCachedType("WeatherChange") }
         }
         
         // Apply text search
@@ -551,13 +564,13 @@ fun PokemonAlertsPage(
             SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
                 it.alert.id?.toLong() ?: Long.MIN_VALUE
             }.thenByDescending { 
-                TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: 0L
+                it.endMillis ?: 0L
             })
             SortPreference.DISTANCE -> filtered.sortedBy { 
                 it.distanceInfo.distanceMeters ?: Float.MAX_VALUE 
             }
             SortPreference.TIME_REMAINING -> filtered.sortedBy { 
-                TimeUtils.parseEndTimeToMillis(it.alert.endTime) ?: Long.MAX_VALUE 
+                it.endMillis ?: Long.MAX_VALUE
             }
             SortPreference.NAME -> filtered.sortedBy { 
                 it.alert.name.lowercase()
@@ -670,6 +683,8 @@ private fun AlertsList(
     searchQuery: String = "",
     onSearchQueryChanged: (String) -> Unit = {}
 ) {
+    val countdownNow = rememberCountdownNow()
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
@@ -838,6 +853,7 @@ private fun AlertsList(
                     AlertCard(
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
+                        nowMillis = countdownNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
                         onShareClick = { onShareClick(model.alert) },
@@ -1156,6 +1172,12 @@ private fun AlertHistoryPage(
         userLocation = getLastKnownLocation(context)
     }
 
+    val alertEndTimes = remember(uiState.alerts) {
+        uiState.alerts.associate { alert ->
+            alert.uniqueId to TimeUtils.parseEndTimeToMillis(alert.endTime)
+        }
+    }
+
     // Trigger pagination when the user scrolls near the bottom of the list.
     val shouldLoadMore = remember {
         derivedStateOf {
@@ -1186,7 +1208,7 @@ private fun AlertHistoryPage(
                 it.id?.toLong() ?: Long.MIN_VALUE
             }.thenByDescending { 
                 // Secondary sort by end time for alerts without ID
-                TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+                alertEndTimes[it.uniqueId] ?: 0L
             })
             SortPreference.DISTANCE -> {
                 userLocation?.let { loc ->
@@ -1198,11 +1220,11 @@ private fun AlertHistoryPage(
                 } ?: filtered.sortedWith(compareByDescending<PokemonAlert> { 
                     it.id?.toLong() ?: Long.MIN_VALUE
                 }.thenByDescending { 
-                    TimeUtils.parseEndTimeToMillis(it.endTime) ?: 0L
+                    alertEndTimes[it.uniqueId] ?: 0L
                 })
             }
             SortPreference.TIME_REMAINING -> filtered.sortedBy { 
-                TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE 
+                alertEndTimes[it.uniqueId] ?: Long.MAX_VALUE
             }
             SortPreference.NAME -> filtered.sortedBy { 
                 it.name.lowercase()
@@ -1285,6 +1307,7 @@ private fun AlertHistoryPage(
         modifier = Modifier.fillMaxSize(),
         state = rememberPullToRefreshState()
     ) {
+        val countdownNow = rememberCountdownNow()
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
@@ -1535,6 +1558,7 @@ private fun AlertHistoryPage(
                 AlertCard(
                     alert = alert,
                     distanceInfo = AlertDistanceInfo(null, null, null),
+                    nowMillis = countdownNow,
                     onOpenMaps = { openMapForAlert(context, alert) },
                     onShowDetails = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)

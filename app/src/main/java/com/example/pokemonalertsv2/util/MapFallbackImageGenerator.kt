@@ -34,7 +34,7 @@ object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
     private const val DEFAULT_ZOOM = 16
-    private val bitmapCache = object : LruCache<String, Bitmap>(12 * 1024) {
+    private val bitmapCache = object : LruCache<String, Bitmap>(32 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
         }
