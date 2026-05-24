@@ -40,6 +40,21 @@ internal object WidgetAlertFilter {
         )
     }
 
+    fun filterWithoutDistance(
+        alerts: List<PokemonAlert>,
+        criteria: Criteria
+    ): List<PokemonAlert> {
+        return alerts.filter { alert ->
+            isVisible(
+                alert = alert,
+                criteria = criteria,
+                origin = null,
+                distanceMeters = { _, _ -> null },
+                applyDistance = false
+            )
+        }
+    }
+
     fun originFrom(location: Location): Origin = Origin(
         latitude = location.latitude,
         longitude = location.longitude
@@ -49,7 +64,8 @@ internal object WidgetAlertFilter {
         alert: PokemonAlert,
         criteria: Criteria,
         origin: Origin?,
-        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float?
+        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float?,
+        applyDistance: Boolean = true
     ): Boolean {
         val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
         if (end <= criteria.nowMillis) return false
@@ -57,7 +73,7 @@ internal object WidgetAlertFilter {
         if (criteria.selectedArea != "All" && alert.area != criteria.selectedArea) return false
         if (!matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
 
-        if (criteria.maxDistanceKm > 0 && origin != null) {
+        if (applyDistance && criteria.maxDistanceKm > 0 && origin != null) {
             val meters = distanceMeters(origin, alert)
             if (meters != null && !meters.isNaN() && meters > criteria.maxDistanceKm * 1000) {
                 return false

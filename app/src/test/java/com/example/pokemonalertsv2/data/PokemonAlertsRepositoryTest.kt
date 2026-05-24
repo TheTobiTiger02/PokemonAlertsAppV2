@@ -91,6 +91,20 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun fetchAlerts_prunesExpiredCacheWhenFetchedDataIsUnchanged() = runTest {
+        val expired = sampleAlert("Expired", endTime = "1000")
+        service.alerts = listOf(expired)
+        dao.alerts.value = listOf(expired.toEntity().copy(createdAt = 123L))
+
+        val fetched = repository.fetchAlerts()
+
+        assertEquals(listOf(expired), fetched)
+        assertTrue(dao.alerts.value.isEmpty())
+        assertEquals(1, dao.clearCalls)
+        assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
     fun upsertAlert_insertsSingleAlertWithoutClearingCache() = runTest {
         val existing = sampleAlert("Existing", id = 1)
         dao.alerts.value = listOf(existing.toEntity())
@@ -105,6 +119,41 @@ class PokemonAlertsRepositoryTest {
         assertEquals("Pushed", dao.alerts.value.last().name)
         assertEquals(1, dao.insertCalls)
         assertEquals(0, dao.clearCalls)
+    }
+
+    @Test
+    fun clearExpiredAlerts_removesExpiredAndKeepsUnknownEndTimes() = runTest {
+        val expired = sampleAlert("Expired", endTime = "1000")
+        val active = sampleAlert("Active", endTime = "3000")
+        val invalid = sampleAlert("Invalid", endTime = "not-a-date")
+        val missing = sampleAlert("Missing", endTime = "")
+        dao.alerts.value = listOf(
+            expired.toEntity(),
+            active.toEntity(),
+            invalid.toEntity(),
+            missing.toEntity()
+        )
+
+        repository.clearExpiredAlerts(nowMillis = 2000)
+
+        assertEquals(
+            listOf(active.uniqueId, invalid.uniqueId, missing.uniqueId),
+            dao.alerts.value.map { it.uniqueId }
+        )
+        assertEquals(1, dao.clearCalls)
+        assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun clearExpiredAlerts_doesNotRewriteWhenAllCachedAlertsAreActive() = runTest {
+        val active = sampleAlert("Active", endTime = "3000")
+        dao.alerts.value = listOf(active.toEntity())
+
+        repository.clearExpiredAlerts(nowMillis = 2000)
+
+        assertEquals(listOf(active.uniqueId), dao.alerts.value.map { it.uniqueId })
+        assertEquals(0, dao.clearCalls)
+        assertEquals(0, dao.insertCalls)
     }
 
     @Test
@@ -173,7 +222,7 @@ class PokemonAlertsRepositoryTest {
 
     private fun sampleAlert(
         name: String,
-        endTime: String = "2025-10-07 23:59:59",
+        endTime: String = "2099-10-07 23:59:59",
         id: Int? = null
     ) = PokemonAlert(
         id = id,

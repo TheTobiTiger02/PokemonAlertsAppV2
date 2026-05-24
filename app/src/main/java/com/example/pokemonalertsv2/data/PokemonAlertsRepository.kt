@@ -9,6 +9,7 @@ import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.toDomain
 import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -51,6 +52,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             if (!sameCachedAlerts(alertDao.getAllAlerts(), remoteEntities)) {
                 alertDao.replaceAll(remoteEntities)
             }
+            clearExpiredAlerts()
             remoteAlerts
         } finally {
             fetchMutex.unlock()
@@ -133,13 +135,15 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
      * Clears expired alerts from the database.
      * Should be called periodically.
      */
-    suspend fun clearExpiredAlerts() {
-        // Simple implementation: delete alerts where endTime string is strictly less than current time
-        // Note: String comparison works for ISO8601 format "yyyy-MM-dd HH:mm:ss"
-        // But we need current time in that format.
-        // For simplicity in this iteration, we might skip complex query logic or implement a helper.
-        // Let's just rely on the fact that we overwrite with fresh data on fetch.
-        // Ideally we'd use alertDao.deleteExpired(now)
+    suspend fun clearExpiredAlerts(nowMillis: Long = System.currentTimeMillis()) {
+        val cachedAlerts = alertDao.getAllAlerts()
+        val activeAlerts = cachedAlerts.filter { entity ->
+            val endMillis = TimeUtils.parseEndTimeToMillis(entity.endTime)
+            endMillis == null || endMillis > nowMillis
+        }
+        if (activeAlerts.size != cachedAlerts.size) {
+            alertDao.replaceAll(activeAlerts)
+        }
     }
 
     suspend fun detectNewAlerts(alerts: List<PokemonAlert>): List<PokemonAlert> {

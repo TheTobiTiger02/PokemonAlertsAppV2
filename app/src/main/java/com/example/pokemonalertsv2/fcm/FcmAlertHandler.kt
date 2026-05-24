@@ -19,6 +19,7 @@ object FcmAlertHandler {
 
         val repository = PokemonAlertsRepository.create(appContext)
         repository.upsertAlert(payload.alert)
+        repository.clearExpiredAlerts()
         repository.markAlertsAsSeen(listOf(payload.alert))
 
         AlertNotifier.notifyAlerts(

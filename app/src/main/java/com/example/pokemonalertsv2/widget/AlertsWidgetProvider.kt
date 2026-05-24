@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.AlarmManagerCompat
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.R
@@ -21,12 +22,9 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
-import com.example.pokemonalertsv2.util.CachedLocationProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -43,11 +41,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
         cancelScheduledUpdate(context)
+        lastActiveAlertCounts.clear()
+        lastActiveAlertCount = null
+        WidgetAlertSnapshotStore.clear()
     }
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
-        updateAll(context, scheduleNext = true)
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                updateAll(context, scheduleNext = true)
+            } finally {
+                try { pending.finish() } catch (_: Throwable) {}
+            }
+        }
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
@@ -55,6 +63,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         // Clean up per-widget filter prefs
         appWidgetIds.forEach { id -> WidgetFilterPrefs.removeFilters(context, id) }
         appWidgetIds.forEach { id -> lastActiveAlertCounts.remove(id) }
+        appWidgetIds.forEach { id -> WidgetAlertSnapshotStore.remove(id) }
         lastActiveAlertCount = lastActiveAlertCounts.values.maxOrNull()
         val remainingIds = AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
@@ -69,13 +78,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         // Rebuild views for this widget (may switch between compact/full)
+        val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                runCatching {
+                    PokemonAlertsRepository.create(context).clearExpiredAlerts()
+                }.onFailure { exception ->
+                    Log.w(TAG, "Expired alert cleanup failed during resize", exception)
+                }
                 val views = buildViews(context, appWidgetId, appWidgetManager)
                 appWidgetManager.updateAppWidget(appWidgetId, views)
                 appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.list_alerts)
             } catch (t: Throwable) {
                 Log.w(TAG, "Widget resize update failed", t)
+            } finally {
+                try { pending.finish() } catch (_: Throwable) {}
             }
         }
     }
@@ -100,7 +117,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     try {
                         val prefs = AlertPreferences(context.alertPreferencesDataStore)
                         prefs.addDismissedAlert(alertId)
-                        updateAll(context)
+                        updateAll(context, scheduleNext = true)
                     } finally {
                         try { pending.finish() } catch (_: Throwable) {}
                     }
@@ -136,26 +153,34 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun updateAll(context: Context, scheduleNext: Boolean = false) {
+    private suspend fun updateAll(context: Context, scheduleNext: Boolean = false) {
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
-        if (ids.isEmpty()) return
+        if (ids.isEmpty()) {
+            cancelScheduledUpdate(context)
+            return
+        }
 
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                ids.forEach { id ->
-                    val views = buildViews(context, id, appWidgetManager)
-                    appWidgetManager.updateAppWidget(id, views)
-                }
-                appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.list_alerts)
-            } catch (t: Throwable) {
-                Log.w(TAG, "Widget update failed", t)
+        try {
+            runCatching {
+                PokemonAlertsRepository.create(context).clearExpiredAlerts()
+            }.onFailure { exception ->
+                Log.w(TAG, "Expired alert cleanup failed", exception)
             }
+
+            ids.forEach { id ->
+                val views = buildViews(context, id, appWidgetManager)
+                appWidgetManager.updateAppWidget(id, views)
+            }
+            appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.list_alerts)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Widget update failed", t)
+        } finally {
             if (scheduleNext) scheduleNextUpdate(context)
         }
     }
 
-    private fun buildViews(context: Context, appWidgetId: Int, appWidgetManager: AppWidgetManager? = null): RemoteViews {
+    private suspend fun buildViews(context: Context, appWidgetId: Int, appWidgetManager: AppWidgetManager? = null): RemoteViews {
         // Detect compact mode based on widget dimensions
         val isCompact = appWidgetManager?.let { isCompactMode(it, appWidgetId) } ?: false
 
@@ -270,36 +295,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return minHeight in 1..119
     }
 
-    private fun getActiveAlertCount(context: Context, appWidgetId: Int): Int {
+    private suspend fun getActiveAlertCount(context: Context, appWidgetId: Int): Int {
         return try {
-            runBlocking {
-                val repo = PokemonAlertsRepository.create(context)
-                val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
-                val dismissedIds = runCatching {
-                    repo.alertPreferences.dismissedAlertIds.first()
-                }.getOrElse { emptySet() }
-                
-                val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
-                val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
-                val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
-                val currentLocation = runCatching {
-                    CachedLocationProvider.get(context, timeoutMs = 2000, highAccuracy = false)
-                }.getOrNull()
-                
-                when (val filterResult = WidgetAlertFilter.filterAlerts(
-                    alerts = alerts,
-                    criteria = WidgetAlertFilter.Criteria(
-                        dismissedAlertIds = dismissedIds,
-                        selectedArea = selectedArea,
-                        maxDistanceKm = maxDistance,
-                        widgetFilterTypes = filterTypes
-                    ),
-                    origin = currentLocation?.let { WidgetAlertFilter.originFrom(it) }
-                )) {
-                    is WidgetAlertFilter.Result.Filtered -> filterResult.alerts.size
-                    WidgetAlertFilter.Result.PreservePrevious -> lastActiveAlertCounts[appWidgetId] ?: 0
-                }
-            }
+            WidgetAlertLoader.load(context, appWidgetId).alerts.size
         } catch (_: Throwable) { 0 }
     }
 
@@ -314,18 +312,33 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val am = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val intent = Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_TIMER_TICK }
         val pi = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, PendingIntent.FLAG_CANCEL_CURRENT or mutableFlag())
+        val nowMillis = System.currentTimeMillis()
         val hasActiveAlerts = (lastActiveAlertCount ?: 1) > 0
-        val triggerAt = System.currentTimeMillis() + if (hasActiveAlerts) {
-            UPDATE_INTERVAL_MS
-        } else {
-            IDLE_UPDATE_INTERVAL_MS
-        }
+        val delayMillis = calculateNextUpdateDelay(
+            nowMillis = nowMillis,
+            hasActiveAlerts = hasActiveAlerts,
+            nextExpirationMillis = WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis)
+        )
+        val triggerAt = nowMillis + delayMillis
 
-        if (hasActiveAlerts) {
-            AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
-        } else {
-            AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+        try {
+            if (hasActiveAlerts && canScheduleExact(am)) {
+                AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+        } catch (exception: SecurityException) {
+            Log.w(TAG, "Exact widget alarm denied; using inexact fallback.", exception)
+            runCatching {
+                AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }.onFailure {
+                Log.w(TAG, "Failed to schedule fallback widget alarm.", it)
+            }
         }
+    }
+
+    private fun canScheduleExact(alarmManager: AlarmManager): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
     }
 
     private fun cancelScheduledUpdate(context: Context) {
@@ -349,6 +362,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         const val EXTRA_NAV_LAT = "extra_nav_lat"
         const val EXTRA_NAV_LNG = "extra_nav_lng"
         private const val REQUEST_CODE = 2025
+        private val MIN_UPDATE_DELAY_MS = TimeUnit.SECONDS.toMillis(1)
+        private val EXPIRY_UPDATE_BUFFER_MS = TimeUnit.SECONDS.toMillis(1)
         private val UPDATE_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30)
         private val IDLE_UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(15)
         private val lastActiveAlertCounts = ConcurrentHashMap<Int, Int>()
@@ -356,6 +371,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         private var lastActiveAlertCount: Int? = null
 
         private fun mutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+
+        @VisibleForTesting
+        internal fun calculateNextUpdateDelay(
+            nowMillis: Long,
+            hasActiveAlerts: Boolean,
+            nextExpirationMillis: Long?
+        ): Long {
+            if (!hasActiveAlerts) return IDLE_UPDATE_INTERVAL_MS
+
+            val expiryDelay = nextExpirationMillis
+                ?.let { expirationMillis -> expirationMillis - nowMillis + EXPIRY_UPDATE_BUFFER_MS }
+                ?.coerceAtLeast(MIN_UPDATE_DELAY_MS)
+
+            return minOf(UPDATE_INTERVAL_MS, expiryDelay ?: UPDATE_INTERVAL_MS)
+        }
 
         fun requestUpdate(context: Context) {
             context.sendBroadcast(Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH })

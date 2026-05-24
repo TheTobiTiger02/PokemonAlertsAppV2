@@ -58,6 +58,21 @@ object CachedLocationProvider {
         return null
     }
 
+    suspend fun getCachedOrLastKnown(context: Context): Location? {
+        val now = System.currentTimeMillis()
+        cachedLocation
+            ?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }
+            ?.let { return it }
+
+        val lastKnown = getLastKnownLocation(context.applicationContext)
+        if (lastKnown != null) {
+            updateCache(lastKnown)
+            return lastKnown
+        }
+
+        return null
+    }
+
     private fun updateCache(location: Location) {
         cachedLocation = location
         cachedAtMillis = System.currentTimeMillis()

@@ -23,12 +23,13 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
-import com.example.pokemonalertsv2.util.CachedLocationProvider
+import com.example.pokemonalertsv2.util.LocationUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 object AlertNotifier {
     const val CHANNEL_ID = "pokemon_alerts_channel"
@@ -91,7 +92,7 @@ object AlertNotifier {
         
         val notificationManager = NotificationManagerCompat.from(context)
         val imageLoader = PokemonAlertsApplication.imageLoader(context)
-        val userLocation = CachedLocationProvider.get(context)
+        val userLocation = NotificationLocationCache.get(context)
         val walkingRoutes = userLocation?.let { location ->
             WalkingRouteUtils.getWalkingRoutes(location, alerts)
         } ?: emptyMap()
@@ -353,6 +354,73 @@ object AlertNotifier {
                     allowedSpawnSpecies = preferences.allowedSpawnSpecies.first()
                 )
             }
+        }
+    }
+
+    private object NotificationLocationCache {
+        private const val STALE_LOCATION_MS = 10 * 60 * 1000L
+
+        @Volatile
+        private var cachedLocation: Location? = null
+
+        @Volatile
+        private var cachedAtMillis: Long = 0L
+
+        /**
+         * Suspending location fetch that actually waits for a fix.
+         * Falls back to FusedLocationProvider's last-known location if a fresh
+         * fix cannot be obtained within the timeout.
+         */
+        suspend fun get(context: Context): Location? {
+            val now = System.currentTimeMillis()
+            // Return cached if still fresh enough
+            cachedLocation?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }?.let { return it }
+
+            val appContext = context.applicationContext
+            // Try a fresh location fix with a reasonable timeout
+            val freshLocation = LocationUtils.getCurrentLocationOrNull(
+                context = appContext,
+                timeoutMs = 4000,
+                highAccuracy = false
+            )
+            if (freshLocation != null) {
+                cachedLocation = freshLocation
+                cachedAtMillis = System.currentTimeMillis()
+                return freshLocation
+            }
+
+            // Fall back to last-known location from FusedLocationProvider
+            val lastKnown = getLastKnownLocation(appContext)
+            if (lastKnown != null) {
+                cachedLocation = lastKnown
+                cachedAtMillis = System.currentTimeMillis()
+                return lastKnown
+            }
+
+            return null
+        }
+
+        @android.annotation.SuppressLint("MissingPermission")
+        private suspend fun getLastKnownLocation(context: Context): Location? {
+            if (!hasLocationPermission(context)) return null
+            return withContext(Dispatchers.IO) {
+                runCatching {
+                    val fused = com.google.android.gms.location.LocationServices
+                        .getFusedLocationProviderClient(context)
+                    kotlinx.coroutines.suspendCancellableCoroutine<Location?> { cont ->
+                        fused.lastLocation
+                            .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc) }
+                            .addOnFailureListener { _ -> if (cont.isActive) cont.resume(null) }
+                    }
+                }.getOrNull()
+            }
+        }
+
+        private fun hasLocationPermission(context: Context): Boolean {
+            val fine = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
+            val coarse = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            return fine == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                    coarse == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
     }
 

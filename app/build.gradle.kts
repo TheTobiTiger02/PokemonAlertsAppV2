@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -12,6 +14,18 @@ if (file("google-services.json").exists()) {
     logger.warn("app/google-services.json not found; Firebase resources will be generated once it is provided.")
 }
 
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val googleMapsApiKey: String =
+    localProperties.getProperty("GOOGLE_MAPS_API_KEY")?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("GOOGLE_MAPS_API_KEY").orNull?.takeIf { it.isNotBlank() }
+        ?: "YOUR_API_KEY_HERE"
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -24,7 +38,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = System.getenv("GOOGLE_MAPS_API_KEY") ?: "YOUR_API_KEY_HERE"
+        resValue("string", "maps_api_key", googleMapsApiKey)
     }
 
     buildTypes {

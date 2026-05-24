@@ -23,14 +23,11 @@ import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
-import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
-import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 class AlertsWidgetService : RemoteViewsService() {
@@ -64,35 +61,14 @@ private class AlertsFactory(
 
     override fun onDataSetChanged() {
         runBlocking {
-            val repo = PokemonAlertsRepository.create(context)
-            val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
-            val dismissedIds = runCatching { repo.alertPreferences.dismissedAlertIds.first() }.getOrElse { emptySet() }
-            val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
-            val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
-            val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
-            val resolvedLocation = runCatching {
-                CachedLocationProvider.get(context, timeoutMs = 4000, highAccuracy = false)
-            }.getOrNull() ?: currentLocation
-
-            currentLocation = resolvedLocation
-
-            val filterResult = WidgetAlertFilter.filterAlerts(
-                alerts = alerts,
-                criteria = WidgetAlertFilter.Criteria(
-                    dismissedAlertIds = dismissedIds,
-                    selectedArea = selectedArea,
-                    maxDistanceKm = maxDistance,
-                    widgetFilterTypes = filterTypes
-                ),
-                origin = resolvedLocation?.let { WidgetAlertFilter.originFrom(it) }
+            val loadedAlerts = WidgetAlertLoader.load(
+                context = context,
+                appWidgetId = appWidgetId,
+                fallbackLocation = currentLocation
             )
+            currentLocation = loadedAlerts.location
 
-            if (filterResult is WidgetAlertFilter.Result.PreservePrevious) {
-                return@runBlocking
-            }
-
-            val activeAlerts = (filterResult as WidgetAlertFilter.Result.Filtered).alerts
-            val sorted = activeAlerts.sortedWith(compareByDescending<PokemonAlert> {
+            val sorted = loadedAlerts.alerts.sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
 
