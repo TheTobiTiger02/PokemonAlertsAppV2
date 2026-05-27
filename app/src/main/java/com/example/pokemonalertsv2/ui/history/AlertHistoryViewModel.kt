@@ -27,8 +27,10 @@ data class HistoryUiState(
     val selectedType: String? = null,
     /** Current server-side text search. Blank = no search. */
     val searchQuery: String = "",
-    /** All-time stats from /api/stats/total. */
-    val totalStats: TotalStatsResponse? = null
+    /** Stats from /api/stats/total, scoped by [totalStatsDate] when it is not null. */
+    val totalStats: TotalStatsResponse? = null,
+    /** Date used to load [totalStats]; null means all time. */
+    val totalStatsDate: String? = null
 )
 
 class AlertHistoryViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,6 +63,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
      */
     fun setDateFilter(date: String?) {
         _uiState.update { it.copy(selectedDate = date) }
+        fetchTotalStats(date = date)
         refreshHistory()
     }
 
@@ -127,6 +130,11 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun refreshHistoryAndStats() {
+        refreshHistory()
+        fetchTotalStats(date = _uiState.value.selectedDate)
+    }
+
     /** Loads the next page. No-op if already loading or all pages fetched. */
     fun loadMore() {
         val state = _uiState.value
@@ -161,16 +169,29 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
 
     // ── Stats ────────────────────────────────────────────────────────────
 
-    private fun fetchTotalStats() {
+    private fun fetchTotalStats(date: String? = _uiState.value.selectedDate) {
+        _uiState.update { current ->
+            if (current.totalStatsDate == date) {
+                current
+            } else {
+                current.copy(totalStats = null, totalStatsDate = date)
+            }
+        }
         viewModelScope.launch {
             runCatching {
-                repository.getTotalStats()
+                repository.getTotalStats(date = date)
             }.onSuccess { stats ->
                 Log.d(TAG, "Stats OK – total=${stats.totalAlerts}, today=${stats.totalToday}, " +
                     "byType=${stats.byType}")
-                _uiState.update { it.copy(totalStats = stats) }
+                _uiState.update { current ->
+                    if (current.selectedDate == date) {
+                        current.copy(totalStats = stats, totalStatsDate = date)
+                    } else {
+                        current
+                    }
+                }
             }.onFailure { throwable ->
-                Log.e(TAG, "Stats fetch failed", throwable)
+                Log.e(TAG, "Stats fetch failed for date=$date", throwable)
             }
         }
     }

@@ -27,6 +27,7 @@ data class HistoryResponse(
 
 /**
  * Server response for /api/stats/total.
+ * Passing a date query parameter (YYYY-MM-DD) returns stats scoped to that day.
  * Every field is nullable / defaulted so unknown future keys won't crash parsing.
  *
  * The server nests per-type counts inside a "byType" map:
@@ -68,7 +69,9 @@ interface PokemonAlertsService {
     ): HistoryResponse
 
     @GET("api/stats/total")
-    suspend fun getTotalStats(): TotalStatsResponse
+    suspend fun getTotalStats(
+        @Query("date") date: String? = null
+    ): TotalStatsResponse
 }
 
 object PokemonAlertsApi {

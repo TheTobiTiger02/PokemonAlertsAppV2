@@ -220,6 +220,19 @@ class PokemonAlertsRepositoryTest {
         )
     }
 
+    @Test
+    fun getTotalStats_passesDateToService() = runTest {
+        service.totalStatsResponse = TotalStatsResponse(
+            totalAlerts = 75,
+            byType = mapOf("Raid" to 10, "Quest" to 65)
+        )
+
+        val response = repository.getTotalStats(date = "2026-05-27")
+
+        assertEquals(75, response.totalAlerts)
+        assertEquals(listOf("2026-05-27"), service.totalStatsRequests)
+    }
+
     private fun sampleAlert(
         name: String,
         endTime: String = "2099-10-07 23:59:59",
@@ -239,7 +252,9 @@ class PokemonAlertsRepositoryTest {
     private class FakePokemonAlertsService : PokemonAlertsService {
         var alerts: List<PokemonAlert> = emptyList()
         var historyResponse: HistoryResponse = HistoryResponse(data = emptyList())
+        var totalStatsResponse: TotalStatsResponse = TotalStatsResponse()
         val pagedHistoryRequests = mutableListOf<HistoryPagedRequest>()
+        val totalStatsRequests = mutableListOf<String?>()
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
         override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
@@ -256,7 +271,10 @@ class PokemonAlertsRepositoryTest {
             pagedHistoryRequests += HistoryPagedRequest(limit, offset, type, date, startDate, endDate, q)
             return historyResponse
         }
-        override suspend fun getTotalStats(): TotalStatsResponse = TotalStatsResponse()
+        override suspend fun getTotalStats(date: String?): TotalStatsResponse {
+            totalStatsRequests += date
+            return totalStatsResponse
+        }
     }
 
     private data class HistoryPagedRequest(

@@ -1232,18 +1232,72 @@ private fun AlertHistoryPage(
         }
     }
     
-    // Statistics: prefer /api/stats/total (all-time), fall back to local counting.
+    // Statistics: prefer /api/stats/total scoped to the active date, fall back to local counting.
     val statistics = remember(
         filteredAlerts,
         uiState.totalStats,
+        uiState.totalStatsDate,
         uiState.selectedDate,
         uiState.selectedType,
         uiState.searchQuery,
         uiState.totalServerCount
     ) {
-        val stats = uiState.totalStats
+        val stats = uiState.totalStats.takeIf { uiState.totalStatsDate == uiState.selectedDate }
         val serverTotal = uiState.totalServerCount
         val byType = stats?.byType ?: emptyMap()
+        val canUseServerStats = stats != null && uiState.searchQuery.isBlank() && byType.isNotEmpty()
+
+        fun emptyStatistics(total: Int, today: Int = 0) = mutableMapOf(
+            "total" to total,
+            "today" to today,
+            "raids" to 0,
+            "quests" to 0,
+            "rares" to 0,
+            "hundos" to 0,
+            "pvp" to 0,
+            "nundos" to 0,
+            "rocket" to 0,
+            "kecleon" to 0,
+            "other" to 0
+        )
+
+        fun serverBreakdown(total: Int, today: Int = 0) = emptyStatistics(total, today).apply {
+            this["raids"] = byType["Raid"] ?: 0
+            this["quests"] = byType["Quest"] ?: 0
+            this["rares"] = byType["Rare"] ?: 0
+            this["hundos"] = byType["Hundo"] ?: 0
+            this["pvp"] = byType["PvP"] ?: 0
+            this["nundos"] = byType["Nundo"] ?: 0
+            this["rocket"] = byType["Rocket"] ?: 0
+            this["kecleon"] = byType["Kecleon"] ?: 0
+        }
+
+        fun serverCountForSelectedType(type: String): Int? = when (type) {
+            "Raid" -> byType["Raid"]
+            "Quest" -> byType["Quest"]
+            "Rare" -> byType["Rare"]
+            "Hundo" -> byType["Hundo"]
+            "PvP" -> byType["PvP"]
+            "Nundo" -> byType["Nundo"]
+            "Rocket" -> byType["Rocket"]
+            "Kecleon" -> byType["Kecleon"]
+            "WeatherChange" -> byType["WeatherChange"] ?: byType["Weather"]
+            else -> null
+        }
+
+        fun putSelectedTypeCount(target: MutableMap<String, Int>, type: String, count: Int) {
+            when (type) {
+                "Raid" -> target["raids"] = count
+                "Quest" -> target["quests"] = count
+                "Rare" -> target["rares"] = count
+                "Hundo" -> target["hundos"] = count
+                "PvP" -> target["pvp"] = count
+                "Nundo" -> target["nundos"] = count
+                "Rocket" -> target["rocket"] = count
+                "Kecleon" -> target["kecleon"] = count
+                else -> target["other"] = count
+            }
+        }
 
         // Local breakdown from loaded alerts (always computed as fallback)
         var raids = 0; var quests = 0; var rares = 0; var hundos = 0
@@ -1261,40 +1315,35 @@ private fun AlertHistoryPage(
             if (!categorized) other++
         }
 
-        if (uiState.selectedDate == null &&
-            uiState.selectedType == null &&
-            uiState.searchQuery.isBlank() &&
-            byType.isNotEmpty()
-        ) {
-            // All-time view + server stats loaded → authoritative per-type from byType map
-            mapOf(
-                "total" to (stats?.totalAlerts ?: serverTotal),
-                "today" to (stats?.totalToday ?: 0),
-                "raids" to (byType["Raid"] ?: 0),
-                "quests" to (byType["Quest"] ?: 0),
-                "rares" to (byType["Rare"] ?: 0),
-                "hundos" to (byType["Hundo"] ?: 0),
-                "pvp" to (byType["PvP"] ?: 0),
-                "nundos" to (byType["Nundo"] ?: 0),
-                "rocket" to (byType["Rocket"] ?: 0),
-                "kecleon" to (byType["Kecleon"] ?: 0),
-                "other" to 0
-            )
-        } else {
-            // Date-filtered or stats not yet loaded → server total + local breakdown
-            mapOf(
-                "total" to if (serverTotal > 0) serverTotal else filteredAlerts.size,
-                "today" to 0,
-                "raids" to raids,
-                "quests" to quests,
-                "rares" to rares,
-                "hundos" to hundos,
-                "pvp" to pvp,
-                "nundos" to nundos,
-                "rocket" to rocket,
-                "kecleon" to kecleon,
-                "other" to other
-            )
+        when {
+            canUseServerStats && uiState.selectedType == null -> {
+                serverBreakdown(
+                    total = stats?.totalAlerts ?: serverTotal,
+                    today = if (uiState.selectedDate == null) stats?.totalToday ?: 0 else 0
+                )
+            }
+            canUseServerStats && uiState.selectedType != null -> {
+                val selectedType = uiState.selectedType
+                val selectedTypeTotal = serverCountForSelectedType(selectedType) ?: serverTotal
+                emptyStatistics(total = if (serverTotal > 0) serverTotal else selectedTypeTotal).apply {
+                    putSelectedTypeCount(this, selectedType, selectedTypeTotal)
+                }
+            }
+            else -> {
+                mapOf(
+                    "total" to if (serverTotal > 0) serverTotal else filteredAlerts.size,
+                    "today" to 0,
+                    "raids" to raids,
+                    "quests" to quests,
+                    "rares" to rares,
+                    "hundos" to hundos,
+                    "pvp" to pvp,
+                    "nundos" to nundos,
+                    "rocket" to rocket,
+                    "kecleon" to kecleon,
+                    "other" to other
+                )
+            }
         }
     }
 

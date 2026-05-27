@@ -126,9 +126,9 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     // ── Server statistics ────────────────────────────────────────────────
 
-    /** Fetches all-time stats from /api/stats/total. */
-    suspend fun getTotalStats(): TotalStatsResponse {
-        return service.getTotalStats()
+    /** Fetches all-time stats, or stats scoped to [date] when provided. */
+    suspend fun getTotalStats(date: String? = null): TotalStatsResponse {
+        return service.getTotalStats(date = date)
     }
     
     /**

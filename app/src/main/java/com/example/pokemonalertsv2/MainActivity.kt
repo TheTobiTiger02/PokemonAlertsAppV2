@@ -336,7 +336,7 @@ private fun MainScaffold(
                             com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
                                 uiState = historyUiState,
                                 snackbarHostState = snackbarHostState,
-                                onRefresh = historyViewModel::refreshHistory,
+                                onRefresh = historyViewModel::refreshHistoryAndStats,
                                 onLoadMore = historyViewModel::loadMore,
                                 onDateChanged = historyViewModel::setDateFilter,
                                 onTypeChanged = historyViewModel::setTypeFilter,
