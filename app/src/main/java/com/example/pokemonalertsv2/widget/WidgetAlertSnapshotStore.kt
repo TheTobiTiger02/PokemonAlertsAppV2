@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal object WidgetAlertSnapshotStore {
     private val snapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
+    private val cadenceSnapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
 
     fun resolve(
         appWidgetId: Int,
@@ -29,14 +30,20 @@ internal object WidgetAlertSnapshotStore {
 
     fun remove(appWidgetId: Int) {
         snapshots.remove(appWidgetId)
+        cadenceSnapshots.remove(appWidgetId)
     }
 
     fun clear() {
         snapshots.clear()
+        cadenceSnapshots.clear()
+    }
+
+    fun updateCadence(appWidgetId: Int, alerts: List<PokemonAlert>) {
+        cadenceSnapshots[appWidgetId] = alerts
     }
 
     fun nextExpirationMillis(nowMillis: Long): Long? {
-        return snapshots.values
+        return cadenceSnapshots.values
             .asSequence()
             .flatten()
             .mapNotNull { TimeUtils.parseEndTimeToMillis(it.endTime) }

@@ -41,8 +41,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
         cancelScheduledUpdate(context)
-        lastActiveAlertCounts.clear()
-        lastActiveAlertCount = null
+        lastCadenceAlertCounts.clear()
+        lastCadenceAlertCount = null
         WidgetAlertSnapshotStore.clear()
     }
 
@@ -62,9 +62,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         super.onDeleted(context, appWidgetIds)
         // Clean up per-widget filter prefs
         appWidgetIds.forEach { id -> WidgetFilterPrefs.removeFilters(context, id) }
-        appWidgetIds.forEach { id -> lastActiveAlertCounts.remove(id) }
+        appWidgetIds.forEach { id -> lastCadenceAlertCounts.remove(id) }
         appWidgetIds.forEach { id -> WidgetAlertSnapshotStore.remove(id) }
-        lastActiveAlertCount = lastActiveAlertCounts.values.maxOrNull()
+        lastCadenceAlertCount = lastCadenceAlertCounts.values.maxOrNull()
         val remainingIds = AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
         if (remainingIds.isEmpty()) cancelScheduledUpdate(context)
@@ -184,10 +184,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         // Detect compact mode based on widget dimensions
         val isCompact = appWidgetManager?.let { isCompactMode(it, appWidgetId) } ?: false
 
-        // Get alert count for badge / compact display
-        val alertCount = getActiveAlertCount(context, appWidgetId)
-        lastActiveAlertCounts[appWidgetId] = alertCount
-        lastActiveAlertCount = lastActiveAlertCounts.values.maxOrNull()
+        val alertCounts = getAlertCounts(context, appWidgetId)
+        val alertCount = alertCounts.visibleCount
+        lastCadenceAlertCounts[appWidgetId] = alertCounts.cadenceCount
+        lastCadenceAlertCount = lastCadenceAlertCounts.values.maxOrNull()
 
         if (isCompact) {
             return buildCompactViews(context, appWidgetId, alertCount)
@@ -295,10 +295,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return minHeight in 1..119
     }
 
-    private suspend fun getActiveAlertCount(context: Context, appWidgetId: Int): Int {
+    private data class WidgetAlertCounts(
+        val visibleCount: Int,
+        val cadenceCount: Int
+    )
+
+    private suspend fun getAlertCounts(context: Context, appWidgetId: Int): WidgetAlertCounts {
         return try {
-            WidgetAlertLoader.load(context, appWidgetId).alerts.size
-        } catch (_: Throwable) { 0 }
+            val loadedAlerts = WidgetAlertLoader.load(context, appWidgetId)
+            WidgetAlertCounts(
+                visibleCount = loadedAlerts.alerts.size,
+                cadenceCount = loadedAlerts.cadenceAlerts.size
+            )
+        } catch (_: Throwable) {
+            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0)
+        }
     }
 
     private fun scheduleNextUpdate(context: Context) {
@@ -313,7 +324,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val intent = Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_TIMER_TICK }
         val pi = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, PendingIntent.FLAG_CANCEL_CURRENT or mutableFlag())
         val nowMillis = System.currentTimeMillis()
-        val hasActiveAlerts = (lastActiveAlertCount ?: 1) > 0
+        val hasActiveAlerts = (lastCadenceAlertCount ?: 1) > 0
         val delayMillis = calculateNextUpdateDelay(
             nowMillis = nowMillis,
             hasActiveAlerts = hasActiveAlerts,
@@ -364,11 +375,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         private const val REQUEST_CODE = 2025
         private val MIN_UPDATE_DELAY_MS = TimeUnit.SECONDS.toMillis(1)
         private val EXPIRY_UPDATE_BUFFER_MS = TimeUnit.SECONDS.toMillis(1)
-        private val UPDATE_INTERVAL_MS = TimeUnit.SECONDS.toMillis(30)
+        private val UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1)
         private val IDLE_UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(15)
-        private val lastActiveAlertCounts = ConcurrentHashMap<Int, Int>()
+        private val lastCadenceAlertCounts = ConcurrentHashMap<Int, Int>()
         @Volatile
-        private var lastActiveAlertCount: Int? = null
+        private var lastCadenceAlertCount: Int? = null
 
         private fun mutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
 

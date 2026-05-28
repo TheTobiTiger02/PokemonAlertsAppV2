@@ -20,7 +20,7 @@ import kotlin.coroutines.resume
  * alert refresh.
  */
 object CachedLocationProvider {
-    private const val STALE_LOCATION_MS = 10 * 60 * 1000L
+    private const val STALE_LOCATION_MS = 60 * 1000L
 
     @Volatile
     private var cachedLocation: Location? = null
@@ -35,7 +35,7 @@ object CachedLocationProvider {
     ): Location? {
         val now = System.currentTimeMillis()
         cachedLocation
-            ?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }
+            ?.takeIf { now - cachedAtMillis < STALE_LOCATION_MS }
             ?.let { return it }
 
         val appContext = context.applicationContext
@@ -61,7 +61,7 @@ object CachedLocationProvider {
     suspend fun getCachedOrLastKnown(context: Context): Location? {
         val now = System.currentTimeMillis()
         cachedLocation
-            ?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }
+            ?.takeIf { now - cachedAtMillis < STALE_LOCATION_MS }
             ?.let { return it }
 
         val lastKnown = getLastKnownLocation(context.applicationContext)

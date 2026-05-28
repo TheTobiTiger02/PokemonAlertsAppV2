@@ -15,10 +15,10 @@
     <string name="countdown_suffix_short">left</string>
     <string name="widget_countdown_format">%1$s left</string>
     <string name="exact_alarm_permission_title">Keep widget alerts fresh</string>
-    <string name="exact_alarm_permission_message">Allow exact background alarms so the widget can refresh countdowns and remove expired alerts on time.</string>
+    <string name="exact_alarm_permission_message">Allow exact background alarms so the widget can refresh location and show alerts when you move into range.</string>
     <string name="exact_alarm_permission_positive">Open settings</string>
     <string name="exact_alarm_permission_negative">Maybe later</string>
-    <string name="exact_alarm_permission_granted">Exact alarms enabled. Background checks are now active.</string>
+    <string name="exact_alarm_permission_granted">Widget background updates are now active.</string>
     <string name="widget_title">Pokemon Alerts</string>
     <string name="widget_updated_at">Updated %1$s</string>
     <string name="widget_logo_cd">Pokemon Alerts logo</string>

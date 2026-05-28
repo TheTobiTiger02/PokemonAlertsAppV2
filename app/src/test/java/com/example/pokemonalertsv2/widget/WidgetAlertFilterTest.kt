@@ -46,6 +46,22 @@ class WidgetAlertFilterTest {
     }
 
     @Test
+    fun filterWithoutDistance_keepsOutOfRangeCadenceCandidate() {
+        val outOfRange = sampleAlert("Out Of Range", area = "North")
+        val wrongArea = sampleAlert("Wrong Area", area = "South")
+
+        val result = WidgetAlertFilter.filterWithoutDistance(
+            alerts = listOf(outOfRange, wrongArea),
+            criteria = criteria(
+                selectedArea = "North",
+                maxDistanceKm = 5
+            )
+        )
+
+        assertEquals(listOf(outOfRange), result)
+    }
+
+    @Test
     fun filterAlerts_appliesSelectedArea() {
         val north = sampleAlert("North", area = "North")
         val south = sampleAlert("South", area = "South")
@@ -134,6 +150,18 @@ class WidgetAlertFilterTest {
         )
 
         assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun snapshotStore_tracksCadenceExpirationForDistanceFilteredAlerts() {
+        val outOfRange = sampleAlert("Out Of Range", endTime = "1500")
+
+        WidgetAlertSnapshotStore.updateCadence(
+            appWidgetId = 10,
+            alerts = listOf(outOfRange)
+        )
+
+        assertEquals(1_500L, WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis = 1_000L))
     }
 
     private fun criteria(
