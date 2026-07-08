@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.graphics.Bitmap
@@ -11,6 +12,9 @@ import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.util.LruCache
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -45,7 +49,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CardDefaults
@@ -97,6 +100,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
+import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -163,9 +167,56 @@ fun AlertsMapScreen(
     var showTimeLabels by rememberSaveable { mutableStateOf(false) }
 
     // Permissions
-    val hasLocationPermission = remember {
-        ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    fun hasLocationPermissionNow(): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    }
+    var hasLocationPermission by remember { mutableStateOf(hasLocationPermissionNow()) }
+
+    fun centerOnUserLocation() {
+        scope.launch {
+            val location = runCatching {
+                CachedLocationProvider.get(
+                    context = context,
+                    timeoutMs = 5000,
+                    highAccuracy = true
+                )
+            }.getOrNull()
+
+            if (location == null) {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.map_current_location_unavailable),
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+
+            val update = CameraUpdateFactory.newLatLngZoom(
+                LatLng(location.latitude, location.longitude),
+                16f
+            )
+            cameraPositionState.animate(update, 1000)
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        hasLocationPermission =
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                hasLocationPermissionNow()
+
+        if (hasLocationPermission) {
+            centerOnUserLocation()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.map_location_permission_needed),
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 
     // Keep expiration checks coarse unless visible labels or the detail popup need live time.
@@ -361,7 +412,7 @@ fun AlertsMapScreen(
             }
         }
         
-        // 3. Bottom Controls (Recenter FAB)
+        // 3. Bottom Controls (Current Location FAB)
         AnimatedVisibility(
             visible = mapLoaded,
             modifier = Modifier
@@ -374,12 +425,16 @@ fun AlertsMapScreen(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                  FilledIconButton(
                     onClick = { 
-                        scope.launch(Dispatchers.Main) {
-                            try {
-                                buildAlertsCameraUpdate(filteredAlerts)?.let { update ->
-                                    cameraPositionState.animate(update, 1000)
-                                }
-                            } catch (_: Exception) {}
+                        if (hasLocationPermissionNow()) {
+                            hasLocationPermission = true
+                            centerOnUserLocation()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
                         }
                     },
                     modifier = Modifier.size(56.dp).shadow(8.dp, CircleShape),
@@ -388,7 +443,10 @@ fun AlertsMapScreen(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    Icon(Icons.Default.LocationOn, "Fit to Alerts")
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_my_location),
+                        contentDescription = "Current location"
+                    )
                 }
             }
         }

@@ -3,9 +3,9 @@ package com.example.pokemonalertsv2.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
-import android.graphics.RadialGradient
-import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.util.LruCache
 import coil.ImageLoader
@@ -18,11 +18,9 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
-import kotlin.math.roundToInt
 import kotlin.math.tan
 
 /**
@@ -34,6 +32,7 @@ object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
     private const val DEFAULT_ZOOM = 16
+    private const val STYLE_VERSION = 2
     private val bitmapCache = object : LruCache<String, Bitmap>(32 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
@@ -71,7 +70,8 @@ object MapFallbackImageGenerator {
             if (latitude !in -85.0511..85.0511 || longitude !in -180.0..180.0) return@withContext null
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
-            val cacheKey = "$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
+            val cacheKey =
+                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
             bitmapCache.get(cacheKey)
                 ?.takeUnless { it.isRecycled }
                 ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
@@ -95,25 +95,21 @@ object MapFallbackImageGenerator {
             val fracX = (tileXExact - centerTileX).toFloat()
             val fracY = (tileYExact - centerTileY).toFloat()
 
-            // Build a grid of tiles large enough to cover the output
-            val tilesAcross = ceil(outputWidth.toFloat() / TILE_SIZE).toInt() + 2
-            val tilesDown = ceil(outputHeight.toFloat() / TILE_SIZE).toInt() + 2
-            val radius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
-            val tileRange = -radius..radius
-            val gridCount = radius * 2 + 1
-
-            // The coordinate sits at pixel (radius + fracX, radius + fracY) tiles
-            // into the grid. Shift the grid so that point lands at the output center.
-            val coordGridPxX = (radius + fracX) * TILE_SIZE
-            val coordGridPxY = (radius + fracY) * TILE_SIZE
-            val shiftX = (outputWidth / 2f - coordGridPxX).roundToInt()
-            val shiftY = (outputHeight / 2f - coordGridPxY).roundToInt()
+            // Build only the tile ranges that intersect the output bitmap.
+            val xTileRange = visibleTileRange(outputWidth, fracX)
+            val yTileRange = visibleTileRange(outputHeight, fracY)
 
             // --- Load all tiles concurrently ---
             data class TileInfo(val dx: Int, val dy: Int, val bitmap: Bitmap?)
 
-            val tileJobs = tileRange.flatMap { dx ->
-                tileRange.map { dy ->
+            val spriteJob = if (!thumbnailUrl.isNullOrBlank()) {
+                async { loadBitmap(imageLoader, context, thumbnailUrl, isMapTile = false) }
+            } else {
+                null
+            }
+
+            val tileJobs = xTileRange.flatMap { dx ->
+                yTileRange.map { dy ->
                     async {
                         val x = ((centerTileX + dx) % n + n) % n
                         val y = (centerTileY + dy).coerceIn(0, n - 1)
@@ -125,68 +121,56 @@ object MapFallbackImageGenerator {
             }
 
             val tiles = tileJobs.awaitAll()
+            val spriteBmp = spriteJob?.await()
 
             // --- Composite the output bitmap ---
             val output = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(output)
 
-            // Dark background (visible if tiles fail to load)
-            canvas.drawColor(0xFF16213E.toInt())
+            // Light neutral background (visible if tiles fail to load)
+            canvas.drawColor(0xFFE8EAED.toInt())
 
-            // Draw map tiles
+            val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                colorFilter = mutedMapColorFilter()
+            }
+
+            // Draw map tiles in a muted, lighter style closer to API alert images.
             for (tile in tiles) {
                 val bmp = tile.bitmap ?: continue
-                val left = (tile.dx + radius) * TILE_SIZE + shiftX
-                val top = (tile.dy + radius) * TILE_SIZE + shiftY
-                canvas.drawBitmap(bmp, left.toFloat(), top.toFloat(), null)
+                val left = outputWidth / 2f + (tile.dx - fracX) * TILE_SIZE
+                val top = outputHeight / 2f + (tile.dy - fracY) * TILE_SIZE
+                canvas.drawBitmap(bmp, left, top, tilePaint)
             }
 
-            // Dark scrim overlay for contrast
-            val scrimPaint = Paint().apply {
-                color = 0x59000000 // ~35% black
+            val washPaint = Paint().apply {
+                color = 0x4DF6F2EA
                 style = Paint.Style.FILL
             }
-            canvas.drawRect(0f, 0f, outputWidth.toFloat(), outputHeight.toFloat(), scrimPaint)
+            canvas.drawRect(0f, 0f, outputWidth.toFloat(), outputHeight.toFloat(), washPaint)
 
             // Coordinate is at center of the output
             val cx = outputWidth / 2f
             val cy = outputHeight / 2f
 
-            // Gold radial glow behind sprite
-            val glowRadius = outputWidth * 0.18f
-            val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = RadialGradient(
-                    cx, cy - glowRadius * 0.15f, glowRadius,
-                    intArrayOf(
-                        0x66FFD700.toInt(),
-                        0x26FFD700.toInt(),
-                        0x00000000
-                    ),
-                    floatArrayOf(0f, 0.5f, 1f),
-                    Shader.TileMode.CLAMP
-                )
+            val minDimension = minOf(outputWidth, outputHeight)
+            val radiusPx = (minDimension * 0.12f).coerceIn(8f, 96f)
+            val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0x805B8FD8.toInt()
+                style = Paint.Style.STROKE
+                strokeWidth = (minDimension * 0.006f).coerceIn(1.5f, 5f)
             }
-            canvas.drawCircle(cx, cy - glowRadius * 0.15f, glowRadius, glowPaint)
-
-            // Gold coordinate marker dot
-            val markerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0xFFFFD700.toInt()
-                style = Paint.Style.FILL
-            }
-            canvas.drawCircle(cx, cy, 5f, markerPaint)
+            canvas.drawCircle(cx, cy, radiusPx, ringPaint)
 
             // Draw thumbnail sprite at coordinate center
-            if (!thumbnailUrl.isNullOrBlank()) {
-                val spriteBmp = loadBitmap(imageLoader, context, thumbnailUrl, isMapTile = false)
-                if (spriteBmp != null) {
-                    val spriteSize = (minOf(outputWidth, outputHeight) * 0.28f).toInt()
-                        .coerceIn(40, 128)
-                    val scaled = Bitmap.createScaledBitmap(spriteBmp, spriteSize, spriteSize, true)
-                    val spriteLeft = cx - scaled.width / 2f
-                    val spriteTop = cy - scaled.height / 2f - (spriteSize * 0.12f) // slight upward offset from marker
-                    canvas.drawBitmap(scaled, spriteLeft, spriteTop, null)
-                    if (scaled !== spriteBmp) scaled.recycle()
-                }
+            if (spriteBmp != null) {
+                val spriteSize = (minDimension * 0.12f).toInt()
+                    .coerceIn(12, 96)
+                val scaled = Bitmap.createScaledBitmap(spriteBmp, spriteSize, spriteSize, true)
+                val spriteLeft = cx - scaled.width / 2f
+                val spriteTop = cy - scaled.height / 2f
+                canvas.drawBitmap(scaled, spriteLeft, spriteTop, null)
+                if (scaled !== spriteBmp) scaled.recycle()
+                spriteBmp.recycle()
             }
 
             // Recycle tile bitmaps
@@ -234,5 +218,28 @@ object MapFallbackImageGenerator {
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun mutedMapColorFilter(): ColorMatrixColorFilter {
+        val matrix = ColorMatrix().apply {
+            setSaturation(0.28f)
+        }
+        val lift = ColorMatrix(
+            floatArrayOf(
+                1.08f, 0f, 0f, 0f, 22f,
+                0f, 1.08f, 0f, 0f, 22f,
+                0f, 0f, 1.08f, 0f, 22f,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        matrix.postConcat(lift)
+        return ColorMatrixColorFilter(matrix)
+    }
+
+    private fun visibleTileRange(outputSize: Int, frac: Float): IntRange {
+        val center = outputSize / 2f
+        val first = floor((-center / TILE_SIZE) + frac).toInt()
+        val last = floor(((outputSize - 1f - center) / TILE_SIZE) + frac).toInt()
+        return first..last
     }
 }

@@ -21,6 +21,30 @@ val localProperties = Properties().apply {
     }
 }
 
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+fun releaseSigningProperty(name: String): String? =
+    keystoreProperties.getProperty(name)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() && !it.startsWith("YOUR_") }
+
+val releaseSigningRequiredProperties = listOf(
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword"
+)
+
+val releaseSigningMissingProperties = releaseSigningRequiredProperties
+    .filter { releaseSigningProperty(it) == null }
+
+val hasReleaseSigningConfig = releaseSigningMissingProperties.isEmpty()
+
 val googleMapsApiKey: String =
     localProperties.getProperty("GOOGLE_MAPS_API_KEY")?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable("GOOGLE_MAPS_API_KEY").orNull?.takeIf { it.isNotBlank() }
@@ -41,8 +65,22 @@ android {
         resValue("string", "maps_api_key", googleMapsApiKey)
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigningConfig) {
+                storeFile = rootProject.file(releaseSigningProperty("storeFile")!!)
+                storePassword = releaseSigningProperty("storePassword")
+                keyAlias = releaseSigningProperty("keyAlias")
+                keyPassword = releaseSigningProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -61,6 +99,17 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+}
+
+tasks.matching {
+    it.name == "preReleaseBuild" || it.name == "assembleRelease" || it.name == "bundleRelease"
+}.configureEach {
+    doFirst {
+        check(hasReleaseSigningConfig) {
+            "Release signing is not configured. Fill keystore.properties. Missing values: " +
+                releaseSigningMissingProperties.joinToString()
+        }
     }
 }
 

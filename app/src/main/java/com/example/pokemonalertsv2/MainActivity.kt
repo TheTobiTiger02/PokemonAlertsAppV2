@@ -1,7 +1,6 @@
 package com.example.pokemonalertsv2
 
 import android.Manifest
-import android.app.AlarmManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -71,7 +70,6 @@ import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
 import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -101,8 +99,6 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
-    private val exactAlarmPermissionNeeded = MutableStateFlow(false)
-    private var exactAlarmSettingsOpened = false
 
     private val locationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -155,10 +151,8 @@ class MainActivity : ComponentActivity() {
 
         requestNotificationPermissionIfNeeded()
         requestLocationPermissionIfNeeded()
-        requestExactAlarmPermissionIfNeeded()
         setContent {
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
-            val showExactAlarmDialog by exactAlarmPermissionNeeded.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
             val darkTheme = true
@@ -202,31 +196,6 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-
-                if (showExactAlarmDialog && !showBackgroundLocationDialog) {
-                    ExactAlarmPermissionDialog(
-                        onDismiss = { exactAlarmPermissionNeeded.value = false },
-                        onOpenSettings = {
-                            exactAlarmPermissionNeeded.value = false
-                            openExactAlarmSettings()
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (exactAlarmSettingsOpened) {
-            exactAlarmSettingsOpened = false
-            if (!needsExactAlarmPermission()) {
-                Toast.makeText(
-                    this,
-                    getString(R.string.exact_alarm_permission_granted),
-                    Toast.LENGTH_SHORT
-                ).show()
-                AlertsWidgetProvider.requestUpdate(this)
             }
         }
     }
@@ -277,34 +246,6 @@ class MainActivity : ComponentActivity() {
             if (!backgroundLocationGranted) {
                 backgroundLocationPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             }
-        }
-    }
-
-    private fun requestExactAlarmPermissionIfNeeded() {
-        if (needsExactAlarmPermission()) {
-            exactAlarmPermissionNeeded.value = true
-        }
-    }
-
-    private fun needsExactAlarmPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
-        val alarmManager = getSystemService(AlarmManager::class.java) ?: return false
-        return !alarmManager.canScheduleExactAlarms()
-    }
-
-    private fun openExactAlarmSettings() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
-        exactAlarmSettingsOpened = true
-        val exactAlarmIntent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-            data = Uri.parse("package:$packageName")
-        }
-        runCatching {
-            startActivity(exactAlarmIntent)
-        }.onFailure {
-            val appSettingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:$packageName")
-            }
-            runCatching { startActivity(appSettingsIntent) }
         }
     }
 }
@@ -443,28 +384,6 @@ private fun BackgroundLocationPermissionDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(text = "Not Now")
-            }
-        }
-    )
-}
-
-@Composable
-private fun ExactAlarmPermissionDialog(
-    onDismiss: () -> Unit,
-    onOpenSettings: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(text = stringResource(id = R.string.exact_alarm_permission_title)) },
-        text = { Text(text = stringResource(id = R.string.exact_alarm_permission_message)) },
-        confirmButton = {
-            TextButton(onClick = onOpenSettings) {
-                Text(text = stringResource(id = R.string.exact_alarm_permission_positive))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = stringResource(id = R.string.exact_alarm_permission_negative))
             }
         }
     )

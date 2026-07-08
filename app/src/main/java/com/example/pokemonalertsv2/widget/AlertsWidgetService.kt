@@ -292,7 +292,6 @@ private class AlertsFactory(
             val left = ((size - iconSize) / 2f).toInt()
             val top = ((size - iconSize) / 2f).toInt()
             drawable.setBounds(left, top, left + iconSize, top + iconSize)
-            drawable.setTint(0xB3FFFFFF.toInt()) // White at ~70% opacity
             drawable.draw(canvas)
         }
 

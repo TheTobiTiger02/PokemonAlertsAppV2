@@ -24,6 +24,8 @@
     <string name="widget_logo_cd">Pokemon Alerts logo</string>
     <string name="alert_image">Alert image</string>
     <string name="map_title">Alerts Map</string>
+    <string name="map_location_permission_needed">Location permission is needed to center the map.</string>
+    <string name="map_current_location_unavailable">Current location is not available right now.</string>
     <string name="back">Back</string>
     <string name="enter_pip_short">PiP</string>
     <string name="open_map">Open map</string>

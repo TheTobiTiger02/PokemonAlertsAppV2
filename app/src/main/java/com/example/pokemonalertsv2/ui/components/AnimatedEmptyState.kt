@@ -150,7 +150,7 @@ fun AnimatedEmptyState(
                     .size(96.dp)
                     .offset(y = bounceOffset.dp)
                     .rotate(rotation),
-                tint = MaterialTheme.colorScheme.primaryContainer
+                tint = Color.Unspecified
             )
         }
 

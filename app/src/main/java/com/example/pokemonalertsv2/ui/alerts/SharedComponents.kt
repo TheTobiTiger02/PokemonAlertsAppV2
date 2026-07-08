@@ -734,8 +734,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                         longitude = safeLon,
                         thumbnailUrl = thumbnailUrl,
                         outputWidth = if (rounded) 512 else 1024,
-                        outputHeight = if (rounded) 320 else 640,
-                        zoom = if (rounded) 16 else 17
+                        outputHeight = if (rounded) 320 else 640
                     )
                 }
             }
@@ -797,7 +796,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                             painter = painterResource(id = R.drawable.ic_placeholder),
                             contentDescription = null,
                             modifier = Modifier.size(if (rounded) 36.dp else 56.dp),
-                            tint = Color.White.copy(alpha = 0.8f)
+                            tint = Color.Unspecified
                         )
                     }
                 }
@@ -908,7 +907,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                             modifier = Modifier
                                 .size(if (rounded) 36.dp else 56.dp)
                                 .offset(y = if (rounded) (-8).dp else (-12).dp),
-                            tint = Color.White.copy(alpha = 0.8f)
+                            tint = Color.Unspecified
                         )
                     }
                 }
@@ -982,7 +981,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                     painter = painterResource(id = R.drawable.ic_placeholder),
                     contentDescription = null,
                     modifier = Modifier.size(if (rounded) 48.dp else 80.dp),
-                    tint = Color.White.copy(alpha = 0.7f)
+                    tint = Color.Unspecified
                 )
             }
         }

@@ -390,6 +390,17 @@ private fun AlertUiModel.hasCachedType(typeName: String): Boolean {
     return typeName.lowercase(Locale.ROOT) in typeKeys
 }
 
+private enum class HistoryAreaFilter(val label: String, val area: String?) {
+    BOTH("Both", null),
+    ALSBACH("Alsbach", "Alsbach"),
+    DARMSTADT("Darmstadt", "Darmstadt");
+
+    fun includes(alert: PokemonAlert): Boolean {
+        val alertArea = alert.area?.trim()
+        return area == null || alertArea.equals(area, ignoreCase = true)
+    }
+}
+
 @Composable
 fun PokemonAlertsPage(
     uiState: AlertsUiState,
@@ -1065,6 +1076,62 @@ private fun FilterRow(
 }
 
 @Composable
+private fun HistoryAreaFilterRow(
+    selectedFilter: HistoryAreaFilter,
+    onFilterChanged: (HistoryAreaFilter) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, _ ->
+                    // Consume horizontal drag to prevent parent pager from intercepting
+                }
+            }
+    ) {
+        items(HistoryAreaFilter.entries.toList()) { filter ->
+            ElevatedAssistChip(
+                onClick = { onFilterChanged(filter) },
+                label = { Text(text = filter.label) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                colors = AssistChipDefaults.elevatedAssistChipColors(
+                    containerColor = if (selectedFilter == filter) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+                    },
+                    labelColor = if (selectedFilter == filter) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    leadingIconContentColor = if (selectedFilter == filter) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (selectedFilter == filter) {
+                        Color.Transparent
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    }
+                )
+            )
+        }
+    }
+}
+
+@Composable
 private fun AuroraToolbar(
     onRefresh: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
@@ -1127,7 +1194,7 @@ private fun EmptyState(onRefresh: () -> Unit) {
             painter = painterResource(id = R.drawable.ic_placeholder),
             contentDescription = null,
             modifier = Modifier.size(96.dp),
-            tint = MaterialTheme.colorScheme.primaryContainer
+            tint = Color.Unspecified
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
@@ -1161,6 +1228,7 @@ private fun AlertHistoryPage(
 ) {
     val context = LocalContext.current
     var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var selectedAreaFilter by rememberSaveable { mutableStateOf(HistoryAreaFilter.BOTH) }
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
@@ -1196,10 +1264,10 @@ private fun AlertHistoryPage(
     // only load one page at a time, so deriving chips from loaded items is incomplete.
     val availableFilters = remember { AlertFilter.entries.toSet() }
 
-    val filteredAlerts = remember(uiState.alerts, sortPreference, userLocation) {
+    val filteredAlerts = remember(uiState.alerts, selectedAreaFilter, sortPreference, userLocation) {
         // Type filtering is now server-side — uiState.alerts already contains
         // only the selected type/search result (or all types when no filter is active).
-        var filtered = uiState.alerts
+        var filtered = uiState.alerts.filter { selectedAreaFilter.includes(it) }
         
         // Sort based on user preference
         when (sortPreference) {
@@ -1240,12 +1308,14 @@ private fun AlertHistoryPage(
         uiState.selectedDate,
         uiState.selectedType,
         uiState.searchQuery,
-        uiState.totalServerCount
+        uiState.totalServerCount,
+        selectedAreaFilter
     ) {
         val stats = uiState.totalStats.takeIf { uiState.totalStatsDate == uiState.selectedDate }
         val serverTotal = uiState.totalServerCount
         val byType = stats?.byType ?: emptyMap()
-        val canUseServerStats = stats != null && uiState.searchQuery.isBlank() && byType.isNotEmpty()
+        val isAreaScoped = selectedAreaFilter != HistoryAreaFilter.BOTH
+        val canUseServerStats = stats != null && !isAreaScoped && uiState.searchQuery.isBlank() && byType.isNotEmpty()
 
         fun emptyStatistics(total: Int, today: Int = 0) = mutableMapOf(
             "total" to total,
@@ -1331,7 +1401,7 @@ private fun AlertHistoryPage(
             }
             else -> {
                 mapOf(
-                    "total" to if (serverTotal > 0) serverTotal else filteredAlerts.size,
+                    "total" to if (!isAreaScoped && serverTotal > 0) serverTotal else filteredAlerts.size,
                     "today" to 0,
                     "raids" to raids,
                     "quests" to quests,
@@ -1407,6 +1477,14 @@ private fun AlertHistoryPage(
                         locationAvailable = false,
                         onRequestLocationPermission = { },
                         availableFilters = availableFilters
+                    )
+
+                    HistoryAreaFilterRow(
+                        selectedFilter = selectedAreaFilter,
+                        onFilterChanged = { filter ->
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            selectedAreaFilter = filter
+                        }
                     )
 
                     // Search bar for history
@@ -1510,7 +1588,12 @@ private fun AlertHistoryPage(
                 } else {
                     "All Time"
                 }
-                
+                val statsScopeText = if (selectedAreaFilter == HistoryAreaFilter.BOTH) {
+                    dateText
+                } else {
+                    "${selectedAreaFilter.label} - $dateText"
+                }
+                 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -1529,7 +1612,7 @@ private fun AlertHistoryPage(
                         ) {
                             Column {
                                 Text(
-                                    text = "Statistics for $dateText",
+                                    text = "Statistics for $statsScopeText",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -1594,7 +1677,7 @@ private fun AlertHistoryPage(
                 item {
                     AnimatedEmptyState(
                         title = "No history found",
-                        message = "No alerts match your search or filters. Try changing the search, date, or type."
+                        message = "No alerts match your search or filters. Try changing the search, area, date, or type."
                     )
                 }
             }
