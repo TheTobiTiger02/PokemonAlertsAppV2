@@ -23,3 +23,15 @@ keystore.properties
 *.pfx
 *.pem
 *.key
+
+# Firebase Configuration
+app/google-services.json
+
+# Build logs and diagnostics
+*.log
+build_error.txt
+build_log*.txt
+
+# Local developer/IDE files
+.idea/deploymentTargetSelector.xml
+.idea/deviceManager.xml
