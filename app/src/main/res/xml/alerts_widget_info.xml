@@ -8,8 +8,8 @@
     android:maxResizeHeight="600dp"
     android:updatePeriodMillis="0"
     android:resizeMode="horizontal|vertical"
-    android:initialLayout="@layout/widget_alerts"
-    android:previewLayout="@layout/widget_alerts"
+    android:initialLayout="@layout/widget_alerts_compact"
+    android:previewLayout="@layout/widget_alerts_compact"
     android:description="@string/widget_description"
     android:configure="com.example.pokemonalertsv2.widget.WidgetConfigActivity"
     android:widgetCategory="home_screen" />

@@ -8,12 +8,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
@@ -90,15 +106,15 @@ fun WidgetConfigScreen(
     initialFilters: Set<String>,
     onConfirm: (Set<String>) -> Unit
 ) {
-    // State: which types are enabled
-    val enabledTypes = remember {
+    val enabledTypes = remember(initialFilters) {
         mutableStateMapOf<String, Boolean>().apply {
             ALL_FILTER_TYPES.forEach { (key, _) ->
-                // If initialFilters is empty, all are enabled by default
                 put(key, initialFilters.isEmpty() || key in initialFilters)
             }
         }
     }
+    val selectedCount = enabledTypes.count { it.value }
+    val allSelected = selectedCount == ALL_FILTER_TYPES.size
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -111,7 +127,7 @@ fun WidgetConfigScreen(
                     )
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
@@ -121,14 +137,81 @@ fun WidgetConfigScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(contentPadding)
-                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Text(
                 text = stringResource(R.string.widget_config_subtitle),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(bottom = 20.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = MaterialTheme.shapes.large,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 64.dp)
+                        .toggleable(
+                            value = allSelected,
+                            role = Role.Switch,
+                            onValueChange = { enabled ->
+                                ALL_FILTER_TYPES.forEach { (key, _) -> enabledTypes[key] = enabled }
+                            }
+                        )
+                        .semantics(mergeDescendants = true) {}
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.widget_config_show_all),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Text(
+                            text = stringResource(R.string.widget_config_show_all_subtitle),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(
+                        checked = allSelected,
+                        onCheckedChange = null,
+                        modifier = Modifier.clearAndSetSemantics {}
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 18.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.widget_config_types_heading),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = stringResource(
+                        R.string.widget_config_selected_count,
+                        selectedCount,
+                        ALL_FILTER_TYPES.size
+                    ),
+                    color = if (selectedCount == 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
 
             Column(
                 modifier = Modifier
@@ -136,11 +219,10 @@ fun WidgetConfigScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                ALL_FILTER_TYPES.forEach { (key, label) ->
+                ALL_FILTER_TYPES.forEach { (key, _) ->
                     val checked = enabledTypes[key] ?: true
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.medium,
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
@@ -149,19 +231,26 @@ fun WidgetConfigScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(min = 56.dp)
-                                .padding(start = 16.dp, end = 12.dp),
+                                .heightIn(min = 60.dp)
+                                .toggleable(
+                                    value = checked,
+                                    role = Role.Switch,
+                                    onValueChange = { enabledTypes[key] = it }
+                                )
+                                .semantics(mergeDescendants = true) {}
+                                .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = label,
+                                text = stringResource(widgetFilterLabelResource(key)),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
                             Switch(
                                 checked = checked,
-                                onCheckedChange = { enabledTypes[key] = it }
+                                onCheckedChange = null,
+                                modifier = Modifier.clearAndSetSemantics {}
                             )
                         }
                     }
@@ -176,9 +265,10 @@ fun WidgetConfigScreen(
                     val selected = enabledTypes.filter { it.value }.keys
                     onConfirm(selected)
                 },
+                enabled = selectedCount > 0,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp),
+                    .heightIn(min = 52.dp),
                 shape = MaterialTheme.shapes.large
             ) {
                 Text(
@@ -188,6 +278,18 @@ fun WidgetConfigScreen(
             }
         }
     }
+}
+
+private fun widgetFilterLabelResource(key: String): Int = when (key) {
+    "Hundo" -> R.string.widget_filter_hundo
+    "Nundo" -> R.string.widget_filter_nundo
+    "PvP" -> R.string.widget_filter_pvp
+    "Spawn" -> R.string.widget_filter_spawn
+    "Raid" -> R.string.widget_filter_raid
+    "Rocket" -> R.string.widget_filter_rocket
+    "Quest" -> R.string.widget_filter_quest
+    "Kecleon" -> R.string.widget_filter_kecleon
+    else -> R.string.widget_filter_other
 }
 
 /**

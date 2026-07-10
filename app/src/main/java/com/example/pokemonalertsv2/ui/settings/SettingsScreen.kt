@@ -1,6 +1,10 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
@@ -23,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Surface
@@ -30,13 +36,18 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -50,12 +61,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -67,7 +82,7 @@ import java.util.Calendar
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onBackClick: () -> Unit
+    onBackClick: (() -> Unit)? = null
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
@@ -95,26 +110,36 @@ fun SettingsScreen(
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
     Scaffold(
-            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
-                TopAppBar(
-                    title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        FilledIconButton(onClick = onBackClick) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.navigation_settings),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    onBackClick?.let { navigateBack ->
+                        IconButton(onClick = navigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back)
+                            )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                        navigationIconContentColor = MaterialTheme.colorScheme.primary,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    scrollBehavior = scrollBehavior
-                )
-            }
-        ) { padding ->
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
+                scrollBehavior = scrollBehavior
+            )
+        }
+    ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -338,26 +363,23 @@ fun SettingsSection(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = MaterialTheme.shapes.large
+                )
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold
-            )
             content()
         }
     }
@@ -373,8 +395,14 @@ fun SwitchSetting(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange
+            )
             .semantics(mergeDescendants = true) {}
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -394,7 +422,7 @@ fun SwitchSetting(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = null
         )
     }
 }
@@ -405,19 +433,18 @@ private fun SilenceNotificationsCard(
     onSilenceFor: (Int) -> Unit,
     onClearSilence: () -> Unit
 ) {
+    val context = LocalContext.current
     val now = System.currentTimeMillis()
     val isSilenced = silenceUntil > now
     
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isSilenced) 
-                MaterialTheme.colorScheme.errorContainer
+                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
             else 
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
+        )
     ) {
         Column(
             modifier = Modifier
@@ -569,6 +596,7 @@ private fun CustomSilenceDialog(
     onDismiss: () -> Unit,
     onSilenceFor: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     var showDurationPicker by remember { mutableStateOf(false) }
     var showDateTimePicker by remember { mutableStateOf(false) }
     
@@ -751,8 +779,8 @@ private fun DurationPickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = MaterialTheme.shapes.small
+                                            Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = String.format("%02d", hour),
@@ -815,8 +843,8 @@ private fun DurationPickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = MaterialTheme.shapes.small
+                                            Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = String.format("%02d", minute),
@@ -1122,8 +1150,8 @@ private fun DateTimePickerDialog(
                                             color = if (isSelected) 
                                                 MaterialTheme.colorScheme.primaryContainer 
                                             else 
-                                                MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = MaterialTheme.shapes.small
+                                                Color.Transparent,
+                                            shape = RoundedCornerShape(8.dp)
                                         ) {
                                             Text(
                                                 text = String.format("%02d", hour),
@@ -1186,8 +1214,8 @@ private fun DateTimePickerDialog(
                                             color = if (isSelected) 
                                                 MaterialTheme.colorScheme.primaryContainer 
                                             else 
-                                                MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = MaterialTheme.shapes.small
+                                                Color.Transparent,
+                                            shape = RoundedCornerShape(8.dp)
                                         ) {
                                             Text(
                                                 text = String.format("%02d", minute),
@@ -1329,8 +1357,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = MaterialTheme.shapes.small
+                                            Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = String.format("%02d", day),
@@ -1393,8 +1421,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = MaterialTheme.shapes.small
+                                            Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = monthNames[month],
@@ -1467,8 +1495,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = MaterialTheme.shapes.small
+                                            Color.Transparent,
+                                        shape = RoundedCornerShape(8.dp)
                                     ) {
                                         Text(
                                             text = year.toString(),

@@ -4,11 +4,9 @@ package com.example.pokemonalertsv2.ui.alerts
 
 import android.Manifest
 import android.app.DatePickerDialog
-import android.content.ActivityNotFoundException
 import android.content.Context
-import android.content.Intent
+import android.content.pm.PackageManager
 import android.location.Location
-import android.location.LocationManager
 import android.widget.DatePicker
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -131,6 +129,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -141,6 +140,7 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -360,6 +360,16 @@ private fun AlertUiModel.hasCachedType(typeName: String): Boolean {
     return typeName.lowercase(Locale.ROOT) in typeKeys
 }
 
+private fun hasForegroundLocationPermission(context: Context): Boolean =
+    ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
 private enum class HistoryAreaFilter(val label: String, val area: String?) {
     BOTH("Both", null),
     ALSBACH("Alsbach", "Alsbach"),
@@ -387,7 +397,13 @@ fun PokemonAlertsPage(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val locationScope = rememberCoroutineScope()
     var userLocation by remember { mutableStateOf<Location?>(null) }
+    var hasLocationPermission by remember {
+        mutableStateOf(hasForegroundLocationPermission(context))
+    }
+    var locationLookupComplete by remember { mutableStateOf(false) }
     var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
@@ -395,6 +411,23 @@ fun PokemonAlertsPage(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
     val haptic = LocalHapticFeedback.current
+
+    suspend fun refreshUserLocation() {
+        val permissionGranted = hasForegroundLocationPermission(context)
+        hasLocationPermission = permissionGranted
+        userLocation = if (permissionGranted) {
+            CachedLocationProvider.get(
+                context = context,
+                timeoutMs = 5_000,
+                highAccuracy = false
+            )?.takeIf { location ->
+                validMapCoordinates(location.latitude, location.longitude) != null
+            }
+        } else {
+            null
+        }
+        locationLookupComplete = true
+    }
 
     // Expiration filtering only needs a coarse tick; visible countdown rows update themselves.
     var filterNow by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -408,13 +441,25 @@ fun PokemonAlertsPage(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        if (permissions.values.all { it }) {
-            userLocation = getLastKnownLocation(context)
+        val permissionGranted =
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                hasForegroundLocationPermission(context)
+        hasLocationPermission = permissionGranted
+        if (permissionGranted) {
+            locationLookupComplete = false
+            locationScope.launch { refreshUserLocation() }
+        } else {
+            userLocation = null
+            locationLookupComplete = true
         }
     }
 
-    LaunchedEffect(Unit) {
-        userLocation = getLastKnownLocation(context)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            locationLookupComplete = false
+            refreshUserLocation()
+        }
     }
 
     LaunchedEffect(userLocation, uiState.alerts) {
@@ -422,21 +467,26 @@ fun PokemonAlertsPage(
         walkingRoutes = if (location == null) {
             emptyMap()
         } else {
-            WalkingRouteUtils.getWalkingRoutes(location, uiState.alerts)
+            WalkingRouteUtils.getWalkingRoutes(
+                location,
+                uiState.alerts.filter { it.mapCoordinatesOrNull() != null }
+            )
         }
     }
 
     val alertsWithDistance = remember(uiState.alerts, userLocation, walkingRoutes) {
         uiState.alerts.map { alert ->
             val distanceMeters: Float? = userLocation?.let { loc ->
-                val latitude = alert.latitude
-                val longitude = alert.longitude
-                if (latitude != null && longitude != null) {
+                alert.mapCoordinatesOrNull()?.let { coordinates ->
                     val results = FloatArray(1)
-                    Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
+                    Location.distanceBetween(
+                        loc.latitude,
+                        loc.longitude,
+                        coordinates.latitude,
+                        coordinates.longitude,
+                        results
+                    )
                     results.getOrNull(0)?.takeUnless { it.isNaN() }
-                } else {
-                    null
                 }
             }
             val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
@@ -615,14 +665,21 @@ fun PokemonAlertsPage(
                     onUndoDismiss(alertId)
                 },
                 onRequestLocationPermission = {
-                    locationPermissionLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
+                    if (hasForegroundLocationPermission(context)) {
+                        locationLookupComplete = false
+                        locationScope.launch { refreshUserLocation() }
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION
+                            )
                         )
-                    )
+                    }
                 },
-                alertsAvailable = uiState.alerts.isNotEmpty(),
+                locationAvailable = hasLocationPermission && userLocation != null,
+                locationPermissionGranted = hasLocationPermission,
+                locationLookupComplete = locationLookupComplete,
                 availableFilters = availableFilters,
                 searchQuery = searchQuery,
                 onSearchQueryChanged = { searchQuery = it }
@@ -659,7 +716,9 @@ private fun AlertsList(
     onDismissClick: (String) -> Unit,
     onRestoreClick: (String) -> Unit,
     onRequestLocationPermission: () -> Unit,
-    alertsAvailable: Boolean,
+    locationAvailable: Boolean,
+    locationPermissionGranted: Boolean,
+    locationLookupComplete: Boolean,
     availableFilters: Set<AlertFilter>,
     searchQuery: String = "",
     onSearchQueryChanged: (String) -> Unit = {}
@@ -729,7 +788,9 @@ private fun AlertsList(
                 FilterRow(
                     selectedFilter = selectedFilter,
                     onFilterChanged = onFilterChanged,
-                    locationAvailable = alertsAvailable,
+                    locationAvailable = locationAvailable,
+                    locationPermissionGranted = locationPermissionGranted,
+                    locationLookupComplete = locationLookupComplete,
                     onRequestLocationPermission = onRequestLocationPermission,
                     availableFilters = availableFilters
                 )
@@ -1043,6 +1104,8 @@ private fun FilterRow(
     selectedFilter: AlertFilter,
     onFilterChanged: (AlertFilter) -> Unit,
     locationAvailable: Boolean,
+    locationPermissionGranted: Boolean,
+    locationLookupComplete: Boolean,
     onRequestLocationPermission: () -> Unit,
     availableFilters: Set<AlertFilter>
 ) {
@@ -1073,10 +1136,16 @@ private fun FilterRow(
             }
         }
 
-        AnimatedVisibility(visible = !locationAvailable) {
+        AnimatedVisibility(visible = locationLookupComplete && !locationAvailable) {
             TextButton(onClick = onRequestLocationPermission) {
                 Text(
-                    text = stringResource(id = R.string.alerts_nearby_permission_hint),
+                    text = stringResource(
+                        id = if (locationPermissionGranted) {
+                            R.string.map_current_location_unavailable
+                        } else {
+                            R.string.alerts_nearby_permission_hint
+                        }
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -1238,17 +1307,59 @@ private fun AlertHistoryPage(
     onAlertClick: (PokemonAlert) -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var selectedAreaFilter by rememberSaveable { mutableStateOf(HistoryAreaFilter.BOTH) }
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
+    var hasLocationPermission by remember {
+        mutableStateOf(hasForegroundLocationPermission(context))
+    }
+    var locationLookupComplete by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val listState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
-        userLocation = getLastKnownLocation(context)
+    suspend fun refreshUserLocation() {
+        val permissionGranted = hasForegroundLocationPermission(context)
+        hasLocationPermission = permissionGranted
+        userLocation = if (permissionGranted) {
+            CachedLocationProvider.get(
+                context = context,
+                timeoutMs = 5_000,
+                highAccuracy = false
+            )?.takeIf { location ->
+                validMapCoordinates(location.latitude, location.longitude) != null
+            }
+        } else {
+            null
+        }
+        locationLookupComplete = true
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val permissionGranted =
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                hasForegroundLocationPermission(context)
+        hasLocationPermission = permissionGranted
+        if (permissionGranted) {
+            locationLookupComplete = false
+            scope.launch { refreshUserLocation() }
+        } else {
+            userLocation = null
+            locationLookupComplete = true
+        }
+    }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            locationLookupComplete = false
+            refreshUserLocation()
+        }
     }
 
     val alertEndTimes = remember(uiState.alerts) {
@@ -1292,9 +1403,17 @@ private fun AlertHistoryPage(
             SortPreference.DISTANCE -> {
                 userLocation?.let { loc ->
                     filtered.sortedBy { alert ->
-                        val results = FloatArray(1)
-                        Location.distanceBetween(loc.latitude, loc.longitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0, results)
-                        results.getOrNull(0)?.takeUnless { it.isNaN() } ?: Float.MAX_VALUE
+                        alert.mapCoordinatesOrNull()?.let { coordinates ->
+                            val results = FloatArray(1)
+                            Location.distanceBetween(
+                                loc.latitude,
+                                loc.longitude,
+                                coordinates.latitude,
+                                coordinates.longitude,
+                                results
+                            )
+                            results.getOrNull(0)?.takeUnless { it.isNaN() }
+                        } ?: Float.MAX_VALUE
                     }
                 } ?: filtered.sortedWith(compareByDescending<PokemonAlert> { 
                     it.id?.toLong() ?: Long.MIN_VALUE
@@ -1489,8 +1608,22 @@ private fun AlertHistoryPage(
                             }
                             onTypeChanged(apiType)
                         },
-                        locationAvailable = false,
-                        onRequestLocationPermission = { },
+                        locationAvailable = hasLocationPermission && userLocation != null,
+                        locationPermissionGranted = hasLocationPermission,
+                        locationLookupComplete = locationLookupComplete,
+                        onRequestLocationPermission = {
+                            if (hasForegroundLocationPermission(context)) {
+                                locationLookupComplete = false
+                                scope.launch { refreshUserLocation() }
+                            } else {
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        },
                         availableFilters = availableFilters
                     )
 

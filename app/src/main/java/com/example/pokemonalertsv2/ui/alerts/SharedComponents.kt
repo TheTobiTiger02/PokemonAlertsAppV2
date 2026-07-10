@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -41,6 +42,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -278,7 +281,6 @@ fun AlertCard(
                     .fillMaxWidth()
                     .aspectRatio(8f / 5f)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
-                    .clip(MaterialTheme.shapes.large)
             ) {
                 AlertImage(
                     alert = alert,
@@ -577,7 +579,7 @@ private fun ShinyBadge() {
     AlertPill(
         text = "Shiny",
         containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.scrim
+        contentColor = MaterialTheme.colorScheme.onPrimary
     )
 }
 
@@ -585,12 +587,12 @@ private fun ShinyBadge() {
 private fun IvBadge(iv: String, isPerfect: Boolean, isNundo: Boolean) {
     val backgroundColor = when {
         isPerfect -> MaterialTheme.colorScheme.primary
-        isNundo -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+        isNundo -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
     }
     val textColor = when {
-        isPerfect -> MaterialTheme.colorScheme.scrim
-        isNundo -> MaterialTheme.colorScheme.onSurface
+        isPerfect -> MaterialTheme.colorScheme.onPrimary
+        isNundo -> MaterialTheme.colorScheme.onSecondary
         else -> MaterialTheme.colorScheme.onSurface
     }
     
@@ -604,7 +606,7 @@ private fun CpBadge(cp: Int, level: Double?) {
     }.orEmpty()
     AlertPill(
         text = "CP $cp$levelText",
-        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = MaterialTheme.colorScheme.onSurface
     )
 }
@@ -614,7 +616,7 @@ private fun WeatherBoostBadge() {
     AlertPill(
         text = "Boost",
         containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.scrim
+        contentColor = MaterialTheme.colorScheme.onPrimary
     )
 }
 
@@ -838,6 +840,8 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
+    val actionBarClearance = 96.dp +
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showSnoozeDialog by remember { mutableStateOf(false) }
@@ -1111,7 +1115,7 @@ fun AlertDetailScreen(
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(96.dp))
+                    Spacer(modifier = Modifier.height(actionBarClearance))
                 }
             }
             AlertDetailActionBar(
@@ -1128,7 +1132,7 @@ fun AlertDetailScreen(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 96.dp)
+                    .padding(start = 16.dp, end = 16.dp, bottom = actionBarClearance)
             )
         }
     }
@@ -1170,58 +1174,95 @@ private fun AlertDetailActionBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 14.dp)
-                .height(54.dp),
+                .height(64.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             FilledTonalButton(
                 onClick = onSnoozeClick,
-                modifier = Modifier.weight(1f).height(54.dp),
+                modifier = Modifier.weight(1f).height(64.dp),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Notifications,
-                    contentDescription = "Snooze",
-                    modifier = Modifier.size(22.dp)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Snooze",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
             }
             FilledTonalButton(
                 onClick = onNavigateClick,
-                modifier = Modifier.weight(1f).height(54.dp),
+                modifier = Modifier.weight(1f).height(64.dp),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_map),
-                    contentDescription = "Navigate",
-                    modifier = Modifier.size(22.dp)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_map),
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Navigate",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
             }
             FilledTonalButton(
                 onClick = onShareClick,
-                modifier = Modifier.weight(1f).height(54.dp),
+                modifier = Modifier.weight(1f).height(64.dp),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
-                    contentDescription = "Share",
-                    modifier = Modifier.size(22.dp)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Share",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
             }
         }
     }

@@ -24,10 +24,12 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -51,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -72,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
@@ -83,13 +87,11 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
@@ -99,11 +101,17 @@ import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
+fun AlertsMapRoute(
+    viewModel: PokemonAlertsViewModel,
+    onBack: () -> Unit,
+    showBackButton: Boolean = true
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -120,7 +128,8 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
-        onRefresh = viewModel::refreshAlerts
+        onRefresh = viewModel::refreshAlerts,
+        showBackButton = showBackButton
     )
 }
 
@@ -128,16 +137,18 @@ fun AlertsMapRoute(viewModel: PokemonAlertsViewModel, onBack: () -> Unit) {
 fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    showBackButton: Boolean = true
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
     val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
 
-    val defaultLatLng = remember { LatLng(0.0, 0.0) }
+    val defaultLatLng = remember { LatLng(ALSBACH_LATITUDE, ALSBACH_LONGITUDE) }
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(defaultLatLng, 2f)
+        position = CameraPosition.fromLatLngZoom(defaultLatLng, ALSBACH_ZOOM)
     }
     var mapLoaded by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
@@ -151,21 +162,55 @@ fun AlertsMapScreen(
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
     var hasLocationPermission by remember { mutableStateOf(hasLocationPermissionNow()) }
+    var userLocation by remember { mutableStateOf<android.location.Location?>(null) }
+    var locationLookupComplete by remember { mutableStateOf(!hasLocationPermission) }
+    var lifecycleLocationRefreshJob by remember { mutableStateOf<Job?>(null) }
+
+    suspend fun loadUserLocation(): android.location.Location? = try {
+        CachedLocationProvider.get(
+            context = context,
+            timeoutMs = 5_000,
+            highAccuracy = true
+        )?.takeIf { location ->
+            validMapCoordinates(location.latitude, location.longitude) != null
+        }
+    } catch (exception: CancellationException) {
+        throw exception
+    } catch (_: Throwable) {
+        null
+    }
+
+    suspend fun refreshLocationState(): android.location.Location? {
+        val permissionGranted = hasLocationPermissionNow()
+        hasLocationPermission = permissionGranted
+        if (!permissionGranted) {
+            userLocation = null
+            locationLookupComplete = true
+            return null
+        }
+
+        locationLookupComplete = false
+        return loadUserLocation().also { location ->
+            userLocation = location
+            locationLookupComplete = true
+        }
+    }
 
     fun centerOnUserLocation() {
+        lifecycleLocationRefreshJob?.cancel()
         scope.launch {
-            val location = runCatching {
-                CachedLocationProvider.get(
-                    context = context,
-                    timeoutMs = 5_000,
-                    highAccuracy = true
-                )
-            }.getOrNull()
+            val location = refreshLocationState()
 
             if (location == null) {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.map_current_location_unavailable),
+                    context.getString(
+                        if (hasLocationPermission) {
+                            R.string.map_current_location_unavailable
+                        } else {
+                            R.string.map_location_permission_needed
+                        }
+                    ),
                     Toast.LENGTH_SHORT
                 ).show()
                 return@launch
@@ -178,6 +223,20 @@ fun AlertsMapScreen(
                 ),
                 1_000
             )
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
+                lifecycleLocationRefreshJob?.cancel()
+                lifecycleLocationRefreshJob = scope.launch { refreshLocationState() }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            lifecycleLocationRefreshJob?.cancel()
         }
     }
 
@@ -211,7 +270,8 @@ fun AlertsMapScreen(
 
     val filteredAlerts = remember(alerts, selectedFilter, now) {
         val activeAlerts = alerts.filter {
-            (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > now
+            it.mapCoordinatesOrNull() != null &&
+                (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > now
         }
         when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
@@ -228,17 +288,18 @@ fun AlertsMapScreen(
     }
 
     val availableFilters = remember(alerts) {
+        val mappableAlerts = alerts.filter { it.mapCoordinatesOrNull() != null }
         buildSet {
             add(AlertFilter.ALL)
-            if (alerts.any { it.hasType("Raid") }) add(AlertFilter.RAIDS)
-            if (alerts.any { it.hasType("Quest") }) add(AlertFilter.QUESTS)
-            if (alerts.any { it.hasType("Rare") || it.hasType("Spawn") }) add(AlertFilter.RARES)
-            if (alerts.any { it.hasType("Hundo") }) add(AlertFilter.HUNDOS)
-            if (alerts.any { it.hasType("PvP") }) add(AlertFilter.PVP)
-            if (alerts.any { it.hasType("Nundo") }) add(AlertFilter.NUNDOS)
-            if (alerts.any { it.hasType("Kecleon") }) add(AlertFilter.KECLEON)
-            if (alerts.any { it.hasType("Rocket") }) add(AlertFilter.ROCKET)
-            if (alerts.any { it.hasType("WeatherChange") }) add(AlertFilter.WEATHER_CHANGE)
+            if (mappableAlerts.any { it.hasType("Raid") }) add(AlertFilter.RAIDS)
+            if (mappableAlerts.any { it.hasType("Quest") }) add(AlertFilter.QUESTS)
+            if (mappableAlerts.any { it.hasType("Rare") || it.hasType("Spawn") }) add(AlertFilter.RARES)
+            if (mappableAlerts.any { it.hasType("Hundo") }) add(AlertFilter.HUNDOS)
+            if (mappableAlerts.any { it.hasType("PvP") }) add(AlertFilter.PVP)
+            if (mappableAlerts.any { it.hasType("Nundo") }) add(AlertFilter.NUNDOS)
+            if (mappableAlerts.any { it.hasType("Kecleon") }) add(AlertFilter.KECLEON)
+            if (mappableAlerts.any { it.hasType("Rocket") }) add(AlertFilter.ROCKET)
+            if (mappableAlerts.any { it.hasType("WeatherChange") }) add(AlertFilter.WEATHER_CHANGE)
         }
     }
 
@@ -271,20 +332,31 @@ fun AlertsMapScreen(
         )
     }
 
-    LaunchedEffect(mapLoaded, filteredAlerts) {
-        if (mapLoaded && !initialCameraPositioned) {
-            buildAlertsCameraUpdate(filteredAlerts)?.let { update ->
-                runCatching { cameraPositionState.move(update) }
-                    .onSuccess { initialCameraPositioned = true }
-            }
+    LaunchedEffect(mapLoaded, filteredAlerts, locationLookupComplete, userLocation) {
+        if (mapLoaded && locationLookupComplete && !initialCameraPositioned) {
+            val viewport = resolveInitialMapViewport(
+                userLatitude = userLocation?.latitude,
+                userLongitude = userLocation?.longitude,
+                alerts = filteredAlerts
+            )
+            runCatching {
+                cameraPositionState.move(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(viewport.latitude, viewport.longitude),
+                        viewport.zoom
+                    )
+                )
+            }.onSuccess { initialCameraPositioned = true }
         }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useSidePanel = maxWidth >= 840.dp
         val controlsEndPadding = if (useSidePanel) 392.dp else 16.dp
+        val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val mapContentPadding = PaddingValues(
-            top = 120.dp,
+            start = 16.dp,
+            top = statusBarPadding + 136.dp,
             end = if (useSidePanel) 392.dp else 16.dp,
             bottom = if (useSidePanel) 24.dp else 96.dp
         )
@@ -322,6 +394,7 @@ fun AlertsMapScreen(
                 visibleAlertCount = filteredAlerts.size,
                 showTimeLabels = showTimeLabels,
                 hybridMap = mapType == MapType.HYBRID,
+                showBackButton = showBackButton,
                 onBack = onBack,
                 onToggleTimeLabels = { showTimeLabels = !showTimeLabels },
                 onRefresh = onRefresh,
@@ -355,6 +428,13 @@ fun AlertsMapScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
+                    .then(
+                        if (showBackButton) {
+                            Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                        } else {
+                            Modifier
+                        }
+                    )
                     .padding(end = if (useSidePanel) 392.dp else 16.dp, bottom = 24.dp),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -408,6 +488,7 @@ private fun MapTopAppBar(
     visibleAlertCount: Int,
     showTimeLabels: Boolean,
     hybridMap: Boolean,
+    showBackButton: Boolean,
     onBack: () -> Unit,
     onToggleTimeLabels: () -> Unit,
     onRefresh: () -> Unit,
@@ -435,11 +516,13 @@ private fun MapTopAppBar(
                 }
             },
             navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back)
-                    )
+                if (showBackButton) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
                 }
             },
             actions = {
@@ -675,35 +758,45 @@ private fun MapAlertDetailContent(
     }
 }
 
-private fun buildAlertsCameraUpdate(alerts: List<PokemonAlert>): CameraUpdate? {
-    val positions = alerts.mapNotNull { alert ->
-        val latitude = alert.latitude
-        val longitude = alert.longitude
-        if (latitude != null && longitude != null) LatLng(latitude, longitude) else null
+internal data class AlertMapCoordinates(
+    val latitude: Double,
+    val longitude: Double
+)
+
+internal data class MapViewportTarget(
+    val latitude: Double,
+    val longitude: Double,
+    val zoom: Float
+)
+
+internal fun validMapCoordinates(
+    latitude: Double?,
+    longitude: Double?
+): AlertMapCoordinates? {
+    if (latitude == null || longitude == null) return null
+    if (!latitude.isFinite() || !longitude.isFinite()) return null
+    if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
+    if (latitude == 0.0 && longitude == 0.0) return null
+    return AlertMapCoordinates(latitude, longitude)
+}
+
+internal fun PokemonAlert.mapCoordinatesOrNull(): AlertMapCoordinates? =
+    validMapCoordinates(latitude, longitude)
+
+internal fun resolveInitialMapViewport(
+    userLatitude: Double?,
+    userLongitude: Double?,
+    alerts: List<PokemonAlert>
+): MapViewportTarget {
+    validMapCoordinates(userLatitude, userLongitude)?.let { location ->
+        return MapViewportTarget(location.latitude, location.longitude, USER_LOCATION_ZOOM)
     }
 
-    return when (positions.size) {
-        0 -> null
-        1 -> CameraUpdateFactory.newLatLngZoom(positions.first(), 14f)
-        else -> {
-            val bounds = LatLngBounds.Builder().also { builder ->
-                positions.forEach(builder::include)
-            }.build()
-            val results = FloatArray(1)
-            android.location.Location.distanceBetween(
-                bounds.northeast.latitude,
-                bounds.northeast.longitude,
-                bounds.southwest.latitude,
-                bounds.southwest.longitude,
-                results
-            )
-            if (results[0] < 2_000) {
-                CameraUpdateFactory.newLatLngZoom(bounds.center, 14f)
-            } else {
-                CameraUpdateFactory.newLatLngBounds(bounds, 300)
-            }
-        }
+    alerts.firstNotNullOfOrNull(PokemonAlert::mapCoordinatesOrNull)?.let { alertLocation ->
+        return MapViewportTarget(alertLocation.latitude, alertLocation.longitude, ALERT_LOCATION_ZOOM)
     }
+
+    return MapViewportTarget(ALSBACH_LATITUDE, ALSBACH_LONGITUDE, ALSBACH_ZOOM)
 }
 
 @Composable
@@ -715,9 +808,11 @@ private fun MapMarker(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    val position = remember(alert.latitude, alert.longitude) {
-        LatLng(alert.latitude ?: 0.0, alert.longitude ?: 0.0)
+    val coordinates = remember(alert.latitude, alert.longitude) {
+        alert.mapCoordinatesOrNull()
     }
+    if (coordinates == null) return
+    val position = remember(coordinates) { LatLng(coordinates.latitude, coordinates.longitude) }
     val visualStyle = resolveAlertVisualStyle(alert)
     val speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName
     val speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
@@ -826,7 +921,7 @@ private suspend fun createMapMarkerIcon(
         } ?: Long.MAX_VALUE
         val isUrgent = timeRemainingMs < 10 * 60 * 1_000
         val cacheKey = listOf(
-            "material3-marker",
+            "material3-marker-compact",
             sizePx,
             categoryCode,
             speciesName,
@@ -852,7 +947,6 @@ private suspend fun createMapMarkerIcon(
         val pinRadius = sizePx * 0.33f
         val tailHeight = sizePx * 0.20f
         val labelGap = (sizePx * 0.07f).toInt()
-        val categoryHeight = (sizePx * 0.25f).toInt().coerceAtLeast(16)
         val timeHeight = if (showTimeLabel && timeLabel != null) {
             (sizePx * 0.26f).toInt().coerceAtLeast(16)
         } else {
@@ -860,7 +954,7 @@ private suspend fun createMapMarkerIcon(
         }
         val totalWidth = sizePx + padding * 2
         val totalHeight = (
-            padding + pinRadius * 2 + tailHeight + labelGap + categoryHeight +
+            padding + pinRadius * 2 + tailHeight +
                 (if (timeHeight > 0) labelGap + timeHeight else 0) + padding
             ).toInt()
         val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
@@ -959,22 +1053,25 @@ private suspend fun createMapMarkerIcon(
             )
         }
 
-        val categoryTop = pinTipY + labelGap
+        // Keep the category identity on the pin itself. A permanent label below every
+        // marker quickly overlaps at real alert density; the optional countdown remains
+        // user-controlled and the selected sheet carries the full label and details.
+        val categoryHeight = sizePx * 0.18f
         canvas.drawMarkerLabel(
             centerX = centerX,
-            top = categoryTop,
-            height = categoryHeight.toFloat(),
+            top = centerY + innerRadius * 0.34f,
+            height = categoryHeight,
             text = categoryCode,
             background = palette.surface,
             foreground = palette.primary,
             outline = palette.primary,
-            maxWidth = totalWidth - padding * 2f
+            maxWidth = pinRadius * 1.55f
         )
 
         if (timeHeight > 0 && timeLabel != null) {
             canvas.drawMarkerLabel(
                 centerX = centerX,
-                top = categoryTop + categoryHeight + labelGap,
+                top = pinTipY + labelGap,
                 height = timeHeight.toFloat(),
                 text = timeLabel,
                 background = if (isUrgent) palette.error else palette.surface,
@@ -1043,6 +1140,12 @@ private fun Canvas.drawMarkerLabel(
     val textY = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
     drawText(text, centerX, textY, textPaint)
 }
+
+private const val ALSBACH_LATITUDE = 49.74677
+private const val ALSBACH_LONGITUDE = 8.62492
+private const val USER_LOCATION_ZOOM = 16f
+private const val ALERT_LOCATION_ZOOM = 14f
+private const val ALSBACH_ZOOM = 13f
 
 private const val LightMapStyle = """
 [

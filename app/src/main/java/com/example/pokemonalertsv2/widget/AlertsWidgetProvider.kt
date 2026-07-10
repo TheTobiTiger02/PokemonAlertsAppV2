@@ -204,6 +204,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             context, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
+        views.setOnClickPendingIntent(R.id.header_open_app_compact, openPending)
         views.setOnClickPendingIntent(R.id.tv_title_compact, openPending)
         views.setOnClickPendingIntent(R.id.img_logo_compact, openPending)
 
@@ -216,6 +217,12 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
         // Count
         views.setTextViewText(R.id.tv_compact_count, alertCount.toString())
+        views.setTextViewText(
+            R.id.tv_compact_label,
+            context.getString(
+                if (alertCount == 0) R.string.widget_empty_title else R.string.widget_active_alerts_label
+            )
+        )
 
         return views
     }
@@ -229,6 +236,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             context, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
+        views.setOnClickPendingIntent(R.id.header_open_app, openPending)
         views.setOnClickPendingIntent(R.id.tv_title, openPending)
         views.setOnClickPendingIntent(R.id.img_logo, openPending)
 
@@ -290,9 +298,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
     private fun isCompactMode(appWidgetManager: AppWidgetManager, appWidgetId: Int): Boolean {
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+        val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
         val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-        // Consider compact if height is less than ~120dp (roughly 2 list items)
-        return minHeight in 1..119
+        return shouldUseCompactWidgetLayout(minWidth, minHeight)
     }
 
     private data class WidgetAlertCounts(
@@ -409,4 +417,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             requestUpdate(context)
         }
     }
+}
+
+@VisibleForTesting
+internal fun shouldUseCompactWidgetLayout(minWidthDp: Int, minHeightDp: Int): Boolean {
+    if (minWidthDp <= 0 || minHeightDp <= 0) return true
+    return minWidthDp < 300 || minHeightDp < 190
 }

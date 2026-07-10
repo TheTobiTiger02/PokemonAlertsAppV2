@@ -55,9 +55,9 @@ class Material3ComposeTest {
             }
         }
 
-        composeRule.onNodeWithContentDescription("Snooze").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Navigate").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Share").assertHasClickAction()
+        composeRule.onNodeWithText("Snooze").assertHasClickAction()
+        composeRule.onNodeWithText("Navigate").assertHasClickAction()
+        composeRule.onNodeWithText("Share").assertHasClickAction()
     }
 
     @Test

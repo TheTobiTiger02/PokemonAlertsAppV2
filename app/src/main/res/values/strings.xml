@@ -20,6 +20,13 @@
     <string name="notification_default_body">New Pokemon alert available</string>
     <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
+    <string name="location_permission_granted">Location access granted.</string>
+    <string name="location_permission_needed">Location access is needed for distance calculations and map features.</string>
+    <string name="background_location_granted">Background location access granted.</string>
+    <string name="background_location_title">Background location access</string>
+    <string name="background_location_message">To keep distances and location-based features accurate in the background, open app settings, choose Permissions, then Location, and select Allow all the time.</string>
+    <string name="background_location_open_settings">Open app settings</string>
+    <string name="not_now">Not now</string>
     <string name="no_maps_app">No maps app found</string>
     <string name="open_in_maps">Open in Google Maps</string>
     <string name="refresh_alerts">Refresh alerts</string>
@@ -73,7 +80,19 @@
     <string name="widget_config_title">Select Alert Types</string>
     <string name="widget_config_subtitle">Choose which alert types appear on this widget.</string>
     <string name="widget_config_show_all">Show all types</string>
+    <string name="widget_config_show_all_subtitle">Enable every alert category</string>
+    <string name="widget_config_types_heading">Alert types</string>
+    <string name="widget_config_selected_count">%1$d of %2$d selected</string>
     <string name="widget_config_confirm">Done</string>
+    <string name="widget_filter_hundo">Hundos (100% IV)</string>
+    <string name="widget_filter_nundo">Nundos (0% IV)</string>
+    <string name="widget_filter_pvp">PvP ranked</string>
+    <string name="widget_filter_spawn">Wild spawns</string>
+    <string name="widget_filter_raid">Raids</string>
+    <string name="widget_filter_rocket">Team Rocket</string>
+    <string name="widget_filter_quest">Quests</string>
+    <string name="widget_filter_kecleon">Kecleon</string>
+    <string name="widget_filter_other">Other alerts</string>
     <string name="widget_empty_title">No active alerts</string>
     <string name="widget_empty_subtitle">Tap refresh to check again</string>
 </resources>

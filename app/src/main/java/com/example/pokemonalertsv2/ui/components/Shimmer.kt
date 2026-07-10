@@ -6,8 +6,10 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +17,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -50,9 +54,9 @@ fun rememberShimmerBrush(): Brush {
         label = "shimmer_translation"
     )
     val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceVariant,
+        MaterialTheme.colorScheme.surfaceContainerHighest,
         MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
-        MaterialTheme.colorScheme.surfaceVariant
+        MaterialTheme.colorScheme.surfaceContainerHighest
     )
 
     return Brush.linearGradient(
@@ -72,79 +76,94 @@ fun ShimmerAlertCard() {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(380.dp)
             .semantics(mergeDescendants = true) {
                 contentDescription = "Loading alert"
                 liveRegion = LiveRegionMode.Polite
             },
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         shape = MaterialTheme.shapes.large
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(4.dp)
+                    .background(MaterialTheme.colorScheme.primary)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(8f / 5f)
                     .background(shimmerBrush)
             )
 
-            Column(modifier = Modifier.padding(20.dp)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.7f)
-                        .height(24.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .background(shimmerBrush)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(16.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .background(shimmerBrush)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.8f)
-                        .height(16.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .background(shimmerBrush)
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .width(60.dp)
-                            .height(24.dp)
-                            .clip(MaterialTheme.shapes.small)
+                            .weight(1f)
+                            .height(22.dp)
+                            .clip(MaterialTheme.shapes.extraSmall)
                             .background(shimmerBrush)
                     )
                     Box(
                         modifier = Modifier
-                            .width(80.dp)
-                            .height(24.dp)
+                            .width(72.dp)
+                            .height(32.dp)
                             .clip(MaterialTheme.shapes.small)
                             .background(shimmerBrush)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
-
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .clip(MaterialTheme.shapes.medium)
+                        .fillMaxWidth(0.68f)
+                        .height(14.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
                         .background(shimmerBrush)
                 )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(72.dp)
+                            .height(32.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(shimmerBrush)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(88.dp)
+                            .height(32.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(shimmerBrush)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    repeat(3) { index ->
+                        if (index > 0) Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(shimmerBrush)
+                        )
+                    }
+                }
             }
         }
     }

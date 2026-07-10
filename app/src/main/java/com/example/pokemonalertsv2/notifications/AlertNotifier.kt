@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.location.Location
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -39,7 +40,6 @@ object AlertNotifier {
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
-            val accent = ContextCompat.getColor(context, R.color.notification_accent)
             
             // Generic channel
             val name = context.getString(R.string.notification_channel_name)
@@ -48,46 +48,34 @@ object AlertNotifier {
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                 this.description = channelDescription
                 enableLights(true)
-                lightColor = accent
+                lightColor = Color.RED
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(channel)
 
             // Raids channel
-            val raidsChannel = NotificationChannel(
-                CHANNEL_RAIDS,
-                context.getString(R.string.notification_channel_raids_name),
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = context.getString(R.string.notification_channel_raids_description)
+            val raidsChannel = NotificationChannel(CHANNEL_RAIDS, "Raids", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Notifications for Raid Battles"
                 enableLights(true)
-                lightColor = accent
+                lightColor = Color.MAGENTA
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(raidsChannel)
 
             // Spawns channel
-            val spawnsChannel = NotificationChannel(
-                CHANNEL_SPAWNS,
-                context.getString(R.string.notification_channel_spawns_name),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = context.getString(R.string.notification_channel_spawns_description)
+            val spawnsChannel = NotificationChannel(CHANNEL_SPAWNS, "Spawns", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Wild Spawns"
                 enableLights(true)
-                lightColor = accent
+                lightColor = Color.GREEN
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(spawnsChannel)
 
             // Quests channel
-            val questsChannel = NotificationChannel(
-                CHANNEL_QUESTS,
-                context.getString(R.string.notification_channel_quests_name),
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = context.getString(R.string.notification_channel_quests_description)
+            val questsChannel = NotificationChannel(CHANNEL_QUESTS, "Quests", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Notifications for Field Research"
                 enableLights(true)
-                lightColor = accent
+                lightColor = Color.CYAN
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(questsChannel)
@@ -208,7 +196,7 @@ object AlertNotifier {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
-                .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+                .setColor(ContextCompat.getColor(context, R.color.poke_red))
                 .setVibrate(if (settings.vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
@@ -218,13 +206,13 @@ object AlertNotifier {
                 // Quick Action: Dismiss
                 .addAction(
                     R.drawable.ic_poke_notification,
-                    context.getString(R.string.notification_action_dismiss),
+                    "Dismiss",
                     createDismissPendingIntent(context, alert)
                 )
                 // Quick Action: Open in PiP
                 .addAction(
                     R.drawable.ic_pip,
-                    context.getString(R.string.enter_pip_short),
+                    "PiP",
                     createPipPendingIntent(context, alert)
                 )
 

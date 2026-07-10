@@ -1,37 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="12dp"
     android:background="@drawable/widget_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingBottom="4dp">
+        android:gravity="center_vertical">
 
-        <ImageView
-            android:id="@+id/img_logo"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/ic_widget_pokeball"
-            android:contentDescription="@string/widget_logo_cd" />
-
-        <TextView
-            android:id="@+id/tv_title"
+        <LinearLayout
+            android:id="@+id/header_open_app"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
-            android:text="@string/widget_title"
-            android:textStyle="bold"
-            android:textSize="16sp"
-            android:textColor="@color/widget_on_surface"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingEnd="4dp">
+
+            <ImageView
+                android:id="@+id/img_logo"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_widget_pokeball"
+                android:contentDescription="@string/widget_logo_cd" />
+
+            <TextView
+                android:id="@+id/tv_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/widget_title"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:textColor="@color/widget_on_surface"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
 
         <!-- Active count badge -->
         <TextView
@@ -41,29 +50,36 @@
             android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="@color/widget_primary"
-            android:layout_marginEnd="8dp"
+            android:background="@drawable/widget_badge_background"
+            android:gravity="center"
+            android:minHeight="28dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:layout_marginEnd="4dp"
             android:maxLines="1" />
 
         <ImageButton
             android:id="@+id/btn_map"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/widget_icon_button_background"
             android:contentDescription="@string/widget_open_map_cd"
             android:tint="@color/widget_primary"
             android:src="@drawable/ic_map"
-            android:padding="10dp"
-            android:layout_marginEnd="8dp" />
+            android:padding="12dp"
+            android:layout_marginEnd="4dp" />
 
         <ImageButton
             android:id="@+id/btn_refresh"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:background="@drawable/widget_icon_button_background"
             android:contentDescription="@string/refresh_alerts"
             android:tint="@color/widget_primary"
             android:src="@drawable/ic_refresh"
-            android:padding="10dp" />
+            android:padding="12dp" />
     </LinearLayout>
 
     <TextView
@@ -74,26 +90,28 @@
         android:textColor="@color/widget_on_surface_variant"
         android:maxLines="1"
         android:ellipsize="end"
-        android:paddingBottom="8dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="6dp"
         android:text="" />
 
     <!-- Empty state with icon -->
     <LinearLayout
         android:id="@+id/empty_container"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="vertical"
         android:gravity="center"
-        android:paddingTop="24dp"
-        android:paddingBottom="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
             android:src="@drawable/ic_placeholder"
             android:contentDescription="@null"
-            android:layout_marginBottom="12dp" />
+            android:layout_marginBottom="8dp" />
 
         <TextView
             android:id="@+id/tv_empty_title"
@@ -113,7 +131,7 @@
             android:text="@string/widget_empty_subtitle"
             android:gravity="center"
             android:textSize="12sp"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="2dp" />
     </LinearLayout>
 
     <!-- Hidden empty view for ListView's setEmptyView -->
@@ -126,9 +144,10 @@
     <ListView
         android:id="@+id/list_alerts"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:divider="@android:color/transparent"
-        android:dividerHeight="10dp"
+        android:dividerHeight="8dp"
         android:transcriptMode="alwaysScroll"
         android:scrollbars="none" />
 
