@@ -4,8 +4,6 @@
     android:minHeight="110dp"
     android:targetCellWidth="2"
     android:targetCellHeight="2"
-    android:maxResizeWidth="400dp"
-    android:maxResizeHeight="600dp"
     android:updatePeriodMillis="0"
     android:resizeMode="horizontal|vertical"
     android:initialLayout="@layout/widget_alerts_compact"

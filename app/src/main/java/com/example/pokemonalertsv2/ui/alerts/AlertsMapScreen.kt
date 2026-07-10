@@ -87,6 +87,9 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
@@ -608,15 +611,16 @@ private fun MapAlertSidePanel(
     onOpenFullDetail: () -> Unit,
     modifier: Modifier
 ) {
+    val colors = LocalLinearModernColors.current
     Surface(
         modifier = modifier
             .padding(WindowInsets.statusBars.asPaddingValues())
             .padding(top = 12.dp, end = 16.dp)
-            .width(360.dp),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 6.dp
+            .width(360.dp)
+            .border(1.dp, colors.borderDefault, RoundedCornerShape(28.dp)),
+        shape = RoundedCornerShape(28.dp),
+        color = colors.bgElevated.copy(alpha = 0.9f),
+        tonalElevation = 0.dp
     ) {
         MapAlertDetailContent(
             alert = alert,

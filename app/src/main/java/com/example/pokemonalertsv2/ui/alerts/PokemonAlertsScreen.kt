@@ -867,43 +867,47 @@ private fun AlertsList(
             SwipeToDismissBox(
                 state = dismissState,
                 backgroundContent = {
-                    if (isDismissed) {
-                        // Restore background - green with check icon
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
-                                    shape = MaterialTheme.shapes.large
+                    val showBg = dismissState.currentValue != SwipeToDismissBoxValue.Settled ||
+                                 dismissState.targetValue != SwipeToDismissBoxValue.Settled
+                    if (showBg) {
+                        if (isDismissed) {
+                            // Restore background - green with check icon
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .padding(start = 24.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = "Restore",
+                                    tint = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.size(28.dp)
                                 )
-                                .padding(start = 24.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Refresh,
-                                contentDescription = "Restore",
-                                tint = MaterialTheme.colorScheme.onTertiary,
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    } else {
-                        // Dismiss background - red with X icon
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
-                                    shape = MaterialTheme.shapes.large
+                            }
+                        } else {
+                            // Dismiss background - red with X icon
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
+                                        shape = MaterialTheme.shapes.large
+                                    )
+                                    .padding(end = 24.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Close,
+                                    contentDescription = "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onError,
+                                    modifier = Modifier.size(28.dp)
                                 )
-                                .padding(end = 24.dp),
-                            contentAlignment = Alignment.CenterEnd
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Dismiss",
-                                tint = MaterialTheme.colorScheme.onError,
-                                modifier = Modifier.size(28.dp)
-                            )
+                            }
                         }
                     }
                 },

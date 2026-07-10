@@ -2,40 +2,34 @@ package com.example.pokemonalertsv2.ui.onboarding
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.pokemonalertsv2.ui.components.GradientText
+import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import com.example.pokemonalertsv2.ui.components.LinearModernCard
+import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import kotlinx.coroutines.launch
 
 data class OnboardingPage(
@@ -46,7 +40,7 @@ data class OnboardingPage(
 
 val pages = listOf(
     OnboardingPage(
-        "Live alerts",
+        "Live Alerts",
         "Real-time intel on Pokémon spawns, Raids, and Research nearby.",
         Icons.Filled.Warning
     ),
@@ -70,11 +64,9 @@ fun OnboardingScreen(
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
     val isLastPage = pagerState.currentPage == pages.lastIndex
+    val colors = LocalLinearModernColors.current
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
+    LinearModernBackground(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.fillMaxSize()) {
             HorizontalPager(
                 state = pagerState,
@@ -87,7 +79,7 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                    .padding(horizontal = 24.dp, vertical = 32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
@@ -97,33 +89,37 @@ fun OnboardingScreen(
                         }
                         .padding(bottom = 28.dp)
                 ) {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         repeat(pages.size) { index ->
+                            val dotColor = if (pagerState.currentPage == index) colors.accent else colors.borderHover
+                            val dotWidth = if (pagerState.currentPage == index) 16.dp else 6.dp
                             Box(
                                 modifier = Modifier
-                                    .size(if (pagerState.currentPage == index) 8.dp else 6.dp)
+                                    .height(6.dp)
+                                    .width(dotWidth)
                                     .background(
-                                        color = if (pagerState.currentPage == index) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.outlineVariant
-                                        },
-                                        shape = CircleShape
+                                        color = dotColor,
+                                        shape = RoundedCornerShape(3.dp)
                                     )
                             )
                         }
                     }
                 }
 
-                androidx.compose.foundation.layout.Row(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (!isLastPage) {
-                        TextButton(onClick = onFinish) {
+                        TextButton(
+                            onClick = onFinish,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = colors.foregroundMuted
+                            )
+                        ) {
                             Text("Skip")
                         }
                     } else {
@@ -139,9 +135,23 @@ fun OnboardingScreen(
                                     pagerState.animateScrollToPage(pagerState.currentPage + 1)
                                 }
                             }
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.shadow(
+                            elevation = 8.dp,
+                            shape = RoundedCornerShape(8.dp),
+                            ambientColor = colors.accentGlow,
+                            spotColor = colors.accentGlow
+                        )
                     ) {
-                        Text(if (isLastPage) "Get started" else "Next")
+                        Text(
+                            text = if (isLastPage) "Get started" else "Next",
+                            fontWeight = FontWeight.SemiBold
+                        )
                         if (!isLastPage) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(
@@ -158,6 +168,8 @@ fun OnboardingScreen(
 
 @Composable
 fun OnboardingPageContent(page: OnboardingPage) {
+    val colors = LocalLinearModernColors.current
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -165,35 +177,46 @@ fun OnboardingPageContent(page: OnboardingPage) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Surface(
-            modifier = Modifier.size(128.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = 2.dp
+        LinearModernCard(
+            modifier = Modifier
+                .size(140.dp)
+                .shadow(
+                    elevation = 12.dp,
+                    shape = RoundedCornerShape(16.dp),
+                    ambientColor = colors.accentGlow,
+                    spotColor = colors.accentGlow
+                )
         ) {
-            Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
                     imageVector = page.icon,
                     contentDescription = null,
                     modifier = Modifier.size(56.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    tint = colors.accent
                 )
             }
         }
-        Spacer(modifier = Modifier.height(40.dp))
-        Text(
+        
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        GradientText(
             text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
+            style = MaterialTheme.typography.headlineLarge,
+            modifier = Modifier.fillMaxWidth(),
+            isAccent = true
         )
-        Spacer(modifier = Modifier.height(12.dp))
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
         Text(
             text = page.description,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            color = colors.foregroundMuted,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
     }
 }

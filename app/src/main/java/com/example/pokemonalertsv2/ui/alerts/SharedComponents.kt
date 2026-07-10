@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -118,6 +119,9 @@ import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
+import com.example.pokemonalertsv2.ui.components.LinearModernCard
+import com.example.pokemonalertsv2.ui.components.GradientText
+import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -243,6 +247,7 @@ fun AlertCard(
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalLinearModernColors.current
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val primary = MaterialTheme.colorScheme.primary
     val haptic = LocalHapticFeedback.current
@@ -256,26 +261,14 @@ fun AlertCard(
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
 
-    Card(
+    LinearModernCard(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
         onClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             onShowDetails()
-        },
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = MaterialTheme.shapes.large
+        }
     ) {
         Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(primary)
-            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -368,28 +361,24 @@ fun AlertCard(
                     displayIv?.let {
                         AlertPill(
                             text = "IV $it",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            isPrimary = true
                         )
                     }
                     AlertPill(
                         text = visualStyle.label,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        isPrimary = false
                     )
                     displayCp?.let {
                         AlertPill(
                             text = "CP $it",
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            isPrimary = false
                         )
                     }
                     distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let {
                         AlertPill(
                             text = it,
                             painter = painterResource(id = R.drawable.ic_map),
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            isPrimary = true
                         )
                     }
                 }
@@ -446,43 +435,49 @@ private fun AlertPill(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     painter: Painter? = null,
-    containerColor: Color = MaterialTheme.colorScheme.secondaryContainer,
-    contentColor: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+    isPrimary: Boolean = false,
+    containerColor: Color? = null,
+    contentColor: Color? = null,
     fontWeight: FontWeight = FontWeight.Bold
 ) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = containerColor,
-        tonalElevation = 2.dp
+    val colors = LocalLinearModernColors.current
+    val borderColor = if (isPrimary) colors.borderAccent else colors.borderDefault
+    val fallbackContentColor = if (isPrimary) colors.accent else colors.foregroundMuted
+    val actualContentColor = contentColor ?: fallbackContentColor
+    val actualBgColor = containerColor ?: colors.surfaceTranslucent
+
+    Box(
+        modifier = modifier
+            .background(actualBgColor, CircleShape)
+            .border(1.dp, borderColor, CircleShape)
     ) {
         Row(
             modifier = Modifier
-                .defaultMinSize(minHeight = 32.dp)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .defaultMinSize(minHeight = 24.dp)
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = contentColor
+                    modifier = Modifier.size(12.dp),
+                    tint = actualContentColor
                 )
             } else if (painter != null) {
                 Icon(
                     painter = painter,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = contentColor
+                    modifier = Modifier.size(12.dp),
+                    tint = actualContentColor
                 )
             }
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = fontWeight,
-                color = contentColor,
+                color = actualContentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

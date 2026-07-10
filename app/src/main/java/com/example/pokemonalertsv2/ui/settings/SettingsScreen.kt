@@ -4,15 +4,14 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
@@ -40,7 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -61,16 +61,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
+import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -82,7 +84,7 @@ import java.util.Calendar
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onBackClick: (() -> Unit)? = null
+    onBackClick: () -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
@@ -109,37 +111,42 @@ fun SettingsScreen(
     val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.navigation_settings),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    onBackClick?.let { navigateBack ->
-                        IconButton(onClick = navigateBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.back)
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.primary,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                scrollBehavior = scrollBehavior
+    val containerGradient = remember {
+        Brush.verticalGradient(
+            listOf(
+                AuroraGradientStart,
+                AuroraGradientMid,
+                AuroraGradientEnd.copy(alpha = 0.85f)
             )
-        }
-    ) { padding ->
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(containerGradient)
+    ) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        FilledIconButton(onClick = onBackClick, shape = CircleShape) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                        scrolledContainerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    scrollBehavior = scrollBehavior
+                )
+            }
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -356,6 +363,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
 }
 
 @Composable
@@ -367,16 +375,13 @@ fun SettingsSection(
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.secondaryContainer,
             fontWeight = FontWeight.Bold
         )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = MaterialTheme.shapes.large
-                )
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.1f), MaterialTheme.shapes.medium)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -393,16 +398,7 @@ fun SwitchSetting(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .toggleable(
-                value = checked,
-                role = Role.Switch,
-                onValueChange = onCheckedChange
-            )
-            .semantics(mergeDescendants = true) {}
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -422,7 +418,7 @@ fun SwitchSetting(
         }
         Switch(
             checked = checked,
-            onCheckedChange = null
+            onCheckedChange = onCheckedChange
         )
     }
 }
@@ -796,7 +792,6 @@ private fun DurationPickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedHours = hour }
-                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -860,7 +855,6 @@ private fun DurationPickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedMinutes = minute }
-                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1167,7 +1161,6 @@ private fun DateTimePickerDialog(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable { selectedHour = hour }
-                                                    .heightIn(min = 48.dp)
                                                     .padding(vertical = 8.dp),
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                             )
@@ -1231,7 +1224,6 @@ private fun DateTimePickerDialog(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable { selectedMinute = minute }
-                                                    .heightIn(min = 48.dp)
                                                     .padding(vertical = 8.dp),
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                             )
@@ -1374,7 +1366,6 @@ private fun CustomDatePickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedDay = day }
-                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1448,7 +1439,6 @@ private fun CustomDatePickerDialog(
                                                         selectedDay = newDaysInMonth
                                                     }
                                                 }
-                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1512,7 +1502,6 @@ private fun CustomDatePickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedYear = year }
-                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1599,7 +1588,6 @@ private fun TypeFilterSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
-                .heightIn(min = 48.dp)
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
