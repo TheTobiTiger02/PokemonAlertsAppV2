@@ -6,15 +6,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 
 data class LinearModernColors(
     val bgDeep: Color,
@@ -34,132 +32,121 @@ data class LinearModernColors(
 )
 
 val DarkLinearModernColors = LinearModernColors(
-    bgDeep = LinearDarkBgDeep,
-    bgBase = LinearDarkBgBase,
-    bgElevated = LinearDarkBgElevated,
-    surfaceTranslucent = LinearDarkSurface,
-    surfaceTranslucentHover = LinearDarkSurfaceHover,
-    foreground = LinearDarkForeground,
-    foregroundMuted = LinearDarkForegroundMuted,
-    foregroundSubtle = LinearDarkForegroundSubtle,
-    accent = LinearDarkAccent,
-    accentBright = LinearDarkAccentBright,
-    accentGlow = LinearDarkAccentGlow,
-    borderDefault = LinearDarkBorderDefault,
-    borderHover = LinearDarkBorderHover,
-    borderAccent = LinearDarkBorderAccent
+    bgDeep = AppDarkBackground,
+    bgBase = AppDarkBackground,
+    bgElevated = AppDarkSurface,
+    surfaceTranslucent = AppDarkSurfaceContainer,
+    surfaceTranslucentHover = AppDarkSurfaceContainerHigh,
+    foreground = AppDarkOnSurface,
+    foregroundMuted = AppDarkOnSurfaceVariant,
+    foregroundSubtle = AppDarkOnSurfaceVariant,
+    accent = AppDarkPrimary,
+    accentBright = AppDarkPrimary,
+    accentGlow = AppDarkPrimary.copy(alpha = 0.14f),
+    borderDefault = AppDarkOutline,
+    borderHover = AppDarkOnSurfaceVariant.copy(alpha = 0.45f),
+    borderAccent = AppDarkPrimary.copy(alpha = 0.55f)
 )
 
 val LightLinearModernColors = LinearModernColors(
-    bgDeep = LinearLightBgDeep,
-    bgBase = LinearLightBgBase,
-    bgElevated = LinearLightBgElevated,
-    surfaceTranslucent = LinearLightSurface,
-    surfaceTranslucentHover = LinearLightSurfaceHover,
-    foreground = LinearLightForeground,
-    foregroundMuted = LinearLightForegroundMuted,
-    foregroundSubtle = LinearLightForegroundSubtle,
-    accent = LinearLightAccent,
-    accentBright = LinearLightAccentBright,
-    accentGlow = LinearLightAccentGlow,
-    borderDefault = LinearLightBorderDefault,
-    borderHover = LinearLightBorderHover,
-    borderAccent = LinearLightBorderAccent
+    bgDeep = AppLightBackground,
+    bgBase = AppLightBackground,
+    bgElevated = AppLightSurface,
+    surfaceTranslucent = AppLightSurfaceContainer,
+    surfaceTranslucentHover = AppLightSurfaceContainerHigh,
+    foreground = AppLightOnSurface,
+    foregroundMuted = AppLightOnSurfaceVariant,
+    foregroundSubtle = AppLightOnSurfaceVariant,
+    accent = AppLightPrimary,
+    accentBright = AppLightPrimary,
+    accentGlow = AppLightPrimary.copy(alpha = 0.10f),
+    borderDefault = AppLightOutline,
+    borderHover = AppLightOnSurfaceVariant.copy(alpha = 0.32f),
+    borderAccent = AppLightPrimary.copy(alpha = 0.45f)
 )
 
-val LocalLinearModernColors = staticCompositionLocalOf<LinearModernColors> {
-    error("No LinearModernColors provided")
-}
+val LocalLinearModernColors = staticCompositionLocalOf { DarkLinearModernColors }
 
 private val DarkColorScheme = darkColorScheme(
-    primary = LinearDarkAccent,
-    onPrimary = LinearDarkForeground,
-    primaryContainer = LinearDarkBgElevated,
-    onPrimaryContainer = LinearDarkForeground,
-    secondary = LinearDarkAccentBright,
-    onSecondary = LinearDarkForeground,
-    secondaryContainer = LinearDarkSurface,
-    onSecondaryContainer = LinearDarkForeground,
-    tertiary = LinearDarkAccent,
-    onTertiary = LinearDarkForeground,
-    tertiaryContainer = LinearDarkSurface,
-    onTertiaryContainer = LinearDarkForeground,
-    error = DangerRed,
-    onError = Color.White,
-    errorContainer = DangerRed.copy(alpha = 0.2f),
-    onErrorContainer = Color.White,
-    background = LinearDarkBgBase,
-    onBackground = LinearDarkForeground,
-    surface = LinearDarkBgElevated,
-    onSurface = LinearDarkForeground,
-    surfaceVariant = LinearDarkSurface,
-    onSurfaceVariant = LinearDarkForegroundMuted,
-    surfaceTint = LinearDarkAccent,
-    inverseSurface = LinearLightBgElevated,
-    inverseOnSurface = LinearLightForeground,
-    inversePrimary = LinearLightAccent,
-    outline = LinearDarkBorderDefault,
-    outlineVariant = LinearDarkBorderHover,
-    scrim = Color.Black,
-    surfaceBright = LinearDarkBgElevated,
-    surfaceDim = LinearDarkBgDeep,
-    surfaceContainer = LinearDarkBgElevated,
-    surfaceContainerHigh = LinearDarkBgElevated,
-    surfaceContainerHighest = LinearDarkBgElevated,
-    surfaceContainerLow = LinearDarkBgDeep,
-    surfaceContainerLowest = LinearDarkBgDeep
+    primary = AppDarkPrimary,
+    onPrimary = AppDarkOnPrimary,
+    primaryContainer = AppDarkPrimaryContainer,
+    onPrimaryContainer = AppDarkOnPrimaryContainer,
+    secondary = AppDarkPrimary,
+    onSecondary = AppDarkOnPrimary,
+    secondaryContainer = AppDarkSurfaceContainerHigh,
+    onSecondaryContainer = AppDarkOnSurface,
+    tertiary = AppDarkPrimary,
+    onTertiary = AppDarkOnPrimary,
+    tertiaryContainer = AppDarkSurfaceContainer,
+    onTertiaryContainer = AppDarkOnSurface,
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = AppDarkBackground,
+    onBackground = AppDarkOnSurface,
+    surface = AppDarkSurface,
+    onSurface = AppDarkOnSurface,
+    surfaceVariant = AppDarkSurfaceContainer,
+    onSurfaceVariant = AppDarkOnSurfaceVariant,
+    outline = AppDarkOutline,
+    outlineVariant = AppDarkOutlineVariant,
+    surfaceBright = AppDarkSurfaceContainerHigh,
+    surfaceDim = AppDarkBackground,
+    surfaceContainerLowest = AppDarkBackground,
+    surfaceContainerLow = AppDarkSurface,
+    surfaceContainer = AppDarkSurfaceContainer,
+    surfaceContainerHigh = AppDarkSurfaceContainerHigh,
+    surfaceContainerHighest = Color(0xFF28303C),
+    scrim = Color.Black
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = LinearLightAccent,
-    onPrimary = Color.White,
-    primaryContainer = LinearLightBgElevated,
-    onPrimaryContainer = LinearLightForeground,
-    secondary = LinearLightAccentBright,
-    onSecondary = Color.White,
-    secondaryContainer = LinearLightSurface,
-    onSecondaryContainer = LinearLightForeground,
-    tertiary = LinearLightAccent,
-    onTertiary = Color.White,
-    tertiaryContainer = LinearLightSurface,
-    onTertiaryContainer = LinearLightForeground,
+    primary = AppLightPrimary,
+    onPrimary = AppLightOnPrimary,
+    primaryContainer = AppLightPrimaryContainer,
+    onPrimaryContainer = AppLightOnPrimaryContainer,
+    secondary = AppLightPrimary,
+    onSecondary = AppLightOnPrimary,
+    secondaryContainer = AppLightSurfaceContainerHigh,
+    onSecondaryContainer = AppLightOnSurface,
+    tertiary = AppLightPrimary,
+    onTertiary = AppLightOnPrimary,
+    tertiaryContainer = AppLightSurfaceContainer,
+    onTertiaryContainer = AppLightOnSurface,
     error = DangerRed,
     onError = Color.White,
-    errorContainer = DangerRed.copy(alpha = 0.1f),
-    onErrorContainer = DangerRed,
-    background = LinearLightBgBase,
-    onBackground = LinearLightForeground,
-    surface = LinearLightBgElevated,
-    onSurface = LinearLightForeground,
-    surfaceVariant = LinearLightSurface,
-    onSurfaceVariant = LinearLightForegroundMuted,
-    surfaceTint = LinearLightAccent,
-    inverseSurface = LinearDarkBgElevated,
-    inverseOnSurface = LinearDarkForeground,
-    inversePrimary = LinearDarkAccent,
-    outline = LinearLightBorderDefault,
-    outlineVariant = LinearLightBorderHover,
-    scrim = Color.Black,
-    surfaceBright = LinearLightBgElevated,
-    surfaceDim = LinearLightBgDeep,
-    surfaceContainer = LinearLightBgElevated,
-    surfaceContainerHigh = LinearLightBgElevated,
-    surfaceContainerHighest = LinearLightBgElevated,
-    surfaceContainerLow = LinearLightBgDeep,
-    surfaceContainerLowest = LinearLightBgDeep
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = AppLightBackground,
+    onBackground = AppLightOnSurface,
+    surface = AppLightSurface,
+    onSurface = AppLightOnSurface,
+    surfaceVariant = AppLightSurfaceContainer,
+    onSurfaceVariant = AppLightOnSurfaceVariant,
+    outline = AppLightOutline,
+    outlineVariant = AppLightOutlineVariant,
+    surfaceBright = AppLightSurface,
+    surfaceDim = AppLightSurfaceContainerHigh,
+    surfaceContainerLowest = AppLightSurface,
+    surfaceContainerLow = AppLightBackground,
+    surfaceContainer = AppLightSurfaceContainer,
+    surfaceContainerHigh = AppLightSurfaceContainerHigh,
+    surfaceContainerHighest = Color(0xFFDCE1E9),
+    scrim = Color.Black
 )
 
 @Composable
 fun PokemonAlertsV2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    @Suppress("UNUSED_PARAMETER")
-    dynamicColor: Boolean = false,
+    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val linearColors = if (darkTheme) DarkLinearModernColors else LightLinearModernColors
-
+    val appColors = if (darkTheme) DarkLinearModernColors else LightLinearModernColors
     val view = LocalView.current
+
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
@@ -172,9 +159,7 @@ fun PokemonAlertsV2Theme(
         }
     }
 
-    CompositionLocalProvider(
-        LocalLinearModernColors provides linearColors
-    ) {
+    CompositionLocalProvider(LocalLinearModernColors provides appColors) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,

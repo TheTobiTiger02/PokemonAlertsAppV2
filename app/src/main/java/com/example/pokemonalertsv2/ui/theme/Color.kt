@@ -2,48 +2,33 @@ package com.example.pokemonalertsv2.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Static Material 3 palettes for Pokemon Alerts.
- *
- * The product deliberately keeps an electric-blue primary across devices instead of
- * inheriting dynamic wallpaper colours. Secondary and tertiary roles are neutral so
- * alert type is communicated by copy and iconography, not a rainbow of card colours.
- */
+/** One UI-inspired, static product palette. */
+val AppLightBackground = Color(0xFFF7F8FB)
+val AppLightSurface = Color(0xFFFFFFFF)
+val AppLightSurfaceContainer = Color(0xFFEEF1F6)
+val AppLightSurfaceContainerHigh = Color(0xFFE5E9F0)
+val AppLightOnSurface = Color(0xFF16181D)
+val AppLightOnSurfaceVariant = Color(0xFF5B6472)
+val AppLightOutline = Color(0xFFD8DEE8)
+val AppLightOutlineVariant = Color(0xFFE6EAF0)
+val AppLightPrimary = Color(0xFF0057D9)
+val AppLightOnPrimary = Color.White
+val AppLightPrimaryContainer = Color(0xFFD9E5FF)
+val AppLightOnPrimaryContainer = Color(0xFF001B3F)
 
-// Light palette (Linear Luminous)
-val LinearLightBgDeep = Color(0xFFF4F4F6)
-val LinearLightBgBase = Color(0xFFFAF9FD)
-val LinearLightBgElevated = Color(0xFFFFFFFF)
-val LinearLightSurface = Color(0x08000000) // rgba(0,0,0,0.03)
-val LinearLightSurfaceHover = Color(0x0F000000) // rgba(0,0,0,0.06)
-val LinearLightForeground = Color(0xFF1A1B20)
-val LinearLightForegroundMuted = Color(0xFF565E70)
-val LinearLightForegroundSubtle = Color(0x66000000) // rgba(0,0,0,0.40)
-val LinearLightAccent = Color(0xFF5E6AD2)
-val LinearLightAccentBright = Color(0xFF4B56C0)
-val LinearLightAccentGlow = Color(0x265E6AD2) // rgba(94,106,210,0.15)
-val LinearLightBorderDefault = Color(0x0F000000) // rgba(0,0,0,0.06)
-val LinearLightBorderHover = Color(0x1A000000) // rgba(0,0,0,0.10)
-val LinearLightBorderAccent = Color(0x335E6AD2) // rgba(94,106,210,0.20)
+val AppDarkBackground = Color(0xFF090B0F)
+val AppDarkSurface = Color(0xFF12151B)
+val AppDarkSurfaceContainer = Color(0xFF191D25)
+val AppDarkSurfaceContainerHigh = Color(0xFF202631)
+val AppDarkOnSurface = Color(0xFFF2F4F8)
+val AppDarkOnSurfaceVariant = Color(0xFFB2BAC7)
+val AppDarkOutline = Color(0xFF323946)
+val AppDarkOutlineVariant = Color(0xFF252B35)
+val AppDarkPrimary = Color(0xFF7FA7FF)
+val AppDarkOnPrimary = Color(0xFF071B43)
+val AppDarkPrimaryContainer = Color(0xFF173D72)
+val AppDarkOnPrimaryContainer = Color(0xFFD8E7FF)
 
-// Dark palette (Linear Deep Space)
-val LinearDarkBgDeep = Color(0xFF020203)
-val LinearDarkBgBase = Color(0xFF050506)
-val LinearDarkBgElevated = Color(0xFF0A0A0C)
-val LinearDarkSurface = Color(0x0DFFFFFF) // rgba(255,255,255,0.05)
-val LinearDarkSurfaceHover = Color(0x14FFFFFF) // rgba(255,255,255,0.08)
-val LinearDarkForeground = Color(0xFFEDEDEF)
-val LinearDarkForegroundMuted = Color(0xFF8A8F98)
-val LinearDarkForegroundSubtle = Color(0x99FFFFFF) // rgba(255,255,255,0.60)
-val LinearDarkAccent = Color(0xFF5E6AD2)
-val LinearDarkAccentBright = Color(0xFF6872D9)
-val LinearDarkAccentGlow = Color(0x4D5E6AD2) // rgba(94,106,210,0.3)
-val LinearDarkBorderDefault = Color(0x0FFFFFFF) // rgba(255,255,255,0.06)
-val LinearDarkBorderHover = Color(0x1AFFFFFF) // rgba(255,255,255,0.10)
-val LinearDarkBorderAccent = Color(0x4D5E6AD2) // rgba(94,106,210,0.30)
-
-// Semantic feedback colors
-val SuccessGreen = Color(0xFF2E7D32)
-val WarningAmber = Color(0xFF8A5A00)
+val SuccessGreen = Color(0xFF2E7D5B)
+val WarningAmber = Color(0xFF9A6200)
 val DangerRed = Color(0xFFBA1A1A)
-
