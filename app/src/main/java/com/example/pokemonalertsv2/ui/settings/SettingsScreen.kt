@@ -70,15 +70,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
+import kotlinx.coroutines.launch
+import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import java.util.Calendar
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import android.widget.Toast
+import com.example.pokemonalertsv2.util.InAppUpdateManager
+import com.example.pokemonalertsv2.util.UpdateState
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,20 +116,8 @@ fun SettingsScreen(
     val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(containerGradient)
+    LinearModernBackground(
+        modifier = Modifier.fillMaxSize()
     ) {
         Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -352,12 +345,47 @@ fun SettingsScreen(
                 }
                 
                 SettingsSection(title = "About") {
-                   Text(
-                       text = "PokemonAlerts v1.0.0",
-                       style = MaterialTheme.typography.bodyMedium,
-                       color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                       modifier = Modifier.padding(vertical = 8.dp)
-                   )
+                    val coroutineScope = rememberCoroutineScope()
+                    val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                            
+                            OutlinedButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        InAppUpdateManager.checkForUpdates()
+                                    }
+                                },
+                                enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading
+                            ) {
+                                if (updateState is UpdateState.Checking) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Checking...")
+                                } else {
+                                    Text("Check for Updates")
+                                }
+                            }
+                        }
+                    }
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))

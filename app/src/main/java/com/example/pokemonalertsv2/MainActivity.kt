@@ -14,9 +14,22 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
@@ -66,15 +79,16 @@ import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
 import androidx.lifecycle.lifecycleScope
 import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
+import androidx.compose.runtime.LaunchedEffect
+import com.example.pokemonalertsv2.util.InAppUpdateManager
+import com.example.pokemonalertsv2.util.UpdateState
+
 
 /**
  * Bottom navigation destinations.
@@ -147,6 +161,10 @@ class MainActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
+        }
+
+        lifecycleScope.launch {
+            InAppUpdateManager.checkForUpdates()
         }
 
         requestNotificationPermissionIfNeeded()
@@ -262,30 +280,38 @@ private fun MainScaffold(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val saveableStateHolder = rememberSaveableStateHolder()
+    val context = LocalContext.current
+    val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
+    LaunchedEffect(updateState) {
+        when (updateState) {
+            is UpdateState.UpToDate -> {
+                Toast.makeText(context, "App is up to date", Toast.LENGTH_SHORT).show()
+                InAppUpdateManager.resetState()
+            }
+            is UpdateState.Error -> {
+                val errorMsg = (updateState as UpdateState.Error).message
+                if (errorMsg != "Unknown sources permission required") {
+                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                    InAppUpdateManager.resetState()
+                }
+            }
+            else -> {}
+        }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(containerGradient)
-    ) {
+    val colors = LocalLinearModernColors.current
+
+    LinearModernBackground(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onBackground,
+            contentColor = colors.foreground,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
                 NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(6.dp),
-                    tonalElevation = 6.dp
+                    containerColor = colors.bgElevated.copy(alpha = 0.8f),
+                    modifier = Modifier.border(1.dp, Brush.verticalGradient(listOf(colors.borderDefault, Color.Transparent)), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    tonalElevation = 0.dp
                 ) {
                     NAV_DESTINATIONS.forEachIndexed { index, destination ->
                         NavigationBarItem(
@@ -310,11 +336,11 @@ private fun MainScaffold(
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.onPrimary,
-                                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                                indicatorColor = MaterialTheme.colorScheme.primary,
-                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f),
-                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f)
+                                selectedIconColor = Color.White,
+                                selectedTextColor = colors.accent,
+                                indicatorColor = colors.accent,
+                                unselectedIconColor = colors.foregroundMuted.copy(alpha = 0.8f),
+                                unselectedTextColor = colors.foregroundMuted.copy(alpha = 0.8f)
                             )
                         )
                     }
@@ -359,6 +385,118 @@ private fun MainScaffold(
                     }
                 }
             }
+        }
+
+        // Dialogs for update flow
+        when (val state = updateState) {
+            is UpdateState.UpdateAvailable -> {
+                AlertDialog(
+                    onDismissRequest = { InAppUpdateManager.resetState() },
+                    title = { Text("Update Available") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("A new version of PokemonAlerts (${state.release.tagName}) is available. Would you like to download and install it?")
+                            if (!state.release.body.isNullOrBlank()) {
+                                Text(
+                                    text = "Release Notes:\n${state.release.body}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.05f), MaterialTheme.shapes.small)
+                                        .padding(8.dp)
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    InAppUpdateManager.downloadAndInstall(context, state.release)
+                                }
+                            }
+                        ) {
+                            Text("Update")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { InAppUpdateManager.resetState() }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+            is UpdateState.Downloading -> {
+                AlertDialog(
+                    onDismissRequest = {}, // Force non-dismissable during download
+                    title = { Text("Downloading Update") },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "${(state.progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    },
+                    confirmButton = {}
+                )
+            }
+            is UpdateState.Error -> {
+                if (state.message == "Unknown sources permission required") {
+                    AlertDialog(
+                        onDismissRequest = { InAppUpdateManager.resetState() },
+                        title = { Text("Install Permission Required") },
+                        text = {
+                            Text("To install the update, please grant permission to install apps from unknown sources on the next screen.")
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    InAppUpdateManager.launchUnknownSourcesSettings(context)
+                                    InAppUpdateManager.resetState()
+                                }
+                            ) {
+                                Text("Open Settings")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { InAppUpdateManager.resetState() }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
+            }
+            is UpdateState.Installing -> {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Installing...") },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text("Launching installer...")
+                        }
+                    },
+                    confirmButton = {}
+                )
+            }
+            else -> {}
         }
     }
 }
