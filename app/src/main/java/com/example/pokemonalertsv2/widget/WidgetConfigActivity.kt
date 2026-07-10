@@ -6,21 +6,17 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 
 /**
  * Configuration activity shown when a widget is first placed.
@@ -50,18 +46,20 @@ class WidgetConfigActivity : ComponentActivity() {
         val existing = WidgetFilterPrefs.getFilters(this, appWidgetId)
 
         setContent {
-            WidgetConfigScreen(
-                initialFilters = existing,
-                onConfirm = { filters ->
-                    WidgetFilterPrefs.saveFilters(this@WidgetConfigActivity, appWidgetId, filters)
-                    // Trigger widget update
-                    AlertsWidgetProvider.requestUpdate(this@WidgetConfigActivity)
-                    // Return success
-                    val resultValue = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                    setResult(RESULT_OK, resultValue)
-                    finish()
-                }
-            )
+            PokemonAlertsV2Theme {
+                WidgetConfigScreen(
+                    initialFilters = existing,
+                    onConfirm = { filters ->
+                        WidgetFilterPrefs.saveFilters(this@WidgetConfigActivity, appWidgetId, filters)
+                        // Trigger widget update
+                        AlertsWidgetProvider.requestUpdate(this@WidgetConfigActivity)
+                        // Return success
+                        val resultValue = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+                        setResult(RESULT_OK, resultValue)
+                        finish()
+                    }
+                )
+            }
         }
     }
 }
@@ -102,72 +100,68 @@ fun WidgetConfigScreen(
         }
     }
 
-    val DarkBg = Color(0xFF0F172A)
-    val DarkSurface = Color(0xFF1E293B)
-    val TextWhite = Color(0xFFF8FAFC)
-    val TextGray = Color(0xFF94A3B8)
-    val AccentBlue = Color(0xFF06B6D4)
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = DarkBg
-    ) {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.widget_config_title),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    ) { contentPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp)
+                .padding(contentPadding)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
-            // Title
             Text(
-                text = stringResource(R.string.widget_config_title),
-                color = TextWhite,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-            Text(
-                text = "Choose which alert types appear on your widget",
-                color = TextGray,
-                fontSize = 14.sp,
+                text = stringResource(R.string.widget_config_subtitle),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(bottom = 20.dp)
             )
 
-            // Scrollable type list
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 ALL_FILTER_TYPES.forEach { (key, label) ->
                     val checked = enabledTypes[key] ?: true
-                    Surface(
+                    Card(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = DarkSurface
+                            .fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        )
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .heightIn(min = 56.dp)
+                                .padding(start = 16.dp, end = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = label,
-                                color = TextWhite,
-                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
                             Switch(
                                 checked = checked,
-                                onCheckedChange = { enabledTypes[key] = it },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
-                                    checkedTrackColor = AccentBlue,
-                                    uncheckedThumbColor = TextGray,
-                                    uncheckedTrackColor = DarkSurface
-                                )
+                                onCheckedChange = { enabledTypes[key] = it }
                             )
                         }
                     }
@@ -184,15 +178,12 @@ fun WidgetConfigScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                    .heightIn(min = 48.dp),
+                shape = MaterialTheme.shapes.large
             ) {
                 Text(
                     text = stringResource(R.string.widget_config_confirm),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

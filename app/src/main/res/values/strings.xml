@@ -1,8 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">PokemonAlertsV2</string>
+    <string name="app_name">Pok&#x00E9;mon Alerts</string>
+    <string name="navigation_alerts">Alerts</string>
+    <string name="navigation_map">Map</string>
+    <string name="navigation_settings">Settings</string>
+    <string name="alerts_section_live">Live</string>
+    <string name="alerts_section_history">History</string>
+    <string name="alerts_destination_title">Pok&#x00E9;mon Alerts</string>
+    <string name="alerts_destination_live_subtitle">Nearby activity</string>
+    <string name="alerts_destination_history_subtitle">Past activity</string>
     <string name="notification_channel_name">Pokemon Alerts</string>
     <string name="notification_channel_description">Notifications for new Pokemon Go alerts nearby</string>
+    <string name="notification_channel_raids_name">Raids</string>
+    <string name="notification_channel_raids_description">Notifications for Raid Battles</string>
+    <string name="notification_channel_spawns_name">Wild Spawns</string>
+    <string name="notification_channel_spawns_description">Notifications for Wild Spawns</string>
+    <string name="notification_channel_quests_name">Field Research</string>
+    <string name="notification_channel_quests_description">Notifications for Field Research</string>
     <string name="notification_default_body">New Pokemon alert available</string>
     <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
@@ -31,9 +45,10 @@
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
     <string name="notification_action_directions">Directions</string>
+    <string name="notification_action_dismiss">Dismiss</string>
     <string name="notification_action_snooze">Snooze</string>
     <string name="loading_alerts">Scanning for nearby spawns…</string>
-    <string name="alerts_hero_title">Field radar</string>
+    <string name="alerts_hero_title">Live alerts</string>
     <string name="alerts_hero_subtitle">Live intel from nearby trainers</string>
     <string name="alerts_hero_active_label">Active alerts</string>
     <string name="alerts_hero_ending_label">Ending soon</string>
@@ -52,8 +67,11 @@
     <string name="widget_active_count">%1$d active</string>
     <string name="widget_dismiss_cd">Dismiss alert</string>
     <string name="widget_navigate_cd">Navigate to alert</string>
+    <string name="widget_open_map_cd">Open alerts map</string>
+    <string name="widget_active_alerts_label">Active alerts</string>
     <string name="widget_compact_count">%1$d active alerts</string>
     <string name="widget_config_title">Select Alert Types</string>
+    <string name="widget_config_subtitle">Choose which alert types appear on this widget.</string>
     <string name="widget_config_show_all">Show all types</string>
     <string name="widget_config_confirm">Done</string>
     <string name="widget_empty_title">No active alerts</string>

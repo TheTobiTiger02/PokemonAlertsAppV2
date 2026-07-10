@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="10dp"
+    android:padding="12dp"
     android:layout_marginBottom="8dp"
     android:background="@drawable/widget_item_background"
     android:gravity="center_vertical">
@@ -39,7 +39,7 @@
                 android:layout_weight="1"
                 android:textStyle="bold"
                 android:textSize="15sp"
-                android:textColor="@color/poke_white"
+                android:textColor="@color/widget_on_surface"
                 android:maxLines="1"
                 android:ellipsize="end" />
 
@@ -49,7 +49,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textStyle="bold"
-                android:textColor="@color/poke_blue"
+                android:textColor="@color/widget_primary"
                 android:layout_marginStart="8dp"
                 android:maxLines="1" />
         </LinearLayout>
@@ -59,7 +59,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textSize="12sp"
-            android:textColor="@color/poke_light_gray"
+            android:textColor="@color/widget_on_surface_variant"
             android:maxLines="1"
             android:ellipsize="end"
             android:layout_marginTop="2dp" />
@@ -70,7 +70,7 @@
             android:layout_height="wrap_content"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:textColor="@color/poke_blue"
+            android:textColor="@color/widget_primary"
             android:maxLines="1"
             android:ellipsize="end"
             android:layout_marginTop="2dp" />
@@ -79,25 +79,26 @@
     <!-- Navigate button -->
     <ImageButton
         android:id="@+id/btn_navigate"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:background="@android:color/transparent"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/widget_icon_button_background"
         android:contentDescription="@string/widget_navigate_cd"
         android:src="@drawable/ic_navigate"
         android:scaleType="fitCenter"
-        android:padding="4dp"
-        android:layout_marginStart="4dp"
+        android:padding="10dp"
+        android:layout_marginStart="6dp"
         android:visibility="gone" />
 
     <!-- Dismiss button -->
     <ImageButton
         android:id="@+id/btn_dismiss"
-        android:layout_width="36dp"
-        android:layout_height="36dp"
-        android:background="@android:color/transparent"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/widget_icon_button_background"
         android:contentDescription="@string/widget_dismiss_cd"
+        android:tint="@color/widget_error"
         android:src="@drawable/ic_close_small"
         android:scaleType="fitCenter"
-        android:padding="6dp"
-        android:layout_marginStart="2dp" />
+        android:padding="10dp"
+        android:layout_marginStart="6dp" />
 </LinearLayout>

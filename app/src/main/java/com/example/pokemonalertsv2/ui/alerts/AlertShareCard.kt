@@ -5,12 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
@@ -19,9 +16,11 @@ import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
+import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.TimeUtils
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -34,6 +33,18 @@ object AlertShareCard {
     private const val CARD_HEIGHT = 1520
     private const val PADDING = 64f
     private const val HERO_HEIGHT = 650f
+
+    private data class ShareCardPalette(
+        val background: Int,
+        val heroFallback: Int,
+        val photoScrim: Int,
+        val primaryContainer: Int,
+        val surfaceContainer: Int,
+        val infoPanel: Int,
+        val primaryText: Int,
+        val secondaryText: Int,
+        val placeholderText: Int
+    )
 
     data class ShareStat(val label: String, val value: String)
 
@@ -158,13 +169,26 @@ object AlertShareCard {
         val heroBitmap = loadHeroBitmap(context, alert)
         val bitmap = Bitmap.createBitmap(CARD_WIDTH, CARD_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
+        val palette = shareCardPalette(context)
 
-        drawBackground(canvas)
-        drawHero(canvas, heroBitmap)
+        drawBackground(canvas, palette)
+        drawHero(canvas, heroBitmap, palette)
         heroBitmap?.recycle()
-        drawContent(canvas, content)
+        drawContent(canvas, content, palette)
         return bitmap
     }
+
+    private fun shareCardPalette(context: Context): ShareCardPalette = ShareCardPalette(
+        background = ContextCompat.getColor(context, R.color.share_card_background),
+        heroFallback = ContextCompat.getColor(context, R.color.share_card_hero_fallback),
+        photoScrim = ContextCompat.getColor(context, R.color.share_card_photo_scrim),
+        primaryContainer = ContextCompat.getColor(context, R.color.share_card_primary_container),
+        surfaceContainer = ContextCompat.getColor(context, R.color.share_card_surface_container),
+        infoPanel = ContextCompat.getColor(context, R.color.share_card_info_panel),
+        primaryText = ContextCompat.getColor(context, R.color.share_card_on_surface),
+        secondaryText = ContextCompat.getColor(context, R.color.share_card_on_surface_variant),
+        placeholderText = ContextCompat.getColor(context, R.color.share_card_placeholder_text)
+    )
 
     private suspend fun loadHeroBitmap(context: Context, alert: PokemonAlert): Bitmap? {
         val imageLoader = PokemonAlertsApplication.imageLoader(context)
@@ -222,41 +246,21 @@ object AlertShareCard {
         }.getOrNull()
     }
 
-    private fun drawBackground(canvas: Canvas) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                0f,
-                0f,
-                CARD_WIDTH.toFloat(),
-                CARD_HEIGHT.toFloat(),
-                intArrayOf(Color.rgb(7, 11, 28), Color.rgb(22, 32, 68), Color.rgb(44, 26, 78)),
-                null,
-                Shader.TileMode.CLAMP
-            )
-        }
+    private fun drawBackground(canvas: Canvas, palette: ShareCardPalette) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.background }
         canvas.drawRect(0f, 0f, CARD_WIDTH.toFloat(), CARD_HEIGHT.toFloat(), paint)
     }
 
-    private fun drawHero(canvas: Canvas, heroBitmap: Bitmap?) {
+    private fun drawHero(canvas: Canvas, heroBitmap: Bitmap?, palette: ShareCardPalette) {
         val heroRect = RectF(0f, 0f, CARD_WIDTH.toFloat(), HERO_HEIGHT)
         if (heroBitmap != null) {
             val src = centerCropRect(heroBitmap.width, heroBitmap.height, CARD_WIDTH, HERO_HEIGHT.roundToInt())
             canvas.drawBitmap(heroBitmap, src, heroRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         } else {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                shader = LinearGradient(
-                    0f,
-                    0f,
-                    CARD_WIDTH.toFloat(),
-                    HERO_HEIGHT,
-                    Color.rgb(28, 37, 75),
-                    Color.rgb(111, 75, 255),
-                    Shader.TileMode.CLAMP
-                )
-            }
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.heroFallback }
             canvas.drawRect(heroRect, paint)
             val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = Color.argb(150, 255, 255, 255)
+                color = palette.placeholderText
                 textSize = 180f
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.DEFAULT_BOLD
@@ -264,50 +268,46 @@ object AlertShareCard {
             canvas.drawText("Pokemon", CARD_WIDTH / 2f, HERO_HEIGHT / 2f, iconPaint)
         }
 
-        val scrim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                0f,
-                0f,
-                0f,
-                HERO_HEIGHT,
-                intArrayOf(Color.argb(20, 0, 0, 0), Color.argb(40, 0, 0, 0), Color.argb(220, 5, 8, 22)),
-                null,
-                Shader.TileMode.CLAMP
-            )
-        }
+        val scrim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.photoScrim }
         canvas.drawRect(heroRect, scrim)
     }
 
-    private fun drawContent(canvas: Canvas, content: ShareCardContent) {
+    private fun drawContent(canvas: Canvas, content: ShareCardContent, palette: ShareCardPalette) {
         var y = HERO_HEIGHT - 190f
-        val titlePaint = textPaint(64f, Color.WHITE, Typeface.BOLD)
+        val titlePaint = textPaint(64f, palette.primaryText, Typeface.BOLD)
         y = drawWrappedText(canvas, content.title, PADDING, y, CARD_WIDTH - PADDING * 2, titlePaint, 2, 72f)
 
         content.subtitle?.let {
             y += 8f
-            y = drawWrappedText(canvas, it, PADDING, y, CARD_WIDTH - PADDING * 2, textPaint(34f, Color.rgb(202, 213, 240)), 1, 42f)
+            y = drawWrappedText(canvas, it, PADDING, y, CARD_WIDTH - PADDING * 2, textPaint(34f, palette.secondaryText), 1, 42f)
         }
 
         y = HERO_HEIGHT + 70f
         if (content.tags.isNotEmpty()) {
-            y = drawTags(canvas, content.tags, PADDING, y)
+            y = drawTags(canvas, content.tags, PADDING, y, palette)
             y += 38f
         }
 
         if (content.stats.isNotEmpty()) {
-            y = drawStats(canvas, content.stats, y)
+            y = drawStats(canvas, content.stats, y, palette)
             y += 42f
         }
 
-        y = drawInfoPanel(canvas, content, y)
-        drawFooter(canvas, content, y)
+        y = drawInfoPanel(canvas, content, y, palette)
+        drawFooter(canvas, content, y, palette)
     }
 
-    private fun drawTags(canvas: Canvas, tags: List<String>, startX: Float, startY: Float): Float {
+    private fun drawTags(
+        canvas: Canvas,
+        tags: List<String>,
+        startX: Float,
+        startY: Float,
+        palette: ShareCardPalette
+    ): Float {
         var x = startX
         var y = startY
-        val textPaint = textPaint(28f, Color.WHITE, Typeface.BOLD)
-        val chipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(80, 255, 255, 255) }
+        val textPaint = textPaint(28f, palette.primaryText, Typeface.BOLD)
+        val chipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.primaryContainer }
         tags.forEach { tag ->
             val width = textPaint.measureText(tag) + 40f
             if (x + width > CARD_WIDTH - PADDING) {
@@ -322,13 +322,18 @@ object AlertShareCard {
         return y + 46f
     }
 
-    private fun drawStats(canvas: Canvas, stats: List<ShareStat>, startY: Float): Float {
+    private fun drawStats(
+        canvas: Canvas,
+        stats: List<ShareStat>,
+        startY: Float,
+        palette: ShareCardPalette
+    ): Float {
         val columns = stats.size.coerceAtLeast(1).coerceAtMost(4)
         val gap = 18f
         val itemWidth = (CARD_WIDTH - PADDING * 2 - gap * (columns - 1)) / columns
-        val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(64, 255, 255, 255) }
-        val labelPaint = textPaint(24f, Color.rgb(174, 188, 220), Typeface.BOLD)
-        val valuePaint = textPaint(44f, Color.WHITE, Typeface.BOLD)
+        val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.surfaceContainer }
+        val labelPaint = textPaint(24f, palette.secondaryText, Typeface.BOLD)
+        val valuePaint = textPaint(44f, palette.primaryText, Typeface.BOLD)
 
         stats.take(columns).forEachIndexed { index, stat ->
             val left = PADDING + index * (itemWidth + gap)
@@ -340,14 +345,19 @@ object AlertShareCard {
         return startY + 150f
     }
 
-    private fun drawInfoPanel(canvas: Canvas, content: ShareCardContent, startY: Float): Float {
+    private fun drawInfoPanel(
+        canvas: Canvas,
+        content: ShareCardContent,
+        startY: Float,
+        palette: ShareCardPalette
+    ): Float {
         val rect = RectF(PADDING, startY, CARD_WIDTH - PADDING, startY + 300f)
-        val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(90, 10, 16, 36) }
+        val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.infoPanel }
         canvas.drawRoundRect(rect, 36f, 36f, panelPaint)
 
         var y = startY + 64f
-        val labelPaint = textPaint(28f, Color.rgb(174, 188, 220), Typeface.BOLD)
-        val valuePaint = textPaint(40f, Color.WHITE, Typeface.BOLD)
+        val labelPaint = textPaint(28f, palette.secondaryText, Typeface.BOLD)
+        val valuePaint = textPaint(40f, palette.primaryText, Typeface.BOLD)
         canvas.drawText("STATUS", PADDING + 34f, y, labelPaint)
         y += 58f
         canvas.drawText(content.endLabel, PADDING + 34f, y, valuePaint)
@@ -356,14 +366,19 @@ object AlertShareCard {
         content.locationLabel?.let {
             canvas.drawText("LOCATION", PADDING + 34f, y, labelPaint)
             y += 48f
-            y = drawWrappedText(canvas, it, PADDING + 34f, y, CARD_WIDTH - PADDING * 2 - 68f, textPaint(34f, Color.WHITE), 2, 42f)
+            y = drawWrappedText(canvas, it, PADDING + 34f, y, CARD_WIDTH - PADDING * 2 - 68f, textPaint(34f, palette.primaryText), 2, 42f)
         }
         return rect.bottom
     }
 
-    private fun drawFooter(canvas: Canvas, content: ShareCardContent, startY: Float) {
-        val footerPaint = textPaint(28f, Color.rgb(174, 188, 220))
-        val titlePaint = textPaint(32f, Color.WHITE, Typeface.BOLD)
+    private fun drawFooter(
+        canvas: Canvas,
+        content: ShareCardContent,
+        startY: Float,
+        palette: ShareCardPalette
+    ) {
+        val footerPaint = textPaint(28f, palette.secondaryText)
+        val titlePaint = textPaint(32f, palette.primaryText, Typeface.BOLD)
         val y = (startY + 90f).coerceAtMost(CARD_HEIGHT - 110f)
         canvas.drawText("Shared from Pokemon Alerts", PADDING, y, titlePaint)
         content.mapsUrl?.let {

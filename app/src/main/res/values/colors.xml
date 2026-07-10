@@ -1,31 +1,68 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
+    <!-- Product and system-facing palette: light mode. -->
+    <color name="brand_primary">#0058BE</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#D9E2FF</color>
+    <color name="brand_on_primary_container">#001A40</color>
+    <color name="app_window_background">#F8F9FF</color>
+    <color name="splash_background">#F8F9FF</color>
+    <color name="launcher_background">#F8F9FF</color>
+    <color name="launcher_primary">#0058BE</color>
+    <color name="notification_accent">#0058BE</color>
+
+    <!-- RemoteViews widget palette. -->
+    <color name="widget_background">#F8F9FF</color>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_surface_variant">#EEF1F7</color>
+    <color name="widget_on_surface">#1A1B20</color>
+    <color name="widget_on_surface_variant">#45464F</color>
+    <color name="widget_outline">#C5C6D0</color>
+    <color name="widget_primary">#0058BE</color>
+    <color name="widget_on_primary">#FFFFFF</color>
+    <color name="widget_primary_container">#D9E2FF</color>
+    <color name="widget_error">#BA1A1A</color>
+    <color name="widget_warning">#875100</color>
+    <color name="widget_fallback_background">#EEF1F7</color>
+
+    <!-- Share card palette: a high-contrast, flat blue treatment. -->
+    <color name="share_card_background">#0F172A</color>
+    <color name="share_card_hero_fallback">#0058BE</color>
+    <color name="share_card_photo_scrim">#840F172A</color>
+    <color name="share_card_primary_container">#235397</color>
+    <color name="share_card_surface_container">#1F2D46</color>
+    <color name="share_card_info_panel">#1B273D</color>
+    <color name="share_card_on_surface">#FFFFFF</color>
+    <color name="share_card_on_surface_variant">#C9D2E4</color>
+    <color name="share_card_placeholder_text">#BCFFFFFF</color>
+
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
-    
-    <!-- Neo-Pokedex Colors -->
-    <color name="poke_red">#F43F5E</color>
-    <color name="poke_red_dark">#BE123C</color>
-    <color name="poke_blue">#06B6D4</color>
-    <color name="poke_blue_dark">#0E7490</color>
-    <color name="poke_yellow">#FACC15</color>
-    <color name="poke_yellow_dark">#CA8A04</color>
-    <color name="poke_green">#10B981</color>
-    <color name="poke_green_dark">#059669</color>
-    
-    <color name="poke_dark_background">#0F172A</color>
-    <color name="poke_dark_surface">#1E293B</color>
-    <color name="poke_dark_surface_variant">#334155</color>
-    
-    <color name="poke_white">#F8FAFC</color>
-    <color name="poke_light_gray">#94A3B8</color>
-    <color name="poke_dark_gray">#475569</color>
-    
-    <!-- Legacy mapping -->
+
+    <!-- Resource aliases retained for legacy consumers. -->
+    <color name="purple_200">#D9E2FF</color>
+    <color name="purple_500">#0058BE</color>
+    <color name="purple_700">#003F8F</color>
+    <color name="teal_200">#146C43</color>
+    <color name="teal_700">#0058BE</color>
+    <color name="poke_red">#BA1A1A</color>
+    <color name="poke_red_dark">#93000A</color>
+    <color name="poke_blue">#0058BE</color>
+    <color name="poke_blue_dark">#003F8F</color>
+    <color name="poke_yellow">#875100</color>
+    <color name="poke_yellow_dark">#5E3700</color>
+    <color name="poke_green">#146C43</color>
+    <color name="poke_green_dark">#0B4F31</color>
+    <color name="poke_dark_background">#F8F9FF</color>
+    <color name="poke_dark_surface">#FFFFFF</color>
+    <color name="poke_dark_surface_variant">#EEF1F7</color>
+    <color name="poke_white">#1A1B20</color>
+    <color name="poke_light_gray">#45464F</color>
+    <color name="poke_dark_gray">#74757E</color>
+    <color name="ember_orange">#875100</color>
+    <color name="volcanic_red">#BA1A1A</color>
+    <color name="molten_gold">#875100</color>
+    <color name="obsidian_black">#1A1B20</color>
+    <color name="charcoal_grey">#45464F</color>
     <color name="pokemon_red">@color/poke_red</color>
 </resources>

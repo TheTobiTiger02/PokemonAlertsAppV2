@@ -35,10 +35,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -138,13 +141,6 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
-import androidx.compose.foundation.isSystemInDarkTheme
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -155,7 +151,8 @@ import java.util.Locale
 @Composable
 fun PokemonAlertsRoute(
     viewModel: PokemonAlertsViewModel,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    showTopBar: Boolean = true
 ) {
     val alertsUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -176,29 +173,15 @@ fun PokemonAlertsRoute(
         }
     }
 
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(containerGradient)
-    ) {
-        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-            rememberTopAppBarState()
-        )
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onBackground,
-            topBar = {
-                AuroraToolbar(
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+        rememberTopAppBarState()
+    )
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        topBar = {
+            if (showTopBar) {
+                AlertsToolbar(
                     onRefresh = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.refreshAlerts()
@@ -206,8 +189,9 @@ fun PokemonAlertsRoute(
                     scrollBehavior = scrollBehavior
                 )
             }
-        ) { paddingValues ->
-            Box(modifier = Modifier.padding(paddingValues)) {
+        }
+    ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
                 val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
                 val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
                 val defaultSnoozeMinutes by viewModel.snoozeDuration.collectAsStateWithLifecycle(initialValue = 10)
@@ -261,7 +245,6 @@ fun PokemonAlertsRoute(
                         }
                     }
                 )
-            }
         }
     }
 
@@ -288,7 +271,8 @@ fun AlertHistoryRoute(
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
-    consumeError: () -> Unit
+    consumeError: () -> Unit,
+    showTopBar: Boolean = true
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -300,28 +284,14 @@ fun AlertHistoryRoute(
         }
     }
 
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(containerGradient)
-    ) {
-        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-            rememberTopAppBarState()
-        )
-        Scaffold(
-            containerColor = Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onBackground,
-            topBar = {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
+        rememberTopAppBarState()
+    )
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        topBar = {
+            if (showTopBar) {
                 TopAppBar(
                     title = {
                         Column {
@@ -333,7 +303,7 @@ fun AlertHistoryRoute(
                             Text(
                                 text = "Browse past alerts",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
@@ -352,29 +322,29 @@ fun AlertHistoryRoute(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        scrolledContainerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        actionIconContentColor = MaterialTheme.colorScheme.primary,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                     ),
                     scrollBehavior = scrollBehavior
                 )
             }
-        ) { paddingValues ->
-            Box(modifier = Modifier.padding(paddingValues)) {
-                AlertHistoryPage(
-                    uiState = uiState,
-                    onRefresh = onRefresh,
-                    onLoadMore = onLoadMore,
-                    onDateChanged = onDateChanged,
-                    onTypeChanged = onTypeChanged,
-                    onSearchChanged = onSearchChanged,
-                    onAlertClick = { alert ->
-                        val intent = AlertDetailActivity.createIntent(context, alert)
-                        context.startActivity(intent)
-                    }
-                )
-            }
+        }
+    ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
+            AlertHistoryPage(
+                uiState = uiState,
+                onRefresh = onRefresh,
+                onLoadMore = onLoadMore,
+                onDateChanged = onDateChanged,
+                onTypeChanged = onTypeChanged,
+                onSearchChanged = onSearchChanged,
+                onAlertClick = { alert ->
+                    val intent = AlertDetailActivity.createIntent(context, alert)
+                    context.startActivity(intent)
+                }
+            )
         }
     }
 }
@@ -695,30 +665,67 @@ private fun AlertsList(
     onSearchQueryChanged: (String) -> Unit = {}
 ) {
     val countdownNow = rememberCountdownNow()
+    var controlsExpanded by rememberSaveable { mutableStateOf(true) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
-    ) {
-        item(key = "filters") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val columns = if (maxWidth >= 840.dp) 2 else 1
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
+                Card(
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Sort & Filter",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    SortingButton(
-                        currentSort = sortPreference,
-                        onSortChanged = onSortChanged
-                    )
+                    Column {
+                        Text(
+                            text = "ALERTS",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "${filteredAlerts.size} active alerts",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SortingButton(
+                            currentSort = sortPreference,
+                            onSortChanged = onSortChanged
+                        )
+                        IconButton(onClick = { controlsExpanded = !controlsExpanded }) {
+                            Icon(
+                                imageVector = if (controlsExpanded)
+                                    Icons.Filled.KeyboardArrowUp
+                                else
+                                    Icons.Filled.KeyboardArrowDown,
+                                contentDescription = if (controlsExpanded)
+                                    "Collapse alert controls"
+                                else
+                                    "Expand alert controls"
+                            )
+                        }
+                    }
                 }
+                AnimatedVisibility(visible = controlsExpanded) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilterRow(
                     selectedFilter = selectedFilter,
                     onFilterChanged = onFilterChanged,
@@ -748,26 +755,29 @@ private fun AlertsList(
                     onQueryChanged = onSearchQueryChanged,
                     placeholder = "Search Pokémon…"
                 )
+                    }
+                }
+                    }
+                }
             }
-        }
-        
-        if (filteredAlerts.isEmpty()) {
-            item {
-                 Text(
-                    text = "No alerts found for filter",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(16.dp),
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
 
-        items(
-            items = filteredAlerts,
-            key = { it.alert.uniqueId },
-            contentType = { "alert_card" }
-        ) { model ->
+            if (filteredAlerts.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "No alerts found for filter",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(24.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            gridItems(
+                items = filteredAlerts,
+                key = { it.alert.uniqueId },
+                contentType = { "alert_card" }
+            ) { model ->
             val isDismissed = model.alert.uniqueId in dismissedAlertIds
             // rememberUpdatedState ensures the lambda inside rememberSwipeToDismissBoxState
             // always reads the CURRENT value, even though the lambda itself is captured once.
@@ -802,8 +812,8 @@ private fun AlertsList(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    color = Color(0xFF4CAF50).copy(alpha = 0.85f),
-                                    shape = RoundedCornerShape(26.dp)
+                                    color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f),
+                                    shape = MaterialTheme.shapes.large
                                 )
                                 .padding(start = 24.dp),
                             contentAlignment = Alignment.CenterStart
@@ -811,7 +821,7 @@ private fun AlertsList(
                             Icon(
                                 imageVector = Icons.Filled.Refresh,
                                 contentDescription = "Restore",
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onTertiary,
                                 modifier = Modifier.size(28.dp)
                             )
                         }
@@ -822,7 +832,7 @@ private fun AlertsList(
                                 .fillMaxSize()
                                 .background(
                                     color = MaterialTheme.colorScheme.error.copy(alpha = 0.85f),
-                                    shape = RoundedCornerShape(26.dp)
+                                    shape = MaterialTheme.shapes.large
                                 )
                                 .padding(end = 24.dp),
                             contentAlignment = Alignment.CenterEnd
@@ -877,16 +887,17 @@ private fun AlertsList(
                                 .matchParentSize()
                                 .background(
                                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f),
-                                    shape = RoundedCornerShape(26.dp)
+                                    shape = MaterialTheme.shapes.large
                                 )
                         )
                     }
                 }
             }
-        }
-        
-        item {
-            Spacer(modifier = Modifier.height(80.dp))
+            }
+
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Spacer(modifier = Modifier.height(80.dp))
+            }
         }
     }
 }
@@ -927,7 +938,7 @@ private fun AlertSearchBar(
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.medium,
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
@@ -1132,7 +1143,7 @@ private fun HistoryAreaFilterRow(
 }
 
 @Composable
-private fun AuroraToolbar(
+private fun AlertsToolbar(
     onRefresh: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
@@ -1147,7 +1158,7 @@ private fun AuroraToolbar(
                 Text(
                     text = stringResource(id = R.string.alerts_toolbar_tagline),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
@@ -1160,10 +1171,10 @@ private fun AuroraToolbar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            titleContentColor = MaterialTheme.colorScheme.onPrimary,
-            actionIconContentColor = MaterialTheme.colorScheme.onPrimary,
-            scrolledContainerColor = MaterialTheme.colorScheme.primary
+            containerColor = MaterialTheme.colorScheme.background,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            actionIconContentColor = MaterialTheme.colorScheme.primary,
+            scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
         ),
         scrollBehavior = scrollBehavior
     )
@@ -1233,7 +1244,7 @@ private fun AlertHistoryPage(
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
     val haptic = LocalHapticFeedback.current
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
@@ -1427,13 +1438,17 @@ private fun AlertHistoryPage(
         state = rememberPullToRefreshState()
     ) {
         val countdownNow = rememberCountdownNow()
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            item {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val columns = if (maxWidth >= 840.dp) 2 else 1
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1497,7 +1512,7 @@ private fun AlertHistoryPage(
             }
             
             // Date Filter Button
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1574,7 +1589,7 @@ private fun AlertHistoryPage(
             }
             
             // Statistics Card
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 var isExpanded by rememberSaveable { mutableStateOf(true) }
                 
                 val dateText = if (selectedDateMillis != null) {
@@ -1599,7 +1614,7 @@ private fun AlertHistoryPage(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         // Header
@@ -1638,31 +1653,31 @@ private fun AlertHistoryPage(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if ((statistics["raids"] ?: 0) > 0) {
-                                    StatRow("Raids", statistics["raids"] ?: 0, Color(0xFFE91E63))
+                                    StatRow("Raids", statistics["raids"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["quests"] ?: 0) > 0) {
-                                    StatRow("Quests", statistics["quests"] ?: 0, Color(0xFF2196F3))
+                                    StatRow("Quests", statistics["quests"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["rares"] ?: 0) > 0) {
-                                    StatRow("Rare", statistics["rares"] ?: 0, Color(0xFF4CAF50))
+                                    StatRow("Rare", statistics["rares"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["hundos"] ?: 0) > 0) {
-                                    StatRow("Hundos", statistics["hundos"] ?: 0, Color(0xFFFFD700))
+                                    StatRow("Hundos", statistics["hundos"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["pvp"] ?: 0) > 0) {
-                                    StatRow("PvP", statistics["pvp"] ?: 0, Color(0xFF9C27B0))
+                                    StatRow("PvP", statistics["pvp"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["nundos"] ?: 0) > 0) {
-                                    StatRow("Nundos", statistics["nundos"] ?: 0, Color(0xFF607D8B))
+                                    StatRow("Nundos", statistics["nundos"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["rocket"] ?: 0) > 0) {
-                                    StatRow("Rocket", statistics["rocket"] ?: 0, Color(0xFFFF5722))
+                                    StatRow("Rocket", statistics["rocket"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["kecleon"] ?: 0) > 0) {
-                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, Color(0xFF00BCD4))
+                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                                 if ((statistics["other"] ?: 0) > 0) {
-                                    StatRow("Other", statistics["other"] ?: 0, Color(0xFF757575))
+                                    StatRow("Other", statistics["other"] ?: 0, MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -1672,9 +1687,11 @@ private fun AlertHistoryPage(
 
             // Shimmer placeholders while the first page is loading
             if (uiState.isLoading && uiState.alerts.isEmpty()) {
-                items(3) { ShimmerAlertCard() }
+                repeat(3) {
+                    item(span = { GridItemSpan(maxLineSpan) }) { ShimmerAlertCard() }
+                }
             } else if (filteredAlerts.isEmpty() && !uiState.isLoading) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     AnimatedEmptyState(
                         title = "No history found",
                         message = "No alerts match your search or filters. Try changing the search, area, date, or type."
@@ -1682,7 +1699,7 @@ private fun AlertHistoryPage(
                 }
             }
 
-            items(
+            gridItems(
                 items = filteredAlerts,
                 key = { it.uniqueId },
                 contentType = { "alert_card" }
@@ -1706,7 +1723,7 @@ private fun AlertHistoryPage(
 
             // Loading indicator while fetching the next page
             if (uiState.isLoadingMore) {
-                item {
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1719,6 +1736,7 @@ private fun AlertHistoryPage(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -1775,7 +1793,7 @@ private fun buildAlertShareHtml(alert: PokemonAlert): String {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0F172A 0%, #1E1E3F 50%, #2A1A4A 100%);
+            background: #0A0A0F;
             min-height: 100vh;
             padding: 20px;
             color: #E2E8F0;
@@ -1783,28 +1801,29 @@ private fun buildAlertShareHtml(alert: PokemonAlert): String {
         .card {
             max-width: 480px;
             margin: 0 auto;
-            background: rgba(30, 41, 59, 0.9);
+            background: rgba(18, 18, 24, 0.95);
             border-radius: 24px;
             overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            border: 1px solid rgba(255, 107, 53, 0.15);
         }
         .image-container {
             position: relative;
             height: 280px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1F120E 0%, #121218 100%);
         }
         .image-container img {
             width: 100%;
             height: 100%;
             object-fit: contain;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1F120E 0%, #121218 100%);
         }
         .content { padding: 24px; }
         h1 {
             font-size: 24px;
             font-weight: 700;
             margin-bottom: 16px;
-            background: linear-gradient(90deg, #60A5FA, #A78BFA);
+            background: linear-gradient(90deg, #FF6B35, #FFA809);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -1816,16 +1835,18 @@ private fun buildAlertShareHtml(alert: PokemonAlert): String {
             margin-bottom: 20px;
         }
         .stat {
-            background: rgba(100, 116, 139, 0.2);
+            background: rgba(255, 107, 53, 0.1);
             padding: 12px;
             border-radius: 12px;
             text-align: center;
+            border: 1px solid rgba(255, 107, 53, 0.15);
         }
-        .stat-value { font-size: 20px; font-weight: 700; color: #60A5FA; }
+        .stat-value { font-size: 20px; font-weight: 700; color: #FFA809; }
         .stat-label { font-size: 12px; color: #94A3B8; margin-top: 4px; }
         .time-badge {
             display: inline-block;
-            background: linear-gradient(90deg, #F59E0B, #EF4444);
+            background: linear-gradient(90deg, #FF6B35, #D62828);
+            color: white;
             padding: 8px 16px;
             border-radius: 20px;
             font-weight: 600;
@@ -1835,13 +1856,13 @@ private fun buildAlertShareHtml(alert: PokemonAlert): String {
         .maps-btn {
             display: block;
             width: 100%;
-            background: linear-gradient(90deg, #3B82F6, #8B5CF6);
-            color: white;
+            background: linear-gradient(90deg, #FF6B35, #FFA809);
+            color: black;
             text-decoration: none;
             padding: 16px;
             border-radius: 12px;
             text-align: center;
-            font-weight: 600;
+            font-weight: 700;
             font-size: 16px;
         }
         .maps-btn:hover { opacity: 0.9; }

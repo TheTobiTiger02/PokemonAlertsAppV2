@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="12dp"
+    android:padding="16dp"
     android:background="@drawable/widget_bg">
 
     <LinearLayout
@@ -15,8 +15,8 @@
 
         <ImageView
             android:id="@+id/img_logo"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/ic_widget_pokeball"
             android:contentDescription="@string/widget_logo_cd" />
@@ -29,7 +29,7 @@
             android:text="@string/widget_title"
             android:textStyle="bold"
             android:textSize="16sp"
-            android:textColor="@color/poke_white"
+            android:textColor="@color/widget_on_surface"
             android:maxLines="1"
             android:ellipsize="end" />
 
@@ -40,28 +40,30 @@
             android:layout_height="wrap_content"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:textColor="@color/poke_blue"
+            android:textColor="@color/widget_primary"
             android:layout_marginEnd="8dp"
             android:maxLines="1" />
 
         <ImageButton
             android:id="@+id/btn_map"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="@android:color/transparent"
-            android:contentDescription="Open Map"
-            android:tint="@color/poke_blue"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/widget_icon_button_background"
+            android:contentDescription="@string/widget_open_map_cd"
+            android:tint="@color/widget_primary"
             android:src="@drawable/ic_map"
-            android:layout_marginEnd="4dp" />
+            android:padding="10dp"
+            android:layout_marginEnd="8dp" />
 
         <ImageButton
             android:id="@+id/btn_refresh"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:background="@android:color/transparent"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/widget_icon_button_background"
             android:contentDescription="@string/refresh_alerts"
-            android:tint="@color/poke_blue"
-            android:src="@drawable/ic_refresh" />
+            android:tint="@color/widget_primary"
+            android:src="@drawable/ic_refresh"
+            android:padding="10dp" />
     </LinearLayout>
 
     <TextView
@@ -69,7 +71,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="@color/poke_light_gray"
+        android:textColor="@color/widget_on_surface_variant"
         android:maxLines="1"
         android:ellipsize="end"
         android:paddingBottom="8dp"
@@ -97,7 +99,7 @@
             android:id="@+id/tv_empty_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/poke_white"
+            android:textColor="@color/widget_on_surface"
             android:text="@string/widget_empty_title"
             android:gravity="center"
             android:textStyle="bold"
@@ -107,7 +109,7 @@
             android:id="@+id/tv_empty_subtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/poke_light_gray"
+            android:textColor="@color/widget_on_surface_variant"
             android:text="@string/widget_empty_subtitle"
             android:gravity="center"
             android:textSize="12sp"
@@ -126,7 +128,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:divider="@android:color/transparent"
-        android:dividerHeight="8dp"
+        android:dividerHeight="10dp"
         android:transcriptMode="alwaysScroll"
         android:scrollbars="none" />
 

@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -39,6 +40,7 @@ import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -87,6 +89,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -111,12 +114,7 @@ import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
-import androidx.compose.foundation.isSystemInDarkTheme
-import com.example.pokemonalertsv2.ui.theme.EmberGradientEnd
-import com.example.pokemonalertsv2.ui.theme.EmberGradientStart
+import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -242,186 +240,112 @@ fun AlertCard(
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
+    val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val accentBrush = remember(alert.type, alert.isPerfect, alert.isNundo, alert.isSpeciesReplacement, primary, secondary) {
-        when {
-            alert.isSpeciesReplacement -> Brush.horizontalGradient(listOf(Color(0xFF26C6DA), Color(0xFF00ACC1)))
-            alert.isWeatherChange -> Brush.horizontalGradient(listOf(Color(0xFFFF9800), Color(0xFFF57C00)))
-            alert.hasTypeContaining("raid") -> Brush.horizontalGradient(listOf(EmberGradientStart, EmberGradientEnd))
-            alert.hasTypeContaining("shadow") -> Brush.horizontalGradient(listOf(AuroraGradientStart, AuroraGradientEnd))
-            alert.isPerfect -> Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFFFA000)))
-            alert.isNundo -> Brush.horizontalGradient(listOf(Color(0xFF607D8B), Color(0xFF455A64)))
-            else -> Brush.horizontalGradient(listOf(primary, secondary))
-        }
-    }
     val haptic = LocalHapticFeedback.current
+    val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
+    val remaining = endMillis?.minus(nowMillis)
+    val countdown = when {
+        remaining == null -> "TIME --"
+        remaining <= 0 -> "EXPIRED"
+        else -> TimeUtils.formatDurationShort(remaining)
+    }
+    val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
+    val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(4.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
         onClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             onShowDetails()
         },
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(26.dp)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = MaterialTheme.shapes.large
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(6.dp)
-                    .background(accentBrush)
+                    .height(4.dp)
+                    .background(primary)
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .aspectRatio(8f / 5f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                    .clip(MaterialTheme.shapes.large)
             ) {
-                AlertImage(alert = alert, rounded = false)
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
-                            )
-                        )
+                AlertImage(
+                    alert = alert,
+                    rounded = false,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(20.dp)
-                ) {
-                    // Pokemon name with shiny indicator
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = formatAlertTitle(alert),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        if (alert.isShiny == true) {
-                            ShinyBadge()
-                        }
-                    }
-                    
-                    // Pokemon form if available
-                    alert.pokemonForm?.takeIf { it.isNotBlank() }?.let { form ->
-                        Text(
-                            text = form,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Quick stats row
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // IV Badge — show new IV for weather change alerts
-                        val displayCardIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
-                        displayCardIv?.let { iv ->
-                            IvBadge(iv = iv, isPerfect = alert.isPerfect, isNundo = alert.isNundo)
-                        }
-                        
-                        // CP Badge — show new CP for weather change alerts
-                        val displayCardCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
-                        displayCardCp?.let { cp ->
-                            CpBadge(cp = cp, level = alert.level)
-                        }
-                        
-                        // Weather boost indicator
-                        if (alert.isWeatherBoosted == true) {
-                            WeatherBoostBadge()
-                        }
-                        
-                        // Species replacement indicator
-                        if (alert.isSpeciesReplacement) {
-                            AlertPill(
-                                text = "Swap",
-                                containerColor = Color(0xFF26C6DA).copy(alpha = 0.22f),
-                                contentColor = Color.White
-                            )
-                        } else if (alert.isWeatherChange) {
-                            // Weather change indicator
-                            AlertPill(
-                                text = "Weather",
-                                containerColor = Color(0xFFFF9800).copy(alpha = 0.25f),
-                                contentColor = Color.White
-                            )
-                        }
-                        
-                        // Distance
-                        val distanceText = distanceInfo.distanceText
-                        if (!distanceText.isNullOrBlank()) {
-                            DistanceChip(text = distanceText)
-                        }
-                    }
-                }
-                
-                // Top Actions
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Share Button
-                    FilledIconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            onShareClick()
-                        },
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color.Black.copy(alpha = 0.3f),
-                            contentColor = Color.White
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Share,
-                            contentDescription = "Share"
-                        )
-                    }
-
-                    FilledIconButton(
-                        onClick = onOpenMaps,
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = stringResource(id = R.string.open_in_maps)
-                        )
-                    }
-                }
             }
 
-            Column(modifier = Modifier.padding(20.dp)) {
-                // Location info
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = formatAlertTitle(alert),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        alert.pokemonForm?.takeIf { it.isNotBlank() }?.let { form ->
+                            Text(
+                                text = form,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = if (remaining != null && remaining <= 0)
+                            MaterialTheme.colorScheme.errorContainer
+                        else
+                            MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            text = countdown,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            style = MetricTextStyle,
+                            color = if (remaining != null && remaining <= 0)
+                                MaterialTheme.colorScheme.onErrorContainer
+                            else
+                                MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1
+                        )
+                    }
+                }
+
                 alert.locationDisplay?.let { location ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Filled.LocationOn,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(14.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
@@ -429,64 +353,83 @@ fun AlertCard(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
-                AlertMetaRow(alert = alert, distanceInfo = distanceInfo, nowMillis = nowMillis)
-                Spacer(modifier = Modifier.height(20.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    displayIv?.let {
+                        AlertPill(
+                            text = "IV $it",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    AlertPill(
+                        text = visualStyle.label,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    displayCp?.let {
+                        AlertPill(
+                            text = "CP $it",
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let {
+                        AlertPill(
+                            text = it,
+                            painter = painterResource(id = R.drawable.ic_map),
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (onSnoozeClick != null) {
-                        FilledTonalButton(
-                            onClick = {
-                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                                onSnoozeClick()
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(18.dp),
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        FilledIconButton(
+                            onClick = onSnoozeClick,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Notifications,
-                                contentDescription = null,
-                                modifier = Modifier.padding(end = 6.dp)
-                            )
-                            Text(
-                                text = "Snooze",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1
+                                contentDescription = "Snooze alert"
                             )
                         }
                     }
-                    ElevatedButton(
-                        onClick = {
-                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            onOpenMaps()
-                        },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(18.dp),
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                    FilledIconButton(
+                        onClick = onShareClick,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Icon(imageVector = Icons.Filled.Share, contentDescription = "Share")
+                    }
+                    FilledIconButton(
+                        onClick = onOpenMaps,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                        Text(
-                            text = "Maps",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1
+                            contentDescription = stringResource(id = R.string.open_in_maps)
                         )
                     }
                 }
@@ -507,7 +450,7 @@ private fun AlertPill(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.small,
         color = containerColor,
         tonalElevation = 2.dp
     ) {
@@ -633,22 +576,22 @@ suspend fun snoozeAlertFromUi(context: Context, alert: PokemonAlert, minutes: In
 private fun ShinyBadge() {
     AlertPill(
         text = "Shiny",
-        containerColor = Color(0xFFFFD700),
-        contentColor = Color.Black
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.scrim
     )
 }
 
 @Composable
 private fun IvBadge(iv: String, isPerfect: Boolean, isNundo: Boolean) {
     val backgroundColor = when {
-        isPerfect -> Color(0xFFFFD700)
-        isNundo -> Color(0xFF607D8B)
-        else -> Color.White.copy(alpha = 0.2f)
+        isPerfect -> MaterialTheme.colorScheme.primary
+        isNundo -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
     }
     val textColor = when {
-        isPerfect -> Color.Black
-        isNundo -> Color.White
-        else -> Color.White
+        isPerfect -> MaterialTheme.colorScheme.scrim
+        isNundo -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.onSurface
     }
     
     AlertPill(text = iv, containerColor = backgroundColor, contentColor = textColor)
@@ -661,8 +604,8 @@ private fun CpBadge(cp: Int, level: Double?) {
     }.orEmpty()
     AlertPill(
         text = "CP $cp$levelText",
-        containerColor = Color.White.copy(alpha = 0.2f),
-        contentColor = Color.White
+        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+        contentColor = MaterialTheme.colorScheme.onSurface
     )
 }
 
@@ -670,13 +613,18 @@ private fun CpBadge(cp: Int, level: Double?) {
 private fun WeatherBoostBadge() {
     AlertPill(
         text = "Boost",
-        containerColor = Color(0xFF4FC3F7),
-        contentColor = Color(0xFF031B1B)
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.scrim
     )
 }
 
 @Composable
-fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Boolean = true) {
+fun AlertImage(
+    alert: PokemonAlert,
+    modifier: Modifier = Modifier,
+    rounded: Boolean = true,
+    contentScale: ContentScale = ContentScale.Crop
+) {
     val context = LocalContext.current
     val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
     val thumbnailUrl = alert.thumbnailUrl
@@ -689,7 +637,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
     var useFallback by remember(primaryUrl, thumbnailUrl) { mutableStateOf(false) }
 
     val imageHeight = if (rounded) 200.dp else 220.dp
-    val shape = if (rounded) RoundedCornerShape(16.dp) else RoundedCornerShape(0.dp)
+    val shape = if (rounded) MaterialTheme.shapes.large else RectangleShape
     // When rounded=false the caller (detail hero) controls height via its own modifier
     val heightModifier = if (rounded) Modifier.height(imageHeight) else Modifier.fillMaxHeight()
     val showPrimaryImage = primaryUrl != null && !useFallback
@@ -710,10 +658,11 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                 placeholder = painterResource(id = R.drawable.ic_placeholder),
                 error = painterResource(id = R.drawable.ic_placeholder),
                 onError = { useFallback = true },
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
                     .clip(shape)
             )
         }
@@ -752,7 +701,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(Color(0xFF1A1A2E), shape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
                     .clipToBounds()
                     .clip(shape),
                 contentAlignment = Alignment.Center
@@ -762,7 +711,7 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = stringResource(id = R.string.alert_image),
-                        contentScale = ContentScale.Crop,
+                        contentScale = contentScale,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -772,9 +721,9 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                             .background(
                                 Brush.radialGradient(
                                     colors = listOf(
-                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.35f else 0.40f),
-                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.12f else 0.15f),
-                                        Color.Transparent
+                                        MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.14f else 0.18f),
+                                        MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.05f else 0.07f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                     )
                                 )
                             )
@@ -803,138 +752,26 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
             }
         }
 
-/*
-                val density = LocalDensity.current
-                val viewWidthPx = constraints.maxWidth.toFloat()
-                val viewHeightPx = constraints.maxHeight.toFloat()
 
-                // Keep tile size near native OSM resolution
-                val tileSizePx = 256f
-                val tileSizeDp = with(density) { tileSizePx.toDp() }
-
-                // Build a large enough tile grid to fully cover the viewport
-                val tilesAcross = ceil(viewWidthPx / tileSizePx).toInt() + 2
-                val tilesDown = ceil(viewHeightPx / tileSizePx).toInt() + 2
-                // Limit tile grid for card views (rounded=true) to reduce composable count
-                val rawRadius = maxOf(1, maxOf(tilesAcross, tilesDown) / 2)
-                val radius = if (rounded) rawRadius.coerceAtMost(1) else rawRadius
-                val tileRange = -radius..radius
-
-                // For each tile, compute offset so the coordinate lands at view center.
-                // The coordinate is at (fracX, fracY) within the center tile (dx=0, dy=0).
-                // Center tile left edge in view px = viewWidth/2 - fracX * tileSizePx
-                // Tile at (dx, dy) left edge = viewWidth/2 + (dx - fracX) * tileSizePx
-                Box(modifier = Modifier.fillMaxSize()) {
-                    for (dx in tileRange) {
-                        for (dy in tileRange) {
-                            val tileLeftPx = viewWidthPx / 2f + (dx - fracX) * tileSizePx
-                            val tileTopPx = viewHeightPx / 2f + (dy - fracY) * tileSizePx
-                            val tileLeftDp = with(density) { tileLeftPx.toDp() }
-                            val tileTopDp = with(density) { tileTopPx.toDp() }
-
-                            val x = ((centerTileX + dx) % n + n) % n
-                            val y = (centerTileY + dy).coerceIn(0, n - 1)
-                            val tileUrl = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(tileUrl)
-                                    .crossfade(300)
-                                    .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                    .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                    .addHeader("User-Agent", "PokemonAlertsV2/1.0")
-                                    .build(),
-                                contentDescription = null,
-                                contentScale = ContentScale.FillBounds,
-                                modifier = Modifier
-                                    .requiredSize(tileSizeDp)
-                                    .offset(x = tileLeftDp, y = tileTopDp)
-                                    .background(Color(0xFF16213E))
-                            )
-                        }
-                    }
-                }
-                // Scrim overlay — stronger vignette for detail view
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = if (rounded) 0.15f else 0.35f))
-                )
-                // Pokemon sprite overlay (centered = at the coordinate)
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    // Exact coordinate marker (at view center = coordinate location)
-                    Box(
-                        modifier = Modifier
-                            .size(if (rounded) 8.dp else 10.dp)
-                            .background(Color(0xFFFFD700), CircleShape)
-                    )
-
-                    // Radial glow backdrop behind sprite
-                    Box(
-                        modifier = Modifier
-                            .size(if (rounded) 80.dp else 130.dp)
-                            .offset(y = if (rounded) (-8).dp else (-12).dp)
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.30f else 0.40f),
-                                        Color(0xFFFFD700).copy(alpha = if (rounded) 0.10f else 0.15f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-                    if (thumbnailUrl != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(thumbnailUrl)
-                                .crossfade(300)
-                                .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
-                                .diskCachePolicy(coil.request.CachePolicy.ENABLED)
-                                .build(),
-                            contentDescription = stringResource(id = R.string.alert_image),
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .size(if (rounded) 44.dp else 72.dp)
-                                .offset(y = if (rounded) (-8).dp else (-12).dp)
-                        )
-                    } else {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_placeholder),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(if (rounded) 36.dp else 56.dp)
-                                .offset(y = if (rounded) (-8).dp else (-12).dp),
-                            tint = Color.Unspecified
-                        )
-                    }
-                }
-            }
-        }
-
-*/
         // Fallback: thumbnail sprite with dark bg + gold glow
         thumbnailUrl != null -> {
             Box(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(Color(0xFF1A1A2E), shape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
                     .clip(shape),
                 contentAlignment = Alignment.Center
             ) {
-                // Gold radial glow behind sprite
                 Box(
                     modifier = Modifier
                         .size(if (rounded) 120.dp else 240.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.35f else 0.40f),
-                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.12f else 0.15f),
-                                    Color.Transparent
+                                    MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.12f else 0.16f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.04f else 0.06f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                 )
                             )
                         )
@@ -959,20 +796,19 @@ fun AlertImage(alert: PokemonAlert, modifier: Modifier = Modifier, rounded: Bool
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(Color(0xFF1A1A2E), shape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
                     .clip(shape),
                 contentAlignment = Alignment.Center
             ) {
-                // Gold radial glow
                 Box(
                     modifier = Modifier
                         .size(if (rounded) 100.dp else 200.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.30f else 0.38f),
-                                    Color(0xFFFFD700).copy(alpha = if (rounded) 0.10f else 0.12f),
-                                    Color.Transparent
+                                    MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.10f else 0.14f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = if (rounded) 0.04f else 0.05f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                 )
                             )
                         )
@@ -1011,24 +847,14 @@ fun AlertDetailScreen(
             AlertPreferences(context.alertPreferencesDataStore).snoozeDuration.first()
         }
     }
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
-    }
-
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Transparent // Let the Box gradient show through
+        color = MaterialTheme.colorScheme.background
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(containerGradient)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             Column(
                 modifier = Modifier.fillMaxSize()
@@ -1050,8 +876,8 @@ fun AlertDetailScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Black.copy(alpha = 0.6f),
-                                        Color.Transparent
+                                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                                     )
                                 )
                             )
@@ -1066,8 +892,8 @@ fun AlertDetailScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        Color.Transparent,
-                                        Color(0xFF0F172A).copy(alpha = 0.85f) // Lighter so map remains visible
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                                     )
                                 )
                             )
@@ -1086,8 +912,8 @@ fun AlertDetailScreen(
                         FilledIconButton(
                             onClick = { activity?.finish() },
                             colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color.Black.copy(alpha = 0.3f),
-                                contentColor = Color.White
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
                             )
                         ) {
                             Icon(
@@ -1100,18 +926,13 @@ fun AlertDetailScreen(
                             Surface(
                                 onClick = { onEnterPictureInPicture() },
                                 modifier = Modifier.height(36.dp),
-                                shape = RoundedCornerShape(18.dp),
-                                color = Color.Black.copy(alpha = 0.45f),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                                 border = BorderStroke(
                                     1.dp,
-                                    Brush.horizontalGradient(
-                                        listOf(
-                                            AuroraGradientStart.copy(alpha = 0.6f),
-                                            AuroraGradientEnd.copy(alpha = 0.4f)
-                                        )
-                                    )
+                                    MaterialTheme.colorScheme.outlineVariant
                                 ),
-                                contentColor = Color.White,
+                                contentColor = MaterialTheme.colorScheme.onSurface,
                                 tonalElevation = 2.dp
                             ) {
                                 Row(
@@ -1123,14 +944,14 @@ fun AlertDetailScreen(
                                         painter = painterResource(id = R.drawable.ic_pip),
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp),
-                                        tint = Color.White
+                                        tint = MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = stringResource(id = R.string.enter_pip_short),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
@@ -1144,8 +965,8 @@ fun AlertDetailScreen(
                                 .align(Alignment.TopEnd)
                                 .statusBarsPadding()
                                 .padding(16.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            color = Color(0xFFFFD700).copy(alpha = 0.9f)
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.primaryContainer
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -1157,7 +978,7 @@ fun AlertDetailScreen(
                                     text = "SHINY",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.Black
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )
                             }
                         }
@@ -1170,7 +991,7 @@ fun AlertDetailScreen(
                         .fillMaxWidth()
                         .weight(1f) // Fill remaining space
                         .verticalScroll(rememberScrollState())
-                        .background(Color(0xFF0F172A)) // Solid background for text area
+                        .background(MaterialTheme.colorScheme.background)
                         .padding(horizontal = 24.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -1185,14 +1006,14 @@ fun AlertDetailScreen(
                                 text = formatAlertTitle(alert),
                                 style = MaterialTheme.typography.headlineMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                             // Pokemon form if available
                             alert.pokemonForm?.takeIf { it.isNotBlank() }?.let { form ->
                                 Text(
                                     text = form,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             // Pokedex ID
@@ -1216,8 +1037,8 @@ fun AlertDetailScreen(
                                 typeList.forEach { typeName ->
                                     AlertPill(
                                         text = typeName.uppercase(),
-                                        containerColor = getTypeColor(typeName),
-                                        contentColor = Color.White
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                 }
                             }
@@ -1265,7 +1086,7 @@ fun AlertDetailScreen(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
                         ),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = MaterialTheme.shapes.large,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
@@ -1342,7 +1163,7 @@ private fun AlertDetailActionBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color(0xFF0F172A).copy(alpha = 0.96f),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         tonalElevation = 8.dp,
         shadowElevation = 12.dp
     ) {
@@ -1357,7 +1178,7 @@ private fun AlertDetailActionBar(
             FilledTonalButton(
                 onClick = onSnoozeClick,
                 modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
@@ -1373,7 +1194,7 @@ private fun AlertDetailActionBar(
             FilledTonalButton(
                 onClick = onNavigateClick,
                 modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -1389,7 +1210,7 @@ private fun AlertDetailActionBar(
             FilledTonalButton(
                 onClick = onShareClick,
                 modifier = Modifier.weight(1f).height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = MaterialTheme.shapes.medium,
                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -1447,7 +1268,7 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color.Black
+        color = MaterialTheme.colorScheme.scrim
     ) {
         Box(
             modifier = Modifier
@@ -1478,8 +1299,8 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = if (isZoomed) 0.3f else 0.7f)
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = if (isZoomed) 0.3f else 0.7f)
                             )
                         )
                     )
@@ -1498,7 +1319,7 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                 ) {
                     Text(
                         text = formatAlertTitle(alert),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -1508,7 +1329,7 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                             text = pipTimerText,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
-                            color = if (isExpired) MaterialTheme.colorScheme.error else Color.White
+                            color = if (isExpired) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -1523,9 +1344,9 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                     .padding(8.dp)
             ) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.5f),
-                    contentColor = Color.White
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
                     Text(
                         text = "%.1f×".format(scale),
@@ -1541,31 +1362,20 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
 
 @Composable
 private fun getTypeColor(type: String): Color {
-    return when (type.lowercase()) {
-        "hundo" -> Color(0xFFFFD700)
-        "nundo" -> Color(0xFF607D8B)
-        "raid" -> Color(0xFFE91E63)
-        "quest" -> Color(0xFF2196F3)
-        "pvp" -> Color(0xFF9C27B0)
-        "rare", "spawn" -> Color(0xFF4CAF50)
-        "rocket" -> Color(0xFFFF5722)
-        "kecleon" -> Color(0xFF00BCD4)
-        "weatherchange" -> Color(0xFFFF9800)
-        else -> Color(0xFF757575)
-    }
+    return MaterialTheme.colorScheme.primary
 }
 
 @Composable
 private fun StatsCard(alert: PokemonAlert) {
     val isReplacement = alert.isSpeciesReplacement
     val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
-    val accentColor = if (isReplacement) Color(0xFF26C6DA) else Color(0xFFFF9800)
+    val accentColor = MaterialTheme.colorScheme.primary
 
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1584,7 +1394,7 @@ private fun StatsCard(alert: PokemonAlert) {
             // Species replacement banner — shows old species info
             if (isReplacement) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = accentColor.copy(alpha = 0.10f),
                     border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
                     modifier = Modifier.fillMaxWidth()
@@ -1635,7 +1445,7 @@ private fun StatsCard(alert: PokemonAlert) {
                         value = iv,
                         subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
                         highlight = alert.isPerfect,
-                        highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) Color(0xFFFFD700) else if (alert.isNundo) Color(0xFF607D8B) else null
+                        highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) MaterialTheme.colorScheme.primary else if (alert.isNundo) MaterialTheme.colorScheme.onSurfaceVariant else null
                     )
                 }
                 
@@ -1656,14 +1466,14 @@ private fun StatsCard(alert: PokemonAlert) {
                         StatItem(
                             label = "100% L20",
                             value = l20.toString(),
-                            highlightColor = Color(0xFFFFD700)
+                            highlightColor = MaterialTheme.colorScheme.primary
                         )
                     }
                     alert.hundoCP.level25?.let { l25 ->
                         StatItem(
                             label = "100% L25",
                             value = l25.toString(),
-                            highlightColor = Color(0xFFFFD700)
+                            highlightColor = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -1742,7 +1552,7 @@ private fun IvBar(label: String, value: Int, maxValue: Int) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .clip(MaterialTheme.shapes.extraSmall)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Box(
@@ -1751,10 +1561,10 @@ private fun IvBar(label: String, value: Int, maxValue: Int) {
                     .height(8.dp)
                     .background(
                         when {
-                            value == 15 -> Color(0xFFFFD700)
-                            value >= 13 -> Color(0xFF4CAF50)
-                            value >= 10 -> Color(0xFFFFC107)
-                            else -> Color(0xFFFF5722)
+                            value == 15 -> MaterialTheme.colorScheme.primary
+                            value >= 13 -> MaterialTheme.colorScheme.primary
+                            value >= 10 -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.primary
                         }
                     )
             )
@@ -1774,7 +1584,7 @@ private fun WeatherAndGenderCard(alert: PokemonAlert) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1790,7 +1600,7 @@ private fun WeatherAndGenderCard(alert: PokemonAlert) {
                     Text(
                         text = "Weather Boosted",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF4FC3F7)
+                        color = MaterialTheme.colorScheme.primary
                     )
                     alert.currentWeather?.let { weather ->
                         Text(
@@ -1830,7 +1640,7 @@ private fun MovesCard(moves: PokemonMoves) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1854,13 +1664,13 @@ private fun MovesCard(moves: PokemonMoves) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF4CAF50).copy(alpha = 0.2f)
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ) {
                         Text(
                             text = "FAST",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF4CAF50),
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
@@ -1881,13 +1691,13 @@ private fun MovesCard(moves: PokemonMoves) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFFE91E63).copy(alpha = 0.2f)
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ) {
                         Text(
                             text = "CHARGED",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFE91E63),
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
@@ -1909,7 +1719,7 @@ private fun LocationCard(alert: PokemonAlert) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1976,7 +1786,7 @@ private fun QuestCard(alert: PokemonAlert) {
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -1992,13 +1802,13 @@ private fun QuestCard(alert: PokemonAlert) {
                 )
                 if (alert.requiresAR == true) {
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFFFF9800)
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.primary
                     ) {
                         Text(
                             text = "AR",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -2019,7 +1829,7 @@ private fun QuestCard(alert: PokemonAlert) {
                 Text(
                     text = "Reward: $reward",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF4CAF50),
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -2034,9 +1844,9 @@ private fun RocketCard(
 ) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF1A1A2E)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -2053,13 +1863,13 @@ private fun RocketCard(
                     Text(
                         text = "Team GO Rocket",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color(0xFFE91E63)
+                        color = MaterialTheme.colorScheme.primary
                     )
                     if (gruntType?.isNotBlank() == true) {
                         Text(
                             text = gruntType,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -2068,20 +1878,20 @@ private fun RocketCard(
 
             // Pokemon Rewards
             if (!pokemonRewards.isNullOrEmpty()) {
-                HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
 
                 Text(
                     text = "Possible Rewards",
                     style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
 
                 pokemonRewards.forEach { reward ->
                     val rarityColor = when (reward.rarity?.lowercase()) {
-                        "common" -> Color(0xFF4CAF50)
-                        "rare" -> Color(0xFFFFD700)
-                        "legendary", "ultra rare" -> Color(0xFFE040FB)
-                        else -> Color(0xFF90A4AE)
+                        "common" -> MaterialTheme.colorScheme.primary
+                        "rare" -> MaterialTheme.colorScheme.primary
+                        "legendary", "ultra rare" -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
 
                     Row(
@@ -2100,7 +1910,7 @@ private fun RocketCard(
                         Text(
                             text = reward.pokemon ?: "Unknown",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.weight(1f)
                         )
@@ -2120,7 +1930,7 @@ private fun RocketCard(
                             Text(
                                 text = "$pct%",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color.White.copy(alpha = 0.9f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
                                 fontWeight = FontWeight.Bold
                             )
                         }
@@ -2133,15 +1943,15 @@ private fun RocketCard(
                                 .fillMaxWidth()
                                 .height(4.dp)
                                 .background(
-                                    Color.White.copy(alpha = 0.08f),
-                                    RoundedCornerShape(2.dp)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                    MaterialTheme.shapes.extraSmall
                                 )
                         ) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(fraction = (pct / 100f).coerceIn(0f, 1f))
                                     .height(4.dp)
-                                    .background(rarityColor, RoundedCornerShape(2.dp))
+                                    .background(rarityColor, MaterialTheme.shapes.extraSmall)
                             )
                         }
                     }
@@ -2157,7 +1967,7 @@ private fun PvpRankingsCard(rankings: List<com.example.pokemonalertsv2.data.PvpR
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -2199,15 +2009,15 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val leagueColor = when {
-                ranking.league?.contains("Great", ignoreCase = true) == true -> Color(0xFF2196F3)
-                ranking.league?.contains("Ultra", ignoreCase = true) == true -> Color(0xFFFFD700)
-                ranking.league?.contains("Master", ignoreCase = true) == true -> Color(0xFF9C27B0)
-                ranking.league?.contains("Little", ignoreCase = true) == true -> Color(0xFFFF9800)
+                ranking.league?.contains("Great", ignoreCase = true) == true -> MaterialTheme.colorScheme.primary
+                ranking.league?.contains("Ultra", ignoreCase = true) == true -> MaterialTheme.colorScheme.primary
+                ranking.league?.contains("Master", ignoreCase = true) == true -> MaterialTheme.colorScheme.primary
+                ranking.league?.contains("Little", ignoreCase = true) == true -> MaterialTheme.colorScheme.primary
                 else -> MaterialTheme.colorScheme.primary
             }
             
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = MaterialTheme.shapes.small,
                 color = leagueColor.copy(alpha = 0.15f)
             ) {
                 Text(
@@ -2228,9 +2038,9 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
                     else -> "#$rank"
                 }
                 val rankColor = when (rank) {
-                    1 -> Color(0xFFFFD700)
-                    2 -> Color(0xFFC0C0C0)
-                    3 -> Color(0xFFCD7F32)
+                    1 -> MaterialTheme.colorScheme.primary
+                    2 -> MaterialTheme.colorScheme.onSurfaceVariant
+                    3 -> MaterialTheme.colorScheme.primary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
                 
@@ -2241,7 +2051,7 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
                     )
                 } else {
                     Surface(
-                        shape = RoundedCornerShape(6.dp),
+                        shape = MaterialTheme.shapes.extraSmall,
                         color = MaterialTheme.colorScheme.primaryContainer
                     ) {
                         Text(
@@ -2422,8 +2232,8 @@ fun DistanceChip(text: String) {
     AlertPill(
         text = text,
         painter = painterResource(id = R.drawable.ic_map),
-        containerColor = Color.White.copy(alpha = 0.15f),
-        contentColor = Color.White
+        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+        contentColor = MaterialTheme.colorScheme.onSurface
     )
 }
 

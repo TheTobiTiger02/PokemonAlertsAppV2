@@ -1,49 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Drop Shadow (Simulated) -->
+
     <path
-        android:fillColor="#33000000"
-        android:pathData="M54,94 C70,94 86,90 86,86 C86,82 70,84 54,84 C38,84 22,82 22,86 C22,90 38,94 54,94 Z" />
+        android:fillColor="@color/launcher_primary"
+        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68" />
 
-    <!-- Pokeball Group -->
-    <group>
-        <!-- Top Half (Red) -->
-        <path
-            android:fillColor="#F44336"
-            android:pathData="M18,54 A36,36 0 0 1 90,54 L90,54 L18,54 Z" />
-        
-        <!-- Bottom Half (White) -->
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M18,54 A36,36 0 0 0 90,54 L90,54 L18,54 Z" />
-            
-        <!-- Center Band (Dark Blue-Grey) -->
-        <path
-            android:fillColor="#263238"
-            android:pathData="M18,50 L90,50 L90,58 L18,58 Z" />
-            
-        <!-- Button Outer (Dark Blue-Grey) -->
-        <path
-            android:fillColor="#263238"
-            android:pathData="M54,54m-12,0a12,12 0 1,1 24,0a12,12 0 1,1 -24,0" />
-            
-        <!-- Button Inner (White) -->
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M54,54m-8,0a8,8 0 1,1 16,0a8,8 0 1,1 -16,0" />
-            
-        <!-- Button Core (Light Grey/Blink) -->
-        <path
-            android:fillColor="#ECEFF1"
-            android:pathData="M54,54m-5,0a5,5 0 1,1 10,0a5,5 0 1,1 -10,0" />
+    <path
+        android:fillColor="@color/launcher_background"
+        android:pathData="M20,50h68v8h-68z" />
 
-        <!-- Reflection/Highlight (Subtle) -->
-        <path
-            android:fillColor="#33FFFFFF"
-            android:pathData="M35,35 A20,20 0 0 1 50,25 L45,30 A15,15 0 0 0 35,35 Z" />
-    </group>
+    <path
+        android:fillColor="@color/launcher_background"
+        android:pathData="M54,42a12,12 0,1 1,0 24a12,12 0,1 1,0 -24" />
+
+    <path
+        android:fillColor="@color/launcher_primary"
+        android:pathData="M54,48a6,6 0,1 1,0 12a6,6 0,1 1,0 -12" />
 </vector>

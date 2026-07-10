@@ -1,24 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportHeight="108"
-    android:tint="#FFFFFF">
-    
-    <group>
-        <!-- Top Half -->
-        <path
-            android:fillColor="#FF000000"
-            android:pathData="M18,54 A36,36 0 0 1 90,54 L90,50 L18,50 Z" />
-            
-        <!-- Bottom Half -->
-        <path
-            android:fillColor="#FF000000"
-            android:pathData="M18,58 L90,58 L90,54 A36,36 0 0 0 18,54 Z" />
-            
-        <!-- Button Inner -->
-        <path
-            android:fillColor="#FF000000"
-            android:pathData="M54,54m-8,0a8,8 0 1,1 16,0a8,8 0 1,1 -16,0" />
-    </group>
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M54,20a34,34 0,1 1,0 68a34,34 0,1 1,0 -68" />
+
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="8"
+        android:pathData="M20,54h68" />
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,42a12,12 0,1 1,0 24a12,12 0,1 1,0 -24" />
 </vector>

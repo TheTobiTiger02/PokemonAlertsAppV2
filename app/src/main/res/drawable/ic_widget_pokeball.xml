@@ -1,45 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="100"
-    android:viewportHeight="100">
-
+    android:viewportWidth="24"
+    android:viewportHeight="24">
     <path
-        android:fillColor="#111827"
-        android:pathData="M50,50m-42,0a42,42 0,1 1,84 0a42,42 0,1 1,-84 0" />
-
+        android:fillColor="@color/widget_primary"
+        android:pathData="M12,2.5a9.5,9.5 0,1 1,0 19a9.5,9.5 0,1 1,0 -19" />
     <path
-        android:fillColor="#F43F5E"
-        android:pathData="M50,12c-20.1,0 -36.6,15.6 -37.9,35.4h75.8C86.6,27.6 70.1,12 50,12z" />
-
+        android:fillColor="@color/widget_background"
+        android:pathData="M3,11h18v2h-18z" />
     <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M12.1,52.6C13.4,72.4 29.9,88 50,88s36.6,-15.6 37.9,-35.4H12.1z" />
-
+        android:fillColor="@color/widget_background"
+        android:pathData="M12,7.5a4.5,4.5 0,1 1,0 9a4.5,4.5 0,1 1,0 -9" />
     <path
-        android:fillColor="#0F172A"
-        android:pathData="M12.1,45.8h75.8c0.1,1.4 0.1,2.8 0,4.2 0.1,1.4 0.1,2.8 0,4.2H12.1c-0.1,-1.4 -0.1,-2.8 0,-4.2 -0.1,-1.4 -0.1,-2.8 0,-4.2z" />
-
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.28"
-        android:pathData="M31,19.6c-7.1,4.3 -12.2,11.4 -14,19.7h13.2c2,-4.6 5.4,-8.5 9.6,-11.2 2.6,-1.7 3.4,-5.1 1.9,-7.8 -1.7,-3 -6.1,-3.5 -10.7,-0.7z" />
-
-    <path
-        android:fillColor="#111827"
-        android:pathData="M50,50m-17.5,0a17.5,17.5 0,1 1,35 0a17.5,17.5 0,1 1,-35 0" />
-
-    <path
-        android:fillColor="#F8FAFC"
-        android:pathData="M50,50m-11.5,0a11.5,11.5 0,1 1,23 0a11.5,11.5 0,1 1,-23 0" />
-
-    <path
-        android:fillColor="#CBD5E1"
-        android:pathData="M50,50m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
-
-    <path
-        android:fillColor="@android:color/transparent"
-        android:strokeColor="#020617"
-        android:strokeWidth="3.5"
-        android:pathData="M50,50m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+        android:fillColor="@color/widget_primary"
+        android:pathData="M12,10a2,2 0,1 1,0 4a2,2 0,1 1,0 -4" />
 </vector>

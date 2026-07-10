@@ -11,9 +11,13 @@ import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -42,16 +46,22 @@ class AlertDetailActivity : ComponentActivity() {
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         setContent {
             PokemonAlertsV2Theme {
-                currentAlert?.let { alert ->
-                    AlertDetailScreen(
-                        alert = alert,
-                        isInPictureInPicture = isInPipMode || isInPictureInPictureMode,
-                        onEnterPictureInPicture = if (canEnterPictureInPicture) {
-                            { enterImagePictureInPicture() }
-                        } else {
-                            null
-                        }
-                    )
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                    contentColor = MaterialTheme.colorScheme.onBackground
+                ) {
+                    currentAlert?.let { alert ->
+                        AlertDetailScreen(
+                            alert = alert,
+                            isInPictureInPicture = isInPipMode || isInPictureInPictureMode,
+                            onEnterPictureInPicture = if (canEnterPictureInPicture) {
+                                { enterImagePictureInPicture() }
+                            } else {
+                                null
+                            }
+                        )
+                    }
                 }
             }
         }

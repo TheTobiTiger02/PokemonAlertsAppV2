@@ -15,8 +15,8 @@
 
         <ImageView
             android:id="@+id/img_logo_compact"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_marginEnd="8dp"
             android:src="@drawable/ic_widget_pokeball"
             android:contentDescription="@string/widget_logo_cd" />
@@ -29,18 +29,19 @@
             android:text="@string/widget_title"
             android:textStyle="bold"
             android:textSize="14sp"
-            android:textColor="@color/poke_white"
+            android:textColor="@color/widget_on_surface"
             android:maxLines="1"
             android:ellipsize="end" />
 
         <ImageButton
             android:id="@+id/btn_refresh_compact"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:background="@android:color/transparent"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/widget_icon_button_background"
             android:contentDescription="@string/refresh_alerts"
-            android:tint="@color/poke_blue"
-            android:src="@drawable/ic_refresh" />
+            android:tint="@color/widget_primary"
+            android:src="@drawable/ic_refresh"
+            android:padding="10dp" />
     </LinearLayout>
 
     <!-- Count display -->
@@ -50,7 +51,7 @@
         android:layout_height="wrap_content"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:textColor="@color/poke_blue"
+        android:textColor="@color/widget_primary"
         android:layout_marginTop="8dp"
         android:maxLines="1" />
 
@@ -59,8 +60,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textSize="12sp"
-        android:textColor="@color/poke_light_gray"
-        android:text="active alerts"
+        android:textColor="@color/widget_on_surface_variant"
+        android:text="@string/widget_active_alerts_label"
         android:layout_marginTop="2dp"
         android:maxLines="1" />
 

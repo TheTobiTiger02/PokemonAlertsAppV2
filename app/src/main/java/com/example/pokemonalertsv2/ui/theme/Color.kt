@@ -2,67 +2,85 @@ package com.example.pokemonalertsv2.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Primary brand palette — inspired by nighttime sky encounters
-val MidnightNavy = Color(0xFF050816)
-val TwilightIndigo = Color(0xFF151B36)
-val NebulaPurple = Color(0xFF7A5BFF)
-val AuroraViolet = Color(0xFF9F6BFF)
-val StardustBlue = Color(0xFF5BCBFF)
-val ElectricCyan = Color(0xFF2ED8C3)
-val LuminousAmber = Color(0xFFFFB454)
-val EmberOrange = Color(0xFFFF784F)
-val RadiantRose = Color(0xFFFF7D9D)
+/**
+ * Static Material 3 palettes for Pokemon Alerts.
+ *
+ * The product deliberately keeps an electric-blue primary across devices instead of
+ * inheriting dynamic wallpaper colours. Secondary and tertiary roles are neutral so
+ * alert type is communicated by copy and iconography, not a rainbow of card colours.
+ */
 
-// Surface layers
-val SurfaceBase = Color(0xFF0F1428)
-val SurfaceElevated = Color(0xFF171E35)
-val SurfaceHighest = Color(0xFF1F2844)
-val SurfaceOutline = Color(0xFF293255)
-val SurfaceDim = Color(0xFF0A0F1F)
+// Light palette
+val LuminousBackground = Color(0xFFFAF9FD)
+val LuminousSurface = Color(0xFFFAF9FD)
+val LuminousSurfaceDim = Color(0xFFDBD9DE)
+val LuminousSurfaceBright = Color(0xFFFAF9FD)
+val LuminousSurfaceContainerLowest = Color(0xFFFFFFFF)
+val LuminousSurfaceContainerLow = Color(0xFFF4F3F7)
+val LuminousSurfaceContainer = Color(0xFFEFEFF3)
+val LuminousSurfaceContainerHigh = Color(0xFFE9E8EC)
+val LuminousSurfaceContainerHighest = Color(0xFFE3E2E6)
+val LuminousOnSurface = Color(0xFF1A1B20)
+val LuminousOnSurfaceVariant = Color(0xFF44474E)
+val LuminousInverseSurface = Color(0xFF2F3036)
+val LuminousInverseOnSurface = Color(0xFFF2F0F4)
+val LuminousOutline = Color(0xFF74777F)
+val LuminousOutlineVariant = Color(0xFFC4C6CF)
 
-// Light counterparts for dynamic palette
-val LightSky = Color(0xFFF5F7FF)
-val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFE8EAF6)
-val LightOutline = Color(0xFFE0E5FF)
-val LightPrimary = Color(0xFF4734FF)
-val LightSecondary = Color(0xFF0061FF)
+val LuminousPrimary = Color(0xFF0058BE)
+val LuminousOnPrimary = Color.White
+val LuminousPrimaryContainer = Color(0xFFD7E2FF)
+val LuminousOnPrimaryContainer = Color(0xFF001B3F)
+val LuminousInversePrimary = Color(0xFFADC6FF)
+val LuminousSecondary = Color(0xFF565E70)
+val LuminousOnSecondary = Color.White
+val LuminousSecondaryContainer = Color(0xFFDAE2F8)
+val LuminousOnSecondaryContainer = Color(0xFF131C2B)
+val LuminousTertiary = Color(0xFF4F5F78)
+val LuminousOnTertiary = Color.White
+val LuminousTertiaryContainer = Color(0xFFD7E3FF)
+val LuminousOnTertiaryContainer = Color(0xFF0A1C35)
+val LuminousError = Color(0xFFBA1A1A)
+val LuminousOnError = Color.White
+val LuminousErrorContainer = Color(0xFFFFDAD6)
+val LuminousOnErrorContainer = Color(0xFF410002)
 
-// Light Theme Containers & Content
-val LavenderMist = Color(0xFFEBE6FF)
-val MidnightViolet = Color(0xFF22005D)
-val SkyMist = Color(0xFFD6EFFF)
-val DeepOcean = Color(0xFF001E31)
-val PeachMist = Color(0xFFFFDCC2)
-val BurntSienna = Color(0xFF3A1A00)
+// Dark palette
+val MidnightBackground = Color(0xFF121318)
+val MidnightSurface = Color(0xFF121318)
+val MidnightSurfaceDim = Color(0xFF121318)
+val MidnightSurfaceBright = Color(0xFF38393F)
+val MidnightSurfaceContainerLowest = Color(0xFF0D0E13)
+val MidnightSurfaceContainerLow = Color(0xFF1A1B20)
+val MidnightSurfaceContainer = Color(0xFF1E1F24)
+val MidnightSurfaceContainerHigh = Color(0xFF292A2F)
+val MidnightSurfaceContainerHighest = Color(0xFF33343A)
+val MidnightOnSurface = Color(0xFFE3E2E6)
+val MidnightOnSurfaceVariant = Color(0xFFC4C6CF)
+val MidnightInverseSurface = Color(0xFFE3E2E6)
+val MidnightInverseOnSurface = Color(0xFF2F3036)
+val MidnightOutline = Color(0xFF8E9099)
+val MidnightOutlineVariant = Color(0xFF44474E)
 
-// Semantic colors
-val SuccessGreen = Color(0xFF34C473)
-val WarningAmber = Color(0xFFFFC85C)
-val DangerRed = Color(0xFFFF5F6D)
+val MidnightPrimary = Color(0xFFADC6FF)
+val MidnightOnPrimary = Color(0xFF002E6A)
+val MidnightPrimaryContainer = Color(0xFF00458F)
+val MidnightOnPrimaryContainer = Color(0xFFD7E2FF)
+val MidnightInversePrimary = Color(0xFF0058BE)
+val MidnightSecondary = Color(0xFFBEC6DA)
+val MidnightOnSecondary = Color(0xFF283142)
+val MidnightSecondaryContainer = Color(0xFF3E4758)
+val MidnightOnSecondaryContainer = Color(0xFFDAE2F8)
+val MidnightTertiary = Color(0xFFB9C7E4)
+val MidnightOnTertiary = Color(0xFF223149)
+val MidnightTertiaryContainer = Color(0xFF39495F)
+val MidnightOnTertiaryContainer = Color(0xFFD7E3FF)
+val MidnightError = Color(0xFFFFB4AB)
+val MidnightOnError = Color(0xFF690005)
+val MidnightErrorContainer = Color(0xFF93000A)
+val MidnightOnErrorContainer = Color(0xFFFFDAD6)
 
-// Gradient anchors for shared UI flourishes
-val AuroraGradientStart = Color(0xFF4820A8)
-val AuroraGradientMid = Color(0xFF3055FF)
-val AuroraGradientEnd = Color(0xFF1EC7FF)
-val EmberGradientStart = Color(0xFFFF6A3D)
-val EmberGradientEnd = Color(0xFFFFC154)
-
-// Light Theme Gradients
-val DaySkyStart = Color(0xFFFFFFFF)
-val DaySkyMid = Color(0xFFF0F4FF)
-val DaySkyEnd = Color(0xFFE0E7FF)
-
-
-// Text Colors
-val PokeWhite = Color(0xFFFFFFFF)
-val PokeLightGray = Color(0xFFE0E0E0)
-val PokeDarkGray = Color(0xFFAAAAAA)
-
-// Legacy colors (kept for compatibility / widgets)
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Semantic feedback colours. These never identify an alert category.
+val SuccessGreen = Color(0xFF2E7D32)
+val WarningAmber = Color(0xFF8A5A00)
+val DangerRed = LuminousError

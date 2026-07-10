@@ -1,17 +1,14 @@
 package com.example.pokemonalertsv2.ui.settings
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,8 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
@@ -28,7 +23,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Surface
@@ -36,9 +30,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
@@ -46,8 +37,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -61,18 +50,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientEnd
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientMid
-import com.example.pokemonalertsv2.ui.theme.AuroraGradientStart
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -111,37 +94,22 @@ fun SettingsScreen(
     val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
 
-    val containerGradient = remember {
-        Brush.verticalGradient(
-            listOf(
-                AuroraGradientStart,
-                AuroraGradientMid,
-                AuroraGradientEnd.copy(alpha = 0.85f)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(containerGradient)
-    ) {
-        Scaffold(
+    Scaffold(
             modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-            containerColor = Color.Transparent,
+            containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
                     title = { Text("Settings", fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        FilledIconButton(onClick = onBackClick, shape = CircleShape) {
+                        FilledIconButton(onClick = onBackClick) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        scrolledContainerColor = MaterialTheme.colorScheme.primary
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        navigationIconContentColor = MaterialTheme.colorScheme.primary,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface
                     ),
                     scrollBehavior = scrollBehavior
                 )
@@ -363,7 +331,6 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
-    }
 }
 
 @Composable
@@ -371,20 +338,26 @@ fun SettingsSection(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            fontWeight = FontWeight.Bold
-        )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.1f), MaterialTheme.shapes.medium)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
             content()
         }
     }
@@ -398,7 +371,10 @@ fun SwitchSetting(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) {}
+            .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -429,18 +405,19 @@ private fun SilenceNotificationsCard(
     onSilenceFor: (Int) -> Unit,
     onClearSilence: () -> Unit
 ) {
-    val context = LocalContext.current
     val now = System.currentTimeMillis()
     val isSilenced = silenceUntil > now
     
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isSilenced) 
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                MaterialTheme.colorScheme.errorContainer
             else 
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.05f)
-        )
+                MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -592,7 +569,6 @@ private fun CustomSilenceDialog(
     onDismiss: () -> Unit,
     onSilenceFor: (Int) -> Unit
 ) {
-    val context = LocalContext.current
     var showDurationPicker by remember { mutableStateOf(false) }
     var showDateTimePicker by remember { mutableStateOf(false) }
     
@@ -775,8 +751,8 @@ private fun DurationPickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = String.format("%02d", hour),
@@ -792,6 +768,7 @@ private fun DurationPickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedHours = hour }
+                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -838,8 +815,8 @@ private fun DurationPickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = String.format("%02d", minute),
@@ -855,6 +832,7 @@ private fun DurationPickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedMinutes = minute }
+                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1144,8 +1122,8 @@ private fun DateTimePickerDialog(
                                             color = if (isSelected) 
                                                 MaterialTheme.colorScheme.primaryContainer 
                                             else 
-                                                Color.Transparent,
-                                            shape = RoundedCornerShape(8.dp)
+                                                MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = MaterialTheme.shapes.small
                                         ) {
                                             Text(
                                                 text = String.format("%02d", hour),
@@ -1161,6 +1139,7 @@ private fun DateTimePickerDialog(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable { selectedHour = hour }
+                                                    .heightIn(min = 48.dp)
                                                     .padding(vertical = 8.dp),
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                             )
@@ -1207,8 +1186,8 @@ private fun DateTimePickerDialog(
                                             color = if (isSelected) 
                                                 MaterialTheme.colorScheme.primaryContainer 
                                             else 
-                                                Color.Transparent,
-                                            shape = RoundedCornerShape(8.dp)
+                                                MaterialTheme.colorScheme.surfaceVariant,
+                                            shape = MaterialTheme.shapes.small
                                         ) {
                                             Text(
                                                 text = String.format("%02d", minute),
@@ -1224,6 +1203,7 @@ private fun DateTimePickerDialog(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
                                                     .clickable { selectedMinute = minute }
+                                                    .heightIn(min = 48.dp)
                                                     .padding(vertical = 8.dp),
                                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                             )
@@ -1349,8 +1329,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = String.format("%02d", day),
@@ -1366,6 +1346,7 @@ private fun CustomDatePickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedDay = day }
+                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1412,8 +1393,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = monthNames[month],
@@ -1439,6 +1420,7 @@ private fun CustomDatePickerDialog(
                                                         selectedDay = newDaysInMonth
                                                     }
                                                 }
+                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1485,8 +1467,8 @@ private fun CustomDatePickerDialog(
                                         color = if (isSelected) 
                                             MaterialTheme.colorScheme.primaryContainer 
                                         else 
-                                            Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp)
+                                            MaterialTheme.colorScheme.surfaceVariant,
+                                        shape = MaterialTheme.shapes.small
                                     ) {
                                         Text(
                                             text = year.toString(),
@@ -1502,6 +1484,7 @@ private fun CustomDatePickerDialog(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .clickable { selectedYear = year }
+                                                .heightIn(min = 48.dp)
                                                 .padding(vertical = 8.dp),
                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
@@ -1588,6 +1571,7 @@ private fun TypeFilterSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { expanded = !expanded }
+                .heightIn(min = 48.dp)
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically

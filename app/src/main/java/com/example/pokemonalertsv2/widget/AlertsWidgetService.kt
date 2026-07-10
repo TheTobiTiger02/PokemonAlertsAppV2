@@ -7,9 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.RadialGradient
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.location.Location
 import android.util.LruCache
@@ -47,10 +45,12 @@ private class AlertsFactory(
     private var walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 
     // Colors
-    private val colorWhite by lazy { ContextCompat.getColor(context, R.color.poke_white) }
-    private val colorRed by lazy { ContextCompat.getColor(context, R.color.poke_red) }
-    private val colorYellow by lazy { ContextCompat.getColor(context, R.color.poke_yellow) }
-    private val colorBlue by lazy { ContextCompat.getColor(context, R.color.poke_blue) }
+    private val colorOnSurface by lazy { ContextCompat.getColor(context, R.color.widget_on_surface) }
+    private val colorError by lazy { ContextCompat.getColor(context, R.color.widget_error) }
+    private val colorWarning by lazy { ContextCompat.getColor(context, R.color.widget_warning) }
+    private val colorPrimary by lazy { ContextCompat.getColor(context, R.color.widget_primary) }
+    private val fallbackBackground by lazy { ContextCompat.getColor(context, R.color.widget_fallback_background) }
+    private val fallbackAccent by lazy { ContextCompat.getColor(context, R.color.widget_primary_container) }
 
     // Corner radius for image clipping (in pixels)
     private val cornerRadiusPx by lazy { (12 * context.resources.displayMetrics.density) }
@@ -105,14 +105,14 @@ private class AlertsFactory(
                 // Color coding for urgency
                 val minutesLeft = remaining / 1000 / 60
                 val timeColor = when {
-                    minutesLeft < 5 -> colorRed
-                    minutesLeft < 15 -> colorYellow
-                    else -> colorBlue
+                    minutesLeft < 5 -> colorError
+                    minutesLeft < 15 -> colorWarning
+                    else -> colorPrimary
                 }
                 views.setTextColor(R.id.item_time, timeColor)
             } else {
                 views.setTextViewText(R.id.item_time, "Ended")
-                views.setTextColor(R.id.item_time, colorWhite)
+                views.setTextColor(R.id.item_time, colorOnSurface)
             }
         } else {
             views.setTextViewText(R.id.item_time, "")
@@ -271,19 +271,13 @@ private class AlertsFactory(
         val cx = size / 2f
         val cy = size / 2f
 
-        // Dark background
-        canvas.drawColor(0xFF1A1A2E.toInt())
-
-        // Gold radial glow
-        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val glowRadius = size * 0.55f
-        glowPaint.shader = RadialGradient(
-            cx, cy, glowRadius,
-            intArrayOf(0x66FFD700.toInt(), 0x26FFD700.toInt(), 0x00000000),
-            floatArrayOf(0f, 0.5f, 1f),
-            Shader.TileMode.CLAMP
+        canvas.drawColor(fallbackBackground)
+        canvas.drawCircle(
+            cx,
+            cy,
+            size * 0.31f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fallbackAccent }
         )
-        canvas.drawCircle(cx, cy, glowRadius, glowPaint)
 
         // Draw Pokéball icon from vector drawable
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_placeholder)
