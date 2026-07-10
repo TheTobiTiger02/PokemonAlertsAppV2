@@ -272,8 +272,8 @@ fun AlertCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(8f / 5f)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+                    .height(144.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 AlertImage(
                     alert = alert,
@@ -281,6 +281,39 @@ fun AlertCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                ) {
+                    Text(
+                        text = visualStyle.label,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                    shape = MaterialTheme.shapes.small,
+                    color = if (remaining != null && remaining <= 0) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    }
+                ) {
+                    Text(
+                        text = countdown,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MetricTextStyle,
+                        color = if (remaining != null && remaining <= 0) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        },
+                        maxLines = 1
+                    )
+                }
             }
 
             Column(
@@ -311,24 +344,6 @@ fun AlertCard(
                                 maxLines = 1
                             )
                         }
-                    }
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = if (remaining != null && remaining <= 0)
-                            MaterialTheme.colorScheme.errorContainer
-                        else
-                            MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Text(
-                            text = countdown,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                            style = MetricTextStyle,
-                            color = if (remaining != null && remaining <= 0)
-                                MaterialTheme.colorScheme.onErrorContainer
-                            else
-                                MaterialTheme.colorScheme.onSecondaryContainer,
-                            maxLines = 1
-                        )
                     }
                 }
 
@@ -381,6 +396,9 @@ fun AlertCard(
                             isPrimary = true
                         )
                     }
+                    distanceInfo.walkingText?.takeIf { it.isNotBlank() }?.let {
+                        AlertPill(text = it, isPrimary = false)
+                    }
                 }
 
                 Row(
@@ -391,6 +409,7 @@ fun AlertCard(
                     if (onSnoozeClick != null) {
                         FilledIconButton(
                             onClick = onSnoozeClick,
+                            modifier = Modifier.size(48.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -404,6 +423,7 @@ fun AlertCard(
                     }
                     FilledIconButton(
                         onClick = onShareClick,
+                        modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -413,6 +433,7 @@ fun AlertCard(
                     }
                     FilledIconButton(
                         onClick = onOpenMaps,
+                        modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -623,6 +644,7 @@ fun AlertImage(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
+    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
     val thumbnailUrl = alert.thumbnailUrl
     val lat = alert.latitude
@@ -711,6 +733,13 @@ fun AlertImage(
                         contentScale = contentScale,
                         modifier = Modifier.fillMaxSize()
                     )
+                    if (darkTheme) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.34f))
+                        )
+                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -835,7 +864,7 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
-    val actionBarClearance = 96.dp +
+    val actionBarClearance = 84.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -862,7 +891,7 @@ fun AlertDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)
+                        .height(240.dp)
                 ) {
                     AlertImage(alert = alert, rounded = false, modifier = Modifier.fillMaxSize())
                     
@@ -991,8 +1020,8 @@ fun AlertDetailScreen(
                         .weight(1f) // Fill remaining space
                         .verticalScroll(rememberScrollState())
                         .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // Pokemon Name and Type Badge Row
                     Row(
@@ -1099,10 +1128,10 @@ fun AlertDetailScreen(
                             CountdownAndEndTimeRow(alert = alert, nowMillis = statusNow)
                             
                             // Created at timestamp
-                            alert.createdAt?.takeIf { it.isNotBlank() }?.let { created ->
+                            TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Posted: $created",
+                                    text = posted,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -1170,14 +1199,14 @@ private fun AlertDetailActionBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 14.dp)
-                .height(64.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .height(56.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             FilledTonalButton(
                 onClick = onSnoozeClick,
-                modifier = Modifier.weight(1f).height(64.dp),
+                modifier = Modifier.weight(0.8f).height(56.dp),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -1205,7 +1234,7 @@ private fun AlertDetailActionBar(
             }
             FilledTonalButton(
                 onClick = onNavigateClick,
-                modifier = Modifier.weight(1f).height(64.dp),
+                modifier = Modifier.weight(1.4f).height(56.dp),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -1233,7 +1262,7 @@ private fun AlertDetailActionBar(
             }
             FilledTonalButton(
                 onClick = onShareClick,
-                modifier = Modifier.weight(1f).height(64.dp),
+                modifier = Modifier.weight(0.8f).height(56.dp),
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
@@ -1616,18 +1645,17 @@ private fun IvBar(label: String, value: Int, maxValue: Int) {
 
 @Composable
 private fun WeatherAndGenderCard(alert: PokemonAlert) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
-        ),
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Weather Boost
             if (alert.isWeatherBoosted == true) {
@@ -2254,7 +2282,8 @@ fun CountdownAndEndTimeRow(alert: PokemonAlert, nowMillis: Long = System.current
             )
         }
         Text(
-            text = stringResource(id = R.string.alert_end_time, alert.endTime),
+            text = endMillis?.let { TimeUtils.formatAlertEndTime(it, nowMillis) }
+                ?: stringResource(id = R.string.alert_end_time, alert.endTime),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

@@ -12,6 +12,7 @@ import android.util.LruCache
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,9 +36,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
-import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -50,7 +53,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -158,6 +160,7 @@ fun AlertsMapScreen(
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var mapType by rememberSaveable { mutableStateOf(MapType.NORMAL) }
     var showTimeLabels by rememberSaveable { mutableStateOf(false) }
+    var showFilterMenu by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
 
     fun hasLocationPermissionNow(): Boolean =
@@ -359,7 +362,7 @@ fun AlertsMapScreen(
         val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val mapContentPadding = PaddingValues(
             start = 16.dp,
-            top = statusBarPadding + 136.dp,
+            top = statusBarPadding + 88.dp,
             end = if (useSidePanel) 392.dp else 16.dp,
             bottom = if (useSidePanel) 24.dp else 96.dp
         )
@@ -403,15 +406,34 @@ fun AlertsMapScreen(
                 onRefresh = onRefresh,
                 onToggleMapType = {
                     mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
-                }
+                },
+                onOpenFilters = { showFilterMenu = true }
             )
 
-            MapFilterRow(
-                filters = AlertFilter.values().filter { it in availableFilters },
-                selectedFilter = selectedFilter,
-                visibleAlertCount = filteredAlerts.size,
-                onFilterSelected = { selectedFilter = it }
-            )
+            DropdownMenu(
+                expanded = showFilterMenu,
+                onDismissRequest = { showFilterMenu = false },
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                AlertFilter.values().filter { it in availableFilters }.forEach { filter ->
+                    DropdownMenuItem(
+                        text = { Text(filter.label) },
+                        onClick = {
+                            selectedFilter = filter
+                            showFilterMenu = false
+                        },
+                        leadingIcon = if (selectedFilter == filter) {
+                            {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
+                                )
+                            }
+                        } else null
+                    )
+                }
+            }
         }
 
         if (mapLoaded && (useSidePanel || selectedAlert == null)) {
@@ -463,7 +485,7 @@ fun AlertsMapScreen(
                     modifier = Modifier.align(Alignment.TopEnd)
                 )
             } else {
-                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
                 ModalBottomSheet(
                     onDismissRequest = { selectedAlert = null },
                     sheetState = sheetState,
@@ -495,73 +517,125 @@ private fun MapTopAppBar(
     onBack: () -> Unit,
     onToggleTimeLabels: () -> Unit,
     onRefresh: () -> Unit,
-    onToggleMapType: () -> Unit
+    onToggleMapType: () -> Unit,
+    onOpenFilters: () -> Unit
 ) {
+    var moreExpanded by remember { mutableStateOf(false) }
     Surface(
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp,
-        shadowElevation = 4.dp
-    ) {
-        CenterAlignedTopAppBar(
-            title = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = stringResource(R.string.map_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "$visibleAlertCount visible",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            navigationIcon = {
-                if (showBackButton) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back)
-                        )
-                    }
-                }
-            },
-            actions = {
-                IconButton(onClick = onToggleTimeLabels) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_timer),
-                        contentDescription = "Toggle countdown labels",
-                        tint = if (showTimeLabels) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                }
-                IconButton(onClick = onRefresh) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.refresh_alerts)
-                    )
-                }
-                IconButton(onClick = onToggleMapType) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_layers),
-                        contentDescription = if (hybridMap) "Switch to standard map" else "Switch to satellite map",
-                        tint = if (hybridMap) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                }
-            },
-            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                containerColor = Color.Transparent
-            )
+        tonalElevation = 0.dp,
+        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
         )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (showBackButton) {
+                IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back)
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.weight(1f).padding(start = if (showBackButton) 2.dp else 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.map_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = "$visibleAlertCount",
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            IconButton(onClick = onOpenFilters, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_filter),
+                    contentDescription = stringResource(R.string.map_filter_alerts)
+                )
+            }
+            IconButton(onClick = onToggleMapType, modifier = Modifier.size(44.dp)) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_layers),
+                    contentDescription = stringResource(
+                        if (hybridMap) R.string.map_switch_standard else R.string.map_switch_satellite
+                    ),
+                    tint = if (hybridMap) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+            }
+            Box {
+                IconButton(
+                    onClick = { moreExpanded = true },
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = stringResource(R.string.map_more_options)
+                    )
+                }
+                DropdownMenu(
+                    expanded = moreExpanded,
+                    onDismissRequest = { moreExpanded = false },
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (showTimeLabels) R.string.map_hide_countdowns
+                                    else R.string.map_show_countdowns
+                                )
+                            )
+                        },
+                        onClick = {
+                            moreExpanded = false
+                            onToggleTimeLabels()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_timer),
+                                contentDescription = null
+                            )
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.refresh_alerts)) },
+                        onClick = {
+                            moreExpanded = false
+                            onRefresh()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

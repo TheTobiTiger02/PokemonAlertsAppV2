@@ -18,10 +18,13 @@ import androidx.core.app.AlarmManagerCompat
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
+import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -181,18 +184,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     }
 
     private suspend fun buildViews(context: Context, appWidgetId: Int, appWidgetManager: AppWidgetManager? = null): RemoteViews {
-        // Detect compact mode based on widget dimensions
-        val isCompact = appWidgetManager?.let { isCompactMode(it, appWidgetId) } ?: false
-
         val alertCounts = getAlertCounts(context, appWidgetId)
         val alertCount = alertCounts.visibleCount
         lastCadenceAlertCounts[appWidgetId] = alertCounts.cadenceCount
         lastCadenceAlertCount = lastCadenceAlertCounts.values.maxOrNull()
 
-        if (isCompact) {
-            return buildCompactViews(context, appWidgetId, alertCount)
+        return when (appWidgetManager?.let {
+            layoutMode(it, appWidgetId, alertCount)
+        } ?: WidgetLayoutMode.MEDIUM) {
+            WidgetLayoutMode.COMPACT -> buildCompactViews(context, appWidgetId, alertCount)
+            WidgetLayoutMode.MEDIUM,
+            WidgetLayoutMode.LARGE_LIST -> buildFullViews(context, appWidgetId, alertCount)
+            WidgetLayoutMode.LARGE_FOCUS -> alertCounts.firstAlert?.let { alert ->
+                buildFocusViews(context, appWidgetId, alert)
+            } ?: buildFullViews(context, appWidgetId, alertCount)
         }
-        return buildFullViews(context, appWidgetId, alertCount)
     }
 
     private fun buildCompactViews(context: Context, appWidgetId: Int, alertCount: Int): RemoteViews {
@@ -296,16 +302,115 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return views
     }
 
-    private fun isCompactMode(appWidgetManager: AppWidgetManager, appWidgetId: Int): Boolean {
+    private fun buildFocusViews(
+        context: Context,
+        appWidgetId: Int,
+        alert: PokemonAlert
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_alerts_focus)
+        val openApp = PendingIntent.getActivity(
+            context,
+            appWidgetId * 10,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.header_open_app_focus, openApp)
+        views.setOnClickPendingIntent(R.id.img_logo_focus, openApp)
+        views.setOnClickPendingIntent(R.id.tv_title_focus, openApp)
+
+        views.setTextViewText(
+            R.id.focus_type,
+            alert.typeDisplay?.takeIf { it.isNotBlank() }
+                ?: alert.type?.firstOrNull()
+                ?: context.getString(R.string.widget_active_alerts_label)
+        )
+        views.setTextViewText(R.id.focus_title, formatAlertTitle(alert))
+        views.setTextViewText(
+            R.id.focus_location,
+            alert.locationDisplay?.takeIf { it.isNotBlank() }
+                ?: alert.description.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.tap_for_details)
+        )
+
+        val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
+        val remaining = endMillis?.minus(System.currentTimeMillis())
+        views.setTextViewText(
+            R.id.focus_countdown,
+            when {
+                remaining == null -> context.getString(R.string.widget_active_alerts_label)
+                remaining <= 0L -> context.getString(R.string.alert_expired)
+                else -> context.getString(
+                    R.string.widget_countdown_format,
+                    TimeUtils.formatDurationShort(remaining)
+                )
+            }
+        )
+
+        val detailPending = PendingIntent.getActivity(
+            context,
+            appWidgetId * 10 + 1,
+            AlertDetailActivity.createIntent(context, alert),
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.focus_content, detailPending)
+
+        val refreshPending = PendingIntent.getBroadcast(
+            context,
+            appWidgetId * 10 + 2,
+            Intent(context, AlertsWidgetProvider::class.java).apply {
+                action = ACTION_REFRESH
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.btn_refresh_focus, refreshPending)
+
+        if (alert.latitude != null && alert.longitude != null) {
+            views.setViewVisibility(R.id.btn_navigate_focus, View.VISIBLE)
+            val navigatePending = PendingIntent.getBroadcast(
+                context,
+                appWidgetId * 10 + 3,
+                Intent(context, AlertsWidgetProvider::class.java).apply {
+                    action = ACTION_NAVIGATE
+                    data = Uri.parse("pokemonalerts://widget/$appWidgetId/navigate/${alert.uniqueId}")
+                    putExtra(EXTRA_NAV_LAT, alert.latitude)
+                    putExtra(EXTRA_NAV_LNG, alert.longitude)
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+            )
+            views.setOnClickPendingIntent(R.id.btn_navigate_focus, navigatePending)
+        } else {
+            views.setViewVisibility(R.id.btn_navigate_focus, View.GONE)
+        }
+
+        val dismissPending = PendingIntent.getBroadcast(
+            context,
+            appWidgetId * 10 + 4,
+            Intent(context, AlertsWidgetProvider::class.java).apply {
+                action = ACTION_DISMISS_WIDGET
+                data = Uri.parse("pokemonalerts://widget/$appWidgetId/dismiss/${alert.uniqueId}")
+                putExtra(EXTRA_DISMISS_ALERT_ID, alert.uniqueId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.btn_dismiss_focus, dismissPending)
+        return views
+    }
+
+    private fun layoutMode(
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        alertCount: Int
+    ): WidgetLayoutMode {
         val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
         val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
         val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
-        return shouldUseCompactWidgetLayout(minWidth, minHeight)
+        return widgetLayoutModeForSize(minWidth, minHeight, alertCount)
     }
 
     private data class WidgetAlertCounts(
         val visibleCount: Int,
-        val cadenceCount: Int
+        val cadenceCount: Int,
+        val firstAlert: PokemonAlert?
     )
 
     private suspend fun getAlertCounts(context: Context, appWidgetId: Int): WidgetAlertCounts {
@@ -313,10 +418,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             val loadedAlerts = WidgetAlertLoader.load(context, appWidgetId)
             WidgetAlertCounts(
                 visibleCount = loadedAlerts.alerts.size,
-                cadenceCount = loadedAlerts.cadenceAlerts.size
+                cadenceCount = loadedAlerts.cadenceAlerts.size,
+                firstAlert = loadedAlerts.alerts.firstOrNull()
             )
         } catch (_: Throwable) {
-            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0)
+            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0, firstAlert = null)
         }
     }
 
@@ -421,6 +527,25 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
 @VisibleForTesting
 internal fun shouldUseCompactWidgetLayout(minWidthDp: Int, minHeightDp: Int): Boolean {
-    if (minWidthDp <= 0 || minHeightDp <= 0) return true
-    return minWidthDp < 300 || minHeightDp < 190
+    return widgetLayoutModeForSize(minWidthDp, minHeightDp, alertCount = 0) ==
+        WidgetLayoutMode.COMPACT
+}
+
+internal enum class WidgetLayoutMode {
+    COMPACT,
+    MEDIUM,
+    LARGE_FOCUS,
+    LARGE_LIST
+}
+
+@VisibleForTesting
+internal fun widgetLayoutModeForSize(
+    minWidthDp: Int,
+    minHeightDp: Int,
+    alertCount: Int
+): WidgetLayoutMode {
+    if (minWidthDp <= 0 || minHeightDp <= 0) return WidgetLayoutMode.COMPACT
+    if (minWidthDp < 300 || minHeightDp < 190) return WidgetLayoutMode.COMPACT
+    if (minHeightDp < 280) return WidgetLayoutMode.MEDIUM
+    return if (alertCount == 1) WidgetLayoutMode.LARGE_FOCUS else WidgetLayoutMode.LARGE_LIST
 }

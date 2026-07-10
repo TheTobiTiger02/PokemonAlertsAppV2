@@ -54,7 +54,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
@@ -724,7 +723,7 @@ private fun AlertsList(
     onSearchQueryChanged: (String) -> Unit = {}
 ) {
     val countdownNow = rememberCountdownNow()
-    var controlsExpanded by rememberSaveable { mutableStateOf(true) }
+    val controlsExpanded = true
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
@@ -739,11 +738,11 @@ private fun AlertsList(
                 Card(
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
                     )
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                 Row(
@@ -753,7 +752,7 @@ private fun AlertsList(
                 ) {
                     Column {
                         Text(
-                            text = "ALERTS",
+                            text = selectedFilter.label,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -765,26 +764,27 @@ private fun AlertsList(
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        FilterChip(
+                            selected = showDismissed,
+                            onClick = { onShowDismissedChanged(!showDismissed) },
+                            label = { Text("Dismissed") },
+                            leadingIcon = if (showDismissed) {
+                                { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
+                            } else null
+                        )
                         SortingButton(
                             currentSort = sortPreference,
                             onSortChanged = onSortChanged
                         )
-                        IconButton(onClick = { controlsExpanded = !controlsExpanded }) {
-                            Icon(
-                                imageVector = if (controlsExpanded)
-                                    Icons.Filled.KeyboardArrowUp
-                                else
-                                    Icons.Filled.KeyboardArrowDown,
-                                contentDescription = if (controlsExpanded)
-                                    "Collapse alert controls"
-                                else
-                                    "Expand alert controls"
-                            )
-                        }
                     }
                 }
                 AnimatedVisibility(visible = controlsExpanded) {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AlertSearchBar(
+                    query = searchQuery,
+                    onQueryChanged = onSearchQueryChanged,
+                    placeholder = stringResource(R.string.alerts_search_hint)
+                )
                 FilterRow(
                     selectedFilter = selectedFilter,
                     onFilterChanged = onFilterChanged,
@@ -795,27 +795,6 @@ private fun AlertsList(
                     availableFilters = availableFilters
                 )
                 
-                // Show dismissed toggle
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = showDismissed,
-                        onClick = { onShowDismissedChanged(!showDismissed) },
-                        label = { Text("Show Dismissed") },
-                        leadingIcon = if (showDismissed) {
-                            { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                        } else null
-                    )
-                }
-                
-                // Search bar
-                AlertSearchBar(
-                    query = searchQuery,
-                    onQueryChanged = onSearchQueryChanged,
-                    placeholder = "Search Pokémon…"
-                )
                     }
                 }
                     }
@@ -1727,7 +1706,7 @@ private fun AlertHistoryPage(
             
             // Statistics Card
             item(span = { GridItemSpan(maxLineSpan) }) {
-                var isExpanded by rememberSaveable { mutableStateOf(true) }
+                var isExpanded by rememberSaveable { mutableStateOf(false) }
                 
                 val dateText = if (selectedDateMillis != null) {
                     val calendar = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }

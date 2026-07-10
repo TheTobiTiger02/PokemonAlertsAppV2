@@ -4,6 +4,7 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
+import java.time.format.FormatStyle
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
@@ -80,4 +81,20 @@ object TimeUtils {
             else -> if (seconds <= 5) "just now" else "$seconds secs ago"
         }
     }
+
+    /** Formats an alert deadline in the device locale without exposing raw server timestamps. */
+    fun formatAlertEndTime(endMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+        val zone = ZoneId.systemDefault()
+        val end = Instant.ofEpochMilli(endMs).atZone(zone)
+        val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+        val time = end.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+        return when (end.toLocalDate()) {
+            today -> "Ends today at $time"
+            today.plusDays(1) -> "Ends tomorrow at $time"
+            else -> "Ends ${end.format(DateTimeFormatter.ofPattern("EEE, d MMM"))} at $time"
+        }
+    }
+
+    fun formatPostedTime(rawTimestamp: String?): String? =
+        parseEndTimeToMillis(rawTimestamp)?.let { "Posted ${formatTimeAgo(it)}" }
 }

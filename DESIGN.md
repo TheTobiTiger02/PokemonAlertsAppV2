@@ -1,29 +1,31 @@
 # Pokémon Alerts design system
 
-Pokémon Alerts uses a static, neutral Material 3 design system. It is designed for fast scanning of time-sensitive alerts, not for decorative category colour.
+Pokémon Alerts uses a static, One UI-inspired Material 3 design system built for quick scanning and one-handed use. Product behavior and data contracts stay independent from the visual layer.
 
-## Visual foundation
+## Foundation
 
-- Follow the system light/dark setting. Dynamic wallpaper colour is intentionally disabled so the product keeps a consistent identity.
-- Primary accent: electric blue — `#0058BE` in light mode and `#ADC6FF` in dark mode.
-- Surfaces, outlines, and secondary roles are neutral blue-grey. Blue communicates selection, primary actions, focus, and the most important metric.
-- Red, amber, and green are reserved for semantic feedback such as destructive actions, warnings, and success; they never identify an alert type.
-- Use Android system typography, Material 3 type scales, and standard 4/8/12/16/28dp corner radii. There is no bundled custom font.
+- Follow the system light/dark setting; dynamic wallpaper color is disabled.
+- Light roles: background `#F7F8FB`, surface `#FFFFFF`, container `#EEF1F6`, outline `#D8DEE8`, primary `#0057D9`.
+- Dark roles: background `#090B0F`, surface `#12151B`, container `#191D25`, raised container `#202631`, outline `#323946`, primary `#7FA7FF`.
+- Electric blue is the only brand accent. Red, amber, and green are reserved for destructive, urgent, and successful states.
+- Use system sans-serif typography, tabular/monospace figures only for countdowns, opaque containers, 20dp screen margins, 24dp cards, and 48dp touch targets.
+- Do not use animated ambient backgrounds, decorative grids, glass surfaces, or category rainbow palettes.
 
 ## Navigation and layout
 
-- The three primary destinations are **Alerts**, **Map**, and **Settings**.
-- **Live** and **History** are persistent secondary tabs inside Alerts so active discovery remains the default entry point.
-- Below `600dp`, use a Material navigation bar. At `600dp` and above, use a navigation rail. At `840dp` and above, feeds use two columns and map details move into a side panel.
-- Preserve destination, section, filter, and scroll state when moving between destinations.
+- Primary destinations are **Alerts**, **Map**, and **Settings**.
+- **Live** and **History** are persistent sections inside Alerts.
+- Below 600dp use bottom navigation; from 600dp use a rail; from 840dp feeds may use two columns and map details use a side panel.
+- Root destinations do not show back buttons. Preserve destination, section, filter, and scroll state.
+- Phone headers use a large, bottom-aligned title area that collapses toward a compact toolbar as content scrolls.
 
-## Components and feedback
+## Content patterns
 
-- Use Material top app bars, cards, chips, bottom sheets, dialogs, snackbars, and 48dp minimum touch targets.
-- Alert type is expressed with a short code, label, and icon rather than a type-specific palette.
-- Loading, empty, error, dismissed, image-fallback, and permission-denied states must use the same semantic tokens and clear recovery actions.
-- Keep all actions visible and accessible: refresh, filter, search, sort, snooze, dismiss/undo, directions, share, and Picture-in-Picture.
+- Keep filter summaries compact and move detailed controls into bottom sheets or focused subpages.
+- Alert cards use a 144dp preview, overlaid type/countdown badges, concise location and distance metadata, and 48dp actions.
+- Use localized, friendly date/time text rather than exposing server timestamp strings.
+- Loading, empty, error, dismissed, image-fallback, and permission-denied states use the same semantic roles and clear recovery actions.
 
-## Non-Compose surfaces
+## System surfaces
 
-RemoteViews widgets, notifications, share cards, map styling, launcher/splash assets, and widget configuration must use matching neutral resources and the electric-blue accent. Their action IDs, PendingIntents, notification channels, image fallbacks, and deep-link contracts are unchanged.
+Widgets, widget configuration, notifications, share cards, onboarding, launcher/splash assets, and map styling use the same neutral/blue roles. Widgets choose compact, medium, large-focus, or large-list layouts based on available size and alert count. Action IDs, PendingIntents, notification channels, image fallbacks, permissions, and deep-link contracts remain unchanged.
