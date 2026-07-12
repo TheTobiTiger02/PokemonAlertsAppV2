@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 if (file("google-services.json").exists()) {
@@ -50,6 +51,11 @@ val googleMapsApiKey: String =
         ?: providers.environmentVariable("GOOGLE_MAPS_API_KEY").orNull?.takeIf { it.isNotBlank() }
         ?: "YOUR_API_KEY_HERE"
 
+val alertsApiBaseUrl: String =
+    localProperties.getProperty("ALERTS_API_BASE_URL")?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("ALERTS_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
+        ?: "http://api.alsbach-scanner.uk/"
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -58,11 +64,12 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
+        buildConfigField("String", "ALERTS_API_BASE_URL", "\"${alertsApiBaseUrl.trimEnd('/')}/\"")
     }
 
     signingConfigs {
@@ -102,6 +109,10 @@ android {
     }
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 tasks.matching {
     it.name == "preReleaseBuild" || it.name == "assembleRelease" || it.name == "bundleRelease"
 }.configureEach {
@@ -114,6 +125,8 @@ tasks.matching {
 }
 
 dependencies {
+
+    baselineProfile(project(":baselineprofile"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.fragment.ktx)
@@ -135,6 +148,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.coil.compose)
     implementation(libs.coil.core)
@@ -155,6 +169,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

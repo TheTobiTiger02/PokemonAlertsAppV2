@@ -17,7 +17,14 @@ data class AlertsUiState(
     val alerts: List<PokemonAlert> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val highlightedAlertId: String? = null
+    val highlightedAlertId: String? = null,
+    val syncMetadata: SyncMetadata = SyncMetadata()
+)
+
+data class SyncMetadata(
+    val lastSuccessfulSyncMillis: Long? = null,
+    val lastAttemptMillis: Long? = null,
+    val isShowingCachedData: Boolean = false
 )
 
 class PokemonAlertsViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,12 +68,32 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             runCatching {
                 repository.fetchAlerts()
             }.onSuccess {
-                if (showLoading) {
-                    _uiState.update { current -> current.copy(isLoading = false) }
+                val now = System.currentTimeMillis()
+                _uiState.update { current ->
+                    current.copy(
+                        isLoading = false,
+                        syncMetadata = SyncMetadata(
+                            lastSuccessfulSyncMillis = now,
+                            lastAttemptMillis = now,
+                            isShowingCachedData = false
+                        )
+                    )
                 }
             }.onFailure { throwable ->
+                val now = System.currentTimeMillis()
                 _uiState.update { current ->
-                    current.copy(isLoading = false, errorMessage = throwable.localizedMessage ?: "Unknown error")
+                    current.copy(
+                        isLoading = false,
+                        errorMessage = if (current.alerts.isNotEmpty()) {
+                            "Offline — showing cached alerts"
+                        } else {
+                            throwable.localizedMessage ?: "Unable to load alerts"
+                        },
+                        syncMetadata = current.syncMetadata.copy(
+                            lastAttemptMillis = now,
+                            isShowingCachedData = current.alerts.isNotEmpty()
+                        )
+                    )
                 }
             }
         }
@@ -81,6 +108,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     }
     
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
+    val sortPreference = repository.alertPreferences.sortPreference
     
     val selectedArea = repository.alertPreferences.selectedArea
     val maxDistance = repository.alertPreferences.maxDistance
@@ -96,6 +124,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             repository.alertPreferences.removeDismissedAlert(alertId)
         }
+    }
+
+    fun updateSortPreference(preference: com.example.pokemonalertsv2.data.SortPreference) {
+        viewModelScope.launch { repository.alertPreferences.updateSortPreference(preference) }
     }
 
     fun snoozeAlert(alert: PokemonAlert, minutes: Int, onResult: (Boolean) -> Unit) {

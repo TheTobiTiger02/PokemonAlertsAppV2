@@ -8,17 +8,12 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.drawable.BitmapDrawable
 import android.location.Location
 import android.util.LruCache
 import android.view.View
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
-import coil.ImageLoader
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
@@ -40,7 +35,6 @@ private class AlertsFactory(
     private val appWidgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
-    private lateinit var imageLoader: ImageLoader
     private var currentLocation: Location? = null
     private var walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 
@@ -51,13 +45,8 @@ private class AlertsFactory(
     private val colorPrimary by lazy { ContextCompat.getColor(context, R.color.widget_primary) }
     private val fallbackBackground by lazy { ContextCompat.getColor(context, R.color.widget_fallback_background) }
     private val fallbackAccent by lazy { ContextCompat.getColor(context, R.color.widget_primary_container) }
-
-    // Corner radius for image clipping (in pixels)
-    private val cornerRadiusPx by lazy { (12 * context.resources.displayMetrics.density) }
-
-    override fun onCreate() {
-        imageLoader = PokemonAlertsApplication.imageLoader(context)
-    }
+    private val cornerRadiusPx by lazy { 12 * context.resources.displayMetrics.density }
+    override fun onCreate() = Unit
 
     override fun onDataSetChanged() {
         runBlocking {
@@ -155,52 +144,11 @@ private class AlertsFactory(
             views.setTextViewText(R.id.item_meta, metaParts.joinToString(" | "))
         }
 
-        // 5. Image Loading (with rounded corners)
-        val imgSize = (56 * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
-        val imageUrl = alert.imageUrl
-        if (!imageUrl.isNullOrBlank()) {
-            try {
-                val bitmap = cachedBitmap("image|$imageUrl|$imgSize|$cornerRadiusPx") {
-                    val req = ImageRequest.Builder(context)
-                        .data(imageUrl)
-                        .size(imgSize, imgSize)
-                        .allowHardware(false)
-                        .build()
-                    val result = runBlocking { imageLoader.execute(req) }
-                    if (result is SuccessResult) {
-                        val drawable = result.drawable
-                        val bmp = if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, imgSize)
-                        roundBitmap(bmp, cornerRadiusPx)
-                    } else {
-                        createFallbackBitmap(imgSize)
-                    }
-                }
-                views.setImageViewBitmap(R.id.item_image, bitmap)
-            } catch (_: Throwable) {
-                views.setImageViewBitmap(R.id.item_image, cachedBitmap("fallback|$imgSize|$cornerRadiusPx") { createFallbackBitmap(imgSize) })
-            }
-        } else if (alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank()) {
-            val latitude = alert.latitude
-            val longitude = alert.longitude
-            val thumbnailUrl = alert.thumbnailUrl
-            val mapKey = "map|$latitude|$longitude|$thumbnailUrl|$imgSize|$cornerRadiusPx"
-            val bitmap = cachedBitmap(mapKey) {
-                val mapBmp = runBlocking {
-                    com.example.pokemonalertsv2.util.MapFallbackImageGenerator.generate(
-                        context = context,
-                        latitude = latitude,
-                        longitude = longitude,
-                        thumbnailUrl = thumbnailUrl,
-                        outputWidth = imgSize,
-                        outputHeight = imgSize
-                    )
-                }
-                mapBmp?.let { roundBitmap(it, cornerRadiusPx) } ?: createFallbackBitmap(imgSize)
-            }
-            views.setImageViewBitmap(R.id.item_image, bitmap)
-        } else {
-            views.setImageViewBitmap(R.id.item_image, cachedBitmap("fallback|$imgSize|$cornerRadiusPx") { createFallbackBitmap(imgSize) })
-        }
+        // 5. Image loading is shared with the expanded single-alert layout.
+        views.setImageViewBitmap(
+            R.id.item_image,
+            runBlocking { WidgetAlertImageRenderer.render(context, alert, sizeDp = 56) }
+        )
 
         // 6. Navigate button — show only if we have coordinates
         if (alert.latitude != null && alert.longitude != null) {
@@ -241,14 +189,6 @@ private class AlertsFactory(
     override fun getViewTypeCount(): Int = 1
     override fun getItemId(position: Int): Long = items.getOrNull(position)?.uniqueId?.hashCode()?.toLong() ?: position.toLong()
     override fun hasStableIds(): Boolean = true
-
-    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable, size: Int): Bitmap {
-        val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bmp)
-        drawable.setBounds(0, 0, size, size)
-        drawable.draw(canvas)
-        return bmp
-    }
 
     /** Clips a bitmap to rounded corners. */
     private fun roundBitmap(source: Bitmap, radius: Float): Bitmap {

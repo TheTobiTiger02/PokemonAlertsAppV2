@@ -194,6 +194,7 @@ fun PokemonAlertsRoute(
                 val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
                 val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
                 val defaultSnoozeMinutes by viewModel.snoozeDuration.collectAsStateWithLifecycle(initialValue = 10)
+                val savedSortPreference by viewModel.sortPreference.collectAsStateWithLifecycle(initialValue = SortPreference.POSTED_TIME)
                 
                 PokemonAlertsPage(
                     uiState = alertsUiState,
@@ -201,6 +202,8 @@ fun PokemonAlertsRoute(
                     selectedArea = selectedArea,
                     maxDistance = maxDistance,
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
+                    sortPreference = savedSortPreference,
+                    onSortPreferenceChange = viewModel::updateSortPreference,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -393,6 +396,8 @@ fun PokemonAlertsPage(
     selectedArea: String,
     maxDistance: Int,
     defaultSnoozeMinutes: Int,
+    sortPreference: SortPreference,
+    onSortPreferenceChange: (SortPreference) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -405,7 +410,6 @@ fun PokemonAlertsPage(
     var locationLookupComplete by remember { mutableStateOf(false) }
     var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
-    var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
@@ -588,8 +592,6 @@ fun PokemonAlertsPage(
                     (model.alert.locationDisplay?.lowercase()?.contains(query) == true)
             }
         }
-        
-        // Sort based on user preference
         when (sortPreference) {
             SortPreference.POSTED_TIME -> filtered.sortedWith(compareByDescending<AlertUiModel> { 
                 it.alert.id?.toLong() ?: Long.MIN_VALUE
@@ -639,7 +641,7 @@ fun PokemonAlertsPage(
                 },
                 onSortChanged = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    sortPreference = it
+                    onSortPreferenceChange(it)
                 },
                 onShowDismissedChanged = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)

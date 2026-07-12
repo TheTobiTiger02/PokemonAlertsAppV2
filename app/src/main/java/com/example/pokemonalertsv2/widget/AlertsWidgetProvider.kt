@@ -302,7 +302,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return views
     }
 
-    private fun buildFocusViews(
+    private suspend fun buildFocusViews(
         context: Context,
         appWidgetId: Int,
         alert: PokemonAlert
@@ -325,6 +325,10 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 ?: context.getString(R.string.widget_active_alerts_label)
         )
         views.setTextViewText(R.id.focus_title, formatAlertTitle(alert))
+        views.setImageViewBitmap(
+            R.id.focus_image,
+            WidgetAlertImageRenderer.render(context, alert, sizeDp = 96)
+        )
         views.setTextViewText(
             R.id.focus_location,
             alert.locationDisplay?.takeIf { it.isNotBlank() }
@@ -353,6 +357,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
         )
         views.setOnClickPendingIntent(R.id.focus_content, detailPending)
+        views.setOnClickPendingIntent(R.id.focus_image, detailPending)
 
         val refreshPending = PendingIntent.getBroadcast(
             context,

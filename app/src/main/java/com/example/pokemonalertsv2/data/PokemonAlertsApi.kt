@@ -13,7 +13,7 @@ import retrofit2.http.Query
 import retrofit2.create
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
-private const val BASE_URL = "http://api.alsbach-scanner.uk"
+private val BASE_URL = BuildConfig.ALERTS_API_BASE_URL
 
 @Serializable
 data class HistoryResponse(
@@ -87,7 +87,7 @@ object PokemonAlertsApi {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BASIC
             } else {
-                HttpLoggingInterceptor.Level.BASIC
+                HttpLoggingInterceptor.Level.NONE
             }
         }
 

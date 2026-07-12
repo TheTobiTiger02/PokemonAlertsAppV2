@@ -47,10 +47,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
@@ -70,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.SortPreference
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import androidx.compose.animation.AnimatedVisibility
@@ -85,7 +88,7 @@ import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.UpdateState
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -107,6 +110,10 @@ fun SettingsScreen(
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
     val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
     val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle(initialValue = 0)
+    val savedSortPreference by viewModel.sortPreference.collectAsStateWithLifecycle(
+        initialValue = SortPreference.POSTED_TIME
+    )
     
     // Excluded types for granular filtering
     val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -149,7 +156,54 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
+                SettingsSection(title = "Appearance & display") {
+                    Text(
+                        text = "Theme",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    listOf(0 to "System", 1 to "Light", 2 to "Dark").forEach { (mode, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.updateThemeMode(mode) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = themeMode == mode,
+                                onClick = { viewModel.updateThemeMode(mode) }
+                            )
+                            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                    HorizontalDivider()
+                    Text(
+                        text = "Default sort",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    listOf(
+                        SortPreference.POSTED_TIME to "Newest",
+                        SortPreference.TIME_REMAINING to "Time remaining",
+                        SortPreference.DISTANCE to "Distance",
+                        SortPreference.NAME to "Name"
+                    ).forEach { (preference, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.updateSortPreference(preference) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = savedSortPreference == preference,
+                                onClick = { viewModel.updateSortPreference(preference) }
+                            )
+                            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+
                 SettingsSection(title = "Filters") {
                     Column {
                         Text(
@@ -392,6 +446,7 @@ fun SettingsScreen(
             }
         }
     }
+
 }
 
 @Composable

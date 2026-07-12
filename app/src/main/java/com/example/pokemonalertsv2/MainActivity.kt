@@ -14,6 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
@@ -69,6 +70,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -100,6 +102,11 @@ private data class NavDestination(
     val unselectedIcon: ImageVector
 )
 
+internal enum class NavigationLayoutMode { BOTTOM_BAR, RAIL }
+
+internal fun navigationLayoutModeForWidth(width: Dp): NavigationLayoutMode =
+    if (width >= 600.dp) NavigationLayoutMode.RAIL else NavigationLayoutMode.BOTTOM_BAR
+
 private val NAV_DESTINATIONS = listOf(
     NavDestination("Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
     NavDestination("History", Icons.Filled.DateRange, Icons.Outlined.DateRange),
@@ -120,11 +127,7 @@ class MainActivity : ComponentActivity() {
             val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
             
             if (fineLocationGranted || coarseLocationGranted) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    requestBackgroundLocationPermission()
-                } else {
-                    Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
-                }
+                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(
                     this,
@@ -163,22 +166,32 @@ class MainActivity : ComponentActivity() {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
         }
 
-        lifecycleScope.launch {
-            InAppUpdateManager.checkForUpdates()
+        if (shouldCheckForUpdates()) {
+            lifecycleScope.launch { InAppUpdateManager.checkForUpdates() }
         }
 
-        requestNotificationPermissionIfNeeded()
-        requestLocationPermissionIfNeeded()
         setContent {
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
-            val darkTheme = true
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+            val darkTheme = when (themeMode) {
+                1 -> false
+                2 -> true
+                else -> isSystemInDarkTheme()
+            }
 
             // Track whether we should show onboarding or the main app
             var showOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
             if (showOnboarding == null && onboardingCompleted != null) {
                 showOnboarding = onboardingCompleted != true
+            }
+
+            LaunchedEffect(showOnboarding) {
+                if (showOnboarding == false) {
+                    requestNotificationPermissionIfNeeded()
+                    requestLocationPermissionIfNeeded()
+                }
             }
 
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
@@ -231,6 +244,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun shouldCheckForUpdates(nowMillis: Long = System.currentTimeMillis()): Boolean {
+        val preferences = getSharedPreferences("update_check", MODE_PRIVATE)
+        val lastCheck = preferences.getLong("last_check_millis", 0L)
+        if (nowMillis - lastCheck < 24 * 60 * 60 * 1000L) return false
+        preferences.edit().putLong("last_check_millis", nowMillis).apply()
+        return true
+    }
+
     private fun requestLocationPermissionIfNeeded() {
         val fineLocationGranted = ContextCompat.checkSelfPermission(
             this,
@@ -249,8 +270,6 @@ class MainActivity : ComponentActivity() {
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 )
             )
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            requestBackgroundLocationPermission()
         }
     }
 

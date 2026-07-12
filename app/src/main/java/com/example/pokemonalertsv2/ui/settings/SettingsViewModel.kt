@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.SortPreference
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -15,6 +16,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     val onboardingCompleted: StateFlow<Boolean?> = repository.observeOnboardingCompleted()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val themeMode: StateFlow<Int> = repository.observeThemeMode()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val sortPreference: StateFlow<SortPreference> = repository.alertPreferences.sortPreference
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortPreference.POSTED_TIME)
     
     val notificationsEnabled: StateFlow<Boolean> = repository.alertPreferences.notificationsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -82,7 +89,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             repository.setOnboardingCompleted(true)
         }
     }
-    
+
+    fun updateThemeMode(mode: Int) {
+        viewModelScope.launch { repository.setThemeMode(mode.coerceIn(0, 2)) }
+    }
+
+    fun updateSortPreference(preference: SortPreference) {
+        viewModelScope.launch { repository.alertPreferences.updateSortPreference(preference) }
+    }
+
     fun updateNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.alertPreferences.updateNotificationsEnabled(enabled)

@@ -4,6 +4,9 @@ import android.content.Context
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.work.CoroutineWorker
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.NetworkType
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -13,6 +16,7 @@ import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 class AlertWorker(
     appContext: Context,
@@ -61,6 +65,12 @@ class AlertWorker(
                 // No network constraint for immediate sync to avoid TooManyRequestsException
                 // The worker will handle network errors gracefully
                 val workRequest = OneTimeWorkRequestBuilder<AlertWorker>()
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build()
+                    )
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.SECONDS)
                     .build()
 
                 WorkManager.getInstance(context).enqueueUniqueWork(
