@@ -99,37 +99,6 @@ internal fun RemoteViews.applyCompactWidgetPalette(palette: WidgetThemePalette) 
     setTextColor(R.id.tv_compact_meta, palette.onSurfaceVariant)
 }
 
-internal fun RemoteViews.applyFocusWidgetPalette(palette: WidgetThemePalette) {
-    setBackgroundResource(R.id.widget_root_focus, palette.backgroundDrawable)
-    setBackgroundResource(R.id.focus_content, palette.itemDrawable)
-    setBackgroundResource(R.id.focus_image, palette.imageDrawable)
-    setBackgroundResource(R.id.btn_refresh_focus, palette.iconButtonDrawable)
-    setBackgroundResource(R.id.btn_navigate_focus, palette.iconButtonDrawable)
-    setBackgroundResource(R.id.btn_dismiss_focus, palette.iconButtonDrawable)
-    setBackgroundResource(R.id.focus_cp, palette.badgeDrawable)
-    setTextColors(palette.onSurface, R.id.tv_title_focus, R.id.focus_title)
-    setTextColors(palette.onSurfaceVariant, R.id.focus_location)
-    setTextColor(R.id.focus_cp, palette.primary)
-    setTextColor(R.id.focus_countdown, palette.warning)
-    setIconColor(palette.primary, R.id.btn_refresh_focus, R.id.btn_navigate_focus)
-    setIconColor(palette.error, R.id.btn_dismiss_focus)
-    setImageViewResource(R.id.img_logo_focus, palette.logoDrawable)
-}
-
-internal fun RemoteViews.applyPairWidgetPalette(palette: WidgetThemePalette) {
-    setBackgroundResource(R.id.widget_root_pair, palette.backgroundDrawable)
-    setBackgroundResource(R.id.pair_first, palette.itemDrawable)
-    setBackgroundResource(R.id.pair_second, palette.itemDrawable)
-    setBackgroundResource(R.id.pair_first_image, palette.imageDrawable)
-    setBackgroundResource(R.id.pair_second_image, palette.imageDrawable)
-    setBackgroundResource(R.id.btn_refresh_pair, palette.iconButtonDrawable)
-    setTextColors(palette.onSurface, R.id.tv_title_pair, R.id.pair_first_title, R.id.pair_second_title)
-    setTextColor(R.id.tv_count_pair, palette.primary)
-    setTextColors(palette.warning, R.id.pair_first_countdown, R.id.pair_second_countdown)
-    setIconColor(palette.primary, R.id.btn_refresh_pair)
-    setImageViewResource(R.id.img_logo_pair, palette.logoDrawable)
-}
-
 internal fun RemoteViews.applyItemWidgetPalette(palette: WidgetThemePalette) {
     setBackgroundResource(R.id.item_root, palette.itemDrawable)
     setBackgroundResource(R.id.item_image, palette.imageDrawable)

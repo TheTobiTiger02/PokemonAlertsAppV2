@@ -17,8 +17,6 @@ class WidgetRemoteViewsInflationTest {
         listOf(
             R.layout.widget_alerts,
             R.layout.widget_alerts_compact,
-            R.layout.widget_alerts_focus,
-            R.layout.widget_alerts_pair,
             R.layout.widget_alert_item,
             R.layout.widget_alert_loading
         ).forEach { layoutId ->

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.GitHubRelease
@@ -19,6 +20,12 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
+
+enum class UpdateCheckSource {
+    AUTOMATIC,
+    MANUAL
+}
 
 sealed interface UpdateState {
     object Idle : UpdateState
@@ -40,6 +47,7 @@ data class PendingInstall(
 object InAppUpdateManager {
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+    private val updateCheckInFlight = AtomicBoolean(false)
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -52,10 +60,16 @@ object InAppUpdateManager {
         _updateState.value = UpdateState.Idle
     }
 
-    suspend fun checkForUpdates(owner: String = "TheTobiTiger02", repo: String = "PokemonAlertsAppV2") {
+    suspend fun checkForUpdates(
+        source: UpdateCheckSource,
+        owner: String = "TheTobiTiger02",
+        repo: String = "PokemonAlertsAppV2"
+    ) {
+        if (!canStartUpdateCheck(_updateState.value)) return
+        if (!updateCheckInFlight.compareAndSet(false, true)) return
         _updateState.value = UpdateState.Checking
-        withContext(Dispatchers.IO) {
-            try {
+        try {
+            withContext(Dispatchers.IO) {
                 val url = "https://api.github.com/repos/$owner/$repo/releases/latest"
                 val request = Request.Builder()
                     .url(url)
@@ -64,7 +78,7 @@ object InAppUpdateManager {
 
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
-                        _updateState.value = UpdateState.Error("Failed to fetch release info: ${response.code}")
+                        finishCheckWithError(source, "Failed to fetch release info: ${response.code}")
                         return@withContext
                     }
                     val bodyString = response.body?.string() ?: throw IOException("Empty response body")
@@ -74,13 +88,22 @@ object InAppUpdateManager {
                     if (isNewerVersion(currentVersion, release.tagName)) {
                         _updateState.value = UpdateState.UpdateAvailable(release)
                     } else {
-                        _updateState.value = UpdateState.UpToDate
+                        _updateState.value = noUpdateState(source)
                     }
                 }
-            } catch (e: Exception) {
-                _updateState.value = UpdateState.Error(e.localizedMessage ?: "Unknown error checking updates")
             }
+        } catch (e: Exception) {
+            finishCheckWithError(source, e.localizedMessage ?: "Unknown error checking updates")
+        } finally {
+            updateCheckInFlight.set(false)
         }
+    }
+
+    private fun finishCheckWithError(source: UpdateCheckSource, message: String) {
+        if (source == UpdateCheckSource.AUTOMATIC) {
+            Log.w(TAG, message)
+        }
+        _updateState.value = updateErrorState(source, message)
     }
 
     fun isNewerVersion(current: String, latest: String): Boolean {
@@ -237,7 +260,25 @@ object InAppUpdateManager {
     }
 
     private const val UPDATE_APK_NAME = "pokemon-alerts-update.apk"
+    private const val TAG = "InAppUpdateManager"
 }
+
+internal fun canStartUpdateCheck(state: UpdateState): Boolean = when (state) {
+    UpdateState.Idle,
+    UpdateState.UpToDate,
+    is UpdateState.Error -> true
+    UpdateState.Checking,
+    is UpdateState.UpdateAvailable,
+    is UpdateState.Downloading,
+    UpdateState.Installing,
+    is UpdateState.AwaitingInstallPermission -> false
+}
+
+internal fun noUpdateState(source: UpdateCheckSource): UpdateState =
+    if (source == UpdateCheckSource.MANUAL) UpdateState.UpToDate else UpdateState.Idle
+
+internal fun updateErrorState(source: UpdateCheckSource, message: String): UpdateState =
+    if (source == UpdateCheckSource.MANUAL) UpdateState.Error(message) else UpdateState.Idle
 
 internal object PendingInstallStore {
     private const val PREFS = "pending_update_install"
@@ -261,6 +302,8 @@ internal object PendingInstallStore {
         val apkPath = preferences.getString(KEY_APK_PATH, null) ?: return null
         return PendingInstall(releaseTag, apkUrl, apkPath)
     }
+
+    fun hasPending(context: Context): Boolean = load(context) != null
 
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()

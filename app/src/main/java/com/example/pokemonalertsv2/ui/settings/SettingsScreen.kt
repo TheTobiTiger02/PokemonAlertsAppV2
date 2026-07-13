@@ -98,6 +98,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
 import com.example.pokemonalertsv2.util.InAppUpdateManager
+import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.util.UpdateState
 
 internal enum class SettingsDestination(val title: String) {
@@ -495,7 +496,7 @@ fun SettingsScreen(
                             OutlinedButton(
                                 onClick = {
                                     coroutineScope.launch {
-                                        InAppUpdateManager.checkForUpdates()
+                                        InAppUpdateManager.checkForUpdates(UpdateCheckSource.MANUAL)
                                     }
                                 },
                                 enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading

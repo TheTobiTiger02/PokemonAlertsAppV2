@@ -25,13 +25,13 @@ class AlertsWidgetLayoutPolicyTest {
     }
 
     @Test
-    fun mediumAndLargeWidgetsChooseContentAwareLayouts() {
+    fun mediumAndLargeWidgetsChooseInformationDenseListLayouts() {
         assertEquals(
             WidgetLayoutMode.MEDIUM,
             widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 220, alertCount = 1)
         )
         assertEquals(
-            WidgetLayoutMode.LARGE_FOCUS,
+            WidgetLayoutMode.LARGE_LIST,
             widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 1)
         )
         assertEquals(
@@ -39,8 +39,12 @@ class AlertsWidgetLayoutPolicyTest {
             widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 3)
         )
         assertEquals(
-            WidgetLayoutMode.LARGE_PAIR,
+            WidgetLayoutMode.LARGE_LIST,
             widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 2)
+        )
+        assertEquals(
+            WidgetLayoutMode.LARGE_LIST,
+            widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 0)
         )
     }
 
@@ -48,8 +52,6 @@ class AlertsWidgetLayoutPolicyTest {
     fun onlyListLayoutsNotifyTheRemoteViewsCollection() {
         assertFalse(WidgetLayoutMode.COMPACT.usesCollection)
         assertTrue(WidgetLayoutMode.MEDIUM.usesCollection)
-        assertFalse(WidgetLayoutMode.LARGE_FOCUS.usesCollection)
-        assertFalse(WidgetLayoutMode.LARGE_PAIR.usesCollection)
         assertTrue(WidgetLayoutMode.LARGE_LIST.usesCollection)
     }
 }

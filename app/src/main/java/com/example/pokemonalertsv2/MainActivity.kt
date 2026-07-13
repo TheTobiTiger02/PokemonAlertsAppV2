@@ -189,10 +189,7 @@ class MainActivity : ComponentActivity() {
         }
 
         lifecycleScope.launch {
-            val restoredPendingInstall = InAppUpdateManager.restorePendingInstall(this@MainActivity)
-            if (!restoredPendingInstall && shouldCheckForUpdates()) {
-                InAppUpdateManager.checkForUpdates()
-            }
+            InAppUpdateManager.restorePendingInstall(this@MainActivity)
         }
 
         setContent {
@@ -288,14 +285,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         requestForegroundLocationStep()
-    }
-
-    private fun shouldCheckForUpdates(nowMillis: Long = System.currentTimeMillis()): Boolean {
-        val preferences = getSharedPreferences("update_check", MODE_PRIVATE)
-        val lastCheck = preferences.getLong("last_check_millis", 0L)
-        if (nowMillis - lastCheck < 24 * 60 * 60 * 1000L) return false
-        preferences.edit().putLong("last_check_millis", nowMillis).apply()
-        return true
     }
 
     private fun requestForegroundLocationStep() {

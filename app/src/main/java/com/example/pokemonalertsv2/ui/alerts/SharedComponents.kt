@@ -56,7 +56,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -98,7 +97,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
@@ -252,7 +250,6 @@ fun AlertCard(
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
-    val colors = LocalLinearModernColors.current
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
     val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
@@ -269,9 +266,8 @@ fun AlertCard(
 
     LinearModernCard(
         modifier = modifier.fillMaxWidth(),
-        containerColor = categoryAccent.copy(alpha = 0.10f)
-            .compositeOver(MaterialTheme.colorScheme.surfaceContainer),
-        borderColor = categoryAccent.copy(alpha = 0.42f),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        borderColor = MaterialTheme.colorScheme.outlineVariant,
         onClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             onShowDetails()
@@ -936,7 +932,7 @@ fun AlertDetailScreen(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                        categoryAccent.copy(alpha = 0.28f),
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
                                         MaterialTheme.colorScheme.background
                                     )
                                 )
@@ -1133,8 +1129,7 @@ fun AlertDetailScreen(
                     // Time & Status
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = categoryAccent.copy(alpha = 0.10f)
-                                .compositeOver(MaterialTheme.colorScheme.surfaceContainer)
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer
                         ),
                         shape = MaterialTheme.shapes.large,
                         modifier = Modifier.fillMaxWidth()
@@ -1462,8 +1457,7 @@ private fun StatsCard(alert: PokemonAlert) {
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = accentColor.copy(alpha = 0.10f)
-                .compositeOver(MaterialTheme.colorScheme.surfaceContainer)
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -1485,8 +1479,8 @@ private fun StatsCard(alert: PokemonAlert) {
             if (isReplacement) {
                 Surface(
                     shape = MaterialTheme.shapes.medium,
-                    color = accentColor.copy(alpha = 0.10f),
-                    border = BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -1676,8 +1670,7 @@ private fun IvBar(label: String, value: Int, maxValue: Int) {
 private fun WeatherAndGenderCard(alert: PokemonAlert) {
     val accent = Color(resolveAlertVisualStyle(alert).category.accentArgb)
     Surface(
-        color = accent.copy(alpha = 0.10f)
-            .compositeOver(MaterialTheme.colorScheme.surfaceContainer),
+        color = MaterialTheme.colorScheme.surfaceContainer,
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1715,16 +1708,16 @@ private fun WeatherAndGenderCard(alert: PokemonAlert) {
             // Gender
             alert.gender?.takeIf { it.isNotBlank() }?.let { gender ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Filled.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = accent
+                    Text(
+                        text = "Gender",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = gender.replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }

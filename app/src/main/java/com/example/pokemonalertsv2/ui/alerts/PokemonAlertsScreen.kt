@@ -1636,15 +1636,9 @@ private fun AlertHistoryPage(
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "${filteredAlerts.size} results",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             SortingButton(
                                 currentSort = sortPreference,

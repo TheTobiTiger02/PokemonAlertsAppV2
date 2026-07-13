@@ -234,16 +234,6 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             )
             WidgetLayoutMode.MEDIUM,
             WidgetLayoutMode.LARGE_LIST -> buildFullViews(context, appWidgetId, alertCount, palette, nowMillis)
-            WidgetLayoutMode.LARGE_FOCUS -> alertCounts.firstAlert?.let { alert ->
-                buildFocusViews(context, appWidgetId, alert, palette, nowMillis)
-            } ?: buildFullViews(context, appWidgetId, alertCount, palette, nowMillis)
-            WidgetLayoutMode.LARGE_PAIR -> buildPairViews(
-                context,
-                appWidgetId,
-                alertCounts.alerts,
-                palette,
-                nowMillis
-            )
         }
         return BuiltWidget(views = views, mode = mode)
     }
@@ -388,115 +378,6 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return views
     }
 
-    private suspend fun buildFocusViews(
-        context: Context,
-        appWidgetId: Int,
-        alert: PokemonAlert,
-        palette: WidgetThemePalette,
-        nowMillis: Long
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_alerts_focus).apply {
-            applyFocusWidgetPalette(palette)
-        }
-        val openApp = PendingIntent.getActivity(
-            context,
-            appWidgetId * 10,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.header_open_app_focus, openApp)
-        views.setOnClickPendingIntent(R.id.img_logo_focus, openApp)
-        views.setOnClickPendingIntent(R.id.tv_title_focus, openApp)
-
-        views.setTextViewText(
-            R.id.focus_type,
-            alert.typeDisplay?.takeIf { it.isNotBlank() }
-                ?: alert.type?.firstOrNull()
-                ?: context.getString(R.string.widget_active_alerts_label)
-        )
-        views.setTextViewText(R.id.focus_title, formatAlertTitle(alert))
-        val visualStyle = resolveAlertVisualStyle(alert)
-        views.setTextColor(R.id.focus_type, visualStyle.category.accentArgb.toInt())
-        alert.displayCp?.let { cp ->
-            views.setViewVisibility(R.id.focus_cp, View.VISIBLE)
-            views.setTextViewText(R.id.focus_cp, "CP $cp")
-        } ?: views.setViewVisibility(R.id.focus_cp, View.GONE)
-        views.setImageViewBitmap(
-            R.id.focus_image,
-            WidgetAlertImageRenderer.render(context, alert, sizeDp = 96, palette = palette)
-        )
-        views.setTextViewText(
-            R.id.focus_location,
-            alert.locationDisplay?.takeIf { it.isNotBlank() }
-                ?: alert.description.takeIf { it.isNotBlank() }
-                ?: context.getString(R.string.tap_for_details)
-        )
-
-        val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-        val remaining = endMillis?.minus(nowMillis)
-        views.setTextViewText(
-            R.id.focus_countdown,
-            when {
-                remaining == null -> context.getString(R.string.widget_active_alerts_label)
-                remaining <= 0L -> context.getString(R.string.alert_expired)
-                else -> context.getString(
-                    R.string.widget_countdown_format,
-                    TimeUtils.formatDurationShort(remaining)
-                )
-            }
-        )
-
-        val detailPending = PendingIntent.getActivity(
-            context,
-            appWidgetId * 10 + 1,
-            AlertDetailActivity.createIntent(context, alert),
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.focus_content, detailPending)
-        views.setOnClickPendingIntent(R.id.focus_image, detailPending)
-
-        val refreshPending = PendingIntent.getBroadcast(
-            context,
-            appWidgetId * 10 + 2,
-            Intent(context, AlertsWidgetProvider::class.java).apply {
-                action = ACTION_REFRESH
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.btn_refresh_focus, refreshPending)
-
-        if (alert.latitude != null && alert.longitude != null) {
-            views.setViewVisibility(R.id.btn_navigate_focus, View.VISIBLE)
-            val navigatePending = PendingIntent.getBroadcast(
-                context,
-                appWidgetId * 10 + 3,
-                Intent(context, AlertsWidgetProvider::class.java).apply {
-                    action = ACTION_NAVIGATE
-                    data = Uri.parse("pokemonalerts://widget/$appWidgetId/navigate/${alert.uniqueId}")
-                    putExtra(EXTRA_NAV_LAT, alert.latitude)
-                    putExtra(EXTRA_NAV_LNG, alert.longitude)
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-            )
-            views.setOnClickPendingIntent(R.id.btn_navigate_focus, navigatePending)
-        } else {
-            views.setViewVisibility(R.id.btn_navigate_focus, View.GONE)
-        }
-
-        val dismissPending = PendingIntent.getBroadcast(
-            context,
-            appWidgetId * 10 + 4,
-            Intent(context, AlertsWidgetProvider::class.java).apply {
-                action = ACTION_DISMISS_WIDGET
-                data = Uri.parse("pokemonalerts://widget/$appWidgetId/dismiss/${alert.uniqueId}")
-                putExtra(EXTRA_DISMISS_ALERT_ID, alert.uniqueId)
-            },
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.btn_dismiss_focus, dismissPending)
-        return views
-    }
-
     private fun layoutMode(
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
@@ -507,95 +388,6 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
         return widgetLayoutModeForSize(minWidth, minHeight, alertCount)
     }
-
-    private suspend fun buildPairViews(
-        context: Context,
-        appWidgetId: Int,
-        alerts: List<PokemonAlert>,
-        palette: WidgetThemePalette,
-        nowMillis: Long
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_alerts_pair).apply {
-            applyPairWidgetPalette(palette)
-        }
-        val openApp = PendingIntent.getActivity(
-            context,
-            appWidgetId * 10,
-            Intent(context, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.header_open_app_pair, openApp)
-        views.setOnClickPendingIntent(R.id.img_logo_pair, openApp)
-        views.setOnClickPendingIntent(R.id.tv_title_pair, openApp)
-        views.setTextViewText(R.id.tv_count_pair, "${alerts.size} active")
-
-        val refreshPending = PendingIntent.getBroadcast(
-            context,
-            appWidgetId * 10 + 2,
-            Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH },
-            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-        )
-        views.setOnClickPendingIntent(R.id.btn_refresh_pair, refreshPending)
-
-        val slots = listOf(
-            PairSlot(
-                R.id.pair_first,
-                R.id.pair_first_bar,
-                R.id.pair_first_image,
-                R.id.pair_first_title,
-                R.id.pair_first_meta,
-                R.id.pair_first_countdown
-            ),
-            PairSlot(
-                R.id.pair_second,
-                R.id.pair_second_bar,
-                R.id.pair_second_image,
-                R.id.pair_second_title,
-                R.id.pair_second_meta,
-                R.id.pair_second_countdown
-            )
-        )
-        slots.zip(alerts.take(2)).forEachIndexed { index, (slot, alert) ->
-            val style = resolveAlertVisualStyle(alert)
-            views.setInt(slot.bar, "setBackgroundColor", style.category.accentArgb.toInt())
-            views.setImageViewBitmap(
-                slot.image,
-                WidgetAlertImageRenderer.render(context, alert, sizeDp = 88, palette = palette)
-            )
-            views.setTextViewText(slot.title, formatAlertTitle(alert))
-            views.setTextViewText(
-                slot.meta,
-                alert.displayCp?.let { "CP $it • ${style.label}" } ?: style.label
-            )
-            views.setTextColor(slot.meta, style.category.accentArgb.toInt())
-            val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)?.minus(nowMillis)
-            views.setTextViewText(
-                slot.countdown,
-                when {
-                    remaining == null -> ""
-                    remaining <= 0L -> context.getString(R.string.alert_expired)
-                    else -> TimeUtils.formatDurationShort(remaining)
-                }
-            )
-            val detailPending = PendingIntent.getActivity(
-                context,
-                appWidgetId * 100 + index,
-                AlertDetailActivity.createIntent(context, alert),
-                PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
-            )
-            views.setOnClickPendingIntent(slot.root, detailPending)
-        }
-        return views
-    }
-
-    private data class PairSlot(
-        val root: Int,
-        val bar: Int,
-        val image: Int,
-        val title: Int,
-        val meta: Int,
-        val countdown: Int
-    )
 
     private data class WidgetAlertCounts(
         val visibleCount: Int,
@@ -749,8 +541,6 @@ internal fun shouldUseCompactWidgetLayout(minWidthDp: Int, minHeightDp: Int): Bo
 internal enum class WidgetLayoutMode {
     COMPACT,
     MEDIUM,
-    LARGE_FOCUS,
-    LARGE_PAIR,
     LARGE_LIST
 }
 
@@ -766,9 +556,5 @@ internal fun widgetLayoutModeForSize(
     if (minWidthDp <= 0 || minHeightDp <= 0) return WidgetLayoutMode.COMPACT
     if (minWidthDp < 300 || minHeightDp < 190) return WidgetLayoutMode.COMPACT
     if (minHeightDp < 280) return WidgetLayoutMode.MEDIUM
-    return when (alertCount) {
-        1 -> WidgetLayoutMode.LARGE_FOCUS
-        2 -> WidgetLayoutMode.LARGE_PAIR
-        else -> WidgetLayoutMode.LARGE_LIST
-    }
+    return WidgetLayoutMode.LARGE_LIST
 }
