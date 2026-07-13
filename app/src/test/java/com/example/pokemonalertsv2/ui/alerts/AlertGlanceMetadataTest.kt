@@ -51,4 +51,64 @@ class AlertGlanceMetadataTest {
         assertNull(alert.displayCp)
         assertFalse(buildAlertGlanceMetadata(alert).contains("2113"))
     }
+
+    @Test
+    fun pipWildSpawnShowsExactCp() {
+        val alert = PokemonAlert(
+            name = "Wild Electrike",
+            type = listOf("Spawn"),
+            cp = 800
+        )
+
+        assertEquals("CP 800", buildPipCpText(alert))
+    }
+
+    @Test
+    fun pipHundoWithoutSpawnTypeStillShowsExactCp() {
+        val alert = PokemonAlert(
+            name = "Perfect Electrike",
+            type = listOf("Hundo"),
+            cp = 800
+        )
+
+        assertEquals("CP 800", buildPipCpText(alert))
+    }
+
+    @Test
+    fun pipRaidShowsBothPerfectCatchValues() {
+        val alert = PokemonAlert(
+            name = "Terrakion Raid",
+            type = listOf("Raid"),
+            hundoCP = HundoCP(level20 = 2113, level25 = 2641)
+        )
+
+        assertEquals("100% CP \u00B7 L20 2113 \u00B7 L25 2641", buildPipCpText(alert))
+    }
+
+    @Test
+    fun pipRaidShowsSingleAvailablePerfectCatchValue() {
+        val alert = PokemonAlert(
+            name = "Terrakion Raid",
+            type = listOf("Raid"),
+            hundoCP = HundoCP(level20 = 2113)
+        )
+
+        assertEquals("100% CP \u00B7 L20 2113", buildPipCpText(alert))
+    }
+
+    @Test
+    fun pipRaidDoesNotPresentBossCpAsPerfectCatchCp() {
+        val alert = PokemonAlert(
+            name = "Terrakion Raid",
+            type = listOf("Raid"),
+            cp = 48457
+        )
+
+        assertNull(buildPipCpText(alert))
+    }
+
+    @Test
+    fun pipAlertWithoutCpOmitsCpLine() {
+        assertNull(buildPipCpText(PokemonAlert(name = "Unknown alert")))
+    }
 }

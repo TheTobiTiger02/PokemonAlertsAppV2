@@ -20,6 +20,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.validAlertCoordinates
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
 import kotlinx.coroutines.Dispatchers
@@ -215,23 +216,18 @@ object AlertShareCard {
         val primary = loadBitmap(imageLoader, context, alert.imageUrl)
         if (primary != null) return primary
 
-        val thumbnail = loadBitmap(imageLoader, context, alert.thumbnailUrl)
-        if (thumbnail != null) return thumbnail
-
-        val lat = alert.latitude
-        val lon = alert.longitude
-        if (lat != null && lon != null) {
+        validAlertCoordinates(alert)?.let { coordinates ->
             MapFallbackImageGenerator.generate(
                 context = context,
-                latitude = lat,
-                longitude = lon,
+                latitude = coordinates.latitude,
+                longitude = coordinates.longitude,
                 thumbnailUrl = alert.thumbnailUrl,
                 outputWidth = CARD_WIDTH,
                 outputHeight = HERO_HEIGHT.roundToInt()
             )?.let { return it }
         }
 
-        return null
+        return loadBitmap(imageLoader, context, alert.thumbnailUrl)
     }
 
     private suspend fun loadBitmap(

@@ -178,19 +178,23 @@ object AlertNotifier {
                 }
             }
 
-            // Load primary first, then thumbnail, then a cached map composite so alerts keep an image.
-            val bitmap = loadImageBitmap(context, imageLoader, alert.imageUrl)
-                ?: loadImageBitmap(context, imageLoader, alert.thumbnailUrl)
-                ?: if (alert.latitude != null && alert.longitude != null) {
-                MapFallbackImageGenerator.generate(
-                    context = context,
-                    latitude = alert.latitude,
-                    longitude = alert.longitude,
-                    thumbnailUrl = alert.thumbnailUrl,
-                    outputWidth = 512,
-                    outputHeight = 256
-                )
-            } else null
+            // Fully prepare the image before posting so the first notification already
+            // contains its map fallback. A bounded wait keeps delivery reliable offline.
+            val bitmap = resolveAlertNotificationImage(
+                alert = alert,
+                loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
+                generateMapFallback = { coordinates, thumbnailUrl, locationLabel ->
+                    MapFallbackImageGenerator.generate(
+                        context = context,
+                        latitude = coordinates.latitude,
+                        longitude = coordinates.longitude,
+                        thumbnailUrl = thumbnailUrl,
+                        locationLabel = locationLabel,
+                        outputWidth = 512,
+                        outputHeight = 256
+                    )
+                }
+            )
 
             // Select Channel ID based on type
             val channelId = when {

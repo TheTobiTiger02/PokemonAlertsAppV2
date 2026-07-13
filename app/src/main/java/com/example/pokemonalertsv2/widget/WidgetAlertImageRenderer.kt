@@ -14,16 +14,10 @@ import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.AlertImageSource
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
-
-internal enum class WidgetAlertImageSource { REMOTE_IMAGE, MAP_THUMBNAIL, PLACEHOLDER }
-
-internal fun widgetAlertImageSource(alert: PokemonAlert): WidgetAlertImageSource = when {
-    !alert.imageUrl.isNullOrBlank() -> WidgetAlertImageSource.REMOTE_IMAGE
-    alert.latitude != null && alert.longitude != null && !alert.thumbnailUrl.isNullOrBlank() ->
-        WidgetAlertImageSource.MAP_THUMBNAIL
-    else -> WidgetAlertImageSource.PLACEHOLDER
-}
+import com.example.pokemonalertsv2.util.orderedAlertImageSources
+import com.example.pokemonalertsv2.util.validAlertCoordinates
 
 /** Shared image pipeline for collection rows and the expanded single-alert widget. */
 internal object WidgetAlertImageRenderer {
@@ -35,22 +29,36 @@ internal object WidgetAlertImageRenderer {
     ): Bitmap {
         val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val radiusPx = 12 * context.resources.displayMetrics.density
-        return runCatching {
-            when (widgetAlertImageSource(alert)) {
-                WidgetAlertImageSource.REMOTE_IMAGE -> remoteImage(context, alert.imageUrl!!, sizePx, radiusPx, palette)
-                WidgetAlertImageSource.MAP_THUMBNAIL -> mapImage(context, alert, sizePx, radiusPx, palette)
-                WidgetAlertImageSource.PLACEHOLDER -> fallback(context, sizePx, radiusPx, palette)
-            }
-        }.getOrElse { fallback(context, sizePx, radiusPx, palette) }
+        orderedAlertImageSources(alert).forEach { source ->
+            val bitmap = runCatching {
+                when (source) {
+                    AlertImageSource.REMOTE_IMAGE -> remoteImage(
+                        context,
+                        requireNotNull(alert.imageUrl),
+                        sizePx,
+                        radiusPx
+                    )
+                    AlertImageSource.MAP_FALLBACK -> mapImage(context, alert, sizePx, radiusPx)
+                    AlertImageSource.THUMBNAIL -> remoteImage(
+                        context,
+                        requireNotNull(alert.thumbnailUrl),
+                        sizePx,
+                        radiusPx
+                    )
+                    AlertImageSource.PLACEHOLDER -> fallback(context, sizePx, radiusPx, palette)
+                }
+            }.getOrNull()
+            if (bitmap != null) return bitmap
+        }
+        return fallback(context, sizePx, radiusPx, palette)
     }
 
     private suspend fun remoteImage(
         context: Context,
         url: String,
         size: Int,
-        radius: Float,
-        palette: WidgetThemePalette
-    ): Bitmap {
+        radius: Float
+    ): Bitmap? {
         val key = "image|$url|$size|$radius"
         cached(key)?.let { return it }
         val request = ImageRequest.Builder(context).data(url).size(size, size).allowHardware(false).build()
@@ -58,24 +66,28 @@ internal object WidgetAlertImageRenderer {
         val bitmap = if (result is SuccessResult) {
             val drawable = result.drawable
             roundBitmap(if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, size), radius)
-        } else fallback(context, size, radius, palette)
-        return cache(key, bitmap)
+        } else null
+        return bitmap?.let { cache(key, it) }
     }
 
     private suspend fun mapImage(
         context: Context,
         alert: PokemonAlert,
         size: Int,
-        radius: Float,
-        palette: WidgetThemePalette
-    ): Bitmap {
+        radius: Float
+    ): Bitmap? {
+        val coordinates = validAlertCoordinates(alert) ?: return null
         val key = "map|${alert.latitude}|${alert.longitude}|${alert.thumbnailUrl}|$size|$radius"
         cached(key)?.let { return it }
         val bitmap = MapFallbackImageGenerator.generate(
-            context, requireNotNull(alert.latitude), requireNotNull(alert.longitude),
-            requireNotNull(alert.thumbnailUrl), size, size
-        )?.let { roundBitmap(it, radius) } ?: fallback(context, size, radius, palette)
-        return cache(key, bitmap)
+            context = context,
+            latitude = coordinates.latitude,
+            longitude = coordinates.longitude,
+            thumbnailUrl = alert.thumbnailUrl,
+            outputWidth = size,
+            outputHeight = size
+        )?.let { roundBitmap(it, radius) }
+        return bitmap?.let { cache(key, it) }
     }
 
     private fun fallback(

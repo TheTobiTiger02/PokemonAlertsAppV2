@@ -23,6 +23,7 @@ import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.validAlertCoordinates
 import kotlinx.coroutines.runBlocking
 
 class AlertsWidgetService : RemoteViewsService() {
@@ -116,10 +117,17 @@ private class AlertsFactory(
 
         // 3. Description
         val type = alert.type?.firstOrNull() ?: "Alert"
-        val descriptionText = alert.description
-            .takeIf { it.isNotBlank() }
-            ?: alert.locationDisplay
-            ?: type
+        val usesMapFallback = alert.imageUrl.isNullOrBlank() && validAlertCoordinates(alert) != null
+        val descriptionText = if (usesMapFallback) {
+            alert.locationDisplay
+                ?: alert.area?.takeIf { it.isNotBlank() }
+                ?: alert.description.takeIf { it.isNotBlank() }
+                ?: type
+        } else {
+            alert.description.takeIf { it.isNotBlank() }
+                ?: alert.locationDisplay
+                ?: type
+        }
         views.setTextViewText(
             R.id.item_desc,
             if (descriptionText == type) type else "$type: $descriptionText"

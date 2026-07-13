@@ -128,18 +128,15 @@ import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.fallbackLocationLabel
+import com.example.pokemonalertsv2.util.validAlertCoordinates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.ceil
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.ln
-import kotlin.math.tan
+import kotlin.math.roundToInt
 
 @Immutable
 data class AlertDistanceInfo(
@@ -245,6 +242,7 @@ fun AlertCard(
     distanceInfo: AlertDistanceInfo,
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
+    onPipClick: () -> Unit,
     onShareClick: () -> Unit,
     onSnoozeClick: (() -> Unit)? = null,
     nowMillis: Long = System.currentTimeMillis(),
@@ -427,6 +425,24 @@ fun AlertCard(
                                 contentDescription = "Snooze alert"
                             )
                         }
+                    }
+                    FilledIconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(
+                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+                            )
+                            onPipClick()
+                        },
+                        modifier = Modifier.size(48.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_pip),
+                            contentDescription = stringResource(id = R.string.open_alert_in_pip)
+                        )
                     }
                     FilledIconButton(
                         onClick = onShareClick,
@@ -650,26 +666,27 @@ fun AlertImage(
     alert: PokemonAlert,
     modifier: Modifier = Modifier,
     rounded: Boolean = true,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    showFallbackLocationChip: Boolean = true,
+    onMapFallbackChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val darkTheme = LocalAppDarkTheme.current
     val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
-    val thumbnailUrl = alert.thumbnailUrl
-    val lat = alert.latitude
-    val lon = alert.longitude
-    val hasValidCoords = lat != null && lon != null &&
-        lat.isFinite() && lon.isFinite() &&
-        lat in -85.0511..85.0511 && lon in -180.0..180.0 &&
-        !(abs(lat) < 0.0001 && abs(lon) < 0.0001)
-    var useFallback by remember(primaryUrl, thumbnailUrl) { mutableStateOf(false) }
+    val thumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+    val coordinates = validAlertCoordinates(alert)
+    var primaryFailed by remember(primaryUrl) { mutableStateOf(false) }
+    var mapFailed by remember(coordinates, thumbnailUrl) { mutableStateOf(false) }
 
     val imageHeight = if (rounded) 200.dp else 220.dp
     val shape = if (rounded) MaterialTheme.shapes.large else RectangleShape
     // When rounded=false the caller (detail hero) controls height via its own modifier
     val heightModifier = if (rounded) Modifier.height(imageHeight) else Modifier.fillMaxHeight()
-    val showPrimaryImage = primaryUrl != null && !useFallback
-    val showMapFallback = !showPrimaryImage && hasValidCoords
+    val showPrimaryImage = primaryUrl != null && !primaryFailed
+    val showMapFallback = !showPrimaryImage && coordinates != null && !mapFailed
+
+    LaunchedEffect(showMapFallback) {
+        onMapFallbackChanged?.invoke(showMapFallback)
+    }
 
     when {
         // Primary image available and not failed yet
@@ -685,7 +702,7 @@ fun AlertImage(
                 contentDescription = stringResource(id = R.string.alert_image),
                 placeholder = painterResource(id = R.drawable.ic_placeholder),
                 error = painterResource(id = R.drawable.ic_placeholder),
-                onError = { useFallback = true },
+                onError = { primaryFailed = true },
                 contentScale = contentScale,
                 modifier = modifier
                     .fillMaxWidth()
@@ -697,35 +714,9 @@ fun AlertImage(
 
         // Fallback: composite map + thumbnail sprite overlay
         showMapFallback -> {
-            val safeLat = lat!!
-            val safeLon = lon!!
-            var fallbackBitmap by remember(safeLat, safeLon, thumbnailUrl, rounded) {
-                mutableStateOf<Bitmap?>(null)
-            }
+            val safeCoordinates = requireNotNull(coordinates)
 
-            LaunchedEffect(safeLat, safeLon, thumbnailUrl, rounded) {
-                fallbackBitmap = withContext(Dispatchers.IO) {
-                    MapFallbackImageGenerator.generate(
-                        context = context,
-                        latitude = safeLat,
-                        longitude = safeLon,
-                        thumbnailUrl = thumbnailUrl,
-                        outputWidth = if (rounded) 512 else 1024,
-                        outputHeight = if (rounded) 320 else 640
-                    )
-                }
-            }
-
-            // Exact fractional tile coordinates
-            
-
-            // Integer tile coordinates (which tile the point falls in)
-            
-
-            // Fractional position within the center tile (0.0–1.0)
-            
-
-            Box(
+            BoxWithConstraints(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
@@ -734,20 +725,87 @@ fun AlertImage(
                     .clip(shape),
                 contentAlignment = Alignment.Center
             ) {
+                val rawWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else if (rounded) 512 else 1024
+                val rawHeight = if (constraints.hasBoundedHeight) constraints.maxHeight else if (rounded) 320 else 640
+                val largestDimension = maxOf(rawWidth, rawHeight).coerceAtLeast(1)
+                val outputScale = (1024f / largestDimension).coerceAtMost(1f)
+                val outputWidth = (rawWidth * outputScale).roundToInt().coerceAtLeast(128)
+                val outputHeight = (rawHeight * outputScale).roundToInt().coerceAtLeast(96)
+                var fallbackBitmap by remember(
+                    safeCoordinates,
+                    thumbnailUrl,
+                    outputWidth,
+                    outputHeight
+                ) { mutableStateOf<Bitmap?>(null) }
+                var mapLoadFinished by remember(
+                    safeCoordinates,
+                    thumbnailUrl,
+                    outputWidth,
+                    outputHeight
+                ) { mutableStateOf(false) }
+
+                LaunchedEffect(safeCoordinates, thumbnailUrl, outputWidth, outputHeight) {
+                    mapLoadFinished = false
+                    fallbackBitmap = withContext(Dispatchers.IO) {
+                        MapFallbackImageGenerator.generate(
+                            context = context,
+                            latitude = safeCoordinates.latitude,
+                            longitude = safeCoordinates.longitude,
+                            thumbnailUrl = thumbnailUrl,
+                            outputWidth = outputWidth,
+                            outputHeight = outputHeight
+                        )
+                    }
+                    mapLoadFinished = true
+                }
+
                 val bitmap = fallbackBitmap
+                LaunchedEffect(mapLoadFinished, bitmap) {
+                    if (mapLoadFinished && bitmap == null) mapFailed = true
+                }
                 if (bitmap != null) {
+                    val locationLabel = fallbackLocationLabel(alert)
                     Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = stringResource(id = R.string.alert_image),
-                        contentScale = contentScale,
+                        contentDescription = locationLabel?.let { "Map centered on $it" }
+                            ?: stringResource(id = R.string.alert_image),
+                        contentScale = ContentScale.FillBounds,
                         modifier = Modifier.fillMaxSize()
                     )
-                    if (darkTheme) {
-                        Box(
+                    if (showFallbackLocationChip && locationLabel != null) {
+                        Surface(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.34f))
-                        )
+                                .align(Alignment.BottomStart)
+                                .padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+                            ),
+                            tonalElevation = 2.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.LocationOn,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = locationLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 } else {
                     Box(
@@ -879,6 +937,10 @@ fun AlertDetailScreen(
     val scope = rememberCoroutineScope()
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
+    val darkTheme = LocalAppDarkTheme.current
+    var isMapFallback by remember(alert.uniqueId) {
+        mutableStateOf(alert.imageUrl.isNullOrBlank() && validAlertCoordinates(alert) != null)
+    }
     var showSnoozeDialog by remember { mutableStateOf(false) }
     var defaultSnoozeMinutes by remember { mutableStateOf(10) }
     LaunchedEffect(context) {
@@ -904,20 +966,34 @@ fun AlertDetailScreen(
                         .fillMaxWidth()
                         .height(240.dp)
                 ) {
-                    AlertImage(alert = alert, rounded = false, modifier = Modifier.fillMaxSize())
+                    AlertImage(
+                        alert = alert,
+                        rounded = false,
+                        modifier = Modifier.fillMaxSize(),
+                        onMapFallbackChanged = { isMapFallback = it }
+                    )
                     
                     // Top Bar Scrim
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(100.dp)
+                            .height(if (isMapFallback) 72.dp else 100.dp)
                             .align(Alignment.TopCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f)
-                                    )
+                                    colors = if (isMapFallback) {
+                                        listOf(
+                                            MaterialTheme.colorScheme.scrim.copy(
+                                                alpha = if (darkTheme) 0.34f else 0f
+                                            ),
+                                            Color.Transparent
+                                        )
+                                    } else {
+                                        listOf(
+                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                        )
+                                    }
                                 )
                             )
                     )
@@ -926,15 +1002,22 @@ fun AlertDetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(96.dp)
+                            .height(if (isMapFallback) 24.dp else 96.dp)
                             .align(Alignment.BottomCenter)
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
-                                        MaterialTheme.colorScheme.background
-                                    )
+                                    colors = if (isMapFallback) {
+                                        listOf(
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.background
+                                        )
+                                    } else {
+                                        listOf(
+                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                            MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
+                                            MaterialTheme.colorScheme.background
+                                        )
+                                    }
                                 )
                             )
                     )
@@ -1331,6 +1414,7 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
         isExpired -> stringResource(id = R.string.alert_expired)
         else -> TimeUtils.formatDurationShort(remainingMs ?: 0L)
     }
+    val pipCpText = remember(alert) { buildPipCpText(alert) }
 
     // Zoom & pan state
     var scale by remember { mutableFloatStateOf(1f) }
@@ -1373,6 +1457,7 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                 AlertImage(
                     alert = alert,
                     rounded = false,
+                    showFallbackLocationChip = false,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -1408,6 +1493,16 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (pipCpText != null) {
+                        Text(
+                            text = pipCpText,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     if (pipTimerText != null) {
                         Text(
                             text = pipTimerText,
@@ -2336,6 +2431,13 @@ fun openMapForAlert(context: Context, alert: PokemonAlert) {
     } catch (exception: ActivityNotFoundException) {
         Toast.makeText(context, context.getString(R.string.no_maps_app), Toast.LENGTH_SHORT).show()
     }
+}
+
+internal fun openAlertInPictureInPicture(context: Context, alert: PokemonAlert) {
+    val intent = AlertDetailActivity.createIntent(context, alert).apply {
+        putExtra(AlertDetailActivity.EXTRA_LAUNCH_PIP, true)
+    }
+    context.startActivity(intent)
 }
 
 fun getLastKnownLocation(context: Context): Location? {

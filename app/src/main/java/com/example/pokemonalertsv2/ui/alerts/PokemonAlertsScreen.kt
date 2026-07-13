@@ -653,6 +653,7 @@ fun PokemonAlertsPage(
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onAlertSelected(it) 
                 },
+                onPipClick = { alert -> openAlertInPictureInPicture(context, alert) },
                 onOpenMaps = { alert -> openMapForAlert(context, alert) },
                 onShareClick = onShareClick,
                 onSnoozeClick = { alert ->
@@ -713,6 +714,7 @@ private fun AlertsList(
     onSortChanged: (SortPreference) -> Unit,
     onShowDismissedChanged: (Boolean) -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
+    onPipClick: (PokemonAlert) -> Unit,
     onOpenMaps: (PokemonAlert) -> Unit,
     onShareClick: (PokemonAlert) -> Unit,
     onSnoozeClick: (PokemonAlert) -> Unit,
@@ -924,6 +926,7 @@ private fun AlertsList(
                         nowMillis = countdownNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
+                        onPipClick = { onPipClick(model.alert) },
                         onShareClick = { onShareClick(model.alert) },
                         onSnoozeClick = { onSnoozeClick(model.alert) }
                     )
@@ -1812,6 +1815,7 @@ private fun AlertHistoryPage(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onAlertClick(alert) 
                     },
+                    onPipClick = { openAlertInPictureInPicture(context, alert) },
                     onShareClick = {
                         scope.launch {
                             AlertShareCard.share(context, alert)

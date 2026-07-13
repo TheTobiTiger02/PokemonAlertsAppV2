@@ -6,12 +6,15 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.util.LruCache
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
+import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -31,8 +34,10 @@ import kotlin.math.tan
 object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
-    private const val DEFAULT_ZOOM = 16
-    private const val STYLE_VERSION = 2
+    private const val DEFAULT_ZOOM = 17
+    private const val STYLE_VERSION = 4
+    private const val TILE_USER_AGENT_REPOSITORY =
+        "https://github.com/TheTobiTiger02/PokemonAlertsAppV2"
     private val bitmapCache = object : LruCache<String, Bitmap>(32 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int {
             return value.byteCount / 1024
@@ -50,9 +55,10 @@ object MapFallbackImageGenerator {
      * @param latitude    Alert latitude
      * @param longitude   Alert longitude
      * @param thumbnailUrl URL of the Pokemon thumbnail sprite (nullable)
+     * @param locationLabel Optional human-readable street/place label
      * @param outputWidth  Desired output bitmap width in pixels
      * @param outputHeight Desired output bitmap height in pixels
-     * @param zoom         OSM zoom level (default 16)
+     * @param zoom         OSM zoom level (default 17)
      * @return Composite [Bitmap] or null if generation fails
      */
     suspend fun generate(
@@ -60,6 +66,7 @@ object MapFallbackImageGenerator {
         latitude: Double,
         longitude: Double,
         thumbnailUrl: String?,
+        locationLabel: String? = null,
         outputWidth: Int = 512,
         outputHeight: Int = 256,
         zoom: Int = DEFAULT_ZOOM
@@ -70,8 +77,9 @@ object MapFallbackImageGenerator {
             if (latitude !in -85.0511..85.0511 || longitude !in -180.0..180.0) return@withContext null
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
+            val normalizedLabel = locationLabel?.trim()?.takeIf { it.isNotEmpty() }
             val cacheKey =
-                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
+                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|${normalizedLabel.orEmpty()}|$outputWidth|$outputHeight|$zoom"
             bitmapCache.get(cacheKey)
                 ?.takeUnless { it.isRecycled }
                 ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
@@ -123,6 +131,14 @@ object MapFallbackImageGenerator {
             val tiles = tileJobs.awaitAll()
             val spriteBmp = spriteJob?.await()
 
+            // The tile containing the exact alert coordinate is essential. If it
+            // failed, let callers continue to their thumbnail/placeholder fallback.
+            if (tiles.none { it.dx == 0 && it.dy == 0 && it.bitmap != null }) {
+                tiles.forEach { it.bitmap?.recycle() }
+                spriteBmp?.recycle()
+                return@withContext null
+            }
+
             // --- Composite the output bitmap ---
             val output = Bitmap.createBitmap(outputWidth, outputHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(output)
@@ -142,36 +158,16 @@ object MapFallbackImageGenerator {
                 canvas.drawBitmap(bmp, left, top, tilePaint)
             }
 
-            val washPaint = Paint().apply {
-                color = 0x4DF6F2EA
-                style = Paint.Style.FILL
-            }
-            canvas.drawRect(0f, 0f, outputWidth.toFloat(), outputHeight.toFloat(), washPaint)
-
             // Coordinate is at center of the output
             val cx = outputWidth / 2f
             val cy = outputHeight / 2f
 
             val minDimension = minOf(outputWidth, outputHeight)
-            val radiusPx = (minDimension * 0.12f).coerceIn(8f, 96f)
-            val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = 0x805B8FD8.toInt()
-                style = Paint.Style.STROKE
-                strokeWidth = (minDimension * 0.006f).coerceIn(1.5f, 5f)
+            drawPokemonAtCoordinate(canvas, cx, cy, minDimension, spriteBmp)
+            normalizedLabel?.let {
+                drawLocationLabel(canvas, context, it, outputWidth, outputHeight)
             }
-            canvas.drawCircle(cx, cy, radiusPx, ringPaint)
-
-            // Draw thumbnail sprite at coordinate center
-            if (spriteBmp != null) {
-                val spriteSize = (minDimension * 0.12f).toInt()
-                    .coerceIn(12, 96)
-                val scaled = Bitmap.createScaledBitmap(spriteBmp, spriteSize, spriteSize, true)
-                val spriteLeft = cx - scaled.width / 2f
-                val spriteTop = cy - scaled.height / 2f
-                canvas.drawBitmap(scaled, spriteLeft, spriteTop, null)
-                if (scaled !== spriteBmp) scaled.recycle()
-                spriteBmp.recycle()
-            }
+            drawOpenStreetMapAttribution(canvas, context, outputWidth, outputHeight)
 
             // Recycle tile bitmaps
             tiles.forEach { it.bitmap?.recycle() }
@@ -195,7 +191,10 @@ object MapFallbackImageGenerator {
                 .scale(Scale.FILL)
                 .allowHardware(false)
             if (isMapTile) {
-                builder.addHeader("User-Agent", "PokemonAlertsV2/1.0")
+                builder.addHeader(
+                    "User-Agent",
+                    "PokemonAlertsV2/${BuildConfig.VERSION_NAME} (+$TILE_USER_AGENT_REPOSITORY)"
+                )
             }
             val result = imageLoader.execute(builder.build())
             if (result is SuccessResult) {
@@ -222,18 +221,143 @@ object MapFallbackImageGenerator {
 
     private fun mutedMapColorFilter(): ColorMatrixColorFilter {
         val matrix = ColorMatrix().apply {
-            setSaturation(0.28f)
+            setSaturation(0.65f)
         }
         val lift = ColorMatrix(
             floatArrayOf(
-                1.08f, 0f, 0f, 0f, 22f,
-                0f, 1.08f, 0f, 0f, 22f,
-                0f, 0f, 1.08f, 0f, 22f,
+                1.04f, 0f, 0f, 0f, 8f,
+                0f, 1.04f, 0f, 0f, 8f,
+                0f, 0f, 1.04f, 0f, 8f,
                 0f, 0f, 0f, 1f, 0f
             )
         )
         matrix.postConcat(lift)
         return ColorMatrixColorFilter(matrix)
+    }
+
+    private fun drawPokemonAtCoordinate(
+        canvas: Canvas,
+        coordinateX: Float,
+        coordinateY: Float,
+        minDimension: Int,
+        sprite: Bitmap?
+    ) {
+        if (sprite != null) {
+            val spriteSize = (minDimension * 0.18f).toInt().coerceIn(24, 112)
+            val scaled = Bitmap.createScaledBitmap(sprite, spriteSize, spriteSize, true)
+            val spriteLeft = coordinateX - scaled.width / 2f
+            val spriteTop = coordinateY - scaled.height / 2f
+            canvas.drawBitmap(scaled, spriteLeft, spriteTop, null)
+            if (scaled !== sprite) scaled.recycle()
+            sprite.recycle()
+        } else {
+            canvas.drawCircle(
+                coordinateX,
+                coordinateY,
+                (minDimension * 0.025f).coerceIn(4f, 14f),
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2869D8.toInt() }
+            )
+        }
+    }
+
+    private fun drawLocationLabel(
+        canvas: Canvas,
+        context: Context,
+        label: String,
+        outputWidth: Int,
+        outputHeight: Int
+    ) {
+        val density = context.resources.displayMetrics.density
+        val widthDp = outputWidth / density
+        val heightDp = outputHeight / density
+        if (widthDp < 150f || heightDp < 90f) return
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFF172033.toInt()
+            textSize = maxOf(12f * density, outputHeight * 0.055f).coerceAtMost(38f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        val horizontalPadding = maxOf(10f * density, outputWidth * 0.018f)
+        val verticalPadding = maxOf(7f * density, outputHeight * 0.025f)
+        val maxTextWidth = outputWidth * 0.62f
+        val displayText = ellipsize(label, maxTextWidth, textPaint)
+        val textWidth = textPaint.measureText(displayText)
+        val fontMetrics = textPaint.fontMetrics
+        val chipHeight = fontMetrics.descent - fontMetrics.ascent + verticalPadding * 2f
+        val margin = maxOf(10f * density, outputWidth * 0.018f)
+        val chipRect = RectF(
+            margin,
+            outputHeight - margin - chipHeight,
+            margin + textWidth + horizontalPadding * 2f,
+            outputHeight - margin
+        )
+        canvas.drawRoundRect(
+            chipRect,
+            chipHeight / 2f,
+            chipHeight / 2f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEBFFFFFF.toInt() }
+        )
+        canvas.drawText(
+            displayText,
+            chipRect.left + horizontalPadding,
+            chipRect.top + verticalPadding - fontMetrics.ascent,
+            textPaint
+        )
+    }
+
+    private fun drawOpenStreetMapAttribution(
+        canvas: Canvas,
+        context: Context,
+        outputWidth: Int,
+        outputHeight: Int
+    ) {
+        val density = context.resources.displayMetrics.density
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xCC172033.toInt()
+            textSize = maxOf(7f * density, minOf(outputWidth, outputHeight) * 0.028f)
+                .coerceAtMost(24f)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        }
+        val attribution = "\u00A9 OpenStreetMap contributors"
+        val availableTextWidth = outputWidth * 0.88f
+        val measuredWidth = textPaint.measureText(attribution)
+        if (measuredWidth > availableTextWidth) {
+            textPaint.textSize *= availableTextWidth / measuredWidth
+        }
+        val paddingX = maxOf(4f * density, outputWidth * 0.006f)
+        val paddingY = maxOf(2f * density, outputHeight * 0.008f)
+        val margin = maxOf(4f * density, outputWidth * 0.008f)
+        val metrics = textPaint.fontMetrics
+        val width = textPaint.measureText(attribution) + paddingX * 2f
+        val height = metrics.descent - metrics.ascent + paddingY * 2f
+        val rect = RectF(
+            outputWidth - margin - width,
+            outputHeight - margin - height,
+            outputWidth - margin,
+            outputHeight - margin
+        )
+        canvas.drawRoundRect(
+            rect,
+            height * 0.22f,
+            height * 0.22f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9FFFFFF.toInt() }
+        )
+        canvas.drawText(
+            attribution,
+            rect.left + paddingX,
+            rect.top + paddingY - metrics.ascent,
+            textPaint
+        )
+    }
+
+    private fun ellipsize(text: String, maxWidth: Float, paint: Paint): String {
+        if (paint.measureText(text) <= maxWidth) return text
+        val ellipsis = "\u2026"
+        var end = text.length
+        while (end > 1 && paint.measureText(text.substring(0, end) + ellipsis) > maxWidth) {
+            end--
+        }
+        return text.substring(0, end).trimEnd() + ellipsis
     }
 
     private fun visibleTileRange(outputSize: Int, frac: Float): IntRange {
