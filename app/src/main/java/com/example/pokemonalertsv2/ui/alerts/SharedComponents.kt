@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -111,6 +112,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
@@ -903,6 +906,7 @@ fun AlertDetailScreen(
         mutableStateOf(alert.imageUrl.isNullOrBlank() && validAlertCoordinates(alert) != null)
     }
     var showSnoozeDialog by remember { mutableStateOf(false) }
+    var showExpandedImage by remember(alert.uniqueId) { mutableStateOf(false) }
     var defaultSnoozeMinutes by remember { mutableStateOf(10) }
     LaunchedEffect(context) {
         defaultSnoozeMinutes = withContext(Dispatchers.IO) {
@@ -930,7 +934,9 @@ fun AlertDetailScreen(
                     AlertImage(
                         alert = alert,
                         rounded = false,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { showExpandedImage = true },
                         onMapFallbackChanged = { isMapFallback = it }
                     )
                     
@@ -1241,6 +1247,58 @@ fun AlertDetailScreen(
                 }
             }
         )
+    }
+
+    if (showExpandedImage) {
+        ExpandedAlertImageViewer(
+            alert = alert,
+            onDismiss = { showExpandedImage = false }
+        )
+    }
+}
+
+@Composable
+private fun ExpandedAlertImageViewer(
+    alert: PokemonAlert,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AlertImage(
+                    alert = alert,
+                    rounded = false,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                FilledIconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(16.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black.copy(alpha = 0.62f),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = stringResource(id = R.string.close)
+                    )
+                }
+            }
+        }
     }
 }
 
