@@ -36,22 +36,4 @@ class AlertImageSourcesTest {
         assertNull(validAlertCoordinates(alert))
     }
 
-    @Test
-    fun locationLabelPrefersExactStreetThenArea() {
-        assertEquals(
-            "Pallaswiesenstraße Darmstadt",
-            fallbackLocationLabel(
-                PokemonAlert(
-                    name = "Street alert",
-                    pokemonLocation = "Pallaswiesenstraße Darmstadt",
-                    area = "Darmstadt"
-                )
-            )
-        )
-        assertEquals(
-            "Darmstadt",
-            fallbackLocationLabel(PokemonAlert(name = "Area alert", area = "Darmstadt"))
-        )
-        assertNull(fallbackLocationLabel(PokemonAlert(name = "Unknown location")))
-    }
 }

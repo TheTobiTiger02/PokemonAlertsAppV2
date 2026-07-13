@@ -35,7 +35,7 @@ object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
     private const val DEFAULT_ZOOM = 17
-    private const val STYLE_VERSION = 4
+    private const val STYLE_VERSION = 5
     private const val TILE_USER_AGENT_REPOSITORY =
         "https://github.com/TheTobiTiger02/PokemonAlertsAppV2"
     private val bitmapCache = object : LruCache<String, Bitmap>(32 * 1024) {
@@ -55,7 +55,6 @@ object MapFallbackImageGenerator {
      * @param latitude    Alert latitude
      * @param longitude   Alert longitude
      * @param thumbnailUrl URL of the Pokemon thumbnail sprite (nullable)
-     * @param locationLabel Optional human-readable street/place label
      * @param outputWidth  Desired output bitmap width in pixels
      * @param outputHeight Desired output bitmap height in pixels
      * @param zoom         OSM zoom level (default 17)
@@ -66,7 +65,6 @@ object MapFallbackImageGenerator {
         latitude: Double,
         longitude: Double,
         thumbnailUrl: String?,
-        locationLabel: String? = null,
         outputWidth: Int = 512,
         outputHeight: Int = 256,
         zoom: Int = DEFAULT_ZOOM
@@ -77,9 +75,8 @@ object MapFallbackImageGenerator {
             if (latitude !in -85.0511..85.0511 || longitude !in -180.0..180.0) return@withContext null
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
-            val normalizedLabel = locationLabel?.trim()?.takeIf { it.isNotEmpty() }
             val cacheKey =
-                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|${normalizedLabel.orEmpty()}|$outputWidth|$outputHeight|$zoom"
+                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
             bitmapCache.get(cacheKey)
                 ?.takeUnless { it.isRecycled }
                 ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
@@ -164,9 +161,6 @@ object MapFallbackImageGenerator {
 
             val minDimension = minOf(outputWidth, outputHeight)
             drawPokemonAtCoordinate(canvas, cx, cy, minDimension, spriteBmp)
-            normalizedLabel?.let {
-                drawLocationLabel(canvas, context, it, outputWidth, outputHeight)
-            }
             drawOpenStreetMapAttribution(canvas, context, outputWidth, outputHeight)
 
             // Recycle tile bitmaps
@@ -260,51 +254,6 @@ object MapFallbackImageGenerator {
         }
     }
 
-    private fun drawLocationLabel(
-        canvas: Canvas,
-        context: Context,
-        label: String,
-        outputWidth: Int,
-        outputHeight: Int
-    ) {
-        val density = context.resources.displayMetrics.density
-        val widthDp = outputWidth / density
-        val heightDp = outputHeight / density
-        if (widthDp < 150f || heightDp < 90f) return
-
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0xFF172033.toInt()
-            textSize = maxOf(12f * density, outputHeight * 0.055f).coerceAtMost(38f)
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        val horizontalPadding = maxOf(10f * density, outputWidth * 0.018f)
-        val verticalPadding = maxOf(7f * density, outputHeight * 0.025f)
-        val maxTextWidth = outputWidth * 0.62f
-        val displayText = ellipsize(label, maxTextWidth, textPaint)
-        val textWidth = textPaint.measureText(displayText)
-        val fontMetrics = textPaint.fontMetrics
-        val chipHeight = fontMetrics.descent - fontMetrics.ascent + verticalPadding * 2f
-        val margin = maxOf(10f * density, outputWidth * 0.018f)
-        val chipRect = RectF(
-            margin,
-            outputHeight - margin - chipHeight,
-            margin + textWidth + horizontalPadding * 2f,
-            outputHeight - margin
-        )
-        canvas.drawRoundRect(
-            chipRect,
-            chipHeight / 2f,
-            chipHeight / 2f,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xEBFFFFFF.toInt() }
-        )
-        canvas.drawText(
-            displayText,
-            chipRect.left + horizontalPadding,
-            chipRect.top + verticalPadding - fontMetrics.ascent,
-            textPaint
-        )
-    }
-
     private fun drawOpenStreetMapAttribution(
         canvas: Canvas,
         context: Context,
@@ -348,16 +297,6 @@ object MapFallbackImageGenerator {
             rect.top + paddingY - metrics.ascent,
             textPaint
         )
-    }
-
-    private fun ellipsize(text: String, maxWidth: Float, paint: Paint): String {
-        if (paint.measureText(text) <= maxWidth) return text
-        val ellipsis = "\u2026"
-        var end = text.length
-        while (end > 1 && paint.measureText(text.substring(0, end) + ellipsis) > maxWidth) {
-            end--
-        }
-        return text.substring(0, end).trimEnd() + ellipsis
     }
 
     private fun visibleTileRange(outputSize: Int, frac: Float): IntRange {

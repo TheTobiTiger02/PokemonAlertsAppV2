@@ -3,7 +3,6 @@ package com.example.pokemonalertsv2.notifications
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.AlertCoordinates
 import com.example.pokemonalertsv2.util.AlertImageSource
-import com.example.pokemonalertsv2.util.fallbackLocationLabel
 import com.example.pokemonalertsv2.util.orderedAlertImageSources
 import com.example.pokemonalertsv2.util.validAlertCoordinates
 import kotlinx.coroutines.CancellationException
@@ -20,7 +19,7 @@ internal suspend fun <T> resolveAlertNotificationImage(
     alert: PokemonAlert,
     timeoutMillis: Long = NOTIFICATION_IMAGE_PREPARATION_TIMEOUT_MS,
     loadRemoteImage: suspend (String) -> T?,
-    generateMapFallback: suspend (AlertCoordinates, String?, String?) -> T?
+    generateMapFallback: suspend (AlertCoordinates, String?) -> T?
 ): T? = withTimeoutOrNull(timeoutMillis) {
     for (source in orderedAlertImageSources(alert)) {
         val image = when (source) {
@@ -33,8 +32,7 @@ internal suspend fun <T> resolveAlertNotificationImage(
                     attemptImageOperation {
                         generateMapFallback(
                             coordinates,
-                            alert.thumbnailUrl?.takeIf { it.isNotBlank() },
-                            fallbackLocationLabel(alert)
+                            alert.thumbnailUrl?.takeIf { it.isNotBlank() }
                         )
                     }
                 }

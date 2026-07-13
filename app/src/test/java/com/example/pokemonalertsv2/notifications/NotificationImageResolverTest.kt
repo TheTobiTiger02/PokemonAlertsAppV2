@@ -22,7 +22,7 @@ class NotificationImageResolverTest {
             resolveAlertNotificationImage(
                 alert = alertWithCoordinates(),
                 loadRemoteImage = { null },
-                generateMapFallback = { _, thumbnailUrl, _ ->
+                generateMapFallback = { _, thumbnailUrl ->
                     assertNull(thumbnailUrl)
                     generatedMap.await()
                 }
@@ -45,7 +45,7 @@ class NotificationImageResolverTest {
                 attempts += "remote:$url"
                 null
             },
-            generateMapFallback = { _, _, _ ->
+            generateMapFallback = { _, _ ->
                 attempts += "map"
                 "generated-map"
             }
@@ -69,7 +69,7 @@ class NotificationImageResolverTest {
                 thumbnailUrl = "https://example.test/pokemon.png"
             ),
             loadRemoteImage = { "thumbnail" },
-            generateMapFallback = { _, _, _ ->
+            generateMapFallback = { _, _ ->
                 mapWasRequested = true
                 "unexpected-map"
             }
@@ -85,7 +85,7 @@ class NotificationImageResolverTest {
             alert = alertWithCoordinates(),
             timeoutMillis = 100L,
             loadRemoteImage = { null },
-            generateMapFallback = { _, _, _ -> awaitCancellation() }
+            generateMapFallback = { _, _ -> awaitCancellation() }
         )
 
         assertNull(result)
@@ -102,7 +102,7 @@ class NotificationImageResolverTest {
                 attempts += "remote:$url"
                 "thumbnail"
             },
-            generateMapFallback = { _, thumbnailUrl, _ ->
+            generateMapFallback = { _, thumbnailUrl ->
                 attempts += "map:$thumbnailUrl"
                 null
             }
@@ -123,7 +123,7 @@ class NotificationImageResolverTest {
         val result = resolveAlertNotificationImage<String>(
             alert = alertWithCoordinates(),
             loadRemoteImage = { null },
-            generateMapFallback = { _, _, _ -> error("tile request failed") }
+            generateMapFallback = { _, _ -> error("tile request failed") }
         )
 
         assertNull(result)

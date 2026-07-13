@@ -30,7 +30,3 @@ internal fun orderedAlertImageSources(alert: PokemonAlert): List<AlertImageSourc
     if (!alert.thumbnailUrl.isNullOrBlank()) add(AlertImageSource.THUMBNAIL)
     add(AlertImageSource.PLACEHOLDER)
 }
-
-internal fun fallbackLocationLabel(alert: PokemonAlert): String? =
-    alert.locationDisplay?.takeIf { it.isNotBlank() }
-        ?: alert.area?.takeIf { it.isNotBlank() }

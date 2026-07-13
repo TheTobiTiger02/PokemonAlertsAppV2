@@ -128,7 +128,6 @@ import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
-import com.example.pokemonalertsv2.util.fallbackLocationLabel
 import com.example.pokemonalertsv2.util.validAlertCoordinates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -667,7 +666,6 @@ fun AlertImage(
     modifier: Modifier = Modifier,
     rounded: Boolean = true,
     contentScale: ContentScale = ContentScale.Crop,
-    showFallbackLocationChip: Boolean = true,
     onMapFallbackChanged: ((Boolean) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -764,49 +762,12 @@ fun AlertImage(
                     if (mapLoadFinished && bitmap == null) mapFailed = true
                 }
                 if (bitmap != null) {
-                    val locationLabel = fallbackLocationLabel(alert)
                     Image(
                         bitmap = bitmap.asImageBitmap(),
-                        contentDescription = locationLabel?.let { "Map centered on $it" }
-                            ?: stringResource(id = R.string.alert_image),
+                        contentDescription = stringResource(id = R.string.alert_image),
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier.fillMaxSize()
                     )
-                    if (showFallbackLocationChip && locationLabel != null) {
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                            border = BorderStroke(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
-                            ),
-                            tonalElevation = 2.dp
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.LocationOn,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = locationLabel,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
                 } else {
                     Box(
                         modifier = Modifier
@@ -1457,7 +1418,6 @@ private fun AlertPictureInPictureContent(alert: PokemonAlert) {
                 AlertImage(
                     alert = alert,
                     rounded = false,
-                    showFallbackLocationChip = false,
                     modifier = Modifier.fillMaxSize()
                 )
             }
