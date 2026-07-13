@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="widget_loading">Loading alerts…</string>
     <string name="app_name">Pok&#x00E9;mon Alerts</string>
     <string name="navigation_alerts">Alerts</string>
     <string name="navigation_map">Map</string>
@@ -43,7 +44,7 @@
     <string name="countdown_suffix_short">left</string>
     <string name="widget_countdown_format">%1$s left</string>
     <string name="exact_alarm_permission_title">Keep widget alerts fresh</string>
-    <string name="exact_alarm_permission_message">Allow exact background alarms so the widget can refresh location and show alerts when you move into range.</string>
+    <string name="exact_alarm_permission_message">Allow Alarms &amp; reminders access so expired alerts disappear from the widget at the correct time.</string>
     <string name="exact_alarm_permission_positive">Open settings</string>
     <string name="exact_alarm_permission_negative">Maybe later</string>
     <string name="exact_alarm_permission_granted">Widget background updates are now active.</string>

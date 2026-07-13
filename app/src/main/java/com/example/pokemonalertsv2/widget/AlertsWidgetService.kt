@@ -17,7 +17,9 @@ import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -38,26 +40,24 @@ private class AlertsFactory(
     private var currentLocation: Location? = null
     private var walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 
-    // Colors
-    private val colorOnSurface by lazy { ContextCompat.getColor(context, R.color.widget_on_surface) }
-    private val colorError by lazy { ContextCompat.getColor(context, R.color.widget_error) }
-    private val colorWarning by lazy { ContextCompat.getColor(context, R.color.widget_warning) }
-    private val colorPrimary by lazy { ContextCompat.getColor(context, R.color.widget_primary) }
-    private val fallbackBackground by lazy { ContextCompat.getColor(context, R.color.widget_fallback_background) }
-    private val fallbackAccent by lazy { ContextCompat.getColor(context, R.color.widget_primary_container) }
+    private var palette: WidgetThemePalette = WidgetThemePalette.Dark
     private val cornerRadiusPx by lazy { 12 * context.resources.displayMetrics.density }
     override fun onCreate() = Unit
 
     override fun onDataSetChanged() {
         runBlocking {
-            val loadedAlerts = WidgetAlertLoader.load(
-                context = context,
-                appWidgetId = appWidgetId,
-                fallbackLocation = currentLocation
-            )
-            currentLocation = loadedAlerts.location
+            palette = resolveWidgetThemePalette(context)
+            val renderSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
+                ?: WidgetAlertLoader.load(
+                    context = context,
+                    appWidgetId = appWidgetId,
+                    fallbackLocation = currentLocation
+                ).let {
+                    WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
+                }
+            currentLocation = renderSnapshot?.location ?: currentLocation
 
-            val sorted = loadedAlerts.alerts.sortedWith(compareByDescending<PokemonAlert> {
+            val sorted = renderSnapshot.orEmpty().sortedWith(compareByDescending<PokemonAlert> {
                 TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
             }.thenByDescending { it.endTime })
 
@@ -69,6 +69,9 @@ private class AlertsFactory(
         }
     }
 
+    private fun WidgetAlertSnapshotStore.RenderSnapshot?.orEmpty(): List<PokemonAlert> =
+        this?.alerts.orEmpty()
+
     override fun onDestroy() {
         items.clear()
         walkingRoutes = emptyMap()
@@ -78,7 +81,11 @@ private class AlertsFactory(
 
     override fun getViewAt(position: Int): RemoteViews? {
         val alert = items.getOrNull(position) ?: return null
-        val views = RemoteViews(context.packageName, R.layout.widget_alert_item)
+        val views = RemoteViews(context.packageName, R.layout.widget_alert_item).apply {
+            applyItemWidgetPalette(palette)
+        }
+        val visualStyle = resolveAlertVisualStyle(alert)
+        views.setInt(R.id.item_category_bar, "setBackgroundColor", visualStyle.category.accentArgb.toInt())
 
         // 1. Title
         views.setTextViewText(R.id.item_title, formatAlertTitle(alert))
@@ -94,14 +101,14 @@ private class AlertsFactory(
                 // Color coding for urgency
                 val minutesLeft = remaining / 1000 / 60
                 val timeColor = when {
-                    minutesLeft < 5 -> colorError
-                    minutesLeft < 15 -> colorWarning
-                    else -> colorPrimary
+                    minutesLeft < 5 -> palette.error
+                    minutesLeft < 15 -> palette.warning
+                    else -> palette.primary
                 }
                 views.setTextColor(R.id.item_time, timeColor)
             } else {
                 views.setTextViewText(R.id.item_time, "Ended")
-                views.setTextColor(R.id.item_time, colorOnSurface)
+                views.setTextColor(R.id.item_time, palette.onSurface)
             }
         } else {
             views.setTextViewText(R.id.item_time, "")
@@ -136,18 +143,24 @@ private class AlertsFactory(
         val distanceText = routeDisplayInfo.distanceText
         val walkingText = routeDisplayInfo.walkingText
 
-        val metaParts = listOfNotNull(distanceText, walkingText)
-        if (metaParts.isEmpty()) {
+        val metadata = buildAlertGlanceMetadata(
+            alert = alert,
+            distanceText = distanceText,
+            walkingText = walkingText,
+            includeCategory = false,
+            separator = " | "
+        )
+        if (metadata.isBlank()) {
             views.setViewVisibility(R.id.item_meta, View.GONE)
         } else {
             views.setViewVisibility(R.id.item_meta, View.VISIBLE)
-            views.setTextViewText(R.id.item_meta, metaParts.joinToString(" | "))
+            views.setTextViewText(R.id.item_meta, metadata)
         }
 
         // 5. Image loading is shared with the expanded single-alert layout.
         views.setImageViewBitmap(
             R.id.item_image,
-            runBlocking { WidgetAlertImageRenderer.render(context, alert, sizeDp = 56) }
+            runBlocking { WidgetAlertImageRenderer.render(context, alert, sizeDp = 56, palette = palette) }
         )
 
         // 6. Navigate button — show only if we have coordinates
@@ -185,7 +198,10 @@ private class AlertsFactory(
         return views
     }
 
-    override fun getLoadingView(): RemoteViews? = null
+    override fun getLoadingView(): RemoteViews =
+        RemoteViews(context.packageName, R.layout.widget_alert_loading).apply {
+            applyLoadingWidgetPalette(palette)
+        }
     override fun getViewTypeCount(): Int = 1
     override fun getItemId(position: Int): Long = items.getOrNull(position)?.uniqueId?.hashCode()?.toLong() ?: position.toLong()
     override fun hasStableIds(): Boolean = true
@@ -211,12 +227,12 @@ private class AlertsFactory(
         val cx = size / 2f
         val cy = size / 2f
 
-        canvas.drawColor(fallbackBackground)
+        canvas.drawColor(palette.fallbackBackground)
         canvas.drawCircle(
             cx,
             cy,
             size * 0.31f,
-            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fallbackAccent }
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.fallbackAccent }
         )
 
         // Draw Pokéball icon from vector drawable

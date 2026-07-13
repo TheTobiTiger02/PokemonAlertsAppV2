@@ -10,6 +10,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.example.pokemonalertsv2.fcm.FcmTopicSubscriber
 import com.example.pokemonalertsv2.notifications.AlertNotifier
+import com.example.pokemonalertsv2.widget.WidgetUpdateCoordinator
 
 class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoaderFactory {
 
@@ -18,6 +19,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         try {
             AlertNotifier.ensureChannel(this)
             FcmTopicSubscriber.subscribe(this)
+            WidgetUpdateCoordinator.start(this)
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)
         }

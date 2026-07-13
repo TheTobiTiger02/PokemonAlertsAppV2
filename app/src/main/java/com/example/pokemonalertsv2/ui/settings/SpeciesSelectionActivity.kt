@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,11 +60,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.data.database.PokemonSpeciesEntity
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 
 class SpeciesSelectionActivity : ComponentActivity() {
 
     private val viewModel: SpeciesSelectionViewModel by viewModels()
+    private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,7 +78,11 @@ class SpeciesSelectionActivity : ComponentActivity() {
         viewModel.setAlertType(alertType)
 
         setContent {
-            PokemonAlertsV2Theme(darkTheme = true) {
+            val themeMode by repository.observeThemeMode()
+                .collectAsStateWithLifecycle(initialValue = 0)
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 val speciesList by viewModel.speciesList.collectAsStateWithLifecycle()
                 val allowedSpecies by viewModel.allowedSpecies.collectAsStateWithLifecycle()
                 val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()

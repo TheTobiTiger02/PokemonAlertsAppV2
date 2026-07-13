@@ -13,6 +13,9 @@
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         tools:targetApi="33" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        tools:targetApi="31" />
 
     <application
         android:name=".PokemonAlertsApplication"
@@ -107,6 +110,9 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="com.example.pokemonalertsv2.widget.ACTION_ITEM_CLICK" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

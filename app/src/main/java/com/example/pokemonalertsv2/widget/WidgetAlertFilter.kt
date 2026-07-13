@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.widget
 
 import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 
 internal object WidgetAlertFilter {
@@ -85,10 +86,19 @@ internal object WidgetAlertFilter {
 
     private fun matchesWidgetTypes(alert: PokemonAlert, filterTypes: Set<String>): Boolean {
         if (filterTypes.isEmpty()) return true
-        val alertTypes = alert.type.orEmpty()
-        if (alertTypes.isEmpty()) return true
-        return alertTypes.any { type ->
-            filterTypes.any { filter -> type.contains(filter, ignoreCase = true) }
+        val semanticTypes = buildSet {
+            addAll(alert.type.orEmpty())
+            add(resolveAlertVisualStyle(alert).label)
+            if (alert.isPerfect) add("Hundo")
+            if (alert.isNundo) add("Nundo")
+            if (alert.isWeatherChange) add("Weather")
+        }
+        if (semanticTypes.isEmpty()) return true
+        return semanticTypes.any { type ->
+            filterTypes.any { filter ->
+                type.contains(filter, ignoreCase = true) ||
+                    filter.contains(type, ignoreCase = true)
+            }
         }
     }
 

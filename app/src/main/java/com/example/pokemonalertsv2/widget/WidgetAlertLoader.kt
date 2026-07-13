@@ -50,6 +50,12 @@ internal object WidgetAlertLoader {
             criteria = criteria
         ).also { WidgetAlertSnapshotStore.updateCadence(appWidgetId, it) }
 
+        WidgetAlertSnapshotStore.publishRenderSnapshot(
+            appWidgetId = appWidgetId,
+            alerts = visibleAlerts,
+            location = location
+        )
+
         return LoadedAlerts(
             alerts = visibleAlerts,
             cadenceAlerts = cadenceAlerts,

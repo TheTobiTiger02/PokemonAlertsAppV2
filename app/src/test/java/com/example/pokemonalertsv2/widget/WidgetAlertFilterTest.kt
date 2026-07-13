@@ -104,6 +104,19 @@ class WidgetAlertFilterTest {
     }
 
     @Test
+    fun filterAlerts_hidesAlertAtExactExpirationBoundary() {
+        val expiringNow = sampleAlert("Boundary", endTime = "1000")
+
+        val result = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(expiringNow),
+            criteria = criteria(nowMillis = 1_000L),
+            origin = null
+        )
+
+        assertTrue((result as WidgetAlertFilter.Result.Filtered).alerts.isEmpty())
+    }
+
+    @Test
     fun filterAlerts_preservesPreviousWhenMaxDistanceNeedsMissingLocation() {
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(sampleAlert("Unknown Distance")),
@@ -164,29 +177,114 @@ class WidgetAlertFilterTest {
         assertEquals(1_500L, WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis = 1_000L))
     }
 
+    @Test
+    fun semanticHundoAndNundoFiltersMatchIvDerivedSpawnAlerts() {
+        val hundo = sampleAlert("Perfect", type = listOf("Spawn"), iv = "15/15/15")
+        val nundo = sampleAlert("Zero", type = listOf("Spawn"), iv = "0/0/0")
+
+        val hundos = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(hundo, nundo),
+            criteria = criteria(widgetFilterTypes = setOf("Hundo")),
+            origin = null
+        ) as WidgetAlertFilter.Result.Filtered
+        val nundos = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(hundo, nundo),
+            criteria = criteria(widgetFilterTypes = setOf("Nundo")),
+            origin = null
+        ) as WidgetAlertFilter.Result.Filtered
+
+        assertEquals(listOf(hundo), hundos.alerts)
+        assertEquals(listOf(nundo), nundos.alerts)
+    }
+
+    @Test
+    fun rareAndWeatherFiltersMatchSemanticCategories() {
+        val rare = sampleAlert("Rare", type = listOf("Rare"))
+        val weather = sampleAlert("Weather", type = listOf("Weather Change"))
+
+        val rareResult = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(rare, weather),
+            criteria = criteria(widgetFilterTypes = setOf("Rare")),
+            origin = null
+        ) as WidgetAlertFilter.Result.Filtered
+        val weatherResult = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(rare, weather),
+            criteria = criteria(widgetFilterTypes = setOf("Weather")),
+            origin = null
+        ) as WidgetAlertFilter.Result.Filtered
+
+        assertEquals(listOf(rare), rareResult.alerts)
+        assertEquals(listOf(weather), weatherResult.alerts)
+    }
+
+    @Test
+    fun renderSnapshotIsGenerationTaggedAndDefensivelyCopied() {
+        val source = mutableListOf(sampleAlert("First"))
+        val first = WidgetAlertSnapshotStore.publishRenderSnapshot(7, source, null)
+        source += sampleAlert("Changed after publish")
+        val restored = WidgetAlertSnapshotStore.currentRenderSnapshot(7)
+        val second = WidgetAlertSnapshotStore.publishRenderSnapshot(
+            7,
+            listOf(sampleAlert("Second")),
+            null
+        )
+
+        assertEquals(listOf("First"), restored?.alerts?.map { it.name })
+        assertTrue(second.generation > first.generation)
+    }
+
+    @Test
+    fun expirationPublishesEmptySnapshotAfterOneActiveAlert() {
+        val alert = sampleAlert("Expiring", endTime = "2000")
+        val active = WidgetAlertSnapshotStore.resolve(
+            appWidgetId = 8,
+            alerts = listOf(alert),
+            criteria = criteria(nowMillis = 1_999L),
+            origin = null
+        )
+        WidgetAlertSnapshotStore.publishRenderSnapshot(8, active, null)
+
+        val expired = WidgetAlertSnapshotStore.resolve(
+            appWidgetId = 8,
+            alerts = listOf(alert),
+            criteria = criteria(nowMillis = 2_000L),
+            origin = null
+        )
+        WidgetAlertSnapshotStore.publishRenderSnapshot(8, expired, null)
+
+        assertTrue(WidgetAlertSnapshotStore.currentRenderSnapshot(8)?.alerts.orEmpty().isEmpty())
+    }
+
     private fun criteria(
         dismissedAlertIds: Set<String> = emptySet(),
         selectedArea: String = "All",
         maxDistanceKm: Int = 0,
-        widgetFilterTypes: Set<String> = emptySet()
+        widgetFilterTypes: Set<String> = emptySet(),
+        nowMillis: Long = 1_000L
     ) = WidgetAlertFilter.Criteria(
         dismissedAlertIds = dismissedAlertIds,
         selectedArea = selectedArea,
         maxDistanceKm = maxDistanceKm,
         widgetFilterTypes = widgetFilterTypes,
-        nowMillis = 1_000L
+        nowMillis = nowMillis
     )
 
     private fun sampleAlert(
         name: String,
         area: String? = null,
-        endTime: String = "2000"
+        endTime: String = "2000",
+        type: List<String> = listOf("Quest"),
+        iv: String? = null
     ) = PokemonAlert(
         name = name,
         endTime = endTime,
         latitude = 49.74,
         longitude = 8.62,
-        type = listOf("Quest"),
+        type = type,
+        iv = iv,
+        ivAttack = iv?.substringBefore('/')?.toIntOrNull(),
+        ivDefense = iv?.split('/')?.getOrNull(1)?.toIntOrNull(),
+        ivStamina = iv?.substringAfterLast('/')?.toIntOrNull(),
         area = area
     )
 

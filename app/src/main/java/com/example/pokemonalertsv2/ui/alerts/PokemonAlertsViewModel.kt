@@ -7,6 +7,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -117,12 +118,14 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun dismissAlert(alertId: String) {
         viewModelScope.launch {
             repository.alertPreferences.addDismissedAlert(alertId)
+            AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
     
     fun undoDismissAlert(alertId: String) {
         viewModelScope.launch {
             repository.alertPreferences.removeDismissedAlert(alertId)
+            AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
 

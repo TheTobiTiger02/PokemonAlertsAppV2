@@ -1,11 +1,26 @@
 package com.example.pokemonalertsv2.notifications
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AlertNotifierSettingsTest {
+
+    @Test
+    fun notificationContent_placesExactWildCpFirst() {
+        val alert = PokemonAlert(name = "Trubbish", cp = 457, type = listOf("Hundo"))
+
+        assertEquals(
+            "CP 457 • 15.5 km • 192 min walk • Hundo",
+            AlertNotifier.buildNotificationContentText(
+                alert = alert,
+                distanceText = "15.5 km",
+                walkingText = "192 min walk"
+            )
+        )
+    }
 
     @Test
     fun shouldNotify_appliesAllowedSpeciesSnapshotCaseInsensitively() {

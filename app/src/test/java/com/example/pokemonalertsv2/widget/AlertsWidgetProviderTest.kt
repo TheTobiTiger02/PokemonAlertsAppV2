@@ -2,6 +2,8 @@ package com.example.pokemonalertsv2.widget
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -54,14 +56,14 @@ class AlertsWidgetProviderTest {
     }
 
     @Test
-    fun calculateNextUpdateDelay_refreshesJustAfterNextExpiryWhenSoonerThanCadence() {
+    fun calculateNextUpdateDelay_refreshesAtNextExpiryWithoutBuffer() {
         val delay = AlertsWidgetProvider.calculateNextUpdateDelay(
             nowMillis = 1_000L,
             hasActiveAlerts = true,
             nextExpirationMillis = 6_000L
         )
 
-        assertEquals(TimeUnit.SECONDS.toMillis(6), delay)
+        assertEquals(TimeUnit.SECONDS.toMillis(5), delay)
     }
 
     @Test
@@ -72,7 +74,29 @@ class AlertsWidgetProviderTest {
             nextExpirationMillis = 5_000L
         )
 
-        assertEquals(TimeUnit.SECONDS.toMillis(1), delay)
+        assertEquals(1L, delay)
+    }
+
+    @Test
+    fun exactAlarmIsUsedOnlyForActiveAlertsWhenAccessIsGranted() {
+        assertTrue(
+            shouldScheduleExactWidgetAlarm(
+                hasActiveAlerts = true,
+                canScheduleExactAlarms = true
+            )
+        )
+        assertFalse(
+            shouldScheduleExactWidgetAlarm(
+                hasActiveAlerts = true,
+                canScheduleExactAlarms = false
+            )
+        )
+        assertFalse(
+            shouldScheduleExactWidgetAlarm(
+                hasActiveAlerts = false,
+                canScheduleExactAlarms = true
+            )
+        )
     }
 
     private fun sampleAlert(endTime: String) = PokemonAlert(

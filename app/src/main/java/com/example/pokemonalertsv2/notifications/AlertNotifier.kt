@@ -22,7 +22,9 @@ import com.example.pokemonalertsv2.data.AlertPreferencesStore
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.LocationUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -36,6 +38,16 @@ object AlertNotifier {
     const val CHANNEL_RAIDS = "pokemon_alerts_raids"
     const val CHANNEL_SPAWNS = "pokemon_alerts_spawns"
     const val CHANNEL_QUESTS = "pokemon_alerts_quests"
+
+    internal fun buildNotificationContentText(
+        alert: PokemonAlert,
+        distanceText: String? = null,
+        walkingText: String? = null
+    ): String = buildAlertGlanceMetadata(
+        alert = alert,
+        distanceText = distanceText,
+        walkingText = walkingText
+    )
 
     fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -151,10 +163,20 @@ object AlertNotifier {
             val distanceText = routeDisplayInfo.distanceText
             val walkingText = routeDisplayInfo.walkingText
 
-            val baseText = alert.type ?: context.getString(R.string.notification_default_body)
-            val chips = listOfNotNull(distanceText, walkingText)
-            val prefix = if (chips.isNotEmpty()) chips.joinToString(" • ") + " • " else ""
-            val contentText = prefix + baseText
+            val baseText = alert.type?.joinToString(", ")
+                ?: context.getString(R.string.notification_default_body)
+            val contentText = buildNotificationContentText(
+                alert = alert,
+                distanceText = distanceText,
+                walkingText = walkingText
+            )
+            val expandedText = buildString {
+                append(contentText)
+                if (alert.description.isNotBlank() && alert.description != baseText) {
+                    appendLine()
+                    append(alert.description)
+                }
+            }
 
             // Load primary first, then thumbnail, then a cached map composite so alerts keep an image.
             val bitmap = loadImageBitmap(context, imageLoader, alert.imageUrl)
@@ -183,20 +205,12 @@ object AlertNotifier {
                 .setContentTitle(formatAlertTitle(alert))
                 .setContentText(contentText)
                 .setStyle(
-                    NotificationCompat.BigTextStyle().bigText(
-                        buildString {
-                            if (!distanceText.isNullOrBlank() || !walkingText.isNullOrBlank()) {
-                                listOfNotNull(distanceText, walkingText).joinTo(this, separator = " • ")
-                                append(" • ")
-                            }
-                            if (alert.description.isNotBlank()) append(alert.description) else append(baseText)
-                        }
-                    )
+                    NotificationCompat.BigTextStyle().bigText(expandedText)
                 )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
-                .setColor(ContextCompat.getColor(context, R.color.poke_red))
+                .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
                 .setVibrate(if (settings.vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,

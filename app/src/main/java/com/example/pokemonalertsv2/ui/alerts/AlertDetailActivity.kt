@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
@@ -23,13 +24,17 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.PvpRanking
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private val json = Json { ignoreUnknownKeys = true }
 
 class AlertDetailActivity : ComponentActivity() {
+    private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
     private var currentAlert: PokemonAlert? by mutableStateOf(null)
     private var isInPipMode by mutableStateOf(false)
     private var canEnterPictureInPicture: Boolean = false
@@ -45,7 +50,11 @@ class AlertDetailActivity : ComponentActivity() {
         canEnterPictureInPicture =
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         setContent {
-            PokemonAlertsV2Theme {
+            val themeMode by repository.observeThemeMode()
+                .collectAsStateWithLifecycle(initialValue = 0)
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,

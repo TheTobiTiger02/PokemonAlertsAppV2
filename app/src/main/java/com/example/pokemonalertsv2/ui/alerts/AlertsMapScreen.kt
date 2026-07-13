@@ -92,6 +92,7 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
+import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
@@ -149,7 +150,7 @@ fun AlertsMapScreen(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
-    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val darkTheme = LocalAppDarkTheme.current
 
     val defaultLatLng = remember { LatLng(ALSBACH_LATITUDE, ALSBACH_LONGITUDE) }
     val cameraPositionState = rememberCameraPositionState {
@@ -416,6 +417,7 @@ fun AlertsMapScreen(
                 containerColor = MaterialTheme.colorScheme.surface
             ) {
                 AlertFilter.values().filter { it in availableFilters }.forEach { filter ->
+                    val filterAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
                     DropdownMenuItem(
                         text = { Text(filter.label) },
                         onClick = {
@@ -427,7 +429,7 @@ fun AlertsMapScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(8.dp)
-                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(50))
+                                        .background(filterAccent, RoundedCornerShape(50))
                                 )
                             }
                         } else null
@@ -575,19 +577,6 @@ private fun MapTopAppBar(
                     contentDescription = stringResource(R.string.map_filter_alerts)
                 )
             }
-            IconButton(onClick = onToggleMapType, modifier = Modifier.size(44.dp)) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_layers),
-                    contentDescription = stringResource(
-                        if (hybridMap) R.string.map_switch_standard else R.string.map_switch_satellite
-                    ),
-                    tint = if (hybridMap) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-            }
             Box {
                 IconButton(
                     onClick = { moreExpanded = true },
@@ -603,6 +592,22 @@ private fun MapTopAppBar(
                     onDismissRequest = { moreExpanded = false },
                     containerColor = MaterialTheme.colorScheme.surface
                 ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (hybridMap) R.string.map_switch_standard else R.string.map_switch_satellite
+                                )
+                            )
+                        },
+                        onClick = {
+                            moreExpanded = false
+                            onToggleMapType()
+                        },
+                        leadingIcon = {
+                            Icon(painterResource(id = R.drawable.ic_layers), contentDescription = null)
+                        }
+                    )
                     DropdownMenuItem(
                         text = {
                             Text(
@@ -727,12 +732,20 @@ private fun MapAlertDetailContent(
     val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
     val remaining = endMillis?.let { it - currentTime } ?: 0L
     val visualStyle = resolveAlertVisualStyle(alert)
+    val categoryAccent = Color(visualStyle.category.accentArgb)
     val isExpired = remaining <= 0L
 
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        AlertImage(
+            alert = alert,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(164.dp),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
@@ -746,12 +759,12 @@ private fun MapAlertDetailContent(
                 )
                 Surface(
                     shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.secondaryContainer
+                    color = categoryAccent.copy(alpha = 0.18f)
                 ) {
                     Text(
                         text = "${visualStyle.shortCode} · ${visualStyle.label}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = categoryAccent,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
@@ -772,12 +785,27 @@ private fun MapAlertDetailContent(
             )
         }
 
+        alert.displayCp?.let { cp ->
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = categoryAccent.copy(alpha = 0.18f)
+            ) {
+                Text(
+                    text = "CP $cp",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = categoryAccent,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
+        }
+
         Surface(
             shape = MaterialTheme.shapes.medium,
             color = if (isExpired) {
                 MaterialTheme.colorScheme.errorContainer
             } else {
-                MaterialTheme.colorScheme.primaryContainer
+                categoryAccent.copy(alpha = 0.18f)
             }
         ) {
             Text(
@@ -791,7 +819,7 @@ private fun MapAlertDetailContent(
                 color = if (isExpired) {
                     MaterialTheme.colorScheme.onErrorContainer
                 } else {
-                    MaterialTheme.colorScheme.onPrimaryContainer
+                    categoryAccent
                 },
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
             )
@@ -892,6 +920,11 @@ private fun MapMarker(
     if (coordinates == null) return
     val position = remember(coordinates) { LatLng(coordinates.latitude, coordinates.longitude) }
     val visualStyle = resolveAlertVisualStyle(alert)
+    val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
+        AlertCategory.HUNDO -> "100%"
+        AlertCategory.NUNDO -> "0%"
+        else -> visualStyle.shortCode
+    }
     val speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName
     val speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
@@ -904,7 +937,7 @@ private fun MapMarker(
     val markerSizePx = remember(density) { with(density) { 68.dp.toPx().toInt() } }
 
     val colors = MaterialTheme.colorScheme
-    val palette = remember(
+    val basePalette = remember(
         colors.primary,
         colors.onPrimary,
         colors.surface,
@@ -923,11 +956,15 @@ private fun MapMarker(
             onError = colors.onError.toArgb()
         )
     }
+    val palette = remember(basePalette, visualStyle.category) {
+        basePalette.copy(primary = visualStyle.category.accentArgb.toInt())
+    }
     var markerIcon by remember(alert.uniqueId) { mutableStateOf<MapMarkerIcon?>(null) }
 
     LaunchedEffect(
         alert.uniqueId,
-        visualStyle.shortCode,
+        markerLabel,
+        visualStyle.category,
         speciesName,
         speciesImageUrl,
         showTimeLabel,
@@ -939,7 +976,7 @@ private fun MapMarker(
             createMapMarkerIcon(
                 context = context,
                 sizePx = markerSizePx,
-                categoryCode = visualStyle.shortCode,
+                categoryCode = markerLabel,
                 speciesName = speciesName,
                 speciesImageUrl = speciesImageUrl,
                 endTime = alert.endTime,

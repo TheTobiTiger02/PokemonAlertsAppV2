@@ -1,9 +1,14 @@
 package com.example.pokemonalertsv2
 
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
@@ -24,7 +29,7 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "Map", "Settings").forEach { label ->
+        listOf("Alerts", "History", "Map", "Settings").forEach { label ->
             composeRule.onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
@@ -32,21 +37,52 @@ class MainNavigationComposeTest {
     }
 
     @Test
-    fun alertsDestinationExposesLiveAndHistoryTabsAndSwitchesSections() {
+    fun historyIsAnIndependentRootDestination() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Live")
-            .assertIsDisplayed()
-            .assertHasClickAction()
-        composeRule.onNodeWithText("History")
-            .assertIsDisplayed()
-            .assertHasClickAction()
+        composeRule.onAllNodesWithText("History").onFirst().performClick()
+        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
 
-        composeRule.onNodeWithText("History").performClick()
-        composeRule.onNodeWithText("Past activity").assertIsDisplayed()
+        composeRule.onNodeWithText("Alerts").performClick()
+        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+    }
 
-        composeRule.onNodeWithText("Live").performClick()
-        composeRule.onNodeWithText("Nearby activity").assertIsDisplayed()
+    @Test
+    fun settingsUsesOverviewAndFocusedSubpages() {
+        waitForMainNavigation()
+
+        composeRule.onNodeWithText("Settings").performClick()
+        listOf(
+            "Appearance & behavior",
+            "Alert filters",
+            "Notifications",
+            "About & updates"
+        ).forEach { label ->
+            composeRule.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+        }
+        composeRule.onNodeWithText("Theme").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
+
+        composeRule.onNodeWithText("Alert filters").performClick()
+        composeRule.onNodeWithText("Maximum Distance").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Appearance & behavior").assertIsDisplayed()
+    }
+
+    @Test
+    fun settingsSubpageSurvivesActivityRecreation() {
+        waitForMainNavigation()
+
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Appearance & behavior").performClick()
+        composeRule.onNodeWithText("Theme").assertIsDisplayed()
+
+        composeRule.activityRule.scenario.recreate()
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            runCatching { composeRule.onNodeWithText("Theme").fetchSemanticsNode() }.isSuccess
+        }
+        composeRule.onNodeWithText("Theme").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
     }
 
     private fun waitForMainNavigation() {
@@ -66,20 +102,30 @@ class MainNavigationComposeTest {
         @BeforeClass
         @JvmStatic
         fun completeOnboardingBeforeLaunchingActivity() {
-            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val context = instrumentation.targetContext
             preferences = AlertPreferences(context.alertPreferencesDataStore)
             runBlocking {
                 originalOnboardingCompleted = preferences.onboardingCompleted.first()
                 preferences.setOnboardingCompleted(true)
+            }
+            listOf(
+                Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ).forEach { permission ->
+                if (context.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                    instrumentation.uiAutomation.grantRuntimePermission(context.packageName, permission)
+                }
             }
         }
 
         @AfterClass
         @JvmStatic
         fun restoreOnboardingCompletionState() {
-            val originalValue = originalOnboardingCompleted ?: return
-            runBlocking {
-                preferences.setOnboardingCompleted(originalValue)
+            originalOnboardingCompleted?.let { originalValue ->
+                runBlocking { preferences.setOnboardingCompleted(originalValue) }
             }
         }
     }

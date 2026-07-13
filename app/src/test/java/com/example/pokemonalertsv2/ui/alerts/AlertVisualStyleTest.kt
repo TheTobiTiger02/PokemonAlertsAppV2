@@ -45,4 +45,13 @@ class AlertVisualStyleTest {
         assertEquals("WX", resolveAlertVisualStyle(weather).shortCode)
         assertEquals("RKT", resolveAlertVisualStyle(rocket).shortCode)
     }
+
+    @Test
+    fun categoriesUseDistinctSemanticAccents() {
+        assertEquals(AlertCategory.HUNDO, resolveAlertVisualStyle("hundo").category)
+        assertEquals(AlertCategory.NUNDO, resolveAlertVisualStyle("nundo").category)
+        assertEquals(AlertCategory.PVP, resolveAlertVisualStyle("pvp").category)
+        assertEquals(AlertCategory.RARE, resolveAlertVisualStyle("rare").category)
+        assertEquals(AlertCategory.SPAWN, resolveAlertVisualStyle("spawn").category)
+    }
 }

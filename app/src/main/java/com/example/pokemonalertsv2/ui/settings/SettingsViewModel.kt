@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -91,7 +92,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateThemeMode(mode: Int) {
-        viewModelScope.launch { repository.setThemeMode(mode.coerceIn(0, 2)) }
+        viewModelScope.launch {
+            repository.setThemeMode(mode.coerceIn(0, 2))
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
     }
 
     fun updateSortPreference(preference: SortPreference) {
@@ -174,12 +178,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateSelectedArea(area: String) {
         viewModelScope.launch {
             repository.alertPreferences.updateSelectedArea(area)
+            AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
     
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
             repository.alertPreferences.updateMaxDistance(distance)
+            AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
     

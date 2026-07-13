@@ -56,6 +56,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
@@ -96,6 +98,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -122,6 +126,7 @@ import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
 import com.example.pokemonalertsv2.ui.components.GradientText
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
+import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -249,7 +254,8 @@ fun AlertCard(
 ) {
     val colors = LocalLinearModernColors.current
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
-    val primary = MaterialTheme.colorScheme.primary
+    val categoryAccent = Color(visualStyle.category.accentArgb)
+    val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
     val haptic = LocalHapticFeedback.current
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val remaining = endMillis?.minus(nowMillis)
@@ -259,10 +265,13 @@ fun AlertCard(
         else -> TimeUtils.formatDurationShort(remaining)
     }
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
-    val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp else alert.cp
+    val resolvedCp = alert.displayCp
 
     LinearModernCard(
         modifier = modifier.fillMaxWidth(),
+        containerColor = categoryAccent.copy(alpha = 0.10f)
+            .compositeOver(MaterialTheme.colorScheme.surfaceContainer),
+        borderColor = categoryAccent.copy(alpha = 0.42f),
         onClick = {
             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             onShowDetails()
@@ -284,13 +293,13 @@ fun AlertCard(
                 Surface(
                     modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                     shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                    color = categoryAccent.copy(alpha = 0.92f)
                 ) {
                     Text(
                         text = visualStyle.label,
                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = categoryOnAccent
                     )
                 }
                 Surface(
@@ -299,7 +308,7 @@ fun AlertCard(
                     color = if (remaining != null && remaining <= 0) {
                         MaterialTheme.colorScheme.errorContainer
                     } else {
-                        MaterialTheme.colorScheme.primaryContainer
+                        categoryAccent.copy(alpha = 0.92f)
                     }
                 ) {
                     Text(
@@ -309,7 +318,7 @@ fun AlertCard(
                         color = if (remaining != null && remaining <= 0) {
                             MaterialTheme.colorScheme.onErrorContainer
                         } else {
-                            MaterialTheme.colorScheme.onPrimaryContainer
+                            categoryOnAccent
                         },
                         maxLines = 1
                     )
@@ -381,12 +390,14 @@ fun AlertCard(
                     }
                     AlertPill(
                         text = visualStyle.label,
-                        isPrimary = false
+                        containerColor = categoryAccent.copy(alpha = 0.16f),
+                        contentColor = categoryAccent
                     )
-                    displayCp?.let {
+                    resolvedCp?.let {
                         AlertPill(
                             text = "CP $it",
-                            isPrimary = false
+                            containerColor = categoryAccent.copy(alpha = 0.16f),
+                            contentColor = categoryAccent
                         )
                     }
                     distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let {
@@ -431,18 +442,20 @@ fun AlertCard(
                     ) {
                         Icon(imageVector = Icons.Filled.Share, contentDescription = "Share")
                     }
-                    FilledIconButton(
+                    FilledTonalButton(
                         onClick = onOpenMaps,
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        modifier = Modifier.height(48.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = categoryAccent.copy(alpha = 0.22f),
+                            contentColor = categoryAccent
                         )
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_map),
                             contentDescription = stringResource(id = R.string.open_in_maps)
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Navigate", style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }
@@ -644,7 +657,7 @@ fun AlertImage(
     contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
-    val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val darkTheme = LocalAppDarkTheme.current
     val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
     val thumbnailUrl = alert.thumbnailUrl
     val lat = alert.latitude
@@ -868,6 +881,8 @@ fun AlertDetailScreen(
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
+    val categoryAccent = Color(visualStyle.category.accentArgb)
     var showSnoozeDialog by remember { mutableStateOf(false) }
     var defaultSnoozeMinutes by remember { mutableStateOf(10) }
     LaunchedEffect(context) {
@@ -921,7 +936,8 @@ fun AlertDetailScreen(
                                 Brush.verticalGradient(
                                     colors = listOf(
                                         MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                                        categoryAccent.copy(alpha = 0.28f),
+                                        MaterialTheme.colorScheme.background
                                     )
                                 )
                             )
@@ -987,26 +1003,31 @@ fun AlertDetailScreen(
                     }
                     
                     // Shiny indicator in top right
-                    if (alert.isShiny == true) {
+                        if (alert.isShiny == true) {
                         Surface(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
                                 .statusBarsPadding()
                                 .padding(16.dp),
                             shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.primaryContainer
+                            color = Color(0xFFFFB300).copy(alpha = 0.20f)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(text = "✨", style = MaterialTheme.typography.labelMedium)
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = Color(0xFFFFB300)
+                                )
                                 Text(
                                     text = "SHINY",
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    color = Color(0xFFFFB300)
                                 )
                             }
                         }
@@ -1065,8 +1086,8 @@ fun AlertDetailScreen(
                                 typeList.forEach { typeName ->
                                     AlertPill(
                                         text = typeName.uppercase(),
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        containerColor = categoryAccent.copy(alpha = 0.18f),
+                                        contentColor = categoryAccent
                                     )
                                 }
                             }
@@ -1112,7 +1133,8 @@ fun AlertDetailScreen(
                     // Time & Status
                     Card(
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+                            containerColor = categoryAccent.copy(alpha = 0.10f)
+                                .compositeOver(MaterialTheme.colorScheme.surfaceContainer)
                         ),
                         shape = MaterialTheme.shapes.large,
                         modifier = Modifier.fillMaxWidth()
@@ -1144,6 +1166,7 @@ fun AlertDetailScreen(
             }
             AlertDetailActionBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
+                accent = categoryAccent,
                 onSnoozeClick = { showSnoozeDialog = true },
                 onNavigateClick = { openMapForAlert(context, alert) },
                 onShareClick = {
@@ -1185,6 +1208,7 @@ fun AlertDetailScreen(
 @Composable
 private fun AlertDetailActionBar(
     modifier: Modifier = Modifier,
+    accent: Color,
     onSnoozeClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onShareClick: () -> Unit
@@ -1210,8 +1234,8 @@ private fun AlertDetailActionBar(
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
                 Column(
@@ -1238,8 +1262,8 @@ private fun AlertDetailActionBar(
                 shape = MaterialTheme.shapes.medium,
                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+                    containerColor = accent,
+                    contentColor = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
                 )
             ) {
                 Column(
@@ -1434,11 +1458,12 @@ private fun getTypeColor(type: String): Color {
 private fun StatsCard(alert: PokemonAlert) {
     val isReplacement = alert.isSpeciesReplacement
     val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
-    val accentColor = MaterialTheme.colorScheme.primary
+    val accentColor = Color(resolveAlertVisualStyle(alert).category.accentArgb)
 
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+            containerColor = accentColor.copy(alpha = 0.10f)
+                .compositeOver(MaterialTheme.colorScheme.surfaceContainer)
         ),
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
@@ -1447,8 +1472,8 @@ private fun StatsCard(alert: PokemonAlert) {
             // Section title
             Text(
                 text = when {
-                    isReplacement -> "🔄 New Species"
-                    isChanged -> "🌦️ New Stats"
+                    isReplacement -> "New species"
+                    isChanged -> "Updated stats"
                     else -> "Stats"
                 },
                 style = MaterialTheme.typography.labelMedium,
@@ -1469,7 +1494,11 @@ private fun StatsCard(alert: PokemonAlert) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(text = "🔄", style = MaterialTheme.typography.titleMedium)
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = null,
+                            tint = accentColor
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Replacing ${alert.oldSpecies}",
@@ -1645,8 +1674,10 @@ private fun IvBar(label: String, value: Int, maxValue: Int) {
 
 @Composable
 private fun WeatherAndGenderCard(alert: PokemonAlert) {
+    val accent = Color(resolveAlertVisualStyle(alert).category.accentArgb)
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
+        color = accent.copy(alpha = 0.10f)
+            .compositeOver(MaterialTheme.colorScheme.surfaceContainer),
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -1660,11 +1691,16 @@ private fun WeatherAndGenderCard(alert: PokemonAlert) {
             // Weather Boost
             if (alert.isWeatherBoosted == true) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text = "☁️", style = MaterialTheme.typography.headlineMedium)
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = accent
+                    )
                     Text(
                         text = "Weather Boosted",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = accent
                     )
                     alert.currentWeather?.let { weather ->
                         Text(
@@ -1679,13 +1715,11 @@ private fun WeatherAndGenderCard(alert: PokemonAlert) {
             // Gender
             alert.gender?.takeIf { it.isNotBlank() }?.let { gender ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = when (gender.lowercase()) {
-                            "male" -> "♂️"
-                            "female" -> "♀️"
-                            else -> "⚧"
-                        },
-                        style = MaterialTheme.typography.headlineMedium
+                    Icon(
+                        imageVector = Icons.Filled.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = accent
                     )
                     Text(
                         text = gender.replaceFirstChar { it.uppercase() },

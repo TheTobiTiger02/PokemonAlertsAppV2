@@ -9,6 +9,13 @@
     android:background="@drawable/widget_item_background"
     android:gravity="center_vertical">
 
+    <FrameLayout
+        android:id="@+id/item_category_bar"
+        android:layout_width="4dp"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="8dp"
+        android:background="@color/widget_primary" />
+
     <ImageView
         android:id="@+id/item_image"
         android:layout_width="56dp"

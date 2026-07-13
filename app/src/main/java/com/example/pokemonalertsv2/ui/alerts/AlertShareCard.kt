@@ -21,6 +21,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.TimeUtils
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,7 +65,7 @@ object AlertShareCard {
     ): ShareCardContent {
         val stats = buildList {
             val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
-            val displayCp = if (alert.isWeatherChange && alert.newCp != null) alert.newCp.toString() else alert.cp?.toString()
+            val displayCp = alert.displayCp?.toString()
             displayIv?.takeIf { it.isNotBlank() }?.let { add(ShareStat("IV", it)) }
             displayCp?.takeIf { it.isNotBlank() }?.let { add(ShareStat("CP", it)) }
             alert.level?.let {
@@ -169,7 +170,7 @@ object AlertShareCard {
         val heroBitmap = loadHeroBitmap(context, alert)
         val bitmap = Bitmap.createBitmap(CARD_WIDTH, CARD_HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val palette = shareCardPalette(context)
+        val palette = shareCardPalette(context, alert)
 
         drawBackground(canvas, palette)
         drawHero(canvas, heroBitmap, palette)
@@ -178,17 +179,36 @@ object AlertShareCard {
         return bitmap
     }
 
-    private fun shareCardPalette(context: Context): ShareCardPalette = ShareCardPalette(
-        background = ContextCompat.getColor(context, R.color.share_card_background),
-        heroFallback = ContextCompat.getColor(context, R.color.share_card_hero_fallback),
+    private fun shareCardPalette(context: Context, alert: PokemonAlert): ShareCardPalette {
+        val accent = resolveAlertVisualStyle(alert).category.accentArgb.toInt()
+        return ShareCardPalette(
+        background = ColorUtils.blendARGB(
+            ContextCompat.getColor(context, R.color.share_card_background),
+            accent,
+            0.08f
+        ),
+        heroFallback = accent,
         photoScrim = ContextCompat.getColor(context, R.color.share_card_photo_scrim),
-        primaryContainer = ContextCompat.getColor(context, R.color.share_card_primary_container),
-        surfaceContainer = ContextCompat.getColor(context, R.color.share_card_surface_container),
-        infoPanel = ContextCompat.getColor(context, R.color.share_card_info_panel),
+        primaryContainer = ColorUtils.blendARGB(
+            ContextCompat.getColor(context, R.color.share_card_primary_container),
+            accent,
+            0.72f
+        ),
+        surfaceContainer = ColorUtils.blendARGB(
+            ContextCompat.getColor(context, R.color.share_card_surface_container),
+            accent,
+            0.15f
+        ),
+        infoPanel = ColorUtils.blendARGB(
+            ContextCompat.getColor(context, R.color.share_card_info_panel),
+            accent,
+            0.11f
+        ),
         primaryText = ContextCompat.getColor(context, R.color.share_card_on_surface),
         secondaryText = ContextCompat.getColor(context, R.color.share_card_on_surface_variant),
         placeholderText = ContextCompat.getColor(context, R.color.share_card_placeholder_text)
     )
+    }
 
     private suspend fun loadHeroBitmap(context: Context, alert: PokemonAlert): Bitmap? {
         val imageLoader = PokemonAlertsApplication.imageLoader(context)

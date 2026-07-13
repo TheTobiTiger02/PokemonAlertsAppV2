@@ -2,6 +2,10 @@ package com.example.pokemonalertsv2.ui.settings
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +35,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -57,20 +63,27 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.SortPreference
 import kotlinx.coroutines.launch
@@ -87,15 +100,57 @@ import android.widget.Toast
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.UpdateState
 
+internal enum class SettingsDestination(val title: String) {
+    OVERVIEW("Settings"),
+    APPEARANCE_BEHAVIOR("Appearance & behavior"),
+    ALERT_FILTERS("Alert filters"),
+    NOTIFICATIONS("Notifications"),
+    ABOUT_UPDATES("About & updates")
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onBackClick: () -> Unit
+    onManageLocationPermissions: () -> Unit
 ) {
+    var destinationName by rememberSaveable { mutableStateOf(SettingsDestination.OVERVIEW.name) }
+    val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
+        ?: SettingsDestination.OVERVIEW
+    val navigateTo: (SettingsDestination) -> Unit = { destinationName = it.name }
+
+    BackHandler(enabled = destination != SettingsDestination.OVERVIEW) {
+        navigateTo(SettingsDestination.OVERVIEW)
+    }
+
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var foregroundLocationGranted by remember { mutableStateOf(false) }
+    var backgroundLocationGranted by remember { mutableStateOf(false) }
+    fun refreshLocationPermissionStatus() {
+        foregroundLocationGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        backgroundLocationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+    }
+    DisposableEffect(lifecycleOwner) {
+        refreshLocationPermissionStatus()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refreshLocationPermissionStatus()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
     val raidsNotifications by viewModel.raidsNotifications.collectAsStateWithLifecycle(initialValue = true)
@@ -131,17 +186,22 @@ fun SettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                    title = { Text(destination.title, fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        FilledIconButton(onClick = onBackClick, shape = CircleShape) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        if (destination != SettingsDestination.OVERVIEW) {
+                            FilledIconButton(
+                                onClick = { navigateTo(SettingsDestination.OVERVIEW) },
+                                shape = CircleShape
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Transparent,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimary,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
-                        scrolledContainerColor = MaterialTheme.colorScheme.primary
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                     ),
                     scrollBehavior = scrollBehavior
                 )
@@ -157,7 +217,21 @@ fun SettingsScreen(
             ) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                SettingsSection(title = "Appearance & display") {
+                if (destination == SettingsDestination.OVERVIEW) {
+                    SettingsOverview(
+                        themeMode = themeMode,
+                        sortPreference = savedSortPreference,
+                        selectedArea = selectedArea,
+                        maxDistance = maxDistance,
+                        notificationsEnabled = notificationsEnabled,
+                        foregroundLocationGranted = foregroundLocationGranted,
+                        backgroundLocationGranted = backgroundLocationGranted,
+                        onDestinationSelected = navigateTo
+                    )
+                }
+
+                if (destination == SettingsDestination.APPEARANCE_BEHAVIOR) {
+                SettingsSection(title = "Display and sorting") {
                     Text(
                         text = "Theme",
                         style = MaterialTheme.typography.titleSmall,
@@ -203,8 +277,10 @@ fun SettingsScreen(
                         }
                     }
                 }
+                }
 
-                SettingsSection(title = "Filters") {
+                if (destination == SettingsDestination.ALERT_FILTERS) {
+                SettingsSection(title = "Location filters") {
                     Column {
                         Text(
                             text = "Area",
@@ -276,8 +352,32 @@ fun SettingsScreen(
                         }
                     }
                 }
+                }
                 
-                SettingsSection(title = "Notifications") {
+                if (destination == SettingsDestination.NOTIFICATIONS) {
+                SettingsSection(title = "Notification preferences") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Location access", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                when {
+                                    !foregroundLocationGranted -> "Needed for distances and map features"
+                                    !backgroundLocationGranted -> "While-in-use granted; background access is off"
+                                    else -> "Foreground and background access granted"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedButton(onClick = onManageLocationPermissions) {
+                            Text(if (foregroundLocationGranted && backgroundLocationGranted) "Manage" else "Grant")
+                        }
+                    }
+                    HorizontalDivider()
                     SwitchSetting(
                         title = "Enable Notifications",
                         subtitle = "Receive alerts for new Pokemon nearby",
@@ -292,14 +392,6 @@ fun SettingsScreen(
                             checked = raidsNotifications,
                             onCheckedChange = { viewModel.updateRaidsNotifications(it) }
                         )
-                        if (raidsNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Raid Tiers",
-                                types = listOf("1", "3", "5", "Mega", "Elite", "Primal"),
-                                excludedTypes = excludedRaidTiers,
-                                onToggleType = { viewModel.toggleExcludedRaidTier(it) }
-                            )
-                        }
                         
                         SwitchSetting(
                             title = "Spawns",
@@ -307,12 +399,6 @@ fun SettingsScreen(
                             checked = spawnsNotifications,
                             onCheckedChange = { viewModel.updateSpawnsNotifications(it) }
                         )
-                        if (spawnsNotifications) {
-                            SpeciesFilterButton(
-                                title = "Filter Spawns by Species",
-                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "spawn")) }
-                            )
-                        }
                         
                         SwitchSetting(
                             title = "Quests",
@@ -327,12 +413,6 @@ fun SettingsScreen(
                             checked = hundosNotifications,
                             onCheckedChange = { viewModel.updateHundosNotifications(it) }
                         )
-                        if (hundosNotifications) {
-                            SpeciesFilterButton(
-                                title = "Filter Hundos by Species",
-                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "hundo")) }
-                            )
-                        }
                         
                         SwitchSetting(
                             title = "PvP",
@@ -340,12 +420,6 @@ fun SettingsScreen(
                             checked = pvpNotifications,
                             onCheckedChange = { viewModel.updatePvpNotifications(it) }
                         )
-                        if (pvpNotifications) {
-                            SpeciesFilterButton(
-                                title = "Filter PvP by Species",
-                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "pvp")) }
-                            )
-                        }
                         
                         SwitchSetting(
                             title = "Nundos",
@@ -353,12 +427,6 @@ fun SettingsScreen(
                             checked = nundosNotifications,
                             onCheckedChange = { viewModel.updateNundosNotifications(it) }
                         )
-                        if (nundosNotifications) {
-                            SpeciesFilterButton(
-                                title = "Filter Nundos by Species",
-                                onClick = { context.startActivity(SpeciesSelectionActivity.createIntent(context, "nundo")) }
-                            )
-                        }
                         
                         SwitchSetting(
                             title = "Kecleon",
@@ -373,14 +441,18 @@ fun SettingsScreen(
                             checked = rocketNotifications,
                             onCheckedChange = { viewModel.updateRocketNotifications(it) }
                         )
-                        if (rocketNotifications) {
-                            TypeFilterSection(
-                                title = "Exclude Grunt Types",
-                                types = ROCKET_GRUNT_TYPES,
-                                excludedTypes = excludedRocketTypes,
-                                onToggleType = { viewModel.toggleExcludedRocketType(it) }
-                            )
-                        }
+                        AdvancedNotificationFilters(
+                            raidsEnabled = raidsNotifications,
+                            spawnsEnabled = spawnsNotifications,
+                            hundosEnabled = hundosNotifications,
+                            pvpEnabled = pvpNotifications,
+                            nundosEnabled = nundosNotifications,
+                            rocketEnabled = rocketNotifications,
+                            excludedRaidTiers = excludedRaidTiers,
+                            excludedRocketTypes = excludedRocketTypes,
+                            onToggleRaidTier = viewModel::toggleExcludedRaidTier,
+                            onToggleRocketType = viewModel::toggleExcludedRocketType
+                        )
                         
                         SwitchSetting(
                             title = "Vibration",
@@ -397,8 +469,10 @@ fun SettingsScreen(
                         )
                     }
                 }
+                }
                 
-                SettingsSection(title = "About") {
+                if (destination == SettingsDestination.ABOUT_UPDATES) {
+                SettingsSection(title = "App information") {
                     val coroutineScope = rememberCoroutineScope()
                     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
@@ -441,12 +515,228 @@ fun SettingsScreen(
                         }
                     }
                 }
+                }
                 
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 
+}
+
+@Composable
+private fun SettingsOverview(
+    themeMode: Int,
+    sortPreference: SortPreference,
+    selectedArea: String,
+    maxDistance: Int,
+    notificationsEnabled: Boolean,
+    foregroundLocationGranted: Boolean,
+    backgroundLocationGranted: Boolean,
+    onDestinationSelected: (SettingsDestination) -> Unit
+) {
+    val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
+    val sortLabel = when (sortPreference) {
+        SortPreference.POSTED_TIME -> "Newest"
+        SortPreference.TIME_REMAINING -> "Time remaining"
+        SortPreference.DISTANCE -> "Distance"
+        SortPreference.NAME -> "Name"
+    }
+    val distanceLabel = if (maxDistance == 0) "Unlimited distance" else "$maxDistance km maximum"
+    val notificationSummary = when {
+        !notificationsEnabled -> "Off"
+        !foregroundLocationGranted -> "On - location access needed"
+        !backgroundLocationGranted -> "On - background location off"
+        else -> "On - background location granted"
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                RoundedCornerShape(28.dp)
+            )
+    ) {
+        SettingsOverviewRow(
+            icon = Icons.Default.Settings,
+            title = "Appearance & behavior",
+            summary = "$themeLabel theme - $sortLabel sort",
+            onClick = { onDestinationSelected(SettingsDestination.APPEARANCE_BEHAVIOR) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.DateRange,
+            title = "Alert filters",
+            summary = "$selectedArea - $distanceLabel",
+            onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.Notifications,
+            title = "Notifications",
+            summary = notificationSummary,
+            onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.Info,
+            title = "About & updates",
+            summary = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME}",
+            onClick = { onDestinationSelected(SettingsDestination.ABOUT_UPDATES) }
+        )
+    }
+}
+
+@Composable
+private fun SettingsOverviewRow(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = CircleShape
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.padding(12.dp).size(24.dp)
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun AdvancedNotificationFilters(
+    raidsEnabled: Boolean,
+    spawnsEnabled: Boolean,
+    hundosEnabled: Boolean,
+    pvpEnabled: Boolean,
+    nundosEnabled: Boolean,
+    rocketEnabled: Boolean,
+    excludedRaidTiers: Set<String>,
+    excludedRocketTypes: Set<String>,
+    onToggleRaidTier: (String) -> Unit,
+    onToggleRocketType: (String) -> Unit
+) {
+    val hasAdvancedFilters = raidsEnabled || spawnsEnabled || hundosEnabled ||
+        pvpEnabled || nundosEnabled || rocketEnabled
+    if (!hasAdvancedFilters) return
+
+    val context = LocalContext.current
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                RoundedCornerShape(20.dp)
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Advanced exclusions", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    text = "Species, raid tier, and Rocket filters",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = if (expanded) {
+                    Icons.Default.KeyboardArrowUp
+                } else {
+                    Icons.Default.KeyboardArrowDown
+                },
+                contentDescription = if (expanded) {
+                    "Collapse advanced exclusions"
+                } else {
+                    "Expand advanced exclusions"
+                }
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (raidsEnabled) {
+                    TypeFilterSection(
+                        title = "Exclude Raid Tiers",
+                        types = listOf("1", "3", "5", "Mega", "Elite", "Primal"),
+                        excludedTypes = excludedRaidTiers,
+                        onToggleType = onToggleRaidTier
+                    )
+                }
+                if (spawnsEnabled) {
+                    SpeciesFilterButton("Filter Spawns by Species") {
+                        context.startActivity(SpeciesSelectionActivity.createIntent(context, "spawn"))
+                    }
+                }
+                if (hundosEnabled) {
+                    SpeciesFilterButton("Filter Hundos by Species") {
+                        context.startActivity(SpeciesSelectionActivity.createIntent(context, "hundo"))
+                    }
+                }
+                if (pvpEnabled) {
+                    SpeciesFilterButton("Filter PvP by Species") {
+                        context.startActivity(SpeciesSelectionActivity.createIntent(context, "pvp"))
+                    }
+                }
+                if (nundosEnabled) {
+                    SpeciesFilterButton("Filter Nundos by Species") {
+                        context.startActivity(SpeciesSelectionActivity.createIntent(context, "nundo"))
+                    }
+                }
+                if (rocketEnabled) {
+                    TypeFilterSection(
+                        title = "Exclude Grunt Types",
+                        types = ROCKET_GRUNT_TYPES,
+                        excludedTypes = excludedRocketTypes,
+                        onToggleType = onToggleRocketType
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable

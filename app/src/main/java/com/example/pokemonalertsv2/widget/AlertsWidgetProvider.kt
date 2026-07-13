@@ -23,11 +23,15 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
+import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -54,7 +58,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                updateAll(context, scheduleNext = true)
+                updateAllSerialized(context, scheduleNext = true)
             } finally {
                 try { pending.finish() } catch (_: Throwable) {}
             }
@@ -84,14 +88,19 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                runCatching {
-                    PokemonAlertsRepository.create(context).clearExpiredAlerts()
-                }.onFailure { exception ->
-                    Log.w(TAG, "Expired alert cleanup failed during resize", exception)
+                updateMutex.withLock {
+                    val nowMillis = System.currentTimeMillis()
+                    runCatching {
+                        PokemonAlertsRepository.create(context).clearExpiredAlerts(nowMillis)
+                    }.onFailure { exception ->
+                        Log.w(TAG, "Expired alert cleanup failed during resize", exception)
+                    }
+                    val builtWidget = buildViews(context, appWidgetId, appWidgetManager, nowMillis)
+                    appWidgetManager.updateAppWidget(appWidgetId, builtWidget.views)
+                    if (builtWidget.mode.usesCollection) {
+                        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.list_alerts)
+                    }
                 }
-                val views = buildViews(context, appWidgetId, appWidgetManager)
-                appWidgetManager.updateAppWidget(appWidgetId, views)
-                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.list_alerts)
             } catch (t: Throwable) {
                 Log.w(TAG, "Widget resize update failed", t)
             } finally {
@@ -103,11 +112,13 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
         when (intent.action) {
-            ACTION_REFRESH, ACTION_TIMER_TICK -> {
+            ACTION_REFRESH,
+            ACTION_TIMER_TICK,
+            AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
-                        updateAll(context, scheduleNext = true)
+                        updateAllSerialized(context, scheduleNext = true)
                     } finally {
                         try { pending.finish() } catch (_: Throwable) {}
                     }
@@ -120,7 +131,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     try {
                         val prefs = AlertPreferences(context.alertPreferencesDataStore)
                         prefs.addDismissedAlert(alertId)
-                        updateAll(context, scheduleNext = true)
+                        updateAllSerialized(context, scheduleNext = true)
                     } finally {
                         try { pending.finish() } catch (_: Throwable) {}
                     }
@@ -156,6 +167,12 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 
+    private suspend fun updateAllSerialized(context: Context, scheduleNext: Boolean = false) {
+        updateMutex.withLock {
+            updateAll(context, scheduleNext)
+        }
+    }
+
     private suspend fun updateAll(context: Context, scheduleNext: Boolean = false) {
         val appWidgetManager = AppWidgetManager.getInstance(context)
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
@@ -164,18 +181,26 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             return
         }
 
+        val nowMillis = System.currentTimeMillis()
         try {
             runCatching {
-                PokemonAlertsRepository.create(context).clearExpiredAlerts()
+                PokemonAlertsRepository.create(context).clearExpiredAlerts(nowMillis)
             }.onFailure { exception ->
                 Log.w(TAG, "Expired alert cleanup failed", exception)
             }
 
+            val collectionWidgetIds = mutableListOf<Int>()
             ids.forEach { id ->
-                val views = buildViews(context, id, appWidgetManager)
-                appWidgetManager.updateAppWidget(id, views)
+                val builtWidget = buildViews(context, id, appWidgetManager, nowMillis)
+                appWidgetManager.updateAppWidget(id, builtWidget.views)
+                if (builtWidget.mode.usesCollection) collectionWidgetIds += id
             }
-            appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.list_alerts)
+            if (collectionWidgetIds.isNotEmpty()) {
+                appWidgetManager.notifyAppWidgetViewDataChanged(
+                    collectionWidgetIds.toIntArray(),
+                    R.id.list_alerts
+                )
+            }
         } catch (t: Throwable) {
             Log.w(TAG, "Widget update failed", t)
         } finally {
@@ -183,26 +208,57 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private suspend fun buildViews(context: Context, appWidgetId: Int, appWidgetManager: AppWidgetManager? = null): RemoteViews {
-        val alertCounts = getAlertCounts(context, appWidgetId)
+    private suspend fun buildViews(
+        context: Context,
+        appWidgetId: Int,
+        appWidgetManager: AppWidgetManager? = null,
+        nowMillis: Long = System.currentTimeMillis()
+    ): BuiltWidget {
+        val alertCounts = getAlertCounts(context, appWidgetId, nowMillis)
+        val palette = resolveWidgetThemePalette(context)
         val alertCount = alertCounts.visibleCount
         lastCadenceAlertCounts[appWidgetId] = alertCounts.cadenceCount
         lastCadenceAlertCount = lastCadenceAlertCounts.values.maxOrNull()
 
-        return when (appWidgetManager?.let {
+        val mode = appWidgetManager?.let {
             layoutMode(it, appWidgetId, alertCount)
-        } ?: WidgetLayoutMode.MEDIUM) {
-            WidgetLayoutMode.COMPACT -> buildCompactViews(context, appWidgetId, alertCount)
+        } ?: WidgetLayoutMode.MEDIUM
+        val views = when (mode) {
+            WidgetLayoutMode.COMPACT -> buildCompactViews(
+                context,
+                appWidgetId,
+                alertCount,
+                alertCounts.firstAlert,
+                palette,
+                nowMillis
+            )
             WidgetLayoutMode.MEDIUM,
-            WidgetLayoutMode.LARGE_LIST -> buildFullViews(context, appWidgetId, alertCount)
+            WidgetLayoutMode.LARGE_LIST -> buildFullViews(context, appWidgetId, alertCount, palette, nowMillis)
             WidgetLayoutMode.LARGE_FOCUS -> alertCounts.firstAlert?.let { alert ->
-                buildFocusViews(context, appWidgetId, alert)
-            } ?: buildFullViews(context, appWidgetId, alertCount)
+                buildFocusViews(context, appWidgetId, alert, palette, nowMillis)
+            } ?: buildFullViews(context, appWidgetId, alertCount, palette, nowMillis)
+            WidgetLayoutMode.LARGE_PAIR -> buildPairViews(
+                context,
+                appWidgetId,
+                alertCounts.alerts,
+                palette,
+                nowMillis
+            )
         }
+        return BuiltWidget(views = views, mode = mode)
     }
 
-    private fun buildCompactViews(context: Context, appWidgetId: Int, alertCount: Int): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_alerts_compact)
+    private fun buildCompactViews(
+        context: Context,
+        appWidgetId: Int,
+        alertCount: Int,
+        alert: PokemonAlert?,
+        palette: WidgetThemePalette,
+        nowMillis: Long
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_alerts_compact).apply {
+            applyCompactWidgetPalette(palette)
+        }
 
         // Logo/title click opens app
         val openIntent = Intent(context, MainActivity::class.java)
@@ -221,20 +277,50 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         )
         views.setOnClickPendingIntent(R.id.btn_refresh_compact, refreshPending)
 
-        // Count
-        views.setTextViewText(R.id.tv_compact_count, alertCount.toString())
-        views.setTextViewText(
-            R.id.tv_compact_label,
-            context.getString(
-                if (alertCount == 0) R.string.widget_empty_title else R.string.widget_active_alerts_label
+        views.setTextViewText(R.id.tv_compact_count, "$alertCount active")
+        if (alert == null) {
+            views.setTextViewText(R.id.tv_compact_alert_title, context.getString(R.string.widget_empty_title))
+            views.setTextViewText(R.id.tv_compact_meta, context.getString(R.string.widget_empty_subtitle))
+            views.setTextViewText(R.id.tv_compact_countdown, "")
+        } else {
+            val visualStyle = resolveAlertVisualStyle(alert)
+            views.setTextViewText(R.id.tv_compact_alert_title, formatAlertTitle(alert))
+            views.setTextViewText(
+                R.id.tv_compact_meta,
+                alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label
             )
-        )
+            views.setTextColor(R.id.tv_compact_meta, visualStyle.category.accentArgb.toInt())
+            val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)?.minus(nowMillis)
+            views.setTextViewText(
+                R.id.tv_compact_countdown,
+                when {
+                    remaining == null -> ""
+                    remaining <= 0L -> context.getString(R.string.alert_expired)
+                    else -> TimeUtils.formatDurationShort(remaining)
+                }
+            )
+            val detailPending = PendingIntent.getActivity(
+                context,
+                appWidgetId * 10 + 8,
+                AlertDetailActivity.createIntent(context, alert),
+                PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+            )
+            views.setOnClickPendingIntent(R.id.compact_alert_content, detailPending)
+        }
 
         return views
     }
 
-    private fun buildFullViews(context: Context, appWidgetId: Int, alertCount: Int): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_alerts)
+    private fun buildFullViews(
+        context: Context,
+        appWidgetId: Int,
+        alertCount: Int,
+        palette: WidgetThemePalette,
+        nowMillis: Long
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_alerts).apply {
+            applyFullWidgetPalette(palette)
+        }
 
         // Title/logo click opens app
         val openIntent = Intent(context, MainActivity::class.java)
@@ -270,7 +356,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
 
         // Last updated
-        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nowMillis))
         views.setTextViewText(R.id.tv_last_updated, context.getString(R.string.widget_updated_at, time))
 
         // Empty view management: show/hide custom empty container based on alert count
@@ -305,9 +391,13 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     private suspend fun buildFocusViews(
         context: Context,
         appWidgetId: Int,
-        alert: PokemonAlert
+        alert: PokemonAlert,
+        palette: WidgetThemePalette,
+        nowMillis: Long
     ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.widget_alerts_focus)
+        val views = RemoteViews(context.packageName, R.layout.widget_alerts_focus).apply {
+            applyFocusWidgetPalette(palette)
+        }
         val openApp = PendingIntent.getActivity(
             context,
             appWidgetId * 10,
@@ -325,9 +415,15 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 ?: context.getString(R.string.widget_active_alerts_label)
         )
         views.setTextViewText(R.id.focus_title, formatAlertTitle(alert))
+        val visualStyle = resolveAlertVisualStyle(alert)
+        views.setTextColor(R.id.focus_type, visualStyle.category.accentArgb.toInt())
+        alert.displayCp?.let { cp ->
+            views.setViewVisibility(R.id.focus_cp, View.VISIBLE)
+            views.setTextViewText(R.id.focus_cp, "CP $cp")
+        } ?: views.setViewVisibility(R.id.focus_cp, View.GONE)
         views.setImageViewBitmap(
             R.id.focus_image,
-            WidgetAlertImageRenderer.render(context, alert, sizeDp = 96)
+            WidgetAlertImageRenderer.render(context, alert, sizeDp = 96, palette = palette)
         )
         views.setTextViewText(
             R.id.focus_location,
@@ -337,7 +433,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         )
 
         val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-        val remaining = endMillis?.minus(System.currentTimeMillis())
+        val remaining = endMillis?.minus(nowMillis)
         views.setTextViewText(
             R.id.focus_countdown,
             when {
@@ -412,22 +508,126 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return widgetLayoutModeForSize(minWidth, minHeight, alertCount)
     }
 
+    private suspend fun buildPairViews(
+        context: Context,
+        appWidgetId: Int,
+        alerts: List<PokemonAlert>,
+        palette: WidgetThemePalette,
+        nowMillis: Long
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.widget_alerts_pair).apply {
+            applyPairWidgetPalette(palette)
+        }
+        val openApp = PendingIntent.getActivity(
+            context,
+            appWidgetId * 10,
+            Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.header_open_app_pair, openApp)
+        views.setOnClickPendingIntent(R.id.img_logo_pair, openApp)
+        views.setOnClickPendingIntent(R.id.tv_title_pair, openApp)
+        views.setTextViewText(R.id.tv_count_pair, "${alerts.size} active")
+
+        val refreshPending = PendingIntent.getBroadcast(
+            context,
+            appWidgetId * 10 + 2,
+            Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH },
+            PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+        )
+        views.setOnClickPendingIntent(R.id.btn_refresh_pair, refreshPending)
+
+        val slots = listOf(
+            PairSlot(
+                R.id.pair_first,
+                R.id.pair_first_bar,
+                R.id.pair_first_image,
+                R.id.pair_first_title,
+                R.id.pair_first_meta,
+                R.id.pair_first_countdown
+            ),
+            PairSlot(
+                R.id.pair_second,
+                R.id.pair_second_bar,
+                R.id.pair_second_image,
+                R.id.pair_second_title,
+                R.id.pair_second_meta,
+                R.id.pair_second_countdown
+            )
+        )
+        slots.zip(alerts.take(2)).forEachIndexed { index, (slot, alert) ->
+            val style = resolveAlertVisualStyle(alert)
+            views.setInt(slot.bar, "setBackgroundColor", style.category.accentArgb.toInt())
+            views.setImageViewBitmap(
+                slot.image,
+                WidgetAlertImageRenderer.render(context, alert, sizeDp = 88, palette = palette)
+            )
+            views.setTextViewText(slot.title, formatAlertTitle(alert))
+            views.setTextViewText(
+                slot.meta,
+                alert.displayCp?.let { "CP $it • ${style.label}" } ?: style.label
+            )
+            views.setTextColor(slot.meta, style.category.accentArgb.toInt())
+            val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)?.minus(nowMillis)
+            views.setTextViewText(
+                slot.countdown,
+                when {
+                    remaining == null -> ""
+                    remaining <= 0L -> context.getString(R.string.alert_expired)
+                    else -> TimeUtils.formatDurationShort(remaining)
+                }
+            )
+            val detailPending = PendingIntent.getActivity(
+                context,
+                appWidgetId * 100 + index,
+                AlertDetailActivity.createIntent(context, alert),
+                PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+            )
+            views.setOnClickPendingIntent(slot.root, detailPending)
+        }
+        return views
+    }
+
+    private data class PairSlot(
+        val root: Int,
+        val bar: Int,
+        val image: Int,
+        val title: Int,
+        val meta: Int,
+        val countdown: Int
+    )
+
     private data class WidgetAlertCounts(
         val visibleCount: Int,
         val cadenceCount: Int,
-        val firstAlert: PokemonAlert?
+        val alerts: List<PokemonAlert>
+    ) {
+        val firstAlert: PokemonAlert? get() = alerts.firstOrNull()
+    }
+
+    private data class BuiltWidget(
+        val views: RemoteViews,
+        val mode: WidgetLayoutMode
     )
 
-    private suspend fun getAlertCounts(context: Context, appWidgetId: Int): WidgetAlertCounts {
+    private suspend fun getAlertCounts(
+        context: Context,
+        appWidgetId: Int,
+        nowMillis: Long
+    ): WidgetAlertCounts {
         return try {
-            val loadedAlerts = WidgetAlertLoader.load(context, appWidgetId)
+            val loadedAlerts = WidgetAlertLoader.load(
+                context = context,
+                appWidgetId = appWidgetId,
+                nowMillis = nowMillis
+            )
             WidgetAlertCounts(
                 visibleCount = loadedAlerts.alerts.size,
                 cadenceCount = loadedAlerts.cadenceAlerts.size,
-                firstAlert = loadedAlerts.alerts.firstOrNull()
+                alerts = loadedAlerts.alerts
             )
         } catch (_: Throwable) {
-            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0, firstAlert = null)
+            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0, alerts = emptyList())
         }
     }
 
@@ -452,7 +652,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val triggerAt = nowMillis + delayMillis
 
         try {
-            if (hasActiveAlerts && canScheduleExact(am)) {
+            if (shouldScheduleExactWidgetAlarm(hasActiveAlerts, canScheduleExact(am))) {
                 AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
             } else {
                 AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
@@ -492,11 +692,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         const val EXTRA_NAV_LAT = "extra_nav_lat"
         const val EXTRA_NAV_LNG = "extra_nav_lng"
         private const val REQUEST_CODE = 2025
-        private val MIN_UPDATE_DELAY_MS = TimeUnit.SECONDS.toMillis(1)
-        private val EXPIRY_UPDATE_BUFFER_MS = TimeUnit.SECONDS.toMillis(1)
+        private const val MIN_UPDATE_DELAY_MS = 1L
         private val UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1)
         private val IDLE_UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(15)
         private val lastCadenceAlertCounts = ConcurrentHashMap<Int, Int>()
+        private val updateMutex = Mutex()
         @Volatile
         private var lastCadenceAlertCount: Int? = null
 
@@ -511,24 +711,34 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             if (!hasActiveAlerts) return IDLE_UPDATE_INTERVAL_MS
 
             val expiryDelay = nextExpirationMillis
-                ?.let { expirationMillis -> expirationMillis - nowMillis + EXPIRY_UPDATE_BUFFER_MS }
+                ?.let { expirationMillis -> expirationMillis - nowMillis }
                 ?.coerceAtLeast(MIN_UPDATE_DELAY_MS)
 
             return minOf(UPDATE_INTERVAL_MS, expiryDelay ?: UPDATE_INTERVAL_MS)
         }
 
-        fun requestUpdate(context: Context) {
+        internal fun sendUpdateBroadcast(context: Context) {
             context.sendBroadcast(Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH })
+        }
+
+        fun requestUpdate(context: Context) {
+            WidgetUpdateCoordinator.request(context)
         }
 
         fun updateFromWorker(context: Context) {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
             if (ids.isEmpty()) return
-            requestUpdate(context)
+            WidgetUpdateCoordinator.request(context)
         }
     }
 }
+
+@VisibleForTesting
+internal fun shouldScheduleExactWidgetAlarm(
+    hasActiveAlerts: Boolean,
+    canScheduleExactAlarms: Boolean
+): Boolean = hasActiveAlerts && canScheduleExactAlarms
 
 @VisibleForTesting
 internal fun shouldUseCompactWidgetLayout(minWidthDp: Int, minHeightDp: Int): Boolean {
@@ -540,8 +750,12 @@ internal enum class WidgetLayoutMode {
     COMPACT,
     MEDIUM,
     LARGE_FOCUS,
+    LARGE_PAIR,
     LARGE_LIST
 }
+
+internal val WidgetLayoutMode.usesCollection: Boolean
+    get() = this == WidgetLayoutMode.MEDIUM || this == WidgetLayoutMode.LARGE_LIST
 
 @VisibleForTesting
 internal fun widgetLayoutModeForSize(
@@ -552,5 +766,9 @@ internal fun widgetLayoutModeForSize(
     if (minWidthDp <= 0 || minHeightDp <= 0) return WidgetLayoutMode.COMPACT
     if (minWidthDp < 300 || minHeightDp < 190) return WidgetLayoutMode.COMPACT
     if (minHeightDp < 280) return WidgetLayoutMode.MEDIUM
-    return if (alertCount == 1) WidgetLayoutMode.LARGE_FOCUS else WidgetLayoutMode.LARGE_LIST
+    return when (alertCount) {
+        1 -> WidgetLayoutMode.LARGE_FOCUS
+        2 -> WidgetLayoutMode.LARGE_PAIR
+        else -> WidgetLayoutMode.LARGE_LIST
+    }
 }

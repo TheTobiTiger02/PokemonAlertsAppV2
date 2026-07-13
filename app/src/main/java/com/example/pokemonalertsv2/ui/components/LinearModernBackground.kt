@@ -6,8 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 
-/** Opaque app background. The former animated blobs and grid were intentionally removed. */
+/** Layered One UI-style background with depth but no distracting animation. */
 @Composable
 fun LinearModernBackground(
     modifier: Modifier = Modifier,
@@ -16,7 +17,15 @@ fun LinearModernBackground(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.72f),
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.45f)
+                    )
+                )
+            )
     ) {
         content()
     }

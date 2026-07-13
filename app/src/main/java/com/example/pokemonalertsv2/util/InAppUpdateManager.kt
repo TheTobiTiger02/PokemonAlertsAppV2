@@ -27,8 +27,15 @@ sealed interface UpdateState {
     object UpToDate : UpdateState
     data class Downloading(val progress: Float) : UpdateState
     object Installing : UpdateState
+    data class AwaitingInstallPermission(val releaseTag: String) : UpdateState
     data class Error(val message: String) : UpdateState
 }
+
+data class PendingInstall(
+    val releaseTag: String,
+    val apkUrl: String,
+    val apkPath: String
+)
 
 object InAppUpdateManager {
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
@@ -100,17 +107,27 @@ object InAppUpdateManager {
             return
         }
 
+        val outputFile = File(context.cacheDir, UPDATE_APK_NAME)
+        val pendingInstall = PendingInstall(
+            releaseTag = release.tagName,
+            apkUrl = apkAsset.browserDownloadUrl,
+            apkPath = outputFile.absolutePath
+        )
+        PendingInstallStore.save(context, pendingInstall)
+        downloadPendingInstall(context, pendingInstall)
+    }
+
+    private suspend fun downloadPendingInstall(context: Context, pendingInstall: PendingInstall) {
         _updateState.value = UpdateState.Downloading(0f)
-        
         withContext(Dispatchers.IO) {
             try {
-                val outputFile = File(context.cacheDir, "pokemon-alerts-update.apk")
+                val outputFile = File(pendingInstall.apkPath)
                 if (outputFile.exists()) {
                     outputFile.delete()
                 }
 
                 val request = Request.Builder()
-                    .url(apkAsset.browserDownloadUrl)
+                    .url(pendingInstall.apkUrl)
                     .build()
 
                 client.newCall(request).execute().use { response ->
@@ -141,16 +158,56 @@ object InAppUpdateManager {
                 withContext(Dispatchers.Main) {
                     if (canRequestInstall(context)) {
                         triggerInstall(context, outputFile)
+                        PendingInstallStore.clear(context)
                         _updateState.value = UpdateState.Idle
                     } else {
-                        // Store the file in a variable or just let the trigger fail and show permission
-                        _updateState.value = UpdateState.Error("Unknown sources permission required")
+                        _updateState.value = UpdateState.AwaitingInstallPermission(pendingInstall.releaseTag)
                     }
                 }
             } catch (e: Exception) {
+                PendingInstallStore.clear(context)
                 _updateState.value = UpdateState.Error(e.localizedMessage ?: "Failed to download update")
             }
         }
+    }
+
+    suspend fun restorePendingInstall(context: Context): Boolean {
+        val pendingInstall = PendingInstallStore.load(context) ?: return false
+        if (canRequestInstall(context)) {
+            resumePendingInstall(context)
+        } else {
+            _updateState.value = UpdateState.AwaitingInstallPermission(pendingInstall.releaseTag)
+        }
+        return true
+    }
+
+    suspend fun resumePendingInstall(context: Context) {
+        val pendingInstall = PendingInstallStore.load(context)
+        if (pendingInstall == null) {
+            _updateState.value = UpdateState.Error("The pending update is no longer available")
+            return
+        }
+        if (!canRequestInstall(context)) {
+            _updateState.value = UpdateState.AwaitingInstallPermission(pendingInstall.releaseTag)
+            return
+        }
+        val apkFile = File(pendingInstall.apkPath)
+        if (!apkFile.exists() || apkFile.length() <= 0L) {
+            downloadPendingInstall(context, pendingInstall)
+            return
+        }
+        _updateState.value = UpdateState.Installing
+        withContext(Dispatchers.Main) {
+            triggerInstall(context, apkFile)
+            PendingInstallStore.clear(context)
+            _updateState.value = UpdateState.Idle
+        }
+    }
+
+    fun cancelPendingInstall(context: Context) {
+        PendingInstallStore.load(context)?.apkPath?.let { path -> runCatching { File(path).delete() } }
+        PendingInstallStore.clear(context)
+        resetState()
     }
 
     fun canRequestInstall(context: Context): Boolean {
@@ -161,15 +218,10 @@ object InAppUpdateManager {
         }
     }
 
-    fun launchUnknownSourcesSettings(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(intent)
+    fun unknownSourcesSettingsIntent(context: Context): Intent =
+        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:${context.packageName}")
         }
-    }
 
     fun triggerInstall(context: Context, apkFile: File) {
         val apkUri = FileProvider.getUriForFile(
@@ -182,5 +234,35 @@ object InAppUpdateManager {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
         }
         context.startActivity(intent)
+    }
+
+    private const val UPDATE_APK_NAME = "pokemon-alerts-update.apk"
+}
+
+internal object PendingInstallStore {
+    private const val PREFS = "pending_update_install"
+    private const val KEY_RELEASE_TAG = "release_tag"
+    private const val KEY_APK_URL = "apk_url"
+    private const val KEY_APK_PATH = "apk_path"
+
+    fun save(context: Context, pendingInstall: PendingInstall) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_RELEASE_TAG, pendingInstall.releaseTag)
+            .putString(KEY_APK_URL, pendingInstall.apkUrl)
+            .putString(KEY_APK_PATH, pendingInstall.apkPath)
+            .apply()
+    }
+
+    fun load(context: Context): PendingInstall? {
+        val preferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val releaseTag = preferences.getString(KEY_RELEASE_TAG, null) ?: return null
+        val apkUrl = preferences.getString(KEY_APK_URL, null) ?: return null
+        val apkPath = preferences.getString(KEY_APK_PATH, null) ?: return null
+        return PendingInstall(releaseTag, apkUrl, apkPath)
+    }
+
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }
 }

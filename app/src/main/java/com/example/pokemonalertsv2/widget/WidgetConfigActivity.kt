@@ -1,16 +1,23 @@
 package com.example.pokemonalertsv2.widget
 
+import android.app.AlarmManager
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -20,8 +27,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
@@ -32,7 +41,11 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Configuration activity shown when a widget is first placed.
@@ -41,6 +54,19 @@ import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 class WidgetConfigActivity : ComponentActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
+    private val showExactAlarmDialog = MutableStateFlow(false)
+    private val exactAlarmSettingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (canScheduleExactWidgetAlarms()) {
+                android.widget.Toast.makeText(
+                    this,
+                    getString(R.string.exact_alarm_permission_granted),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            completeWidgetConfiguration()
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,21 +88,76 @@ class WidgetConfigActivity : ComponentActivity() {
         val existing = WidgetFilterPrefs.getFilters(this, appWidgetId)
 
         setContent {
-            PokemonAlertsV2Theme {
+            val themeMode by repository.observeThemeMode()
+                .collectAsStateWithLifecycle(initialValue = 0)
+            val showExactAlarmPermission by showExactAlarmDialog.collectAsStateWithLifecycle()
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 WidgetConfigScreen(
                     initialFilters = existing,
                     onConfirm = { filters ->
                         WidgetFilterPrefs.saveFilters(this@WidgetConfigActivity, appWidgetId, filters)
-                        // Trigger widget update
-                        AlertsWidgetProvider.requestUpdate(this@WidgetConfigActivity)
-                        // Return success
-                        val resultValue = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-                        setResult(RESULT_OK, resultValue)
-                        finish()
+                        if (needsExactAlarmAccess()) {
+                            showExactAlarmDialog.value = true
+                        } else {
+                            completeWidgetConfiguration()
+                        }
                     }
                 )
+
+                if (showExactAlarmPermission) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showExactAlarmDialog.value = false
+                            completeWidgetConfiguration()
+                        },
+                        title = { Text(stringResource(R.string.exact_alarm_permission_title)) },
+                        text = { Text(stringResource(R.string.exact_alarm_permission_message)) },
+                        confirmButton = {
+                            TextButton(onClick = ::openExactAlarmSettings) {
+                                Text(stringResource(R.string.exact_alarm_permission_positive))
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showExactAlarmDialog.value = false
+                                    completeWidgetConfiguration()
+                                }
+                            ) {
+                                Text(stringResource(R.string.exact_alarm_permission_negative))
+                            }
+                        }
+                    )
+                }
             }
         }
+    }
+
+    private fun needsExactAlarmAccess(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExactWidgetAlarms()
+
+    private fun canScheduleExactWidgetAlarms(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = getSystemService(AlarmManager::class.java) ?: return false
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    private fun openExactAlarmSettings() {
+        showExactAlarmDialog.value = false
+        val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+            data = Uri.parse("package:$packageName")
+        }
+        runCatching { exactAlarmSettingsLauncher.launch(intent) }
+            .onFailure { completeWidgetConfiguration() }
+    }
+
+    private fun completeWidgetConfiguration() {
+        AlertsWidgetProvider.requestUpdate(this)
+        val resultValue = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+        setResult(RESULT_OK, resultValue)
+        finish()
     }
 }
 
@@ -97,7 +178,9 @@ val ALL_FILTER_TYPES = listOf(
     "Raid" to "Raids",
     "Rocket" to "Team Rocket",
     "Quest" to "Quests",
-    "Kecleon" to "Kecleon"
+    "Kecleon" to "Kecleon",
+    "Rare" to "Rare spawns",
+    "Weather" to "Weather changes"
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,6 +381,10 @@ private fun widgetFilterLabelResource(key: String): Int = when (key) {
 object WidgetFilterPrefs {
     private const val PREFS_NAME = "widget_filter_prefs"
     private const val KEY_PREFIX = "widget_filters_"
+    private val LEGACY_ALL_FILTER_TYPES = setOf(
+        "Hundo", "Nundo", "PvP", "Spawn", "Raid", "Rocket", "Quest", "Kecleon"
+    )
+    private val NEW_DEFAULT_FILTER_TYPES = setOf("Rare", "Weather")
 
     fun saveFilters(context: Context, appWidgetId: Int, enabledTypes: Set<String>) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -307,8 +394,15 @@ object WidgetFilterPrefs {
     }
 
     fun getFilters(context: Context, appWidgetId: Int): Set<String> {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getStringSet("$KEY_PREFIX$appWidgetId", emptySet()) ?: emptySet()
+        val filters = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getStringSet("$KEY_PREFIX$appWidgetId", emptySet())
+            ?.toSet()
+            .orEmpty()
+        return if (filters.containsAll(LEGACY_ALL_FILTER_TYPES)) {
+            filters + NEW_DEFAULT_FILTER_TYPES
+        } else {
+            filters
+        }
     }
 
     fun removeFilters(context: Context, appWidgetId: Int) {

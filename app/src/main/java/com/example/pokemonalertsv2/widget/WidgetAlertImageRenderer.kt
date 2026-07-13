@@ -9,7 +9,6 @@ import android.graphics.RectF
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.LruCache
-import androidx.core.content.ContextCompat
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
@@ -28,19 +27,30 @@ internal fun widgetAlertImageSource(alert: PokemonAlert): WidgetAlertImageSource
 
 /** Shared image pipeline for collection rows and the expanded single-alert widget. */
 internal object WidgetAlertImageRenderer {
-    suspend fun render(context: Context, alert: PokemonAlert, sizeDp: Int): Bitmap {
+    suspend fun render(
+        context: Context,
+        alert: PokemonAlert,
+        sizeDp: Int,
+        palette: WidgetThemePalette
+    ): Bitmap {
         val sizePx = (sizeDp * context.resources.displayMetrics.density).toInt().coerceAtLeast(40)
         val radiusPx = 12 * context.resources.displayMetrics.density
         return runCatching {
             when (widgetAlertImageSource(alert)) {
-                WidgetAlertImageSource.REMOTE_IMAGE -> remoteImage(context, alert.imageUrl!!, sizePx, radiusPx)
-                WidgetAlertImageSource.MAP_THUMBNAIL -> mapImage(context, alert, sizePx, radiusPx)
-                WidgetAlertImageSource.PLACEHOLDER -> fallback(context, sizePx, radiusPx)
+                WidgetAlertImageSource.REMOTE_IMAGE -> remoteImage(context, alert.imageUrl!!, sizePx, radiusPx, palette)
+                WidgetAlertImageSource.MAP_THUMBNAIL -> mapImage(context, alert, sizePx, radiusPx, palette)
+                WidgetAlertImageSource.PLACEHOLDER -> fallback(context, sizePx, radiusPx, palette)
             }
-        }.getOrElse { fallback(context, sizePx, radiusPx) }
+        }.getOrElse { fallback(context, sizePx, radiusPx, palette) }
     }
 
-    private suspend fun remoteImage(context: Context, url: String, size: Int, radius: Float): Bitmap {
+    private suspend fun remoteImage(
+        context: Context,
+        url: String,
+        size: Int,
+        radius: Float,
+        palette: WidgetThemePalette
+    ): Bitmap {
         val key = "image|$url|$size|$radius"
         cached(key)?.let { return it }
         val request = ImageRequest.Builder(context).data(url).size(size, size).allowHardware(false).build()
@@ -48,31 +58,42 @@ internal object WidgetAlertImageRenderer {
         val bitmap = if (result is SuccessResult) {
             val drawable = result.drawable
             roundBitmap(if (drawable is BitmapDrawable) drawable.bitmap else drawableToBitmap(drawable, size), radius)
-        } else fallback(context, size, radius)
+        } else fallback(context, size, radius, palette)
         return cache(key, bitmap)
     }
 
-    private suspend fun mapImage(context: Context, alert: PokemonAlert, size: Int, radius: Float): Bitmap {
+    private suspend fun mapImage(
+        context: Context,
+        alert: PokemonAlert,
+        size: Int,
+        radius: Float,
+        palette: WidgetThemePalette
+    ): Bitmap {
         val key = "map|${alert.latitude}|${alert.longitude}|${alert.thumbnailUrl}|$size|$radius"
         cached(key)?.let { return it }
         val bitmap = MapFallbackImageGenerator.generate(
             context, requireNotNull(alert.latitude), requireNotNull(alert.longitude),
             requireNotNull(alert.thumbnailUrl), size, size
-        )?.let { roundBitmap(it, radius) } ?: fallback(context, size, radius)
+        )?.let { roundBitmap(it, radius) } ?: fallback(context, size, radius, palette)
         return cache(key, bitmap)
     }
 
-    private fun fallback(context: Context, size: Int, radius: Float): Bitmap {
-        val key = "fallback|$size|$radius"
+    private fun fallback(
+        context: Context,
+        size: Int,
+        radius: Float,
+        palette: WidgetThemePalette
+    ): Bitmap {
+        val key = "fallback|${palette.dark}|$size|$radius"
         cached(key)?.let { return it }
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val center = size / 2f
-        canvas.drawColor(ContextCompat.getColor(context, R.color.widget_fallback_background))
+        canvas.drawColor(palette.fallbackBackground)
         canvas.drawCircle(center, center, size * 0.31f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = ContextCompat.getColor(context, R.color.widget_primary_container)
+            color = palette.fallbackAccent
         })
-        ContextCompat.getDrawable(context, R.drawable.ic_placeholder)?.let { drawable ->
+        androidx.core.content.ContextCompat.getDrawable(context, R.drawable.ic_placeholder)?.let { drawable ->
             val iconSize = (size * 0.50f).toInt()
             val inset = (size - iconSize) / 2
             drawable.setBounds(inset, inset, inset + iconSize, inset + iconSize)

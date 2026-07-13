@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 
 /**
  * Handles notification action buttons.
@@ -31,6 +32,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 val prefs = AlertPreferences(context.alertPreferencesDataStore)
                 CoroutineScope(Dispatchers.IO).launch {
                     prefs.addDismissedAlert(alertId)
+                    AlertsWidgetProvider.requestUpdate(context)
                 }
             }
             ACTION_SNOOZE -> {

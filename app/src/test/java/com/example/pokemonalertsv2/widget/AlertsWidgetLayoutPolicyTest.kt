@@ -38,5 +38,18 @@ class AlertsWidgetLayoutPolicyTest {
             WidgetLayoutMode.LARGE_LIST,
             widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 3)
         )
+        assertEquals(
+            WidgetLayoutMode.LARGE_PAIR,
+            widgetLayoutModeForSize(minWidthDp = 340, minHeightDp = 300, alertCount = 2)
+        )
+    }
+
+    @Test
+    fun onlyListLayoutsNotifyTheRemoteViewsCollection() {
+        assertFalse(WidgetLayoutMode.COMPACT.usesCollection)
+        assertTrue(WidgetLayoutMode.MEDIUM.usesCollection)
+        assertFalse(WidgetLayoutMode.LARGE_FOCUS.usesCollection)
+        assertFalse(WidgetLayoutMode.LARGE_PAIR.usesCollection)
+        assertTrue(WidgetLayoutMode.LARGE_LIST.usesCollection)
     }
 }

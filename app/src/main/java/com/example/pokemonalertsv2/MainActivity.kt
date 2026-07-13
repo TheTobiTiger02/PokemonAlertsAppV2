@@ -3,10 +3,8 @@ package com.example.pokemonalertsv2
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -82,6 +80,7 @@ import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -120,6 +119,7 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
+    private var permissionStep = PermissionStep.IDLE
 
     private val locationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
@@ -128,12 +128,14 @@ class MainActivity : ComponentActivity() {
             
             if (fineLocationGranted || coarseLocationGranted) {
                 Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
+                requestBackgroundLocationStep()
             } else {
                 Toast.makeText(
                     this,
                     "Location permission is needed for distance calculations and map features",
                     Toast.LENGTH_LONG
                 ).show()
+                finishPermissionFlow()
             }
         }
 
@@ -142,8 +144,9 @@ class MainActivity : ComponentActivity() {
             if (isGranted) {
                 Toast.makeText(this, "Background location access granted", Toast.LENGTH_SHORT).show()
             } else {
-                backgroundLocationPermissionNeeded.value = true
+                Toast.makeText(this, "Background location access was not granted", Toast.LENGTH_SHORT).show()
             }
+            finishPermissionFlow()
         }
 
     private val notificationsPermissionLauncher =
@@ -154,6 +157,25 @@ class MainActivity : ComponentActivity() {
                     getString(R.string.notification_permission_rationale),
                     Toast.LENGTH_LONG
                 ).show()
+            }
+            requestForegroundLocationStep()
+        }
+
+    private val backgroundLocationSettingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            val granted = hasBackgroundLocationPermission()
+            Toast.makeText(
+                this,
+                if (granted) "Background location access granted" else "Background location access was not granted",
+                Toast.LENGTH_SHORT
+            ).show()
+            finishPermissionFlow()
+        }
+
+    private val unknownSourcesSettingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            lifecycleScope.launch {
+                InAppUpdateManager.resumePendingInstall(this@MainActivity)
             }
         }
 
@@ -166,8 +188,11 @@ class MainActivity : ComponentActivity() {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
         }
 
-        if (shouldCheckForUpdates()) {
-            lifecycleScope.launch { InAppUpdateManager.checkForUpdates() }
+        lifecycleScope.launch {
+            val restoredPendingInstall = InAppUpdateManager.restorePendingInstall(this@MainActivity)
+            if (!restoredPendingInstall && shouldCheckForUpdates()) {
+                InAppUpdateManager.checkForUpdates()
+            }
         }
 
         setContent {
@@ -175,11 +200,8 @@ class MainActivity : ComponentActivity() {
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             
             val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
-            val darkTheme = when (themeMode) {
-                1 -> false
-                2 -> true
-                else -> isSystemInDarkTheme()
-            }
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
 
             // Track whether we should show onboarding or the main app
             var showOnboarding by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -189,8 +211,7 @@ class MainActivity : ComponentActivity() {
 
             LaunchedEffect(showOnboarding) {
                 if (showOnboarding == false) {
-                    requestNotificationPermissionIfNeeded()
-                    requestLocationPermissionIfNeeded()
+                    startPermissionFlow()
                 }
             }
 
@@ -211,19 +232,36 @@ class MainActivity : ComponentActivity() {
                     MainScaffold(
                         alertsViewModel = alertsViewModel,
                         historyViewModelProvider = { historyViewModel },
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        onManageLocationPermissions = ::restartLocationPermissionFlow,
+                        onOpenUnknownSourcesSettings = {
+                            unknownSourcesSettingsLauncher.launch(
+                                InAppUpdateManager.unknownSourcesSettingsIntent(this@MainActivity)
+                            )
+                        }
                     )
                 }
 
                 if (showBackgroundLocationDialog) {
                     BackgroundLocationPermissionDialog(
-                        onDismiss = { backgroundLocationPermissionNeeded.value = false },
+                        onDismiss = {
+                            backgroundLocationPermissionNeeded.value = false
+                            finishPermissionFlow()
+                        },
                         onOpenSettings = {
                             backgroundLocationPermissionNeeded.value = false
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:$packageName")
+                            val launchResult = launchAppLocationPermissionSettings(
+                                context = this@MainActivity,
+                                launch = backgroundLocationSettingsLauncher::launch
+                            )
+                            if (launchResult == LocationSettingsLaunchResult.FAILED) {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Unable to open Location settings. Open Settings > Apps > Pokemon Alerts > Permissions.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                finishPermissionFlow()
                             }
-                            startActivity(intent)
                         }
                     )
                 }
@@ -231,7 +269,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
+    private fun startPermissionFlow() {
+        if (permissionStep != PermissionStep.IDLE) return
+        requestNotificationPermissionStep()
+    }
+
+    private fun requestNotificationPermissionStep() {
+        permissionStep = PermissionStep.NOTIFICATION
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val isGranted = ContextCompat.checkSelfPermission(
                 this,
@@ -240,8 +284,10 @@ class MainActivity : ComponentActivity() {
 
             if (!isGranted) {
                 notificationsPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
             }
         }
+        requestForegroundLocationStep()
     }
 
     private fun shouldCheckForUpdates(nowMillis: Long = System.currentTimeMillis()): Boolean {
@@ -252,7 +298,8 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
-    private fun requestLocationPermissionIfNeeded() {
+    private fun requestForegroundLocationStep() {
+        permissionStep = PermissionStep.FOREGROUND_LOCATION
         val fineLocationGranted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -270,20 +317,37 @@ class MainActivity : ComponentActivity() {
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 )
             )
+            return
+        }
+        requestBackgroundLocationStep()
+    }
+
+    private fun requestBackgroundLocationStep() {
+        permissionStep = PermissionStep.BACKGROUND_LOCATION
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || hasBackgroundLocationPermission()) {
+            finishPermissionFlow()
+            return
+        }
+        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+            backgroundLocationPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        } else {
+            backgroundLocationPermissionNeeded.value = true
         }
     }
 
-    private fun requestBackgroundLocationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val backgroundLocationGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_BACKGROUND_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+    private fun hasBackgroundLocationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
 
-            if (!backgroundLocationGranted) {
-                backgroundLocationPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-            }
-        }
+    private fun finishPermissionFlow() {
+        permissionStep = PermissionStep.COMPLETE
+    }
+
+    private fun restartLocationPermissionFlow() {
+        if (permissionStep.isRequestActive()) return
+        requestForegroundLocationStep()
     }
 }
 
@@ -293,7 +357,9 @@ class MainActivity : ComponentActivity() {
 private fun MainScaffold(
     alertsViewModel: PokemonAlertsViewModel,
     historyViewModelProvider: () -> AlertHistoryViewModel,
-    settingsViewModel: SettingsViewModel
+    settingsViewModel: SettingsViewModel,
+    onManageLocationPermissions: () -> Unit,
+    onOpenUnknownSourcesSettings: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -310,10 +376,8 @@ private fun MainScaffold(
             }
             is UpdateState.Error -> {
                 val errorMsg = (updateState as UpdateState.Error).message
-                if (errorMsg != "Unknown sources permission required") {
-                    Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
-                    InAppUpdateManager.resetState()
-                }
+                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                InAppUpdateManager.resetState()
             }
             else -> {}
         }
@@ -398,7 +462,7 @@ private fun MainScaffold(
                         3 -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
-                                onBackClick = { selectedTab = 0 }
+                                onManageLocationPermissions = onManageLocationPermissions
                             )
                         }
                     }
@@ -471,32 +535,28 @@ private fun MainScaffold(
                     confirmButton = {}
                 )
             }
-            is UpdateState.Error -> {
-                if (state.message == "Unknown sources permission required") {
-                    AlertDialog(
-                        onDismissRequest = { InAppUpdateManager.resetState() },
-                        title = { Text("Install Permission Required") },
-                        text = {
-                            Text("To install the update, please grant permission to install apps from unknown sources on the next screen.")
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    InAppUpdateManager.launchUnknownSourcesSettings(context)
-                                    InAppUpdateManager.resetState()
-                                }
-                            ) {
-                                Text("Open Settings")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { InAppUpdateManager.resetState() }) {
-                                Text("Cancel")
-                            }
+            is UpdateState.AwaitingInstallPermission -> {
+                AlertDialog(
+                    onDismissRequest = { InAppUpdateManager.cancelPendingInstall(context) },
+                    title = { Text("Install Permission Required") },
+                    text = {
+                        Text("Allow Pokemon Alerts to install ${state.releaseTag}, then return here. Installation will continue automatically.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = onOpenUnknownSourcesSettings
+                        ) {
+                            Text("Open Settings")
                         }
-                    )
-                }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { InAppUpdateManager.cancelPendingInstall(context) }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
+            is UpdateState.Error -> Unit
             is UpdateState.Installing -> {
                 AlertDialog(
                     onDismissRequest = {},

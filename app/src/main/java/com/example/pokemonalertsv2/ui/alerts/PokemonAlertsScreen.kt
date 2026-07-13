@@ -76,6 +76,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -294,7 +296,7 @@ fun AlertHistoryRoute(
         contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             if (showTopBar) {
-                TopAppBar(
+                LargeTopAppBar(
                     title = {
                         Column {
                             Text(
@@ -725,7 +727,7 @@ private fun AlertsList(
     onSearchQueryChanged: (String) -> Unit = {}
 ) {
     val countdownNow = rememberCountdownNow()
-    val controlsExpanded = true
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
@@ -737,16 +739,7 @@ private fun AlertsList(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
-                Card(
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -765,42 +758,50 @@ private fun AlertsList(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        FilterChip(
-                            selected = showDismissed,
-                            onClick = { onShowDismissedChanged(!showDismissed) },
-                            label = { Text("Dismissed") },
-                            leadingIcon = if (showDismissed) {
-                                { Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp)) }
-                            } else null
-                        )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         SortingButton(
                             currentSort = sortPreference,
                             onSortChanged = onSortChanged
                         )
+                        FilledTonalButton(onClick = { showFilterSheet = true }) {
+                            Text("Filters")
+                        }
                     }
                 }
-                AnimatedVisibility(visible = controlsExpanded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AlertSearchBar(
                     query = searchQuery,
                     onQueryChanged = onSearchQueryChanged,
                     placeholder = stringResource(R.string.alerts_search_hint)
                 )
-                FilterRow(
-                    selectedFilter = selectedFilter,
-                    onFilterChanged = onFilterChanged,
-                    locationAvailable = locationAvailable,
-                    locationPermissionGranted = locationPermissionGranted,
-                    locationLookupComplete = locationLookupComplete,
-                    onRequestLocationPermission = onRequestLocationPermission,
-                    availableFilters = availableFilters
-                )
-                
+                if (selectedFilter != AlertFilter.ALL || showDismissed) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (selectedFilter != AlertFilter.ALL) {
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { showFilterSheet = true },
+                                    label = { Text(selectedFilter.label) }
+                                )
+                            }
+                        }
+                        if (showDismissed) {
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { onShowDismissedChanged(false) },
+                                    label = { Text("Dismissed") },
+                                    trailingIcon = {
+                                        Icon(Icons.Filled.Close, contentDescription = "Remove dismissed filter", modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-                    }
-                }
+            }
             }
 
             if (filteredAlerts.isEmpty()) {
@@ -943,6 +944,39 @@ private fun AlertsList(
 
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+    }
+
+    if (showFilterSheet) {
+        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Filter alerts", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                FilterRow(
+                    selectedFilter = selectedFilter,
+                    onFilterChanged = onFilterChanged,
+                    locationAvailable = locationAvailable,
+                    locationPermissionGranted = locationPermissionGranted,
+                    locationLookupComplete = locationLookupComplete,
+                    onRequestLocationPermission = onRequestLocationPermission,
+                    availableFilters = availableFilters
+                )
+                FilterChip(
+                    selected = showDismissed,
+                    onClick = { onShowDismissedChanged(!showDismissed) },
+                    label = { Text("Show dismissed alerts") }
+                )
+                Button(
+                    onClick = { showFilterSheet = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Done")
+                }
             }
         }
     }
@@ -1106,16 +1140,17 @@ private fun FilterRow(
                 }
         ) {
             items(AlertFilter.values().filter { it in availableFilters }) { filter ->
+                val chipAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
                 ElevatedAssistChip(
                     onClick = { onFilterChanged(filter) },
                     label = { Text(text = filter.label) },
                     colors = AssistChipDefaults.elevatedAssistChipColors(
-                        containerColor = if (selectedFilter == filter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
-                        labelColor = if (selectedFilter == filter) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        containerColor = if (selectedFilter == filter) chipAccent.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                        labelColor = if (selectedFilter == filter) chipAccent else MaterialTheme.colorScheme.onSurface
                     ),
                     border = BorderStroke(
                         width = 1.dp,
-                        color = if (selectedFilter == filter) Color.Transparent else MaterialTheme.colorScheme.outline
+                        color = if (selectedFilter == filter) chipAccent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline
                     )
                 )
             }
@@ -1201,7 +1236,7 @@ private fun AlertsToolbar(
     onRefresh: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
-    TopAppBar(
+    LargeTopAppBar(
         title = {
             Column {
                 Text(
@@ -1297,6 +1332,7 @@ private fun AlertHistoryPage(
     var selectedAreaFilter by rememberSaveable { mutableStateOf(HistoryAreaFilter.BOTH) }
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
+    var showHistoryFilterSheet by rememberSaveable { mutableStateOf(false) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
@@ -1532,6 +1568,50 @@ private fun AlertHistoryPage(
         }
     }
 
+    val selectedDateLabel = selectedDateMillis?.let { millis ->
+        val calendar = java.util.Calendar.getInstance().apply { timeInMillis = millis }
+        String.format(
+            "%02d/%02d/%04d",
+            calendar.get(java.util.Calendar.DAY_OF_MONTH),
+            calendar.get(java.util.Calendar.MONTH) + 1,
+            calendar.get(java.util.Calendar.YEAR)
+        )
+    }
+    val applyHistoryTypeFilter: (AlertFilter) -> Unit = { filter ->
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        selectedTypeFilter = filter
+        onTypeChanged(
+            when (filter) {
+                AlertFilter.ALL -> null
+                AlertFilter.RAIDS -> "Raid"
+                AlertFilter.QUESTS -> "Quest"
+                AlertFilter.RARES -> "Rare"
+                AlertFilter.HUNDOS -> "Hundo"
+                AlertFilter.PVP -> "PvP"
+                AlertFilter.NUNDOS -> "Nundo"
+                AlertFilter.KECLEON -> "Kecleon"
+                AlertFilter.ROCKET -> "Rocket"
+                AlertFilter.WEATHER_CHANGE -> "WeatherChange"
+            }
+        )
+    }
+    val showHistoryDatePicker = {
+        val calendar = java.util.Calendar.getInstance().apply {
+            selectedDateMillis?.let { timeInMillis = it }
+        }
+        DatePickerDialog(
+            context,
+            { _: DatePicker, year: Int, month: Int, day: Int ->
+                val selectedCalendar = java.util.Calendar.getInstance().apply { set(year, month, day) }
+                selectedDateMillis = selectedCalendar.timeInMillis
+                onDateChanged(String.format("%04d-%02d-%02d", year, month + 1, day))
+            },
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH),
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -1560,147 +1640,54 @@ private fun AlertHistoryPage(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Sort & Filter",
+                            text = "${filteredAlerts.size} results",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        SortingButton(
-                            currentSort = sortPreference,
-                            onSortChanged = {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                sortPreference = it
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SortingButton(
+                                currentSort = sortPreference,
+                                onSortChanged = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    sortPreference = it
+                                }
+                            )
+                            FilledTonalButton(onClick = { showHistoryFilterSheet = true }) {
+                                Text("Filters")
                             }
-                        )
-                    }
-                    FilterRow(
-                        selectedFilter = selectedTypeFilter,
-                        onFilterChanged = { filter ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedTypeFilter = filter
-                            // Map the UI filter enum to the server-side type string
-                            val apiType = when (filter) {
-                                AlertFilter.ALL -> null
-                                AlertFilter.RAIDS -> "Raid"
-                                AlertFilter.QUESTS -> "Quest"
-                                AlertFilter.RARES -> "Rare"
-                                AlertFilter.HUNDOS -> "Hundo"
-                                AlertFilter.PVP -> "PvP"
-                                AlertFilter.NUNDOS -> "Nundo"
-                                AlertFilter.KECLEON -> "Kecleon"
-                                AlertFilter.ROCKET -> "Rocket"
-                                AlertFilter.WEATHER_CHANGE -> "WeatherChange"
-                            }
-                            onTypeChanged(apiType)
-                        },
-                        locationAvailable = hasLocationPermission && userLocation != null,
-                        locationPermissionGranted = hasLocationPermission,
-                        locationLookupComplete = locationLookupComplete,
-                        onRequestLocationPermission = {
-                            if (hasForegroundLocationPermission(context)) {
-                                locationLookupComplete = false
-                                scope.launch { refreshUserLocation() }
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        },
-                        availableFilters = availableFilters
-                    )
-
-                    HistoryAreaFilterRow(
-                        selectedFilter = selectedAreaFilter,
-                        onFilterChanged = { filter ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedAreaFilter = filter
                         }
-                    )
-
-                    // Search bar for history
+                    }
                     AlertSearchBar(
                         query = uiState.searchQuery,
                         onQueryChanged = onSearchChanged,
                         placeholder = "Search history…"
                     )
-                }
-            }
-            
-            // Date Filter Button
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilledTonalButton(
-                        onClick = {
-                            val calendar = java.util.Calendar.getInstance()
-                            if (selectedDateMillis != null) {
-                                calendar.timeInMillis = selectedDateMillis!!
+                    if (selectedTypeFilter != AlertFilter.ALL || selectedAreaFilter != HistoryAreaFilter.BOTH || selectedDateLabel != null) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (selectedTypeFilter != AlertFilter.ALL) item {
+                                FilterChip(true, { showHistoryFilterSheet = true }, { Text(selectedTypeFilter.label) })
                             }
-                            DatePickerDialog(
-                                context,
-                                { _: DatePicker, year: Int, month: Int, day: Int ->
-                                    val selectedCalendar = java.util.Calendar.getInstance()
-                                    selectedCalendar.set(year, month, day)
-                                    selectedDateMillis = selectedCalendar.timeInMillis
-                                    // Format as YYYY-MM-DD for the server
-                                    val dateStr = String.format("%04d-%02d-%02d", year, month + 1, day)
-                                    onDateChanged(dateStr)
-                                },
-                                calendar.get(java.util.Calendar.YEAR),
-                                calendar.get(java.util.Calendar.MONTH),
-                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                            ).show()
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = if (selectedDateMillis != null) 
-                                MaterialTheme.colorScheme.primary 
-                            else 
-                                MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DateRange,
-                            contentDescription = "Filter by Date",
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (selectedDateMillis != null) {
-                                val cal = java.util.Calendar.getInstance().apply { timeInMillis = selectedDateMillis!! }
-                                String.format(
-                                    "%02d/%02d/%04d",
-                                    cal.get(java.util.Calendar.DAY_OF_MONTH),
-                                    cal.get(java.util.Calendar.MONTH) + 1,
-                                    cal.get(java.util.Calendar.YEAR)
-                                )
-                            } else {
-                                "Select Date"
+                            if (selectedAreaFilter != HistoryAreaFilter.BOTH) item {
+                                FilterChip(true, { showHistoryFilterSheet = true }, { Text(selectedAreaFilter.label) })
                             }
-                        )
-                    }
-                    
-                    if (selectedDateMillis != null) {
-                        FilledIconButton(
-                            onClick = {
-                                selectedDateMillis = null
-                                onDateChanged(null) // clear server-side date filter
-                            },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear Date Filter",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
+                            selectedDateLabel?.let { label ->
+                                item {
+                                    FilterChip(
+                                        selected = true,
+                                        onClick = { showHistoryFilterSheet = true },
+                                        label = { Text(label) },
+                                        trailingIcon = {
+                                            IconButton(onClick = {
+                                                selectedDateMillis = null
+                                                onDateChanged(null)
+                                            }) {
+                                                Icon(Icons.Filled.Close, contentDescription = "Clear date", modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1771,31 +1758,31 @@ private fun AlertHistoryPage(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if ((statistics["raids"] ?: 0) > 0) {
-                                    StatRow("Raids", statistics["raids"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Raids", statistics["raids"] ?: 0, Color(AlertCategory.RAID.accentArgb))
                                 }
                                 if ((statistics["quests"] ?: 0) > 0) {
-                                    StatRow("Quests", statistics["quests"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Quests", statistics["quests"] ?: 0, Color(AlertCategory.QUEST.accentArgb))
                                 }
                                 if ((statistics["rares"] ?: 0) > 0) {
-                                    StatRow("Rare", statistics["rares"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Rare", statistics["rares"] ?: 0, Color(AlertCategory.RARE.accentArgb))
                                 }
                                 if ((statistics["hundos"] ?: 0) > 0) {
-                                    StatRow("Hundos", statistics["hundos"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Hundos", statistics["hundos"] ?: 0, Color(AlertCategory.HUNDO.accentArgb))
                                 }
                                 if ((statistics["pvp"] ?: 0) > 0) {
-                                    StatRow("PvP", statistics["pvp"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("PvP", statistics["pvp"] ?: 0, Color(AlertCategory.PVP.accentArgb))
                                 }
                                 if ((statistics["nundos"] ?: 0) > 0) {
-                                    StatRow("Nundos", statistics["nundos"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Nundos", statistics["nundos"] ?: 0, Color(AlertCategory.NUNDO.accentArgb))
                                 }
                                 if ((statistics["rocket"] ?: 0) > 0) {
-                                    StatRow("Rocket", statistics["rocket"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Rocket", statistics["rocket"] ?: 0, Color(AlertCategory.ROCKET.accentArgb))
                                 }
                                 if ((statistics["kecleon"] ?: 0) > 0) {
-                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, Color(AlertCategory.KECLEON.accentArgb))
                                 }
                                 if ((statistics["other"] ?: 0) > 0) {
-                                    StatRow("Other", statistics["other"] ?: 0, MaterialTheme.colorScheme.primary)
+                                    StatRow("Other", statistics["other"] ?: 0, Color(AlertCategory.GENERIC.accentArgb))
                                 }
                             }
                         }
@@ -1855,6 +1842,76 @@ private fun AlertHistoryPage(
                     }
                 }
             }
+            }
+        }
+    }
+
+    if (showHistoryFilterSheet) {
+        ModalBottomSheet(onDismissRequest = { showHistoryFilterSheet = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Filter history", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Alert type", style = MaterialTheme.typography.titleSmall)
+                FilterRow(
+                    selectedFilter = selectedTypeFilter,
+                    onFilterChanged = applyHistoryTypeFilter,
+                    locationAvailable = hasLocationPermission && userLocation != null,
+                    locationPermissionGranted = hasLocationPermission,
+                    locationLookupComplete = locationLookupComplete,
+                    onRequestLocationPermission = {
+                        if (hasForegroundLocationPermission(context)) {
+                            locationLookupComplete = false
+                            scope.launch { refreshUserLocation() }
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    availableFilters = availableFilters
+                )
+                Text("Area", style = MaterialTheme.typography.titleSmall)
+                HistoryAreaFilterRow(
+                    selectedFilter = selectedAreaFilter,
+                    onFilterChanged = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        selectedAreaFilter = it
+                    }
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = showHistoryDatePicker,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Filled.DateRange, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(selectedDateLabel ?: "Select date")
+                    }
+                    if (selectedDateMillis != null) {
+                        FilledIconButton(onClick = {
+                            selectedDateMillis = null
+                            onDateChanged(null)
+                        }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear date")
+                        }
+                    }
+                }
+                Button(
+                    onClick = { showHistoryFilterSheet = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Show results")
+                }
             }
         }
     }

@@ -66,6 +66,7 @@ val LightLinearModernColors = LinearModernColors(
 )
 
 val LocalLinearModernColors = staticCompositionLocalOf { DarkLinearModernColors }
+val LocalAppDarkTheme = staticCompositionLocalOf { false }
 
 private val DarkColorScheme = darkColorScheme(
     primary = AppDarkPrimary,
@@ -159,7 +160,10 @@ fun PokemonAlertsV2Theme(
         }
     }
 
-    CompositionLocalProvider(LocalLinearModernColors provides appColors) {
+    CompositionLocalProvider(
+        LocalLinearModernColors provides appColors,
+        LocalAppDarkTheme provides darkTheme
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = Typography,
