@@ -183,13 +183,12 @@ object AlertNotifier {
             val bitmap = resolveAlertNotificationImage(
                 alert = alert,
                 loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
-                generateMapFallback = { coordinates, thumbnailUrl, locationLabel ->
+                generateMapFallback = { coordinates, thumbnailUrl ->
                     MapFallbackImageGenerator.generate(
                         context = context,
                         latitude = coordinates.latitude,
                         longitude = coordinates.longitude,
                         thumbnailUrl = thumbnailUrl,
-                        locationLabel = locationLabel,
                         outputWidth = 512,
                         outputHeight = 256
                     )
