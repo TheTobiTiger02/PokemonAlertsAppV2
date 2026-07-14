@@ -1,31 +1,29 @@
 package com.example.pokemonalertsv2.fcm
 
 import android.util.Log
-import com.example.pokemonalertsv2.work.AlertWorker
+import com.example.pokemonalertsv2.work.FcmAlertWorker
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class PokemonFirebaseMessagingService : FirebaseMessagingService() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        scope.launch {
-            runCatching {
-                FcmAlertHandler.handle(applicationContext, remoteMessage.data)
-            }.onFailure { exception ->
-                Log.w(TAG, "Failed to handle FCM alert message", exception)
-            }
-        }
+        FcmAlertWorker.enqueue(
+            context = applicationContext,
+            messageId = remoteMessage.messageId,
+            data = remoteMessage.data
+        )
     }
 
     override fun onDeletedMessages() {
         super.onDeletedMessages()
-        AlertWorker.triggerImmediateSync(applicationContext)
+        FcmAlertWorker.enqueueAuthoritativeSync(applicationContext)
+    }
+
+    override fun onNewToken(token: String) {
+        super.onNewToken(token)
+        Log.d(TAG, "FCM registration token changed; renewing alerts topic subscription")
+        FcmTopicSubscriber.subscribe(applicationContext)
     }
 
     companion object {
