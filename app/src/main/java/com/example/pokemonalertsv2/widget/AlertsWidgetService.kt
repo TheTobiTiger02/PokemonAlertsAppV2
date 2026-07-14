@@ -58,9 +58,7 @@ private class AlertsFactory(
                 }
             currentLocation = renderSnapshot?.location ?: currentLocation
 
-            val sorted = renderSnapshot.orEmpty().sortedWith(compareByDescending<PokemonAlert> {
-                TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MIN_VALUE
-            }.thenByDescending { it.endTime })
+            val sorted = renderSnapshot.orEmpty()
 
             items.clear()
             items.addAll(sorted)

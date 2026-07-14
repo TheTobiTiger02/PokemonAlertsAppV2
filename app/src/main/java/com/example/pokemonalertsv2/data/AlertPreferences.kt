@@ -17,6 +17,7 @@ private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesK
 private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("use_imperial_units")
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
+private val MAP_STYLE_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("map_style_preference")
 private val NOTIFICATIONS_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
 private val RAIDS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("raids_notifications")
 private val SPAWNS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spawns_notifications")
@@ -53,6 +54,20 @@ enum class SortPreference {
     POSTED_TIME, TIME_REMAINING, DISTANCE, NAME
 }
 
+enum class MapStylePreference {
+    GOOGLE_STANDARD,
+    GOOGLE_SATELLITE,
+    OPENSTREETMAP;
+
+    companion object {
+        fun fromStoredValue(value: String?): MapStylePreference = when (value) {
+            GOOGLE_SATELLITE.name -> GOOGLE_SATELLITE
+            OPENSTREETMAP.name -> OPENSTREETMAP
+            else -> GOOGLE_STANDARD
+        }
+    }
+}
+
 interface AlertPreferencesStore {
     val seenAlertIds: Flow<Set<String>>
     suspend fun getSeenAlertIds(): Set<String>
@@ -73,6 +88,9 @@ interface AlertPreferencesStore {
     
     val sortPreference: Flow<SortPreference>
     suspend fun updateSortPreference(preference: SortPreference)
+
+    val mapStylePreference: Flow<MapStylePreference>
+    suspend fun updateMapStylePreference(preference: MapStylePreference)
     
     val notificationsEnabled: Flow<Boolean>
     suspend fun updateNotificationsEnabled(enabled: Boolean)
@@ -227,6 +245,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateSortPreference(preference: SortPreference) {
         dataStore.edit { prefs ->
             prefs[SORT_PREFERENCE_KEY] = preference.name
+        }
+    }
+
+    override val mapStylePreference: Flow<MapStylePreference> = dataStore.data.map { preferences ->
+        MapStylePreference.fromStoredValue(preferences[MAP_STYLE_PREFERENCE_KEY])
+    }
+
+    override suspend fun updateMapStylePreference(preference: MapStylePreference) {
+        dataStore.edit { prefs ->
+            prefs[MAP_STYLE_PREFERENCE_KEY] = preference.name
         }
     }
     

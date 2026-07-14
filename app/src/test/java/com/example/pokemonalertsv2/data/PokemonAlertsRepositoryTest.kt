@@ -307,6 +307,7 @@ class PokemonAlertsRepositoryTest {
         private val imperialState = MutableStateFlow(false)
         private val onboardingState = MutableStateFlow(false)
         private val sortState = MutableStateFlow(SortPreference.TIME_REMAINING)
+        private val mapStyleState = MutableStateFlow(MapStylePreference.GOOGLE_STANDARD)
         private val notificationsEnabledState = MutableStateFlow(true)
         private val raidsState = MutableStateFlow(true)
         private val spawnsState = MutableStateFlow(true)
@@ -352,6 +353,9 @@ class PokemonAlertsRepositoryTest {
 
         override val sortPreference: Flow<SortPreference> = sortState.asStateFlow()
         override suspend fun updateSortPreference(preference: SortPreference) { sortState.value = preference }
+
+        override val mapStylePreference: Flow<MapStylePreference> = mapStyleState.asStateFlow()
+        override suspend fun updateMapStylePreference(preference: MapStylePreference) { mapStyleState.value = preference }
 
         override val notificationsEnabled: Flow<Boolean> = notificationsEnabledState.asStateFlow()
         override suspend fun updateNotificationsEnabled(enabled: Boolean) { notificationsEnabledState.value = enabled }

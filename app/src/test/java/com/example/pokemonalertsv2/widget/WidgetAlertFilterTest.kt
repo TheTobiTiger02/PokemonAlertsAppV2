@@ -219,17 +219,17 @@ class WidgetAlertFilterTest {
 
     @Test
     fun renderSnapshotIsGenerationTaggedAndDefensivelyCopied() {
-        val source = mutableListOf(sampleAlert("First"))
+        val source = mutableListOf(sampleAlert("First"), sampleAlert("Second"))
         val first = WidgetAlertSnapshotStore.publishRenderSnapshot(7, source, null)
         source += sampleAlert("Changed after publish")
         val restored = WidgetAlertSnapshotStore.currentRenderSnapshot(7)
         val second = WidgetAlertSnapshotStore.publishRenderSnapshot(
             7,
-            listOf(sampleAlert("Second")),
+            listOf(sampleAlert("Replacement")),
             null
         )
 
-        assertEquals(listOf("First"), restored?.alerts?.map { it.name })
+        assertEquals(listOf("First", "Second"), restored?.alerts?.map { it.name })
         assertTrue(second.generation > first.generation)
     }
 

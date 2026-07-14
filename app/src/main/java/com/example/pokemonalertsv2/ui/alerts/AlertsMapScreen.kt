@@ -3,16 +3,19 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
 import android.util.LruCache
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -86,18 +89,20 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
@@ -119,6 +124,9 @@ fun AlertsMapRoute(
     showBackButton: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val savedMapStyle by viewModel.mapStylePreference.collectAsStateWithLifecycle(
+        initialValue = MapStylePreference.GOOGLE_STANDARD
+    )
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Refresh while the map is visible without duplicating the main feed cadence.
@@ -135,6 +143,8 @@ fun AlertsMapRoute(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
+        initialMapStyle = savedMapStyle,
+        onMapStyleChanged = viewModel::updateMapStylePreference,
         showBackButton = showBackButton
     )
 }
@@ -144,6 +154,8 @@ fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
+    onMapStyleChanged: (MapStylePreference) -> Unit = {},
     showBackButton: Boolean = true
 ) {
     val context = LocalContext.current
@@ -156,13 +168,36 @@ fun AlertsMapScreen(
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(defaultLatLng, ALSBACH_ZOOM)
     }
-    var mapLoaded by remember { mutableStateOf(false) }
+    var googleMapLoaded by remember { mutableStateOf(false) }
+    var openStreetMapLoaded by remember { mutableStateOf(false) }
     var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
     var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
-    var mapType by rememberSaveable { mutableStateOf(MapType.NORMAL) }
+    var mapStyle by rememberSaveable(initialMapStyle) { mutableStateOf(initialMapStyle) }
+    val mapSource = if (mapStyle == MapStylePreference.OPENSTREETMAP) {
+        MapDisplaySource.OPENSTREETMAP
+    } else {
+        MapDisplaySource.GOOGLE
+    }
+    val mapType = if (mapStyle == MapStylePreference.GOOGLE_SATELLITE) {
+        MapType.HYBRID
+    } else {
+        MapType.NORMAL
+    }
     var showTimeLabels by rememberSaveable { mutableStateOf(false) }
     var showFilterMenu by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
+    var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
+    var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
+    var retainedZoom by rememberSaveable { mutableStateOf(ALSBACH_ZOOM.toDouble()) }
+    val openStreetMapController = remember { OpenStreetMapController() }
+
+    fun retainedCamera() = MapCameraSnapshot(retainedLatitude, retainedLongitude, retainedZoom)
+
+    fun updateRetainedCamera(snapshot: MapCameraSnapshot) {
+        retainedLatitude = snapshot.latitude
+        retainedLongitude = snapshot.longitude
+        retainedZoom = snapshot.zoom
+    }
 
     fun hasLocationPermissionNow(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -223,13 +258,19 @@ fun AlertsMapScreen(
                 return@launch
             }
 
-            cameraPositionState.animate(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(location.latitude, location.longitude),
-                    16f
-                ),
-                1_000
-            )
+            val target = MapCameraSnapshot(location.latitude, location.longitude, 16.0)
+            updateRetainedCamera(target)
+            if (mapSource == MapDisplaySource.GOOGLE) {
+                cameraPositionState.animate(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(location.latitude, location.longitude),
+                        16f
+                    ),
+                    1_000
+                )
+            } else {
+                openStreetMapController.setCamera(target, animate = true)
+            }
         }
     }
 
@@ -339,20 +380,32 @@ fun AlertsMapScreen(
         )
     }
 
-    LaunchedEffect(mapLoaded, filteredAlerts, locationLookupComplete, userLocation) {
-        if (mapLoaded && locationLookupComplete && !initialCameraPositioned) {
+    val currentMapLoaded = if (mapSource == MapDisplaySource.GOOGLE) {
+        googleMapLoaded
+    } else {
+        openStreetMapLoaded
+    }
+
+    LaunchedEffect(currentMapLoaded, filteredAlerts, locationLookupComplete, userLocation, mapSource) {
+        if (currentMapLoaded && locationLookupComplete && !initialCameraPositioned) {
             val viewport = resolveInitialMapViewport(
                 userLatitude = userLocation?.latitude,
                 userLongitude = userLocation?.longitude,
                 alerts = filteredAlerts
             )
+            val target = MapCameraSnapshot(viewport.latitude, viewport.longitude, viewport.zoom.toDouble())
+            updateRetainedCamera(target)
             runCatching {
-                cameraPositionState.move(
-                    CameraUpdateFactory.newLatLngZoom(
-                        LatLng(viewport.latitude, viewport.longitude),
-                        viewport.zoom
+                if (mapSource == MapDisplaySource.GOOGLE) {
+                    cameraPositionState.move(
+                        CameraUpdateFactory.newLatLngZoom(
+                            LatLng(viewport.latitude, viewport.longitude),
+                            viewport.zoom
+                        )
                     )
-                )
+                } else {
+                    openStreetMapController.setCamera(target)
+                }
             }.onSuccess { initialCameraPositioned = true }
         }
     }
@@ -367,25 +420,111 @@ fun AlertsMapScreen(
             end = if (useSidePanel) 392.dp else 16.dp,
             bottom = if (useSidePanel) 24.dp else 96.dp
         )
+        val fitPaddingPx = with(density) {
+            (if (useSidePanel) 104.dp else 72.dp).roundToPx()
+        }
+        val openStreetMapInsets = with(density) {
+            MapContentInsets(
+                left = 16.dp.roundToPx(),
+                top = (statusBarPadding + 88.dp).roundToPx(),
+                right = (if (useSidePanel) 392.dp else 16.dp).roundToPx(),
+                bottom = (if (useSidePanel) 24.dp else 96.dp).roundToPx()
+            )
+        }
+        val visibleCoordinates = remember(filteredAlerts) { resolveFitAllCoordinates(filteredAlerts) }
 
-        GoogleMap(
-            modifier = Modifier.fillMaxSize(),
-            cameraPositionState = cameraPositionState,
-            contentPadding = mapContentPadding,
-            onMapLoaded = { mapLoaded = true },
-            properties = mapProperties,
-            uiSettings = mapUiSettings
-        ) {
-            filteredAlerts.forEach { alert ->
-                key(alert.uniqueId) {
-                    MapMarker(
-                        alert = alert,
-                        now = now,
-                        density = density,
-                        showTimeLabel = showTimeLabels,
-                        onClick = { selectedAlert = alert }
+        fun fitVisibleAlerts() {
+            if (visibleCoordinates.isEmpty()) {
+                Toast.makeText(context, R.string.map_no_alerts_to_show, Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (mapSource == MapDisplaySource.GOOGLE) {
+                scope.launch {
+                    if (visibleCoordinates.size == 1) {
+                        val coordinate = visibleCoordinates.first()
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngZoom(
+                                LatLng(coordinate.latitude, coordinate.longitude),
+                                16f
+                            ),
+                            750
+                        )
+                    } else {
+                        val bounds = LatLngBounds.Builder().apply {
+                            visibleCoordinates.forEach { include(LatLng(it.latitude, it.longitude)) }
+                        }.build()
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngBounds(bounds, fitPaddingPx),
+                            750
+                        )
+                    }
+                    val position = cameraPositionState.position
+                    updateRetainedCamera(
+                        MapCameraSnapshot(position.target.latitude, position.target.longitude, position.zoom.toDouble())
                     )
                 }
+            } else {
+                openStreetMapController.fitAlerts(visibleCoordinates, fitPaddingPx)
+            }
+        }
+
+        if (mapSource == MapDisplaySource.GOOGLE) {
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+                contentPadding = mapContentPadding,
+                onMapLoaded = { googleMapLoaded = true },
+                properties = mapProperties,
+                uiSettings = mapUiSettings
+            ) {
+                filteredAlerts.forEach { alert ->
+                    key(alert.uniqueId) {
+                        MapMarker(
+                            alert = alert,
+                            now = now,
+                            density = density,
+                            showTimeLabel = showTimeLabels,
+                            onClick = { selectedAlert = alert }
+                        )
+                    }
+                }
+            }
+        } else {
+            OpenStreetMapView(
+                modifier = Modifier.fillMaxSize(),
+                alerts = filteredAlerts,
+                userLocation = userLocation,
+                cameraSnapshot = retainedCamera(),
+                contentInsets = openStreetMapInsets,
+                showTimeLabels = showTimeLabels,
+                now = now,
+                controller = openStreetMapController,
+                onMapLoaded = { openStreetMapLoaded = true },
+                onLoadError = {
+                    Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
+                },
+                onAlertClick = { selectedAlert = it },
+                onCameraChanged = ::updateRetainedCamera
+            )
+
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 8.dp)
+                    .clickable {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/copyright"))
+                        )
+                    },
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                shape = MaterialTheme.shapes.extraSmall
+            ) {
+                Text(
+                    text = stringResource(R.string.map_osm_attribution),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
             }
         }
 
@@ -401,12 +540,47 @@ fun AlertsMapScreen(
                 visibleAlertCount = filteredAlerts.size,
                 showTimeLabels = showTimeLabels,
                 hybridMap = mapType == MapType.HYBRID,
+                mapSource = mapSource,
                 showBackButton = showBackButton,
                 onBack = onBack,
                 onToggleTimeLabels = { showTimeLabels = !showTimeLabels },
                 onRefresh = onRefresh,
                 onToggleMapType = {
-                    mapType = if (mapType == MapType.NORMAL) MapType.HYBRID else MapType.NORMAL
+                    val nextStyle = if (mapStyle == MapStylePreference.GOOGLE_SATELLITE) {
+                        MapStylePreference.GOOGLE_STANDARD
+                    } else {
+                        MapStylePreference.GOOGLE_SATELLITE
+                    }
+                    mapStyle = nextStyle
+                    onMapStyleChanged(nextStyle)
+                },
+                onToggleMapSource = {
+                    if (mapSource == MapDisplaySource.GOOGLE) {
+                        val position = cameraPositionState.position
+                        updateRetainedCamera(
+                            MapCameraSnapshot(
+                                position.target.latitude,
+                                position.target.longitude,
+                                position.zoom.toDouble()
+                            )
+                        )
+                        openStreetMapLoaded = false
+                        mapStyle = MapStylePreference.OPENSTREETMAP
+                        onMapStyleChanged(MapStylePreference.OPENSTREETMAP)
+                    } else {
+                        googleMapLoaded = false
+                        mapStyle = MapStylePreference.GOOGLE_STANDARD
+                        onMapStyleChanged(MapStylePreference.GOOGLE_STANDARD)
+                        scope.launch {
+                            val retained = retainedCamera()
+                            cameraPositionState.move(
+                                CameraUpdateFactory.newLatLngZoom(
+                                    LatLng(retained.latitude, retained.longitude),
+                                    retained.zoom.toFloat()
+                                )
+                            )
+                        }
+                    }
                 },
                 onOpenFilters = { showFilterMenu = true }
             )
@@ -438,21 +612,8 @@ fun AlertsMapScreen(
             }
         }
 
-        if (mapLoaded && (useSidePanel || selectedAlert == null)) {
-            FloatingActionButton(
-                onClick = {
-                    if (hasLocationPermissionNow()) {
-                        hasLocationPermission = true
-                        centerOnUserLocation()
-                    } else {
-                        locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION
-                            )
-                        )
-                    }
-                },
+        if (currentMapLoaded && (useSidePanel || selectedAlert == null)) {
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .then(
@@ -463,21 +624,54 @@ fun AlertsMapScreen(
                         }
                     )
                     .padding(end = if (useSidePanel) 392.dp else 16.dp, bottom = 24.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_my_location),
-                    contentDescription = "Center on current location"
-                )
+                FloatingActionButton(
+                    onClick = ::fitVisibleAlerts,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_fit_map),
+                        contentDescription = stringResource(R.string.map_show_all_alerts)
+                    )
+                }
+                FloatingActionButton(
+                    onClick = {
+                        if (hasLocationPermissionNow()) {
+                            hasLocationPermission = true
+                            centerOnUserLocation()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_my_location),
+                        contentDescription = "Center on current location"
+                    )
+                }
             }
         }
 
         selectedAlert?.let { alert ->
+            val distanceInfo = remember(alert.uniqueId, userLocation?.latitude, userLocation?.longitude) {
+                resolveMapAlertDistanceInfo(userLocation, alert)
+            }
             if (useSidePanel) {
                 MapAlertSidePanel(
                     alert = alert,
+                    distanceInfo = distanceInfo,
                     onDismiss = { selectedAlert = null },
                     onOpenMaps = { openMapForAlert(context, alert) },
                     onShare = { scope.launch { AlertShareCard.share(context, alert) } },
@@ -496,6 +690,7 @@ fun AlertsMapScreen(
                 ) {
                     MapAlertDetailContent(
                         alert = alert,
+                        distanceInfo = distanceInfo,
                         onDismiss = { selectedAlert = null },
                         onOpenMaps = { openMapForAlert(context, alert) },
                         onShare = { scope.launch { AlertShareCard.share(context, alert) } },
@@ -515,11 +710,13 @@ private fun MapTopAppBar(
     visibleAlertCount: Int,
     showTimeLabels: Boolean,
     hybridMap: Boolean,
+    mapSource: MapDisplaySource,
     showBackButton: Boolean,
     onBack: () -> Unit,
     onToggleTimeLabels: () -> Unit,
     onRefresh: () -> Unit,
     onToggleMapType: () -> Unit,
+    onToggleMapSource: () -> Unit,
     onOpenFilters: () -> Unit
 ) {
     var moreExpanded by remember { mutableStateOf(false) }
@@ -593,6 +790,26 @@ private fun MapTopAppBar(
                     containerColor = MaterialTheme.colorScheme.surface
                 ) {
                     DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (mapSource == MapDisplaySource.GOOGLE) {
+                                        R.string.map_use_openstreetmap
+                                    } else {
+                                        R.string.map_use_google
+                                    }
+                                )
+                            )
+                        },
+                        onClick = {
+                            moreExpanded = false
+                            onToggleMapSource()
+                        },
+                        leadingIcon = {
+                            Icon(painterResource(id = R.drawable.ic_map), contentDescription = null)
+                        }
+                    )
+                    if (mapSource == MapDisplaySource.GOOGLE) DropdownMenuItem(
                         text = {
                             Text(
                                 stringResource(
@@ -684,6 +901,7 @@ private fun MapFilterRow(
 @Composable
 private fun MapAlertSidePanel(
     alert: PokemonAlert,
+    distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
@@ -703,6 +921,7 @@ private fun MapAlertSidePanel(
     ) {
         MapAlertDetailContent(
             alert = alert,
+            distanceInfo = distanceInfo,
             onDismiss = onDismiss,
             onOpenMaps = onOpenMaps,
             onShare = onShare,
@@ -715,6 +934,7 @@ private fun MapAlertSidePanel(
 @Composable
 private fun MapAlertDetailContent(
     alert: PokemonAlert,
+    distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
@@ -782,6 +1002,26 @@ private fun MapAlertDetailContent(
                 text = location,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        ) {
+            val distanceText = distanceInfo?.distanceText
+            val walkingText = distanceInfo?.walkingText
+            Text(
+                text = when {
+                    distanceText != null && walkingText != null -> {
+                        "$distanceText · ${stringResource(R.string.map_estimated_walk, walkingText)}"
+                    }
+                    distanceText != null -> distanceText
+                    else -> stringResource(R.string.map_distance_unavailable)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
             )
         }
 
@@ -869,6 +1109,11 @@ internal data class AlertMapCoordinates(
     val longitude: Double
 )
 
+internal enum class MapDisplaySource {
+    GOOGLE,
+    OPENSTREETMAP
+}
+
 internal data class MapViewportTarget(
     val latitude: Double,
     val longitude: Double,
@@ -888,6 +1133,50 @@ internal fun validMapCoordinates(
 
 internal fun PokemonAlert.mapCoordinatesOrNull(): AlertMapCoordinates? =
     validMapCoordinates(latitude, longitude)
+
+internal fun resolveFitAllCoordinates(alerts: List<PokemonAlert>): List<AlertMapCoordinates> =
+    alerts.mapNotNull(PokemonAlert::mapCoordinatesOrNull)
+
+internal fun resolveMapAlertDistanceInfo(
+    userLocation: android.location.Location?,
+    alert: PokemonAlert
+): AlertDistanceInfo? = resolveMapAlertDistanceInfo(
+    userLatitude = userLocation?.latitude,
+    userLongitude = userLocation?.longitude,
+    alert = alert
+)
+
+internal fun resolveMapAlertDistanceInfo(
+    userLatitude: Double?,
+    userLongitude: Double?,
+    alert: PokemonAlert,
+    distanceBetween: (AlertMapCoordinates, AlertMapCoordinates) -> Float? = { origin, destination ->
+        val results = FloatArray(1)
+        runCatching {
+            android.location.Location.distanceBetween(
+                origin.latitude,
+                origin.longitude,
+                destination.latitude,
+                destination.longitude,
+                results
+            )
+            results[0]
+        }.getOrNull()
+    }
+): AlertDistanceInfo? {
+    val origin = validMapCoordinates(userLatitude, userLongitude) ?: return null
+    val destination = alert.mapCoordinatesOrNull() ?: return null
+    val straightLineDistance = distanceBetween(origin, destination)
+        ?.takeUnless { it.isNaN() || it.isInfinite() || it < 0f }
+        ?: return null
+    val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(straightLineDistance)
+    val displayInfo = WalkingRouteUtils.buildRouteDisplayInfo(straightLineDistance, routeInfo)
+    return AlertDistanceInfo(
+        distanceMeters = displayInfo.straightLineDistanceMeters,
+        distanceText = displayInfo.distanceText,
+        walkingText = displayInfo.walkingText
+    )
+}
 
 internal fun resolveInitialMapViewport(
     userLatitude: Double?,
@@ -986,10 +1275,13 @@ private fun MapMarker(
             )
         }
     }
+    val googleMarkerDescriptor = remember(markerIcon) {
+        markerIcon?.bitmap?.let(BitmapDescriptorFactory::fromBitmap)
+    }
 
     MarkerInfoWindowContent(
         state = remember(position) { MarkerState(position = position) },
-        icon = markerIcon?.descriptor,
+        icon = googleMarkerDescriptor,
         anchor = markerIcon?.anchor ?: Offset(0.5f, 1f),
         title = formatAlertTitle(alert),
         visible = true,
@@ -1002,7 +1294,7 @@ private fun MapMarker(
     }
 }
 
-private data class MapMarkerPalette(
+internal data class MapMarkerPalette(
     val primary: Int,
     val onPrimary: Int,
     val surface: Int,
@@ -1012,14 +1304,14 @@ private data class MapMarkerPalette(
     val onError: Int
 )
 
-private data class MapMarkerIcon(
-    val descriptor: BitmapDescriptor,
+internal data class MapMarkerIcon(
+    val bitmap: Bitmap,
     val anchor: Offset
 )
 
 private val markerIconCache = LruCache<String, MapMarkerIcon>(256)
 
-private suspend fun createMapMarkerIcon(
+internal suspend fun createMapMarkerIcon(
     context: android.content.Context,
     sizePx: Int,
     categoryCode: String,
@@ -1197,7 +1489,7 @@ private suspend fun createMapMarkerIcon(
         }
 
         val icon = MapMarkerIcon(
-            descriptor = BitmapDescriptorFactory.fromBitmap(bitmap),
+            bitmap = bitmap,
             anchor = Offset(0.5f, (pinTipY / totalHeight).coerceIn(0f, 1f))
         )
         markerIconCache.put(cacheKey, icon)

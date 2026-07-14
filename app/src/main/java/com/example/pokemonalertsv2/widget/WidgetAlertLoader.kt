@@ -27,6 +27,8 @@ internal object WidgetAlertLoader {
         }.getOrElse { emptySet() }
         val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
         val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
+        val sortPreference = runCatching { repo.alertPreferences.sortPreference.first() }
+            .getOrElse { com.example.pokemonalertsv2.data.SortPreference.POSTED_TIME }
         val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
         val location = runCatching {
             CachedLocationProvider.get(context)
@@ -39,15 +41,24 @@ internal object WidgetAlertLoader {
             nowMillis = nowMillis
         )
 
-        val visibleAlerts = WidgetAlertSnapshotStore.resolve(
-            appWidgetId = appWidgetId,
-            alerts = alerts,
-            criteria = criteria,
-            origin = location?.let { WidgetAlertFilter.originFrom(it) }
+        val origin = location?.let { WidgetAlertFilter.originFrom(it) }
+        val visibleAlerts = WidgetAlertSorter.sort(
+            alerts = WidgetAlertSnapshotStore.resolve(
+                appWidgetId = appWidgetId,
+                alerts = alerts,
+                criteria = criteria,
+                origin = origin
+            ),
+            preference = sortPreference,
+            origin = origin
         )
-        val cadenceAlerts = WidgetAlertFilter.filterWithoutDistance(
-            alerts = alerts,
-            criteria = criteria
+        val cadenceAlerts = WidgetAlertSorter.sort(
+            alerts = WidgetAlertFilter.filterWithoutDistance(
+                alerts = alerts,
+                criteria = criteria
+            ),
+            preference = sortPreference,
+            origin = origin
         ).also { WidgetAlertSnapshotStore.updateCadence(appWidgetId, it) }
 
         WidgetAlertSnapshotStore.publishRenderSnapshot(

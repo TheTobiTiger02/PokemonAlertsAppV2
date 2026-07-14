@@ -99,7 +99,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateSortPreference(preference: SortPreference) {
-        viewModelScope.launch { repository.alertPreferences.updateSortPreference(preference) }
+        viewModelScope.launch {
+            repository.alertPreferences.updateSortPreference(preference)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
     }
 
     fun updateNotificationsEnabled(enabled: Boolean) {

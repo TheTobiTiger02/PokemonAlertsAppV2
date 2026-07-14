@@ -63,6 +63,11 @@ val alertsApiBaseUrl: String =
         ?: providers.environmentVariable("ALERTS_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
         ?: "http://api.alsbach-scanner.uk/"
 
+val osmTileUrl: String =
+    localProperties.getProperty("OSM_TILE_URL")?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("OSM_TILE_URL").orNull?.takeIf { it.isNotBlank() }
+        ?: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -71,12 +76,13 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.0.11"
+        versionCode = 13
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
         buildConfigField("String", "ALERTS_API_BASE_URL", "\"${alertsApiBaseUrl.trimEnd('/')}/\"")
+        buildConfigField("String", "OSM_TILE_URL", "\"$osmTileUrl\"")
     }
 
     signingConfigs {
@@ -166,6 +172,7 @@ dependencies {
     implementation(libs.coil.core)
     implementation(libs.google.play.services.maps)
     implementation(libs.google.maps.compose)
+    implementation(libs.maplibre.android)
     implementation(libs.google.play.services.location)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
@@ -110,6 +111,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
     val sortPreference = repository.alertPreferences.sortPreference
+    val mapStylePreference = repository.alertPreferences.mapStylePreference
     
     val selectedArea = repository.alertPreferences.selectedArea
     val maxDistance = repository.alertPreferences.maxDistance
@@ -130,7 +132,16 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun updateSortPreference(preference: com.example.pokemonalertsv2.data.SortPreference) {
-        viewModelScope.launch { repository.alertPreferences.updateSortPreference(preference) }
+        viewModelScope.launch {
+            repository.alertPreferences.updateSortPreference(preference)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun updateMapStylePreference(preference: MapStylePreference) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMapStylePreference(preference)
+        }
     }
 
     fun snoozeAlert(alert: PokemonAlert, minutes: Int, onResult: (Boolean) -> Unit) {
