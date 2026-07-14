@@ -48,6 +48,23 @@ class MainNavigationComposeTest {
     }
 
     @Test
+    fun alertsIntentSwitchesExistingTaskToAlertsRoot() {
+        waitForMainNavigation()
+
+        composeRule.onNodeWithText("Map").performClick()
+        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+
+        composeRule.activity.handleNavigationIntent(
+            MainActivity.createAlertsIntent(composeRule.activity)
+        )
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+        }
+
+        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+    }
+
+    @Test
     fun settingsUsesOverviewAndFocusedSubpages() {
         waitForMainNavigation()
 

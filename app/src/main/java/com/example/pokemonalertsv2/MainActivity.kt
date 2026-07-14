@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -119,6 +120,7 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
+    private val requestedRootTab = MutableStateFlow<Int?>(null)
     private var permissionStep = PermissionStep.IDLE
 
     private val locationPermissionLauncher =
@@ -183,6 +185,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        handleNavigationIntent(intent)
 
         lifecycleScope.launch {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
@@ -195,6 +198,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
+            val requestedTab by requestedRootTab.collectAsStateWithLifecycle()
             
             val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val darkTheme = AppThemeMode.fromStored(themeMode)
@@ -230,6 +234,8 @@ class MainActivity : ComponentActivity() {
                         alertsViewModel = alertsViewModel,
                         historyViewModelProvider = { historyViewModel },
                         settingsViewModel = settingsViewModel,
+                        requestedTab = requestedTab,
+                        onRequestedTabConsumed = { requestedRootTab.value = null },
                         onManageLocationPermissions = ::restartLocationPermissionFlow,
                         onOpenUnknownSourcesSettings = {
                             unknownSourcesSettingsLauncher.launch(
@@ -264,6 +270,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNavigationIntent(intent)
+    }
+
+    internal fun handleNavigationIntent(intent: Intent) {
+        requestedTab(intent)?.let { requestedRootTab.value = it }
     }
 
     private fun startPermissionFlow() {
@@ -338,6 +354,21 @@ class MainActivity : ComponentActivity() {
         if (permissionStep.isRequestActive()) return
         requestForegroundLocationStep()
     }
+
+    companion object {
+        private const val EXTRA_INITIAL_TAB = "extra_initial_tab"
+        private const val ALERTS_TAB_INDEX = 0
+
+        internal fun createAlertsIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_INITIAL_TAB, ALERTS_TAB_INDEX)
+            }
+
+        internal fun requestedTab(intent: Intent?): Int? =
+            intent?.getIntExtra(EXTRA_INITIAL_TAB, -1)
+                ?.takeIf { it in NAV_DESTINATIONS.indices }
+    }
 }
 
 // ── Main Scaffold with Bottom Navigation ─────────────────────────────────
@@ -347,6 +378,8 @@ private fun MainScaffold(
     alertsViewModel: PokemonAlertsViewModel,
     historyViewModelProvider: () -> AlertHistoryViewModel,
     settingsViewModel: SettingsViewModel,
+    requestedTab: Int?,
+    onRequestedTabConsumed: () -> Unit,
     onManageLocationPermissions: () -> Unit,
     onOpenUnknownSourcesSettings: () -> Unit
 ) {
@@ -356,6 +389,13 @@ private fun MainScaffold(
     val saveableStateHolder = rememberSaveableStateHolder()
     val context = LocalContext.current
     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
+
+    LaunchedEffect(requestedTab) {
+        requestedTab?.let {
+            selectedTab = it
+            onRequestedTabConsumed()
+        }
+    }
 
     LaunchedEffect(updateState) {
         when (updateState) {

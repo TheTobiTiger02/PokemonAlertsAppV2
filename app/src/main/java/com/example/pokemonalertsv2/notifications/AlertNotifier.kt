@@ -127,7 +127,11 @@ object AlertNotifier {
             }
 
             if (!settings.shouldNotify(alert)) return@forEachIndexed
-            val notificationIntent = AlertDetailActivity.createIntent(context, alert)
+            val notificationIntent = AlertDetailActivity.createIntent(
+                context = context,
+                alert = alert,
+                returnToAlerts = true
+            )
             val pendingIntent = PendingIntent.getActivity(
                 context,
                 // Use a stable, unique requestCode per alert to avoid PendingIntent collisions across runs
@@ -462,7 +466,11 @@ object AlertNotifier {
     }
 
     private fun createPipPendingIntent(context: Context, alert: PokemonAlert): PendingIntent {
-        val pipIntent = AlertDetailActivity.createIntent(context, alert).apply {
+        val pipIntent = AlertDetailActivity.createIntent(
+            context = context,
+            alert = alert,
+            returnToAlerts = true
+        ).apply {
             putExtra(AlertDetailActivity.EXTRA_LAUNCH_PIP, true)
         }
         return PendingIntent.getActivity(

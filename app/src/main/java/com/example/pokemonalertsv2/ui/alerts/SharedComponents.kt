@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -139,6 +138,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.math.roundToInt
+
+private val ALERT_DETAIL_HERO_IMAGE_HEIGHT = 240.dp
 
 @Immutable
 data class AlertDistanceInfo(
@@ -671,6 +672,39 @@ fun AlertImage(
     contentScale: ContentScale = ContentScale.Crop,
     onMapFallbackChanged: ((Boolean) -> Unit)? = null
 ) {
+    AlertImageContent(
+        alert = alert,
+        modifier = modifier,
+        rounded = rounded,
+        contentScale = contentScale,
+        containEntireImage = false,
+        onMapFallbackChanged = onMapFallbackChanged
+    )
+}
+
+@Composable
+private fun ContainedAlertImage(
+    alert: PokemonAlert,
+    modifier: Modifier = Modifier
+) {
+    AlertImageContent(
+        alert = alert,
+        modifier = modifier,
+        rounded = false,
+        contentScale = ContentScale.Fit,
+        containEntireImage = true
+    )
+}
+
+@Composable
+private fun AlertImageContent(
+    alert: PokemonAlert,
+    modifier: Modifier,
+    rounded: Boolean,
+    contentScale: ContentScale,
+    containEntireImage: Boolean,
+    onMapFallbackChanged: ((Boolean) -> Unit)? = null
+) {
     val context = LocalContext.current
     val primaryUrl = alert.imageUrl?.takeIf { it.isNotBlank() }
     val thumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
@@ -679,9 +713,14 @@ fun AlertImage(
     var mapFailed by remember(coordinates, thumbnailUrl) { mutableStateOf(false) }
 
     val imageHeight = if (rounded) 200.dp else 220.dp
-    val shape = if (rounded) MaterialTheme.shapes.large else RectangleShape
+    val shape = if (rounded && !containEntireImage) MaterialTheme.shapes.large else RectangleShape
+    val containerColor = if (containEntireImage) Color.Black else MaterialTheme.colorScheme.surfaceVariant
     // When rounded=false the caller (detail hero) controls height via its own modifier
-    val heightModifier = if (rounded) Modifier.height(imageHeight) else Modifier.fillMaxHeight()
+    val heightModifier = when {
+        containEntireImage -> Modifier.fillMaxSize()
+        rounded -> Modifier.height(imageHeight)
+        else -> Modifier.fillMaxHeight()
+    }
     val showPrimaryImage = primaryUrl != null && !primaryFailed
     val showMapFallback = !showPrimaryImage && coordinates != null && !mapFailed
 
@@ -699,6 +738,9 @@ fun AlertImage(
                     .memoryCachePolicy(coil.request.CachePolicy.ENABLED)
                     .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                     .networkCachePolicy(coil.request.CachePolicy.ENABLED)
+                    .apply {
+                        if (containEntireImage) size(coil.size.Size.ORIGINAL)
+                    }
                     .build(),
                 contentDescription = stringResource(id = R.string.alert_image),
                 placeholder = painterResource(id = R.drawable.ic_placeholder),
@@ -708,7 +750,7 @@ fun AlertImage(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+                    .background(containerColor, shape)
                     .clip(shape)
             )
         }
@@ -721,7 +763,7 @@ fun AlertImage(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+                    .background(containerColor, shape)
                     .clipToBounds()
                     .clip(shape),
                 contentAlignment = Alignment.Center
@@ -729,7 +771,11 @@ fun AlertImage(
                 val rawWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else if (rounded) 512 else 1024
                 val rawHeight = if (constraints.hasBoundedHeight) constraints.maxHeight else if (rounded) 320 else 640
                 val largestDimension = maxOf(rawWidth, rawHeight).coerceAtLeast(1)
-                val outputScale = (1024f / largestDimension).coerceAtMost(1f)
+                val outputScale = if (containEntireImage) {
+                    (1024f / rawWidth.coerceAtLeast(1)).coerceAtMost(1f)
+                } else {
+                    (1024f / largestDimension).coerceAtMost(1f)
+                }
                 val outputWidth = (rawWidth * outputScale).roundToInt().coerceAtLeast(128)
                 val outputHeight = (rawHeight * outputScale).roundToInt().coerceAtLeast(96)
                 var fallbackBitmap by remember(
@@ -745,7 +791,13 @@ fun AlertImage(
                     outputHeight
                 ) { mutableStateOf(false) }
 
-                LaunchedEffect(safeCoordinates, thumbnailUrl, outputWidth, outputHeight) {
+                LaunchedEffect(
+                    safeCoordinates,
+                    thumbnailUrl,
+                    outputWidth,
+                    outputHeight,
+                    containEntireImage
+                ) {
                     mapLoadFinished = false
                     fallbackBitmap = withContext(Dispatchers.IO) {
                         MapFallbackImageGenerator.generate(
@@ -768,7 +820,7 @@ fun AlertImage(
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = stringResource(id = R.string.alert_image),
-                        contentScale = ContentScale.FillBounds,
+                        contentScale = contentScale,
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -816,7 +868,7 @@ fun AlertImage(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+                    .background(containerColor, shape)
                     .clip(shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -841,8 +893,12 @@ fun AlertImage(
                         .diskCachePolicy(coil.request.CachePolicy.ENABLED)
                         .build(),
                     contentDescription = stringResource(id = R.string.alert_image),
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(if (rounded) 64.dp else 140.dp)
+                    contentScale = contentScale,
+                    modifier = if (containEntireImage) {
+                        Modifier.fillMaxSize()
+                    } else {
+                        Modifier.size(if (rounded) 64.dp else 140.dp)
+                    }
                 )
             }
         }
@@ -853,7 +909,7 @@ fun AlertImage(
                 modifier = modifier
                     .fillMaxWidth()
                     .then(heightModifier)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, shape)
+                    .background(containerColor, shape)
                     .clip(shape),
                 contentAlignment = Alignment.Center
             ) {
@@ -886,6 +942,7 @@ fun AlertImage(
 @Composable
 fun AlertDetailScreen(
     alert: PokemonAlert,
+    onBack: (() -> Unit)? = null,
     isInPictureInPicture: Boolean = false,
     onEnterPictureInPicture: (() -> Unit)? = null
 ) {
@@ -929,7 +986,7 @@ fun AlertDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
                 ) {
                     AlertImage(
                         alert = alert,
@@ -1000,7 +1057,7 @@ fun AlertDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         FilledIconButton(
-                            onClick = { activity?.finish() },
+                            onClick = { onBack?.invoke() ?: activity?.finish() },
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -1274,10 +1331,8 @@ private fun ExpandedAlertImageViewer(
             color = Color.Black
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                AlertImage(
+                ContainedAlertImage(
                     alert = alert,
-                    rounded = false,
-                    contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize()
                 )
 

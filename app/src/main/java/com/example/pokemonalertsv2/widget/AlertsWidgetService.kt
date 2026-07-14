@@ -192,7 +192,11 @@ private class AlertsFactory(
         views.setOnClickFillInIntent(R.id.btn_dismiss, dismissIntent)
 
         // 8. Root layout and Image click → open AlertDetailActivity (via broadcast to provider)
-        val detailExtras = AlertDetailActivity.createIntent(context, alert)
+        val detailExtras = AlertDetailActivity.createIntent(
+            context = context,
+            alert = alert,
+            returnToAlerts = true
+        )
         val fillInIntent = Intent().apply {
             action = AlertsWidgetProvider.ACTION_ITEM_CLICK
             putExtras(detailExtras)

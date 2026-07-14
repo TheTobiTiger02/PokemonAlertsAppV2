@@ -292,7 +292,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             val detailPending = PendingIntent.getActivity(
                 context,
                 appWidgetId * 10 + 8,
-                AlertDetailActivity.createIntent(context, alert),
+                AlertDetailActivity.createIntent(
+                    context = context,
+                    alert = alert,
+                    returnToAlerts = true
+                ),
                 PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
             )
             views.setOnClickPendingIntent(R.id.compact_alert_content, detailPending)

@@ -9,6 +9,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -46,6 +48,7 @@ class AlertDetailActivity : ComponentActivity() {
             finish()
             return
         }
+        onBackPressedDispatcher.addCallback(this) { navigateBack() }
         syncPictureInPictureState()
         canEnterPictureInPicture =
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
@@ -63,6 +66,7 @@ class AlertDetailActivity : ComponentActivity() {
                     currentAlert?.let { alert ->
                         AlertDetailScreen(
                             alert = alert,
+                            onBack = { onBackPressedDispatcher.onBackPressed() },
                             isInPictureInPicture = isInPipMode || isInPictureInPictureMode,
                             onEnterPictureInPicture = if (canEnterPictureInPicture) {
                                 { enterImagePictureInPicture() }
@@ -123,6 +127,13 @@ class AlertDetailActivity : ComponentActivity() {
 
     private fun syncPictureInPictureState() {
         isInPipMode = isInPictureInPictureMode
+    }
+
+    private fun navigateBack() {
+        if (intent.getBooleanExtra(EXTRA_RETURN_TO_ALERTS, false)) {
+            startActivity(MainActivity.createAlertsIntent(this))
+        }
+        finish()
     }
 
     private fun Intent.toPokemonAlert(): PokemonAlert? {
@@ -284,13 +295,19 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_OLD_CP = "extra_old_cp"
         private const val EXTRA_NEW_SPECIES = "extra_new_species"
         private const val EXTRA_AREA = "extra_area"
+        private const val EXTRA_RETURN_TO_ALERTS = "extra_return_to_alerts"
         const val EXTRA_LAUNCH_PIP = "extra_launch_pip"
 
-        fun createIntent(context: Context, alert: PokemonAlert): Intent {
+        fun createIntent(
+            context: Context,
+            alert: PokemonAlert,
+            returnToAlerts: Boolean = false
+        ): Intent {
             return Intent(context, AlertDetailActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_RETURN_TO_ALERTS, returnToAlerts)
                 alert.id?.let { putExtra(EXTRA_ALERT_ID, it) }
                 putExtra(EXTRA_ALERT_NAME, alert.name)
                 putExtra(EXTRA_ALERT_DESCRIPTION, alert.description)
