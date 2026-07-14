@@ -9,11 +9,18 @@ plugins {
     alias(libs.plugins.androidx.baselineprofile)
 }
 
-if (file("google-services.json").exists()) {
+val googleServicesFile = file("google-services.json")
+
+if (googleServicesFile.exists()) {
     apply(plugin = "com.google.gms.google-services")
 } else {
-    logger.warn("app/google-services.json not found; Firebase resources will be generated once it is provided.")
+    logger.warn("app/google-services.json not found; non-release builds will not include Firebase resources.")
 }
+
+val hasReleaseGoogleServicesConfig = googleServicesFile.isFile &&
+    googleServicesFile.length() > 0L &&
+    Regex("""\"package_name\"\s*:\s*\"com\.example\.pokemonalertsv2\"""")
+        .containsMatchIn(googleServicesFile.takeIf { it.isFile }?.readText().orEmpty())
 
 val localProperties = Properties().apply {
     val localPropertiesFile = rootProject.file("local.properties")
@@ -64,8 +71,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 11
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -117,6 +124,10 @@ tasks.matching {
     it.name == "preReleaseBuild" || it.name == "assembleRelease" || it.name == "bundleRelease"
 }.configureEach {
     doFirst {
+        check(hasReleaseGoogleServicesConfig) {
+            "Release Firebase configuration is missing or does not target com.example.pokemonalertsv2. " +
+                "Provide app/google-services.json before building a release."
+        }
         check(hasReleaseSigningConfig) {
             "Release signing is not configured. Fill keystore.properties. Missing values: " +
                 releaseSigningMissingProperties.joinToString()

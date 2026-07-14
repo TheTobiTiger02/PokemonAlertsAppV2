@@ -29,6 +29,7 @@ class Material3ComposeTest {
                     ),
                     onOpenMaps = {},
                     onShowDetails = {},
+                    onPipClick = {},
                     onShareClick = {},
                     onSnoozeClick = {},
                     nowMillis = 0L
