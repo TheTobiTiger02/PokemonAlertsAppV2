@@ -50,6 +50,62 @@ internal data class OpenStreetMapMarker(
     val icon: MapMarkerIcon
 )
 
+internal class OpenStreetMapLifecycleGuard(
+    private val onStart: () -> Unit,
+    private val onResume: () -> Unit,
+    private val onPause: () -> Unit,
+    private val onStop: () -> Unit,
+    private val onDestroy: () -> Unit
+) {
+    private var started = false
+    private var resumed = false
+    private var destroyed = false
+
+    val isActive: Boolean
+        get() = !destroyed
+
+    fun start() {
+        if (destroyed || started) return
+        onStart()
+        started = true
+    }
+
+    fun resume() {
+        if (destroyed || resumed) return
+        start()
+        onResume()
+        resumed = true
+    }
+
+    fun pause() {
+        if (destroyed || !resumed) return
+        resumed = false
+        onPause()
+    }
+
+    fun stop() {
+        if (destroyed) return
+        pause()
+        if (!started) return
+        started = false
+        onStop()
+    }
+
+    fun destroy() {
+        if (destroyed) return
+        pause()
+        stop()
+        destroyed = true
+        onDestroy()
+    }
+
+    fun runIfActive(block: () -> Unit): Boolean {
+        if (destroyed) return false
+        block()
+        return true
+    }
+}
+
 internal class OpenStreetMapController {
     private var map: MapLibreMap? = null
     private var pendingMarkers: List<OpenStreetMapMarker> = emptyList()
@@ -61,12 +117,17 @@ internal class OpenStreetMapController {
     fun attach(map: MapLibreMap, context: android.content.Context) {
         this.map = map
         map.setOnMarkerClickListener { marker ->
-            pendingMarkers.firstOrNull { it.alert.uniqueId == marker.title }
-                ?.alert
-                ?.let { onAlertClick(it) }
-            true
+            if (this.map !== map) {
+                false
+            } else {
+                pendingMarkers.firstOrNull { it.alert.uniqueId == marker.title }
+                    ?.alert
+                    ?.let { onAlertClick(it) }
+                true
+            }
         }
         map.addOnCameraIdleListener {
+            if (this.map !== map) return@addOnCameraIdleListener
             val position = map.cameraPosition
             val target = position.target ?: return@addOnCameraIdleListener
             onCameraChanged(
@@ -227,21 +288,33 @@ internal fun OpenStreetMapView(
     val mapView = remember(context) {
         MapView(context).apply { onCreate(null) }
     }
+    val lifecycleGuard = remember(mapView) {
+        OpenStreetMapLifecycleGuard(
+            onStart = { if (!mapView.isDestroyed) mapView.onStart() },
+            onResume = { if (!mapView.isDestroyed) mapView.onResume() },
+            onPause = { if (!mapView.isDestroyed) mapView.onPause() },
+            onStop = { if (!mapView.isDestroyed) mapView.onStop() },
+            onDestroy = { if (!mapView.isDestroyed) mapView.onDestroy() }
+        )
+    }
 
     controller.onAlertClick = onAlertClick
     controller.onCameraChanged = onCameraChanged
     controller.setContentInsets(contentInsets)
 
-    DisposableEffect(lifecycleOwner, mapView) {
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStart()
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
+    DisposableEffect(lifecycleOwner, mapView, lifecycleGuard) {
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) lifecycleGuard.start()
+        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) lifecycleGuard.resume()
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> mapView.onStart()
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                Lifecycle.Event.ON_START -> lifecycleGuard.start()
+                Lifecycle.Event.ON_RESUME -> lifecycleGuard.resume()
+                Lifecycle.Event.ON_PAUSE -> lifecycleGuard.pause()
+                Lifecycle.Event.ON_STOP -> lifecycleGuard.stop()
+                Lifecycle.Event.ON_DESTROY -> {
+                    controller.detach()
+                    lifecycleGuard.destroy()
+                }
                 else -> Unit
             }
         }
@@ -249,11 +322,7 @@ internal fun OpenStreetMapView(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             controller.detach()
-            if (!mapView.isDestroyed) {
-                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onPause()
-                if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) mapView.onStop()
-                mapView.onDestroy()
-            }
+            lifecycleGuard.destroy()
         }
     }
 
@@ -261,10 +330,12 @@ internal fun OpenStreetMapView(
         modifier = modifier,
         factory = {
             mapView.apply {
-                addOnDidFailLoadingMapListener { onLoadError() }
+                addOnDidFailLoadingMapListener {
+                    lifecycleGuard.runIfActive(onLoadError)
+                }
                 getMapAsync { map ->
+                    if (!lifecycleGuard.isActive || mapView.isDestroyed) return@getMapAsync
                     map.setPrefetchesTiles(false)
-                    map.setTileCacheEnabled(true)
                     map.setMinZoomPreference(3.0)
                     map.setMaxZoomPreference(20.0)
                     map.uiSettings.apply {
@@ -272,10 +343,11 @@ internal fun OpenStreetMapView(
                         isAttributionEnabled = false
                         isCompassEnabled = true
                     }
-                    map.setStyle(Style.Builder().fromJson(openStreetMapStyleJson())) {
+                    map.setStyle(Style.Builder().fromJson(openStreetMapStyleJson())) styleLoaded@{
+                        if (!lifecycleGuard.isActive || mapView.isDestroyed) return@styleLoaded
                         controller.attach(map, context)
                         controller.setCamera(cameraSnapshot)
-                        onMapLoaded()
+                        lifecycleGuard.runIfActive(onMapLoaded)
                     }
                 }
             }
