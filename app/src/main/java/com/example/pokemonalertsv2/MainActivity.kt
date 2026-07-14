@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -113,6 +114,12 @@ private val NAV_DESTINATIONS = listOf(
     NavDestination("Map", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
     NavDestination("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
 )
+
+internal const val ALERTS_TAB_INDEX = 0
+internal const val MAP_TAB_INDEX = 2
+
+internal fun rootTabIndexOrNull(index: Int): Int? =
+    index.takeIf { it in NAV_DESTINATIONS.indices }
 
 class MainActivity : ComponentActivity() {
 
@@ -357,7 +364,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_INITIAL_TAB = "extra_initial_tab"
-        private const val ALERTS_TAB_INDEX = 0
 
         internal fun createAlertsIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java).apply {
@@ -365,9 +371,15 @@ class MainActivity : ComponentActivity() {
                 putExtra(EXTRA_INITIAL_TAB, ALERTS_TAB_INDEX)
             }
 
+        internal fun createMapIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_INITIAL_TAB, MAP_TAB_INDEX)
+            }
+
         internal fun requestedTab(intent: Intent?): Int? =
             intent?.getIntExtra(EXTRA_INITIAL_TAB, -1)
-                ?.takeIf { it in NAV_DESTINATIONS.indices }
+                ?.let(::rootTabIndexOrNull)
     }
 }
 
@@ -395,6 +407,10 @@ private fun MainScaffold(
             selectedTab = it
             onRequestedTabConsumed()
         }
+    }
+
+    BackHandler(enabled = selectedTab == MAP_TAB_INDEX) {
+        selectedTab = ALERTS_TAB_INDEX
     }
 
     LaunchedEffect(updateState) {
@@ -485,7 +501,7 @@ private fun MainScaffold(
                         2 -> {
                             AlertsMapRoute(
                                 viewModel = alertsViewModel,
-                                onBack = { selectedTab = 0 }
+                                onBack = { selectedTab = ALERTS_TAB_INDEX }
                             )
                         }
                         3 -> {

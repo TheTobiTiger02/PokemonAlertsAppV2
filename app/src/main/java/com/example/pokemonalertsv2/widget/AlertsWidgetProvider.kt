@@ -22,7 +22,6 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
-import com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
 import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
@@ -327,7 +326,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.img_logo, openPending)
 
         // Map Button click
-        val mapIntent = Intent(context, AlertsMapActivity::class.java)
+        val mapIntent = MainActivity.createMapIntent(context)
         val mapPending = PendingIntent.getActivity(
             context, 1, mapIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()

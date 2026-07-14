@@ -12,10 +12,12 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.AfterClass
+import org.junit.Assert.assertFalse
 import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
@@ -65,6 +67,46 @@ class MainNavigationComposeTest {
     }
 
     @Test
+    fun mapIntentOpensMapAndToolbarBackReturnsToAlerts() {
+        openMapFromIntent()
+
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
+        waitForAlertsScreen()
+    }
+
+    @Test
+    fun mapIntentSystemBackReturnsToAlertsWithoutFinishingActivity() {
+        openMapFromIntent()
+
+        composeRule.runOnIdle {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        waitForAlertsScreen()
+        assertFalse(composeRule.activity.isFinishing)
+    }
+
+    @Test
+    fun persistedMapStylesUseTheSameBackNavigation() {
+        val originalStyle = runBlocking { preferences.mapStylePreference.first() }
+        try {
+            listOf(
+                MapStylePreference.GOOGLE_STANDARD,
+                MapStylePreference.GOOGLE_SATELLITE,
+                MapStylePreference.OPENSTREETMAP
+            ).forEach { style ->
+                runBlocking { preferences.updateMapStylePreference(style) }
+                openMapFromIntent()
+                composeRule.runOnIdle {
+                    composeRule.activity.onBackPressedDispatcher.onBackPressed()
+                }
+                waitForAlertsScreen()
+            }
+        } finally {
+            runBlocking { preferences.updateMapStylePreference(originalStyle) }
+        }
+    }
+
+    @Test
     fun settingsUsesOverviewAndFocusedSubpages() {
         waitForMainNavigation()
 
@@ -108,6 +150,24 @@ class MainNavigationComposeTest {
                 composeRule.onNodeWithText("Alerts").fetchSemanticsNode()
             }.isSuccess
         }
+    }
+
+    private fun openMapFromIntent() {
+        waitForMainNavigation()
+        composeRule.activity.handleNavigationIntent(
+            MainActivity.createMapIntent(composeRule.activity)
+        )
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            runCatching { composeRule.onNodeWithText("Alerts Map").fetchSemanticsNode() }.isSuccess
+        }
+        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+    }
+
+    private fun waitForAlertsScreen() {
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+        }
+        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
     }
 
     private companion object {

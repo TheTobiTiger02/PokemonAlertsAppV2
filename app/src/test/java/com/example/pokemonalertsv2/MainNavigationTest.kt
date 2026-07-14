@@ -7,6 +7,14 @@ import org.junit.Test
 class MainNavigationTest {
 
     @Test
+    fun rootTabIndicesResolveAlertsAndMapDestinations() {
+        assertEquals(ALERTS_TAB_INDEX, rootTabIndexOrNull(ALERTS_TAB_INDEX))
+        assertEquals(MAP_TAB_INDEX, rootTabIndexOrNull(MAP_TAB_INDEX))
+        assertEquals(null, rootTabIndexOrNull(-1))
+        assertEquals(null, rootTabIndexOrNull(4))
+    }
+
+    @Test
     fun navigationLayoutModeUsesBottomBarOnCompactAndRailFromMediumWidths() {
         assertEquals(
             NavigationLayoutMode.BOTTOM_BAR,
