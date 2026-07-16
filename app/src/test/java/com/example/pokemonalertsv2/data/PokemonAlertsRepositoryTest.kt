@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.database.AlertDao
 import com.example.pokemonalertsv2.data.database.AlertEntity
 import com.example.pokemonalertsv2.data.database.HistoryAlertDao
@@ -78,6 +79,20 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun fetchAlerts_excludesInvalidatedAlertsFromActiveCacheAndResult() = runTest {
+        val active = sampleAlert("Active", id = 1)
+        val invalidated = sampleAlert("Invalidated", id = 2).copy(
+            invalidatedAt = "2026-07-16 19:04:21"
+        )
+        service.alerts = listOf(active, invalidated)
+
+        val fetched = repository.fetchAlerts()
+
+        assertEquals(listOf(active), fetched)
+        assertEquals(listOf(active.uniqueId), dao.alerts.value.map { it.uniqueId })
+    }
+
+    @Test
     fun fetchAlerts_skipsDaoReplaceWhenFetchedDataIsUnchanged() = runTest {
         val alert = sampleAlert("Service")
         service.alerts = listOf(alert)
@@ -119,6 +134,147 @@ class PokemonAlertsRepositoryTest {
         assertEquals("Pushed", dao.alerts.value.last().name)
         assertEquals(1, dao.insertCalls)
         assertEquals(0, dao.clearCalls)
+    }
+
+    @Test
+    fun processIncomingAlert_weatherRemovesAffectedAlertByServerId() = runTest {
+        val affected = sampleAlert("Zubat", id = 25).copy(
+            pokemon = "Zubat",
+            cp = 239,
+            type = listOf("PvP"),
+            area = "Alsbach"
+        )
+        dao.alerts.value = listOf(affected.toEntity())
+        val weather = weatherAlert(
+            affectedAlerts = listOf(AffectedAlert(id = 25, name = affected.name))
+        )
+
+        val removed = repository.processIncomingAlert(weather)
+
+        assertEquals(setOf(affected.uniqueId), removed)
+        assertEquals(listOf(weather.uniqueId), dao.alerts.value.map { it.uniqueId })
+    }
+
+    @Test
+    fun processIncomingAlert_weatherUsesExactNormalizedFallbackIdentity() = runTest {
+        val affected = sampleAlert(
+            name = "Zubat",
+            endTime = "2026-07-16 20:00:00"
+        ).copy(
+            pokemon = "  ZUBAT ",
+            pokemonForm = null,
+            cp = 239,
+            type = listOf("PvP", "Rare"),
+            area = " ALSBACH "
+        )
+        dao.alerts.value = listOf(affected.toEntity())
+        val weather = weatherAlert(
+            affectedAlerts = listOf(
+                AffectedAlert(
+                    name = affected.name,
+                    pokemon = "zubat",
+                    pokemonForm = null,
+                    cp = 239,
+                    type = listOf("rare", "pvp"),
+                    endTime = " 2026-07-16 20:00:00 ",
+                    area = "alsbach"
+                )
+            )
+        )
+
+        val removed = repository.processIncomingAlert(weather)
+
+        assertEquals(setOf(affected.uniqueId), removed)
+        assertEquals(listOf(weather.uniqueId), dao.alerts.value.map { it.uniqueId })
+    }
+
+    @Test
+    fun processIncomingAlert_weatherRemovesMultipleExactMatches() = runTest {
+        val first = affectedPokemon("Zubat", cp = 239, endTime = "2026-07-16 20:00:00")
+        val second = affectedPokemon("Zubat", cp = 303, endTime = "2026-07-16 20:01:00")
+        val unaffected = affectedPokemon("Pikachu", cp = 500, endTime = "2026-07-16 20:02:00")
+        dao.alerts.value = listOf(first, second, unaffected).map { it.toEntity() }
+        val weather = weatherAlert(
+            affectedAlerts = listOf(first.toAffectedAlert(), second.toAffectedAlert())
+        )
+
+        val removed = repository.processIncomingAlert(weather)
+
+        assertEquals(setOf(first.uniqueId, second.uniqueId), removed)
+        assertEquals(
+            setOf(unaffected.uniqueId, weather.uniqueId),
+            dao.alerts.value.map { it.uniqueId }.toSet()
+        )
+    }
+
+    @Test
+    fun processIncomingAlert_duplicateWeatherEventIsIdempotent() = runTest {
+        val affected = affectedPokemon(
+            "Zubat",
+            cp = 239,
+            endTime = "2026-07-16 20:00:00"
+        )
+        dao.alerts.value = listOf(affected.toEntity())
+        val weather = weatherAlert(listOf(affected.toAffectedAlert()))
+
+        repository.processIncomingAlert(weather)
+        repository.processIncomingAlert(weather)
+
+        assertEquals(listOf(weather.uniqueId), dao.alerts.value.map { it.uniqueId })
+    }
+
+    @Test
+    fun processIncomingAlert_incompleteAndNearFallbackMatchesRemainActive() = runTest {
+        val exactCandidate = affectedPokemon(
+            "Zubat",
+            cp = 239,
+            endTime = "2026-07-16 20:00:00"
+        )
+        dao.alerts.value = listOf(exactCandidate.toEntity())
+
+        val incompleteWeather = weatherAlert(
+            affectedAlerts = listOf(
+                exactCandidate.toAffectedAlert().copy(area = null)
+            )
+        )
+        assertTrue(repository.processIncomingAlert(incompleteWeather).isEmpty())
+
+        dao.alerts.value = listOf(exactCandidate.toEntity())
+        val nearWeather = weatherAlert(
+            affectedAlerts = listOf(
+                exactCandidate.toAffectedAlert().copy(cp = 240)
+            )
+        )
+        assertTrue(repository.processIncomingAlert(nearWeather).isEmpty())
+        assertTrue(dao.alerts.value.any { it.uniqueId == exactCandidate.uniqueId })
+    }
+
+    @Test
+    fun processIncomingAlert_invalidatedAlertIsRemovedInsteadOfStored() = runTest {
+        val active = sampleAlert("Zubat", id = 55)
+        dao.alerts.value = listOf(active.toEntity())
+
+        repository.processIncomingAlert(
+            active.copy(
+                invalidatedAt = "2026-07-16 19:04:21",
+                invalidationReason = "Weather changed",
+                invalidatedByAlertId = 10587
+            )
+        )
+
+        assertTrue(dao.alerts.value.isEmpty())
+    }
+
+    @Test
+    fun getLocalAlerts_filtersInvalidatedRowsAlreadyPresentInCache() = runTest {
+        dao.alerts.value = listOf(
+            sampleAlert("Visible").toEntity(),
+            sampleAlert("Hidden").copy(
+                invalidationReason = "Weather changed"
+            ).toEntity()
+        )
+
+        assertEquals(listOf("Visible"), repository.getLocalAlerts().map { it.name })
     }
 
     @Test
@@ -249,6 +405,39 @@ class PokemonAlertsRepositoryTest {
         thumbnailUrl = null
     )
 
+    private fun affectedPokemon(
+        pokemon: String,
+        cp: Int,
+        endTime: String
+    ) = sampleAlert(pokemon, endTime = endTime).copy(
+        pokemon = pokemon,
+        cp = cp,
+        type = listOf("PvP"),
+        area = "Alsbach"
+    )
+
+    private fun PokemonAlert.toAffectedAlert() = AffectedAlert(
+        id = id,
+        name = name,
+        pokemon = pokemon,
+        pokemonForm = pokemonForm,
+        cp = cp,
+        type = type,
+        endTime = endTime,
+        area = area
+    )
+
+    private fun weatherAlert(affectedAlerts: List<AffectedAlert>) = PokemonAlert(
+        id = 10587,
+        name = "Weather change",
+        endTime = "2026-07-16 20:04:21",
+        type = listOf("WeatherChange"),
+        weatherFrom = "Partly Cloudy",
+        weatherTo = "Cloudy",
+        affectedAlerts = affectedAlerts,
+        area = "Alsbach"
+    )
+
     private class FakePokemonAlertsService : PokemonAlertsService {
         var alerts: List<PokemonAlert> = emptyList()
         var historyResponse: HistoryResponse = HistoryResponse(data = emptyList())
@@ -298,6 +487,7 @@ class PokemonAlertsRepositoryTest {
         override suspend fun clearAll() {
             alerts.value = emptyList()
         }
+
     }
 
     private class FakeAlertPreferencesStore(initial: Set<String> = emptySet()) : AlertPreferencesStore {
@@ -455,6 +645,16 @@ class PokemonAlertsRepositoryTest {
         override suspend fun clearAll() {
             clearCalls++
             alerts.value = emptyList()
+        }
+
+        override suspend fun deleteByUniqueIds(uniqueIds: List<String>) {
+            alerts.value = alerts.value.filterNot { it.uniqueId in uniqueIds }
+        }
+
+        override suspend fun deleteAlert(uniqueId: String, serverId: Int?) {
+            alerts.value = alerts.value.filterNot {
+                it.uniqueId == uniqueId || (serverId != null && it.id == serverId)
+            }
         }
 
         override suspend fun deleteExpired(currentTime: String) {

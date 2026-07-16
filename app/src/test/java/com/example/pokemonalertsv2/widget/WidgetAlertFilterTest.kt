@@ -104,6 +104,22 @@ class WidgetAlertFilterTest {
     }
 
     @Test
+    fun filterAlerts_hidesInvalidatedAlerts() {
+        val active = sampleAlert("Active")
+        val invalidated = sampleAlert("Invalidated").copy(
+            invalidatedByAlertId = 10587
+        )
+
+        val result = WidgetAlertFilter.filterAlerts(
+            alerts = listOf(active, invalidated),
+            criteria = criteria(),
+            origin = null
+        )
+
+        assertEquals(listOf(active), (result as WidgetAlertFilter.Result.Filtered).alerts)
+    }
+
+    @Test
     fun filterAlerts_hidesAlertAtExactExpirationBoundary() {
         val expiringNow = sampleAlert("Boundary", endTime = "1000")
 

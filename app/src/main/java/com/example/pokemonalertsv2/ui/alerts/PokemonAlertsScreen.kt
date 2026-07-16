@@ -518,6 +518,7 @@ fun PokemonAlertsPage(
             // Filter out expired, optionally include dismissed based on toggle
             val notExpired = end > filterNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
+            val notInvalidated = !model.alert.isInvalidated
             
             // Area Filter
             val areaMatch = selectedArea == "All" || model.alert.area == selectedArea
@@ -525,7 +526,7 @@ fun PokemonAlertsPage(
             // Distance Filter (allow if maxDistance is 0 or if location is unknown)
             val distanceMatch = maxDistance == 0 || model.distanceInfo.distanceMeters == null || model.distanceInfo.distanceMeters <= maxDistance * 1000
             
-            notExpired && notDismissed && areaMatch && distanceMatch
+            notExpired && notDismissed && notInvalidated && areaMatch && distanceMatch
         }
     }
 
@@ -586,12 +587,8 @@ fun PokemonAlertsPage(
         
         // Apply text search
         if (searchQuery.isNotBlank()) {
-            val query = searchQuery.trim().lowercase()
             filtered = filtered.filter { model ->
-                model.alert.name.lowercase().contains(query) ||
-                    (model.alert.pokemon?.lowercase()?.contains(query) == true) ||
-                    (model.alert.cleanPokemonName.lowercase().contains(query)) ||
-                    (model.alert.locationDisplay?.lowercase()?.contains(query) == true)
+                model.alert.matchesAlertSearch(searchQuery)
             }
         }
         when (sortPreference) {

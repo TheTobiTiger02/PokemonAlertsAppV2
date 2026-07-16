@@ -97,4 +97,17 @@ object TimeUtils {
 
     fun formatPostedTime(rawTimestamp: String?): String? =
         parseEndTimeToMillis(rawTimestamp)?.let { "Posted ${formatTimeAgo(it)}" }
+
+    /** Formats a server timestamp as a localized date and time. */
+    fun formatTimestamp(rawTimestamp: String?): String? {
+        val timestamp = parseEndTimeToMillis(rawTimestamp) ?: return null
+        return Instant.ofEpochMilli(timestamp)
+            .atZone(ZoneId.systemDefault())
+            .format(
+                DateTimeFormatter.ofLocalizedDateTime(
+                    FormatStyle.MEDIUM,
+                    FormatStyle.SHORT
+                )
+            )
+    }
 }

@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.data.database
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -78,6 +79,9 @@ data class AlertEntity(
     // Weather change
     val newCp: Int? = null,
     val newIv: String? = null,
+    val weatherFrom: String? = null,
+    val weatherTo: String? = null,
+    val affectedAlertsJson: String? = null,
     
     // Species replacement
     val oldSpecies: String? = null,
@@ -89,7 +93,10 @@ data class AlertEntity(
     val area: String? = null,
     
     // Timestamps
-    val alertCreatedAt: String? = null
+    val alertCreatedAt: String? = null,
+    val invalidatedAt: String? = null,
+    val invalidationReason: String? = null,
+    val invalidatedByAlertId: Int? = null
 )
 
 fun AlertEntity.toDomain(): PokemonAlert {
@@ -151,12 +158,24 @@ fun AlertEntity.toDomain(): PokemonAlert {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        weatherFrom = weatherFrom,
+        weatherTo = weatherTo,
+        affectedAlerts = affectedAlertsJson?.let {
+            try {
+                Json.decodeFromString<List<AffectedAlert>>(it)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }.orEmpty(),
         oldSpecies = oldSpecies,
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
         area = area,
-        createdAt = alertCreatedAt
+        createdAt = alertCreatedAt,
+        invalidatedAt = invalidatedAt,
+        invalidationReason = invalidationReason,
+        invalidatedByAlertId = invalidatedByAlertId
     )
 }
 
@@ -206,11 +225,19 @@ fun PokemonAlert.toEntity(): AlertEntity {
         requiresAR = requiresAR,
         newCp = newCp,
         newIv = newIv,
+        weatherFrom = weatherFrom,
+        weatherTo = weatherTo,
+        affectedAlertsJson = affectedAlerts.takeIf { it.isNotEmpty() }?.let {
+            Json.encodeToString(it)
+        },
         oldSpecies = oldSpecies,
         oldIv = oldIv,
         oldCp = oldCp,
         newSpecies = newSpecies,
         area = area,
-        alertCreatedAt = createdAt
+        alertCreatedAt = createdAt,
+        invalidatedAt = invalidatedAt,
+        invalidationReason = invalidationReason,
+        invalidatedByAlertId = invalidatedByAlertId
     )
 }

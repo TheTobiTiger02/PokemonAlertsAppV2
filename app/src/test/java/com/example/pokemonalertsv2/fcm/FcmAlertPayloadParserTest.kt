@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.fcm
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FcmAlertPayloadParserTest {
@@ -159,5 +160,61 @@ class FcmAlertPayloadParserTest {
         assertEquals("Patched description text", payload.alert.description)
         assertEquals("https://example.com/patched_image.png", payload.alert.imageUrl)
         assertEquals("https://example.com/patched_thumb.png", payload.alert.thumbnailUrl)
+    }
+
+    @Test
+    fun parse_decodesWeatherChangeDetailsAndAffectedAlerts() {
+        val payload = FcmAlertPayloadParser.parse(
+            mapOf(
+                "alertId" to "10587",
+                "alert" to """
+                    {
+                      "name": "Weather change",
+                      "endTime": "2026-07-16 20:04:21",
+                      "type": ["WeatherChange"],
+                      "weatherFrom": "Partly Cloudy 🌤",
+                      "weatherTo": "Cloudy ☁",
+                      "affectedAlerts": [{
+                        "name": "Zubat",
+                        "pokemon": "Zubat",
+                        "pokemonForm": null,
+                        "cp": 239,
+                        "type": ["PvP"],
+                        "endTime": "2026-07-16 20:00:00",
+                        "area": "Alsbach"
+                      }]
+                    }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals("Partly Cloudy 🌤", payload!!.alert.weatherFrom)
+        assertEquals("Cloudy ☁", payload.alert.weatherTo)
+        assertEquals("Zubat", payload.alert.affectedAlerts.single().pokemon)
+        assertEquals(239, payload.alert.affectedAlerts.single().cp)
+    }
+
+    @Test
+    fun parse_fallbackToleratesMalformedWeatherAndInvalidationFields() {
+        val payload = FcmAlertPayloadParser.parse(
+            mapOf(
+                "name" to "Weather change",
+                "type" to "WeatherChange",
+                "weatherFrom" to "Sunny",
+                "weatherTo" to "Cloudy",
+                "affectedAlerts" to "{not-json",
+                "invalidatedAt" to "not-a-date",
+                "invalidationReason" to "Weather changed",
+                "invalidatedByAlertId" to "not-a-number"
+            )
+        )
+
+        assertNotNull(payload)
+        assertEquals("Sunny", payload!!.alert.weatherFrom)
+        assertEquals("Cloudy", payload.alert.weatherTo)
+        assertTrue(payload.alert.affectedAlerts.isEmpty())
+        assertEquals("not-a-date", payload.alert.invalidatedAt)
+        assertEquals("Weather changed", payload.alert.invalidationReason)
+        assertNull(payload.alert.invalidatedByAlertId)
     }
 }

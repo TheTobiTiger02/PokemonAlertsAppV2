@@ -44,7 +44,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 val now = System.currentTimeMillis()
                 val activeAlerts = alerts.filter {
                     val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                    end > now
+                    end > now && !it.isInvalidated
                 }.sortedByDescending { it.endTime }
                 _uiState.update { it.copy(alerts = activeAlerts) }
             }

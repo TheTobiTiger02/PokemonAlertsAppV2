@@ -116,6 +116,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -187,6 +188,7 @@ fun formatAlertTitle(alert: PokemonAlert): String {
     
     // Handle weather change - show "Pokemon Weather Change"
     if (alert.isWeatherChange) {
+        weatherTransitionLabel(alert)?.let { return it }
         return "🌦️ $baseName Changed"
     }
     
@@ -375,6 +377,12 @@ fun AlertCard(
                     }
                 }
 
+                if (alert.isWeatherChange &&
+                    (weatherTransitionLabel(alert) != null || alert.affectedAlerts.isNotEmpty())
+                ) {
+                    WeatherChangeCardSummary(alert = alert)
+                }
+
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -395,6 +403,14 @@ fun AlertCard(
                             text = "CP $it",
                             containerColor = categoryAccent.copy(alpha = 0.16f),
                             contentColor = categoryAccent
+                        )
+                    }
+                    invalidationBadgeText(alert)?.let {
+                        AlertPill(
+                            text = it,
+                            icon = Icons.Filled.Warning,
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
                     distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let {
@@ -472,6 +488,58 @@ fun AlertCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Navigate", style = MaterialTheme.typography.labelLarge)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherChangeCardSummary(alert: PokemonAlert) {
+    val transition = weatherTransitionLabel(alert)
+    val summaries = affectedAlertCardLines(alert)
+    val overflow = affectedAlertOverflowCount(alert)
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            transition?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            if (alert.affectedAlerts.isNotEmpty()) {
+                Text(
+                    text = "Affected Pokémon (${alert.affectedAlerts.size})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                summaries.forEach { summary ->
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (overflow > 0) {
+                    Text(
+                        text = "+$overflow more",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
         }
@@ -1196,6 +1264,19 @@ fun AlertDetailScreen(
                             }
                         }
                     }
+
+                    if (alert.isInvalidated) {
+                        InvalidationBanner(alert = alert)
+                    }
+
+                    if (alert.isWeatherChange &&
+                        (weatherTransitionLabel(alert) != null || alert.affectedAlerts.isNotEmpty())
+                    ) {
+                        WeatherTransitionCard(alert = alert)
+                        alert.affectedAlerts.forEach { affectedAlert ->
+                            AffectedAlertDetailCard(alert = affectedAlert)
+                        }
+                    }
                     
                     // Stats Card (IVs, CP, Level, HundoCP)
                     if (alert.formattedIv != null || alert.cp != null || alert.level != null || alert.hundoCP != null) {
@@ -1310,6 +1391,151 @@ fun AlertDetailScreen(
         ExpandedAlertImageViewer(
             alert = alert,
             onDismiss = { showExpandedImage = false }
+        )
+    }
+}
+
+@Composable
+private fun InvalidationBanner(alert: PokemonAlert) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Filled.Warning, contentDescription = null)
+                Text(
+                    text = "Invalidated by weather",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            alert.invalidatedAt?.takeIf { it.isNotBlank() }?.let { raw ->
+                DetailValueRow(
+                    label = "Removed",
+                    value = TimeUtils.formatTimestamp(raw) ?: raw
+                )
+            }
+            alert.invalidationReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                DetailValueRow(label = "Reason", value = reason)
+            }
+            alert.invalidatedByAlertId?.let { alertId ->
+                DetailValueRow(label = "Weather alert", value = "#$alertId")
+            }
+        }
+    }
+}
+
+@Composable
+private fun WeatherTransitionCard(alert: PokemonAlert) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Weather change",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            weatherTransitionLabel(alert)?.let { transition ->
+                Text(
+                    text = transition,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            if (alert.affectedAlerts.isNotEmpty()) {
+                val suffix = if (alert.affectedAlerts.size == 1) {
+                    "active Pokémon alert was replaced"
+                } else {
+                    "active Pokémon alerts were replaced"
+                }
+                Text(
+                    text = "${alert.affectedAlerts.size} $suffix",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AffectedAlertDetailCard(alert: AffectedAlert) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = alert.name?.takeIf { it.isNotBlank() } ?: affectedAlertSummary(alert),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            alert.id?.let { DetailValueRow("Alert ID", "#$it") }
+            alert.pokemon?.takeIf { it.isNotBlank() }?.let {
+                DetailValueRow("Pokémon", it)
+            }
+            alert.pokemonForm?.takeIf { it.isNotBlank() }?.let {
+                DetailValueRow("Form", it)
+            }
+            alert.cp?.let { DetailValueRow("CP", it.toString()) }
+            alert.type
+                .orEmpty()
+                .mapNotNull { it.takeIf(String::isNotBlank) }
+                .takeIf { it.isNotEmpty() }
+                ?.let { DetailValueRow("Types", it.joinToString(", ")) }
+            alert.area?.takeIf { it.isNotBlank() }?.let {
+                DetailValueRow("Area", it)
+            }
+            alert.endTime?.takeIf { it.isNotBlank() }?.let { raw ->
+                DetailValueRow("Original end time", TimeUtils.formatTimestamp(raw) ?: raw)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailValueRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.width(116.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

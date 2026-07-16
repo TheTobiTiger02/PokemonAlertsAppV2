@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.Locale
 
 /**
  * Represents a PvP ranking for a Pokemon.
@@ -63,6 +64,52 @@ data class PokemonReward(
     val pokemon: String? = null,
     val percentage: Int? = null
 )
+
+/**
+ * Compact reference to an active alert invalidated by a weather change.
+ */
+@Immutable
+@Serializable
+data class AffectedAlert(
+    val id: Int? = null,
+    val name: String? = null,
+    val pokemon: String? = null,
+    val pokemonForm: String? = null,
+    val cp: Int? = null,
+    val type: List<String>? = null,
+    val endTime: String? = null,
+    val area: String? = null
+)
+
+internal fun AffectedAlert.matches(candidate: PokemonAlert): Boolean {
+    id?.let { affectedId ->
+        return candidate.id == affectedId
+    }
+
+    val affectedPokemon = pokemon.normalizedAlertIdentity() ?: return false
+    val affectedCp = cp ?: return false
+    val affectedEndTime = endTime.normalizedAlertIdentity() ?: return false
+    val affectedArea = area.normalizedAlertIdentity() ?: return false
+    val affectedTypes = type.normalizedAlertTypes().takeIf { it.isNotEmpty() } ?: return false
+
+    return candidate.pokemon.normalizedAlertIdentity() == affectedPokemon &&
+        candidate.pokemonForm.normalizedAlertIdentity() ==
+            pokemonForm.normalizedAlertIdentity() &&
+        candidate.cp == affectedCp &&
+        candidate.endTime.normalizedAlertIdentity() == affectedEndTime &&
+        candidate.area.normalizedAlertIdentity() == affectedArea &&
+        candidate.type.normalizedAlertTypes() == affectedTypes
+}
+
+private fun String?.normalizedAlertIdentity(): String? =
+    this
+        ?.trim()
+        ?.replace(Regex("\\s+"), " ")
+        ?.lowercase(Locale.ROOT)
+        ?.takeIf { it.isNotEmpty() }
+
+private fun List<String>?.normalizedAlertTypes(): Set<String> =
+    orEmpty().mapNotNull { it.normalizedAlertIdentity() }.toSet()
 
 /**
  * Represents a Pokemon Alert with all structured data from the backend API.
@@ -127,6 +174,9 @@ data class PokemonAlert(
     // Weather change info
     val newCp: Int? = null,
     val newIv: String? = null,
+    val weatherFrom: String? = null,
+    val weatherTo: String? = null,
+    val affectedAlerts: List<AffectedAlert> = emptyList(),
     
     // Species replacement info
     val oldSpecies: String? = null,
@@ -138,7 +188,10 @@ data class PokemonAlert(
     val area: String? = null,
     
     // Timestamps
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val invalidatedAt: String? = null,
+    val invalidationReason: String? = null,
+    val invalidatedByAlertId: Int? = null
 ) {
     val uniqueId: String get() = "${name.trim()}|${endTime.trim()}"
     
@@ -147,6 +200,12 @@ data class PokemonAlert(
     
     /** Returns true if this is a species replacement alert (different species replaced the original) */
     val isSpeciesReplacement: Boolean get() = oldSpecies != null && newSpecies != null
+
+    /** Returns true when the backend marks this alert as no longer active. */
+    val isInvalidated: Boolean
+        get() = invalidatedAt != null ||
+            invalidationReason != null ||
+            invalidatedByAlertId != null
 
     val googleMapsUri: Uri?
         get() = if (latitude != null && longitude != null) {

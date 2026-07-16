@@ -54,6 +54,10 @@ class FcmAlertWorker(
                         Log.d(TAG, "Skipped notification for an already handled FCM alert")
                     FcmAlertHandlingResult.HANDLED ->
                         Log.d(TAG, "Handled FCM alert in durable background work")
+                    FcmAlertHandlingResult.WEATHER_DUPLICATE ->
+                        Log.d(TAG, "Updated duplicate weather alert and requested authoritative sync")
+                    FcmAlertHandlingResult.WEATHER_HANDLED ->
+                        Log.d(TAG, "Handled weather alert and requested authoritative sync")
                 }
                 Result.success()
             },
@@ -107,7 +111,7 @@ class FcmAlertWorker(
 
         @VisibleForTesting
         internal fun shouldRequestAuthoritativeSync(outcome: FcmAlertHandlingResult): Boolean =
-            outcome == FcmAlertHandlingResult.INVALID
+            outcome.requestsAuthoritativeSync
     }
 
     internal object FcmAlertWorkPayload {

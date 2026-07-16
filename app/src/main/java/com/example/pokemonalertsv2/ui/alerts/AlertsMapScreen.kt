@@ -319,6 +319,7 @@ fun AlertsMapScreen(
     val filteredAlerts = remember(alerts, selectedFilter, now) {
         val activeAlerts = alerts.filter {
             it.mapCoordinatesOrNull() != null &&
+                !it.isInvalidated &&
                 (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > now
         }
         when (selectedFilter) {
@@ -336,7 +337,9 @@ fun AlertsMapScreen(
     }
 
     val availableFilters = remember(alerts) {
-        val mappableAlerts = alerts.filter { it.mapCoordinatesOrNull() != null }
+        val mappableAlerts = alerts.filter {
+            it.mapCoordinatesOrNull() != null && !it.isInvalidated
+        }
         buildSet {
             add(AlertFilter.ALL)
             if (mappableAlerts.any { it.hasType("Raid") }) add(AlertFilter.RAIDS)

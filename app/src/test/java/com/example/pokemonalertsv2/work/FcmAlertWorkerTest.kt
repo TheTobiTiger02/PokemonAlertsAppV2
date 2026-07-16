@@ -61,6 +61,8 @@ class FcmAlertWorkerTest {
         assertTrue(FcmAlertWorker.shouldRequestAuthoritativeSync(FcmAlertHandlingResult.INVALID))
         assertFalse(FcmAlertWorker.shouldRequestAuthoritativeSync(FcmAlertHandlingResult.HANDLED))
         assertFalse(FcmAlertWorker.shouldRequestAuthoritativeSync(FcmAlertHandlingResult.DUPLICATE))
+        assertTrue(FcmAlertWorker.shouldRequestAuthoritativeSync(FcmAlertHandlingResult.WEATHER_HANDLED))
+        assertTrue(FcmAlertWorker.shouldRequestAuthoritativeSync(FcmAlertHandlingResult.WEATHER_DUPLICATE))
     }
 
     @Test

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -341,6 +341,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 12 -> 13: adds structured weather-change and invalidation metadata. */
+        internal val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                listOf("alerts", "history_alerts").forEach { table ->
+                    db.execSQL("ALTER TABLE $table ADD COLUMN weatherFrom TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN weatherTo TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN affectedAlertsJson TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN invalidatedAt TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN invalidationReason TEXT")
+                    db.execSQL("ALTER TABLE $table ADD COLUMN invalidatedByAlertId INTEGER")
+                }
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -357,7 +371,18 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pokemon_alerts_database"
                 )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                .addMigrations(
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                    MIGRATION_7_8,
+                    MIGRATION_8_9,
+                    MIGRATION_9_10,
+                    MIGRATION_10_11,
+                    MIGRATION_11_12,
+                    MIGRATION_12_13
+                )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()
                 INSTANCE = instance

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.fcm
 
+import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -41,6 +42,12 @@ object FcmAlertPayloadParser {
         val descriptionFallback = data["description"].takeIfNotBlank() ?: data[KEY_BODY].takeIfNotBlank()
         val imageUrlFallback = data["imageUrl"].takeIfNotBlank()
         val thumbnailUrlFallback = data["thumbnailUrl"].takeIfNotBlank()
+        val weatherFromFallback = data["weatherFrom"].takeIfNotBlank()
+        val weatherToFallback = data["weatherTo"].takeIfNotBlank()
+        val affectedAlertsFallback = data["affectedAlerts"].toAffectedAlerts()
+        val invalidatedAtFallback = data["invalidatedAt"].takeIfNotBlank()
+        val invalidationReasonFallback = data["invalidationReason"].takeIfNotBlank()
+        val invalidatedByAlertIdFallback = data["invalidatedByAlertId"].parseIntOrNull()
 
         if (alert.endTime.isBlank() && endTimeFallback != null) {
             alert = alert.copy(endTime = endTimeFallback)
@@ -53,6 +60,24 @@ object FcmAlertPayloadParser {
         }
         if (alert.thumbnailUrl.isNullOrBlank() && thumbnailUrlFallback != null) {
             alert = alert.copy(thumbnailUrl = thumbnailUrlFallback)
+        }
+        if (alert.weatherFrom.isNullOrBlank() && weatherFromFallback != null) {
+            alert = alert.copy(weatherFrom = weatherFromFallback)
+        }
+        if (alert.weatherTo.isNullOrBlank() && weatherToFallback != null) {
+            alert = alert.copy(weatherTo = weatherToFallback)
+        }
+        if (alert.affectedAlerts.isEmpty() && affectedAlertsFallback.isNotEmpty()) {
+            alert = alert.copy(affectedAlerts = affectedAlertsFallback)
+        }
+        if (alert.invalidatedAt.isNullOrBlank() && invalidatedAtFallback != null) {
+            alert = alert.copy(invalidatedAt = invalidatedAtFallback)
+        }
+        if (alert.invalidationReason.isNullOrBlank() && invalidationReasonFallback != null) {
+            alert = alert.copy(invalidationReason = invalidationReasonFallback)
+        }
+        if (alert.invalidatedByAlertId == null && invalidatedByAlertIdFallback != null) {
+            alert = alert.copy(invalidatedByAlertId = invalidatedByAlertIdFallback)
         }
 
         return FcmAlertPayload(
@@ -78,7 +103,13 @@ object FcmAlertPayloadParser {
             type = data["type"].toTypeList(),
             area = data["area"].takeIfNotBlank(),
             imageUrl = data["imageUrl"].takeIfNotBlank(),
-            thumbnailUrl = data["thumbnailUrl"].takeIfNotBlank()
+            thumbnailUrl = data["thumbnailUrl"].takeIfNotBlank(),
+            weatherFrom = data["weatherFrom"].takeIfNotBlank(),
+            weatherTo = data["weatherTo"].takeIfNotBlank(),
+            affectedAlerts = data["affectedAlerts"].toAffectedAlerts(),
+            invalidatedAt = data["invalidatedAt"].takeIfNotBlank(),
+            invalidationReason = data["invalidationReason"].takeIfNotBlank(),
+            invalidatedByAlertId = data["invalidatedByAlertId"].parseIntOrNull()
         )
     }
 
@@ -97,5 +128,12 @@ object FcmAlertPayloadParser {
             ?.split(',')
             ?.mapNotNull { it.trim().takeIf(String::isNotEmpty) }
             ?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun String?.toAffectedAlerts(): List<AffectedAlert> {
+        val encoded = takeIfNotBlank() ?: return emptyList()
+        return runCatching {
+            json.decodeFromString<List<AffectedAlert>>(encoded)
+        }.getOrDefault(emptyList())
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.pokemonalertsv2.MainActivity
+import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
@@ -186,11 +187,20 @@ class AlertDetailActivity : ComponentActivity() {
         // Weather change fields
         val newCp = getIntExtra(EXTRA_NEW_CP, -1).takeIf { it >= 0 }
         val newIv = getStringExtra(EXTRA_NEW_IV)
+        val weatherFrom = getStringExtra(EXTRA_WEATHER_FROM)
+        val weatherTo = getStringExtra(EXTRA_WEATHER_TO)
+        val affectedAlerts = getStringExtra(EXTRA_AFFECTED_ALERTS)?.let {
+            runCatching { json.decodeFromString<List<AffectedAlert>>(it) }.getOrNull()
+        }.orEmpty()
         val oldSpecies = getStringExtra(EXTRA_OLD_SPECIES)
         val oldIv = getStringExtra(EXTRA_OLD_IV)
         val oldCp = getIntExtra(EXTRA_OLD_CP, -1).takeIf { it >= 0 }
         val newSpecies = getStringExtra(EXTRA_NEW_SPECIES)
         val area = getStringExtra(EXTRA_AREA)
+        val invalidatedAt = getStringExtra(EXTRA_INVALIDATED_AT)
+        val invalidationReason = getStringExtra(EXTRA_INVALIDATION_REASON)
+        val invalidatedByAlertId = getIntExtra(EXTRA_INVALIDATED_BY_ALERT_ID, -1)
+            .takeIf { it >= 0 }
 
         // PvP Rankings (serialized as JSON)
         val pvpRankingsJson = getStringExtra(EXTRA_PVP_RANKINGS)
@@ -241,11 +251,17 @@ class AlertDetailActivity : ComponentActivity() {
             createdAt = createdAt,
             newCp = newCp,
             newIv = newIv,
+            weatherFrom = weatherFrom,
+            weatherTo = weatherTo,
+            affectedAlerts = affectedAlerts,
             oldSpecies = oldSpecies,
             oldIv = oldIv,
             oldCp = oldCp,
             newSpecies = newSpecies,
-            area = area
+            area = area,
+            invalidatedAt = invalidatedAt,
+            invalidationReason = invalidationReason,
+            invalidatedByAlertId = invalidatedByAlertId
         )
     }
 
@@ -290,11 +306,17 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_POKEMON_REWARDS = "extra_pokemon_rewards"
         private const val EXTRA_NEW_CP = "extra_new_cp"
         private const val EXTRA_NEW_IV = "extra_new_iv"
+        private const val EXTRA_WEATHER_FROM = "extra_weather_from"
+        private const val EXTRA_WEATHER_TO = "extra_weather_to"
+        private const val EXTRA_AFFECTED_ALERTS = "extra_affected_alerts"
         private const val EXTRA_OLD_SPECIES = "extra_old_species"
         private const val EXTRA_OLD_IV = "extra_old_iv"
         private const val EXTRA_OLD_CP = "extra_old_cp"
         private const val EXTRA_NEW_SPECIES = "extra_new_species"
         private const val EXTRA_AREA = "extra_area"
+        private const val EXTRA_INVALIDATED_AT = "extra_invalidated_at"
+        private const val EXTRA_INVALIDATION_REASON = "extra_invalidation_reason"
+        private const val EXTRA_INVALIDATED_BY_ALERT_ID = "extra_invalidated_by_alert_id"
         private const val EXTRA_RETURN_TO_ALERTS = "extra_return_to_alerts"
         const val EXTRA_LAUNCH_PIP = "extra_launch_pip"
 
@@ -350,11 +372,21 @@ class AlertDetailActivity : ComponentActivity() {
                 putExtra(EXTRA_CREATED_AT, alert.createdAt)
                 alert.newCp?.let { putExtra(EXTRA_NEW_CP, it) }
                 putExtra(EXTRA_NEW_IV, alert.newIv)
+                putExtra(EXTRA_WEATHER_FROM, alert.weatherFrom)
+                putExtra(EXTRA_WEATHER_TO, alert.weatherTo)
+                if (alert.affectedAlerts.isNotEmpty()) {
+                    putExtra(EXTRA_AFFECTED_ALERTS, Json.encodeToString(alert.affectedAlerts))
+                }
                 putExtra(EXTRA_OLD_SPECIES, alert.oldSpecies)
                 putExtra(EXTRA_OLD_IV, alert.oldIv)
                 alert.oldCp?.let { putExtra(EXTRA_OLD_CP, it) }
                 putExtra(EXTRA_NEW_SPECIES, alert.newSpecies)
                 putExtra(EXTRA_AREA, alert.area)
+                putExtra(EXTRA_INVALIDATED_AT, alert.invalidatedAt)
+                putExtra(EXTRA_INVALIDATION_REASON, alert.invalidationReason)
+                alert.invalidatedByAlertId?.let {
+                    putExtra(EXTRA_INVALIDATED_BY_ALERT_ID, it)
+                }
                 alert.pvpRankings?.let { rankings ->
                     if (rankings.isNotEmpty()) {
                         putExtra(EXTRA_PVP_RANKINGS, Json.encodeToString(rankings))

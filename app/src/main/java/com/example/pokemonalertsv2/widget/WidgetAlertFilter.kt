@@ -70,6 +70,7 @@ internal object WidgetAlertFilter {
     ): Boolean {
         val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
         if (end <= criteria.nowMillis) return false
+        if (alert.isInvalidated) return false
         if (alert.uniqueId in criteria.dismissedAlertIds) return false
         if (criteria.selectedArea != "All" && alert.area != criteria.selectedArea) return false
         if (!matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false

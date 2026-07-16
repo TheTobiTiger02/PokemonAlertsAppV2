@@ -26,14 +26,14 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     val alertPreferences: AlertPreferencesStore get() = preferences
 
     val alerts: Flow<List<PokemonAlert>> = alertDao.observeAllAlerts().map { entities ->
-        entities.map { it.toDomain() }
+        entities.map { it.toDomain() }.filterNot { it.isInvalidated }
     }
 
     /**
      * Returns the current list of alerts from the local database without triggering a network call.
      */
     suspend fun getLocalAlerts(): List<PokemonAlert> {
-        return alertDao.getAllAlerts().map { it.toDomain() }
+        return alertDao.getAllAlerts().map { it.toDomain() }.filterNot { it.isInvalidated }
     }
 
     /**
@@ -47,7 +47,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         }
         
         return try {
-            val remoteAlerts = service.getPokemonAlerts()
+            val remoteAlerts = service.getPokemonAlerts().filterNot { it.isInvalidated }
             val remoteEntities = remoteAlerts.map { it.toEntity() }
             if (!sameCachedAlerts(alertDao.getAllAlerts(), remoteEntities)) {
                 alertDao.replaceAll(remoteEntities)
@@ -60,7 +60,31 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     }
 
     suspend fun upsertAlert(alert: PokemonAlert) {
-        alertDao.insertAlerts(listOf(alert.toEntity()))
+        processIncomingAlert(alert)
+    }
+
+    /**
+     * Stores a pushed alert. Weather changes remove their affected active alerts
+     * in the same Room transaction as the weather alert upsert.
+     *
+     * @return unique IDs removed from the active cache.
+     */
+    suspend fun processIncomingAlert(alert: PokemonAlert): Set<String> {
+        if (alert.isInvalidated) {
+            alertDao.deleteAlert(alert.uniqueId, alert.id)
+            return emptySet()
+        }
+
+        if (!alert.isWeatherChange || alert.affectedAlerts.isEmpty()) {
+            alertDao.insertAlerts(listOf(alert.toEntity()))
+            return emptySet()
+        }
+
+        val affectedUniqueIds = alertDao.replaceAffectedWithWeather(
+            weatherAlert = alert.toEntity(),
+            affectedAlerts = alert.affectedAlerts
+        )
+        return affectedUniqueIds.toSet()
     }
 
     suspend fun getHistory(q: String? = null): List<PokemonAlert> {
@@ -139,7 +163,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         val cachedAlerts = alertDao.getAllAlerts()
         val activeAlerts = cachedAlerts.filter { entity ->
             val endMillis = TimeUtils.parseEndTimeToMillis(entity.endTime)
-            endMillis == null || endMillis > nowMillis
+            !entity.toDomain().isInvalidated && (endMillis == null || endMillis > nowMillis)
         }
         if (activeAlerts.size != cachedAlerts.size) {
             alertDao.replaceAll(activeAlerts)
@@ -247,12 +271,18 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             result = 31 * result + requiresAR.hashCode()
             result = 31 * result + newCp.hashCode()
             result = 31 * result + newIv.hashCode()
+            result = 31 * result + weatherFrom.hashCode()
+            result = 31 * result + weatherTo.hashCode()
+            result = 31 * result + affectedAlertsJson.hashCode()
             result = 31 * result + oldSpecies.hashCode()
             result = 31 * result + oldIv.hashCode()
             result = 31 * result + oldCp.hashCode()
             result = 31 * result + newSpecies.hashCode()
             result = 31 * result + area.hashCode()
             result = 31 * result + alertCreatedAt.hashCode()
+            result = 31 * result + invalidatedAt.hashCode()
+            result = 31 * result + invalidationReason.hashCode()
+            result = 31 * result + invalidatedByAlertId.hashCode()
             return result
         }
 

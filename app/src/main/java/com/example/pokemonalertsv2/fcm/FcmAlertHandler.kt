@@ -21,7 +21,7 @@ internal object FcmAlertHandler {
         val repository = PokemonAlertsRepository.create(appContext)
         return FcmAlertProcessor(
             detectNew = { alert -> repository.detectNewAlerts(listOf(alert)).isNotEmpty() },
-            upsert = repository::upsertAlert,
+            processIncoming = { alert -> repository.processIncomingAlert(alert) },
             clearExpired = { repository.clearExpiredAlerts() },
             notify = { alert -> AlertNotifier.notifyAlerts(appContext, listOf(alert)) },
             markSeen = { alert -> repository.markAlertsAsSeen(listOf(alert)) },
@@ -30,23 +30,25 @@ internal object FcmAlertHandler {
     }
 }
 
-internal enum class FcmAlertHandlingResult {
-    HANDLED,
-    DUPLICATE,
-    INVALID
+internal enum class FcmAlertHandlingResult(val requestsAuthoritativeSync: Boolean) {
+    HANDLED(false),
+    DUPLICATE(false),
+    WEATHER_HANDLED(true),
+    WEATHER_DUPLICATE(true),
+    INVALID(true)
 }
 
 internal class FcmAlertProcessor(
     private val detectNew: suspend (PokemonAlert) -> Boolean,
-    private val upsert: suspend (PokemonAlert) -> Unit,
+    private val processIncoming: suspend (PokemonAlert) -> Unit,
     private val clearExpired: suspend () -> Unit,
     private val notify: suspend (PokemonAlert) -> Unit,
     private val markSeen: suspend (PokemonAlert) -> Unit,
     private val requestWidgetUpdate: () -> Unit
 ) {
     suspend fun process(alert: PokemonAlert): FcmAlertHandlingResult {
-        val isNewAlert = detectNew(alert)
-        upsert(alert)
+        val isNewAlert = !alert.isInvalidated && detectNew(alert)
+        processIncoming(alert)
         clearExpired()
 
         if (isNewAlert) {
@@ -55,10 +57,11 @@ internal class FcmAlertProcessor(
         }
 
         requestWidgetUpdate()
-        return if (isNewAlert) {
-            FcmAlertHandlingResult.HANDLED
-        } else {
-            FcmAlertHandlingResult.DUPLICATE
+        return when {
+            alert.isWeatherChange && isNewAlert -> FcmAlertHandlingResult.WEATHER_HANDLED
+            alert.isWeatherChange -> FcmAlertHandlingResult.WEATHER_DUPLICATE
+            isNewAlert -> FcmAlertHandlingResult.HANDLED
+            else -> FcmAlertHandlingResult.DUPLICATE
         }
     }
 }

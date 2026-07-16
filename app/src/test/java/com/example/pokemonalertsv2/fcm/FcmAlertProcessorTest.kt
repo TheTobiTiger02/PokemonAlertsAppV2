@@ -17,7 +17,7 @@ class FcmAlertProcessorTest {
 
         assertEquals(FcmAlertHandlingResult.HANDLED, result)
         assertEquals(
-            listOf("detect", "upsert", "clearExpired", "notify", "markSeen", "widget"),
+            listOf("detect", "processIncoming", "clearExpired", "notify", "markSeen", "widget"),
             calls
         )
     }
@@ -30,7 +30,39 @@ class FcmAlertProcessorTest {
         val result = processor.process(sampleAlert())
 
         assertEquals(FcmAlertHandlingResult.DUPLICATE, result)
-        assertEquals(listOf("detect", "upsert", "clearExpired", "widget"), calls)
+        assertEquals(listOf("detect", "processIncoming", "clearExpired", "widget"), calls)
+    }
+
+    @Test
+    fun process_weatherAlertRequestsAuthoritativeSyncForNewAndDuplicateEvents() = runTest {
+        val newCalls = mutableListOf<String>()
+        val duplicateCalls = mutableListOf<String>()
+        val weather = sampleAlert().copy(type = listOf("WeatherChange"))
+
+        val newResult = processor(newCalls, isNew = true).process(weather)
+        val duplicateResult = processor(duplicateCalls, isNew = false).process(weather)
+
+        assertEquals(FcmAlertHandlingResult.WEATHER_HANDLED, newResult)
+        assertEquals(FcmAlertHandlingResult.WEATHER_DUPLICATE, duplicateResult)
+        assertEquals(
+            listOf("detect", "processIncoming", "clearExpired", "notify", "markSeen", "widget"),
+            newCalls
+        )
+        assertEquals(
+            listOf("detect", "processIncoming", "clearExpired", "widget"),
+            duplicateCalls
+        )
+    }
+
+    @Test
+    fun process_invalidatedAlertUpdatesCacheWithoutDetectionOrNotification() = runTest {
+        val calls = mutableListOf<String>()
+        val alert = sampleAlert().copy(invalidationReason = "Weather changed")
+
+        val result = processor(calls, isNew = true).process(alert)
+
+        assertEquals(FcmAlertHandlingResult.DUPLICATE, result)
+        assertEquals(listOf("processIncoming", "clearExpired", "widget"), calls)
     }
 
     private fun processor(calls: MutableList<String>, isNew: Boolean) = FcmAlertProcessor(
@@ -38,7 +70,7 @@ class FcmAlertProcessorTest {
             calls += "detect"
             isNew
         },
-        upsert = { calls += "upsert" },
+        processIncoming = { calls += "processIncoming" },
         clearExpired = { calls += "clearExpired" },
         notify = { calls += "notify" },
         markSeen = { calls += "markSeen" },
