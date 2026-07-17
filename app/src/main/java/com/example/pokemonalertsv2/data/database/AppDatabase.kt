@@ -8,14 +8,15 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class],
-    version = 13,
+    entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class, GoDexEntryEntity::class],
+    version = 14,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun alertDao(): AlertDao
     abstract fun historyAlertDao(): HistoryAlertDao
     abstract fun pokemonSpeciesDao(): PokemonSpeciesDao
+    abstract fun goDexEntryDao(): GoDexEntryDao
 
     companion object {
         @Volatile
@@ -355,6 +356,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `godex_entries` (`entryKey` TEXT NOT NULL, `pokedexId` INTEGER NOT NULL, `formSlug` TEXT, `gender` TEXT NOT NULL, `displayName` TEXT NOT NULL, `needed` INTEGER NOT NULL, PRIMARY KEY(`entryKey`))"
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_godex_entries_pokedexId` ON `godex_entries` (`pokedexId`)")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -381,7 +391,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_9_10,
                     MIGRATION_10_11,
                     MIGRATION_11_12,
-                    MIGRATION_12_13
+                    MIGRATION_12_13,
+                    MIGRATION_13_14
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

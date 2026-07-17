@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -86,6 +87,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import androidx.compose.animation.AnimatedVisibility
@@ -94,6 +98,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import java.util.Calendar
+import java.text.DateFormat
+import java.util.Date
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
@@ -178,6 +184,17 @@ fun SettingsScreen(
     val excludedSpawnTypes by viewModel.excludedSpawnTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
     val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
+    val goDexConfig by viewModel.goDexConfig.collectAsStateWithLifecycle()
+    val goDexEntries by viewModel.goDexEntries.collectAsStateWithLifecycle()
+    val goDexSyncUiState by viewModel.goDexSyncUiState.collectAsStateWithLifecycle()
+    var goDexUrlInput by rememberSaveable { mutableStateOf("") }
+    var showGoDexDebugList by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(goDexConfig.url) {
+        if (goDexConfig.url.isNotBlank() || goDexUrlInput.isBlank()) {
+            goDexUrlInput = goDexConfig.url
+        }
+    }
 
     LinearModernBackground(
         modifier = Modifier.fillMaxSize()
@@ -353,6 +370,101 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                SettingsSection(title = "GoDex Hundo checklist") {
+                    val totalCount = goDexEntries.size
+                    val neededCount = goDexEntries.count { it.needed }
+                    val isStale = goDexConfig.lastSuccessfulSyncMillis > 0L &&
+                        System.currentTimeMillis() - goDexConfig.lastSuccessfulSyncMillis >=
+                        GoDexRepository.STALE_WARNING_MILLIS
+
+                    if (!goDexConfig.isConnected) {
+                        Text(
+                            "Connect a public GoDex Hundo collection to show checklist status and optionally filter Hundo notifications.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = goDexUrlInput,
+                            onValueChange = { goDexUrlInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Public GoDex collection URL") },
+                            placeholder = { Text("https://godex.site/public-collection/…") },
+                            singleLine = true,
+                            enabled = !goDexSyncUiState.isSyncing
+                        )
+                        ElevatedButton(
+                            onClick = { viewModel.connectGoDex(goDexUrlInput) },
+                            enabled = goDexUrlInput.isNotBlank() && !goDexSyncUiState.isSyncing
+                        ) {
+                            Text(if (goDexSyncUiState.isSyncing) "Connecting…" else "Connect")
+                        }
+                    } else {
+                        Text(
+                            goDexConfig.collectionTitle.ifBlank { "GoDex Hundo collection" },
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "$neededCount needed • ${totalCount - neededCount} collected • $totalCount total",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            "Last synchronized ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(goDexConfig.lastSuccessfulSyncMillis))}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (isStale) {
+                            Text(
+                                "Checklist data is over 48 hours old. The last successful cache is still in use.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        SwitchSetting(
+                            title = "Only notify for needed GoDex Hundos",
+                            subtitle = "Confirmed collected Hundos are suppressed. Unknown forms still notify.",
+                            checked = goDexConfig.notificationFilterEnabled,
+                            onCheckedChange = viewModel::updateGoDexNotificationFilter
+                        )
+                        if (goDexConfig.notificationFilterEnabled) {
+                            Text(
+                                "Your manual Hundo species selection is preserved and resumes when this filter is disabled.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalButton(
+                                onClick = viewModel::syncGoDex,
+                                enabled = !goDexSyncUiState.isSyncing
+                            ) {
+                                Text(if (goDexSyncUiState.isSyncing) "Syncing…" else "Sync now")
+                            }
+                            OutlinedButton(
+                                onClick = viewModel::disconnectGoDex,
+                                enabled = !goDexSyncUiState.isSyncing
+                            ) {
+                                Text("Disconnect")
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { showGoDexDebugList = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = goDexEntries.isNotEmpty()
+                        ) {
+                            Text("View synced Pokémon ($totalCount)")
+                        }
+                    }
+
+                    goDexSyncUiState.errorMessage?.let { error ->
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
                 }
                 
                 if (destination == SettingsDestination.NOTIFICATIONS) {
@@ -523,6 +635,144 @@ fun SettingsScreen(
         }
     }
 
+    if (showGoDexDebugList) {
+        val debugEntries = remember(goDexEntries) {
+            viewModel.buildGoDexDebugEntries(goDexEntries)
+        }
+        GoDexDebugListDialog(
+            entries = debugEntries,
+            onDismiss = { showGoDexDebugList = false }
+        )
+    }
+
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoDexDebugListDialog(
+    entries: List<GoDexDebugEntry>,
+    onDismiss: () -> Unit
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedStatusName by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedStatus = selectedStatusName?.let { name ->
+        GoDexMatchStatus.entries.firstOrNull { it.name == name }
+    }
+    val filteredEntries = remember(entries, query, selectedStatus) {
+        val normalizedQuery = query.trim().lowercase()
+        entries.filter { entry ->
+            val statusMatches = selectedStatus == null || entry.result.status == selectedStatus
+            val queryMatches = normalizedQuery.isEmpty() || listOf(
+                entry.displayName,
+                entry.entryKey,
+                entry.pokedexId.toString(),
+                entry.formSlug.orEmpty(),
+                entry.gender,
+                entry.statusLabel
+            ).any { it.lowercase().contains(normalizedQuery) }
+            statusMatches && queryMatches
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text("Synced GoDex Pokémon")
+                Text(
+                    "${filteredEntries.size} of ${entries.size} entries",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Search name, number, form or status") },
+                    singleLine = true
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(
+                        null to "All",
+                        GoDexMatchStatus.NEEDED to "Needed",
+                        GoDexMatchStatus.EVOLUTION_NEEDED to "Evolution needed",
+                        GoDexMatchStatus.COLLECTED to "Collected",
+                        GoDexMatchStatus.UNKNOWN to "Unknown"
+                    ).forEach { (status, label) ->
+                        FilterChip(
+                            selected = selectedStatus == status,
+                            onClick = { selectedStatusName = status?.name },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 240.dp, max = 520.dp)
+                ) {
+                    items(filteredEntries, key = { it.entryKey }) { entry ->
+                        GoDexDebugEntryRow(entry)
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
+    val statusColor = when (entry.result.status) {
+        GoDexMatchStatus.NEEDED -> MaterialTheme.colorScheme.primary
+        GoDexMatchStatus.EVOLUTION_NEEDED -> MaterialTheme.colorScheme.tertiary
+        GoDexMatchStatus.COLLECTED -> MaterialTheme.colorScheme.onSurfaceVariant
+        GoDexMatchStatus.UNKNOWN -> MaterialTheme.colorScheme.error
+        GoDexMatchStatus.NOT_CONFIGURED -> MaterialTheme.colorScheme.error
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp)
+    ) {
+        Text(
+            "#${entry.pokedexId.toString().padStart(4, '0')} ${entry.displayName}",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold
+        )
+        val variant = buildList {
+            entry.formSlug?.let { add("form: $it") }
+            entry.gender.takeUnless { it == "none" }?.let { add("gender: $it") }
+        }.joinToString(" • ")
+        if (variant.isNotEmpty()) {
+            Text(
+                variant,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            entry.entryKey,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+        )
+        Text(
+            entry.statusLabel,
+            style = MaterialTheme.typography.bodyMedium,
+            color = statusColor,
+            fontWeight = FontWeight.Medium
+        )
+    }
 }
 
 @Composable

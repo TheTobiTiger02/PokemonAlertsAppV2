@@ -79,6 +79,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -122,6 +123,9 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
@@ -253,6 +257,7 @@ fun AlertCard(
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
+    val goDexStatus = rememberGoDexStatus(alert)
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
     val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
@@ -387,6 +392,7 @@ fun AlertCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    GoDexStatusPill(goDexStatus)
                     displayIv?.let {
                         AlertPill(
                             text = "IV $it",
@@ -599,6 +605,46 @@ private fun AlertPill(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+@Composable
+private fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
+    if (!alert.hasType("hundo")) return GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+    val context = LocalContext.current.applicationContext
+    val repository = remember(context) { GoDexRepository.getInstance(context) }
+    val entries by repository.entries.collectAsState()
+    val config by repository.config.collectAsState()
+    return remember(alert, entries, config.url) {
+        repository.match(alert, entries)
+    }
+}
+
+@Composable
+private fun GoDexStatusPill(result: GoDexMatchResult) {
+    when (result.status) {
+        GoDexMatchStatus.NEEDED -> AlertPill(
+            text = "Needed in GoDex",
+            icon = Icons.Filled.Star,
+            isPrimary = true
+        )
+        GoDexMatchStatus.COLLECTED -> AlertPill(
+            text = "Already collected",
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        GoDexMatchStatus.EVOLUTION_NEEDED -> AlertPill(
+            text = "Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}",
+            icon = Icons.Filled.Star,
+            isPrimary = true
+        )
+        GoDexMatchStatus.UNKNOWN -> AlertPill(
+            text = "GoDex form unknown",
+            icon = Icons.Filled.Warning,
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+        GoDexMatchStatus.NOT_CONFIGURED -> Unit
     }
 }
 
@@ -1020,6 +1066,7 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
+    val goDexStatus = rememberGoDexStatus(alert)
     val actionBarClearance = 84.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -1235,6 +1282,16 @@ fun AlertDetailScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                            GoDexStatusPill(goDexStatus)
+                            if (goDexStatus.status == GoDexMatchStatus.EVOLUTION_NEEDED) {
+                                goDexStatus.evolutionTargets.forEach { target ->
+                                    Text(
+                                        text = "Evolution needed: ${target.displayName}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                             // Pokedex ID
                             alert.pokedexId?.let { dexId ->

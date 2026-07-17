@@ -1,0 +1,802 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 14,
+    "identityHash": "f4e06feab1b47d733190ad9e00acc284",
+    "entities": [
+      {
+        "tableName": "alerts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`uniqueId` TEXT NOT NULL, `id` INTEGER, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrl` TEXT, `longitude` REAL NOT NULL, `latitude` REAL NOT NULL, `endTime` TEXT NOT NULL, `type` TEXT, `thumbnailUrl` TEXT, `createdAt` INTEGER NOT NULL, `pokemon` TEXT, `pokemonForm` TEXT, `pokedexId` INTEGER, `iv` TEXT, `ivAttack` INTEGER, `ivDefense` INTEGER, `ivStamina` INTEGER, `gender` TEXT, `isShiny` INTEGER, `cp` INTEGER, `level` REAL, `isWeatherBoosted` INTEGER, `currentWeather` TEXT, `pokemonLocation` TEXT, `gym` TEXT, `pokestop` TEXT, `movesFast` TEXT, `movesCharged` TEXT, `hundoCPL20` INTEGER, `hundoCPL25` INTEGER, `pvpRankingsJson` TEXT, `gruntType` TEXT, `pokemonRewardsJson` TEXT, `questTask` TEXT, `questReward` TEXT, `requiresAR` INTEGER, `newCp` INTEGER, `newIv` TEXT, `weatherFrom` TEXT, `weatherTo` TEXT, `affectedAlertsJson` TEXT, `oldSpecies` TEXT, `oldIv` TEXT, `oldCp` INTEGER, `newSpecies` TEXT, `area` TEXT, `alertCreatedAt` TEXT, `invalidatedAt` TEXT, `invalidationReason` TEXT, `invalidatedByAlertId` INTEGER, PRIMARY KEY(`uniqueId`))",
+        "fields": [
+          {
+            "fieldPath": "uniqueId",
+            "columnName": "uniqueId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUrl",
+            "columnName": "imageUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "thumbnailUrl",
+            "columnName": "thumbnailUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pokemon",
+            "columnName": "pokemon",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonForm",
+            "columnName": "pokemonForm",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokedexId",
+            "columnName": "pokedexId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "iv",
+            "columnName": "iv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivAttack",
+            "columnName": "ivAttack",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivDefense",
+            "columnName": "ivDefense",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivStamina",
+            "columnName": "ivStamina",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gender",
+            "columnName": "gender",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isShiny",
+            "columnName": "isShiny",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cp",
+            "columnName": "cp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isWeatherBoosted",
+            "columnName": "isWeatherBoosted",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "currentWeather",
+            "columnName": "currentWeather",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonLocation",
+            "columnName": "pokemonLocation",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gym",
+            "columnName": "gym",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokestop",
+            "columnName": "pokestop",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "movesFast",
+            "columnName": "movesFast",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "movesCharged",
+            "columnName": "movesCharged",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "hundoCPL20",
+            "columnName": "hundoCPL20",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "hundoCPL25",
+            "columnName": "hundoCPL25",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pvpRankingsJson",
+            "columnName": "pvpRankingsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gruntType",
+            "columnName": "gruntType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonRewardsJson",
+            "columnName": "pokemonRewardsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "questTask",
+            "columnName": "questTask",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "questReward",
+            "columnName": "questReward",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "requiresAR",
+            "columnName": "requiresAR",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newCp",
+            "columnName": "newCp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newIv",
+            "columnName": "newIv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "weatherFrom",
+            "columnName": "weatherFrom",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "weatherTo",
+            "columnName": "weatherTo",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "affectedAlertsJson",
+            "columnName": "affectedAlertsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldSpecies",
+            "columnName": "oldSpecies",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldIv",
+            "columnName": "oldIv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldCp",
+            "columnName": "oldCp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newSpecies",
+            "columnName": "newSpecies",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "area",
+            "columnName": "area",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "alertCreatedAt",
+            "columnName": "alertCreatedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidatedAt",
+            "columnName": "invalidatedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidationReason",
+            "columnName": "invalidationReason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidatedByAlertId",
+            "columnName": "invalidatedByAlertId",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "uniqueId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_alerts_endTime",
+            "unique": false,
+            "columnNames": [
+              "endTime"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `${TABLE_NAME}` (`endTime`)"
+          },
+          {
+            "name": "index_alerts_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_alerts_area",
+            "unique": false,
+            "columnNames": [
+              "area"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_alerts_area` ON `${TABLE_NAME}` (`area`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "history_alerts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`historyId` INTEGER NOT NULL, `uniqueId` TEXT NOT NULL, `name` TEXT NOT NULL, `description` TEXT NOT NULL, `imageUrl` TEXT, `longitude` REAL NOT NULL, `latitude` REAL NOT NULL, `endTime` TEXT NOT NULL, `type` TEXT, `thumbnailUrl` TEXT, `cachedAt` INTEGER NOT NULL, `pokemon` TEXT, `pokemonForm` TEXT, `pokedexId` INTEGER, `iv` TEXT, `ivAttack` INTEGER, `ivDefense` INTEGER, `ivStamina` INTEGER, `gender` TEXT, `isShiny` INTEGER, `cp` INTEGER, `level` REAL, `isWeatherBoosted` INTEGER, `currentWeather` TEXT, `pokemonLocation` TEXT, `gym` TEXT, `pokestop` TEXT, `movesFast` TEXT, `movesCharged` TEXT, `hundoCPL20` INTEGER, `hundoCPL25` INTEGER, `pvpRankingsJson` TEXT, `gruntType` TEXT, `pokemonRewardsJson` TEXT, `questTask` TEXT, `questReward` TEXT, `requiresAR` INTEGER, `newCp` INTEGER, `newIv` TEXT, `weatherFrom` TEXT, `weatherTo` TEXT, `affectedAlertsJson` TEXT, `oldSpecies` TEXT, `oldIv` TEXT, `oldCp` INTEGER, `newSpecies` TEXT, `area` TEXT, `alertCreatedAt` TEXT, `invalidatedAt` TEXT, `invalidationReason` TEXT, `invalidatedByAlertId` INTEGER, PRIMARY KEY(`historyId`))",
+        "fields": [
+          {
+            "fieldPath": "historyId",
+            "columnName": "historyId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uniqueId",
+            "columnName": "uniqueId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUrl",
+            "columnName": "imageUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTime",
+            "columnName": "endTime",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "thumbnailUrl",
+            "columnName": "thumbnailUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cachedAt",
+            "columnName": "cachedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pokemon",
+            "columnName": "pokemon",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonForm",
+            "columnName": "pokemonForm",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokedexId",
+            "columnName": "pokedexId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "iv",
+            "columnName": "iv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivAttack",
+            "columnName": "ivAttack",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivDefense",
+            "columnName": "ivDefense",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ivStamina",
+            "columnName": "ivStamina",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gender",
+            "columnName": "gender",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isShiny",
+            "columnName": "isShiny",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cp",
+            "columnName": "cp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isWeatherBoosted",
+            "columnName": "isWeatherBoosted",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "currentWeather",
+            "columnName": "currentWeather",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonLocation",
+            "columnName": "pokemonLocation",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gym",
+            "columnName": "gym",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokestop",
+            "columnName": "pokestop",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "movesFast",
+            "columnName": "movesFast",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "movesCharged",
+            "columnName": "movesCharged",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "hundoCPL20",
+            "columnName": "hundoCPL20",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "hundoCPL25",
+            "columnName": "hundoCPL25",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pvpRankingsJson",
+            "columnName": "pvpRankingsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gruntType",
+            "columnName": "gruntType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "pokemonRewardsJson",
+            "columnName": "pokemonRewardsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "questTask",
+            "columnName": "questTask",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "questReward",
+            "columnName": "questReward",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "requiresAR",
+            "columnName": "requiresAR",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newCp",
+            "columnName": "newCp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newIv",
+            "columnName": "newIv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "weatherFrom",
+            "columnName": "weatherFrom",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "weatherTo",
+            "columnName": "weatherTo",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "affectedAlertsJson",
+            "columnName": "affectedAlertsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldSpecies",
+            "columnName": "oldSpecies",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldIv",
+            "columnName": "oldIv",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "oldCp",
+            "columnName": "oldCp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "newSpecies",
+            "columnName": "newSpecies",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "area",
+            "columnName": "area",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "alertCreatedAt",
+            "columnName": "alertCreatedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidatedAt",
+            "columnName": "invalidatedAt",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidationReason",
+            "columnName": "invalidationReason",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "invalidatedByAlertId",
+            "columnName": "invalidatedByAlertId",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "historyId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_history_alerts_endTime",
+            "unique": false,
+            "columnNames": [
+              "endTime"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_history_alerts_endTime` ON `${TABLE_NAME}` (`endTime`)"
+          },
+          {
+            "name": "index_history_alerts_type",
+            "unique": false,
+            "columnNames": [
+              "type"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_history_alerts_type` ON `${TABLE_NAME}` (`type`)"
+          },
+          {
+            "name": "index_history_alerts_area",
+            "unique": false,
+            "columnNames": [
+              "area"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_history_alerts_area` ON `${TABLE_NAME}` (`area`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "pokemon_species",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, `imageUrl` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUrl",
+            "columnName": "imageUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "godex_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`entryKey` TEXT NOT NULL, `pokedexId` INTEGER NOT NULL, `formSlug` TEXT, `gender` TEXT NOT NULL, `displayName` TEXT NOT NULL, `needed` INTEGER NOT NULL, PRIMARY KEY(`entryKey`))",
+        "fields": [
+          {
+            "fieldPath": "entryKey",
+            "columnName": "entryKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pokedexId",
+            "columnName": "pokedexId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "formSlug",
+            "columnName": "formSlug",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gender",
+            "columnName": "gender",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "needed",
+            "columnName": "needed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "entryKey"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_godex_entries_pokedexId",
+            "unique": false,
+            "columnNames": [
+              "pokedexId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_godex_entries_pokedexId` ON `${TABLE_NAME}` (`pokedexId`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f4e06feab1b47d733190ad9e00acc284')"
+    ]
+  }
+}

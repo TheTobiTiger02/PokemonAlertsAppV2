@@ -10,6 +10,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.MapStylePreference
@@ -124,6 +125,20 @@ class MainNavigationComposeTest {
 
         composeRule.onNodeWithText("Alert filters").performClick()
         composeRule.onNodeWithText("Maximum Distance").assertIsDisplayed()
+        composeRule.onNodeWithText("GoDex Hundo checklist").performScrollTo().assertIsDisplayed()
+        val isDisconnected = composeRule
+            .onAllNodesWithText("Public GoDex collection URL")
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+        if (isDisconnected) {
+            composeRule.onNodeWithText("Public GoDex collection URL").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithText("Connect").assertHasClickAction()
+        } else {
+            composeRule.onNodeWithText("View synced Pokémon", substring = true)
+                .performScrollTo()
+                .assertIsDisplayed()
+                .assertHasClickAction()
+        }
         composeRule.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
         composeRule.onNodeWithText("Appearance & behavior").assertIsDisplayed()
     }

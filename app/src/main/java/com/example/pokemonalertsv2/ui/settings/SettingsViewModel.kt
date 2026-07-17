@@ -5,6 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +17,14 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = PokemonAlertsRepository.create(application)
+    private val goDexRepository = GoDexRepository.getInstance(application)
+
+    val goDexConfig = goDexRepository.config
+    val goDexEntries = goDexRepository.entries
+    val goDexSyncUiState = goDexRepository.syncUiState
+
+    fun buildGoDexDebugEntries(entries: List<GoDexEntryEntity>): List<GoDexDebugEntry> =
+        goDexRepository.debugEntries(entries)
 
     val onboardingCompleted: StateFlow<Boolean?> = repository.observeOnboardingCompleted()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -195,6 +206,30 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateSnoozeDuration(minutes: Int) {
         viewModelScope.launch {
             repository.alertPreferences.updateSnoozeDuration(minutes)
+        }
+    }
+
+    fun connectGoDex(url: String) {
+        viewModelScope.launch {
+            runCatching { goDexRepository.connect(url.trim()) }
+        }
+    }
+
+    fun syncGoDex() {
+        viewModelScope.launch {
+            runCatching { goDexRepository.syncConfigured() }
+        }
+    }
+
+    fun updateGoDexNotificationFilter(enabled: Boolean) {
+        viewModelScope.launch {
+            goDexRepository.setNotificationFilterEnabled(enabled)
+        }
+    }
+
+    fun disconnectGoDex() {
+        viewModelScope.launch {
+            goDexRepository.disconnect()
         }
     }
     

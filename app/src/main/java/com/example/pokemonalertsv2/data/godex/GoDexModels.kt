@@ -1,0 +1,60 @@
+package com.example.pokemonalertsv2.data.godex
+
+data class GoDexConfig(
+    val url: String = "",
+    val collectionTitle: String = "",
+    val lastSuccessfulSyncMillis: Long = 0L,
+    val notificationFilterEnabled: Boolean = false
+) {
+    val isConnected: Boolean get() = url.isNotBlank()
+}
+
+data class GoDexSyncUiState(
+    val isSyncing: Boolean = false,
+    val errorMessage: String? = null
+)
+
+enum class GoDexMatchStatus {
+    NEEDED,
+    EVOLUTION_NEEDED,
+    COLLECTED,
+    UNKNOWN,
+    NOT_CONFIGURED
+}
+
+data class GoDexEvolutionTarget(
+    val entryKey: String,
+    val pokedexId: Int,
+    val displayName: String,
+    val distance: Int
+)
+
+data class GoDexMatchResult(
+    val status: GoDexMatchStatus,
+    val evolutionTargets: List<GoDexEvolutionTarget> = emptyList()
+) {
+    val compactEvolutionLabel: String?
+        get() = evolutionTargets.firstOrNull()?.let { first ->
+            if (evolutionTargets.size == 1) first.displayName
+            else "${first.displayName} +${evolutionTargets.size - 1}"
+        }
+}
+
+data class GoDexDebugEntry(
+    val entryKey: String,
+    val pokedexId: Int,
+    val displayName: String,
+    val formSlug: String?,
+    val gender: String,
+    val result: GoDexMatchResult
+) {
+    val statusLabel: String
+        get() = when (result.status) {
+            GoDexMatchStatus.NEEDED -> "Needed in GoDex"
+            GoDexMatchStatus.EVOLUTION_NEEDED ->
+                "Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
+            GoDexMatchStatus.COLLECTED -> "Already collected"
+            GoDexMatchStatus.UNKNOWN -> "GoDex form unknown"
+            GoDexMatchStatus.NOT_CONFIGURED -> "GoDex not configured"
+        }
+}

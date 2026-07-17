@@ -20,6 +20,9 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.data.AlertPreferencesStore
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
@@ -99,7 +102,11 @@ object AlertNotifier {
         ensureChannel(context)
         
         val repository = PokemonAlertsRepository.create(context)
-        val settings = NotificationSettings.load(repository.alertPreferences)
+        val goDexRepository = GoDexRepository.getInstance(context)
+        val (goDexConfig, goDexEntries) = goDexRepository.notificationSnapshot()
+        val settings = NotificationSettings.load(repository.alertPreferences).copy(
+            goDexFilterEnabled = goDexConfig.notificationFilterEnabled
+        )
         if (!settings.notificationsEnabled || settings.isSilenced) return
         
         val notificationManager = NotificationManagerCompat.from(context)
@@ -126,7 +133,12 @@ object AlertNotifier {
                 }
             }
 
-            if (!settings.shouldNotify(alert)) return@forEachIndexed
+            val goDexStatus = if (alert.hasType("hundo")) {
+                goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+            } else {
+                GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+            }
+            if (!settings.shouldNotify(alert, goDexStatus.status)) return@forEachIndexed
             val notificationIntent = AlertDetailActivity.createIntent(
                 context = context,
                 alert = alert,
@@ -173,7 +185,7 @@ object AlertNotifier {
                 alert = alert,
                 distanceText = distanceText,
                 walkingText = walkingText
-            )
+            ) + goDexNotificationSuffix(alert, goDexStatus)
             val expandedText = buildString {
                 append(contentText)
                 if (alert.description.isNotBlank() && alert.description != baseText) {
@@ -280,6 +292,7 @@ object AlertNotifier {
         val allowedNundoSpecies: Set<String>,
         val allowedPvpSpecies: Set<String>,
         val allowedSpawnSpecies: Set<String>,
+        val goDexFilterEnabled: Boolean = false,
         val nowMillis: Long = System.currentTimeMillis()
     ) {
         val isSilenced: Boolean get() = silenceUntil > nowMillis
@@ -295,7 +308,10 @@ object AlertNotifier {
         private val allowedPvpSpeciesLower = allowedPvpSpecies.lowercaseSet()
         private val allowedSpawnSpeciesLower = allowedSpawnSpecies.lowercaseSet()
 
-        fun shouldNotify(alert: PokemonAlert): Boolean {
+        fun shouldNotify(
+            alert: PokemonAlert,
+            goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED
+        ): Boolean {
             if (!notificationsEnabled || isSilenced) return false
             return when {
                 alert.hasTypeContaining("raid") -> {
@@ -310,7 +326,11 @@ object AlertNotifier {
                 alert.hasType("hundo") -> {
                     hundosEnabled &&
                         !isPokemonTypeExcluded(alert, excludedHundoTypesLower) &&
-                        isSpeciesAllowed(alert, allowedHundoSpeciesLower)
+                        if (goDexFilterEnabled) {
+                            goDexStatus != GoDexMatchStatus.COLLECTED
+                        } else {
+                            isSpeciesAllowed(alert, allowedHundoSpeciesLower)
+                        }
                 }
                 alert.hasType("pvp") -> {
                     pvpEnabled &&
@@ -447,6 +467,18 @@ object AlertNotifier {
 
     private fun Set<String>.lowercaseSet(): Set<String> {
         return mapTo(LinkedHashSet(size)) { it.lowercase() }
+    }
+
+    private fun goDexNotificationSuffix(alert: PokemonAlert, result: GoDexMatchResult): String {
+        if (!alert.hasType("hundo")) return ""
+        return when (result.status) {
+            GoDexMatchStatus.NEEDED -> " • Needed in GoDex"
+            GoDexMatchStatus.EVOLUTION_NEEDED ->
+                " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
+            GoDexMatchStatus.COLLECTED -> " • Already collected in GoDex"
+            GoDexMatchStatus.UNKNOWN -> " • GoDex form unknown"
+            GoDexMatchStatus.NOT_CONFIGURED -> ""
+        }
     }
 
     private fun immutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0

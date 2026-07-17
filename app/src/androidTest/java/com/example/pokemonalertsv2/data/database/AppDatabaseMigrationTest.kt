@@ -93,6 +93,34 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate13To14_createsGoDexCacheTableAndIndex() {
+        helper.createDatabase(TEST_DATABASE, 13).close()
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            14,
+            true,
+            AppDatabase.MIGRATION_13_14
+        ).apply {
+            execSQL(
+                """
+                INSERT INTO godex_entries
+                    (entryKey, pokedexId, formSlug, gender, displayName, needed)
+                VALUES ('0026_alola-female', 26, 'alola', 'female', 'Raichu', 1)
+                """.trimIndent()
+            )
+            query("SELECT pokedexId, formSlug, gender, needed FROM godex_entries").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(26, cursor.getInt(0))
+                assertEquals("alola", cursor.getString(1))
+                assertEquals("female", cursor.getString(2))
+                assertEquals(1, cursor.getInt(3))
+            }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }

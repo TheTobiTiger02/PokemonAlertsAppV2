@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.notifications
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -54,6 +55,29 @@ class AlertNotifierSettingsTest {
         assertTrue(settings.shouldNotify(sampleAlert(type = listOf("Quest"))))
     }
 
+    @Test
+    fun goDexFilterSuppressesOnlyConfirmedCollectedHundos() {
+        val settings = notificationSettings(
+            allowedHundoSpecies = setOf("different-species"),
+            goDexFilterEnabled = true
+        )
+        val hundo = sampleAlert(type = listOf("Hundo"))
+
+        assertFalse(settings.shouldNotify(hundo, GoDexMatchStatus.COLLECTED))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.NEEDED))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.EVOLUTION_NEEDED))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.UNKNOWN))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.NOT_CONFIGURED))
+    }
+
+    @Test
+    fun goDexFilterDoesNotChangeNonHundoOrOtherFilters() {
+        val settings = notificationSettings(goDexFilterEnabled = true, rocketEnabled = false)
+
+        assertTrue(settings.shouldNotify(sampleAlert(type = listOf("Quest")), GoDexMatchStatus.COLLECTED))
+        assertFalse(settings.shouldNotify(sampleAlert(type = listOf("Rocket")), GoDexMatchStatus.NEEDED))
+    }
+
     private fun notificationSettings(
         notificationsEnabled: Boolean = true,
         rocketEnabled: Boolean = true,
@@ -62,7 +86,8 @@ class AlertNotifierSettingsTest {
         maxDistance: Int = 0,
         allowedHundoSpecies: Set<String> = emptySet(),
         excludedRaidTiers: Set<String> = emptySet(),
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        goDexFilterEnabled: Boolean = false
     ) = AlertNotifier.NotificationSettings(
         notificationsEnabled = notificationsEnabled,
         raidsEnabled = true,
@@ -87,7 +112,8 @@ class AlertNotifierSettingsTest {
         allowedNundoSpecies = emptySet(),
         allowedPvpSpecies = emptySet(),
         allowedSpawnSpecies = emptySet(),
-        nowMillis = nowMillis
+        nowMillis = nowMillis,
+        goDexFilterEnabled = goDexFilterEnabled
     )
 
     private fun sampleAlert(
