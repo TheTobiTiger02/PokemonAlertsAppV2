@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "speciesMaxId": 1025,
+  "edges": [
+    { "pokedexId": 676, "fromForm": null, "toForm": "heart" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "star" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "diamond" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "debutante" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "matron" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "dandy" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "la_reine" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "kabuki" },
+    { "pokedexId": 676, "fromForm": null, "toForm": "pharaoh" }
+  ]
+}

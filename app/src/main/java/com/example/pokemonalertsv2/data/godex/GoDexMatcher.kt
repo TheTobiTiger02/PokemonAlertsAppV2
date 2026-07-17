@@ -11,21 +11,16 @@ object GoDexMatcher {
         alert: PokemonAlert,
         entries: List<GoDexEntryEntity>,
         configured: Boolean,
-        evolutionGraph: GoDexEvolutionGraph? = null
+        evolutionGraph: GoDexEvolutionGraph? = null,
+        formChangeGraph: GoDexFormChangeGraph? = null
     ): GoDexMatchResult {
         if (!configured) return GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
         val pokedexId = alert.pokedexId ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
-        val alertForm = normalizedAlertForm(alert.pokemonForm)
         val alertGender = normalizedGender(alert.gender)
-        val resolved = resolveDirect(pokedexId, alertForm, alertGender, entries)
+        val resolved = resolveDirect(pokedexId, alert.pokemonForm, alertGender, entries)
             ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
 
         if (resolved.needed) return GoDexMatchResult(GoDexMatchStatus.NEEDED)
-        // A base-only GoDex entry may match an unrepresented costume. Never assume that
-        // such a costume can evolve unless the graph explicitly contains that form.
-        if (alertForm != null && resolved.formSlug == null) {
-            return GoDexMatchResult(GoDexMatchStatus.COLLECTED)
-        }
 
         val targets = evolutionGraph?.let {
             findNeededDescendants(
@@ -36,11 +31,23 @@ object GoDexMatcher {
                 graph = it
             )
         }.orEmpty()
-        return if (targets.isEmpty()) {
-            GoDexMatchResult(GoDexMatchStatus.COLLECTED)
-        } else {
-            GoDexMatchResult(GoDexMatchStatus.EVOLUTION_NEEDED, targets)
+        val formChangeTargets = formChangeGraph?.let {
+            findNeededFormChanges(
+                pokedexId = pokedexId,
+                sourceForm = resolved.formSlug,
+                sourceGender = alertGender,
+                entries = entries,
+                graph = it
+            )
+        }.orEmpty()
+        val status = when {
+            targets.isNotEmpty() && formChangeTargets.isNotEmpty() ->
+                GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
+            targets.isNotEmpty() -> GoDexMatchStatus.EVOLUTION_NEEDED
+            formChangeTargets.isNotEmpty() -> GoDexMatchStatus.FORM_CHANGE_NEEDED
+            else -> GoDexMatchStatus.COLLECTED
         }
+        return GoDexMatchResult(status, targets, formChangeTargets)
     }
 
     private fun resolveDirect(
@@ -51,29 +58,39 @@ object GoDexMatcher {
     ): GoDexEntryEntity? {
         val speciesEntries = entries.filter { it.pokedexId == pokedexId }
         if (speciesEntries.isEmpty()) return null
-        val hasExplicitForms = speciesEntries.any { it.formSlug != null }
-        val formCandidates = if (alertForm != null) {
-            speciesEntries.filter { it.formSlug == alertForm }
-        } else {
-            speciesEntries.filter { it.formSlug == null }
-        }
+        val normalizedForm = normalizedAlertForm(alertForm)
+        val exactCandidates = speciesEntries.filter { it.formSlug == normalizedForm }
         val candidates = when {
-            formCandidates.isNotEmpty() -> formCandidates
-            !hasExplicitForms -> speciesEntries.filter { it.formSlug == null }
-            else -> return null
+            exactCandidates.isNotEmpty() -> exactCandidates
+            alertForm == null -> speciesEntries.filter { it.formSlug == null }
+            else -> {
+                val alertKeys = canonicalFormKeys(alertForm)
+                val equivalentEntries = speciesEntries.filter { entry ->
+                    entry.formSlug?.let(::canonicalFormKeys)?.any(alertKeys::contains) == true
+                }
+                when {
+                    equivalentEntries.isNotEmpty() -> equivalentEntries
+                    isExplicitBaseFormLabel(alertForm) -> speciesEntries.filter { it.formSlug == null }
+                    else -> return null
+                }
+            }
         }
         return resolveGender(candidates, alertGender)
     }
 
-    private fun resolveExactEvolutionTarget(
+    private fun resolveReachableTarget(
         pokedexId: Int,
         form: String?,
         gender: String?,
         entries: List<GoDexEntryEntity>
-    ): GoDexEntryEntity? = resolveGender(
-        entries.filter { it.pokedexId == pokedexId && it.formSlug == form },
-        gender
-    )
+    ): GoDexEntryEntity? {
+        val speciesEntries = entries.filter { it.pokedexId == pokedexId }
+        val exactCandidates = speciesEntries.filter { it.formSlug == form }
+        val candidates = exactCandidates.ifEmpty {
+            speciesEntries.filter { formsEquivalent(it.formSlug, form) }
+        }
+        return resolveGender(candidates, gender)
+    }
 
     private fun resolveGender(candidates: List<GoDexEntryEntity>, gender: String?): GoDexEntryEntity? {
         if (candidates.isEmpty()) return null
@@ -108,13 +125,13 @@ object GoDexMatcher {
             val current = queue.removeFirst()
             graph.outgoing(current.pokedexId)
                 .asSequence()
-                .filter { it.fromForm == current.form }
+                .filter { formsEquivalent(it.fromForm, current.form) }
                 .filter { it.sourceGender == null || it.sourceGender == current.gender }
                 .forEach { edge ->
                     val next = EvolutionState(edge.to, edge.toForm, current.gender, current.distance + 1)
                     val visitKey = Triple(next.pokedexId, next.form, next.gender)
                     if (!visited.add(visitKey)) return@forEach
-                    resolveExactEvolutionTarget(next.pokedexId, next.form, next.gender, entries)
+                    resolveReachableTarget(next.pokedexId, next.form, next.gender, entries)
                         ?.takeIf { it.needed }
                         ?.let { entry ->
                             targets.putIfAbsent(
@@ -133,32 +150,90 @@ object GoDexMatcher {
         return targets.values.sortedWith(compareBy(GoDexEvolutionTarget::distance, GoDexEvolutionTarget::pokedexId))
     }
 
+    private data class FormChangeState(
+        val form: String?,
+        val distance: Int
+    )
+
+    private fun findNeededFormChanges(
+        pokedexId: Int,
+        sourceForm: String?,
+        sourceGender: String?,
+        entries: List<GoDexEntryEntity>,
+        graph: GoDexFormChangeGraph
+    ): List<GoDexFormChangeTarget> {
+        val queue = ArrayDeque<FormChangeState>()
+        queue.add(FormChangeState(sourceForm, 0))
+        val visited = hashSetOf(sourceForm)
+        val targets = linkedMapOf<String, GoDexFormChangeTarget>()
+
+        while (queue.isNotEmpty()) {
+            val current = queue.removeFirst()
+            graph.outgoing(pokedexId)
+                .asSequence()
+                .filter { formsEquivalent(it.fromForm, current.form) }
+                .forEach { edge ->
+                    if (!visited.add(edge.toForm)) return@forEach
+                    val next = FormChangeState(edge.toForm, current.distance + 1)
+                    resolveReachableTarget(pokedexId, next.form, sourceGender, entries)
+                        ?.takeIf { it.needed }
+                        ?.let { entry ->
+                            targets.putIfAbsent(
+                                entry.entryKey,
+                                GoDexFormChangeTarget(
+                                    entryKey = entry.entryKey,
+                                    pokedexId = entry.pokedexId,
+                                    displayName = entry.displayName,
+                                    distance = next.distance
+                                )
+                            )
+                        }
+                    queue.add(next)
+                }
+        }
+        return targets.values.sortedWith(compareBy(GoDexFormChangeTarget::distance, GoDexFormChangeTarget::entryKey))
+    }
+
     internal fun normalizedAlertForm(value: String?): String? {
         val normalized = value.normalizedToken() ?: return null
-        val aliases = mapOf(
-            "alola" to "alola", "alolan" to "alola",
-            "galar" to "galar", "galarian" to "galar",
-            "hisui" to "hisui", "hisuian" to "hisui",
-            "paldea" to "paldea", "paldean" to "paldea",
-            "baile style" to "baile", "pau style" to "pau",
-            "pom pom style" to "pom", "sensu style" to "sensu",
-            "east sea" to "east", "west sea" to "west",
-            "blue striped" to "blue", "red striped" to "red", "white striped" to "white",
-            "plant cloak" to "plant", "sandy cloak" to "sandy", "trash cloak" to "trash",
-            "spring form" to "spring", "summer form" to "summer",
-            "autumn form" to "autumn", "winter form" to "winter",
-            "red flower" to "red_flower", "orange flower" to "orange_flower",
-            "yellow flower" to "yellow_flower", "white flower" to "white_flower",
-            "blue flower" to "blue_flower",
-            "exclamation" to "zem", "question" to "zim"
-        )
-        aliases[normalized]?.let { return it }
+        FORM_ALIASES[normalized]?.let { return it }
         Regex("(?:spinda )?(\\d{1,2})").matchEntire(normalized)?.let {
             return it.groupValues[1].padStart(2, '0')
         }
         Regex("(?:unown )?([a-z])").matchEntire(normalized)?.let { return it.groupValues[1] }
         return normalized.replace(" ", "_")
     }
+
+    private fun canonicalFormKeys(value: String): Set<String> {
+        val normalized = value.normalizedToken() ?: return emptySet()
+        val phrases = linkedSetOf(normalized)
+        var words = normalized.split(' ')
+        while (words.lastOrNull() in DESCRIPTIVE_SUFFIXES) {
+            words = words.dropLast(1)
+            if (words.isNotEmpty()) phrases += words.joinToString(" ")
+        }
+
+        val keys = linkedSetOf<String>()
+        phrases.forEach { phrase ->
+            val aliased = FORM_ALIASES[phrase] ?: phrase.replace(" ", "_")
+            keys += aliased
+            keys += aliased.replace("_", "")
+        }
+        normalizedAlertForm(value)?.let { primary ->
+            keys += primary
+            keys += primary.replace("_", "")
+        }
+        return keys
+    }
+
+    private fun formsEquivalent(first: String?, second: String?): Boolean {
+        if (first == null || second == null) return first == second
+        val firstKeys = canonicalFormKeys(first)
+        return canonicalFormKeys(second).any(firstKeys::contains)
+    }
+
+    private fun isExplicitBaseFormLabel(value: String): Boolean =
+        value.normalizedToken() in BASE_FORM_LABELS
 
     private fun normalizedGender(value: String?): String? = value?.trim()?.lowercase(Locale.ROOT)?.let {
         when {
@@ -177,4 +252,31 @@ object GoDexMatcher {
         ?.trim()
         ?.replace(Regex("\\s+"), " ")
         ?.takeIf { it.isNotEmpty() }
+
+    private val DESCRIPTIVE_SUFFIXES = setOf(
+        "form", "forme", "style", "trim", "flower", "striped", "cloak", "sea", "size"
+    )
+
+    private val BASE_FORM_LABELS = setOf(
+        "natural", "natural form", "normal", "normal form",
+        "default", "default form", "base", "base form"
+    )
+
+    private val FORM_ALIASES = mapOf(
+        "alola" to "alola", "alolan" to "alola",
+        "galar" to "galar", "galarian" to "galar",
+        "hisui" to "hisui", "hisuian" to "hisui",
+        "paldea" to "paldea", "paldean" to "paldea",
+        "baile style" to "baile", "pau style" to "pau",
+        "pom pom" to "pom", "pom pom style" to "pom", "sensu style" to "sensu",
+        "east sea" to "east", "west sea" to "west",
+        "blue striped" to "blue", "red striped" to "red", "white striped" to "white",
+        "plant cloak" to "plant", "sandy cloak" to "sandy", "trash cloak" to "trash",
+        "spring form" to "spring", "summer form" to "summer",
+        "autumn form" to "autumn", "winter form" to "winter",
+        "red flower" to "red_flower", "orange flower" to "orange_flower",
+        "yellow flower" to "yellow_flower", "white flower" to "white_flower",
+        "blue flower" to "blue_flower",
+        "exclamation" to "zem", "question" to "zim"
+    )
 }

@@ -472,11 +472,16 @@ object AlertNotifier {
     private fun goDexNotificationSuffix(alert: PokemonAlert, result: GoDexMatchResult): String {
         if (!alert.hasType("hundo")) return ""
         return when (result.status) {
-            GoDexMatchStatus.NEEDED -> " • Needed in GoDex"
+            GoDexMatchStatus.NEEDED -> " â€¢ Needed in GoDex"
             GoDexMatchStatus.EVOLUTION_NEEDED ->
                 " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
-            GoDexMatchStatus.COLLECTED -> " • Already collected in GoDex"
-            GoDexMatchStatus.UNKNOWN -> " • GoDex form unknown"
+            GoDexMatchStatus.FORM_CHANGE_NEEDED ->
+                " \u2022 Collected \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
+            GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED ->
+                " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
+                    " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
+            GoDexMatchStatus.COLLECTED -> " â€¢ Already collected in GoDex"
+            GoDexMatchStatus.UNKNOWN -> " â€¢ GoDex form unknown"
             GoDexMatchStatus.NOT_CONFIGURED -> ""
         }
     }

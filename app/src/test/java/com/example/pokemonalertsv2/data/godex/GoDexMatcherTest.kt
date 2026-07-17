@@ -29,6 +29,174 @@ class GoDexMatcherTest {
     }
 
     @Test
+    fun matchesAllFlabebeFamilyFlowerColorsFromShortAndFullLabels() {
+        val colors = listOf("red", "orange", "yellow", "white", "blue")
+
+        (669..671).forEach { dex ->
+            colors.forEachIndexed { index, color ->
+                val entries = listOf(
+                    entry(
+                        "${dex}_${color}_flower-none",
+                        dex,
+                        "${color}_flower",
+                        needed = index % 2 == 0
+                    )
+                )
+                val expected = if (index % 2 == 0) GoDexMatchStatus.NEEDED else GoDexMatchStatus.COLLECTED
+
+                assertEquals(expected, match(dex, color.replaceFirstChar(Char::uppercase), entries))
+                assertEquals(expected, match(dex, "${color.replaceFirstChar(Char::uppercase)} Flower", entries))
+            }
+        }
+    }
+
+    @Test
+    fun matchesFurfrouNaturalFormAndEveryTrim() {
+        val entries = listOf(
+            entry("0676-none", 676, null, needed = false),
+            entry("0676_heart-none", 676, "heart", needed = true),
+            entry("0676_star-none", 676, "star", needed = true),
+            entry("0676_diamond-none", 676, "diamond", needed = true),
+            entry("0676_debutante-none", 676, "debutante", needed = true),
+            entry("0676_matron-none", 676, "matron", needed = true),
+            entry("0676_dandy-none", 676, "dandy", needed = true),
+            entry("0676_lareine-none", 676, "lareine", needed = true),
+            entry("0676_kabuki-none", 676, "kabuki", needed = true),
+            entry("0676_pharaoh-none", 676, "pharaoh", needed = true)
+        )
+
+        listOf("Natural", "Natural Form", "Normal Form", "Default Form", "Base Form").forEach {
+            assertEquals(GoDexMatchStatus.COLLECTED, match(676, it, entries))
+        }
+        listOf(
+            "Heart Trim", "Star Trim", "Diamond Trim", "Debutante Trim", "Matron Trim",
+            "Dandy Trim", "La Reine Trim", "Kabuki Trim", "Pharaoh Trim"
+        ).forEach {
+            assertEquals(GoDexMatchStatus.NEEDED, match(676, it, entries))
+        }
+    }
+
+    @Test
+    fun collectedNaturalFurfrouReportsOnlyMissingTrims() {
+        val graph = GoDexFormChangeGraph.forTests(
+            listOf(
+                GoDexFormChangeEdge(676, null, "heart"),
+                GoDexFormChangeEdge(676, null, "star"),
+                GoDexFormChangeEdge(676, null, "la_reine")
+            )
+        )
+        val entries = listOf(
+            entry("0676-none", 676, null, needed = false, name = "Furfrou (Natural)"),
+            entry("0676_heart-none", 676, "heart", needed = true, name = "Furfrou (Heart)"),
+            entry("0676_star-none", 676, "star", needed = false, name = "Furfrou (Star)"),
+            entry("0676_lareine-none", 676, "lareine", needed = true, name = "Furfrou (La Reine)")
+        )
+
+        val result = matchResult(676, "Natural Form", entries, formChangeGraph = graph)
+
+        assertEquals(GoDexMatchStatus.FORM_CHANGE_NEEDED, result.status)
+        assertEquals(listOf("0676_heart-none", "0676_lareine-none"), result.formChangeTargets.map { it.entryKey })
+        assertEquals("Furfrou (Heart) +1", result.compactFormChangeLabel)
+    }
+
+    @Test
+    fun naturalFurfrouIsCollectedWhenEveryReachableTrimIsCollected() {
+        val graph = GoDexFormChangeGraph.forTests(
+            listOf(GoDexFormChangeEdge(676, null, "heart"))
+        )
+        val collectedEntries = listOf(
+            entry("0676-none", 676, null, needed = false),
+            entry("0676_heart-none", 676, "heart", needed = false)
+        )
+        val naturalNeededEntries = collectedEntries.map {
+            if (it.formSlug == null) it.copy(needed = true) else it
+        }
+
+        assertEquals(
+            GoDexMatchStatus.COLLECTED,
+            matchResult(676, "Natural", collectedEntries, formChangeGraph = graph).status
+        )
+        assertEquals(
+            GoDexMatchStatus.NEEDED,
+            matchResult(676, "Natural", naturalNeededEntries, formChangeGraph = graph).status
+        )
+    }
+
+    @Test
+    fun formChangesTraverseCyclesAndCollectedIntermediatesSafely() {
+        val graph = GoDexFormChangeGraph.forTests(
+            listOf(
+                GoDexFormChangeEdge(676, null, "heart"),
+                GoDexFormChangeEdge(676, "heart", "star"),
+                GoDexFormChangeEdge(676, "star", null),
+                GoDexFormChangeEdge(676, null, "diamond")
+            )
+        )
+        val entries = listOf(
+            entry("0676-none", 676, null, needed = false),
+            entry("0676_heart-none", 676, "heart", needed = false),
+            entry("0676_star-none", 676, "star", needed = true)
+        )
+
+        val result = matchResult(676, "Natural", entries, formChangeGraph = graph)
+
+        assertEquals(GoDexMatchStatus.FORM_CHANGE_NEEDED, result.status)
+        assertEquals("0676_star-none", result.formChangeTargets.single().entryKey)
+        assertEquals(2, result.formChangeTargets.single().distance)
+    }
+
+    @Test
+    fun reportsCombinedEvolutionAndFormChangeTargets() {
+        val evolutionGraph = GoDexEvolutionGraph.forTests(listOf(GoDexEvolutionEdge(1, 2)))
+        val formChangeGraph = GoDexFormChangeGraph.forTests(listOf(GoDexFormChangeEdge(1, null, "alternate")))
+        val entries = listOf(
+            entry("0001-none", 1, null, needed = false, name = "Source"),
+            entry("0001_alternate-none", 1, "alternate", needed = true, name = "Alternate Source"),
+            entry("0002-none", 2, null, needed = true, name = "Evolution")
+        )
+
+        val result = matchResult(
+            dex = 1,
+            form = null,
+            entries = entries,
+            graph = evolutionGraph,
+            formChangeGraph = formChangeGraph
+        )
+
+        assertEquals(GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED, result.status)
+        assertEquals("0002-none", result.evolutionTargets.single().entryKey)
+        assertEquals("0001_alternate-none", result.formChangeTargets.single().entryKey)
+    }
+
+    @Test
+    fun matchesExistingDescriptiveFormFamiliesAgainstImportedSlugs() {
+        val cases = listOf(
+            Triple(19, "Alolan Form", "alola"),
+            Triple(741, "Pom-Pom Style", "pom"),
+            Triple(422, "East Sea", "east"),
+            Triple(550, "Blue Striped", "blue"),
+            Triple(412, "Plant Cloak", "plant"),
+            Triple(585, "Spring Form", "spring"),
+            Triple(710, "Small Size", "small")
+        )
+
+        cases.forEach { (dex, alertForm, entryForm) ->
+            assertEquals(
+                GoDexMatchStatus.NEEDED,
+                match(dex, alertForm, listOf(entry("$dex-$entryForm", dex, entryForm, needed = true)))
+            )
+        }
+        assertEquals(
+            GoDexMatchStatus.NEEDED,
+            match(201, "Unown G", listOf(entry("0201_g-none", 201, "g", needed = true)))
+        )
+        assertEquals(
+            GoDexMatchStatus.NEEDED,
+            match(327, "Spinda 7", listOf(entry("0327_07-none", 327, "07", needed = true)))
+        )
+    }
+
+    @Test
     fun requiresExactGenderWhenGoDexDistinguishesIt() {
         val entries = listOf(
             entry("0593-male", 593, null, "male", needed = false),
@@ -41,10 +209,10 @@ class GoDexMatcherTest {
     }
 
     @Test
-    fun baseOnlyEntryAppliesToUnrepresentedCostume() {
+    fun unrepresentedCostumeDoesNotFallBackToBaseEntry() {
         val entries = listOf(entry("0025-none", 25, null, needed = true))
 
-        assertEquals(GoDexMatchStatus.NEEDED, match(25, "Holiday 2025", entries))
+        assertEquals(GoDexMatchStatus.UNKNOWN, match(25, "Holiday 2025", entries))
     }
 
     @Test
@@ -168,7 +336,7 @@ class GoDexMatcherTest {
     }
 
     @Test
-    fun directNeededPrecedesEvolutionAndCostumeFallbackDoesNotEvolve() {
+    fun directNeededPrecedesEvolutionAndUnknownCostumeDoesNotEvolve() {
         val graph = GoDexEvolutionGraph.forTests(listOf(GoDexEvolutionEdge(25, 26)))
         val neededEntries = listOf(
             entry("0025-none", 25, null, needed = true, name = "Pikachu"),
@@ -178,9 +346,56 @@ class GoDexMatcherTest {
 
         val costumeEntries = neededEntries.map { if (it.pokedexId == 25) it.copy(needed = false) else it }
         assertEquals(
-            GoDexMatchStatus.COLLECTED,
+            GoDexMatchStatus.UNKNOWN,
             matchResult(25, "Holiday 2025", costumeEntries, graph = graph).status
         )
+    }
+
+    @Test
+    fun equivalentFlowerSlugsFindNeededFloetteForEveryColor() {
+        listOf("red", "orange", "yellow", "white", "blue").forEach { color ->
+            val graphForm = "${color}_flower"
+            val graph = GoDexEvolutionGraph.forTests(
+                listOf(
+                    GoDexEvolutionEdge(669, 670, fromForm = graphForm, toForm = graphForm),
+                    GoDexEvolutionEdge(670, 671, fromForm = graphForm, toForm = graphForm)
+                )
+            )
+            val entries = listOf(
+                entry("0669_$color-none", 669, color, needed = false, name = "Flabebe $color"),
+                entry("0670_$color-none", 670, color, needed = true, name = "Floette $color"),
+                entry("0671_$color-none", 671, color, needed = false, name = "Florges $color")
+            )
+            val alertForm = "${color.replaceFirstChar(Char::uppercase)} Flower"
+
+            val flabebe = matchResult(669, alertForm, entries, graph = graph)
+
+            assertEquals(GoDexMatchStatus.EVOLUTION_NEEDED, flabebe.status)
+            assertEquals("0670_$color-none", flabebe.evolutionTargets.single().entryKey)
+            assertEquals(GoDexMatchStatus.NEEDED, match(670, alertForm, entries))
+            assertEquals(GoDexMatchStatus.COLLECTED, match(671, alertForm, entries))
+        }
+    }
+
+    @Test
+    fun equivalentFlowerSlugsTraverseCollectedIntermediateToNeededDescendant() {
+        val graph = GoDexEvolutionGraph.forTests(
+            listOf(
+                GoDexEvolutionEdge(669, 670, fromForm = "red_flower", toForm = "red_flower"),
+                GoDexEvolutionEdge(670, 671, fromForm = "red_flower", toForm = "red_flower")
+            )
+        )
+        val entries = listOf(
+            entry("0669_red-none", 669, "red", needed = false, name = "Flabebe Red"),
+            entry("0670_red-none", 670, "red", needed = false, name = "Floette Red"),
+            entry("0671_red-none", 671, "red", needed = true, name = "Florges Red")
+        )
+
+        val result = matchResult(669, "Red", entries, graph = graph)
+
+        assertEquals(GoDexMatchStatus.EVOLUTION_NEEDED, result.status)
+        assertEquals("0671_red-none", result.evolutionTargets.single().entryKey)
+        assertEquals(2, result.evolutionTargets.single().distance)
     }
 
     private fun match(
@@ -199,12 +414,14 @@ class GoDexMatcherTest {
         form: String?,
         entries: List<GoDexEntryEntity>,
         gender: String? = null,
-        graph: GoDexEvolutionGraph
+        graph: GoDexEvolutionGraph? = null,
+        formChangeGraph: GoDexFormChangeGraph? = null
     ) = GoDexMatcher.match(
         PokemonAlert(name = "Pokemon", pokedexId = dex, pokemonForm = form, gender = gender),
         entries,
         configured = true,
-        evolutionGraph = graph
+        evolutionGraph = graph,
+        formChangeGraph = formChangeGraph
     )
 
     private fun entry(

@@ -17,6 +17,8 @@ data class GoDexSyncUiState(
 enum class GoDexMatchStatus {
     NEEDED,
     EVOLUTION_NEEDED,
+    FORM_CHANGE_NEEDED,
+    EVOLUTION_AND_FORM_CHANGE_NEEDED,
     COLLECTED,
     UNKNOWN,
     NOT_CONFIGURED
@@ -29,14 +31,28 @@ data class GoDexEvolutionTarget(
     val distance: Int
 )
 
+data class GoDexFormChangeTarget(
+    val entryKey: String,
+    val pokedexId: Int,
+    val displayName: String,
+    val distance: Int
+)
+
 data class GoDexMatchResult(
     val status: GoDexMatchStatus,
-    val evolutionTargets: List<GoDexEvolutionTarget> = emptyList()
+    val evolutionTargets: List<GoDexEvolutionTarget> = emptyList(),
+    val formChangeTargets: List<GoDexFormChangeTarget> = emptyList()
 ) {
     val compactEvolutionLabel: String?
         get() = evolutionTargets.firstOrNull()?.let { first ->
             if (evolutionTargets.size == 1) first.displayName
             else "${first.displayName} +${evolutionTargets.size - 1}"
+        }
+
+    val compactFormChangeLabel: String?
+        get() = formChangeTargets.firstOrNull()?.let { first ->
+            if (formChangeTargets.size == 1) first.displayName
+            else "${first.displayName} +${formChangeTargets.size - 1}"
         }
 }
 
@@ -53,6 +69,11 @@ data class GoDexDebugEntry(
             GoDexMatchStatus.NEEDED -> "Needed in GoDex"
             GoDexMatchStatus.EVOLUTION_NEEDED ->
                 "Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
+            GoDexMatchStatus.FORM_CHANGE_NEEDED ->
+                "Collected \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
+            GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED ->
+                "Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
+                    " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
             GoDexMatchStatus.COLLECTED -> "Already collected"
             GoDexMatchStatus.UNKNOWN -> "GoDex form unknown"
             GoDexMatchStatus.NOT_CONFIGURED -> "GoDex not configured"

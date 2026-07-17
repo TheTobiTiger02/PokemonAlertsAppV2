@@ -389,7 +389,7 @@ fun SettingsScreen(
                             onValueChange = { goDexUrlInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Public GoDex collection URL") },
-                            placeholder = { Text("https://godex.site/public-collection/…") },
+                            placeholder = { Text("https://godex.site/public-collection/â€¦") },
                             singleLine = true,
                             enabled = !goDexSyncUiState.isSyncing
                         )
@@ -397,7 +397,7 @@ fun SettingsScreen(
                             onClick = { viewModel.connectGoDex(goDexUrlInput) },
                             enabled = goDexUrlInput.isNotBlank() && !goDexSyncUiState.isSyncing
                         ) {
-                            Text(if (goDexSyncUiState.isSyncing) "Connecting…" else "Connect")
+                            Text(if (goDexSyncUiState.isSyncing) "Connectingâ€¦" else "Connect")
                         }
                     } else {
                         Text(
@@ -406,7 +406,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "$neededCount needed • ${totalCount - neededCount} collected • $totalCount total",
+                            "$neededCount needed â€¢ ${totalCount - neededCount} collected â€¢ $totalCount total",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
@@ -439,7 +439,7 @@ fun SettingsScreen(
                                 onClick = viewModel::syncGoDex,
                                 enabled = !goDexSyncUiState.isSyncing
                             ) {
-                                Text(if (goDexSyncUiState.isSyncing) "Syncing…" else "Sync now")
+                                Text(if (goDexSyncUiState.isSyncing) "Syncingâ€¦" else "Sync now")
                             }
                             OutlinedButton(
                                 onClick = viewModel::disconnectGoDex,
@@ -453,7 +453,7 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = goDexEntries.isNotEmpty()
                         ) {
-                            Text("View synced Pokémon ($totalCount)")
+                            Text("View synced PokÃ©mon ($totalCount)")
                         }
                     }
 
@@ -522,21 +522,21 @@ fun SettingsScreen(
                         
                         SwitchSetting(
                             title = "Hundos",
-                            subtitle = "Notifications for 100% IV Pokémon",
+                            subtitle = "Notifications for 100% IV PokÃ©mon",
                             checked = hundosNotifications,
                             onCheckedChange = { viewModel.updateHundosNotifications(it) }
                         )
                         
                         SwitchSetting(
                             title = "PvP",
-                            subtitle = "Notifications for PvP ranked Pokémon",
+                            subtitle = "Notifications for PvP ranked PokÃ©mon",
                             checked = pvpNotifications,
                             onCheckedChange = { viewModel.updatePvpNotifications(it) }
                         )
                         
                         SwitchSetting(
                             title = "Nundos",
-                            subtitle = "Notifications for 0% IV Pokémon",
+                            subtitle = "Notifications for 0% IV PokÃ©mon",
                             checked = nundosNotifications,
                             onCheckedChange = { viewModel.updateNundosNotifications(it) }
                         )
@@ -678,7 +678,7 @@ private fun GoDexDebugListDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("Synced GoDex Pokémon")
+                Text("Synced GoDex PokÃ©mon")
                 Text(
                     "${filteredEntries.size} of ${entries.size} entries",
                     style = MaterialTheme.typography.bodySmall,
@@ -703,6 +703,8 @@ private fun GoDexDebugListDialog(
                         null to "All",
                         GoDexMatchStatus.NEEDED to "Needed",
                         GoDexMatchStatus.EVOLUTION_NEEDED to "Evolution needed",
+                        GoDexMatchStatus.FORM_CHANGE_NEEDED to "Form change needed",
+                        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED to "Evolution + form change",
                         GoDexMatchStatus.COLLECTED to "Collected",
                         GoDexMatchStatus.UNKNOWN to "Unknown"
                     ).forEach { (status, label) ->
@@ -736,6 +738,8 @@ private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
     val statusColor = when (entry.result.status) {
         GoDexMatchStatus.NEEDED -> MaterialTheme.colorScheme.primary
         GoDexMatchStatus.EVOLUTION_NEEDED -> MaterialTheme.colorScheme.tertiary
+        GoDexMatchStatus.FORM_CHANGE_NEEDED -> MaterialTheme.colorScheme.tertiary
+        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> MaterialTheme.colorScheme.tertiary
         GoDexMatchStatus.COLLECTED -> MaterialTheme.colorScheme.onSurfaceVariant
         GoDexMatchStatus.UNKNOWN -> MaterialTheme.colorScheme.error
         GoDexMatchStatus.NOT_CONFIGURED -> MaterialTheme.colorScheme.error
@@ -753,7 +757,7 @@ private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
         val variant = buildList {
             entry.formSlug?.let { add("form: $it") }
             entry.gender.takeUnless { it == "none" }?.let { add("gender: $it") }
-        }.joinToString(" • ")
+        }.joinToString(" â€¢ ")
         if (variant.isNotEmpty()) {
             Text(
                 variant,
@@ -774,7 +778,6 @@ private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
         )
     }
 }
-
 @Composable
 private fun SettingsOverview(
     themeMode: Int,

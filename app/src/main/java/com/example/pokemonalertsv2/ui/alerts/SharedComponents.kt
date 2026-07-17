@@ -638,6 +638,17 @@ private fun GoDexStatusPill(result: GoDexMatchResult) {
             icon = Icons.Filled.Star,
             isPrimary = true
         )
+        GoDexMatchStatus.FORM_CHANGE_NEEDED -> AlertPill(
+            text = "Collected \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}",
+            icon = Icons.Filled.Star,
+            isPrimary = true
+        )
+        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> AlertPill(
+            text = "Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
+                " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}",
+            icon = Icons.Filled.Star,
+            isPrimary = true
+        )
         GoDexMatchStatus.UNKNOWN -> AlertPill(
             text = "GoDex form unknown",
             icon = Icons.Filled.Warning,
@@ -1284,14 +1295,19 @@ fun AlertDetailScreen(
                                 )
                             }
                             GoDexStatusPill(goDexStatus)
-                            if (goDexStatus.status == GoDexMatchStatus.EVOLUTION_NEEDED) {
-                                goDexStatus.evolutionTargets.forEach { target ->
-                                    Text(
-                                        text = "Evolution needed: ${target.displayName}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
+                            goDexStatus.evolutionTargets.forEach { target ->
+                                Text(
+                                    text = "Evolution needed: ${target.displayName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            goDexStatus.formChangeTargets.forEach { target ->
+                                Text(
+                                    text = "Form change needed: ${target.displayName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
                             }
                             // Pokedex ID
                             alert.pokedexId?.let { dexId ->

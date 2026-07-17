@@ -8,6 +8,8 @@ import android.provider.Settings
 
 private const val ACTION_MANAGE_APP_PERMISSION =
     "android.intent.action.MANAGE_APP_PERMISSION"
+private const val ACTION_MANAGE_APP_PERMISSIONS =
+    "android.intent.action.MANAGE_APP_PERMISSIONS"
 
 internal fun directAppLocationPermissionSettingsIntent(packageName: String): Intent =
     Intent(ACTION_MANAGE_APP_PERMISSION).apply {
@@ -15,57 +17,47 @@ internal fun directAppLocationPermissionSettingsIntent(packageName: String): Int
         putExtra(Intent.EXTRA_PERMISSION_GROUP_NAME, Manifest.permission_group.LOCATION)
     }
 
+internal fun appPermissionsSettingsIntent(packageName: String): Intent =
+    Intent(ACTION_MANAGE_APP_PERMISSIONS).apply {
+        putExtra(Intent.EXTRA_PACKAGE_NAME, packageName)
+    }
+
 internal fun appDetailsSettingsIntent(packageName: String): Intent =
     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
         data = Uri.parse("package:$packageName")
     }
 
-internal fun appLocationPermissionSettingsIntent(
-    context: Context,
-    canResolveDirectIntent: (Intent) -> Boolean = { intent ->
-        intent.resolveActivity(context.packageManager) != null
-    }
-): Intent {
-    val directIntent = directAppLocationPermissionSettingsIntent(context.packageName)
-    return if (canResolveDirectIntent(directIntent)) {
-        directIntent
-    } else {
-        appDetailsSettingsIntent(context.packageName)
-    }
-}
-
 internal enum class LocationSettingsLaunchResult {
     DIRECT,
+    APP_PERMISSIONS,
     APP_DETAILS,
     FAILED
 }
 
 /**
- * The permission-controller action is hidden and some OEMs resolve it but deny
- * third-party launches. Always attempt it defensively and fall back to the
- * public app-details page without letting an OEM exception escape.
+ * Permission-controller activities may be hidden from package visibility even
+ * when Android can launch them. Attempt the direct actions in order and only
+ * fall back to app details when the OEM rejects both permission pages.
  */
 internal fun launchAppLocationPermissionSettings(
     context: Context,
-    canResolveDirectIntent: (Intent) -> Boolean = { intent ->
-        intent.resolveActivity(context.packageManager) != null
-    },
     launch: (Intent) -> Unit
 ): LocationSettingsLaunchResult {
-    val directIntent = directAppLocationPermissionSettingsIntent(context.packageName)
-    if (canResolveDirectIntent(directIntent)) {
+    val attempts = listOf(
+        LocationSettingsLaunchResult.DIRECT to
+            directAppLocationPermissionSettingsIntent(context.packageName),
+        LocationSettingsLaunchResult.APP_PERMISSIONS to
+            appPermissionsSettingsIntent(context.packageName),
+        LocationSettingsLaunchResult.APP_DETAILS to
+            appDetailsSettingsIntent(context.packageName)
+    )
+    attempts.forEach { (result, intent) ->
         try {
-            launch(directIntent)
-            return LocationSettingsLaunchResult.DIRECT
+            launch(intent)
+            return result
         } catch (_: RuntimeException) {
-            // Fall through to the public, OEM-safe app details page.
+            // Try the next, less specific settings surface.
         }
     }
-
-    return try {
-        launch(appDetailsSettingsIntent(context.packageName))
-        LocationSettingsLaunchResult.APP_DETAILS
-    } catch (_: RuntimeException) {
-        LocationSettingsLaunchResult.FAILED
-    }
+    return LocationSettingsLaunchResult.FAILED
 }

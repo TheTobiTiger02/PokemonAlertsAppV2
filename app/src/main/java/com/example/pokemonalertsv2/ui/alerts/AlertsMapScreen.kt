@@ -114,8 +114,18 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+internal fun mapCountdownRefreshKey(showTimeLabels: Boolean, nowMillis: Long): Long =
+    nowMillis / if (showTimeLabels) 1_000L else 30_000L
+
+internal fun mapCountdownLabel(endTime: String?, nowMillis: Long): String {
+    val remaining = (TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) - nowMillis
+    return if (remaining <= 0L) "Expired" else TimeUtils.formatDurationShort(remaining)
+}
 
 @Composable
 fun AlertsMapRoute(
@@ -1220,11 +1230,8 @@ private fun MapMarker(
     val speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName
     val speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
-    val timeRemainingMs = remember(now, alert.endTime) {
-        (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) - now
-    }
-    val timeLabel = remember(timeRemainingMs) {
-        if (timeRemainingMs <= 0L) "Expired" else TimeUtils.formatDurationShort(timeRemainingMs)
+    val timeLabel = remember(now, alert.endTime) {
+        mapCountdownLabel(alert.endTime, now)
     }
     val markerSizePx = remember(density) { with(density) { 68.dp.toPx().toInt() } }
 
@@ -1264,7 +1271,7 @@ private fun MapMarker(
         markerSizePx,
         palette
     ) {
-        markerIcon = withContext(Dispatchers.IO) {
+        val renderedIcon = withContext(Dispatchers.IO) {
             createMapMarkerIcon(
                 context = context,
                 sizePx = markerSizePx,
@@ -1277,6 +1284,8 @@ private fun MapMarker(
                 palette = palette
             )
         }
+        currentCoroutineContext().ensureActive()
+        markerIcon = renderedIcon
     }
     val googleMarkerDescriptor = remember(markerIcon) {
         markerIcon?.bitmap?.let(BitmapDescriptorFactory::fromBitmap)

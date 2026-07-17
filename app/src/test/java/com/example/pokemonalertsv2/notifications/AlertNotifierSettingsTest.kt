@@ -66,6 +66,8 @@ class AlertNotifierSettingsTest {
         assertFalse(settings.shouldNotify(hundo, GoDexMatchStatus.COLLECTED))
         assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.NEEDED))
         assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.EVOLUTION_NEEDED))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.FORM_CHANGE_NEEDED))
+        assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED))
         assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.UNKNOWN))
         assertTrue(settings.shouldNotify(hundo, GoDexMatchStatus.NOT_CONFIGURED))
     }

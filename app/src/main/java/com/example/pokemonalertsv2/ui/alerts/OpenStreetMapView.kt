@@ -21,6 +21,8 @@ import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.annotations.MarkerOptions
@@ -354,7 +356,7 @@ internal fun OpenStreetMapView(
         }
     )
 
-    LaunchedEffect(alerts, userLocation, showTimeLabels, if (showTimeLabels) now / 30_000L else 0L, basePalette) {
+    LaunchedEffect(alerts, userLocation, mapCountdownRefreshKey(showTimeLabels, now), basePalette) {
         val markers = withContext(Dispatchers.IO) {
             alerts.mapNotNull { alert ->
                 val visualStyle = resolveAlertVisualStyle(alert)
@@ -363,8 +365,7 @@ internal fun OpenStreetMapView(
                     AlertCategory.NUNDO -> "0%"
                     else -> visualStyle.shortCode
                 }
-                val timeRemaining = (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) - now
-                val timeLabel = if (timeRemaining <= 0L) "Expired" else TimeUtils.formatDurationShort(timeRemaining)
+                val timeLabel = mapCountdownLabel(alert.endTime, now)
                 val icon = createMapMarkerIcon(
                     context = context,
                     sizePx = markerSizePx,
@@ -380,6 +381,7 @@ internal fun OpenStreetMapView(
                 OpenStreetMapMarker(alert, icon)
             }
         }
+        currentCoroutineContext().ensureActive()
         controller.setMarkers(context, markers, userLocation)
     }
 }

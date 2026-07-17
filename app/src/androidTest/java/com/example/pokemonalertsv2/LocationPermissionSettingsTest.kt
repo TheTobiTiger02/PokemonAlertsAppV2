@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2
 
 import android.Manifest
 import android.content.Intent
-import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
@@ -27,22 +26,21 @@ class LocationPermissionSettingsTest {
     }
 
     @Test
-    fun unresolvedDirectIntentFallsBackToAppDetails() {
+    fun appPermissionsIntentTargetsThisApp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val intent = appLocationPermissionSettingsIntent(context) { false }
+        val intent = appPermissionsSettingsIntent(context.packageName)
 
-        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, intent.action)
-        assertEquals("package:${context.packageName}", intent.dataString)
+        assertEquals("android.intent.action.MANAGE_APP_PERMISSIONS", intent.action)
+        assertEquals(context.packageName, intent.getStringExtra(Intent.EXTRA_PACKAGE_NAME))
     }
 
     @Test
-    fun launchUsesDirectLocationPageWhenAllowed() {
+    fun launchAttemptsDirectLocationPageWithoutResolveGate() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val launched = mutableListOf<Intent>()
 
         val result = launchAppLocationPermissionSettings(
             context = context,
-            canResolveDirectIntent = { true },
             launch = launched::add
         )
 
@@ -51,13 +49,12 @@ class LocationPermissionSettingsTest {
     }
 
     @Test
-    fun securityExceptionFromDirectPageFallsBackToAppDetails() {
+    fun securityExceptionFromDirectPageFallsBackToAppPermissions() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val launched = mutableListOf<String?>()
 
         val result = launchAppLocationPermissionSettings(
             context = context,
-            canResolveDirectIntent = { true },
             launch = { intent ->
                 launched += intent.action
                 if (intent.action == "android.intent.action.MANAGE_APP_PERMISSION") {
@@ -66,20 +63,39 @@ class LocationPermissionSettingsTest {
             }
         )
 
-        assertEquals(LocationSettingsLaunchResult.APP_DETAILS, result)
+        assertEquals(LocationSettingsLaunchResult.APP_PERMISSIONS, result)
         assertEquals(
-            listOf("android.intent.action.MANAGE_APP_PERMISSION", Settings.ACTION_APPLICATION_DETAILS_SETTINGS),
+            listOf("android.intent.action.MANAGE_APP_PERMISSION", "android.intent.action.MANAGE_APP_PERMISSIONS"),
             launched
         )
     }
 
     @Test
-    fun bothSettingsLaunchesFailWithoutThrowing() {
+    fun rejectedPermissionPagesFallBackToAppDetails() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val launched = mutableListOf<String?>()
+
+        val result = launchAppLocationPermissionSettings(
+            context = context,
+            launch = { intent ->
+                launched += intent.action
+                if (intent.action != android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS) {
+                    throw SecurityException("Permission page unavailable")
+                }
+            }
+        )
+
+        assertEquals(LocationSettingsLaunchResult.APP_DETAILS, result)
+        assertEquals(3, launched.size)
+        assertEquals(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, launched.last())
+    }
+
+    @Test
+    fun allSettingsLaunchesFailWithoutThrowing() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
 
         val result = launchAppLocationPermissionSettings(
             context = context,
-            canResolveDirectIntent = { true },
             launch = { throw SecurityException("No settings activity available") }
         )
 

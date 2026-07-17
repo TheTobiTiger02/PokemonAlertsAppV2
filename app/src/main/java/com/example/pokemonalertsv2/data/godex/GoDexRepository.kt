@@ -22,6 +22,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
     private val preferences = GoDexPreferences(appContext.alertPreferencesDataStore)
     private val importer = GoDexImporter()
     private val evolutionGraph = GoDexEvolutionGraph.load(appContext)
+    private val formChangeGraph = GoDexFormChangeGraph.load(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val syncMutex = Mutex()
 
@@ -73,7 +74,13 @@ class GoDexRepository private constructor(private val appContext: Context) {
         alert: PokemonAlert,
         snapshot: List<GoDexEntryEntity> = entries.value,
         configured: Boolean = config.value.isConnected
-    ): GoDexMatchResult = GoDexMatcher.match(alert, snapshot, configured, evolutionGraph)
+    ): GoDexMatchResult = GoDexMatcher.match(
+        alert = alert,
+        entries = snapshot,
+        configured = configured,
+        evolutionGraph = evolutionGraph,
+        formChangeGraph = formChangeGraph
+    )
 
     fun debugEntries(snapshot: List<GoDexEntryEntity> = entries.value): List<GoDexDebugEntry> =
         snapshot.map { entry ->
