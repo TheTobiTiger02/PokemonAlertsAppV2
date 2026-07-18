@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class AlertNotifierSettingsTest {
 
@@ -29,6 +30,19 @@ class AlertNotifierSettingsTest {
 
         assertTrue(settings.shouldNotify(sampleAlert(name = "Pikachu", type = listOf("Hundo"))))
         assertFalse(settings.shouldNotify(sampleAlert(name = "Eevee", type = listOf("Hundo"))))
+    }
+
+    @Test
+    fun shouldNotify_normalizesIdentifiersIndependentlyOfDeviceLocale() {
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            val settings = notificationSettings(allowedHundoSpecies = setOf("ivysaur"))
+
+            assertTrue(settings.shouldNotify(sampleAlert(name = "Ivysaur", type = listOf("Hundo"))))
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
     }
 
     @Test

@@ -30,7 +30,7 @@ class GoDexSyncWorker(appContext: Context, params: WorkerParameters) : Coroutine
             .build()
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<GoDexSyncWorker>(12, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<GoDexSyncWorker>(6, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
                 .build()

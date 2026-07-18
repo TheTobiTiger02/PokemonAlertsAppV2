@@ -209,6 +209,39 @@ class GoDexMatcherTest {
     }
 
     @Test
+    fun matchesGenderLabelsThatAlertHistoryStoresAsForms() {
+        val graph = GoDexEvolutionGraph.forTests(listOf(GoDexEvolutionEdge(592, 593)))
+        val entries = listOf(
+            entry("0592-male", 592, null, "male", needed = false, name = "Frillish (Male)"),
+            entry("0592-female", 592, null, "female", needed = false, name = "Frillish (Female)"),
+            entry("0593-male", 593, null, "male", needed = false, name = "Jellicent (Male)"),
+            entry("0593-female", 593, null, "female", needed = true, name = "Jellicent (Female)")
+        )
+
+        val female = matchResult(592, "Female", entries, "Female", graph)
+        val femaleWithoutSeparateGender = matchResult(592, "Female Form", entries, graph = graph)
+        val male = matchResult(592, null, entries, "Male", graph)
+
+        assertEquals(GoDexMatchStatus.EVOLUTION_NEEDED, female.status)
+        assertEquals("0593-female", female.evolutionTargets.single().entryKey)
+        assertEquals(GoDexMatchStatus.EVOLUTION_NEEDED, femaleWithoutSeparateGender.status)
+        assertEquals("0593-female", femaleWithoutSeparateGender.evolutionTargets.single().entryKey)
+        assertEquals(GoDexMatchStatus.COLLECTED, male.status)
+        assertEquals(GoDexMatchStatus.UNKNOWN, match(592, "Female", entries, "Male"))
+    }
+
+    @Test
+    fun neededGenderedEntryKeepsDirectStatusPriorityWhenGenderIsInFormLabel() {
+        val entries = listOf(
+            entry("0592-male", 592, null, "male", needed = false),
+            entry("0592-female", 592, null, "female", needed = true)
+        )
+
+        assertEquals(GoDexMatchStatus.NEEDED, match(592, "Female", entries, "Female"))
+        assertEquals(GoDexMatchStatus.COLLECTED, match(592, "Male Form", entries))
+    }
+
+    @Test
     fun unrepresentedCostumeDoesNotFallBackToBaseEntry() {
         val entries = listOf(entry("0025-none", 25, null, needed = true))
 

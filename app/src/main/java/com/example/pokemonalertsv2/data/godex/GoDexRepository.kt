@@ -112,7 +112,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
 
     companion object {
         const val STALE_WARNING_MILLIS = 48L * 60L * 60L * 1000L
-        private const val STALE_REFRESH_MILLIS = 12L * 60L * 60L * 1000L
+        private const val STALE_REFRESH_MILLIS = 4L * 60L * 60L * 1000L
 
         @Volatile private var instance: GoDexRepository? = null
 

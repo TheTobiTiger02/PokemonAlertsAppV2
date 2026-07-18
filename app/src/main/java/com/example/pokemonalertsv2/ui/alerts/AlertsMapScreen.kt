@@ -94,6 +94,11 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import com.example.pokemonalertsv2.data.godex.GoDexConfig
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
@@ -149,13 +154,20 @@ fun AlertsMapRoute(
         }
     }
 
+    val context = LocalContext.current
+    val goDexRepository = remember(context) { GoDexRepository.getInstance(context) }
+    val goDexEntries by goDexRepository.entries.collectAsStateWithLifecycle()
+    val goDexConfig by goDexRepository.config.collectAsStateWithLifecycle()
+
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
         initialMapStyle = savedMapStyle,
         onMapStyleChanged = viewModel::updateMapStylePreference,
-        showBackButton = showBackButton
+        showBackButton = showBackButton,
+        goDexEntries = goDexEntries,
+        goDexConfig = goDexConfig
     )
 }
 
@@ -166,7 +178,9 @@ fun AlertsMapScreen(
     onRefresh: () -> Unit,
     initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
-    showBackButton: Boolean = true
+    showBackButton: Boolean = true,
+    goDexEntries: List<GoDexEntryEntity> = emptyList(),
+    goDexConfig: GoDexConfig = GoDexConfig()
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -497,6 +511,8 @@ fun AlertsMapScreen(
                             now = now,
                             density = density,
                             showTimeLabel = showTimeLabels,
+                            goDexEntries = goDexEntries,
+                            goDexConfig = goDexConfig,
                             onClick = { selectedAlert = alert }
                         )
                     }
@@ -517,7 +533,9 @@ fun AlertsMapScreen(
                     Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
                 },
                 onAlertClick = { selectedAlert = it },
-                onCameraChanged = ::updateRetainedCamera
+                onCameraChanged = ::updateRetainedCamera,
+                goDexEntries = goDexEntries,
+                goDexConfig = goDexConfig
             )
 
             Surface(
@@ -984,22 +1002,30 @@ private fun MapAlertDetailContent(
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            val goDexStatus = rememberGoDexStatus(alert)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = formatAlertTitle(alert),
+                    text = formatAlertTitle(alert, goDexStatus.status),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = categoryAccent.copy(alpha = 0.18f)
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "${visualStyle.shortCode} · ${visualStyle.label}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = categoryAccent,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = categoryAccent.copy(alpha = 0.18f)
+                    ) {
+                        Text(
+                            text = "${visualStyle.shortCode} · ${visualStyle.label}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = categoryAccent,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                    GoDexStatusPill(goDexStatus)
                 }
             }
             IconButton(onClick = onDismiss) {
@@ -1213,6 +1239,8 @@ private fun MapMarker(
     now: Long,
     density: androidx.compose.ui.unit.Density,
     showTimeLabel: Boolean,
+    goDexEntries: List<GoDexEntryEntity>,
+    goDexConfig: GoDexConfig,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1222,6 +1250,16 @@ private fun MapMarker(
     if (coordinates == null) return
     val position = remember(coordinates) { LatLng(coordinates.latitude, coordinates.longitude) }
     val visualStyle = resolveAlertVisualStyle(alert)
+    
+    val goDexRepository = remember(context) { GoDexRepository.getInstance(context) }
+    val matchResult = remember(alert, goDexEntries, goDexConfig) {
+        if (alert.hasType("hundo")) {
+            goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+        } else {
+            GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+        }
+    }
+    
     val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
         AlertCategory.HUNDO -> "100%"
         AlertCategory.NUNDO -> "0%"
@@ -1269,7 +1307,8 @@ private fun MapMarker(
         showTimeLabel,
         timeLabel,
         markerSizePx,
-        palette
+        palette,
+        matchResult.status
     ) {
         val renderedIcon = withContext(Dispatchers.IO) {
             createMapMarkerIcon(
@@ -1281,7 +1320,8 @@ private fun MapMarker(
                 endTime = alert.endTime,
                 showTimeLabel = showTimeLabel,
                 timeLabel = if (showTimeLabel) timeLabel else null,
-                palette = palette
+                palette = palette,
+                goDexStatus = matchResult.status
             )
         }
         currentCoroutineContext().ensureActive()
@@ -1295,7 +1335,7 @@ private fun MapMarker(
         state = remember(position) { MarkerState(position = position) },
         icon = googleMarkerDescriptor,
         anchor = markerIcon?.anchor ?: Offset(0.5f, 1f),
-        title = formatAlertTitle(alert),
+        title = formatAlertTitle(alert, matchResult.status),
         visible = true,
         onClick = {
             onClick()
@@ -1332,7 +1372,8 @@ internal suspend fun createMapMarkerIcon(
     endTime: String?,
     showTimeLabel: Boolean,
     timeLabel: String?,
-    palette: MapMarkerPalette
+    palette: MapMarkerPalette,
+    goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED
 ): MapMarkerIcon? {
     try {
         val timeRemainingMs = endTime?.let(TimeUtils::parseEndTimeToMillis)?.let {
@@ -1348,7 +1389,8 @@ internal suspend fun createMapMarkerIcon(
             showTimeLabel,
             timeLabel.orEmpty(),
             isUrgent,
-            palette
+            palette,
+            goDexStatus
         ).joinToString("|")
         markerIconCache.get(cacheKey)?.let { return it }
 
@@ -1470,6 +1512,38 @@ internal suspend fun createMapMarkerIcon(
                     strokeWidth = sizePx * 0.022f
                 }
             )
+        }
+
+        if (goDexStatus == GoDexMatchStatus.NEEDED ||
+            goDexStatus == GoDexMatchStatus.EVOLUTION_NEEDED ||
+            goDexStatus == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
+            goDexStatus == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
+        ) {
+            val badgeRadius = sizePx * 0.16f
+            val badgeX = centerX - pinRadius * 0.70f
+            val badgeY = centerY - pinRadius * 0.66f
+
+            canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = palette.surface
+            })
+            canvas.drawCircle(
+                badgeX,
+                badgeY,
+                badgeRadius,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = palette.outline
+                    style = Paint.Style.STROKE
+                    strokeWidth = sizePx * 0.022f
+                }
+            )
+
+            val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                textSize = badgeRadius * 1.3f
+                textAlign = Paint.Align.CENTER
+            }
+            val emojiStr = if (goDexStatus == GoDexMatchStatus.NEEDED) "🎯" else "🧬"
+            val textY = badgeY - (emojiPaint.descent() + emojiPaint.ascent()) / 2f
+            canvas.drawText(emojiStr, badgeX, textY, emojiPaint)
         }
 
         // Keep the category identity on the pin itself. A permanent label below every

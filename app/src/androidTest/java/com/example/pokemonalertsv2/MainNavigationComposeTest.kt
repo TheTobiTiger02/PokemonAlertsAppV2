@@ -132,9 +132,12 @@ class MainNavigationComposeTest {
             .isNotEmpty()
         if (isDisconnected) {
             composeRule.onNodeWithText("Public GoDex collection URL").performScrollTo().assertIsDisplayed()
+            composeRule.onNodeWithText("https://godex.site/public-collection/\u2026")
+                .performScrollTo()
+                .assertIsDisplayed()
             composeRule.onNodeWithText("Connect").assertHasClickAction()
         } else {
-            composeRule.onNodeWithText("View synced Pokémon", substring = true)
+            composeRule.onNodeWithText("View synced Pok\u00E9mon", substring = true)
                 .performScrollTo()
                 .assertIsDisplayed()
                 .assertHasClickAction()

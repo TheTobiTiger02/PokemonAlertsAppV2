@@ -16,7 +16,12 @@ object GoDexMatcher {
     ): GoDexMatchResult {
         if (!configured) return GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
         val pokedexId = alert.pokedexId ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
-        val alertGender = normalizedGender(alert.gender)
+        val explicitGender = normalizedGender(alert.gender)
+        val formGender = normalizedFormGender(alert.pokemonForm)
+        if (explicitGender != null && formGender != null && explicitGender != formGender) {
+            return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
+        }
+        val alertGender = explicitGender ?: formGender
         val resolved = resolveDirect(pokedexId, alert.pokemonForm, alertGender, entries)
             ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
 
@@ -71,6 +76,8 @@ object GoDexMatcher {
                 when {
                     equivalentEntries.isNotEmpty() -> equivalentEntries
                     isExplicitBaseFormLabel(alertForm) -> speciesEntries.filter { it.formSlug == null }
+                    normalizedFormGender(alertForm) != null && normalizedFormGender(alertForm) == alertGender ->
+                        speciesEntries.filter { it.formSlug == null }
                     else -> return null
                 }
             }
@@ -234,6 +241,12 @@ object GoDexMatcher {
 
     private fun isExplicitBaseFormLabel(value: String): Boolean =
         value.normalizedToken() in BASE_FORM_LABELS
+
+    private fun normalizedFormGender(value: String?): String? = when (value.normalizedToken()) {
+        "male", "male form" -> "male"
+        "female", "female form" -> "female"
+        else -> null
+    }
 
     private fun normalizedGender(value: String?): String? = value?.trim()?.lowercase(Locale.ROOT)?.let {
         when {

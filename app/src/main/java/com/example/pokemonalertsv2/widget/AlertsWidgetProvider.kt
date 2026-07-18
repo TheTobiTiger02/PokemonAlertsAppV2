@@ -26,6 +26,9 @@ import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -273,7 +276,12 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(R.id.tv_compact_countdown, "")
         } else {
             val visualStyle = resolveAlertVisualStyle(alert)
-            views.setTextViewText(R.id.tv_compact_alert_title, formatAlertTitle(alert))
+            val goDexStatus = if (alert.hasType("hundo")) {
+                GoDexRepository.getInstance(context).match(alert)
+            } else {
+                GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+            }
+            views.setTextViewText(R.id.tv_compact_alert_title, formatAlertTitle(alert, goDexStatus.status))
             views.setTextViewText(
                 R.id.tv_compact_meta,
                 alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label

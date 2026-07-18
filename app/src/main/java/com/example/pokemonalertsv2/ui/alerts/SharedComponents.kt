@@ -177,7 +177,19 @@ fun rememberCountdownNow(tickMillis: Long = 1000L): Long {
  * Generates a descriptive title for an alert based on its type.
  * Examples: "100% Togetic", "0% Togetic", "Great #1 Togetic", "Terrakion Raid", "Psychic Rocket"
  */
-fun formatAlertTitle(alert: PokemonAlert): String {
+fun formatAlertTitle(alert: PokemonAlert, goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED): String {
+    val baseTitle = formatAlertTitleRaw(alert)
+    val prefix = when (goDexStatus) {
+        GoDexMatchStatus.NEEDED -> "🎯 "
+        GoDexMatchStatus.EVOLUTION_NEEDED,
+        GoDexMatchStatus.FORM_CHANGE_NEEDED,
+        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> "🧬 "
+        else -> ""
+    }
+    return "$prefix$baseTitle"
+}
+
+private fun formatAlertTitleRaw(alert: PokemonAlert): String {
     val baseName = alert.pokemon ?: alert.cleanPokemonName
     
     // Handle raids - just show "Pokemon Raid"
@@ -609,7 +621,7 @@ private fun AlertPill(
 }
 
 @Composable
-private fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
+internal fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
     if (!alert.hasType("hundo")) return GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
     val context = LocalContext.current.applicationContext
     val repository = remember(context) { GoDexRepository.getInstance(context) }
@@ -621,7 +633,7 @@ private fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
 }
 
 @Composable
-private fun GoDexStatusPill(result: GoDexMatchResult) {
+internal fun GoDexStatusPill(result: GoDexMatchResult) {
     when (result.status) {
         GoDexMatchStatus.NEEDED -> AlertPill(
             text = "Needed in GoDex",

@@ -34,6 +34,7 @@ import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import kotlin.coroutines.resume
 
 object AlertNotifier {
@@ -221,7 +222,7 @@ object AlertNotifier {
 
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
-                .setContentTitle(formatAlertTitle(alert))
+                .setContentTitle(formatAlertTitle(alert, goDexStatus.status))
                 .setContentText(contentText)
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(expandedText)
@@ -257,7 +258,7 @@ object AlertNotifier {
                     NotificationCompat.BigPictureStyle()
                         .bigPicture(it)
                         .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
-                        .setBigContentTitle(formatAlertTitle(alert))
+                        .setBigContentTitle(formatAlertTitle(alert, goDexStatus.status))
                         .setSummaryText(contentText)
                 )
             }
@@ -344,7 +345,7 @@ object AlertNotifier {
                 }
                 alert.hasType("kecleon") -> kecleonEnabled
                 alert.hasType("rocket") -> {
-                    rocketEnabled && alert.gruntType?.lowercase()?.let { it !in excludedRocketTypesLower } != false
+                    rocketEnabled && alert.gruntType?.lowercase(Locale.ROOT)?.let { it !in excludedRocketTypesLower } != false
                 }
                 else -> true
             }
@@ -352,17 +353,17 @@ object AlertNotifier {
 
         private fun raidTierAllowed(alert: PokemonAlert): Boolean {
             val raidTier = alert.type?.find { it.matches(RAID_TIER_REGEX) }
-            return raidTier == null || raidTier.lowercase() !in excludedRaidTiersLower
+            return raidTier == null || raidTier.lowercase(Locale.ROOT) !in excludedRaidTiersLower
         }
 
         private fun isPokemonTypeExcluded(alert: PokemonAlert, excludedSet: Set<String>): Boolean {
             if (excludedSet.isEmpty()) return false
-            return alert.type?.any { it.lowercase() in excludedSet } == true
+            return alert.type?.any { it.lowercase(Locale.ROOT) in excludedSet } == true
         }
 
         private fun isSpeciesAllowed(alert: PokemonAlert, allowedSet: Set<String>): Boolean {
             if (allowedSet.isEmpty()) return true
-            return (alert.pokemon ?: alert.name).lowercase() in allowedSet
+            return (alert.pokemon ?: alert.name).lowercase(Locale.ROOT) in allowedSet
         }
 
         companion object {
@@ -466,13 +467,13 @@ object AlertNotifier {
     }
 
     private fun Set<String>.lowercaseSet(): Set<String> {
-        return mapTo(LinkedHashSet(size)) { it.lowercase() }
+        return mapTo(LinkedHashSet(size)) { it.lowercase(Locale.ROOT) }
     }
 
     private fun goDexNotificationSuffix(alert: PokemonAlert, result: GoDexMatchResult): String {
         if (!alert.hasType("hundo")) return ""
         return when (result.status) {
-            GoDexMatchStatus.NEEDED -> " â€¢ Needed in GoDex"
+            GoDexMatchStatus.NEEDED -> " \u2022 Needed in GoDex"
             GoDexMatchStatus.EVOLUTION_NEEDED ->
                 " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
             GoDexMatchStatus.FORM_CHANGE_NEEDED ->
@@ -480,8 +481,8 @@ object AlertNotifier {
             GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED ->
                 " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
                     " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
-            GoDexMatchStatus.COLLECTED -> " â€¢ Already collected in GoDex"
-            GoDexMatchStatus.UNKNOWN -> " â€¢ GoDex form unknown"
+            GoDexMatchStatus.COLLECTED -> " \u2022 Already collected in GoDex"
+            GoDexMatchStatus.UNKNOWN -> " \u2022 GoDex form unknown"
             GoDexMatchStatus.NOT_CONFIGURED -> ""
         }
     }

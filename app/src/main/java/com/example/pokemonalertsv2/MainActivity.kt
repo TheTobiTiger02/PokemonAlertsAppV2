@@ -260,18 +260,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onOpenSettings = {
                             backgroundLocationPermissionNeeded.value = false
-                            val launchResult = launchAppLocationPermissionSettings(
-                                context = this@MainActivity,
-                                launch = backgroundLocationSettingsLauncher::launch
+                            backgroundLocationPermissionLauncher.launch(
+                                Manifest.permission.ACCESS_BACKGROUND_LOCATION
                             )
-                            if (launchResult == LocationSettingsLaunchResult.FAILED) {
-                                Toast.makeText(
-                                    this@MainActivity,
-                                    "Unable to open Location settings. Open Settings > Apps > Pokemon Alerts > Permissions.",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                                finishPermissionFlow()
-                            }
                         }
                     )
                 }

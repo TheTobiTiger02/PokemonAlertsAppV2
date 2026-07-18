@@ -20,6 +20,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import com.example.pokemonalertsv2.data.godex.GoDexConfig
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -261,7 +266,9 @@ internal fun OpenStreetMapView(
     onMapLoaded: () -> Unit,
     onLoadError: () -> Unit,
     onAlertClick: (PokemonAlert) -> Unit,
-    onCameraChanged: (MapCameraSnapshot) -> Unit
+    onCameraChanged: (MapCameraSnapshot) -> Unit,
+    goDexEntries: List<GoDexEntryEntity> = emptyList(),
+    goDexConfig: GoDexConfig = GoDexConfig()
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -356,10 +363,16 @@ internal fun OpenStreetMapView(
         }
     )
 
-    LaunchedEffect(alerts, userLocation, mapCountdownRefreshKey(showTimeLabels, now), basePalette) {
+    LaunchedEffect(alerts, userLocation, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
         val markers = withContext(Dispatchers.IO) {
+            val goDexRepository = GoDexRepository.getInstance(context)
             alerts.mapNotNull { alert ->
                 val visualStyle = resolveAlertVisualStyle(alert)
+                val matchResult = if (alert.hasType("hundo")) {
+                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+                } else {
+                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+                }
                 val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
                     AlertCategory.HUNDO -> "100%"
                     AlertCategory.NUNDO -> "0%"
@@ -376,7 +389,8 @@ internal fun OpenStreetMapView(
                     endTime = alert.endTime,
                     showTimeLabel = showTimeLabels,
                     timeLabel = if (showTimeLabels) timeLabel else null,
-                    palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt())
+                    palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
+                    goDexStatus = matchResult.status
                 ) ?: return@mapNotNull null
                 OpenStreetMapMarker(alert, icon)
             }

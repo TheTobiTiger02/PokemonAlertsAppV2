@@ -389,7 +389,7 @@ fun SettingsScreen(
                             onValueChange = { goDexUrlInput = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Public GoDex collection URL") },
-                            placeholder = { Text("https://godex.site/public-collection/â€¦") },
+                            placeholder = { Text("https://godex.site/public-collection/\u2026") },
                             singleLine = true,
                             enabled = !goDexSyncUiState.isSyncing
                         )
@@ -397,7 +397,7 @@ fun SettingsScreen(
                             onClick = { viewModel.connectGoDex(goDexUrlInput) },
                             enabled = goDexUrlInput.isNotBlank() && !goDexSyncUiState.isSyncing
                         ) {
-                            Text(if (goDexSyncUiState.isSyncing) "Connectingâ€¦" else "Connect")
+                            Text(if (goDexSyncUiState.isSyncing) "Connecting\u2026" else "Connect")
                         }
                     } else {
                         Text(
@@ -406,7 +406,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            "$neededCount needed â€¢ ${totalCount - neededCount} collected â€¢ $totalCount total",
+                            "$neededCount needed \u2022 ${totalCount - neededCount} collected \u2022 $totalCount total",
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
@@ -439,7 +439,7 @@ fun SettingsScreen(
                                 onClick = viewModel::syncGoDex,
                                 enabled = !goDexSyncUiState.isSyncing
                             ) {
-                                Text(if (goDexSyncUiState.isSyncing) "Syncingâ€¦" else "Sync now")
+                                Text(if (goDexSyncUiState.isSyncing) "Syncing\u2026" else "Sync now")
                             }
                             OutlinedButton(
                                 onClick = viewModel::disconnectGoDex,
@@ -453,7 +453,7 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = goDexEntries.isNotEmpty()
                         ) {
-                            Text("View synced PokÃ©mon ($totalCount)")
+                            Text("View synced Pok\u00E9mon ($totalCount)")
                         }
                     }
 
@@ -522,21 +522,21 @@ fun SettingsScreen(
                         
                         SwitchSetting(
                             title = "Hundos",
-                            subtitle = "Notifications for 100% IV PokÃ©mon",
+                            subtitle = "Notifications for 100% IV Pok\u00E9mon",
                             checked = hundosNotifications,
                             onCheckedChange = { viewModel.updateHundosNotifications(it) }
                         )
                         
                         SwitchSetting(
                             title = "PvP",
-                            subtitle = "Notifications for PvP ranked PokÃ©mon",
+                            subtitle = "Notifications for PvP ranked Pok\u00E9mon",
                             checked = pvpNotifications,
                             onCheckedChange = { viewModel.updatePvpNotifications(it) }
                         )
                         
                         SwitchSetting(
                             title = "Nundos",
-                            subtitle = "Notifications for 0% IV PokÃ©mon",
+                            subtitle = "Notifications for 0% IV Pok\u00E9mon",
                             checked = nundosNotifications,
                             onCheckedChange = { viewModel.updateNundosNotifications(it) }
                         )
@@ -678,7 +678,7 @@ private fun GoDexDebugListDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                Text("Synced GoDex PokÃ©mon")
+                Text("Synced GoDex Pok\u00E9mon")
                 Text(
                     "${filteredEntries.size} of ${entries.size} entries",
                     style = MaterialTheme.typography.bodySmall,
@@ -757,7 +757,7 @@ private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
         val variant = buildList {
             entry.formSlug?.let { add("form: $it") }
             entry.gender.takeUnless { it == "none" }?.let { add("gender: $it") }
-        }.joinToString(" â€¢ ")
+        }.joinToString(" \u2022 ")
         if (variant.isNotEmpty()) {
             Text(
                 variant,

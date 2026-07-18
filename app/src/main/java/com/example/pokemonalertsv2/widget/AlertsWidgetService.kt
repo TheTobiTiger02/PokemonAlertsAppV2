@@ -24,6 +24,9 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.validAlertCoordinates
+import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import kotlinx.coroutines.runBlocking
 
 class AlertsWidgetService : RemoteViewsService() {
@@ -87,7 +90,12 @@ private class AlertsFactory(
         views.setInt(R.id.item_category_bar, "setBackgroundColor", visualStyle.category.accentArgb.toInt())
 
         // 1. Title
-        views.setTextViewText(R.id.item_title, formatAlertTitle(alert))
+        val goDexStatus = if (alert.hasType("hundo")) {
+            GoDexRepository.getInstance(context).match(alert)
+        } else {
+            GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+        }
+        views.setTextViewText(R.id.item_title, formatAlertTitle(alert, goDexStatus.status))
 
         // 2. Time Logic & Coloring
         val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
