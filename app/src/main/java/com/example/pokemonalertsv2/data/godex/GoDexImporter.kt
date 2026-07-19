@@ -48,16 +48,17 @@ class GoDexImporter(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun import(url: String): GoDexImportResult = withContext(Dispatchers.IO) {
-        val normalizedUrl = validateUrl(url)
+    suspend fun import(url: String, sessionCookies: String = ""): GoDexImportResult = withContext(Dispatchers.IO) {
+        val normalizedUrl = validateAnyCollectionUrl(url)
         val initialHtml = execute(
-            Request.Builder().url(normalizedUrl).get().build()
+            Request.Builder().url(normalizedUrl).get().build(),
+            sessionCookies
         )
         val initialPage = parseInitialPage(initialHtml, normalizedUrl)
 
         val regionEntries = coroutineScope {
             initialPage.lazyComponents.map { component ->
-                async { loadRegion(normalizedUrl, initialPage.csrfToken, component) }
+                async { loadRegion(normalizedUrl, initialPage.csrfToken, component, sessionCookies) }
             }.awaitAll()
         }
         val entries = regionEntries.flatten().distinctBy { it.entryKey }
@@ -114,7 +115,7 @@ class GoDexImporter(
         )
     }
 
-    private fun loadRegion(url: String, csrfToken: String, component: GoDexLazyComponent): List<GoDexEntryEntity> {
+    private fun loadRegion(url: String, csrfToken: String, component: GoDexLazyComponent, cookies: String): List<GoDexEntryEntity> {
         val payload = buildJsonObject {
             put("_token", csrfToken)
             put("components", buildJsonArray {
@@ -137,7 +138,8 @@ class GoDexImporter(
                 .header("Referer", url)
                 .header("X-Livewire", "true")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
-                .build()
+                .build(),
+            cookies
         )
         val componentResponse = json.parseToJsonElement(responseText).jsonObject["components"]
             ?.jsonArray?.singleOrNull()?.jsonObject
@@ -227,9 +229,19 @@ class GoDexImporter(
     private fun JsonObject.intValue(key: String): Int? =
         get(key)?.jsonPrimitive?.content?.toIntOrNull()
 
-    private fun execute(request: Request): String = client.newCall(request).execute().use { response ->
-        if (!response.isSuccessful) throw IllegalStateException("GoDex returned HTTP ${response.code}")
-        response.body?.string() ?: throw IllegalStateException("GoDex returned an empty response")
+    private fun execute(request: Request, cookies: String = ""): String {
+        val requestWithHeaders = request.newBuilder()
+            .apply {
+                if (cookies.isNotBlank()) {
+                    header("Cookie", cookies)
+                }
+                header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K)")
+            }
+            .build()
+        return client.newCall(requestWithHeaders).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("GoDex returned HTTP ${response.code}")
+            response.body?.string() ?: throw IllegalStateException("GoDex returned an empty response")
+        }
     }
 
     companion object {

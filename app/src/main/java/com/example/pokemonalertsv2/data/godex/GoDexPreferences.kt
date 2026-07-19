@@ -38,6 +38,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
     suspend fun saveWriteBackUrl(url: String) {
         dataStore.edit { prefs ->
             prefs[WRITE_BACK_URL_KEY] = url
+            prefs[URL_KEY] = url
         }
     }
 

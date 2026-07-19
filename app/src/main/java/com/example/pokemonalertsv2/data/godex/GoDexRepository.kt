@@ -39,7 +39,8 @@ class GoDexRepository private constructor(private val appContext: Context) {
 
     private suspend fun synchronize(url: String, schedulePeriodicRefresh: Boolean) = syncMutex.withLock {
         syncUiState.value = GoDexSyncUiState(isSyncing = true)
-        runCatching { importer.import(url) }
+        val cookies = preferences.config.first().sessionCookies
+        runCatching { importer.import(url, cookies) }
             .onSuccess { result ->
                 dao.replaceAll(result.entries)
                 preferences.saveSuccessfulSync(
@@ -57,7 +58,8 @@ class GoDexRepository private constructor(private val appContext: Context) {
     }
 
     suspend fun syncConfigured() {
-        val url = preferences.config.first().url
+        val cfg = preferences.config.first()
+        val url = cfg.url.ifBlank { cfg.writeBackUrl }
         if (url.isBlank()) return
         synchronize(url, schedulePeriodicRefresh = false)
     }

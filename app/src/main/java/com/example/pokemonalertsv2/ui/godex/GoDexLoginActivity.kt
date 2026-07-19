@@ -133,17 +133,19 @@ class GoDexLoginActivity : ComponentActivity() {
                                                     if (isOnGoDex && isCollectionUrl(currentUrl)) {
                                                         val cookies = CookieManager.getInstance().getCookie("https://godex.site")
                                                         if (cookies != null && cookies.contains("godex_session")) {
-                                                            scope.launch {
-                                                                repository.saveSessionCookies(cookies)
-                                                                repository.saveWriteBackUrl(currentUrl)
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Checklist selected! Two-way sync is ready.",
-                                                                    Toast.LENGTH_LONG
-                                                                ).show()
-                                                                setResult(Activity.RESULT_OK)
-                                                                finish()
-                                                            }
+                                                             scope.launch {
+                                                                 repository.saveSessionCookies(cookies)
+                                                                 repository.saveWriteBackUrl(currentUrl)
+                                                                 com.example.pokemonalertsv2.work.GoDexSyncWorker.enqueueImmediate(context)
+                                                                 com.example.pokemonalertsv2.work.GoDexSyncWorker.schedule(context)
+                                                                 Toast.makeText(
+                                                                     context,
+                                                                     "Checklist selected! Two-way sync is ready.",
+                                                                     Toast.LENGTH_LONG
+                                                                 ).show()
+                                                                 setResult(Activity.RESULT_OK)
+                                                                 finish()
+                                                             }
                                                         }
                                                     }
                                                 }

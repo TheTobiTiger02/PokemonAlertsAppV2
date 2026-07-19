@@ -8,7 +8,7 @@ data class GoDexConfig(
     val sessionCookies: String = "",
     val writeBackUrl: String = ""
 ) {
-    val isConnected: Boolean get() = url.isNotBlank()
+    val isConnected: Boolean get() = url.isNotBlank() || writeBackUrl.isNotBlank()
     val hasSession: Boolean get() = sessionCookies.isNotBlank()
     val hasWriteBackUrl: Boolean get() = writeBackUrl.isNotBlank()
 }

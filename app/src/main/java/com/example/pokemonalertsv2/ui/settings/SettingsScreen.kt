@@ -380,11 +380,44 @@ fun SettingsScreen(
                         System.currentTimeMillis() - goDexConfig.lastSuccessfulSyncMillis >=
                         GoDexRepository.STALE_WARNING_MILLIS
 
-                    if (!goDexConfig.isConnected) {
+                     if (!goDexConfig.isConnected) {
+                        val context = LocalContext.current
                         Text(
-                            "Connect a public GoDex Hundo collection to show checklist status and optionally filter Hundo notifications.",
+                            "Connect your GoDex Hundo collection to track needed targets, filter notifications, and sync catches.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        ElevatedButton(
+                            onClick = {
+                                context.startActivity(
+                                    com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sign in to GoDex (Two-Way Sync)")
+                        }
+                        Text(
+                            "Logging in allows you to mark Pokémon as caught directly inside the app to sync them back to your GoDex checklist.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            "Or, connect with a Public URL (Read-Only):",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
                         )
                         OutlinedTextField(
                             value = goDexUrlInput,
