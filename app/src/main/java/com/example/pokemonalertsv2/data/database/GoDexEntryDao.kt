@@ -26,4 +26,19 @@ interface GoDexEntryDao {
         clear()
         insertAll(entries)
     }
+
+    @Query("UPDATE godex_entries SET needed = :needed WHERE entryKey = :entryKey")
+    suspend fun updateNeeded(entryKey: String, needed: Boolean)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPendingUpdate(update: GoDexPendingUpdateEntity)
+
+    @Query("DELETE FROM godex_pending_updates WHERE id = :id")
+    suspend fun deletePendingUpdate(id: Long)
+
+    @Query("SELECT * FROM godex_pending_updates ORDER BY timestamp ASC")
+    suspend fun getPendingUpdates(): List<GoDexPendingUpdateEntity>
+
+    @Query("DELETE FROM godex_pending_updates")
+    suspend fun clearPendingUpdates()
 }

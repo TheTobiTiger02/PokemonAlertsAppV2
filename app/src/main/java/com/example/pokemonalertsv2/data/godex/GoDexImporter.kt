@@ -253,6 +253,22 @@ class GoDexImporter(
             return parsed.newBuilder().query(null).fragment(null).build().toString().trimEnd('/')
         }
 
+        fun validateAnyCollectionUrl(value: String): String {
+            val parsed = value.trim().toHttpUrlOrNull()
+                ?: throw IllegalArgumentException("Enter a valid GoDex collection URL")
+            require(parsed.scheme == "https" && parsed.host.equals("godex.site", ignoreCase = true)) {
+                "Only HTTPS godex.site collection URLs are supported"
+            }
+            val path = parsed.encodedPath
+            require(
+                Regex("^/public-collection/[A-Za-z0-9_\\-]+/?$", RegexOption.IGNORE_CASE).matches(path) ||
+                Regex("^/(?:collection|collections|c)/[A-Za-z0-9_\\-]+/?$", RegexOption.IGNORE_CASE).matches(path)
+            ) {
+                "Use a valid GoDex collection URL"
+            }
+            return parsed.newBuilder().query(null).fragment(null).build().toString().trimEnd('/')
+        }
+
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .cookieJar(InMemoryCookieJar())
             .build()

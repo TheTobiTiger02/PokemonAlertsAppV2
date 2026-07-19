@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import com.example.pokemonalertsv2.data.database.GoDexPendingUpdateEntity
+import com.example.pokemonalertsv2.work.GoDexWriteWorker
 
 class GoDexRepository private constructor(private val appContext: Context) {
     private val dao = AppDatabase.getDatabase(appContext).goDexEntryDao()
@@ -63,6 +66,14 @@ class GoDexRepository private constructor(private val appContext: Context) {
         preferences.setNotificationFilterEnabled(enabled)
     }
 
+    suspend fun saveSessionCookies(cookies: String) {
+        preferences.saveSessionCookies(cookies)
+    }
+
+    suspend fun saveWriteBackUrl(url: String) {
+        preferences.saveWriteBackUrl(url)
+    }
+
     suspend fun disconnect() = syncMutex.withLock {
         dao.clear()
         preferences.clear()
@@ -78,6 +89,16 @@ class GoDexRepository private constructor(private val appContext: Context) {
         alert = alert,
         entries = snapshot,
         configured = configured,
+        evolutionGraph = evolutionGraph,
+        formChangeGraph = formChangeGraph
+    )
+
+    fun getCaughtEntries(
+        alert: PokemonAlert,
+        snapshot: List<GoDexEntryEntity> = entries.value
+    ): List<GoDexEntryEntity> = GoDexMatcher.getCaughtEntries(
+        alert = alert,
+        entries = snapshot,
         evolutionGraph = evolutionGraph,
         formChangeGraph = formChangeGraph
     )
@@ -108,6 +129,18 @@ class GoDexRepository private constructor(private val appContext: Context) {
         if (current.isConnected && nowMillis - current.lastSuccessfulSyncMillis >= STALE_REFRESH_MILLIS) {
             GoDexSyncWorker.enqueueImmediate(appContext)
         }
+    }
+
+    suspend fun markAsCaught(entryKey: String, caught: Boolean) = withContext(Dispatchers.IO) {
+        dao.updateNeeded(entryKey, !caught)
+        dao.insertPendingUpdate(
+            GoDexPendingUpdateEntity(
+                entryKey = entryKey,
+                caught = caught,
+                timestamp = System.currentTimeMillis()
+            )
+        )
+        GoDexWriteWorker.enqueue(appContext)
     }
 
     companion object {

@@ -25,7 +25,7 @@ object GoDexMatcher {
         val resolved = resolveDirect(pokedexId, alert.pokemonForm, alertGender, entries)
             ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
 
-        if (resolved.needed) return GoDexMatchResult(GoDexMatchStatus.NEEDED)
+        if (resolved.needed) return GoDexMatchResult(GoDexMatchStatus.NEEDED, resolved.entryKey)
 
         val targets = evolutionGraph?.let {
             findNeededDescendants(
@@ -52,7 +52,12 @@ object GoDexMatcher {
             formChangeTargets.isNotEmpty() -> GoDexMatchStatus.FORM_CHANGE_NEEDED
             else -> GoDexMatchStatus.COLLECTED
         }
-        return GoDexMatchResult(status, targets, formChangeTargets)
+        return GoDexMatchResult(
+            status = status,
+            matchedEntryKey = resolved.entryKey,
+            evolutionTargets = targets,
+            formChangeTargets = formChangeTargets
+        )
     }
 
     private fun resolveDirect(
@@ -237,6 +242,71 @@ object GoDexMatcher {
         if (first == null || second == null) return first == second
         val firstKeys = canonicalFormKeys(first)
         return canonicalFormKeys(second).any(firstKeys::contains)
+    }
+
+    fun getCaughtEntries(
+        alert: PokemonAlert,
+        entries: List<GoDexEntryEntity>,
+        evolutionGraph: GoDexEvolutionGraph? = null,
+        formChangeGraph: GoDexFormChangeGraph? = null
+    ): List<GoDexEntryEntity> {
+        val pokedexId = alert.pokedexId ?: return emptyList()
+        val alertGender = normalizedGender(alert.gender) ?: normalizedFormGender(alert.pokemonForm)
+        val resolved = resolveDirect(pokedexId, alert.pokemonForm, alertGender, entries) ?: return emptyList()
+        
+        val list = mutableListOf<GoDexEntryEntity>()
+        if (!resolved.needed) {
+            list.add(resolved)
+        }
+        
+        evolutionGraph?.let { graph ->
+            val queue = ArrayDeque<EvolutionState>()
+            queue.add(EvolutionState(pokedexId, resolved.formSlug, alertGender, 0))
+            val visited = hashSetOf(Triple(pokedexId, resolved.formSlug, alertGender))
+            while (queue.isNotEmpty()) {
+                val current = queue.removeFirst()
+                graph.outgoing(current.pokedexId)
+                    .asSequence()
+                    .filter { formsEquivalent(it.fromForm, current.form) }
+                    .filter { it.sourceGender == null || it.sourceGender == current.gender }
+                    .forEach { edge ->
+                        val next = EvolutionState(edge.to, edge.toForm, current.gender, current.distance + 1)
+                        val visitKey = Triple(next.pokedexId, next.form, next.gender)
+                        if (!visited.add(visitKey)) return@forEach
+                        resolveReachableTarget(next.pokedexId, next.form, next.gender, entries)
+                            ?.let { entry ->
+                                if (!entry.needed) {
+                                    list.add(entry)
+                                }
+                            }
+                        queue.add(next)
+                    }
+            }
+        }
+        
+        formChangeGraph?.let { graph ->
+            val queue = ArrayDeque<FormChangeState>()
+            queue.add(FormChangeState(resolved.formSlug, 0))
+            val visited = hashSetOf(resolved.formSlug)
+            while (queue.isNotEmpty()) {
+                val current = queue.removeFirst()
+                graph.outgoing(pokedexId)
+                    .asSequence()
+                    .filter { formsEquivalent(it.fromForm, current.form) }
+                    .forEach { edge ->
+                        if (!visited.add(edge.toForm)) return@forEach
+                        val next = FormChangeState(edge.toForm, current.distance + 1)
+                        resolveReachableTarget(pokedexId, next.form, alertGender, entries)
+                            ?.let { entry ->
+                                if (!entry.needed) {
+                                    list.add(entry)
+                                }
+                            }
+                        queue.add(next)
+                    }
+            }
+        }
+        return list.distinctBy { it.entryKey }
     }
 
     private fun isExplicitBaseFormLabel(value: String): Boolean =

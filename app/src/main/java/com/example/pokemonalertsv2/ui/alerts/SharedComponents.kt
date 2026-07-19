@@ -50,6 +50,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -126,6 +128,8 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
@@ -481,6 +485,93 @@ fun AlertCard(
                             contentDescription = stringResource(id = R.string.open_alert_in_pip)
                         )
                     }
+                    val context = LocalContext.current
+                    val scope = rememberCoroutineScope()
+                    val repository = remember(context) { GoDexRepository.getInstance(context) }
+                    val config by repository.config.collectAsState()
+                    var showTargetDialog by remember { mutableStateOf(false) }
+                    var showUncatchDialog by remember { mutableStateOf(false) }
+                    var caughtEntries by remember { mutableStateOf<List<GoDexEntryEntity>>(emptyList()) }
+
+
+                    if (config.hasSession && alert.hasType("hundo")) {
+                        val isCollected = goDexStatus.status == GoDexMatchStatus.COLLECTED
+                        val isNeeded = goDexStatus.status == GoDexMatchStatus.NEEDED
+                        val hasDescendantsNeeded = goDexStatus.status == GoDexMatchStatus.EVOLUTION_NEEDED ||
+                                goDexStatus.status == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
+                                goDexStatus.status == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
+
+                        FilledIconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                val targetKey = goDexStatus.matchedEntryKey
+                                android.util.Log.d("GoDexClick", "Clicked checkmark: isCollected=$isCollected, status=${goDexStatus.status}, hasDescendantsNeeded=$hasDescendantsNeeded, targetKey=$targetKey")
+                                if (isCollected) {
+                                    val caught = repository.getCaughtEntries(alert)
+                                    if (caught.size > 1) {
+                                        caughtEntries = caught
+                                        showUncatchDialog = true
+                                    } else {
+                                        val keyToUncheck = caught.firstOrNull()?.entryKey ?: targetKey
+                                        if (keyToUncheck != null) {
+                                            scope.launch {
+                                                repository.markAsCaught(keyToUncheck, false)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    if (hasDescendantsNeeded) {
+                                        showTargetDialog = true
+                                    } else {
+                                        if (targetKey != null) {
+                                            scope.launch {
+                                                repository.markAsCaught(targetKey, true)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(48.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                contentColor = if (isCollected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Icon(
+                                imageVector = if (isCollected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
+                                contentDescription = if (isCollected) "Mark as needed" else "Mark as caught"
+                            )
+                        }
+
+                        if (showTargetDialog) {
+                            GoDexCatchTargetDialog(
+                                pokemonName = alert.pokemon ?: "Unknown",
+                                matchResult = goDexStatus,
+                                onDismiss = { showTargetDialog = false },
+                                onConfirm = { selectedKey ->
+                                    showTargetDialog = false
+                                    scope.launch {
+                                        repository.markAsCaught(selectedKey, true)
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showUncatchDialog) {
+                            GoDexUncatchTargetDialog(
+                                pokemonName = alert.pokemon ?: "Unknown",
+                                caughtEntries = caughtEntries,
+                                onDismiss = { showUncatchDialog = false },
+                                onConfirm = { selectedKey ->
+                                    showUncatchDialog = false
+                                    scope.launch {
+                                        repository.markAsCaught(selectedKey, false)
+                                    }
+                                }
+                            )
+                        }
+                    }
+
                     FilledIconButton(
                         onClick = onShareClick,
                         modifier = Modifier.size(48.dp),

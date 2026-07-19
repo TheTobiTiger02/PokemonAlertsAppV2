@@ -15,7 +15,9 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             url = prefs[URL_KEY].orEmpty(),
             collectionTitle = prefs[TITLE_KEY].orEmpty(),
             lastSuccessfulSyncMillis = prefs[LAST_SYNC_KEY] ?: 0L,
-            notificationFilterEnabled = prefs[FILTER_ENABLED_KEY] ?: false
+            notificationFilterEnabled = prefs[FILTER_ENABLED_KEY] ?: false,
+            sessionCookies = prefs[COOKIES_KEY].orEmpty(),
+            writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty()
         )
     }
 
@@ -24,6 +26,18 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             prefs[URL_KEY] = url
             prefs[TITLE_KEY] = title
             prefs[LAST_SYNC_KEY] = timestamp
+        }
+    }
+
+    suspend fun saveSessionCookies(cookies: String) {
+        dataStore.edit { prefs ->
+            prefs[COOKIES_KEY] = cookies
+        }
+    }
+
+    suspend fun saveWriteBackUrl(url: String) {
+        dataStore.edit { prefs ->
+            prefs[WRITE_BACK_URL_KEY] = url
         }
     }
 
@@ -37,6 +51,8 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             prefs.remove(TITLE_KEY)
             prefs.remove(LAST_SYNC_KEY)
             prefs.remove(FILTER_ENABLED_KEY)
+            prefs.remove(COOKIES_KEY)
+            prefs.remove(WRITE_BACK_URL_KEY)
         }
     }
 
@@ -45,5 +61,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         val TITLE_KEY = stringPreferencesKey("godex_hundo_collection_title")
         val LAST_SYNC_KEY = longPreferencesKey("godex_hundo_last_successful_sync")
         val FILTER_ENABLED_KEY = booleanPreferencesKey("godex_hundo_notification_filter")
+        val COOKIES_KEY = stringPreferencesKey("godex_session_cookies")
+        val WRITE_BACK_URL_KEY = stringPreferencesKey("godex_write_back_url")
     }
 }

@@ -232,6 +232,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             goDexRepository.disconnect()
         }
     }
+
+    fun clearGoDexSession() {
+        viewModelScope.launch {
+            goDexRepository.saveSessionCookies("")
+        }
+    }
     
     fun toggleExcludedHundoType(type: String) {
         viewModelScope.launch {

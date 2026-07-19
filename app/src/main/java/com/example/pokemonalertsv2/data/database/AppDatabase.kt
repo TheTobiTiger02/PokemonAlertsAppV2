@@ -8,8 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [AlertEntity::class, HistoryAlertEntity::class, PokemonSpeciesEntity::class, GoDexEntryEntity::class],
-    version = 14,
+    entities = [
+        AlertEntity::class,
+        HistoryAlertEntity::class,
+        PokemonSpeciesEntity::class,
+        GoDexEntryEntity::class,
+        GoDexPendingUpdateEntity::class
+    ],
+    version = 15,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -365,6 +371,14 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `godex_pending_updates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `entryKey` TEXT NOT NULL, `caught` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL)"
+                )
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -392,7 +406,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_10_11,
                     MIGRATION_11_12,
                     MIGRATION_12_13,
-                    MIGRATION_13_14
+                    MIGRATION_13_14,
+                    MIGRATION_14_15
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

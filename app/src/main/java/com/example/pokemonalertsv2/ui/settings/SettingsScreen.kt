@@ -31,6 +31,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Close
@@ -447,6 +449,108 @@ fun SettingsScreen(
                             ) {
                                 Text("Disconnect")
                             }
+                        }
+                        val context = LocalContext.current
+                        if (goDexConfig.hasSession) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                if (goDexConfig.hasWriteBackUrl) {
+                                    val shortUrl = goDexConfig.writeBackUrl.substringAfterLast("/")
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.CheckCircle,
+                                            contentDescription = null,
+                                            tint = Color(0xFF4CAF50),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            "Two-way sync enabled for checklist: $shortUrl",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        TextButton(onClick = {
+                                            context.startActivity(
+                                                com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context, startAtPicker = true)
+                                            )
+                                        }) {
+                                            Text("Change checklist")
+                                        }
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        TextButton(onClick = { viewModel.clearGoDexSession() }) {
+                                            Text("Sign out")
+                                        }
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Info,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFFB74D),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            "Signed in, but no checklist is selected.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        ElevatedButton(
+                                            onClick = {
+                                                context.startActivity(
+                                                    com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context, startAtPicker = true)
+                                                )
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Select checklist to sync")
+                                        }
+                                        TextButton(onClick = { viewModel.clearGoDexSession() }) {
+                                            Text("Sign out")
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            ElevatedButton(
+                                onClick = {
+                                    context.startActivity(
+                                        com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.AccountCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Sign in to GoDex for two-way sync")
+                            }
+                            Text(
+                                "Sign in to mark Pokémon as caught directly from alerts, and have changes sync back to your GoDex checklist.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         OutlinedButton(
                             onClick = { showGoDexDebugList = true },

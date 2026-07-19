@@ -4,9 +4,13 @@ data class GoDexConfig(
     val url: String = "",
     val collectionTitle: String = "",
     val lastSuccessfulSyncMillis: Long = 0L,
-    val notificationFilterEnabled: Boolean = false
+    val notificationFilterEnabled: Boolean = false,
+    val sessionCookies: String = "",
+    val writeBackUrl: String = ""
 ) {
     val isConnected: Boolean get() = url.isNotBlank()
+    val hasSession: Boolean get() = sessionCookies.isNotBlank()
+    val hasWriteBackUrl: Boolean get() = writeBackUrl.isNotBlank()
 }
 
 data class GoDexSyncUiState(
@@ -40,6 +44,7 @@ data class GoDexFormChangeTarget(
 
 data class GoDexMatchResult(
     val status: GoDexMatchStatus,
+    val matchedEntryKey: String? = null,
     val evolutionTargets: List<GoDexEvolutionTarget> = emptyList(),
     val formChangeTargets: List<GoDexFormChangeTarget> = emptyList()
 ) {
