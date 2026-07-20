@@ -29,6 +29,49 @@ class GoDexMatcherTest {
     }
 
     @Test
+    fun matchesHistoricalCastformAndCherrimLabelsForEitherAlertGender() {
+        val castformEntries = listOf(
+            entry("0351-none", 351, null, needed = false),
+            entry("0351_rain-none", 351, "rain", needed = true)
+        )
+        val cherrimEntries = listOf(
+            entry("0421_over-none", 421, "over", needed = false),
+            entry("0421_sun-none", 421, "sun", needed = true)
+        )
+
+        listOf("Male", "Female").forEach { gender ->
+            assertEquals(GoDexMatchStatus.NEEDED, match(351, "Rainy", castformEntries, gender))
+            assertEquals(GoDexMatchStatus.COLLECTED, match(421, "Overcast Form", cherrimEntries, gender))
+        }
+    }
+
+    @Test
+    fun matchesEverySquawkabillyPlumageLabelForEitherAlertGender() {
+        listOf("green", "yellow", "blue", "white").forEachIndexed { index, color ->
+            val entries = listOf(
+                entry("0931_$color-none", 931, color, needed = index % 2 == 0)
+            )
+            val expected = if (index % 2 == 0) GoDexMatchStatus.NEEDED else GoDexMatchStatus.COLLECTED
+            val label = "${color.replaceFirstChar(Char::uppercase)} Plumage"
+
+            listOf("Male", "Female").forEach { gender ->
+                assertEquals(expected, match(931, label, entries, gender))
+            }
+        }
+    }
+
+    @Test
+    fun disguisedIsABaseFormOnlyForMimikyu() {
+        val mimikyuEntries = listOf(entry("0778-none", 778, null, needed = false))
+        val otherEntries = listOf(entry("0777-none", 777, null, needed = false))
+
+        listOf("Male", "Female").forEach { gender ->
+            assertEquals(GoDexMatchStatus.COLLECTED, match(778, "Disguised", mimikyuEntries, gender))
+        }
+        assertEquals(GoDexMatchStatus.UNKNOWN, match(777, "Disguised", otherEntries))
+    }
+
+    @Test
     fun matchesAllFlabebeFamilyFlowerColorsFromShortAndFullLabels() {
         val colors = listOf("red", "orange", "yellow", "white", "blue")
 
@@ -246,6 +289,15 @@ class GoDexMatcherTest {
         val entries = listOf(entry("0025-none", 25, null, needed = true))
 
         assertEquals(GoDexMatchStatus.UNKNOWN, match(25, "Holiday 2025", entries))
+    }
+
+    @Test
+    fun unrepresentedWinterDelibirdDoesNotFallBackToBaseEntry() {
+        val entries = listOf(entry("0225-none", 225, null, needed = true))
+
+        listOf("Male", "Female").forEach { gender ->
+            assertEquals(GoDexMatchStatus.UNKNOWN, match(225, "Winter 2020", entries, gender))
+        }
     }
 
     @Test

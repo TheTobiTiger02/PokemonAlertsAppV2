@@ -80,7 +80,8 @@ object GoDexMatcher {
                 }
                 when {
                     equivalentEntries.isNotEmpty() -> equivalentEntries
-                    isExplicitBaseFormLabel(alertForm) -> speciesEntries.filter { it.formSlug == null }
+                    isExplicitBaseFormLabel(pokedexId, alertForm) ->
+                        speciesEntries.filter { it.formSlug == null }
                     normalizedFormGender(alertForm) != null && normalizedFormGender(alertForm) == alertGender ->
                         speciesEntries.filter { it.formSlug == null }
                     else -> return null
@@ -309,8 +310,11 @@ object GoDexMatcher {
         return list.distinctBy { it.entryKey }
     }
 
-    private fun isExplicitBaseFormLabel(value: String): Boolean =
-        value.normalizedToken() in BASE_FORM_LABELS
+    private fun isExplicitBaseFormLabel(pokedexId: Int, value: String): Boolean {
+        val normalized = value.normalizedToken()
+        return normalized in BASE_FORM_LABELS ||
+            normalized in SPECIES_BASE_FORM_LABELS[pokedexId].orEmpty()
+    }
 
     private fun normalizedFormGender(value: String?): String? = when (value.normalizedToken()) {
         "male", "male form" -> "male"
@@ -360,6 +364,13 @@ object GoDexMatcher {
         "red flower" to "red_flower", "orange flower" to "orange_flower",
         "yellow flower" to "yellow_flower", "white flower" to "white_flower",
         "blue flower" to "blue_flower",
+        "rainy" to "rain", "overcast" to "over", "overcast form" to "over",
+        "green plumage" to "green", "yellow plumage" to "yellow",
+        "blue plumage" to "blue", "white plumage" to "white",
         "exclamation" to "zem", "question" to "zim"
+    )
+
+    private val SPECIES_BASE_FORM_LABELS = mapOf(
+        778 to setOf("disguised")
     )
 }
