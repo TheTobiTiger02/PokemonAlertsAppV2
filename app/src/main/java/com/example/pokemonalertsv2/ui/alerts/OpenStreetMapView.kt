@@ -38,6 +38,27 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory.fillColor
+import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
+import org.maplibre.android.style.layers.PropertyFactory.fillOutlineColor
+import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
+import org.maplibre.android.style.layers.PropertyFactory.iconImage
+import org.maplibre.android.style.layers.PropertyFactory.iconRotate
+import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.SymbolLayer
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
 
 internal data class MapCameraSnapshot(
     val latitude: Double,
@@ -115,11 +136,13 @@ internal class OpenStreetMapLifecycleGuard(
 
 internal class OpenStreetMapController {
     private var map: MapLibreMap? = null
+    private var style: Style? = null
     private var pendingMarkers: List<OpenStreetMapMarker> = emptyList()
-    private var pendingUserLocation: android.location.Location? = null
+    private var pendingUserPose: MapUserPose? = null
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     var onAlertClick: (PokemonAlert) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
+    var onUserGesture: () -> Unit = {}
 
     fun attach(map: MapLibreMap, context: android.content.Context) {
         this.map = map
@@ -145,12 +168,43 @@ internal class OpenStreetMapController {
                 )
             )
         }
+        map.addOnCameraMoveStartedListener { reason ->
+            if (this.map === map && reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                onUserGesture()
+            }
+        }
         applyContentInsets()
         renderMarkers(context)
     }
 
+    fun attachStyle(style: Style, context: android.content.Context) {
+        this.style = style
+        style.addImage(USER_DOT_IMAGE, createMapUserMarkerBitmap(context, directional = false))
+        style.addImage(USER_ARROW_IMAGE, createMapUserMarkerBitmap(context, directional = true))
+        style.addSource(GeoJsonSource(USER_ACCURACY_SOURCE))
+        style.addSource(GeoJsonSource(USER_POSE_SOURCE))
+        style.addLayer(
+            FillLayer(USER_ACCURACY_LAYER, USER_ACCURACY_SOURCE).withProperties(
+                fillColor(MAP_USER_LOCATION_BLUE),
+                fillOpacity(0.14f),
+                fillOutlineColor(MAP_USER_LOCATION_BLUE)
+            )
+        )
+        style.addLayer(
+            SymbolLayer(USER_POSE_LAYER, USER_POSE_SOURCE).withProperties(
+                iconImage(Expression.get("icon")),
+                iconRotate(Expression.get("heading")),
+                iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_MAP),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true)
+            )
+        )
+        renderUserPose()
+    }
+
     fun detach() {
         map = null
+        style = null
     }
 
     fun setCamera(snapshot: MapCameraSnapshot, animate: Boolean = false) {
@@ -187,12 +241,15 @@ internal class OpenStreetMapController {
 
     fun setMarkers(
         context: android.content.Context,
-        markers: List<OpenStreetMapMarker>,
-        userLocation: android.location.Location?
+        markers: List<OpenStreetMapMarker>
     ) {
         pendingMarkers = markers
-        pendingUserLocation = userLocation
         renderMarkers(context)
+    }
+
+    fun setUserPose(pose: MapUserPose?) {
+        pendingUserPose = pose
+        renderUserPose()
     }
 
     fun setContentInsets(insets: MapContentInsets) {
@@ -218,46 +275,75 @@ internal class OpenStreetMapController {
                     .icon(iconFactory.fromBitmap(model.icon.bitmap))
             )
         }
-        pendingUserLocation?.let { location ->
-            currentMap.addMarker(
-                MarkerOptions()
-                    .position(LatLng(location.latitude, location.longitude))
-                    .title(USER_LOCATION_MARKER_TITLE)
-                    .icon(iconFactory.fromBitmap(createUserLocationBitmap(context)))
-            )
-        }
     }
 
-    private fun createUserLocationBitmap(context: android.content.Context): Bitmap {
-        val size = (24 * context.resources.displayMetrics.density).toInt().coerceAtLeast(24)
-        return Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
-            val canvas = Canvas(bitmap)
-            val center = size / 2f
-            canvas.drawCircle(
-                center,
-                center,
-                size * 0.42f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE }
-            )
-            canvas.drawCircle(
-                center,
-                center,
-                size * 0.30f,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(33, 150, 243) }
-            )
+    private fun renderUserPose() {
+        val currentStyle = style ?: return
+        val poseSource = currentStyle.getSourceAs<GeoJsonSource>(USER_POSE_SOURCE) ?: return
+        val accuracySource = currentStyle.getSourceAs<GeoJsonSource>(USER_ACCURACY_SOURCE) ?: return
+        val pose = pendingUserPose
+        if (pose == null) {
+            poseSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            accuracySource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            return
         }
+
+        val location = pose.location
+        val point = Feature.fromGeometry(Point.fromLngLat(location.longitude, location.latitude)).apply {
+            addStringProperty("icon", if (pose.headingDegrees == null) USER_DOT_IMAGE else USER_ARROW_IMAGE)
+            addNumberProperty("heading", pose.headingDegrees ?: 0f)
+        }
+        poseSource.setGeoJson(point)
+        accuracySource.setGeoJson(
+            Feature.fromGeometry(
+                createAccuracyPolygon(
+                    latitude = location.latitude,
+                    longitude = location.longitude,
+                    radiusMeters = location.accuracy.toDouble().coerceAtLeast(1.0)
+                )
+            )
+        )
     }
 
     private companion object {
-        const val USER_LOCATION_MARKER_TITLE = "__user_location__"
+        const val USER_ACCURACY_SOURCE = "user-accuracy-source"
+        const val USER_POSE_SOURCE = "user-pose-source"
+        const val USER_ACCURACY_LAYER = "user-accuracy-layer"
+        const val USER_POSE_LAYER = "user-pose-layer"
+        const val USER_DOT_IMAGE = "user-location-dot"
+        const val USER_ARROW_IMAGE = "user-location-arrow"
     }
+}
+
+internal fun createAccuracyPolygon(
+    latitude: Double,
+    longitude: Double,
+    radiusMeters: Double,
+    points: Int = 48
+): Polygon {
+    val angularDistance = radiusMeters / 6_371_000.0
+    val latitudeRadians = Math.toRadians(latitude)
+    val longitudeRadians = Math.toRadians(longitude)
+    val ring = (0..points.coerceAtLeast(8)).map { index ->
+        val bearing = 2.0 * Math.PI * index / points.coerceAtLeast(8)
+        val targetLatitude = asin(
+            sin(latitudeRadians) * cos(angularDistance) +
+                cos(latitudeRadians) * sin(angularDistance) * cos(bearing)
+        )
+        val targetLongitude = longitudeRadians + atan2(
+            sin(bearing) * sin(angularDistance) * cos(latitudeRadians),
+            cos(angularDistance) - sin(latitudeRadians) * sin(targetLatitude)
+        )
+        Point.fromLngLat(Math.toDegrees(targetLongitude), Math.toDegrees(targetLatitude))
+    }
+    return Polygon.fromLngLats(listOf(ring))
 }
 
 @Composable
 internal fun OpenStreetMapView(
     modifier: Modifier,
     alerts: List<PokemonAlert>,
-    userLocation: android.location.Location?,
+    userPose: MapUserPose?,
     cameraSnapshot: MapCameraSnapshot,
     contentInsets: MapContentInsets,
     showTimeLabels: Boolean,
@@ -267,6 +353,7 @@ internal fun OpenStreetMapView(
     onLoadError: () -> Unit,
     onAlertClick: (PokemonAlert) -> Unit,
     onCameraChanged: (MapCameraSnapshot) -> Unit,
+    onUserGesture: () -> Unit,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig()
 ) {
@@ -309,6 +396,7 @@ internal fun OpenStreetMapView(
 
     controller.onAlertClick = onAlertClick
     controller.onCameraChanged = onCameraChanged
+    controller.onUserGesture = onUserGesture
     controller.setContentInsets(contentInsets)
 
     DisposableEffect(lifecycleOwner, mapView, lifecycleGuard) {
@@ -351,10 +439,12 @@ internal fun OpenStreetMapView(
                         isLogoEnabled = false
                         isAttributionEnabled = false
                         isCompassEnabled = true
+                        isRotateGesturesEnabled = false
                     }
                     map.setStyle(Style.Builder().fromJson(openStreetMapStyleJson())) styleLoaded@{
                         if (!lifecycleGuard.isActive || mapView.isDestroyed) return@styleLoaded
                         controller.attach(map, context)
+                        controller.attachStyle(it, context)
                         controller.setCamera(cameraSnapshot)
                         lifecycleGuard.runIfActive(onMapLoaded)
                     }
@@ -363,7 +453,7 @@ internal fun OpenStreetMapView(
         }
     )
 
-    LaunchedEffect(alerts, userLocation, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
+    LaunchedEffect(alerts, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
         val markers = withContext(Dispatchers.IO) {
             val goDexRepository = GoDexRepository.getInstance(context)
             alerts.mapNotNull { alert ->
@@ -396,7 +486,11 @@ internal fun OpenStreetMapView(
             }
         }
         currentCoroutineContext().ensureActive()
-        controller.setMarkers(context, markers, userLocation)
+        controller.setMarkers(context, markers)
+    }
+
+    LaunchedEffect(userPose) {
+        controller.setUserPose(userPose)
     }
 }
 

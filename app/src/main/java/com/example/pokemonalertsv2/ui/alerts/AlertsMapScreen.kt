@@ -69,6 +69,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,10 +114,13 @@ import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.maps.android.compose.CameraMoveStartedReason
+import com.google.maps.android.compose.Circle
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
@@ -127,6 +131,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collectLatest
 
 internal fun mapCountdownRefreshKey(showTimeLabels: Boolean, nowMillis: Long): Long =
     nowMillis / if (showTimeLabels) 1_000L else 30_000L
@@ -186,6 +191,31 @@ fun AlertsMapScreen(
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig()
 ) {
+    AlertsMapScreenContent(
+        alerts = alerts,
+        onBack = onBack,
+        onRefresh = onRefresh,
+        initialMapStyle = initialMapStyle,
+        onMapStyleChanged = onMapStyleChanged,
+        showBackButton = showBackButton,
+        goDexEntries = goDexEntries,
+        goDexConfig = goDexConfig,
+        locationTrackerFactory = DefaultMapPoseTrackerFactory
+    )
+}
+
+@Composable
+internal fun AlertsMapScreenContent(
+    alerts: List<PokemonAlert>,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
+    onMapStyleChanged: (MapStylePreference) -> Unit = {},
+    showBackButton: Boolean = true,
+    goDexEntries: List<GoDexEntryEntity> = emptyList(),
+    goDexConfig: GoDexConfig = GoDexConfig(),
+    locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -233,8 +263,33 @@ fun AlertsMapScreen(
 
     var hasLocationPermission by remember { mutableStateOf(hasLocationPermissionNow()) }
     var userLocation by remember { mutableStateOf<android.location.Location?>(null) }
+    var userPose by remember { mutableStateOf<MapUserPose?>(null) }
+    var trackingRequested by rememberSaveable { mutableStateOf(false) }
+    var cameraFollowEnabled by rememberSaveable { mutableStateOf(false) }
+    var trackingStatus by remember { mutableStateOf(MapTrackingStatus.INACTIVE) }
     var locationLookupComplete by remember { mutableStateOf(!hasLocationPermission) }
     var lifecycleLocationRefreshJob by remember { mutableStateOf<Job?>(null) }
+    val locationTracker = remember(context, locationTrackerFactory) {
+        locationTrackerFactory(
+            context,
+            { pose ->
+                userPose = pose
+                userLocation = pose.location
+                locationLookupComplete = true
+            },
+            { trackingStatus = it }
+        )
+    }
+
+    fun applyTrackingInteraction(state: MapTrackingInteractionState) {
+        trackingRequested = state.trackingRequested
+        cameraFollowEnabled = state.cameraFollowEnabled
+    }
+
+    fun trackingInteraction() = MapTrackingInteractionState(
+        trackingRequested = trackingRequested,
+        cameraFollowEnabled = cameraFollowEnabled
+    )
 
     suspend fun loadUserLocation(): android.location.Location? = try {
         CachedLocationProvider.get(
@@ -267,9 +322,10 @@ fun AlertsMapScreen(
     }
 
     fun centerOnUserLocation() {
+        applyTrackingInteraction(trackingInteraction().onGpsTapped())
         lifecycleLocationRefreshJob?.cancel()
         scope.launch {
-            val location = refreshLocationState()
+            val location = userPose?.location ?: refreshLocationState()
 
             if (location == null) {
                 Toast.makeText(
@@ -302,6 +358,16 @@ fun AlertsMapScreen(
         }
     }
 
+    fun showPreciseLocationGuidanceIfNeeded() {
+        val fineGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!fineGranted && hasLocationPermissionNow()) {
+            Toast.makeText(context, R.string.map_precise_location_recommended, Toast.LENGTH_LONG).show()
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {
@@ -316,6 +382,28 @@ fun AlertsMapScreen(
         }
     }
 
+    DisposableEffect(lifecycleOwner, trackingRequested, hasLocationPermission, locationTracker) {
+        fun updateTrackingForLifecycle() {
+            if (
+                trackingRequested &&
+                hasLocationPermission &&
+                lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            ) {
+                locationTracker.start()
+            } else {
+                locationTracker.stop()
+            }
+        }
+
+        val observer = LifecycleEventObserver { _, _ -> updateTrackingForLifecycle() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        updateTrackingForLifecycle()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            locationTracker.stop()
+        }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -325,6 +413,7 @@ fun AlertsMapScreen(
                 hasLocationPermissionNow()
 
         if (hasLocationPermission) {
+            showPreciseLocationGuidanceIfNeeded()
             centerOnUserLocation()
         } else {
             Toast.makeText(
@@ -392,14 +481,14 @@ fun AlertsMapScreen(
             myLocationButtonEnabled = false,
             compassEnabled = true,
             mapToolbarEnabled = false,
-            rotationGesturesEnabled = true,
+            rotationGesturesEnabled = false,
             tiltGesturesEnabled = true
         )
     }
 
     val mapProperties = remember(hasLocationPermission, mapType, darkTheme) {
         MapProperties(
-            isMyLocationEnabled = hasLocationPermission,
+            isMyLocationEnabled = false,
             mapType = mapType,
             minZoomPreference = 3f,
             maxZoomPreference = 20f,
@@ -415,6 +504,45 @@ fun AlertsMapScreen(
         googleMapLoaded
     } else {
         openStreetMapLoaded
+    }
+
+    LaunchedEffect(cameraPositionState) {
+        snapshotFlow {
+            cameraPositionState.isMoving to cameraPositionState.cameraMoveStartedReason
+        }.collectLatest { (isMoving, reason) ->
+            if (isMoving && reason == CameraMoveStartedReason.GESTURE) {
+                applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
+            }
+        }
+    }
+
+    LaunchedEffect(
+        userPose?.location?.elapsedRealtimeNanos,
+        cameraFollowEnabled,
+        currentMapLoaded,
+        mapSource
+    ) {
+        val pose = userPose ?: return@LaunchedEffect
+        if (!cameraFollowEnabled || !currentMapLoaded) return@LaunchedEffect
+        val location = pose.location
+        val currentZoom = if (mapSource == MapDisplaySource.GOOGLE) {
+            cameraPositionState.position.zoom.coerceAtLeast(16f).toDouble()
+        } else {
+            retainedZoom.coerceAtLeast(16.0)
+        }
+        val target = MapCameraSnapshot(location.latitude, location.longitude, currentZoom)
+        updateRetainedCamera(target)
+        if (mapSource == MapDisplaySource.GOOGLE) {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(location.latitude, location.longitude),
+                    currentZoom.toFloat()
+                ),
+                500
+            )
+        } else {
+            openStreetMapController.setCamera(target, animate = true)
+        }
     }
 
     LaunchedEffect(currentMapLoaded, filteredAlerts, locationLookupComplete, userLocation, mapSource) {
@@ -465,6 +593,7 @@ fun AlertsMapScreen(
         val visibleCoordinates = remember(filteredAlerts) { resolveFitAllCoordinates(filteredAlerts) }
 
         fun fitVisibleAlerts() {
+            applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
             if (visibleCoordinates.isEmpty()) {
                 Toast.makeText(context, R.string.map_no_alerts_to_show, Toast.LENGTH_SHORT).show()
                 return
@@ -508,6 +637,29 @@ fun AlertsMapScreen(
                 properties = mapProperties,
                 uiSettings = mapUiSettings
             ) {
+                userPose?.let { pose ->
+                    val location = pose.location
+                    Circle(
+                        center = LatLng(location.latitude, location.longitude),
+                        radius = location.accuracy.toDouble().coerceAtLeast(1.0),
+                        fillColor = Color(MAP_USER_LOCATION_BLUE).copy(alpha = 0.14f),
+                        strokeColor = Color(MAP_USER_LOCATION_BLUE).copy(alpha = 0.55f),
+                        strokeWidth = 2f,
+                        zIndex = 900f
+                    )
+                    Marker(
+                        state = MarkerState(LatLng(location.latitude, location.longitude)),
+                        icon = BitmapDescriptorFactory.fromBitmap(
+                            remember(pose.headingDegrees != null) {
+                                createMapUserMarkerBitmap(context, pose.headingDegrees != null)
+                            }
+                        ),
+                        anchor = Offset(0.5f, 0.5f),
+                        flat = true,
+                        rotation = pose.headingDegrees ?: 0f,
+                        zIndex = 1_000f
+                    )
+                }
                 filteredAlerts.forEach { alert ->
                     key(alert.uniqueId) {
                         MapMarker(
@@ -526,7 +678,7 @@ fun AlertsMapScreen(
             OpenStreetMapView(
                 modifier = Modifier.fillMaxSize(),
                 alerts = filteredAlerts,
-                userLocation = userLocation,
+                userPose = userPose,
                 cameraSnapshot = retainedCamera(),
                 contentInsets = openStreetMapInsets,
                 showTimeLabels = showTimeLabels,
@@ -538,6 +690,9 @@ fun AlertsMapScreen(
                 },
                 onAlertClick = { selectedAlert = it },
                 onCameraChanged = ::updateRetainedCamera,
+                onUserGesture = {
+                    applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
+                },
                 goDexEntries = goDexEntries,
                 goDexConfig = goDexConfig
             )
@@ -677,6 +832,7 @@ fun AlertsMapScreen(
                     onClick = {
                         if (hasLocationPermissionNow()) {
                             hasLocationPermission = true
+                            showPreciseLocationGuidanceIfNeeded()
                             centerOnUserLocation()
                         } else {
                             locationPermissionLauncher.launch(
@@ -687,13 +843,29 @@ fun AlertsMapScreen(
                             )
                         }
                     },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    containerColor = when {
+                        cameraFollowEnabled -> MaterialTheme.colorScheme.primary
+                        trackingRequested -> MaterialTheme.colorScheme.secondaryContainer
+                        else -> MaterialTheme.colorScheme.primaryContainer
+                    },
+                    contentColor = when {
+                        cameraFollowEnabled -> MaterialTheme.colorScheme.onPrimary
+                        trackingRequested -> MaterialTheme.colorScheme.onSecondaryContainer
+                        else -> MaterialTheme.colorScheme.onPrimaryContainer
+                    },
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_my_location),
-                        contentDescription = "Center on current location"
+                        contentDescription = stringResource(
+                            when {
+                                cameraFollowEnabled && trackingStatus == MapTrackingStatus.DEGRADED ->
+                                    R.string.map_location_tracking_degraded
+                                cameraFollowEnabled -> R.string.map_location_following
+                                trackingRequested -> R.string.map_location_tracking_recenter
+                                else -> R.string.map_location_start_tracking
+                            }
+                        )
                     )
                 }
             }

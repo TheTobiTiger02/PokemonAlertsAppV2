@@ -61,6 +61,11 @@
     <string name="map_switch_satellite">Switch to satellite map</string>
     <string name="map_location_permission_needed">Location permission is needed to center the map.</string>
     <string name="map_current_location_unavailable">Current location is not available right now.</string>
+    <string name="map_precise_location_recommended">Your location is approximate. Enable Precise location in Android app permissions for accurate tracking.</string>
+    <string name="map_location_start_tracking">Start live location tracking</string>
+    <string name="map_location_following">Following your live location</string>
+    <string name="map_location_tracking_recenter">Live location active; recenter map</string>
+    <string name="map_location_tracking_degraded">Following last location; waiting for GPS</string>
     <string name="map_show_all_alerts">Show all visible alerts</string>
     <string name="map_no_alerts_to_show">No alerts to show</string>
     <string name="map_use_openstreetmap">Use OpenStreetMap</string>
