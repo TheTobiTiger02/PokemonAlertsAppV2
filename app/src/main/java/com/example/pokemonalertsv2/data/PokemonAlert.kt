@@ -236,12 +236,36 @@ data class PokemonAlert(
     val cleanPokemonName: String
         get() = pokemon ?: name.replace(Regex("^[^a-zA-Z]+"), "").trim()
     
+    /** Returns Gym or PokéStop name if present */
+    val venueName: String?
+        get() = gym?.takeIf { it.isNotBlank() } ?: pokestop?.takeIf { it.isNotBlank() }
+
+    /** Returns label "Gym" or "PokéStop" depending on which venue is set */
+    val venueTypeLabel: String?
+        get() = when {
+            gym?.isNotBlank() == true -> "Gym"
+            pokestop?.isNotBlank() == true -> "PokéStop"
+            else -> null
+        }
+
     /** Location display text - prioritizes pokemonLocation, then gym, then pokestop */
     val locationDisplay: String?
         get() = pokemonLocation?.takeIf { it.isNotBlank() }
             ?: gym?.takeIf { it.isNotBlank() }
             ?: pokestop?.takeIf { it.isNotBlank() }
-    
+
+    /** Check if alert is a Pokémon spawn (and not a Raid, Rocket, Quest, Kecleon, or WeatherChange) */
+    val isSpawnAlert: Boolean
+        get() {
+            if (hasType("Raid") || hasType("Rocket") || hasType("Quest") ||
+                hasType("Kecleon") || hasType("WeatherChange")
+            ) {
+                return false
+            }
+            return hasType("Spawn") || hasType("Hundo") || hasType("Nundo") ||
+                hasType("PvP") || hasType("Rare") || pokemon != null
+        }
+
     /** Check if alert has a specific type (case-insensitive) */
     fun hasType(typeName: String): Boolean =
         type?.any { it.equals(typeName, ignoreCase = true) } == true

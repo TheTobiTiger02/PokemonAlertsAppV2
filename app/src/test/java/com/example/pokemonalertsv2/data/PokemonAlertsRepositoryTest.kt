@@ -623,6 +623,14 @@ class PokemonAlertsRepositoryTest {
 
         override val allowedSpawnSpecies: Flow<Set<String>> = allowedSpawnSpeciesState.asStateFlow()
         override suspend fun updateAllowedSpawnSpecies(species: Set<String>) { allowedSpawnSpeciesState.value = species }
+
+        private val showSpawnRadiusState = MutableStateFlow(false)
+        override val showSpawnRadius: Flow<Boolean> = showSpawnRadiusState.asStateFlow()
+        override suspend fun updateShowSpawnRadius(enabled: Boolean) { showSpawnRadiusState.value = enabled }
+
+        private val spacialRendEnabledState = MutableStateFlow(false)
+        override val spacialRendEnabled: Flow<Boolean> = spacialRendEnabledState.asStateFlow()
+        override suspend fun updateSpacialRendEnabled(enabled: Boolean) { spacialRendEnabledState.value = enabled }
     }
 
     private class FakeAlertDao : AlertDao() {

@@ -40,10 +40,14 @@ import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.fillColor
 import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.fillOutlineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineWidth
+import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
@@ -138,6 +142,9 @@ internal class OpenStreetMapController {
     private var map: MapLibreMap? = null
     private var style: Style? = null
     private var pendingMarkers: List<OpenStreetMapMarker> = emptyList()
+    private var pendingAlerts: List<PokemonAlert> = emptyList()
+    private var pendingShowSpawnRadius = false
+    private var pendingSpacialRendEnabled = false
     private var pendingUserPose: MapUserPose? = null
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     var onAlertClick: (PokemonAlert) -> Unit = {}
@@ -181,8 +188,23 @@ internal class OpenStreetMapController {
         this.style = style
         style.addImage(USER_DOT_IMAGE, createMapUserMarkerBitmap(context, directional = false))
         style.addImage(USER_ARROW_IMAGE, createMapUserMarkerBitmap(context, directional = true))
+        style.addSource(GeoJsonSource(SPAWN_RADIUS_SOURCE))
         style.addSource(GeoJsonSource(USER_ACCURACY_SOURCE))
         style.addSource(GeoJsonSource(USER_POSE_SOURCE))
+        style.addLayer(
+            FillLayer(SPAWN_RADIUS_LAYER, SPAWN_RADIUS_SOURCE).withProperties(
+                fillColor(AndroidColor.parseColor("#1A73E8")),
+                fillOpacity(0.28f),
+                fillOutlineColor(AndroidColor.parseColor("#1A73E8"))
+            )
+        )
+        style.addLayer(
+            LineLayer(SPAWN_RADIUS_LINE_LAYER, SPAWN_RADIUS_SOURCE).withProperties(
+                lineColor(AndroidColor.parseColor("#1A73E8")),
+                lineWidth(2.5f),
+                lineOpacity(0.85f)
+            )
+        )
         style.addLayer(
             FillLayer(USER_ACCURACY_LAYER, USER_ACCURACY_SOURCE).withProperties(
                 fillColor(MAP_USER_LOCATION_BLUE),
@@ -200,6 +222,7 @@ internal class OpenStreetMapController {
             )
         )
         renderUserPose()
+        renderSpawnRadii()
     }
 
     fun detach() {
@@ -241,10 +264,19 @@ internal class OpenStreetMapController {
 
     fun setMarkers(
         context: android.content.Context,
-        markers: List<OpenStreetMapMarker>
+        markers: List<OpenStreetMapMarker>,
+        rawAlerts: List<PokemonAlert> = emptyList()
     ) {
         pendingMarkers = markers
+        pendingAlerts = rawAlerts
         renderMarkers(context)
+        renderSpawnRadii()
+    }
+
+    fun setSpawnRadiusOptions(showRadius: Boolean, spacialRend: Boolean) {
+        pendingShowSpawnRadius = showRadius
+        pendingSpacialRendEnabled = spacialRend
+        renderSpawnRadii()
     }
 
     fun setUserPose(pose: MapUserPose?) {
@@ -305,7 +337,31 @@ internal class OpenStreetMapController {
         )
     }
 
+    private fun renderSpawnRadii() {
+        val currentStyle = style ?: return
+        val radiusSource = currentStyle.getSourceAs<GeoJsonSource>(SPAWN_RADIUS_SOURCE) ?: return
+        if (!pendingShowSpawnRadius) {
+            radiusSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            return
+        }
+        val radiusMeters = if (pendingSpacialRendEnabled) 80.0 else 40.0
+        val features = pendingAlerts.filter { it.isSpawnAlert }.mapNotNull { alert ->
+            val coords = alert.mapCoordinatesOrNull() ?: return@mapNotNull null
+            Feature.fromGeometry(
+                createAccuracyPolygon(
+                    latitude = coords.latitude,
+                    longitude = coords.longitude,
+                    radiusMeters = radiusMeters
+                )
+            )
+        }
+        radiusSource.setGeoJson(FeatureCollection.fromFeatures(features))
+    }
+
     private companion object {
+        const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
+        const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
+        const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
         const val USER_ACCURACY_SOURCE = "user-accuracy-source"
         const val USER_POSE_SOURCE = "user-pose-source"
         const val USER_ACCURACY_LAYER = "user-accuracy-layer"
@@ -355,7 +411,9 @@ internal fun OpenStreetMapView(
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
-    goDexConfig: GoDexConfig = GoDexConfig()
+    goDexConfig: GoDexConfig = GoDexConfig(),
+    showSpawnRadius: Boolean = false,
+    spacialRendEnabled: Boolean = false
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -486,7 +544,11 @@ internal fun OpenStreetMapView(
             }
         }
         currentCoroutineContext().ensureActive()
-        controller.setMarkers(context, markers)
+        controller.setMarkers(context, markers, alerts)
+    }
+
+    LaunchedEffect(showSpawnRadius, spacialRendEnabled, alerts) {
+        controller.setSpawnRadiusOptions(showSpawnRadius, spacialRendEnabled)
     }
 
     LaunchedEffect(userPose) {

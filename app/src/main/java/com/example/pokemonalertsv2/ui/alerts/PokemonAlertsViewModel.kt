@@ -112,6 +112,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
     val sortPreference = repository.alertPreferences.sortPreference
     val mapStylePreference = repository.alertPreferences.mapStylePreference
+    val showSpawnRadius = repository.alertPreferences.showSpawnRadius
+    val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
     
     val selectedArea = repository.alertPreferences.selectedArea
     val maxDistance = repository.alertPreferences.maxDistance
@@ -141,6 +143,18 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateMapStylePreference(preference: MapStylePreference) {
         viewModelScope.launch {
             repository.alertPreferences.updateMapStylePreference(preference)
+        }
+    }
+
+    fun updateShowSpawnRadius(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateShowSpawnRadius(enabled)
+        }
+    }
+
+    fun updateSpacialRendEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateSpacialRendEnabled(enabled)
         }
     }
 

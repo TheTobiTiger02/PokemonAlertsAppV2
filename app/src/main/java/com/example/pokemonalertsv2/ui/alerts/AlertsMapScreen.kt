@@ -168,6 +168,9 @@ fun AlertsMapRoute(
     val goDexEntries by goDexRepository.entries.collectAsStateWithLifecycle()
     val goDexConfig by goDexRepository.config.collectAsStateWithLifecycle()
 
+    val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle(initialValue = false)
+    val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle(initialValue = false)
+
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
@@ -176,7 +179,11 @@ fun AlertsMapRoute(
         onMapStyleChanged = viewModel::updateMapStylePreference,
         showBackButton = showBackButton,
         goDexEntries = goDexEntries,
-        goDexConfig = goDexConfig
+        goDexConfig = goDexConfig,
+        showSpawnRadius = showSpawnRadius,
+        spacialRendEnabled = spacialRendEnabled,
+        onToggleSpawnRadius = { viewModel.updateShowSpawnRadius(!showSpawnRadius) },
+        onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) }
     )
 }
 
@@ -189,7 +196,11 @@ fun AlertsMapScreen(
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
     showBackButton: Boolean = true,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
-    goDexConfig: GoDexConfig = GoDexConfig()
+    goDexConfig: GoDexConfig = GoDexConfig(),
+    showSpawnRadius: Boolean = false,
+    spacialRendEnabled: Boolean = false,
+    onToggleSpawnRadius: () -> Unit = {},
+    onToggleSpacialRend: () -> Unit = {}
 ) {
     AlertsMapScreenContent(
         alerts = alerts,
@@ -200,6 +211,10 @@ fun AlertsMapScreen(
         showBackButton = showBackButton,
         goDexEntries = goDexEntries,
         goDexConfig = goDexConfig,
+        showSpawnRadius = showSpawnRadius,
+        spacialRendEnabled = spacialRendEnabled,
+        onToggleSpawnRadius = onToggleSpawnRadius,
+        onToggleSpacialRend = onToggleSpacialRend,
         locationTrackerFactory = DefaultMapPoseTrackerFactory
     )
 }
@@ -214,6 +229,10 @@ internal fun AlertsMapScreenContent(
     showBackButton: Boolean = true,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig(),
+    showSpawnRadius: Boolean = false,
+    spacialRendEnabled: Boolean = false,
+    onToggleSpawnRadius: () -> Unit = {},
+    onToggleSpacialRend: () -> Unit = {},
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
 ) {
     val context = LocalContext.current
@@ -660,6 +679,20 @@ internal fun AlertsMapScreenContent(
                         zIndex = 1_000f
                     )
                 }
+                if (showSpawnRadius) {
+                    val radiusMeters = if (spacialRendEnabled) 80.0 else 40.0
+                    filteredAlerts.filter { it.isSpawnAlert }.forEach { alert ->
+                        val coords = alert.mapCoordinatesOrNull() ?: return@forEach
+                        Circle(
+                            center = LatLng(coords.latitude, coords.longitude),
+                            radius = radiusMeters,
+                            fillColor = Color(0x471A73E8),
+                            strokeColor = Color(0xFF1A73E8),
+                            strokeWidth = 2.5f * density.density,
+                            zIndex = 800f
+                        )
+                    }
+                }
                 filteredAlerts.forEach { alert ->
                     key(alert.uniqueId) {
                         MapMarker(
@@ -694,7 +727,9 @@ internal fun AlertsMapScreenContent(
                     applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
                 },
                 goDexEntries = goDexEntries,
-                goDexConfig = goDexConfig
+                goDexConfig = goDexConfig,
+                showSpawnRadius = showSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled
             )
 
             Surface(
@@ -732,8 +767,12 @@ internal fun AlertsMapScreenContent(
                 hybridMap = mapType == MapType.HYBRID,
                 mapSource = mapSource,
                 showBackButton = showBackButton,
+                showSpawnRadius = showSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled,
                 onBack = onBack,
                 onToggleTimeLabels = { showTimeLabels = !showTimeLabels },
+                onToggleSpawnRadius = onToggleSpawnRadius,
+                onToggleSpacialRend = onToggleSpacialRend,
                 onRefresh = onRefresh,
                 onToggleMapType = {
                     val nextStyle = if (mapStyle == MapStylePreference.GOOGLE_SATELLITE) {
@@ -919,8 +958,12 @@ private fun MapTopAppBar(
     hybridMap: Boolean,
     mapSource: MapDisplaySource,
     showBackButton: Boolean,
+    showSpawnRadius: Boolean,
+    spacialRendEnabled: Boolean,
     onBack: () -> Unit,
     onToggleTimeLabels: () -> Unit,
+    onToggleSpawnRadius: () -> Unit,
+    onToggleSpacialRend: () -> Unit,
     onRefresh: () -> Unit,
     onToggleMapType: () -> Unit,
     onToggleMapSource: () -> Unit,
@@ -1052,6 +1095,48 @@ private fun MapTopAppBar(
                             )
                         }
                     )
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (showSpawnRadius) R.string.map_hide_spawn_radius
+                                    else R.string.map_show_spawn_radius
+                                )
+                            )
+                        },
+                        onClick = {
+                            moreExpanded = false
+                            onToggleSpawnRadius()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_my_location),
+                                contentDescription = null
+                            )
+                        }
+                    )
+                    if (showSpawnRadius) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (spacialRendEnabled) R.string.map_disable_spacial_rend
+                                        else R.string.map_enable_spacial_rend
+                                    )
+                                )
+                            },
+                            onClick = {
+                                moreExpanded = false
+                                onToggleSpacialRend()
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_fit_map),
+                                    contentDescription = null
+                                )
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.refresh_alerts)) },
                         onClick = {
@@ -1294,7 +1379,26 @@ private fun MapAlertDetailContent(
             }
         }
 
-        alert.locationDisplay?.let { location ->
+        val venue = alert.venueName
+        val venueType = alert.venueTypeLabel
+        val address = alert.pokemonLocation
+
+        if (venue != null) {
+            Text(
+                text = if (venueType != null) "$venueType: $venue" else venue,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (!address.isNullOrBlank() && address != venue) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = address,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else alert.locationDisplay?.let { location ->
             Text(
                 text = location,
                 style = MaterialTheme.typography.bodyMedium,

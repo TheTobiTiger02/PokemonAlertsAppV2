@@ -32,6 +32,8 @@ private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferen
 private val SELECTED_AREA_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_area")
 private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance")
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
+private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
+private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
 
 // Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
 private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
@@ -133,6 +135,12 @@ interface AlertPreferencesStore {
 
     val snoozeDuration: Flow<Int>
     suspend fun updateSnoozeDuration(minutes: Int)
+
+    val showSpawnRadius: Flow<Boolean>
+    suspend fun updateShowSpawnRadius(enabled: Boolean)
+
+    val spacialRendEnabled: Flow<Boolean>
+    suspend fun updateSpacialRendEnabled(enabled: Boolean)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -395,6 +403,26 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateSnoozeDuration(minutes: Int) {
         dataStore.edit { prefs ->
             prefs[SNOOZE_DURATION_KEY] = minutes
+        }
+    }
+
+    override val showSpawnRadius: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_SPAWN_RADIUS_KEY] ?: false
+    }
+
+    override suspend fun updateShowSpawnRadius(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_SPAWN_RADIUS_KEY] = enabled
+        }
+    }
+
+    override val spacialRendEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SPACIAL_REND_ENABLED_KEY] ?: false
+    }
+
+    override suspend fun updateSpacialRendEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SPACIAL_REND_ENABLED_KEY] = enabled
         }
     }
     

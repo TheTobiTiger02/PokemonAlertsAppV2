@@ -376,7 +376,8 @@ fun AlertCard(
                     }
                 }
 
-                alert.locationDisplay?.let { location ->
+                val cardLocationText = alert.venueName ?: alert.locationDisplay
+                cardLocationText?.let { location ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -388,7 +389,7 @@ fun AlertCard(
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = location,
+                            text = alert.venueTypeLabel?.let { "$it: $location" } ?: location,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -2401,32 +2402,37 @@ private fun LocationCard(alert: PokemonAlert) {
             }
             Spacer(modifier = Modifier.height(8.dp))
             
-            // Location address
-            alert.locationDisplay?.let { location ->
+            // PokéStop / Gym venue and street address
+            val venue = alert.venueName
+            val venueType = alert.venueTypeLabel
+            val address = alert.pokemonLocation
+
+            if (venue != null) {
+                Text(
+                    text = if (venueType != null) "$venueType: $venue" else venue,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (!address.isNullOrBlank() && address != venue) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = address,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else if (!address.isNullOrBlank()) {
+                Text(
+                    text = address,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            } else alert.locationDisplay?.let { location ->
                 Text(
                     text = location,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            // Gym name (separate from address)
-            alert.gym?.takeIf { it.isNotBlank() && it != alert.pokemonLocation }?.let { gym ->
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Gym: $gym",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            // Pokestop name
-            alert.pokestop?.takeIf { it.isNotBlank() && it != alert.pokemonLocation }?.let { stop ->
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "PokéStop: $stop",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             

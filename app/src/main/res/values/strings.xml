@@ -105,6 +105,7 @@
     <string name="widget_open_map_cd">Open alerts map</string>
     <string name="widget_active_alerts_label">Active alerts</string>
     <string name="widget_compact_count">%1$d active alerts</string>
+
     <string name="widget_config_title">Select Alert Types</string>
     <string name="widget_config_subtitle">Choose which alert types appear on this widget.</string>
     <string name="widget_config_show_all">Show all types</string>
@@ -123,4 +124,8 @@
     <string name="widget_filter_other">Other alerts</string>
     <string name="widget_empty_title">No active alerts</string>
     <string name="widget_empty_subtitle">Tap refresh to check again</string>
+    <string name="map_show_spawn_radius">Show spawn radius (40m)</string>
+    <string name="map_hide_spawn_radius">Hide spawn radius</string>
+    <string name="map_enable_spacial_rend">Enable Spacial Rend (80m)</string>
+    <string name="map_disable_spacial_rend">Disable Spacial Rend (40m)</string>
 </resources>
