@@ -11,13 +11,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import com.example.pokemonalertsv2.data.database.GoDexPendingUpdateEntity
 import com.example.pokemonalertsv2.work.GoDexWriteWorker
 
 class GoDexRepository private constructor(private val appContext: Context) {
@@ -33,26 +33,50 @@ class GoDexRepository private constructor(private val appContext: Context) {
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
     val config: StateFlow<GoDexConfig> = preferences.config
         .stateIn(scope, SharingStarted.Eagerly, GoDexConfig())
-    val syncUiState = MutableStateFlow(GoDexSyncUiState())
+    private val syncOperationState = MutableStateFlow(GoDexSyncUiState())
+    val pendingEntryKeys: StateFlow<Set<String>> = dao.observePendingEntryKeys()
+        .combine(config) { keys, _ -> keys.toSet() }
+        .stateIn(scope, SharingStarted.Eagerly, emptySet())
+    val syncUiState: StateFlow<GoDexSyncUiState> = combine(
+        syncOperationState,
+        config,
+        dao.observePendingCount()
+    ) { operation, cfg, pendingCount ->
+        operation.copy(
+            pendingCount = pendingCount,
+            lastSuccessfulWriteMillis = cfg.lastSuccessfulWriteMillis,
+            sessionState = cfg.sessionState,
+            errorMessage = operation.errorMessage ?: cfg.lastWriteError
+        )
+    }.stateIn(scope, SharingStarted.Eagerly, GoDexSyncUiState())
 
     suspend fun connect(url: String) = synchronize(url, schedulePeriodicRefresh = true)
 
     private suspend fun synchronize(url: String, schedulePeriodicRefresh: Boolean) = syncMutex.withLock {
-        syncUiState.value = GoDexSyncUiState(isSyncing = true)
+        syncOperationState.value = GoDexSyncUiState(isSyncing = true)
         val cookies = preferences.config.first().sessionCookies
         runCatching { importer.import(url, cookies) }
             .onSuccess { result ->
-                dao.replaceAll(result.entries)
+                dao.replaceAllPreservingPending(result.entries)
+                persistRefreshedCookies(result.refreshedCookies)
                 preferences.saveSuccessfulSync(
                     url = result.normalizedUrl,
                     title = result.collectionTitle,
                     timestamp = System.currentTimeMillis()
                 )
                 if (schedulePeriodicRefresh) GoDexSyncWorker.schedule(appContext)
-                syncUiState.value = GoDexSyncUiState()
+                syncOperationState.value = GoDexSyncUiState()
             }
             .onFailure { error ->
-                syncUiState.value = GoDexSyncUiState(errorMessage = error.message ?: "GoDex synchronization failed")
+                if (error is GoDexAuthenticationException) {
+                    persistRefreshedCookies(error.refreshedCookies)
+                    preferences.markReauthenticationRequired(
+                        error.message ?: "Your GoDex session expired."
+                    )
+                }
+                syncOperationState.value = GoDexSyncUiState(
+                    errorMessage = error.message ?: "GoDex synchronization failed"
+                )
                 throw error
             }
     }
@@ -70,6 +94,18 @@ class GoDexRepository private constructor(private val appContext: Context) {
 
     suspend fun saveSessionCookies(cookies: String) {
         preferences.saveSessionCookies(cookies)
+        if (cookies.isBlank()) {
+            GoDexWriteWorker.cancel(appContext)
+            syncOperationState.value = GoDexSyncUiState()
+        }
+    }
+
+    suspend fun saveAuthenticatedSession(cookies: String, writeBackUrl: String) {
+        preferences.saveAuthenticatedSession(cookies, writeBackUrl)
+        syncOperationState.value = GoDexSyncUiState()
+        GoDexWriteWorker.enqueue(appContext)
+        GoDexSyncWorker.enqueueImmediate(appContext)
+        GoDexSyncWorker.schedule(appContext)
     }
 
     suspend fun saveWriteBackUrl(url: String) {
@@ -77,10 +113,11 @@ class GoDexRepository private constructor(private val appContext: Context) {
     }
 
     suspend fun disconnect() = syncMutex.withLock {
-        dao.clear()
+        dao.clearGoDexData()
         preferences.clear()
-        syncUiState.value = GoDexSyncUiState()
+        syncOperationState.value = GoDexSyncUiState()
         GoDexSyncWorker.cancel(appContext)
+        GoDexWriteWorker.cancel(appContext)
     }
 
     fun match(
@@ -126,23 +163,43 @@ class GoDexRepository private constructor(private val appContext: Context) {
     suspend fun notificationSnapshot(): Pair<GoDexConfig, List<GoDexEntryEntity>> =
         preferences.config.first() to dao.getAll()
 
+    suspend fun currentConfig(): GoDexConfig = preferences.config.first()
+
     suspend fun refreshIfStale(nowMillis: Long = System.currentTimeMillis()) {
         val current = preferences.config.first()
+        if (current.isConnected) {
+            GoDexSyncWorker.schedule(appContext)
+        }
+        if (current.hasSession && dao.getNextPendingUpdate() != null) {
+            GoDexWriteWorker.enqueue(appContext)
+        }
         if (current.isConnected && nowMillis - current.lastSuccessfulSyncMillis >= STALE_REFRESH_MILLIS) {
             GoDexSyncWorker.enqueueImmediate(appContext)
         }
     }
 
     suspend fun markAsCaught(entryKey: String, caught: Boolean) = withContext(Dispatchers.IO) {
-        dao.updateNeeded(entryKey, !caught)
-        dao.insertPendingUpdate(
-            GoDexPendingUpdateEntity(
-                entryKey = entryKey,
-                caught = caught,
-                timestamp = System.currentTimeMillis()
-            )
-        )
+        dao.setDesiredState(entryKey, caught, System.currentTimeMillis())
         GoDexWriteWorker.enqueue(appContext)
+    }
+
+    suspend fun persistRefreshedCookies(cookies: String) {
+        if (cookies.isNotBlank() && cookies != preferences.config.first().sessionCookies) {
+            preferences.saveSessionCookies(cookies)
+        }
+    }
+
+    suspend fun markReauthenticationRequired(message: String) {
+        preferences.markReauthenticationRequired(message)
+    }
+
+    suspend fun recordWriteSuccess(timestamp: Long = System.currentTimeMillis()) {
+        preferences.saveWriteSuccess(timestamp)
+        syncOperationState.value = GoDexSyncUiState()
+    }
+
+    suspend fun recordWriteError(message: String) {
+        preferences.saveWriteError(message)
     }
 
     companion object {

@@ -16,21 +16,18 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import okhttp3.Cookie
-import okhttp3.CookieJar
-import okhttp3.HttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.jsoup.Jsoup
-import java.util.concurrent.ConcurrentHashMap
 
 data class GoDexImportResult(
     val normalizedUrl: String,
     val collectionTitle: String,
-    val entries: List<GoDexEntryEntity>
+    val entries: List<GoDexEntryEntity>,
+    val refreshedCookies: String = ""
 )
 
 internal data class GoDexInitialPage(
@@ -50,15 +47,16 @@ class GoDexImporter(
 
     suspend fun import(url: String, sessionCookies: String = ""): GoDexImportResult = withContext(Dispatchers.IO) {
         val normalizedUrl = validateAnyCollectionUrl(url)
+        val session = GoDexHttpSession(sessionCookies)
         val initialHtml = execute(
             Request.Builder().url(normalizedUrl).get().build(),
-            sessionCookies
+            session
         )
         val initialPage = parseInitialPage(initialHtml, normalizedUrl)
 
         val regionEntries = coroutineScope {
             initialPage.lazyComponents.map { component ->
-                async { loadRegion(normalizedUrl, initialPage.csrfToken, component, sessionCookies) }
+                async { loadRegion(normalizedUrl, initialPage.csrfToken, component, session) }
             }.awaitAll()
         }
         val entries = regionEntries.flatten().distinctBy { it.entryKey }
@@ -70,7 +68,12 @@ class GoDexImporter(
             context = "GoDex collection"
         )
         require(entries.isNotEmpty()) { "GoDex returned no Pokémon entries" }
-        GoDexImportResult(normalizedUrl, initialPage.collectionTitle, entries)
+        GoDexImportResult(
+            normalizedUrl,
+            initialPage.collectionTitle,
+            entries,
+            session.cookieHeader()
+        )
     }
 
     internal fun parseInitialPage(html: String, baseUrl: String): GoDexInitialPage {
@@ -115,7 +118,12 @@ class GoDexImporter(
         )
     }
 
-    private fun loadRegion(url: String, csrfToken: String, component: GoDexLazyComponent, cookies: String): List<GoDexEntryEntity> {
+    private fun loadRegion(
+        url: String,
+        csrfToken: String,
+        component: GoDexLazyComponent,
+        session: GoDexHttpSession
+    ): List<GoDexEntryEntity> {
         val payload = buildJsonObject {
             put("_token", csrfToken)
             put("components", buildJsonArray {
@@ -139,7 +147,7 @@ class GoDexImporter(
                 .header("X-Livewire", "true")
                 .post(payload.toRequestBody(JSON_MEDIA_TYPE))
                 .build(),
-            cookies
+            session
         )
         val componentResponse = json.parseToJsonElement(responseText).jsonObject["components"]
             ?.jsonArray?.singleOrNull()?.jsonObject
@@ -229,18 +237,19 @@ class GoDexImporter(
     private fun JsonObject.intValue(key: String): Int? =
         get(key)?.jsonPrimitive?.content?.toIntOrNull()
 
-    private fun execute(request: Request, cookies: String = ""): String {
-        val requestWithHeaders = request.newBuilder()
-            .apply {
-                if (cookies.isNotBlank()) {
-                    header("Cookie", cookies)
-                }
-                header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K)")
+    private fun execute(request: Request, session: GoDexHttpSession): String {
+        return client.newCall(session.decorate(request)).execute().use { response ->
+            val result = session.consume(response)
+            if (result.requiresReauthentication) {
+                throw GoDexAuthenticationException(
+                    "Your GoDex session expired. Sign in again to resume synchronization.",
+                    session.cookieHeader()
+                )
             }
-            .build()
-        return client.newCall(requestWithHeaders).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("GoDex returned HTTP ${response.code}")
-            response.body?.string() ?: throw IllegalStateException("GoDex returned an empty response")
+            if (!result.isSuccessful) {
+                throw IllegalStateException("GoDex returned HTTP ${result.code}")
+            }
+            result.body.ifBlank { throw IllegalStateException("GoDex returned an empty response") }
         }
     }
 
@@ -281,17 +290,6 @@ class GoDexImporter(
             return parsed.newBuilder().query(null).fragment(null).build().toString().trimEnd('/')
         }
 
-        private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
-            .cookieJar(InMemoryCookieJar())
-            .build()
-    }
-
-    private class InMemoryCookieJar : CookieJar {
-        private val cookies = ConcurrentHashMap<String, List<Cookie>>()
-        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-            this.cookies[url.host] = cookies
-        }
-        override fun loadForRequest(url: HttpUrl): List<Cookie> =
-            cookies[url.host].orEmpty().filter { it.matches(url) }
+        private fun defaultClient(): OkHttpClient = OkHttpClient()
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +63,7 @@ class GoDexLoginActivity : ComponentActivity() {
             val startAtPicker = intent.getBooleanExtra("EXTRA_START_AT_PICKER", false)
             var step by remember { mutableStateOf(if (startAtPicker) Step.PICK_CHECKLIST else Step.LOGIN) }
             var statusText by remember { mutableStateOf(if (startAtPicker) "Select your checklist" else "Sign in with Google or Discord") }
+            var webView by remember { mutableStateOf<WebView?>(null) }
 
             Scaffold(
                 topBar = {
@@ -70,6 +72,25 @@ class GoDexLoginActivity : ComponentActivity() {
                         navigationIcon = {
                             IconButton(onClick = { finish() }) {
                                 Icon(Icons.Default.Close, contentDescription = "Close")
+                            }
+                        },
+                        actions = {
+                            if (!startAtPicker) {
+                                TextButton(
+                                    onClick = {
+                                        GoDexWebSessionCookies.clearAllWebViewCookies {
+                                            runOnUiThread {
+                                                step = Step.LOGIN
+                                                statusText = "Sign in with Google or Discord"
+                                                webView?.loadUrl(
+                                                    GoDexWebSessionCookies.GODEX_LOGIN_URL
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text("Use another account")
+                                }
                             }
                         }
                     )
@@ -80,6 +101,25 @@ class GoDexLoginActivity : ComponentActivity() {
                         .fillMaxSize()
                         .padding(padding)
                 ) {
+                    AnimatedVisibility(visible = step == Step.LOGIN) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = "Google or Discord may remember your account for faster reauthentication.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Pokémon Alerts never stores your email or password.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     AnimatedVisibility(visible = step == Step.PICK_CHECKLIST) {
                         Column(
                             modifier = Modifier
@@ -104,6 +144,7 @@ class GoDexLoginActivity : ComponentActivity() {
                         AndroidView(
                             factory = { context ->
                                 WebView(context).apply {
+                                    webView = this
                                     settings.apply {
                                         javaScriptEnabled = true
                                         domStorageEnabled = true
@@ -132,12 +173,9 @@ class GoDexLoginActivity : ComponentActivity() {
                                                     val isOnGoDex = currentUrl.contains("godex.site")
                                                     if (isOnGoDex && isCollectionUrl(currentUrl)) {
                                                         val cookies = CookieManager.getInstance().getCookie("https://godex.site")
-                                                        if (cookies != null && cookies.contains("godex_session")) {
+                                                        if (!cookies.isNullOrBlank()) {
                                                              scope.launch {
-                                                                 repository.saveSessionCookies(cookies)
-                                                                 repository.saveWriteBackUrl(currentUrl)
-                                                                 com.example.pokemonalertsv2.work.GoDexSyncWorker.enqueueImmediate(context)
-                                                                 com.example.pokemonalertsv2.work.GoDexSyncWorker.schedule(context)
+                                                                 repository.saveAuthenticatedSession(cookies, currentUrl)
                                                                  Toast.makeText(
                                                                      context,
                                                                      "Checklist selected! Two-way sync is ready.",
@@ -161,11 +199,13 @@ class GoDexLoginActivity : ComponentActivity() {
                                             sessionCookies.split(";").forEach { cookie ->
                                                 cookieManager.setCookie("https://godex.site", cookie.trim())
                                             }
+                                            cookieManager.flush()
                                         }
                                         loadUrl("https://godex.site")
                                     } else {
-                                        CookieManager.getInstance().removeAllCookies(null)
-                                        loadUrl("https://godex.site/login")
+                                        // Preserve Google/Discord WebView cookies so reauthentication
+                                        // can reuse the provider session without storing credentials.
+                                        loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
                                     }
                                 }
                             },

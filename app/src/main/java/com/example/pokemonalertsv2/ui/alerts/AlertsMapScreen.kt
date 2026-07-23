@@ -1338,6 +1338,7 @@ private fun MapAlertDetailContent(
             val scope = rememberCoroutineScope()
             val repository = remember(context) { GoDexRepository.getInstance(context) }
             val config by repository.config.collectAsState()
+            val pendingEntryKeys by repository.pendingEntryKeys.collectAsState()
             var showTargetDialog by remember { mutableStateOf(false) }
             var showUncatchDialog by remember { mutableStateOf(false) }
             var caughtEntries by remember { mutableStateOf<List<GoDexEntryEntity>>(emptyList()) }
@@ -1345,6 +1346,8 @@ private fun MapAlertDetailContent(
             if (config.hasSession && alert.hasType("hundo")) {
                 val isCollected = goDexStatus.status == GoDexMatchStatus.COLLECTED
                 val isNeeded = goDexStatus.status == GoDexMatchStatus.NEEDED
+                val targetKey = goDexStatus.matchedEntryKey
+                val isGoDexChangePending = targetKey != null && targetKey in pendingEntryKeys
                 val hasDescendantsNeeded = goDexStatus.status == GoDexMatchStatus.EVOLUTION_NEEDED ||
                         goDexStatus.status == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
                         goDexStatus.status == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
@@ -1353,7 +1356,6 @@ private fun MapAlertDetailContent(
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        val targetKey = goDexStatus.matchedEntryKey
                         android.util.Log.d("GoDexClickMap", "Clicked map checkmark: isCollected=$isCollected, status=${goDexStatus.status}, hasDescendantsNeeded=$hasDescendantsNeeded, targetKey=$targetKey")
                         if (isCollected) {
                             val caught = repository.getCaughtEntries(alert)
@@ -1383,8 +1385,16 @@ private fun MapAlertDetailContent(
                 ) {
                     Icon(
                         imageVector = if (isCollected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
-                        contentDescription = if (isCollected) "Mark as needed" else "Mark as caught",
-                        tint = if (isCollected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        contentDescription = when {
+                            isGoDexChangePending -> "GoDex checklist change pending"
+                            isCollected -> "Mark as needed"
+                            else -> "Mark as caught"
+                        },
+                        tint = when {
+                            isGoDexChangePending -> MaterialTheme.colorScheme.tertiary
+                            isCollected -> Color(0xFF4CAF50)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        }
                     )
                 }
 

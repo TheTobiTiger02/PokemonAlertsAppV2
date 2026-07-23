@@ -121,6 +121,50 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate15To16_coalescesPendingRowsToLatestDesiredState() {
+        helper.createDatabase(TEST_DATABASE, 15).apply {
+            execSQL(
+                "INSERT INTO godex_pending_updates (entryKey, caught, timestamp) VALUES ('0025-none', 1, 100)"
+            )
+            execSQL(
+                "INSERT INTO godex_pending_updates (entryKey, caught, timestamp) VALUES ('0025-none', 0, 200)"
+            )
+            execSQL(
+                "INSERT INTO godex_pending_updates (entryKey, caught, timestamp) VALUES ('0026_alola-female', 1, 150)"
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            16,
+            true,
+            AppDatabase.MIGRATION_15_16
+        ).apply {
+            query(
+                """
+                SELECT entryKey, caught, revision, timestamp, attemptCount, lastError
+                FROM godex_pending_updates
+                ORDER BY entryKey
+                """.trimIndent()
+            ).use { cursor ->
+                assertEquals(2, cursor.count)
+                cursor.moveToFirst()
+                assertEquals("0025-none", cursor.getString(0))
+                assertEquals(0, cursor.getInt(1))
+                assertEquals(200L, cursor.getLong(2))
+                assertEquals(200L, cursor.getLong(3))
+                assertEquals(0, cursor.getInt(4))
+                assertNull(cursor.getString(5))
+                cursor.moveToNext()
+                assertEquals("0026_alola-female", cursor.getString(0))
+                assertEquals(1, cursor.getInt(1))
+            }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }

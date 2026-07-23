@@ -6,17 +6,55 @@ data class GoDexConfig(
     val lastSuccessfulSyncMillis: Long = 0L,
     val notificationFilterEnabled: Boolean = false,
     val sessionCookies: String = "",
-    val writeBackUrl: String = ""
+    val writeBackUrl: String = "",
+    val sessionState: GoDexSessionState = GoDexSessionState.NONE,
+    val lastSuccessfulWriteMillis: Long = 0L,
+    val lastWriteError: String? = null
 ) {
     val isConnected: Boolean get() = url.isNotBlank() || writeBackUrl.isNotBlank()
-    val hasSession: Boolean get() = sessionCookies.isNotBlank()
+    val hasSession: Boolean
+        get() = sessionState == GoDexSessionState.AUTHENTICATED && sessionCookies.isNotBlank()
     val hasWriteBackUrl: Boolean get() = writeBackUrl.isNotBlank()
+}
+
+enum class GoDexSessionState {
+    NONE,
+    AUTHENTICATED,
+    REAUTH_REQUIRED
 }
 
 data class GoDexSyncUiState(
     val isSyncing: Boolean = false,
+    val pendingCount: Int = 0,
+    val lastSuccessfulWriteMillis: Long = 0L,
+    val sessionState: GoDexSessionState = GoDexSessionState.NONE,
     val errorMessage: String? = null
 )
+
+sealed interface GoDexWriteResult {
+    val refreshedCookies: String
+
+    data class Applied(override val refreshedCookies: String) : GoDexWriteResult
+    data class AlreadyApplied(override val refreshedCookies: String) : GoDexWriteResult
+    data class ReauthenticationRequired(
+        val message: String,
+        override val refreshedCookies: String
+    ) : GoDexWriteResult
+    data class RetryableFailure(
+        val message: String,
+        val cause: Throwable? = null,
+        override val refreshedCookies: String
+    ) : GoDexWriteResult
+    data class PermanentFailure(
+        val message: String,
+        override val refreshedCookies: String
+    ) : GoDexWriteResult
+}
+
+class GoDexAuthenticationException(
+    message: String,
+    val refreshedCookies: String
+) : IllegalStateException(message)
 
 enum class GoDexMatchStatus {
     NEEDED,

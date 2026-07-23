@@ -92,6 +92,7 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
+import com.example.pokemonalertsv2.data.godex.GoDexSessionState
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import androidx.compose.animation.AnimatedVisibility
@@ -454,6 +455,25 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (goDexSyncUiState.pendingCount > 0) {
+                            Text(
+                                "${goDexSyncUiState.pendingCount} checklist " +
+                                    if (goDexSyncUiState.pendingCount == 1) {
+                                        "change is pending"
+                                    } else {
+                                        "changes are pending"
+                                    },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                        if (goDexSyncUiState.lastSuccessfulWriteMillis > 0L) {
+                            Text(
+                                "Last change sent ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(goDexSyncUiState.lastSuccessfulWriteMillis))}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         if (isStale) {
                             Text(
                                 "Checklist data is over 48 hours old. The last successful cache is still in use.",
@@ -568,6 +588,17 @@ fun SettingsScreen(
                                 }
                             }
                         } else {
+                            val requiresReauthentication =
+                                goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED
+                            if (requiresReauthentication) {
+                                Text(
+                                    "Your GoDex session expired. Sign in again to resume " +
+                                        "${goDexSyncUiState.pendingCount} pending checklist " +
+                                        if (goDexSyncUiState.pendingCount == 1) "change." else "changes.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
                             ElevatedButton(
                                 onClick = {
                                     context.startActivity(
@@ -582,7 +613,13 @@ fun SettingsScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Sign in to GoDex for two-way sync")
+                                Text(
+                                    if (requiresReauthentication) {
+                                        "Sign in again to resume sync"
+                                    } else {
+                                        "Sign in to GoDex for two-way sync"
+                                    }
+                                )
                             }
                             Text(
                                 "Sign in to mark Pokémon as caught directly from alerts, and have changes sync back to your GoDex checklist.",

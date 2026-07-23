@@ -5,8 +5,10 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "godex_pending_updates")
 data class GoDexPendingUpdateEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val entryKey: String,
+    @PrimaryKey val entryKey: String,
     val caught: Boolean,
-    val timestamp: Long
+    val revision: Long,
+    val timestamp: Long,
+    val attemptCount: Int = 0,
+    val lastError: String? = null
 )

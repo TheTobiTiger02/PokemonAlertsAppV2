@@ -12,6 +12,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.godex.GoDexAuthenticationException
 import java.util.concurrent.TimeUnit
 
 class GoDexSyncWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
@@ -19,7 +20,15 @@ class GoDexSyncWorker(appContext: Context, params: WorkerParameters) : Coroutine
         GoDexRepository.getInstance(applicationContext).syncConfigured()
     }.fold(
         onSuccess = { Result.success() },
-        onFailure = { if (runAttemptCount < 3) Result.retry() else Result.failure() }
+        onFailure = { error ->
+            if (error is GoDexAuthenticationException) {
+                Result.success()
+            } else if (runAttemptCount < 3) {
+                Result.retry()
+            } else {
+                Result.failure()
+            }
+        }
     )
 
     companion object {

@@ -9,6 +9,7 @@ import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
+import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -244,6 +245,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearGoDexSession() {
         viewModelScope.launch {
             goDexRepository.saveSessionCookies("")
+            GoDexWebSessionCookies.clearGoDexSessionCookies()
         }
     }
     

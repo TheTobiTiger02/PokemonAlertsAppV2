@@ -17,7 +17,16 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             lastSuccessfulSyncMillis = prefs[LAST_SYNC_KEY] ?: 0L,
             notificationFilterEnabled = prefs[FILTER_ENABLED_KEY] ?: false,
             sessionCookies = prefs[COOKIES_KEY].orEmpty(),
-            writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty()
+            writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty(),
+            sessionState = prefs[SESSION_STATE_KEY]
+                ?.let { runCatching { GoDexSessionState.valueOf(it) }.getOrNull() }
+                ?: if (prefs[COOKIES_KEY].isNullOrBlank()) {
+                    GoDexSessionState.NONE
+                } else {
+                    GoDexSessionState.AUTHENTICATED
+                },
+            lastSuccessfulWriteMillis = prefs[LAST_WRITE_KEY] ?: 0L,
+            lastWriteError = prefs[LAST_WRITE_ERROR_KEY]
         )
     }
 
@@ -32,7 +41,40 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
     suspend fun saveSessionCookies(cookies: String) {
         dataStore.edit { prefs ->
             prefs[COOKIES_KEY] = cookies
+            if (cookies.isBlank()) {
+                prefs[SESSION_STATE_KEY] = GoDexSessionState.NONE.name
+                prefs.remove(LAST_WRITE_ERROR_KEY)
+            }
         }
+    }
+
+    suspend fun saveAuthenticatedSession(cookies: String, writeBackUrl: String) {
+        dataStore.edit { prefs ->
+            prefs[COOKIES_KEY] = cookies
+            prefs[WRITE_BACK_URL_KEY] = writeBackUrl
+            prefs[URL_KEY] = writeBackUrl
+            prefs[SESSION_STATE_KEY] = GoDexSessionState.AUTHENTICATED.name
+            prefs.remove(LAST_WRITE_ERROR_KEY)
+        }
+    }
+
+    suspend fun markReauthenticationRequired(message: String) {
+        dataStore.edit { prefs ->
+            prefs[SESSION_STATE_KEY] = GoDexSessionState.REAUTH_REQUIRED.name
+            prefs[LAST_WRITE_ERROR_KEY] = message
+        }
+    }
+
+    suspend fun saveWriteSuccess(timestamp: Long) {
+        dataStore.edit { prefs ->
+            prefs[LAST_WRITE_KEY] = timestamp
+            prefs[SESSION_STATE_KEY] = GoDexSessionState.AUTHENTICATED.name
+            prefs.remove(LAST_WRITE_ERROR_KEY)
+        }
+    }
+
+    suspend fun saveWriteError(message: String) {
+        dataStore.edit { prefs -> prefs[LAST_WRITE_ERROR_KEY] = message }
     }
 
     suspend fun saveWriteBackUrl(url: String) {
@@ -54,6 +96,9 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             prefs.remove(FILTER_ENABLED_KEY)
             prefs.remove(COOKIES_KEY)
             prefs.remove(WRITE_BACK_URL_KEY)
+            prefs.remove(SESSION_STATE_KEY)
+            prefs.remove(LAST_WRITE_KEY)
+            prefs.remove(LAST_WRITE_ERROR_KEY)
         }
     }
 
@@ -64,5 +109,8 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         val FILTER_ENABLED_KEY = booleanPreferencesKey("godex_hundo_notification_filter")
         val COOKIES_KEY = stringPreferencesKey("godex_session_cookies")
         val WRITE_BACK_URL_KEY = stringPreferencesKey("godex_write_back_url")
+        val SESSION_STATE_KEY = stringPreferencesKey("godex_session_state")
+        val LAST_WRITE_KEY = longPreferencesKey("godex_last_successful_write")
+        val LAST_WRITE_ERROR_KEY = stringPreferencesKey("godex_last_write_error")
     }
 }

@@ -35,6 +35,35 @@ class GoDexEntryDaoTest {
         assertEquals(2, dao.observeAll().first().size)
     }
 
+    @Test
+    fun latestDesiredStateCoalescesAndSurvivesInboundReplacement() = runBlocking {
+        dao.replaceAll(listOf(entry("0025-none", 25, needed = true)))
+
+        dao.setDesiredState("0025-none", caught = true, now = 100L)
+        val firstRevision = dao.getPendingUpdate("0025-none")!!.revision
+        dao.setDesiredState("0025-none", caught = false, now = 100L)
+
+        val pending = dao.getPendingUpdates()
+        assertEquals(1, pending.size)
+        assertEquals(false, pending.single().caught)
+        assertEquals(firstRevision + 1L, pending.single().revision)
+
+        dao.replaceAllPreservingPending(listOf(entry("0025-none", 25, needed = false)))
+        assertEquals(true, dao.getAll().single().needed)
+        assertEquals(1, dao.getPendingUpdates().size)
+    }
+
+    @Test
+    fun acknowledgementOnlyDeletesMatchingRevision() = runBlocking {
+        dao.replaceAll(listOf(entry("0025-none", 25, needed = true)))
+        dao.setDesiredState("0025-none", caught = true, now = 100L)
+        val oldRevision = dao.getPendingUpdate("0025-none")!!.revision
+        dao.setDesiredState("0025-none", caught = false, now = 101L)
+
+        assertEquals(0, dao.deletePendingUpdateIfRevision("0025-none", oldRevision))
+        assertEquals(false, dao.getPendingUpdate("0025-none")!!.caught)
+    }
+
     private fun entry(
         key: String,
         dex: Int,

@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GoDexEntryEntity::class,
         GoDexPendingUpdateEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -379,6 +379,43 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        internal val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `godex_pending_updates_new` (
+                        `entryKey` TEXT NOT NULL,
+                        `caught` INTEGER NOT NULL,
+                        `revision` INTEGER NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `attemptCount` INTEGER NOT NULL,
+                        `lastError` TEXT,
+                        PRIMARY KEY(`entryKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `godex_pending_updates_new`
+                        (`entryKey`, `caught`, `revision`, `timestamp`, `attemptCount`, `lastError`)
+                    SELECT pending.`entryKey`, pending.`caught`,
+                           CASE WHEN pending.`timestamp` > 0 THEN pending.`timestamp` ELSE pending.`id` END,
+                           pending.`timestamp`, 0, NULL
+                    FROM `godex_pending_updates` AS pending
+                    WHERE pending.`id` = (
+                        SELECT newest.`id`
+                        FROM `godex_pending_updates` AS newest
+                        WHERE newest.`entryKey` = pending.`entryKey`
+                        ORDER BY newest.`timestamp` DESC, newest.`id` DESC
+                        LIMIT 1
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("DROP TABLE `godex_pending_updates`")
+                db.execSQL("ALTER TABLE `godex_pending_updates_new` RENAME TO `godex_pending_updates`")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -407,7 +444,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_11_12,
                     MIGRATION_12_13,
                     MIGRATION_13_14,
-                    MIGRATION_14_15
+                    MIGRATION_14_15,
+                    MIGRATION_15_16
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

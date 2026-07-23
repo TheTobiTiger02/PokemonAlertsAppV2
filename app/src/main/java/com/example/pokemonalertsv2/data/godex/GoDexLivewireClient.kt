@@ -2,7 +2,16 @@ package com.example.pokemonalertsv2.data.godex
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,214 +24,287 @@ class GoDexLivewireClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun toggleCaught(
+    suspend fun setCaught(
         url: String,
         cookies: String,
         entryKey: String,
         caught: Boolean
-    ): Result<Unit> = withContext(Dispatchers.IO) {
+    ): GoDexWriteResult = withContext(Dispatchers.IO) {
+        val session = GoDexHttpSession(cookies)
         try {
             val normalizedUrl = GoDexImporter.validateAnyCollectionUrl(url)
+            val inspection = inspectEntry(normalizedUrl, entryKey, session)
+                ?: return@withContext GoDexWriteResult.PermanentFailure(
+                    "The selected Pokémon is no longer present in this GoDex checklist.",
+                    session.cookieHeader()
+                )
 
-            // Step 1: Fetch initial page to get CSRF token and lazy components
-            val getRequest = Request.Builder()
-                .url(normalizedUrl)
-                .addHeader("Cookie", cookies)
-                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K)")
-                .get()
-                .build()
-
-            var finalUrl = normalizedUrl
-            val initialHtml = client.newCall(getRequest).execute().use { response ->
-                finalUrl = response.request.url.toString()
-                if (!response.isSuccessful) {
-                    return@withContext Result.failure(IOException("Failed to fetch initial page: ${response.code}"))
-                }
-                response.body?.string() ?: ""
+            if (inspection.caught == caught) {
+                return@withContext GoDexWriteResult.AlreadyApplied(session.cookieHeader())
+            }
+            if (inspection.caught == null) {
+                return@withContext GoDexWriteResult.RetryableFailure(
+                    "GoDex did not expose the current checklist state. The change remains queued.",
+                    refreshedCookies = session.cookieHeader()
+                )
             }
 
-            android.util.Log.d("GoDexClient", "Fetched initial page. Requested: $normalizedUrl, Final: $finalUrl, HTML length: ${initialHtml.length}")
-            val document = Jsoup.parse(initialHtml, finalUrl)
-            val pageTitle = document.title()
-            android.util.Log.d("GoDexClient", "Page title: $pageTitle")
+            val payload = buildTogglePayload(inspection, entryKey)
+            val request = Request.Builder()
+                .url(LIVEWIRE_UPDATE_URL)
+                .header("Content-Type", "application/json")
+                .header("X-Livewire", "true")
+                .header("X-CSRF-TOKEN", inspection.csrfToken)
+                .header("Referer", normalizedUrl)
+                .post(payload.toRequestBody(JSON_MEDIA_TYPE))
+                .build()
 
-            val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
-                ?.takeIf { it.isNotBlank() }
-                ?: document.selectFirst("script[data-csrf]")?.attr("data-csrf")
-                ?.takeIf { it.isNotBlank() }
-                ?: return@withContext Result.failure(IllegalStateException("CSRF token not found. Final URL: $finalUrl, Title: $pageTitle"))
+            val updateResponse = execute(request, session)
+            if (updateResponse.requiresReauthentication) {
+                return@withContext reauthenticationResult(session)
+            }
+            if (!updateResponse.isSuccessful) {
+                return@withContext GoDexWriteResult.RetryableFailure(
+                    "GoDex returned HTTP ${updateResponse.code} while saving the checklist.",
+                    refreshedCookies = session.cookieHeader()
+                )
+            }
 
-            var targetSnapshot: String? = null
-            var targetMethod: String = "toggle" // Default fallback
+            val responseState = caughtStateFromLivewireResponse(updateResponse.body, entryKey)
+            val verifiedState = responseState
+                ?: inspectEntry(normalizedUrl, entryKey, session)?.caught
 
-            // Check if the target entryKey is already present in the initial HTML document
-            // (e.g. if the checklist regions are already rendered directly instead of lazy-loaded)
-            val cardElement = document.selectFirst("[wire:key=$entryKey]")
-                ?: document.selectFirst("[wire:key=\"$entryKey\"]")
-                ?: document.selectFirst("[wire:key='$entryKey']")
-
-            if (cardElement != null) {
-                android.util.Log.d("GoDexClient", "Found entry $entryKey directly in the initial HTML")
-                val snapshotElement = (listOf(cardElement) + cardElement.parents()).firstOrNull { it.hasAttr("wire:snapshot") }
-                targetSnapshot = snapshotElement?.attr("wire:snapshot")
-                
-                val clickVal = cardElement.attr("wire:click").takeIf { it.isNotBlank() }
-                    ?: cardElement.attr("@click").takeIf { it.isNotBlank() }
-                    ?: cardElement.attr("x-on:click").takeIf { it.isNotBlank() }
-                    ?: cardElement.selectFirst("[wire:click]")?.attr("wire:click")
-                    ?: cardElement.selectFirst("[@click]")?.attr("@click")
-                    ?: cardElement.selectFirst("[x-on:click]")?.attr("x-on:click")
-                
-                android.util.Log.d("GoDexClient", "Found direct click value: $clickVal")
-                if (clickVal != null) {
-                    METHOD_NAME_REGEX.find(clickVal)?.groupValues?.get(1)?.let {
-                        targetMethod = it
-                    }
-                }
-                android.util.Log.d("GoDexClient", "Using direct targetMethod: $targetMethod")
+            if (verifiedState == caught) {
+                GoDexWriteResult.Applied(session.cookieHeader())
             } else {
-                // If not found in the initial page, find lazy components and load them
-                val lazyComponents = document.getAllElements().mapNotNull { element ->
-                    val snapshot = element.attr("wire:snapshot").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val init = element.attr("x-init")
-                    val mountParam = LAZY_PARAM_REGEX.find(init)?.groupValues
-                        ?.drop(1)?.firstOrNull { it.isNotBlank() } ?: return@mapNotNull null
-                    GoDexLazyComponent(snapshot, mountParam)
-                }
-
-                if (lazyComponents.isEmpty()) {
-                    return@withContext Result.failure(IllegalStateException("No region components found and card not in initial page"))
-                }
-
-                // Step 2: Load the region containing the entryKey
-                for (component in lazyComponents) {
-                    val payload = buildJsonObject {
-                        put("_token", csrfToken)
-                        put("components", buildJsonArray {
-                            add(buildJsonObject {
-                                put("snapshot", component.snapshot)
-                                put("updates", buildJsonObject {})
-                                put("calls", buildJsonArray {
-                                    add(buildJsonObject {
-                                        put("path", "")
-                                        put("method", "__lazyLoad")
-                                        put("params", buildJsonArray { add(JsonPrimitive(component.mountParam)) })
-                                    })
-                                })
-                            })
-                        })
-                    }.toString()
-
-                    val postRequest = Request.Builder()
-                        .url("https://godex.site/livewire/update")
-                        .addHeader("Cookie", cookies)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("X-Livewire", "true")
-                        .addHeader("X-CSRF-TOKEN", csrfToken)
-                        .addHeader("Referer", normalizedUrl)
-                        .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K)")
-                        .post(payload.toRequestBody(JSON_MEDIA_TYPE))
-                        .build()
-
-                    val responseBody = client.newCall(postRequest).execute().use { response ->
-                        if (response.isSuccessful) response.body?.string() else null
-                    } ?: continue
-
-                    // Check if the loaded region contains our entryKey
-                    val responseJson = json.parseToJsonElement(responseBody).jsonObject
-                    val componentResponse = responseJson["components"]?.jsonArray?.singleOrNull()?.jsonObject
-                    val htmlSnippet = componentResponse?.get("effects")?.jsonObject?.get("html")?.jsonPrimitive?.content ?: ""
-
-                    if (htmlSnippet.contains("wire:key=\"$entryKey\"") || htmlSnippet.contains("wire:key='$entryKey'")) {
-                        android.util.Log.d("GoDexClient", "Found entry $entryKey in HTML snippet: $htmlSnippet")
-                        // Extract latest snapshot
-                        targetSnapshot = componentResponse?.get("snapshot")?.jsonPrimitive?.content
-                        
-                        // Dynamically parse method name from the card HTML
-                        val cardDoc = Jsoup.parseBodyFragment(htmlSnippet)
-                        val innerCardElement = cardDoc.selectFirst("[wire:key=$entryKey]")
-                        if (innerCardElement != null) {
-                            val clickVal = innerCardElement.attr("wire:click").takeIf { it.isNotBlank() }
-                                ?: innerCardElement.attr("@click").takeIf { it.isNotBlank() }
-                                ?: innerCardElement.attr("x-on:click").takeIf { it.isNotBlank() }
-                                ?: innerCardElement.selectFirst("[wire:click]")?.attr("wire:click")
-                                ?: innerCardElement.selectFirst("[@click]")?.attr("@click")
-                                ?: innerCardElement.selectFirst("[x-on:click]")?.attr("x-on:click")
-                            
-                            android.util.Log.d("GoDexClient", "Found click value: $clickVal")
-                            if (clickVal != null) {
-                                METHOD_NAME_REGEX.find(clickVal)?.groupValues?.get(1)?.let {
-                                    targetMethod = it
-                                }
-                            }
-                        }
-                        android.util.Log.d("GoDexClient", "Using targetMethod: $targetMethod")
-                        break
-                    }
-                }
+                GoDexWriteResult.RetryableFailure(
+                    "GoDex did not confirm the requested checklist state.",
+                    refreshedCookies = session.cookieHeader()
+                )
             }
-
-            if (targetSnapshot == null) {
-                return@withContext Result.failure(IllegalStateException("Target Pokémon not found in checklist"))
-            }
-
-            // Step 3: Send the toggle caught update request
-            val updatePayload = buildJsonObject {
-                put("_token", csrfToken)
-                put("components", buildJsonArray {
-                    add(buildJsonObject {
-                        put("snapshot", targetSnapshot)
-                        put("updates", buildJsonObject {})
-                        put("calls", buildJsonArray {
-                            add(buildJsonObject {
-                                put("path", "")
-                                if (targetMethod == "togglePokemon" || targetMethod == "togglePokemonInCollection") {
-                                    val parts = entryKey.split("-")
-                                    val pokedexId = parts.getOrNull(0) ?: entryKey
-                                    val gender = parts.getOrNull(1) ?: "none"
-                                    put("method", "togglePokemonInCollection")
-                                    put("params", buildJsonArray {
-                                        add(JsonPrimitive(pokedexId))
-                                        add(JsonPrimitive(gender))
-                                    })
-                                } else {
-                                    put("method", targetMethod)
-                                    put("params", buildJsonArray { add(JsonPrimitive(entryKey)) })
-                                }
-                            })
-                        })
-                    })
-                })
-            }.toString()
-
-            val finalPostRequest = Request.Builder()
-                .url("https://godex.site/livewire/update")
-                .addHeader("Cookie", cookies)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("X-Livewire", "true")
-                .addHeader("X-CSRF-TOKEN", csrfToken)
-                .addHeader("Referer", normalizedUrl)
-                .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10; K)")
-                .post(updatePayload.toRequestBody(JSON_MEDIA_TYPE))
-                .build()
-
-            client.newCall(finalPostRequest).execute().use { response ->
-                val body = response.body?.string() ?: ""
-                android.util.Log.d("GoDexClient", "Step 3 response code: ${response.code}, body: $body")
-                if (response.isSuccessful) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(IOException("Failed to toggle caught state on GoDex. HTTP code: ${response.code}, body: $body"))
-                }
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (error: GoDexAuthenticationException) {
+            GoDexWriteResult.ReauthenticationRequired(
+                error.message ?: SESSION_EXPIRED_MESSAGE,
+                error.refreshedCookies
+            )
+        } catch (error: IOException) {
+            GoDexWriteResult.RetryableFailure(
+                "Could not reach GoDex. The change remains queued.",
+                error,
+                session.cookieHeader()
+            )
+        } catch (error: Exception) {
+            GoDexWriteResult.RetryableFailure(
+                error.message ?: "GoDex returned an unexpected response.",
+                error,
+                session.cookieHeader()
+            )
         }
     }
 
+    private fun inspectEntry(
+        url: String,
+        entryKey: String,
+        session: GoDexHttpSession
+    ): EntryInspection? {
+        val initialResponse = execute(Request.Builder().url(url).get().build(), session)
+        requireAuthenticated(initialResponse, session)
+        if (!initialResponse.isSuccessful) {
+            throw IOException("GoDex returned HTTP ${initialResponse.code}")
+        }
+
+        val document = Jsoup.parse(initialResponse.body, initialResponse.finalUrl)
+        val csrfToken = document.selectFirst("meta[name=csrf-token]")?.attr("content")
+            ?.takeIf(String::isNotBlank)
+            ?: document.selectFirst("script[data-csrf]")?.attr("data-csrf")
+                ?.takeIf(String::isNotBlank)
+            ?: throw IllegalStateException("GoDex did not provide a synchronization token")
+
+        document.selectFirst("[wire:key=\"$entryKey\"]")?.let { card ->
+            val snapshot = (listOf(card) + card.parents())
+                .firstOrNull { it.hasAttr("wire:snapshot") }
+                ?.attr("wire:snapshot")
+                ?.takeIf(String::isNotBlank)
+                ?: return@let
+            return EntryInspection(
+                csrfToken = csrfToken,
+                snapshot = snapshot,
+                method = clickMethod(card.outerHtml()),
+                caught = caughtStateFromSnapshot(snapshot, entryKey)
+            )
+        }
+
+        val lazyComponents = document.getAllElements().mapNotNull { element ->
+            val snapshot = element.attr("wire:snapshot").takeIf(String::isNotBlank)
+                ?: return@mapNotNull null
+            val mountParam = LAZY_PARAM_REGEX.find(element.attr("x-init"))?.groupValues
+                ?.drop(1)?.firstOrNull(String::isNotBlank)
+                ?: return@mapNotNull null
+            GoDexLazyComponent(snapshot, mountParam)
+        }
+
+        for (component in lazyComponents) {
+            val response = execute(
+                Request.Builder()
+                    .url(LIVEWIRE_UPDATE_URL)
+                    .header("Content-Type", "application/json")
+                    .header("X-Livewire", "true")
+                    .header("X-CSRF-TOKEN", csrfToken)
+                    .header("Referer", url)
+                    .post(lazyPayload(component, csrfToken).toRequestBody(JSON_MEDIA_TYPE))
+                    .build(),
+                session
+            )
+            requireAuthenticated(response, session)
+            if (!response.isSuccessful) continue
+
+            val componentResponse = runCatching {
+                json.parseToJsonElement(response.body).jsonObject["components"]
+                    ?.jsonArray?.singleOrNull()?.jsonObject
+            }.getOrNull() ?: continue
+            val html = componentResponse["effects"]?.jsonObject
+                ?.get("html")?.jsonPrimitive?.content.orEmpty()
+            if (!html.contains("wire:key=\"$entryKey\"") &&
+                !html.contains("wire:key='$entryKey'")
+            ) {
+                continue
+            }
+            val snapshot = componentResponse["snapshot"]?.jsonPrimitive?.content
+                ?: continue
+            val cardHtml = Jsoup.parseBodyFragment(html)
+                .selectFirst("[wire:key=\"$entryKey\"]")
+                ?.outerHtml()
+                ?: html
+            return EntryInspection(
+                csrfToken = csrfToken,
+                snapshot = snapshot,
+                method = clickMethod(cardHtml),
+                caught = caughtStateFromSnapshot(snapshot, entryKey)
+            )
+        }
+        return null
+    }
+
+    private fun buildTogglePayload(inspection: EntryInspection, entryKey: String): String =
+        buildJsonObject {
+            put("_token", inspection.csrfToken)
+            put("components", buildJsonArray {
+                add(buildJsonObject {
+                    put("snapshot", inspection.snapshot)
+                    put("updates", buildJsonObject {})
+                    put("calls", buildJsonArray {
+                        add(buildJsonObject {
+                            put("path", "")
+                            if (inspection.method == "togglePokemon" ||
+                                inspection.method == "togglePokemonInCollection"
+                            ) {
+                                val parts = entryKey.split("-")
+                                put("method", "togglePokemonInCollection")
+                                put("params", buildJsonArray {
+                                    add(JsonPrimitive(parts.getOrNull(0) ?: entryKey))
+                                    add(JsonPrimitive(parts.getOrNull(1) ?: "none"))
+                                })
+                            } else {
+                                put("method", inspection.method)
+                                put("params", buildJsonArray { add(JsonPrimitive(entryKey)) })
+                            }
+                        })
+                    })
+                })
+            })
+        }.toString()
+
+    private fun lazyPayload(component: GoDexLazyComponent, csrfToken: String): String = buildJsonObject {
+        put("_token", csrfToken)
+        put("components", buildJsonArray {
+            add(buildJsonObject {
+                put("snapshot", component.snapshot)
+                put("updates", buildJsonObject {})
+                put("calls", buildJsonArray {
+                    add(buildJsonObject {
+                        put("path", "")
+                        put("method", "__lazyLoad")
+                        put("params", buildJsonArray {
+                            add(JsonPrimitive(component.mountParam))
+                        })
+                    })
+                })
+            })
+        })
+    }.toString()
+
+    private fun caughtStateFromLivewireResponse(body: String, entryKey: String): Boolean? {
+        val snapshot = runCatching {
+            json.parseToJsonElement(body).jsonObject["components"]
+                ?.jsonArray?.singleOrNull()?.jsonObject
+                ?.get("snapshot")?.jsonPrimitive?.content
+        }.getOrNull() ?: return null
+        return caughtStateFromSnapshot(snapshot, entryKey)
+    }
+
+    private fun caughtStateFromSnapshot(snapshot: String, entryKey: String): Boolean? {
+        val data = runCatching {
+            json.parseToJsonElement(snapshot).jsonObject["data"]?.jsonObject
+        }.getOrNull() ?: return null
+        val tuple = data["pokemonsCaught"] as? JsonArray ?: return null
+        val genders = tuple.firstOrNull() as? JsonObject ?: return null
+        return caughtKeys(genders).contains(entryKey)
+    }
+
+    private fun caughtKeys(genders: JsonObject): Set<String> = buildSet {
+        genders.forEach { (gender, value) ->
+            val tuple = value as? JsonArray ?: return@forEach
+            val caught = tuple.firstOrNull() as? JsonObject ?: return@forEach
+            caught.keys.forEach { pokemonKey -> add("$pokemonKey-${gender.lowercase()}") }
+        }
+    }
+
+    private fun clickMethod(html: String): String {
+        val card = Jsoup.parseBodyFragment(html).getAllElements()
+            .firstOrNull { element ->
+                element.hasAttr("wire:click") ||
+                    element.hasAttr("@click") ||
+                    element.hasAttr("x-on:click")
+            }
+        val value = card?.attr("wire:click").takeUnless(String?::isNullOrBlank)
+            ?: card?.attr("@click").takeUnless(String?::isNullOrBlank)
+            ?: card?.attr("x-on:click").takeUnless(String?::isNullOrBlank)
+        return value?.let { METHOD_NAME_REGEX.find(it)?.groupValues?.get(1) } ?: "toggle"
+    }
+
+    private fun execute(request: Request, session: GoDexHttpSession): GoDexHttpResponse =
+        client.newCall(session.decorate(request)).execute().use(session::consume)
+
+    private fun requireAuthenticated(response: GoDexHttpResponse, session: GoDexHttpSession) {
+        if (response.requiresReauthentication) {
+            throw GoDexAuthenticationException(
+                SESSION_EXPIRED_MESSAGE,
+                session.cookieHeader()
+            )
+        }
+    }
+
+    private fun reauthenticationResult(session: GoDexHttpSession) =
+        GoDexWriteResult.ReauthenticationRequired(
+            SESSION_EXPIRED_MESSAGE,
+            session.cookieHeader()
+        )
+
+    private data class EntryInspection(
+        val csrfToken: String,
+        val snapshot: String,
+        val method: String,
+        val caught: Boolean?
+    )
+
     private companion object {
-        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        private val LAZY_PARAM_REGEX = Regex("__lazyLoad\\(&#0*39;([^&]+)&#0*39;\\)|__lazyLoad\\('([^']+)'\\)")
-        private val METHOD_NAME_REGEX = Regex("(?:wire:click|x-on:click|@click)?\\s*(?:\\\$wire\\.)?([a-zA-Z0-9_]+)\\(")
+        const val LIVEWIRE_UPDATE_URL = "https://godex.site/livewire/update"
+        const val SESSION_EXPIRED_MESSAGE =
+            "Your GoDex session expired. Sign in again to resume pending changes."
+        val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        val LAZY_PARAM_REGEX =
+            Regex("__lazyLoad\\(&#0*39;([^&]+)&#0*39;\\)|__lazyLoad\\('([^']+)'\\)")
+        val METHOD_NAME_REGEX =
+            Regex("(?:wire:click|x-on:click|@click)?\\s*(?:\\\$wire\\.)?([a-zA-Z0-9_]+)\\(")
     }
 }

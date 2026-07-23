@@ -12,60 +12,77 @@ import androidx.work.WorkerParameters
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.godex.GoDexLivewireClient
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
-import kotlinx.coroutines.flow.first
+import com.example.pokemonalertsv2.data.godex.GoDexWriteResult
 import java.util.concurrent.TimeUnit
 
-class GoDexWriteWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
+class GoDexWriteWorker(appContext: Context, params: WorkerParameters) :
+    CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        val database = AppDatabase.getDatabase(applicationContext)
-        val dao = database.goDexEntryDao()
-        val pendingUpdates = dao.getPendingUpdates()
-
-        if (pendingUpdates.isEmpty()) {
-            return Result.success()
-        }
+        val dao = AppDatabase.getDatabase(applicationContext).goDexEntryDao()
+        if (dao.getNextPendingUpdate() == null) return Result.success()
 
         val repository = GoDexRepository.getInstance(applicationContext)
-        val config = repository.config.value
-
+        val config = repository.currentConfig()
         if (!config.isConnected || !config.hasSession) {
-            // Write-back sync is disabled or user is logged out, clear queue
-            dao.clearPendingUpdates()
+            // Pending desired states survive sign-out and session expiry.
             return Result.success()
         }
 
         val client = GoDexLivewireClient()
+        while (true) {
+            val update = dao.getNextPendingUpdate() ?: break
+            val currentConfig = repository.currentConfig()
+            if (!currentConfig.hasSession) return Result.success()
 
-        for (update in pendingUpdates) {
-            val targetUrl = config.writeBackUrl.ifBlank { config.url }
-            val result = client.toggleCaught(
-                url = targetUrl,
-                cookies = config.sessionCookies,
+            val result = client.setCaught(
+                url = currentConfig.writeBackUrl.ifBlank { currentConfig.url },
+                cookies = currentConfig.sessionCookies,
                 entryKey = update.entryKey,
                 caught = update.caught
             )
+            repository.persistRefreshedCookies(result.refreshedCookies)
 
-            if (result.isSuccess) {
-                dao.deletePendingUpdate(update.id)
-            } else {
-                val error = result.exceptionOrNull()
-                android.util.Log.e("GoDexWriteWorker", "Failed to sync pending update: ${update.entryKey}", error)
-                // If it is a bad request or missing resource error, we should discard it to prevent blocking the queue forever
-                if (error is IllegalStateException && error.message?.contains("Target Pokémon not found") == true) {
-                    dao.deletePendingUpdate(update.id)
-                    continue
+            when (result) {
+                is GoDexWriteResult.Applied,
+                is GoDexWriteResult.AlreadyApplied -> {
+                    // A newer local action uses a newer revision and is not deleted here.
+                    dao.deletePendingUpdateIfRevision(update.entryKey, update.revision)
+                    repository.recordWriteSuccess()
                 }
-                // For temporary network failures, retry the worker
-                return if (runAttemptCount < 5) Result.retry() else Result.failure()
+
+                is GoDexWriteResult.ReauthenticationRequired -> {
+                    dao.recordPendingFailure(update.entryKey, update.revision, result.message)
+                    repository.markReauthenticationRequired(result.message)
+                    return Result.success()
+                }
+
+                is GoDexWriteResult.RetryableFailure -> {
+                    dao.recordPendingFailure(update.entryKey, update.revision, result.message)
+                    repository.recordWriteError(result.message)
+                    android.util.Log.e(
+                        "GoDexWriteWorker",
+                        "Failed to sync pending update: ${update.entryKey}",
+                        result.cause
+                    )
+                    return if (runAttemptCount < MAX_RETRIES) Result.retry() else Result.failure()
+                }
+
+                is GoDexWriteResult.PermanentFailure -> {
+                    dao.recordPendingFailure(update.entryKey, update.revision, result.message)
+                    repository.recordWriteError(result.message)
+                    dao.deletePendingUpdateIfRevision(update.entryKey, update.revision)
+                }
             }
         }
 
+        GoDexSyncWorker.enqueueImmediate(applicationContext)
         return Result.success()
     }
 
     companion object {
         private const val UNIQUE_WORK_NAME = "godex_write_sync"
+        private const val MAX_RETRIES = 5
         private val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
@@ -77,9 +94,13 @@ class GoDexWriteWorker(appContext: Context, params: WorkerParameters) : Coroutin
                 .build()
             WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
                 UNIQUE_WORK_NAME,
-                ExistingWorkPolicy.REPLACE,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request
             )
+        }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE_WORK_NAME)
         }
     }
 }
