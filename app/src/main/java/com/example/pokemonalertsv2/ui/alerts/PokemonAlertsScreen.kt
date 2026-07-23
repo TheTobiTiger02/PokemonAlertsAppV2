@@ -79,6 +79,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -160,17 +161,11 @@ fun PokemonAlertsRoute(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
+    val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
             AlertShareCard.share(context, alert)
-        }
-    }
-
-    alertsUiState.errorMessage?.let { message ->
-        LaunchedEffect(message) {
-            snackbarHostState.showSnackbar(message)
-            viewModel.consumeError()
         }
     }
 
@@ -205,6 +200,10 @@ fun PokemonAlertsRoute(
                     maxDistance = maxDistance,
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
                     sortPreference = savedSortPreference,
+                    selectedFilter = selectedFilter,
+                    onSelectedFilterChange = viewModel::updateSelectedAlertFilter,
+                    onSelectedAreaChange = viewModel::updateSelectedArea,
+                    onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
@@ -280,13 +279,6 @@ fun AlertHistoryRoute(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-
-    uiState.errorMessage?.let { message ->
-        LaunchedEffect(message) {
-            snackbarHostState.showSnackbar(message)
-            consumeError()
-        }
-    }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
         rememberTopAppBarState()
@@ -399,6 +391,10 @@ fun PokemonAlertsPage(
     maxDistance: Int,
     defaultSnoozeMinutes: Int,
     sortPreference: SortPreference,
+    selectedFilter: AlertFilter,
+    onSelectedFilterChange: (AlertFilter) -> Unit,
+    onSelectedAreaChange: (String) -> Unit,
+    onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -411,7 +407,6 @@ fun PokemonAlertsPage(
     }
     var locationLookupComplete by remember { mutableStateOf(false) }
     var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
-    var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
@@ -567,7 +562,7 @@ fun PokemonAlertsPage(
     // Auto-reset filter if current selection is invalid
     LaunchedEffect(availableFilters, selectedFilter) {
         if (selectedFilter != AlertFilter.ALL && selectedFilter !in availableFilters) {
-            selectedFilter = AlertFilter.ALL
+            onSelectedFilterChange(AlertFilter.ALL)
         }
     }
 
@@ -611,6 +606,11 @@ fun PokemonAlertsPage(
     
     // Expired alerts are filtered by the coarse expiration tick above.
 
+    Column(modifier = modifier.fillMaxSize()) {
+    SyncStatusBanner(
+        status = uiState.toSyncStatus(),
+        onRetry = onRefresh
+    )
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -636,7 +636,7 @@ fun PokemonAlertsPage(
                 dismissedAlertIds = dismissedAlertIds,
                 onFilterChanged = { 
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    selectedFilter = it 
+                    onSelectedFilterChange(it)
                 },
                 onSortChanged = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -683,9 +683,19 @@ fun PokemonAlertsPage(
                 locationLookupComplete = locationLookupComplete,
                 availableFilters = availableFilters,
                 searchQuery = searchQuery,
-                onSearchQueryChanged = { searchQuery = it }
+                onSearchQueryChanged = { searchQuery = it },
+                selectedArea = selectedArea,
+                maxDistance = maxDistance,
+                onClearAllFilters = {
+                    onSelectedFilterChange(AlertFilter.ALL)
+                    showDismissed = false
+                    searchQuery = ""
+                    onSelectedAreaChange("All")
+                    onMaxDistanceChange(0)
+                }
             )
         }
+    }
     }
 
     alertPendingSnooze?.let { alert ->
@@ -697,6 +707,32 @@ fun PokemonAlertsPage(
                 onSnoozeAlert(alert, minutes)
             }
         )
+    }
+}
+
+@Composable
+private fun SyncStatusBanner(
+    status: SyncStatus,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val message = status.alertsStatusMessage() ?: return
+    val isProblem = status is SyncStatus.Cached || status is SyncStatus.Failed
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = if (isProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = if (isProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(message, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            if (status is SyncStatus.Cached || status is SyncStatus.Failed) {
+                TextButton(onClick = onRetry) { Text("Retry") }
+            }
+        }
     }
 }
 
@@ -723,10 +759,20 @@ private fun AlertsList(
     locationLookupComplete: Boolean,
     availableFilters: Set<AlertFilter>,
     searchQuery: String = "",
-    onSearchQueryChanged: (String) -> Unit = {}
+    onSearchQueryChanged: (String) -> Unit = {},
+    selectedArea: String = "All",
+    maxDistance: Int = 0,
+    onClearAllFilters: () -> Unit = {}
 ) {
     val countdownNow = rememberCountdownNow()
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    val activeFilterCount = listOf(
+        selectedFilter != AlertFilter.ALL,
+        showDismissed,
+        searchQuery.isNotBlank(),
+        selectedArea != "All",
+        maxDistance > 0
+    ).count { it }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
@@ -766,7 +812,7 @@ private fun AlertsList(
                             onSortChanged = onSortChanged
                         )
                         FilledTonalButton(onClick = { showFilterSheet = true }) {
-                            Text("Filters")
+                            Text(if (activeFilterCount == 0) "Filters" else "Filters ($activeFilterCount)")
                         }
                     }
                 }
@@ -805,13 +851,28 @@ private fun AlertsList(
 
             if (filteredAlerts.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text(
-                        text = "No alerts found for filter",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(24.dp),
-                        textAlign = TextAlign.Center
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = alertEmptyStateMessage(
+                                searchQuery = searchQuery,
+                                selectedFilter = selectedFilter,
+                                selectedArea = selectedArea,
+                                maxDistance = maxDistance,
+                                showDismissed = showDismissed,
+                                locationAvailable = locationAvailable
+                            ),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        if (activeFilterCount > 0) {
+                            OutlinedButton(onClick = onClearAllFilters) { Text("Clear all filters") }
+                        }
+                    }
                 }
             }
 
@@ -971,6 +1032,12 @@ private fun AlertsList(
                     onClick = { onShowDismissedChanged(!showDismissed) },
                     label = { Text("Show dismissed alerts") }
                 )
+                if (activeFilterCount > 0) {
+                    TextButton(onClick = {
+                        onClearAllFilters()
+                        showFilterSheet = false
+                    }) { Text("Clear all") }
+                }
                 Button(
                     onClick = { showFilterSheet = false },
                     modifier = Modifier.fillMaxWidth()
@@ -980,6 +1047,23 @@ private fun AlertsList(
             }
         }
     }
+}
+
+internal fun alertEmptyStateMessage(
+    searchQuery: String,
+    selectedFilter: AlertFilter,
+    selectedArea: String,
+    maxDistance: Int,
+    showDismissed: Boolean,
+    locationAvailable: Boolean
+): String = when {
+    searchQuery.isNotBlank() -> "No alerts match ‘${searchQuery.trim()}’. Try a different search."
+    selectedFilter != AlertFilter.ALL -> "No ${selectedFilter.label.lowercase()} alerts match the current filters."
+    selectedArea != "All" -> "No active alerts are available in $selectedArea right now."
+    maxDistance > 0 && !locationAvailable -> "Distance filtering needs location access. Enable location or clear the distance limit."
+    maxDistance > 0 -> "No active alerts are within $maxDistance km."
+    showDismissed -> "There are no dismissed alerts to show."
+    else -> "No alerts match the current filters."
 }
 
 @Composable
@@ -1634,6 +1718,25 @@ private fun AlertHistoryPage(
             ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    uiState.errorMessage?.let { message ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    if (uiState.alerts.isEmpty()) "Unable to load history" else "Showing saved history · $message",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                TextButton(onClick = onRefresh) { Text("Retry") }
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
@@ -1657,6 +1760,40 @@ private fun AlertHistoryPage(
                         onQueryChanged = onSearchChanged,
                         placeholder = "Search history…"
                     )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            FilterChip(
+                                selected = uiState.selectedDate == historyDateString(0),
+                                onClick = {
+                                    val millis = historyDateMillis(0)
+                                    selectedDateMillis = millis
+                                    onDateChanged(historyDateString(0))
+                                },
+                                label = { Text("Today") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = uiState.selectedDate == historyDateString(1),
+                                onClick = {
+                                    val millis = historyDateMillis(1)
+                                    selectedDateMillis = millis
+                                    onDateChanged(historyDateString(1))
+                                },
+                                label = { Text("Yesterday") }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = uiState.selectedDate != null &&
+                                    uiState.selectedDate != historyDateString(0) &&
+                                    uiState.selectedDate != historyDateString(1),
+                                onClick = showHistoryDatePicker,
+                                label = { Text("Custom") },
+                                leadingIcon = { Icon(Icons.Filled.DateRange, contentDescription = null) }
+                            )
+                        }
+                    }
                     if (selectedTypeFilter != AlertFilter.ALL || selectedAreaFilter != HistoryAreaFilter.BOTH || selectedDateLabel != null) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (selectedTypeFilter != AlertFilter.ALL) item {
@@ -1837,6 +1974,18 @@ private fun AlertHistoryPage(
                     }
                 }
             }
+            uiState.paginationErrorMessage?.let {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Couldn't load more history", color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = onLoadMore) { Text("Retry") }
+                    }
+                }
+            }
             }
         }
     }
@@ -1911,6 +2060,19 @@ private fun AlertHistoryPage(
         }
     }
 }
+
+internal fun historyDateMillis(daysAgo: Int, nowMillis: Long = System.currentTimeMillis()): Long =
+    java.util.Calendar.getInstance().apply {
+        timeInMillis = nowMillis
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+        add(java.util.Calendar.DAY_OF_YEAR, -daysAgo.coerceAtLeast(0))
+    }.timeInMillis
+
+internal fun historyDateString(daysAgo: Int, nowMillis: Long = System.currentTimeMillis()): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(historyDateMillis(daysAgo, nowMillis)))
 
 @Composable
 private fun StatRow(label: String, count: Int, color: Color) {

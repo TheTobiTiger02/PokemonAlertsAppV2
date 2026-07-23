@@ -20,8 +20,10 @@ internal object WidgetAlertFilter {
     )
 
     sealed class Result {
-        data class Filtered(val alerts: List<PokemonAlert>) : Result()
-        data object PreservePrevious : Result()
+        data class Filtered(
+            val alerts: List<PokemonAlert>,
+            val distanceFilterApplied: Boolean
+        ) : Result()
     }
 
     fun filterAlerts(
@@ -30,14 +32,19 @@ internal object WidgetAlertFilter {
         origin: Origin?,
         distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::distanceMeters
     ): Result {
-        if (criteria.maxDistanceKm > 0 && origin == null) {
-            return Result.PreservePrevious
-        }
+        val distanceFilterApplied = criteria.maxDistanceKm <= 0 || origin != null
 
         return Result.Filtered(
             alerts.filter { alert ->
-                isVisible(alert, criteria, origin, distanceMeters)
-            }
+                isVisible(
+                    alert = alert,
+                    criteria = criteria,
+                    origin = origin,
+                    distanceMeters = distanceMeters,
+                    applyDistance = distanceFilterApplied
+                )
+            },
+            distanceFilterApplied = distanceFilterApplied
         )
     }
 

@@ -1,165 +1,100 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.pokemonalertsv2.ui.components.GradientText
+import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
-import com.example.pokemonalertsv2.ui.components.LinearModernCard
-import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
-import kotlinx.coroutines.launch
 
-data class OnboardingPage(
-    val title: String,
-    val description: String,
-    val icon: ImageVector
-)
-
-val pages = listOf(
-    OnboardingPage(
-        "Live Alerts",
-        "Real-time intel on Pokémon spawns, Raids, and Research nearby.",
-        Icons.Filled.Warning
-    ),
-    OnboardingPage(
-        "Instant Alerts",
-        "Get notified the second a rare Pokémon appears in your area.",
-        Icons.Filled.Notifications
-    ),
-    OnboardingPage(
-        "Track & Collect",
-        "Save your favorites and filter the noise to catch 'em all.",
-        Icons.Filled.Check
-    )
-)
-
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OnboardingScreen(
+    initialArea: String,
+    initialMaxDistance: Int,
+    onAreaChanged: (String) -> Unit,
+    onMaxDistanceChanged: (Int) -> Unit,
+    onPresetSelected: (NotificationPreset) -> Unit,
     onFinish: () -> Unit
 ) {
-    val pagerState = rememberPagerState(pageCount = { pages.size })
-    val scope = rememberCoroutineScope()
-    val isLastPage = pagerState.currentPage == pages.lastIndex
-    val colors = LocalLinearModernColors.current
+    var step by rememberSaveable { mutableIntStateOf(0) }
+    var area by rememberSaveable(initialArea) { mutableStateOf(initialArea) }
+    var distance by rememberSaveable(initialMaxDistance) { mutableIntStateOf(initialMaxDistance) }
+    var presetName by rememberSaveable { mutableStateOf(NotificationPreset.EVERYTHING.name) }
 
-    LinearModernBackground(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { pageIndex ->
-                OnboardingPageContent(page = pages[pageIndex])
-            }
-
+    LinearModernBackground(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp, vertical = 32.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .semantics {
-                            stateDescription = "Page ${pagerState.currentPage + 1} of ${pages.size}"
-                        }
-                        .padding(bottom = 28.dp)
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        repeat(pages.size) { index ->
-                            val dotColor = if (pagerState.currentPage == index) colors.accent else colors.borderHover
-                            val dotWidth = if (pagerState.currentPage == index) 16.dp else 6.dp
-                            Box(
-                                modifier = Modifier
-                                    .height(6.dp)
-                                    .width(dotWidth)
-                                    .background(
-                                        color = dotColor,
-                                        shape = RoundedCornerShape(3.dp)
-                                    )
-                            )
-                        }
-                    }
+                Text("Step ${step + 1} of 4", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                when (step) {
+                    0 -> SetupIntro()
+                    1 -> AreaSetup(area, distance, { area = it }, { distance = it })
+                    2 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
+                    else -> PermissionSetup()
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (!isLastPage) {
-                        TextButton(
-                            onClick = onFinish,
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = colors.foregroundMuted
-                            )
-                        ) {
-                            Text("Skip")
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.width(1.dp))
+            }
+            Column {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (step > 0) {
+                        OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) { Text("Back") }
                     }
-
                     Button(
                         onClick = {
-                            if (isLastPage) {
+                            if (step < 3) step++ else {
+                                onAreaChanged(area)
+                                onMaxDistanceChanged(distance)
+                                onPresetSelected(NotificationPreset.valueOf(presetName))
                                 onFinish()
-                            } else {
-                                scope.launch {
-                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                }
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.accent,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.shadow(
-                            elevation = 8.dp,
-                            shape = RoundedCornerShape(8.dp),
-                            ambientColor = colors.accentGlow,
-                            spotColor = colors.accentGlow
-                        )
-                    ) {
-                        Text(
-                            text = if (isLastPage) "Get started" else "Next",
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        if (!isLastPage) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                contentDescription = null
-                            )
-                        }
-                    }
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (step == 3) "Enable & finish" else "Continue") }
+                }
+                if (step == 3) {
+                    Text(
+                        "Android will ask for notification and location access next. You can decline and change these later in Settings.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+                    )
                 }
             }
         }
@@ -167,56 +102,67 @@ fun OnboardingScreen(
 }
 
 @Composable
-fun OnboardingPageContent(page: OnboardingPage) {
-    val colors = LocalLinearModernColors.current
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 48.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        LinearModernCard(
-            modifier = Modifier
-                .size(140.dp)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(16.dp),
-                    ambientColor = colors.accentGlow,
-                    spotColor = colors.accentGlow
-                )
+private fun SetupIntro() = SetupHeader(
+    Icons.Filled.Warning,
+    "Catch the alerts that matter",
+    "Pokémon Alerts shows live nearby activity, remaining time, distance, and navigation. Background updates keep notifications and widgets useful when the app is closed."
+)
+
+@Composable
+private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onDistance: (Int) -> Unit) {
+    SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Alert filters.")
+    Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf("All", "Alsbach", "Darmstadt").forEach { value ->
+            FilterChip(selected = area == value, onClick = { onArea(value) }, label = { Text(value) })
+        }
+    }
+    Text(
+        if (distance == 0) "Distance: Unlimited" else "Distance: $distance km",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    Slider(value = distance.toFloat(), onValueChange = { onDistance(kotlin.math.round(it).toInt()) }, valueRange = 0f..50f)
+}
+
+@Composable
+private fun PresetSetup(selected: NotificationPreset, onSelected: (NotificationPreset) -> Unit) {
+    SetupHeader(Icons.Filled.Notifications, "Choose notification intensity", "Presets only set alert categories. Fine-grained species and raid filters remain available in Settings.")
+    listOf(
+        NotificationPreset.EVERYTHING to "Every supported alert category",
+        NotificationPreset.HIGH_VALUE to "Spawns, Hundos, PvP, Nundos, and Kecleon",
+        NotificationPreset.QUIET_ESSENTIALS to "Only Hundos, Nundos, and Kecleon"
+    ).forEach { (preset, description) ->
+        Surface(
+            onClick = { onSelected(preset) },
+            shape = MaterialTheme.shapes.large,
+            color = if (selected == preset) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = page.icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(56.dp),
-                    tint = colors.accent
-                )
+            Column(Modifier.padding(16.dp)) {
+                Text(preset.label, fontWeight = FontWeight.SemiBold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        
-        Spacer(modifier = Modifier.height(48.dp))
-        
-        GradientText(
-            text = page.title,
-            style = MaterialTheme.typography.headlineLarge,
-            modifier = Modifier.fillMaxWidth(),
-            isAccent = true
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = page.description,
-            style = MaterialTheme.typography.bodyLarge,
-            color = colors.foregroundMuted,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
     }
+}
+
+@Composable
+private fun PermissionSetup() = SetupHeader(
+    Icons.Filled.Notifications,
+    "Stay informed",
+    "Notifications deliver new alerts. Location calculates distance and powers map tracking. Background location keeps location-based features accurate when the app is not open."
+)
+
+@Composable
+private fun SetupHeader(icon: ImageVector, title: String, description: String) {
+    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+    Text(
+        title,
+        style = MaterialTheme.typography.headlineMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    Text(description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(4.dp))
 }

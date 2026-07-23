@@ -208,6 +208,8 @@ class MainActivity : ComponentActivity() {
             val requestedTab by requestedRootTab.collectAsStateWithLifecycle()
             
             val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+            val onboardingArea by settingsViewModel.selectedArea.collectAsStateWithLifecycle()
+            val onboardingDistance by settingsViewModel.maxDistance.collectAsStateWithLifecycle()
             val darkTheme = AppThemeMode.fromStored(themeMode)
                 .resolveDark(isSystemInDarkTheme())
 
@@ -231,6 +233,11 @@ class MainActivity : ComponentActivity() {
 
                 if (showOnboarding == true) {
                     com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
+                        initialArea = onboardingArea,
+                        initialMaxDistance = onboardingDistance,
+                        onAreaChanged = settingsViewModel::updateSelectedArea,
+                        onMaxDistanceChanged = settingsViewModel::updateMaxDistance,
+                        onPresetSelected = settingsViewModel::applyNotificationPreset,
                         onFinish = {
                             settingsViewModel.completeOnboarding()
                             showOnboarding = false

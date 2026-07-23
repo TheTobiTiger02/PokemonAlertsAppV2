@@ -99,6 +99,16 @@ class AlertsWidgetProviderTest {
         )
     }
 
+    @Test
+    fun adapterDataUriChangesWithSnapshotGeneration() {
+        val first = widgetAdapterDataKey("com.example.test", appWidgetId = 7, generation = 10L)
+        val second = widgetAdapterDataKey("com.example.test", appWidgetId = 7, generation = 11L)
+
+        assertTrue(first != second)
+        assertTrue(first.endsWith("generation=10"))
+        assertTrue(second.endsWith("generation=11"))
+    }
+
     private fun sampleAlert(endTime: String) = PokemonAlert(
         name = "Out Of Range",
         endTime = endTime,

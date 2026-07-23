@@ -81,7 +81,12 @@ internal fun RemoteViews.applyFullWidgetPalette(palette: WidgetThemePalette) {
     setBackgroundResource(R.id.btn_map, palette.iconButtonDrawable)
     setBackgroundResource(R.id.btn_refresh, palette.iconButtonDrawable)
     setTextColors(palette.onSurface, R.id.tv_title, R.id.tv_empty_title)
-    setTextColors(palette.onSurfaceVariant, R.id.tv_last_updated, R.id.tv_empty_subtitle)
+    setTextColors(
+        palette.onSurfaceVariant,
+        R.id.tv_last_updated,
+        R.id.tv_distance_status,
+        R.id.tv_empty_subtitle
+    )
     setTextColor(R.id.tv_count, palette.primary)
     setIconColor(palette.primary, R.id.btn_map, R.id.btn_refresh)
     setImageViewResource(R.id.img_logo, palette.logoDrawable)

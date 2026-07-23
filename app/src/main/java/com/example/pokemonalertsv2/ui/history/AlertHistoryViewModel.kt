@@ -22,6 +22,7 @@ data class HistoryUiState(
     val canLoadMore: Boolean = true,
     val totalServerCount: Int = 0,
     val errorMessage: String? = null,
+    val paginationErrorMessage: String? = null,
     /** Currently active server-side date filter (YYYY-MM-DD) or null = all time. */
     val selectedDate: String? = null,
     /** Currently active server-side type filter (e.g. "Raid") or null = all types. */
@@ -122,7 +123,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
         loadMoreJob?.cancel()
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null, canLoadMore = true) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, paginationErrorMessage = null, canLoadMore = true) }
             currentOffset = 0
             val state = _uiState.value
             val date = state.selectedDate
@@ -139,6 +140,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        errorMessage = null,
                         totalServerCount = total,
                         canLoadMore = progress.canLoadMore
                     )
@@ -168,7 +170,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
 
         loadMoreJob?.cancel()
         loadMoreJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingMore = true) }
+            _uiState.update { it.copy(isLoadingMore = true, paginationErrorMessage = null) }
             val state = _uiState.value
             val date = state.selectedDate
             val type = state.selectedType
@@ -185,6 +187,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
+                        paginationErrorMessage = null,
                         totalServerCount = total,
                         canLoadMore = progress.canLoadMore
                     )
@@ -192,7 +195,12 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
             }.onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 Log.e(TAG, "Load-more failed", throwable)
-                _uiState.update { it.copy(isLoadingMore = false) }
+                _uiState.update {
+                    it.copy(
+                        isLoadingMore = false,
+                        paginationErrorMessage = throwable.localizedMessage ?: "Couldn't load more history"
+                    )
+                }
             }
         }
     }

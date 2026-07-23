@@ -108,6 +108,8 @@ import android.widget.Toast
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.util.UpdateState
+import com.example.pokemonalertsv2.data.NotificationPreset
+import com.example.pokemonalertsv2.data.NotificationCategoryState
 
 internal enum class SettingsDestination(val title: String) {
     OVERVIEW("Settings"),
@@ -138,6 +140,7 @@ fun SettingsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var foregroundLocationGranted by remember { mutableStateOf(false) }
     var backgroundLocationGranted by remember { mutableStateOf(false) }
+    var systemNotificationsGranted by remember { mutableStateOf(true) }
     fun refreshLocationPermissionStatus() {
         foregroundLocationGranted = ContextCompat.checkSelfPermission(
             context,
@@ -151,6 +154,8 @@ fun SettingsScreen(
                 context,
                 Manifest.permission.ACCESS_BACKGROUND_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
+        systemNotificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
     DisposableEffect(lifecycleOwner) {
         refreshLocationPermissionStatus()
@@ -605,28 +610,64 @@ fun SettingsScreen(
                 }
                 
                 if (destination == SettingsDestination.NOTIFICATIONS) {
-                SettingsSection(title = "Notification preferences") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Location access", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                when {
-                                    !foregroundLocationGranted -> "Needed for distances and map features"
-                                    !backgroundLocationGranted -> "While-in-use granted; background access is off"
-                                    else -> "Foreground and background access granted"
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                SettingsSection(title = "Permission status") {
+                    PermissionStatusRow(
+                        title = "Notifications",
+                        granted = systemNotificationsGranted,
+                        description = "Required for instant alert notifications",
+                        actionLabel = if (systemNotificationsGranted) "Manage" else "Enable",
+                        onAction = {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
                             )
                         }
-                        OutlinedButton(onClick = onManageLocationPermissions) {
-                            Text(if (foregroundLocationGranted && backgroundLocationGranted) "Manage" else "Grant")
+                    )
+                    HorizontalDivider()
+                    PermissionStatusRow(
+                        title = "Location while using the app",
+                        granted = foregroundLocationGranted,
+                        description = "Enables distance, nearby sorting, and map tracking",
+                        actionLabel = if (foregroundLocationGranted) "Manage" else "Grant",
+                        onAction = onManageLocationPermissions
+                    )
+                    HorizontalDivider()
+                    PermissionStatusRow(
+                        title = "Background location",
+                        granted = backgroundLocationGranted,
+                        description = "Keeps location-based features accurate when the app is closed",
+                        actionLabel = if (backgroundLocationGranted) "Manage" else "Grant",
+                        onAction = onManageLocationPermissions
+                    )
+                }
+                SettingsSection(title = "Notification preferences") {
+                    val notificationState = NotificationCategoryState(
+                        raidsNotifications, spawnsNotifications, questsNotifications, hundosNotifications,
+                        pvpNotifications, nundosNotifications, kecleonNotifications, rocketNotifications
+                    )
+                    val detectedPreset = NotificationPreset.detect(notificationState)
+                    Text("Preset: ${detectedPreset.label}", style = MaterialTheme.typography.titleSmall)
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            NotificationPreset.EVERYTHING,
+                            NotificationPreset.HIGH_VALUE,
+                            NotificationPreset.QUIET_ESSENTIALS
+                        ).forEach { preset ->
+                            FilterChip(
+                                selected = detectedPreset == preset,
+                                onClick = { viewModel.applyNotificationPreset(preset) },
+                                label = { Text(preset.label) }
+                            )
                         }
                     }
+                    Text(
+                        "Presets change categories only; species and raid-tier filters are preserved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     HorizontalDivider()
                     SwitchSetting(
                         title = "Enable Notifications",
@@ -782,6 +823,31 @@ fun SettingsScreen(
         )
     }
 
+}
+
+@Composable
+private fun PermissionStatusRow(
+    title: String,
+    granted: Boolean,
+    description: String,
+    actionLabel: String,
+    onAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (granted) "On · $description" else "Off · $description",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (granted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+            )
+        }
+        OutlinedButton(onClick = onAction) { Text(actionLabel) }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -44,6 +44,10 @@ class Material3ComposeTest {
         composeRule.onNodeWithContentDescription("Snooze alert").assertHasClickAction()
         composeRule.onNodeWithContentDescription("Share").assertHasClickAction()
         composeRule
+            .onNodeWithContentDescription(composeRule.activity.getString(R.string.open_alert_in_pip))
+            .assertHasClickAction()
+        composeRule.onNodeWithContentDescription("More alert actions").assertDoesNotExist()
+        composeRule
             .onNodeWithContentDescription(composeRule.activity.getString(R.string.open_in_maps))
             .assertHasClickAction()
     }

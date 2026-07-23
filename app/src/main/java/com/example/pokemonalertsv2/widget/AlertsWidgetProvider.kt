@@ -99,9 +99,6 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     }
                     val builtWidget = buildViews(context, appWidgetId, appWidgetManager, nowMillis)
                     appWidgetManager.updateAppWidget(appWidgetId, builtWidget.views)
-                    if (builtWidget.mode.usesCollection) {
-                        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.list_alerts)
-                    }
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Widget resize update failed", t)
@@ -191,17 +188,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 Log.w(TAG, "Expired alert cleanup failed", exception)
             }
 
-            val collectionWidgetIds = mutableListOf<Int>()
             ids.forEach { id ->
                 val builtWidget = buildViews(context, id, appWidgetManager, nowMillis)
                 appWidgetManager.updateAppWidget(id, builtWidget.views)
-                if (builtWidget.mode.usesCollection) collectionWidgetIds += id
-            }
-            if (collectionWidgetIds.isNotEmpty()) {
-                appWidgetManager.notifyAppWidgetViewDataChanged(
-                    collectionWidgetIds.toIntArray(),
-                    R.id.list_alerts
-                )
             }
         } catch (t: Throwable) {
             Log.w(TAG, "Widget update failed", t)
@@ -232,10 +221,19 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 alertCount,
                 alertCounts.firstAlert,
                 palette,
-                nowMillis
+                nowMillis,
+                alertCounts.distanceUnavailable
             )
             WidgetLayoutMode.MEDIUM,
-            WidgetLayoutMode.LARGE_LIST -> buildFullViews(context, appWidgetId, alertCount, palette, nowMillis)
+            WidgetLayoutMode.LARGE_LIST -> buildFullViews(
+                context,
+                appWidgetId,
+                alertCount,
+                palette,
+                nowMillis,
+                alertCounts.distanceUnavailable,
+                alertCounts.generation
+            )
         }
         return BuiltWidget(views = views, mode = mode)
     }
@@ -246,7 +244,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         alertCount: Int,
         alert: PokemonAlert?,
         palette: WidgetThemePalette,
-        nowMillis: Long
+        nowMillis: Long,
+        distanceUnavailable: Boolean
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_alerts_compact).apply {
             applyCompactWidgetPalette(palette)
@@ -272,7 +271,15 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(R.id.tv_compact_count, "$alertCount active")
         if (alert == null) {
             views.setTextViewText(R.id.tv_compact_alert_title, context.getString(R.string.widget_empty_title))
-            views.setTextViewText(R.id.tv_compact_meta, context.getString(R.string.widget_empty_subtitle))
+            val emptyMeta = context.getString(R.string.widget_empty_subtitle)
+            views.setTextViewText(
+                R.id.tv_compact_meta,
+                if (distanceUnavailable) {
+                    "$emptyMeta • ${context.getString(R.string.widget_distance_unavailable)}"
+                } else {
+                    emptyMeta
+                }
+            )
             views.setTextViewText(R.id.tv_compact_countdown, "")
         } else {
             val visualStyle = resolveAlertVisualStyle(alert)
@@ -282,9 +289,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
             }
             views.setTextViewText(R.id.tv_compact_alert_title, formatAlertTitle(alert, goDexStatus.status))
+            val alertMeta = alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label
             views.setTextViewText(
                 R.id.tv_compact_meta,
-                alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label
+                if (distanceUnavailable) {
+                    "$alertMeta • ${context.getString(R.string.widget_distance_unavailable)}"
+                } else {
+                    alertMeta
+                }
             )
             views.setTextColor(R.id.tv_compact_meta, visualStyle.category.accentArgb.toInt())
             val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)?.minus(nowMillis)
@@ -317,7 +329,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         appWidgetId: Int,
         alertCount: Int,
         palette: WidgetThemePalette,
-        nowMillis: Long
+        nowMillis: Long,
+        distanceUnavailable: Boolean,
+        generation: Long
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_alerts).apply {
             applyFullWidgetPalette(palette)
@@ -359,6 +373,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         // Last updated
         val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nowMillis))
         views.setTextViewText(R.id.tv_last_updated, context.getString(R.string.widget_updated_at, time))
+        views.setViewVisibility(
+            R.id.tv_distance_status,
+            if (distanceUnavailable) View.VISIBLE else View.GONE
+        )
+        views.setTextViewText(
+            R.id.tv_distance_status,
+            context.getString(R.string.widget_distance_unavailable)
+        )
 
         // Empty view management: show/hide custom empty container based on alert count
         if (alertCount == 0) {
@@ -372,7 +394,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         // Remote adapter with unique data per widget id
         val svcIntent = Intent(context, AlertsWidgetService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            putExtra(EXTRA_WIDGET_SNAPSHOT_GENERATION, generation)
+            data = Uri.parse(widgetAdapterDataKey(context.packageName, appWidgetId, generation))
         }
         views.setRemoteAdapter(R.id.list_alerts, svcIntent)
 
@@ -403,7 +426,9 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     private data class WidgetAlertCounts(
         val visibleCount: Int,
         val cadenceCount: Int,
-        val alerts: List<PokemonAlert>
+        val alerts: List<PokemonAlert>,
+        val distanceUnavailable: Boolean,
+        val generation: Long
     ) {
         val firstAlert: PokemonAlert? get() = alerts.firstOrNull()
     }
@@ -427,10 +452,18 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             WidgetAlertCounts(
                 visibleCount = loadedAlerts.alerts.size,
                 cadenceCount = loadedAlerts.cadenceAlerts.size,
-                alerts = loadedAlerts.alerts
+                alerts = loadedAlerts.alerts,
+                distanceUnavailable = loadedAlerts.distanceUnavailable,
+                generation = loadedAlerts.generation
             )
         } catch (_: Throwable) {
-            WidgetAlertCounts(visibleCount = 0, cadenceCount = 0, alerts = emptyList())
+            WidgetAlertCounts(
+                visibleCount = 0,
+                cadenceCount = 0,
+                alerts = emptyList(),
+                distanceUnavailable = false,
+                generation = 0L
+            )
         }
     }
 
@@ -494,6 +527,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         const val EXTRA_DISMISS_ALERT_ID = "extra_dismiss_alert_id"
         const val EXTRA_NAV_LAT = "extra_nav_lat"
         const val EXTRA_NAV_LNG = "extra_nav_lng"
+        internal const val EXTRA_WIDGET_SNAPSHOT_GENERATION = "extra_widget_snapshot_generation"
         private const val REQUEST_CODE = 2025
         private const val MIN_UPDATE_DELAY_MS = 1L
         private val UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1)
@@ -536,6 +570,13 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
+@VisibleForTesting
+internal fun widgetAdapterDataKey(
+    packageName: String,
+    appWidgetId: Int,
+    generation: Long
+): String = "pokemon-alerts-widget://$packageName/$appWidgetId?generation=$generation"
 
 @VisibleForTesting
 internal fun shouldScheduleExactWidgetAlarm(

@@ -32,13 +32,22 @@ import kotlinx.coroutines.runBlocking
 class AlertsWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
         val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-        return AlertsFactory(applicationContext, widgetId)
+        val generation = intent.getLongExtra(
+            AlertsWidgetProvider.EXTRA_WIDGET_SNAPSHOT_GENERATION,
+            INVALID_GENERATION
+        )
+        return AlertsFactory(applicationContext, widgetId, generation)
+    }
+
+    private companion object {
+        const val INVALID_GENERATION = -1L
     }
 }
 
 private class AlertsFactory(
     private val context: Context,
-    private val appWidgetId: Int
+    private val appWidgetId: Int,
+    private val expectedGeneration: Long
 ) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
     private var currentLocation: Location? = null
@@ -51,13 +60,19 @@ private class AlertsFactory(
     override fun onDataSetChanged() {
         runBlocking {
             palette = resolveWidgetThemePalette(context)
-            val renderSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
+            val renderSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(
+                appWidgetId = appWidgetId,
+                expectedGeneration = expectedGeneration.takeIf { it >= 0L }
+            )
                 ?: WidgetAlertLoader.load(
                     context = context,
                     appWidgetId = appWidgetId,
                     fallbackLocation = currentLocation
                 ).let {
-                    WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
+                    WidgetAlertSnapshotStore.currentRenderSnapshot(
+                        appWidgetId = appWidgetId,
+                        expectedGeneration = it.generation
+                    )
                 }
             currentLocation = renderSnapshot?.location ?: currentLocation
 

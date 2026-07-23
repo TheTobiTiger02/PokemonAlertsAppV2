@@ -448,10 +448,10 @@ fun AlertCard(
                     }
                 }
 
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (onSnoozeClick != null) {
                         FilledIconButton(
@@ -581,7 +581,7 @@ fun AlertCard(
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     ) {
-                        Icon(imageVector = Icons.Filled.Share, contentDescription = "Share")
+                        Icon(Icons.Filled.Share, contentDescription = "Share")
                     }
                     FilledTonalButton(
                         onClick = onOpenMaps,

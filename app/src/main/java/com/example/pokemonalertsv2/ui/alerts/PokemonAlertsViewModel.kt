@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class AlertsUiState(
@@ -36,8 +37,23 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     private val _uiState = MutableStateFlow(AlertsUiState(isLoading = true))
     val uiState: StateFlow<AlertsUiState> = _uiState
     private var refreshJob: Job? = null
+    private val _selectedAlertFilter = MutableStateFlow(AlertFilter.ALL)
+    val selectedAlertFilter: StateFlow<AlertFilter> = _selectedAlertFilter
 
     init {
+        viewModelScope.launch {
+            val persisted = repository.alertPreferences.lastSuccessfulAlertSyncMillis.first()
+            if (persisted > 0L) {
+                _uiState.update { current ->
+                    current.copy(syncMetadata = current.syncMetadata.copy(lastSuccessfulSyncMillis = persisted))
+                }
+            }
+        }
+        viewModelScope.launch {
+            repository.alertPreferences.selectedAlertFilterName.collect { stored ->
+                _selectedAlertFilter.value = AlertFilter.entries.firstOrNull { it.name == stored } ?: AlertFilter.ALL
+            }
+        }
         refreshAlerts()
         viewModelScope.launch {
             repository.alerts.collect { alerts ->
@@ -71,6 +87,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 repository.fetchAlerts()
             }.onSuccess {
                 val now = System.currentTimeMillis()
+                repository.alertPreferences.updateLastSuccessfulAlertSyncMillis(now)
                 _uiState.update { current ->
                     current.copy(
                         isLoading = false,
@@ -108,10 +125,30 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun consumeError() {
         _uiState.update { current -> current.copy(errorMessage = null) }
     }
+
+    fun updateSelectedAlertFilter(filter: AlertFilter) {
+        _selectedAlertFilter.value = filter
+        viewModelScope.launch { repository.alertPreferences.updateSelectedAlertFilterName(filter.name) }
+    }
+
+    fun updateSelectedArea(area: String) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateSelectedArea(area)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun updateMaxDistance(distance: Int) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMaxDistance(distance.coerceIn(0, 50))
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
     
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
     val sortPreference = repository.alertPreferences.sortPreference
     val mapStylePreference = repository.alertPreferences.mapStylePreference
+    val showMapCountdowns = repository.alertPreferences.showMapCountdowns
     val showSpawnRadius = repository.alertPreferences.showSpawnRadius
     val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
     
@@ -143,6 +180,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateMapStylePreference(preference: MapStylePreference) {
         viewModelScope.launch {
             repository.alertPreferences.updateMapStylePreference(preference)
+        }
+    }
+
+    fun updateShowMapCountdowns(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateShowMapCountdowns(enabled)
         }
     }
 

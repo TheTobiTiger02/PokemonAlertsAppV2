@@ -229,6 +229,13 @@ fun WidgetConfigScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
+            Text(
+                text = "The widget keeps the latest saved alerts visible and shows when it was updated. Location access improves distance filtering.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
@@ -192,6 +193,13 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun updateSelectedArea(area: String) {
         viewModelScope.launch {
             repository.alertPreferences.updateSelectedArea(area)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun applyNotificationPreset(preset: NotificationPreset) {
+        viewModelScope.launch {
+            repository.alertPreferences.applyNotificationPreset(preset)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }

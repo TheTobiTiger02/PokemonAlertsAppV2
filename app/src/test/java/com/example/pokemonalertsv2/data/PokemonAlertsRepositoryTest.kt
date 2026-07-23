@@ -498,6 +498,7 @@ class PokemonAlertsRepositoryTest {
         private val onboardingState = MutableStateFlow(false)
         private val sortState = MutableStateFlow(SortPreference.TIME_REMAINING)
         private val mapStyleState = MutableStateFlow(MapStylePreference.GOOGLE_STANDARD)
+        private val showMapCountdownsState = MutableStateFlow(false)
         private val notificationsEnabledState = MutableStateFlow(true)
         private val raidsState = MutableStateFlow(true)
         private val spawnsState = MutableStateFlow(true)
@@ -523,6 +524,8 @@ class PokemonAlertsRepositoryTest {
         private val allowedNundoSpeciesState = MutableStateFlow(emptySet<String>())
         private val allowedPvpSpeciesState = MutableStateFlow(emptySet<String>())
         private val allowedSpawnSpeciesState = MutableStateFlow(emptySet<String>())
+        private val lastSyncState = MutableStateFlow(0L)
+        private val selectedAlertFilterState = MutableStateFlow("ALL")
 
         override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
         override suspend fun getSeenAlertIds(): Set<String> = state.value
@@ -546,6 +549,9 @@ class PokemonAlertsRepositoryTest {
 
         override val mapStylePreference: Flow<MapStylePreference> = mapStyleState.asStateFlow()
         override suspend fun updateMapStylePreference(preference: MapStylePreference) { mapStyleState.value = preference }
+
+        override val showMapCountdowns: Flow<Boolean> = showMapCountdownsState.asStateFlow()
+        override suspend fun updateShowMapCountdowns(enabled: Boolean) { showMapCountdownsState.value = enabled }
 
         override val notificationsEnabled: Flow<Boolean> = notificationsEnabledState.asStateFlow()
         override suspend fun updateNotificationsEnabled(enabled: Boolean) { notificationsEnabledState.value = enabled }
@@ -631,6 +637,12 @@ class PokemonAlertsRepositoryTest {
         private val spacialRendEnabledState = MutableStateFlow(false)
         override val spacialRendEnabled: Flow<Boolean> = spacialRendEnabledState.asStateFlow()
         override suspend fun updateSpacialRendEnabled(enabled: Boolean) { spacialRendEnabledState.value = enabled }
+
+        override val lastSuccessfulAlertSyncMillis: Flow<Long> = lastSyncState.asStateFlow()
+        override suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long) { lastSyncState.value = timestampMillis }
+        override suspend fun applyNotificationPreset(preset: NotificationPreset) = Unit
+        override val selectedAlertFilterName: Flow<String> = selectedAlertFilterState.asStateFlow()
+        override suspend fun updateSelectedAlertFilterName(filterName: String) { selectedAlertFilterState.value = filterName }
     }
 
     private class FakeAlertDao : AlertDao() {

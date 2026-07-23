@@ -11,41 +11,27 @@ internal object WidgetAlertSnapshotStore {
     data class RenderSnapshot(
         val generation: Long,
         val alerts: List<PokemonAlert>,
-        val location: Location?
+        val location: Location?,
+        val distanceUnavailable: Boolean
     )
 
-    private val snapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
     private val cadenceSnapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
     private val renderSnapshots = ConcurrentHashMap<Int, RenderSnapshot>()
     private val nextGeneration = AtomicLong(0L)
 
     fun resolve(
-        appWidgetId: Int,
         alerts: List<PokemonAlert>,
         criteria: WidgetAlertFilter.Criteria,
         origin: WidgetAlertFilter.Origin?
-    ): List<PokemonAlert> {
-        return when (val result = WidgetAlertFilter.filterAlerts(alerts, criteria, origin)) {
-            is WidgetAlertFilter.Result.Filtered -> {
-                result.alerts.also { snapshots[appWidgetId] = it }
-            }
-            WidgetAlertFilter.Result.PreservePrevious -> {
-                WidgetAlertFilter.filterWithoutDistance(
-                    alerts = snapshots[appWidgetId].orEmpty(),
-                    criteria = criteria
-                ).also { snapshots[appWidgetId] = it }
-            }
-        }
-    }
+    ): WidgetAlertFilter.Result.Filtered =
+        WidgetAlertFilter.filterAlerts(alerts, criteria, origin) as WidgetAlertFilter.Result.Filtered
 
     fun remove(appWidgetId: Int) {
-        snapshots.remove(appWidgetId)
         cadenceSnapshots.remove(appWidgetId)
         renderSnapshots.remove(appWidgetId)
     }
 
     fun clear() {
-        snapshots.clear()
         cadenceSnapshots.clear()
         renderSnapshots.clear()
     }
@@ -53,17 +39,23 @@ internal object WidgetAlertSnapshotStore {
     fun publishRenderSnapshot(
         appWidgetId: Int,
         alerts: List<PokemonAlert>,
-        location: Location?
+        location: Location?,
+        distanceUnavailable: Boolean = false
     ): RenderSnapshot {
         return RenderSnapshot(
             generation = nextGeneration.incrementAndGet(),
             alerts = alerts.toList(),
-            location = location?.let(::Location)
+            location = location?.let(::Location),
+            distanceUnavailable = distanceUnavailable
         ).also { renderSnapshots[appWidgetId] = it }
     }
 
-    fun currentRenderSnapshot(appWidgetId: Int): RenderSnapshot? =
+    fun currentRenderSnapshot(
+        appWidgetId: Int,
+        expectedGeneration: Long? = null
+    ): RenderSnapshot? =
         renderSnapshots[appWidgetId]?.let { snapshot ->
+            if (expectedGeneration != null && snapshot.generation != expectedGeneration) return null
             snapshot.copy(
                 alerts = snapshot.alerts.toList(),
                 location = snapshot.location?.let(::Location)
@@ -81,11 +73,6 @@ internal object WidgetAlertSnapshotStore {
             .mapNotNull { TimeUtils.parseEndTimeToMillis(it.endTime) }
             .filter { it > nowMillis }
             .minOrNull()
-    }
-
-    @VisibleForTesting
-    fun putForTesting(appWidgetId: Int, alerts: List<PokemonAlert>) {
-        snapshots[appWidgetId] = alerts
     }
 
     @VisibleForTesting

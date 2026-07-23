@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.widget
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -133,31 +132,27 @@ class WidgetAlertFilterTest {
     }
 
     @Test
-    fun filterAlerts_preservesPreviousWhenMaxDistanceNeedsMissingLocation() {
+    fun filterAlerts_skipsDistanceButKeepsNewAlertsWhenLocationIsMissing() {
+        val alert = sampleAlert("Unknown Distance")
         val result = WidgetAlertFilter.filterAlerts(
-            alerts = listOf(sampleAlert("Unknown Distance")),
+            alerts = listOf(alert),
             criteria = criteria(maxDistanceKm = 5),
             origin = null
-        )
+        ) as WidgetAlertFilter.Result.Filtered
 
-        assertSame(WidgetAlertFilter.Result.PreservePrevious, result)
+        assertEquals(listOf(alert), result.alerts)
+        assertEquals(false, result.distanceFilterApplied)
     }
 
     @Test
-    fun snapshotStore_preservesPreviousDistanceResultButDropsExpiredAndDismissedAlerts() {
-        val appWidgetId = 42
-        val visible = sampleAlert("Visible", area = "North", endTime = "2000")
+    fun snapshotStore_usesNewestRoomAlertsWhenDistanceLocationIsMissing() {
+        val newAlert = sampleAlert("Needs Location", area = "North", endTime = "2000")
         val expired = sampleAlert("Expired", area = "North", endTime = "1000")
         val dismissed = sampleAlert("Dismissed", area = "North", endTime = "2000")
         val wrongArea = sampleAlert("Wrong Area", area = "South", endTime = "2000")
-        WidgetAlertSnapshotStore.putForTesting(
-            appWidgetId = appWidgetId,
-            alerts = listOf(visible, expired, dismissed, wrongArea)
-        )
 
         val result = WidgetAlertSnapshotStore.resolve(
-            appWidgetId = appWidgetId,
-            alerts = listOf(sampleAlert("Needs Location", area = "North", endTime = "2000")),
+            alerts = listOf(newAlert, expired, dismissed, wrongArea),
             criteria = criteria(
                 dismissedAlertIds = setOf(dismissed.uniqueId),
                 selectedArea = "North",
@@ -166,19 +161,22 @@ class WidgetAlertFilterTest {
             origin = null
         )
 
-        assertEquals(listOf(visible), result)
+        assertEquals(listOf(newAlert), result.alerts)
+        assertEquals(false, result.distanceFilterApplied)
     }
 
     @Test
-    fun snapshotStore_returnsEmptyWhenDistanceNeedsMissingLocationAndNoPreviousSnapshotExists() {
+    fun snapshotStore_returnsNewAlertAfterProcessSnapshotIsCleared() {
+        val newAlert = sampleAlert("Needs Location")
+        WidgetAlertSnapshotStore.clearForTesting()
         val result = WidgetAlertSnapshotStore.resolve(
-            appWidgetId = 99,
-            alerts = listOf(sampleAlert("Needs Location")),
+            alerts = listOf(newAlert),
             criteria = criteria(maxDistanceKm = 5),
             origin = null
         )
 
-        assertTrue(result.isEmpty())
+        assertEquals(listOf(newAlert), result.alerts)
+        assertEquals(false, result.distanceFilterApplied)
     }
 
     @Test
@@ -236,7 +234,12 @@ class WidgetAlertFilterTest {
     @Test
     fun renderSnapshotIsGenerationTaggedAndDefensivelyCopied() {
         val source = mutableListOf(sampleAlert("First"), sampleAlert("Second"))
-        val first = WidgetAlertSnapshotStore.publishRenderSnapshot(7, source, null)
+        val first = WidgetAlertSnapshotStore.publishRenderSnapshot(
+            7,
+            source,
+            null,
+            distanceUnavailable = true
+        )
         source += sampleAlert("Changed after publish")
         val restored = WidgetAlertSnapshotStore.currentRenderSnapshot(7)
         val second = WidgetAlertSnapshotStore.publishRenderSnapshot(
@@ -246,27 +249,30 @@ class WidgetAlertFilterTest {
         )
 
         assertEquals(listOf("First", "Second"), restored?.alerts?.map { it.name })
+        assertEquals(true, restored?.distanceUnavailable)
         assertTrue(second.generation > first.generation)
+        assertEquals(
+            null,
+            WidgetAlertSnapshotStore.currentRenderSnapshot(7, expectedGeneration = first.generation)
+        )
     }
 
     @Test
     fun expirationPublishesEmptySnapshotAfterOneActiveAlert() {
         val alert = sampleAlert("Expiring", endTime = "2000")
         val active = WidgetAlertSnapshotStore.resolve(
-            appWidgetId = 8,
             alerts = listOf(alert),
             criteria = criteria(nowMillis = 1_999L),
             origin = null
         )
-        WidgetAlertSnapshotStore.publishRenderSnapshot(8, active, null)
+        WidgetAlertSnapshotStore.publishRenderSnapshot(8, active.alerts, null)
 
         val expired = WidgetAlertSnapshotStore.resolve(
-            appWidgetId = 8,
             alerts = listOf(alert),
             criteria = criteria(nowMillis = 2_000L),
             origin = null
         )
-        WidgetAlertSnapshotStore.publishRenderSnapshot(8, expired, null)
+        WidgetAlertSnapshotStore.publishRenderSnapshot(8, expired.alerts, null)
 
         assertTrue(WidgetAlertSnapshotStore.currentRenderSnapshot(8)?.alerts.orEmpty().isEmpty())
     }

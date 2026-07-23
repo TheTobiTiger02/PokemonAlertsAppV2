@@ -56,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -148,9 +149,11 @@ fun AlertsMapRoute(
     showBackButton: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
     val savedMapStyle by viewModel.mapStylePreference.collectAsStateWithLifecycle(
         initialValue = MapStylePreference.GOOGLE_STANDARD
     )
+    val showMapCountdowns by viewModel.showMapCountdowns.collectAsStateWithLifecycle(initialValue = false)
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Refresh while the map is visible without duplicating the main feed cadence.
@@ -175,8 +178,13 @@ fun AlertsMapRoute(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
+        syncStatus = uiState.toSyncStatus(),
+        selectedFilter = selectedFilter,
+        onSelectedFilterChange = viewModel::updateSelectedAlertFilter,
         initialMapStyle = savedMapStyle,
         onMapStyleChanged = viewModel::updateMapStylePreference,
+        showTimeLabels = showMapCountdowns,
+        onShowTimeLabelsChanged = viewModel::updateShowMapCountdowns,
         showBackButton = showBackButton,
         goDexEntries = goDexEntries,
         goDexConfig = goDexConfig,
@@ -192,8 +200,13 @@ fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    syncStatus: SyncStatus = SyncStatus.Live(null),
+    selectedFilter: AlertFilter = AlertFilter.ALL,
+    onSelectedFilterChange: (AlertFilter) -> Unit = {},
     initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
+    showTimeLabels: Boolean = false,
+    onShowTimeLabelsChanged: (Boolean) -> Unit = {},
     showBackButton: Boolean = true,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig(),
@@ -206,8 +219,13 @@ fun AlertsMapScreen(
         alerts = alerts,
         onBack = onBack,
         onRefresh = onRefresh,
+        syncStatus = syncStatus,
+        selectedFilter = selectedFilter,
+        onSelectedFilterChange = onSelectedFilterChange,
         initialMapStyle = initialMapStyle,
         onMapStyleChanged = onMapStyleChanged,
+        showTimeLabels = showTimeLabels,
+        onShowTimeLabelsChanged = onShowTimeLabelsChanged,
         showBackButton = showBackButton,
         goDexEntries = goDexEntries,
         goDexConfig = goDexConfig,
@@ -224,8 +242,13 @@ internal fun AlertsMapScreenContent(
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    syncStatus: SyncStatus = SyncStatus.Live(null),
+    selectedFilter: AlertFilter = AlertFilter.ALL,
+    onSelectedFilterChange: (AlertFilter) -> Unit = {},
     initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
+    showTimeLabels: Boolean = false,
+    onShowTimeLabelsChanged: (Boolean) -> Unit = {},
     showBackButton: Boolean = true,
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig(),
@@ -247,8 +270,10 @@ internal fun AlertsMapScreenContent(
     }
     var googleMapLoaded by remember { mutableStateOf(false) }
     var openStreetMapLoaded by remember { mutableStateOf(false) }
-    var selectedAlert by remember { mutableStateOf<PokemonAlert?>(null) }
-    var selectedFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
+    var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedAlert = remember(alerts, selectedAlertId) {
+        alerts.firstOrNull { it.uniqueId == selectedAlertId }
+    }
     var mapStyle by rememberSaveable(initialMapStyle) { mutableStateOf(initialMapStyle) }
     val mapSource = if (mapStyle == MapStylePreference.OPENSTREETMAP) {
         MapDisplaySource.OPENSTREETMAP
@@ -260,7 +285,6 @@ internal fun AlertsMapScreenContent(
     } else {
         MapType.NORMAL
     }
-    var showTimeLabels by rememberSaveable { mutableStateOf(false) }
     var showFilterMenu by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -491,7 +515,7 @@ internal fun AlertsMapScreenContent(
     }
 
     LaunchedEffect(availableFilters) {
-        if (selectedFilter !in availableFilters) selectedFilter = AlertFilter.ALL
+        if (selectedFilter !in availableFilters) onSelectedFilterChange(AlertFilter.ALL)
     }
 
     val mapUiSettings = remember(hasLocationPermission) {
@@ -702,7 +726,7 @@ internal fun AlertsMapScreenContent(
                             showTimeLabel = showTimeLabels,
                             goDexEntries = goDexEntries,
                             goDexConfig = goDexConfig,
-                            onClick = { selectedAlert = alert }
+                            onClick = { selectedAlertId = alert.uniqueId }
                         )
                     }
                 }
@@ -721,7 +745,7 @@ internal fun AlertsMapScreenContent(
                 onLoadError = {
                     Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
                 },
-                onAlertClick = { selectedAlert = it },
+                onAlertClick = { selectedAlertId = it.uniqueId },
                 onCameraChanged = ::updateRetainedCamera,
                 onUserGesture = {
                     applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
@@ -770,7 +794,7 @@ internal fun AlertsMapScreenContent(
                 showSpawnRadius = showSpawnRadius,
                 spacialRendEnabled = spacialRendEnabled,
                 onBack = onBack,
-                onToggleTimeLabels = { showTimeLabels = !showTimeLabels },
+                onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
                 onToggleSpawnRadius = onToggleSpawnRadius,
                 onToggleSpacialRend = onToggleSpacialRend,
                 onRefresh = onRefresh,
@@ -814,6 +838,8 @@ internal fun AlertsMapScreenContent(
                 onOpenFilters = { showFilterMenu = true }
             )
 
+            MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+
             DropdownMenu(
                 expanded = showFilterMenu,
                 onDismissRequest = { showFilterMenu = false },
@@ -824,7 +850,7 @@ internal fun AlertsMapScreenContent(
                     DropdownMenuItem(
                         text = { Text(filter.label) },
                         onClick = {
-                            selectedFilter = filter
+                            onSelectedFilterChange(filter)
                             showFilterMenu = false
                         },
                         leadingIcon = if (selectedFilter == filter) {
@@ -918,7 +944,7 @@ internal fun AlertsMapScreenContent(
                 MapAlertSidePanel(
                     alert = alert,
                     distanceInfo = distanceInfo,
-                    onDismiss = { selectedAlert = null },
+                    onDismiss = { selectedAlertId = null },
                     onOpenMaps = { openMapForAlert(context, alert) },
                     onShare = { scope.launch { AlertShareCard.share(context, alert) } },
                     onOpenFullDetail = {
@@ -929,7 +955,7 @@ internal fun AlertsMapScreenContent(
             } else {
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
                 ModalBottomSheet(
-                    onDismissRequest = { selectedAlert = null },
+                    onDismissRequest = { selectedAlertId = null },
                     sheetState = sheetState,
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface
@@ -937,7 +963,7 @@ internal fun AlertsMapScreenContent(
                     MapAlertDetailContent(
                         alert = alert,
                         distanceInfo = distanceInfo,
-                        onDismiss = { selectedAlert = null },
+                        onDismiss = { selectedAlertId = null },
                         onOpenMaps = { openMapForAlert(context, alert) },
                         onShare = { scope.launch { AlertShareCard.share(context, alert) } },
                         onOpenFullDetail = {
@@ -947,6 +973,25 @@ internal fun AlertsMapScreenContent(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
+    val text = status.mapStatusMessage() ?: return
+    val problem = status is SyncStatus.Cached || status is SyncStatus.Failed
+    Surface(
+        color = if (problem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        contentColor = if (problem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+            if (problem) TextButton(onClick = onRetry) { Text("Retry") }
         }
     }
 }

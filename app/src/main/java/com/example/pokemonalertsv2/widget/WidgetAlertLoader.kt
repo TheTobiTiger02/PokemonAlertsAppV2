@@ -11,7 +11,9 @@ internal object WidgetAlertLoader {
     data class LoadedAlerts(
         val alerts: List<PokemonAlert>,
         val cadenceAlerts: List<PokemonAlert>,
-        val location: Location?
+        val location: Location?,
+        val distanceUnavailable: Boolean,
+        val generation: Long
     )
 
     suspend fun load(
@@ -42,13 +44,13 @@ internal object WidgetAlertLoader {
         )
 
         val origin = location?.let { WidgetAlertFilter.originFrom(it) }
+        val resolvedAlerts = WidgetAlertSnapshotStore.resolve(
+            alerts = alerts,
+            criteria = criteria,
+            origin = origin
+        )
         val visibleAlerts = WidgetAlertSorter.sort(
-            alerts = WidgetAlertSnapshotStore.resolve(
-                appWidgetId = appWidgetId,
-                alerts = alerts,
-                criteria = criteria,
-                origin = origin
-            ),
+            alerts = resolvedAlerts.alerts,
             preference = sortPreference,
             origin = origin
         )
@@ -61,16 +63,19 @@ internal object WidgetAlertLoader {
             origin = origin
         ).also { WidgetAlertSnapshotStore.updateCadence(appWidgetId, it) }
 
-        WidgetAlertSnapshotStore.publishRenderSnapshot(
+        val renderSnapshot = WidgetAlertSnapshotStore.publishRenderSnapshot(
             appWidgetId = appWidgetId,
             alerts = visibleAlerts,
-            location = location
+            location = location,
+            distanceUnavailable = !resolvedAlerts.distanceFilterApplied
         )
 
         return LoadedAlerts(
             alerts = visibleAlerts,
             cadenceAlerts = cadenceAlerts,
-            location = location
+            location = location,
+            distanceUnavailable = renderSnapshot.distanceUnavailable,
+            generation = renderSnapshot.generation
         )
     }
 }

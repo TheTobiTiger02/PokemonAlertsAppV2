@@ -18,6 +18,7 @@ private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.boolean
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
 private val MAP_STYLE_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("map_style_preference")
+private val SHOW_MAP_COUNTDOWNS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_map_countdowns")
 private val NOTIFICATIONS_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
 private val RAIDS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("raids_notifications")
 private val SPAWNS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spawns_notifications")
@@ -34,6 +35,8 @@ private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreference
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
 private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
+private val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
+private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_alert_filter")
 
 // Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
 private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
@@ -93,6 +96,9 @@ interface AlertPreferencesStore {
 
     val mapStylePreference: Flow<MapStylePreference>
     suspend fun updateMapStylePreference(preference: MapStylePreference)
+
+    val showMapCountdowns: Flow<Boolean>
+    suspend fun updateShowMapCountdowns(enabled: Boolean)
     
     val notificationsEnabled: Flow<Boolean>
     suspend fun updateNotificationsEnabled(enabled: Boolean)
@@ -141,6 +147,14 @@ interface AlertPreferencesStore {
 
     val spacialRendEnabled: Flow<Boolean>
     suspend fun updateSpacialRendEnabled(enabled: Boolean)
+
+    val lastSuccessfulAlertSyncMillis: Flow<Long>
+    suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long)
+
+    suspend fun applyNotificationPreset(preset: NotificationPreset)
+
+    val selectedAlertFilterName: Flow<String>
+    suspend fun updateSelectedAlertFilterName(filterName: String)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -263,6 +277,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateMapStylePreference(preference: MapStylePreference) {
         dataStore.edit { prefs ->
             prefs[MAP_STYLE_PREFERENCE_KEY] = preference.name
+        }
+    }
+
+    override val showMapCountdowns: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_MAP_COUNTDOWNS_KEY] ?: false
+    }
+
+    override suspend fun updateShowMapCountdowns(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_MAP_COUNTDOWNS_KEY] = enabled
         }
     }
     
@@ -424,6 +448,39 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         dataStore.edit { prefs ->
             prefs[SPACIAL_REND_ENABLED_KEY] = enabled
         }
+    }
+
+    override val lastSuccessfulAlertSyncMillis: Flow<Long> = dataStore.data.map { preferences ->
+        preferences[LAST_SUCCESSFUL_ALERT_SYNC_KEY] ?: 0L
+    }
+
+    override suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long) {
+        dataStore.edit { prefs ->
+            prefs[LAST_SUCCESSFUL_ALERT_SYNC_KEY] = timestampMillis.coerceAtLeast(0L)
+        }
+    }
+
+    override suspend fun applyNotificationPreset(preset: NotificationPreset) {
+        val categories = preset.categories() ?: return
+        dataStore.edit { prefs ->
+            prefs[NOTIFICATIONS_ENABLED_KEY] = true
+            prefs[RAIDS_NOTIFICATIONS_KEY] = categories.raids
+            prefs[SPAWNS_NOTIFICATIONS_KEY] = categories.spawns
+            prefs[QUESTS_NOTIFICATIONS_KEY] = categories.quests
+            prefs[HUNDOS_NOTIFICATIONS_KEY] = categories.hundos
+            prefs[PVP_NOTIFICATIONS_KEY] = categories.pvp
+            prefs[NUNDOS_NOTIFICATIONS_KEY] = categories.nundos
+            prefs[KECLEON_NOTIFICATIONS_KEY] = categories.kecleon
+            prefs[ROCKET_NOTIFICATIONS_KEY] = categories.rocket
+        }
+    }
+
+    override val selectedAlertFilterName: Flow<String> = dataStore.data.map { preferences ->
+        preferences[SELECTED_ALERT_FILTER_KEY] ?: "ALL"
+    }
+
+    override suspend fun updateSelectedAlertFilterName(filterName: String) {
+        dataStore.edit { prefs -> prefs[SELECTED_ALERT_FILTER_KEY] = filterName }
     }
     
     // Sub-type filtering implementations
