@@ -30,7 +30,7 @@ internal object WidgetAlertFilter {
         alerts: List<PokemonAlert>,
         criteria: Criteria,
         origin: Origin?,
-        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::distanceMeters
+        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::directDistanceMeters
     ): Result {
         val distanceFilterApplied = criteria.maxDistanceKm <= 0 || origin != null
 
@@ -110,7 +110,7 @@ internal object WidgetAlertFilter {
         }
     }
 
-    private fun distanceMeters(origin: Origin, alert: PokemonAlert): Float? {
+    fun directDistanceMeters(origin: Origin, alert: PokemonAlert): Float? {
         val latitude = alert.latitude ?: return null
         val longitude = alert.longitude ?: return null
         val results = FloatArray(1)

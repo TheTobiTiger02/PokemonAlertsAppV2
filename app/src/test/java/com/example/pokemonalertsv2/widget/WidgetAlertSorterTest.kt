@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.widget
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -72,6 +73,28 @@ class WidgetAlertSorterTest {
             source,
             WidgetAlertSorter.sort(source, SortPreference.DISTANCE, origin = null)
         )
+    }
+
+    @Test
+    fun `distance puts routed alerts before direct fallbacks and uses routed meters`() {
+        val directNear = alert("direct-near")
+        val routedFar = alert("routed-far")
+        val routedNear = alert("routed-near")
+
+        val result = WidgetAlertSorter.sort(
+            alerts = listOf(directNear, routedFar, routedNear),
+            preference = SortPreference.DISTANCE,
+            origin = origin,
+            walkingRoutes = mapOf(
+                routedFar.uniqueId to WalkingRouteInfo(2_000, 1_200),
+                routedNear.uniqueId to WalkingRouteInfo(500, 400)
+            ),
+            distanceMeters = { _, candidate ->
+                if (candidate == directNear) 100f else 50f
+            }
+        )
+
+        assertEquals(listOf(routedNear, routedFar, directNear), result)
     }
 
     @Test

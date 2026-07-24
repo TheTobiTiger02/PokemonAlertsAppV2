@@ -464,6 +464,11 @@ class PokemonAlertsRepositoryTest {
             totalStatsRequests += date
             return totalStatsResponse
         }
+        override suspend fun getWalkingRoutes(request: WalkingRouteRequest): WalkingRoutesResponse =
+            WalkingRoutesResponse(
+                provider = "test",
+                calculatedAt = "2026-07-24T12:00:00Z"
+            )
     }
 
     private data class HistoryPagedRequest(

@@ -4,12 +4,14 @@ import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 
 internal object WidgetAlertSorter {
     fun sort(
         alerts: List<PokemonAlert>,
         preference: SortPreference,
         origin: WidgetAlertFilter.Origin?,
+        walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap(),
         distanceMeters: (WidgetAlertFilter.Origin, PokemonAlert) -> Float? = ::distanceMeters
     ): List<PokemonAlert> = when (preference) {
         SortPreference.POSTED_TIME -> alerts.sortedWith(
@@ -23,11 +25,15 @@ internal object WidgetAlertSorter {
 
         SortPreference.DISTANCE -> {
             if (origin == null) alerts
-            else alerts.sortedBy { alert ->
-                distanceMeters(origin, alert)
-                    ?.takeUnless { it.isNaN() || it.isInfinite() || it < 0f }
-                    ?: Float.MAX_VALUE
-            }
+            else alerts.sortedWith(
+                compareBy<PokemonAlert> { if (walkingRoutes.containsKey(it.uniqueId)) 0 else 1 }
+                    .thenBy { alert ->
+                        walkingRoutes[alert.uniqueId]?.distanceMeters?.toFloat()
+                            ?: distanceMeters(origin, alert)
+                                ?.takeUnless { it.isNaN() || it.isInfinite() || it < 0f }
+                            ?: Float.MAX_VALUE
+                    }
+            )
         }
 
         SortPreference.NAME -> alerts.sortedBy { it.name.lowercase() }

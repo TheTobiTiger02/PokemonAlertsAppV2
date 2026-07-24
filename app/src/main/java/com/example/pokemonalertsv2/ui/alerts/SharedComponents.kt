@@ -139,6 +139,7 @@ import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.validAlertCoordinates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -154,7 +155,15 @@ private val ALERT_DETAIL_HERO_IMAGE_HEIGHT = 240.dp
 data class AlertDistanceInfo(
     val distanceMeters: Float?,
     val distanceText: String?,
-    val walkingText: String?
+    val walkingText: String?,
+    val straightLineDistanceMeters: Float? = distanceMeters,
+    val routedWalkingDistanceMeters: Float? = null,
+    val walkingDurationSeconds: Long? = null,
+    val source: DistanceSource = when {
+        routedWalkingDistanceMeters != null -> DistanceSource.ROUTED
+        distanceMeters != null -> DistanceSource.DIRECT
+        else -> DistanceSource.UNAVAILABLE
+    }
 )
 
 @Immutable

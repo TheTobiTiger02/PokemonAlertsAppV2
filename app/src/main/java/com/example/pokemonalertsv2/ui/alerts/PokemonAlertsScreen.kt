@@ -143,8 +143,10 @@ import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.util.CachedLocationProvider
+import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -401,6 +403,7 @@ fun PokemonAlertsPage(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val locationScope = rememberCoroutineScope()
+    val walkingRouteRepository = remember { WalkingRouteRepository.getInstance() }
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
@@ -419,7 +422,7 @@ fun PokemonAlertsPage(
             CachedLocationProvider.get(
                 context = context,
                 timeoutMs = 5_000,
-                highAccuracy = false
+                highAccuracy = true
             )?.takeIf { location ->
                 validMapCoordinates(location.latitude, location.longitude) != null
             }
@@ -467,7 +470,7 @@ fun PokemonAlertsPage(
         walkingRoutes = if (location == null) {
             emptyMap()
         } else {
-            WalkingRouteUtils.getWalkingRoutes(
+            walkingRouteRepository.getWalkingRoutes(
                 location,
                 uiState.alerts.filter { it.mapCoordinatesOrNull() != null }
             )
@@ -496,9 +499,13 @@ fun PokemonAlertsPage(
             AlertUiModel(
                 alert = alert, 
                 distanceInfo = AlertDistanceInfo(
-                    distanceMeters = routeDisplayInfo.straightLineDistanceMeters,
+                    distanceMeters = routeDisplayInfo.effectiveDistanceMeters,
                     distanceText = routeDisplayInfo.distanceText,
-                    walkingText = routeDisplayInfo.walkingText
+                    walkingText = routeDisplayInfo.walkingText,
+                    straightLineDistanceMeters = routeDisplayInfo.straightLineDistanceMeters,
+                    routedWalkingDistanceMeters = routeDisplayInfo.routedDistanceMeters,
+                    walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
+                    source = routeDisplayInfo.source
                 ),
                 endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
                 typeKeys = alert.typeKeys()
@@ -592,9 +599,13 @@ fun PokemonAlertsPage(
             }.thenByDescending { 
                 it.endMillis ?: 0L
             })
-            SortPreference.DISTANCE -> filtered.sortedBy { 
-                it.distanceInfo.distanceMeters ?: Float.MAX_VALUE 
-            }
+            SortPreference.DISTANCE -> filtered.sortedWith(
+                compareBy<AlertUiModel> {
+                    if (it.distanceInfo.source == DistanceSource.ROUTED) 0 else 1
+                }.thenBy {
+                    it.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+                }
+            )
             SortPreference.TIME_REMAINING -> filtered.sortedBy { 
                 it.endMillis ?: Long.MAX_VALUE
             }
@@ -681,6 +692,9 @@ fun PokemonAlertsPage(
                 locationAvailable = hasLocationPermission && userLocation != null,
                 locationPermissionGranted = hasLocationPermission,
                 locationLookupComplete = locationLookupComplete,
+                locationPrecisionInsufficient = userLocation?.let {
+                    !it.hasAccuracy() || it.accuracy > 100f
+                } == true,
                 availableFilters = availableFilters,
                 searchQuery = searchQuery,
                 onSearchQueryChanged = { searchQuery = it },
@@ -757,6 +771,7 @@ private fun AlertsList(
     locationAvailable: Boolean,
     locationPermissionGranted: Boolean,
     locationLookupComplete: Boolean,
+    locationPrecisionInsufficient: Boolean,
     availableFilters: Set<AlertFilter>,
     searchQuery: String = "",
     onSearchQueryChanged: (String) -> Unit = {},
@@ -821,6 +836,23 @@ private fun AlertsList(
                     onQueryChanged = onSearchQueryChanged,
                     placeholder = stringResource(R.string.alerts_search_hint)
                 )
+                if (locationPrecisionInsufficient) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Location is approximate. Enable Precise location for walking routes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = onRequestLocationPermission) {
+                            Text("Improve")
+                        }
+                    }
+                }
                 if (selectedFilter != AlertFilter.ALL || showDismissed) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (selectedFilter != AlertFilter.ALL) {

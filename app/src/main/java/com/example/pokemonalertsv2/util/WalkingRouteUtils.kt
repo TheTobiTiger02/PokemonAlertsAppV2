@@ -1,7 +1,6 @@
 package com.example.pokemonalertsv2.util
 
 import android.location.Location
-import com.example.pokemonalertsv2.data.PokemonAlert
 import java.util.Locale
 import kotlin.math.ceil
 
@@ -10,55 +9,24 @@ data class WalkingRouteInfo(
     val durationSeconds: Long
 )
 
+enum class DistanceSource {
+    ROUTED,
+    DIRECT,
+    UNAVAILABLE
+}
+
 data class RouteDisplayInfo(
     val straightLineDistanceMeters: Float?,
+    val routedDistanceMeters: Float?,
+    val effectiveDistanceMeters: Float?,
+    val walkingDurationSeconds: Long?,
+    val source: DistanceSource,
     val distanceText: String?,
     val walkingText: String?
 )
 
 object WalkingRouteUtils {
-    private const val WALKING_ROUTE_DISTANCE_FACTOR = 1.25f
-    private const val WALKING_SPEED_METERS_PER_SECOND = 1.35f
-
-    suspend fun getWalkingRoutes(
-        origin: Location,
-        alerts: List<PokemonAlert>
-    ): Map<String, WalkingRouteInfo> {
-        return buildEstimatedWalkingRoutes(alerts) { latitude, longitude ->
-            straightLineDistanceMeters(
-                originLatitude = origin.latitude,
-                originLongitude = origin.longitude,
-                destinationLatitude = latitude,
-                destinationLongitude = longitude
-            )
-        }
-    }
-
-    internal fun buildEstimatedWalkingRoutes(
-        alerts: List<PokemonAlert>,
-        straightLineDistanceMeters: (latitude: Double, longitude: Double) -> Float?
-    ): Map<String, WalkingRouteInfo> {
-        return alerts.mapNotNull { alert ->
-            val latitude = alert.latitude ?: return@mapNotNull null
-            val longitude = alert.longitude ?: return@mapNotNull null
-            val routeInfo = estimateWalkingRouteInfo(straightLineDistanceMeters(latitude, longitude))
-                ?: return@mapNotNull null
-            alert.uniqueId to routeInfo
-        }.toMap()
-    }
-
-    internal fun estimateWalkingRouteInfo(straightLineDistanceMeters: Float?): WalkingRouteInfo? {
-        val meters = straightLineDistanceMeters?.takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
-            ?: return null
-        val estimatedDistanceMeters = ceil(meters * WALKING_ROUTE_DISTANCE_FACTOR).toInt()
-        val estimatedDurationSeconds = ceil(estimatedDistanceMeters / WALKING_SPEED_METERS_PER_SECOND).toLong()
-        return WalkingRouteInfo(
-            distanceMeters = estimatedDistanceMeters,
-            durationSeconds = estimatedDurationSeconds
-        )
-    }
-
-    private fun straightLineDistanceMeters(
+    fun straightLineDistanceMeters(
         originLatitude: Double,
         originLongitude: Double,
         destinationLatitude: Double,
@@ -81,11 +49,30 @@ object WalkingRouteUtils {
         straightLineDistanceMeters: Float?,
         routeInfo: WalkingRouteInfo?
     ): RouteDisplayInfo {
+        val directDistance = straightLineDistanceMeters
+            ?.takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
+        val validRoute = routeInfo?.takeIf {
+            it.distanceMeters >= 0 && it.durationSeconds >= 0
+        }
+        val source = when {
+            validRoute != null -> DistanceSource.ROUTED
+            directDistance != null -> DistanceSource.DIRECT
+            else -> DistanceSource.UNAVAILABLE
+        }
+        val routedDistance = validRoute?.distanceMeters?.toFloat()
+        val effectiveDistance = routedDistance ?: directDistance
         return RouteDisplayInfo(
-            straightLineDistanceMeters = straightLineDistanceMeters,
-            distanceText = routeInfo?.let { formatDistanceMeters(it.distanceMeters.toFloat()) }
-                ?: straightLineDistanceMeters?.let { formatDistanceMeters(it) },
-            walkingText = routeInfo?.let { formatWalkingDurationSeconds(it.durationSeconds) }
+            straightLineDistanceMeters = directDistance,
+            routedDistanceMeters = routedDistance,
+            effectiveDistanceMeters = effectiveDistance,
+            walkingDurationSeconds = validRoute?.durationSeconds,
+            source = source,
+            distanceText = when (source) {
+                DistanceSource.ROUTED -> routedDistance?.let(::formatDistanceMeters)
+                DistanceSource.DIRECT -> directDistance?.let { "${formatDistanceMeters(it)} direct" }
+                DistanceSource.UNAVAILABLE -> null
+            },
+            walkingText = validRoute?.let { formatWalkingDurationSeconds(it.durationSeconds) }
         )
     }
 

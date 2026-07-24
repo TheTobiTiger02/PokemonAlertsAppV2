@@ -4,6 +4,7 @@ import android.location.Location
 import androidx.annotation.VisibleForTesting
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -12,7 +13,8 @@ internal object WidgetAlertSnapshotStore {
         val generation: Long,
         val alerts: List<PokemonAlert>,
         val location: Location?,
-        val distanceUnavailable: Boolean
+        val distanceUnavailable: Boolean,
+        val walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
     )
 
     private val cadenceSnapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
@@ -22,9 +24,17 @@ internal object WidgetAlertSnapshotStore {
     fun resolve(
         alerts: List<PokemonAlert>,
         criteria: WidgetAlertFilter.Criteria,
-        origin: WidgetAlertFilter.Origin?
+        origin: WidgetAlertFilter.Origin?,
+        walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
     ): WidgetAlertFilter.Result.Filtered =
-        WidgetAlertFilter.filterAlerts(alerts, criteria, origin) as WidgetAlertFilter.Result.Filtered
+        WidgetAlertFilter.filterAlerts(
+            alerts,
+            criteria,
+            origin
+        ) { routeOrigin, alert ->
+            walkingRoutes[alert.uniqueId]?.distanceMeters?.toFloat()
+                ?: WidgetAlertFilter.directDistanceMeters(routeOrigin, alert)
+        } as WidgetAlertFilter.Result.Filtered
 
     fun remove(appWidgetId: Int) {
         cadenceSnapshots.remove(appWidgetId)
@@ -40,13 +50,15 @@ internal object WidgetAlertSnapshotStore {
         appWidgetId: Int,
         alerts: List<PokemonAlert>,
         location: Location?,
-        distanceUnavailable: Boolean = false
+        distanceUnavailable: Boolean = false,
+        walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
     ): RenderSnapshot {
         return RenderSnapshot(
             generation = nextGeneration.incrementAndGet(),
             alerts = alerts.toList(),
             location = location?.let(::Location),
-            distanceUnavailable = distanceUnavailable
+            distanceUnavailable = distanceUnavailable,
+            walkingRoutes = walkingRoutes.toMap()
         ).also { renderSnapshots[appWidgetId] = it }
     }
 
@@ -58,7 +70,8 @@ internal object WidgetAlertSnapshotStore {
             if (expectedGeneration != null && snapshot.generation != expectedGeneration) return null
             snapshot.copy(
                 alerts = snapshot.alerts.toList(),
-                location = snapshot.location?.let(::Location)
+                location = snapshot.location?.let(::Location),
+                walkingRoutes = snapshot.walkingRoutes.toMap()
             )
         }
 

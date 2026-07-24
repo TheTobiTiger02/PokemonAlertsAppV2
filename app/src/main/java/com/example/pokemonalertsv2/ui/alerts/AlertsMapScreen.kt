@@ -98,6 +98,8 @@ import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.godex.GoDexConfig
@@ -473,6 +475,23 @@ internal fun AlertsMapScreenContent(
         while (true) {
             now = System.currentTimeMillis()
             kotlinx.coroutines.delay(if (showTimeLabels || selectedAlert != null) 1_000 else 30_000)
+        }
+    }
+
+    var selectedWalkingRoute by remember { mutableStateOf<WalkingRouteInfo?>(null) }
+    LaunchedEffect(
+        selectedAlert?.uniqueId,
+        userLocation?.latitude,
+        userLocation?.longitude,
+        userLocation?.accuracy
+    ) {
+        val alert = selectedAlert
+        val location = userLocation
+        selectedWalkingRoute = if (alert == null || location == null) {
+            null
+        } else {
+            WalkingRouteRepository.getInstance()
+                .getWalkingRoutes(location, listOf(alert))[alert.uniqueId]
         }
     }
 
@@ -937,8 +956,13 @@ internal fun AlertsMapScreenContent(
         }
 
         selectedAlert?.let { alert ->
-            val distanceInfo = remember(alert.uniqueId, userLocation?.latitude, userLocation?.longitude) {
-                resolveMapAlertDistanceInfo(userLocation, alert)
+            val distanceInfo = remember(
+                alert.uniqueId,
+                userLocation?.latitude,
+                userLocation?.longitude,
+                selectedWalkingRoute
+            ) {
+                resolveMapAlertDistanceInfo(userLocation, alert, selectedWalkingRoute)
             }
             if (useSidePanel) {
                 MapAlertSidePanel(
@@ -1595,17 +1619,20 @@ internal fun resolveFitAllCoordinates(alerts: List<PokemonAlert>): List<AlertMap
 
 internal fun resolveMapAlertDistanceInfo(
     userLocation: android.location.Location?,
-    alert: PokemonAlert
+    alert: PokemonAlert,
+    routeInfo: WalkingRouteInfo? = null
 ): AlertDistanceInfo? = resolveMapAlertDistanceInfo(
     userLatitude = userLocation?.latitude,
     userLongitude = userLocation?.longitude,
-    alert = alert
+    alert = alert,
+    routeInfo = routeInfo
 )
 
 internal fun resolveMapAlertDistanceInfo(
     userLatitude: Double?,
     userLongitude: Double?,
     alert: PokemonAlert,
+    routeInfo: WalkingRouteInfo? = null,
     distanceBetween: (AlertMapCoordinates, AlertMapCoordinates) -> Float? = { origin, destination ->
         val results = FloatArray(1)
         runCatching {
@@ -1625,12 +1652,15 @@ internal fun resolveMapAlertDistanceInfo(
     val straightLineDistance = distanceBetween(origin, destination)
         ?.takeUnless { it.isNaN() || it.isInfinite() || it < 0f }
         ?: return null
-    val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(straightLineDistance)
     val displayInfo = WalkingRouteUtils.buildRouteDisplayInfo(straightLineDistance, routeInfo)
     return AlertDistanceInfo(
-        distanceMeters = displayInfo.straightLineDistanceMeters,
+        distanceMeters = displayInfo.effectiveDistanceMeters,
         distanceText = displayInfo.distanceText,
-        walkingText = displayInfo.walkingText
+        walkingText = displayInfo.walkingText,
+        straightLineDistanceMeters = displayInfo.straightLineDistanceMeters,
+        routedWalkingDistanceMeters = displayInfo.routedDistanceMeters,
+        walkingDurationSeconds = displayInfo.walkingDurationSeconds,
+        source = displayInfo.source
     )
 }
 

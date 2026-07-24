@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.DistanceSource
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -81,7 +83,7 @@ class AlertsMapViewportTest {
     }
 
     @Test
-    fun `selected alert distance includes estimated walking metadata`() {
+    fun `selected alert distance includes routed walking metadata`() {
         val previousLocale = Locale.getDefault()
         Locale.setDefault(Locale.US)
         try {
@@ -89,10 +91,13 @@ class AlertsMapViewportTest {
                 userLatitude = 49.7,
                 userLongitude = 8.6,
                 alert = alert("destination", 49.8, 8.7),
+                routeInfo = WalkingRouteInfo(distanceMeters = 1_300, durationSeconds = 960),
                 distanceBetween = { _, _ -> 1_000f }
             )
 
-            assertEquals(1_000f, info?.distanceMeters)
+            assertEquals(1_300f, info?.distanceMeters)
+            assertEquals(1_000f, info?.straightLineDistanceMeters)
+            assertEquals(DistanceSource.ROUTED, info?.source)
             assertEquals("1.3 km", info?.distanceText)
             assertEquals("16 min walk", info?.walkingText)
         } finally {

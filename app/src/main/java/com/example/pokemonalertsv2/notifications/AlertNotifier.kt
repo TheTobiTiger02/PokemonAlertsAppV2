@@ -31,6 +31,7 @@ import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.LocationUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -114,24 +115,41 @@ object AlertNotifier {
         val imageLoader = PokemonAlertsApplication.imageLoader(context)
         val userLocation = NotificationLocationCache.get(context)
         val walkingRoutes = userLocation?.let { location ->
-            WalkingRouteUtils.getWalkingRoutes(location, alerts)
+            WalkingRouteRepository.getInstance().getWalkingRoutes(
+                origin = location,
+                alerts = alerts,
+                timeoutMillis = WalkingRouteRepository.BACKGROUND_TIMEOUT_MILLIS
+            )
         } ?: emptyMap()
 
         alerts.forEachIndexed { index, alert ->
             // Area Filter
             if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEachIndexed
-            
-            // Distance Filter (allow if maxDistance is 0 or if location is unknown)
-            if (settings.maxDistance > 0 && userLocation != null) {
-                val latitude = alert.latitude
-                val longitude = alert.longitude
-                if (latitude != null && longitude != null) {
-                    val results = FloatArray(1)
-                    Location.distanceBetween(userLocation.latitude, userLocation.longitude, latitude, longitude, results)
-                    if (!results[0].isNaN() && results[0] > settings.maxDistance * 1000) {
-                        return@forEachIndexed
-                    }
-                }
+
+            val straightLineDistanceMeters = userLocation?.let { loc ->
+                val latitude = alert.latitude ?: return@let null
+                val longitude = alert.longitude ?: return@let null
+                WalkingRouteUtils.straightLineDistanceMeters(
+                    loc.latitude,
+                    loc.longitude,
+                    latitude,
+                    longitude
+                )
+            }
+            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+                straightLineDistanceMeters = straightLineDistanceMeters,
+                routeInfo = walkingRoutes[alert.uniqueId]
+            )
+
+            // A routed distance is preferred. Direct distance is a safe exclusion
+            // fallback because a walkable route cannot be shorter than the geodesic.
+            if (
+                settings.maxDistance > 0 &&
+                routeDisplayInfo.effectiveDistanceMeters?.let {
+                    it > settings.maxDistance * 1000
+                } == true
+            ) {
+                return@forEachIndexed
             }
 
             val goDexStatus = if (alert.hasType("hundo")) {
@@ -162,21 +180,6 @@ object AlertNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
 
-            val straightLineDistanceMeters = userLocation?.let { loc ->
-                val latitude = alert.latitude
-                val longitude = alert.longitude
-                if (latitude == null || longitude == null) return@let null
-                val results = FloatArray(1)
-                runCatching {
-                    Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
-                }.getOrNull()
-                val meters = results.getOrNull(0) ?: Float.NaN
-                meters.takeUnless { it.isNaN() }
-            }
-            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
-                straightLineDistanceMeters = straightLineDistanceMeters,
-                routeInfo = walkingRoutes[alert.uniqueId]
-            )
             val distanceText = routeDisplayInfo.distanceText
             val walkingText = routeDisplayInfo.walkingText
 

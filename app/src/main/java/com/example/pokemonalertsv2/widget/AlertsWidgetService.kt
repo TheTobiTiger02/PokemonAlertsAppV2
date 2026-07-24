@@ -80,9 +80,7 @@ private class AlertsFactory(
 
             items.clear()
             items.addAll(sorted)
-            walkingRoutes = currentLocation?.let { location ->
-                WalkingRouteUtils.getWalkingRoutes(location, sorted)
-            } ?: emptyMap()
+            walkingRoutes = renderSnapshot?.walkingRoutes.orEmpty()
         }
     }
 

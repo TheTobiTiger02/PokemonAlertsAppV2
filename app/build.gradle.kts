@@ -61,7 +61,7 @@ val googleMapsApiKey: String =
 val alertsApiBaseUrl: String =
     localProperties.getProperty("ALERTS_API_BASE_URL")?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable("ALERTS_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
-        ?: "http://api.alsbach-scanner.uk/"
+        ?: "https://api.alsbach-scanner.uk/"
 
 val osmTileUrl: String =
     localProperties.getProperty("OSM_TILE_URL")?.takeIf { it.isNotBlank() }
@@ -76,8 +76,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.3.5"
+        versionCode = 25
+        versionName = "1.3.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)

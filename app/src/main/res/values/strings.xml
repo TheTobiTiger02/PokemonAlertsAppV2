@@ -72,7 +72,7 @@
     <string name="map_use_google">Use Google Maps</string>
     <string name="map_openstreetmap_unavailable">OpenStreetMap could not be loaded. You can switch back to Google Maps.</string>
     <string name="map_distance_unavailable">Distance unavailable</string>
-    <string name="map_estimated_walk">Estimated %1$s</string>
+    <string name="map_estimated_walk">%1$s</string>
     <string name="map_osm_attribution">© OpenStreetMap contributors</string>
     <string name="back">Back</string>
     <string name="enter_pip_short">PiP</string>

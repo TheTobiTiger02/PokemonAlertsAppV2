@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.widget
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -42,6 +43,20 @@ class WidgetAlertFilterTest {
         )
 
         assertEquals(listOf(inRange), (result as WidgetAlertFilter.Result.Filtered).alerts)
+    }
+
+    @Test
+    fun snapshotResolve_prefersRoutedDistanceForMaximumDistance() {
+        val alert = sampleAlert("Route Detour")
+
+        val result = WidgetAlertSnapshotStore.resolve(
+            alerts = listOf(alert),
+            criteria = criteria(maxDistanceKm = 5),
+            origin = origin,
+            walkingRoutes = mapOf(alert.uniqueId to WalkingRouteInfo(6_000, 4_000))
+        )
+
+        assertTrue(result.alerts.isEmpty())
     }
 
     @Test

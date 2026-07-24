@@ -9,6 +9,8 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Body
 import retrofit2.http.Query
 import retrofit2.create
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -44,6 +46,40 @@ data class TotalStatsResponse(
     @SerialName("uptime")         val uptime: Long? = null
 )
 
+@Serializable
+data class WalkingRouteCoordinates(
+    val latitude: Double,
+    val longitude: Double
+)
+
+@Serializable
+data class WalkingRouteDestination(
+    val id: String,
+    val latitude: Double,
+    val longitude: Double
+)
+
+@Serializable
+data class WalkingRouteRequest(
+    val origin: WalkingRouteCoordinates,
+    val destinations: List<WalkingRouteDestination>
+)
+
+@Serializable
+data class WalkingRouteResult(
+    val id: String,
+    val status: String,
+    val distanceMeters: Int? = null,
+    val durationSeconds: Long? = null
+)
+
+@Serializable
+data class WalkingRoutesResponse(
+    val provider: String,
+    val calculatedAt: String,
+    val routes: List<WalkingRouteResult> = emptyList()
+)
+
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
@@ -72,6 +108,11 @@ interface PokemonAlertsService {
     suspend fun getTotalStats(
         @Query("date") date: String? = null
     ): TotalStatsResponse
+
+    @POST("api/routes/walking")
+    suspend fun getWalkingRoutes(
+        @Body request: WalkingRouteRequest
+    ): WalkingRoutesResponse
 }
 
 object PokemonAlertsApi {
