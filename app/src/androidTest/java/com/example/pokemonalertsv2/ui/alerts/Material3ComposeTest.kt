@@ -60,9 +60,10 @@ class Material3ComposeTest {
             }
         }
 
-        composeRule.onNodeWithText("Snooze").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Snooze alert").assertHasClickAction()
+        composeRule.onNodeWithText("I\u2019m going").assertHasClickAction()
         composeRule.onNodeWithText("Navigate").assertHasClickAction()
-        composeRule.onNodeWithText("Share").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Share alert").assertHasClickAction()
     }
 
     @Test
@@ -94,6 +95,8 @@ class Material3ComposeTest {
         ivDefense = 15,
         ivStamina = 15,
         cp = 1234,
-        level = 35.0
+        level = 35.0,
+        latitude = 49.86,
+        longitude = 8.65
     )
 }

@@ -96,6 +96,8 @@ import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
+import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
@@ -261,6 +263,7 @@ internal fun AlertsMapScreenContent(
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
 ) {
     val context = LocalContext.current
+    val arrivalTracking = rememberArrivalTrackingUiController()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -969,6 +972,8 @@ internal fun AlertsMapScreenContent(
                     alert = alert,
                     distanceInfo = distanceInfo,
                     onDismiss = { selectedAlertId = null },
+                    isGoing = arrivalTracking.isTracking(alert),
+                    onGoing = { arrivalTracking.onToggle(alert) },
                     onOpenMaps = { openMapForAlert(context, alert) },
                     onShare = { scope.launch { AlertShareCard.share(context, alert) } },
                     onOpenFullDetail = {
@@ -988,6 +993,8 @@ internal fun AlertsMapScreenContent(
                         alert = alert,
                         distanceInfo = distanceInfo,
                         onDismiss = { selectedAlertId = null },
+                        isGoing = arrivalTracking.isTracking(alert),
+                        onGoing = { arrivalTracking.onToggle(alert) },
                         onOpenMaps = { openMapForAlert(context, alert) },
                         onShare = { scope.launch { AlertShareCard.share(context, alert) } },
                         onOpenFullDetail = {
@@ -1264,6 +1271,8 @@ private fun MapAlertSidePanel(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
+    isGoing: Boolean,
+    onGoing: () -> Unit,
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
     onOpenFullDetail: () -> Unit,
@@ -1284,6 +1293,8 @@ private fun MapAlertSidePanel(
             alert = alert,
             distanceInfo = distanceInfo,
             onDismiss = onDismiss,
+            isGoing = isGoing,
+            onGoing = onGoing,
             onOpenMaps = onOpenMaps,
             onShare = onShare,
             onOpenFullDetail = onOpenFullDetail,
@@ -1297,6 +1308,8 @@ private fun MapAlertDetailContent(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
+    isGoing: Boolean,
+    onGoing: () -> Unit,
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
     onOpenFullDetail: () -> Unit,
@@ -1505,6 +1518,20 @@ private fun MapAlertDetailContent(
             )
         }
 
+        if (isGoing) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = "Arrival tracking active",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                )
+            }
+        }
+
         alert.displayCp?.let { cp ->
             Surface(
                 shape = MaterialTheme.shapes.small,
@@ -1549,6 +1576,15 @@ private fun MapAlertDetailContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            FilledTonalButton(
+                onClick = onGoing,
+                enabled = isGoing || alert.isEligibleArrivalDestination(),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text(if (isGoing) "Stop" else "I\u2019m going")
+            }
             Button(
                 onClick = onOpenMaps,
                 modifier = Modifier
@@ -1563,6 +1599,12 @@ private fun MapAlertDetailContent(
                 Spacer(modifier = Modifier.size(8.dp))
                 Text("Directions")
             }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             FilledTonalButton(
                 onClick = onShare,
                 modifier = Modifier
@@ -1571,15 +1613,14 @@ private fun MapAlertDetailContent(
             ) {
                 Text("Share")
             }
-        }
-
-        FilledTonalButton(
-            onClick = onOpenFullDetail,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            Text("Open full detail")
+            FilledTonalButton(
+                onClick = onOpenFullDetail,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text("Open details")
+            }
         }
     }
 }

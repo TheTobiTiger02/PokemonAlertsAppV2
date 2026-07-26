@@ -14,6 +14,7 @@ import coil.memory.MemoryCache
 import com.example.pokemonalertsv2.fcm.FcmTopicSubscriber
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
 import com.example.pokemonalertsv2.util.UpdateCheckSource
@@ -63,6 +64,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onStart(owner: LifecycleOwner) {
         if (PendingInstallStore.hasPending(this)) return
+        ArrivalTrackingService.resumeIfActive(this)
         applicationScope.launch {
             GoDexRepository.getInstance(this@PokemonAlertsApplication).refreshIfStale()
             InAppUpdateManager.checkForUpdates(UpdateCheckSource.AUTOMATIC)

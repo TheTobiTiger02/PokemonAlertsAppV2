@@ -131,6 +131,8 @@ import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
+import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
+import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
 import com.example.pokemonalertsv2.ui.components.GradientText
@@ -279,6 +281,8 @@ fun AlertCard(
     onPipClick: () -> Unit,
     onShareClick: () -> Unit,
     onSnoozeClick: (() -> Unit)? = null,
+    isGoing: Boolean = false,
+    onGoingClick: (() -> Unit)? = null,
     nowMillis: Long = System.currentTimeMillis(),
     modifier: Modifier = Modifier
 ) {
@@ -601,6 +605,31 @@ fun AlertCard(
                         )
                     ) {
                         Icon(Icons.Filled.Share, contentDescription = "Share")
+                    }
+                    if (onGoingClick != null) {
+                        FilledTonalButton(
+                            onClick = onGoingClick,
+                            modifier = Modifier.height(48.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (isGoing) {
+                                    MaterialTheme.colorScheme.errorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                },
+                                contentColor = if (isGoing) {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                }
+                            )
+                        ) {
+                            Icon(Icons.Filled.LocationOn, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                if (isGoing) "Stop" else "I\u2019m going",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
                     }
                     FilledTonalButton(
                         onClick = onOpenMaps,
@@ -1200,6 +1229,8 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
+    val arrivalTracking = rememberArrivalTrackingUiController()
+    val isGoing = arrivalTracking.isTracking(alert)
     val goDexStatus = rememberGoDexStatus(alert)
     val actionBarClearance = 84.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -1496,6 +1527,14 @@ fun AlertDetailScreen(
                     
                     // Location Card
                     LocationCard(alert = alert)
+                    if (isGoing) {
+                        AlertPill(
+                            text = "Arrival tracking active",
+                            icon = Icons.Filled.LocationOn,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                     
                     // Quest Info Card (for quests)
                     if (alert.questTask != null || alert.questReward != null) {
@@ -1547,6 +1586,9 @@ fun AlertDetailScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
                 accent = categoryAccent,
                 onSnoozeClick = { showSnoozeDialog = true },
+                isGoing = isGoing,
+                goingEnabled = alert.isEligibleArrivalDestination(),
+                onGoingClick = { arrivalTracking.onToggle(alert) },
                 onNavigateClick = { openMapForAlert(context, alert) },
                 onShareClick = {
                     scope.launch {
@@ -1784,6 +1826,9 @@ private fun AlertDetailActionBar(
     modifier: Modifier = Modifier,
     accent: Color,
     onSnoozeClick: () -> Unit,
+    isGoing: Boolean,
+    goingEnabled: Boolean,
+    onGoingClick: () -> Unit,
     onNavigateClick: () -> Unit,
     onShareClick: () -> Unit
 ) {
@@ -1802,14 +1847,38 @@ private fun AlertDetailActionBar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FilledTonalButton(
+            FilledIconButton(
                 onClick = onSnoozeClick,
-                modifier = Modifier.weight(0.8f).height(56.dp),
+                modifier = Modifier.size(56.dp),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
+                colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     contentColor = MaterialTheme.colorScheme.onSurface
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Notifications,
+                    contentDescription = "Snooze alert",
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            FilledTonalButton(
+                onClick = onGoingClick,
+                enabled = goingEnabled || isGoing,
+                modifier = Modifier.weight(1.2f).height(56.dp),
+                shape = MaterialTheme.shapes.medium,
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = if (isGoing) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (isGoing) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
                 )
             ) {
                 Column(
@@ -1817,13 +1886,13 @@ private fun AlertDetailActionBar(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Notifications,
+                        imageVector = Icons.Filled.LocationOn,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Snooze",
+                        text = if (isGoing) "Stop" else "I\u2019m going",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
@@ -1858,33 +1927,20 @@ private fun AlertDetailActionBar(
                     )
                 }
             }
-            FilledTonalButton(
+            FilledIconButton(
                 onClick = onShareClick,
-                modifier = Modifier.weight(0.8f).height(56.dp),
+                modifier = Modifier.size(56.dp),
                 shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
+                colors = IconButtonDefaults.filledIconButtonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Share",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.Share,
+                    contentDescription = "Share alert",
+                    modifier = Modifier.size(22.dp)
+                )
             }
         }
     }

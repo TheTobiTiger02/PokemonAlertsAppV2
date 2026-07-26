@@ -138,6 +138,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
+import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
@@ -779,6 +781,7 @@ private fun AlertsList(
     maxDistance: Int = 0,
     onClearAllFilters: () -> Unit = {}
 ) {
+    val arrivalTracking = rememberArrivalTrackingUiController()
     val countdownNow = rememberCountdownNow()
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     val activeFilterCount = listOf(
@@ -1018,7 +1021,13 @@ private fun AlertsList(
                         onShowDetails = { onAlertSelected(model.alert) },
                         onPipClick = { onPipClick(model.alert) },
                         onShareClick = { onShareClick(model.alert) },
-                        onSnoozeClick = { onSnoozeClick(model.alert) }
+                        onSnoozeClick = { onSnoozeClick(model.alert) },
+                        isGoing = arrivalTracking.isTracking(model.alert),
+                        onGoingClick = if (model.alert.isEligibleArrivalDestination()) {
+                            { arrivalTracking.onToggle(model.alert) }
+                        } else {
+                            null
+                        }
                     )
                     // Dimmed overlay for dismissed alerts
                     if (isDismissed) {

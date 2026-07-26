@@ -111,6 +111,7 @@ import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.util.UpdateState
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.NotificationCategoryState
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 
 internal enum class SettingsDestination(val title: String) {
     OVERVIEW("Settings"),
@@ -138,6 +139,13 @@ fun SettingsScreen(
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
+    val arrivalRepository = remember(context) { ArrivalTrackingRepository.getInstance(context) }
+    val arrivalRadius by arrivalRepository.arrivalRadiusMeters.collectAsStateWithLifecycle()
+    val arrivalScope = rememberCoroutineScope()
+    var arrivalRadiusSlider by remember { mutableStateOf(arrivalRadius.toFloat()) }
+    LaunchedEffect(arrivalRadius) {
+        arrivalRadiusSlider = arrivalRadius.toFloat()
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var foregroundLocationGranted by remember { mutableStateOf(false) }
     var backgroundLocationGranted by remember { mutableStateOf(false) }
@@ -376,6 +384,55 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                SettingsSection(title = "Arrival tracking") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Arrival radius",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "${ArrivalTrackingRepository.normalizeRadius(arrivalRadiusSlider.toInt())} m",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Notify me after two precise location fixes inside this radius. Changes also apply to an active journey.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    androidx.compose.material3.Slider(
+                        value = arrivalRadiusSlider,
+                        onValueChange = { arrivalRadiusSlider = it },
+                        onValueChangeFinished = {
+                            val normalized = ArrivalTrackingRepository.normalizeRadius(
+                                arrivalRadiusSlider.toInt()
+                            )
+                            arrivalRadiusSlider = normalized.toFloat()
+                            arrivalScope.launch {
+                                arrivalRepository.updateArrivalRadius(normalized)
+                            }
+                        },
+                        valueRange = ArrivalTrackingRepository.MIN_RADIUS_METERS.toFloat()..
+                            ArrivalTrackingRepository.MAX_RADIUS_METERS.toFloat(),
+                        steps = 35
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("20 m", style = MaterialTheme.typography.labelSmall)
+                        Text("40 m default", style = MaterialTheme.typography.labelSmall)
+                        Text("200 m", style = MaterialTheme.typography.labelSmall)
                     }
                 }
 
