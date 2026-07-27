@@ -25,6 +25,34 @@ class GoDexModelsTest {
         )
     }
 
+    @Test
+    fun anonymousPublicCollectionCookiesDoNotImplyAuthentication() {
+        assertEquals(
+            GoDexSessionState.NONE,
+            resolveGoDexSessionState(
+                storedName = null,
+                cookies = "PHPSESSID=anonymous",
+                writeBackUrl = ""
+            )
+        )
+        assertEquals(
+            GoDexSessionState.AUTHENTICATED,
+            resolveGoDexSessionState(
+                storedName = null,
+                cookies = "PHPSESSID=authenticated",
+                writeBackUrl = "https://godex.site/collection/abc"
+            )
+        )
+        assertEquals(
+            GoDexSessionState.REAUTH_REQUIRED,
+            resolveGoDexSessionState(
+                storedName = GoDexSessionState.REAUTH_REQUIRED.name,
+                cookies = "PHPSESSID=expired",
+                writeBackUrl = "https://godex.site/collection/abc"
+            )
+        )
+    }
+
     private fun debugEntry(result: GoDexMatchResult) = GoDexDebugEntry(
         entryKey = "0001-none",
         pokedexId = 1,

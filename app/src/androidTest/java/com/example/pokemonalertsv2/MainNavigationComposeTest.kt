@@ -115,6 +115,7 @@ class MainNavigationComposeTest {
         listOf(
             "Appearance & behavior",
             "Alert filters",
+            "GoDex checklist",
             "Notifications",
             "About & updates"
         ).forEach { label ->
@@ -125,6 +126,12 @@ class MainNavigationComposeTest {
 
         composeRule.onNodeWithText("Alert filters").performClick()
         composeRule.onNodeWithText("Maximum Distance").assertIsDisplayed()
+        composeRule.onNodeWithText("GoDex Hundo checklist").assertDoesNotExist()
+        composeRule.activity.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+
+        composeRule.onNodeWithText("GoDex checklist").performClick()
         composeRule.onNodeWithText("GoDex Hundo checklist").performScrollTo().assertIsDisplayed()
         val isDisconnected = composeRule
             .onAllNodesWithText("Public GoDex collection URL")
@@ -134,10 +141,24 @@ class MainNavigationComposeTest {
             composeRule.onNodeWithText("Public GoDex collection URL").performScrollTo().assertIsDisplayed()
             composeRule.onNodeWithText("Connect").assertHasClickAction()
         } else {
-            composeRule.onNodeWithText("View synced Pok\u00E9mon", substring = true)
+            val collectionAction = if (
+                composeRule.onAllNodesWithText("Review needed").fetchSemanticsNodes().isNotEmpty()
+            ) {
+                "Review needed"
+            } else {
+                "View collection"
+            }
+            composeRule.onNodeWithText(collectionAction)
                 .performScrollTo()
                 .assertIsDisplayed()
                 .assertHasClickAction()
+                .performClick()
+            composeRule.onNodeWithText("Search Pokémon, form, number, or key")
+                .assertIsDisplayed()
+            composeRule.activity.runOnUiThread {
+                composeRule.activity.onBackPressedDispatcher.onBackPressed()
+            }
+            composeRule.onNodeWithText("GoDex Hundo checklist").assertIsDisplayed()
         }
         composeRule.activity.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()

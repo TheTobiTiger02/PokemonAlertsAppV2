@@ -96,8 +96,11 @@ class GoDexImporter(
                 ?.drop(1)?.firstOrNull { it.isNotBlank() } ?: return@mapNotNull null
             GoDexLazyComponent(snapshot, mountParam)
         }
-        require(lazyComponents.size == EXPECTED_REGION_COUNT) {
-            "GoDex returned ${lazyComponents.size} of $EXPECTED_REGION_COUNT expected collection regions"
+        require(lazyComponents.isNotEmpty() && lazyComponents.size <= MAX_REGION_COUNT) {
+            "GoDex returned an invalid number of collection regions: ${lazyComponents.size}"
+        }
+        require(lazyComponents.distinctBy(GoDexLazyComponent::mountParam).size == lazyComponents.size) {
+            "GoDex returned duplicate collection regions"
         }
         val collectionCounts = document.getAllElements().mapNotNull { element ->
             val snapshot = element.attr("wire:snapshot").takeIf { it.isNotBlank() }
@@ -157,15 +160,21 @@ class GoDexImporter(
             ?: throw IllegalStateException("GoDex region snapshot is missing")
         val html = componentResponse["effects"]?.jsonObject?.get("html")?.jsonPrimitive?.content
             ?: throw IllegalStateException("GoDex region entries are missing")
-        val caughtKeys = caughtKeys(snapshot)
-        val entries = parseEntries(html, caughtKeys)
         val data = snapshot["data"]?.jsonObject
             ?: throw IllegalStateException("GoDex region data is missing")
+        val caughtKeys = caughtKeys(snapshot)
+        val expectedTotal = data.intValue("totalPokemonsCount")
+            ?: throw IllegalStateException("GoDex region total is missing")
+        val entries = parseEntries(
+            html = html,
+            caughtKeys = caughtKeys,
+            baseUrl = url,
+            allowEmpty = expectedTotal == 0
+        )
         validateEntries(
             entries = entries,
             caughtKeys = caughtKeys,
-            expectedTotal = data.intValue("totalPokemonsCount")
-                ?: throw IllegalStateException("GoDex region total is missing"),
+            expectedTotal = expectedTotal,
             expectedCollected = data.intValue("pokemonsCaughtCount")
                 ?: throw IllegalStateException("GoDex region collected count is missing"),
             context = "GoDex region ${data["region"]?.jsonPrimitive?.content ?: "unknown"}"
@@ -173,12 +182,19 @@ class GoDexImporter(
         return entries
     }
 
-    internal fun parseEntries(html: String, caughtKeys: Set<String>): List<GoDexEntryEntity> {
-        val document = Jsoup.parseBodyFragment(html)
+    internal fun parseEntries(
+        html: String,
+        caughtKeys: Set<String>,
+        baseUrl: String,
+        allowEmpty: Boolean = false
+    ): List<GoDexEntryEntity> {
+        val document = Jsoup.parseBodyFragment(html, baseUrl)
         val pokemonElements = document.getAllElements().filter { element ->
             element.hasAttr("wire:key") && element.selectFirst("img[dusk=pokemon-sprite]") != null
         }
-        require(pokemonElements.isNotEmpty()) { "GoDex region contained no Pokemon entries" }
+        require(allowEmpty || pokemonElements.isNotEmpty()) {
+            "GoDex region contained no Pokemon entries"
+        }
         val entries = pokemonElements.map { element ->
             val entryKey = element.attr("wire:key")
             val match = ENTRY_KEY_REGEX.matchEntire(entryKey)
@@ -186,7 +202,8 @@ class GoDexImporter(
             val pokedexId = match.groupValues[1].toInt()
             val formSlug = match.groupValues[3].ifBlank { null }?.lowercase()
             val gender = match.groupValues[4].lowercase()
-            val displayName = element.selectFirst("img[dusk=pokemon-sprite]")?.attr("alt")
+            val image = element.selectFirst("img[dusk=pokemon-sprite]")
+            val displayName = image?.attr("alt")
                 ?.takeIf { it.isNotBlank() } ?: entryKey
             GoDexEntryEntity(
                 entryKey = entryKey,
@@ -194,10 +211,18 @@ class GoDexImporter(
                 formSlug = formSlug,
                 gender = gender,
                 displayName = displayName,
-                needed = entryKey !in caughtKeys
+                needed = entryKey !in caughtKeys,
+                spriteUrl = sanitizeSpriteUrl(image?.absUrl("src").orEmpty())
             )
         }
         return entries.distinctBy { it.entryKey }
+    }
+
+    private fun sanitizeSpriteUrl(value: String): String? {
+        val parsed = value.toHttpUrlOrNull() ?: return null
+        return parsed.toString().takeIf {
+            parsed.scheme == "https" && parsed.host.equals("godex.site", ignoreCase = true)
+        }
     }
 
     internal fun validateEntries(
@@ -260,7 +285,7 @@ class GoDexImporter(
             "^([0-9]{4})([A-Za-z]?)(?:_([A-Za-z0-9_]+))?-(none|male|female)$",
             RegexOption.IGNORE_CASE
         )
-        private const val EXPECTED_REGION_COUNT = 11
+        private const val MAX_REGION_COUNT = 20
 
         fun validateUrl(value: String): String {
             val parsed = value.trim().toHttpUrlOrNull()

@@ -89,10 +89,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.godex.GoDexConfig
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
-import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
-import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
+import com.example.pokemonalertsv2.data.godex.GoDexSyncUiState
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import androidx.compose.animation.AnimatedVisibility
@@ -117,9 +117,23 @@ internal enum class SettingsDestination(val title: String) {
     OVERVIEW("Settings"),
     APPEARANCE_BEHAVIOR("Appearance & behavior"),
     ALERT_FILTERS("Alert filters"),
+    GODEX("GoDex checklist"),
+    GODEX_COLLECTION("GoDex collection"),
     NOTIFICATIONS("Notifications"),
     ABOUT_UPDATES("About & updates")
 }
+
+internal fun goDexDisconnectMessage(pendingCount: Int): String =
+    if (pendingCount > 0) {
+        "This removes the cached checklist and discards $pendingCount unsent " +
+            if (pendingCount == 1) {
+                "change from this device. GoDex itself will not be changed."
+            } else {
+                "changes from this device. GoDex itself will not be changed."
+            }
+    } else {
+        "This removes the cached checklist from this device. Your GoDex collection will not be changed."
+    }
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -132,9 +146,14 @@ fun SettingsScreen(
     val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
         ?: SettingsDestination.OVERVIEW
     val navigateTo: (SettingsDestination) -> Unit = { destinationName = it.name }
+    val parentDestination = if (destination == SettingsDestination.GODEX_COLLECTION) {
+        SettingsDestination.GODEX
+    } else {
+        SettingsDestination.OVERVIEW
+    }
 
     BackHandler(enabled = destination != SettingsDestination.OVERVIEW) {
-        navigateTo(SettingsDestination.OVERVIEW)
+        navigateTo(parentDestination)
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
@@ -203,12 +222,23 @@ fun SettingsScreen(
     val goDexConfig by viewModel.goDexConfig.collectAsStateWithLifecycle()
     val goDexEntries by viewModel.goDexEntries.collectAsStateWithLifecycle()
     val goDexSyncUiState by viewModel.goDexSyncUiState.collectAsStateWithLifecycle()
+    val goDexPendingEntryKeys by viewModel.goDexPendingEntryKeys.collectAsStateWithLifecycle()
     var goDexUrlInput by rememberSaveable { mutableStateOf("") }
-    var showGoDexDebugList by rememberSaveable { mutableStateOf(false) }
+    var showGoDexDisconnectConfirmation by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(goDexConfig.url) {
         if (goDexConfig.url.isNotBlank() || goDexUrlInput.isBlank()) {
             goDexUrlInput = goDexConfig.url
+        }
+    }
+
+    LaunchedEffect(destination, goDexConfig.isConnected) {
+        if (
+            goDexConfig.isConnected &&
+            (destination == SettingsDestination.GODEX ||
+                destination == SettingsDestination.GODEX_COLLECTION)
+        ) {
+            viewModel.refreshGoDexForPageEntry()
         }
     }
 
@@ -224,7 +254,7 @@ fun SettingsScreen(
                     navigationIcon = {
                         if (destination != SettingsDestination.OVERVIEW) {
                             FilledIconButton(
-                                onClick = { navigateTo(SettingsDestination.OVERVIEW) },
+                                onClick = { navigateTo(parentDestination) },
                                 shape = CircleShape
                             ) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -241,6 +271,24 @@ fun SettingsScreen(
                 )
             }
         ) { padding ->
+            if (destination == SettingsDestination.GODEX_COLLECTION) {
+                GoDexCollectionContent(
+                    entries = goDexEntries,
+                    pendingEntryKeys = goDexPendingEntryKeys,
+                    canEdit = goDexConfig.hasWriteBackUrl,
+                    sessionState = goDexSyncUiState.sessionState,
+                    isSyncing = goDexSyncUiState.isSyncing,
+                    syncError = goDexSyncUiState.errorMessage,
+                    pendingCount = goDexSyncUiState.pendingCount,
+                    onSetCaught = viewModel::setGoDexEntryCaught,
+                    onSignIn = {
+                        context.startActivity(
+                            com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
+                        )
+                    },
+                    modifier = Modifier.padding(padding)
+                )
+            } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -260,6 +308,14 @@ fun SettingsScreen(
                         notificationsEnabled = notificationsEnabled,
                         foregroundLocationGranted = foregroundLocationGranted,
                         backgroundLocationGranted = backgroundLocationGranted,
+                        goDexSummary = when {
+                            !goDexConfig.isConnected -> "Not connected"
+                            goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
+                                "${goDexEntries.count { it.needed }} still needed - sign in again"
+                            goDexConfig.hasWriteBackUrl ->
+                                "${goDexEntries.count { it.needed }} still needed - two-way sync"
+                            else -> "${goDexEntries.count { it.needed }} still needed - read-only"
+                        },
                         onDestinationSelected = navigateTo
                     )
                 }
@@ -436,6 +492,9 @@ fun SettingsScreen(
                     }
                 }
 
+                }
+
+                if (destination == SettingsDestination.GODEX) {
                 SettingsSection(title = "GoDex Hundo checklist") {
                     val totalCount = goDexEntries.size
                     val neededCount = goDexEntries.count { it.needed }
@@ -497,47 +556,29 @@ fun SettingsScreen(
                         ) {
                             Text(if (goDexSyncUiState.isSyncing) "Connecting\u2026" else "Connect")
                         }
+                        goDexSyncUiState.errorMessage?.let { error ->
+                            Text(
+                                text = error,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     } else {
                         Text(
                             goDexConfig.collectionTitle.ifBlank { "GoDex Hundo collection" },
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            "$neededCount needed \u2022 ${totalCount - neededCount} collected \u2022 $totalCount total",
-                            style = MaterialTheme.typography.bodyMedium
+                        GoDexSettingsProgressCard(
+                            neededCount = neededCount,
+                            totalCount = totalCount,
+                            onOpenCollection = { navigateTo(SettingsDestination.GODEX_COLLECTION) }
                         )
-                        Text(
-                            "Last synchronized ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(goDexConfig.lastSuccessfulSyncMillis))}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        GoDexSyncStatusCard(
+                            config = goDexConfig,
+                            syncState = goDexSyncUiState,
+                            isStale = isStale
                         )
-                        if (goDexSyncUiState.pendingCount > 0) {
-                            Text(
-                                "${goDexSyncUiState.pendingCount} checklist " +
-                                    if (goDexSyncUiState.pendingCount == 1) {
-                                        "change is pending"
-                                    } else {
-                                        "changes are pending"
-                                    },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                        if (goDexSyncUiState.lastSuccessfulWriteMillis > 0L) {
-                            Text(
-                                "Last change sent ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(goDexSyncUiState.lastSuccessfulWriteMillis))}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        if (isStale) {
-                            Text(
-                                "Checklist data is over 48 hours old. The last successful cache is still in use.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
                         SwitchSetting(
                             title = "Only notify for needed GoDex Hundos",
                             subtitle = "Confirmed collected Hundos are suppressed. Unknown forms still notify.",
@@ -551,18 +592,21 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             FilledTonalButton(
+                                onClick = { navigateTo(SettingsDestination.GODEX_COLLECTION) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(if (neededCount == 0) "View collection" else "Review needed")
+                            }
+                            OutlinedButton(
                                 onClick = viewModel::syncGoDex,
                                 enabled = !goDexSyncUiState.isSyncing
                             ) {
                                 Text(if (goDexSyncUiState.isSyncing) "Syncing\u2026" else "Sync now")
-                            }
-                            OutlinedButton(
-                                onClick = viewModel::disconnectGoDex,
-                                enabled = !goDexSyncUiState.isSyncing
-                            ) {
-                                Text("Disconnect")
                             }
                         }
                         val context = LocalContext.current
@@ -684,22 +728,14 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        OutlinedButton(
-                            onClick = { showGoDexDebugList = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = goDexEntries.isNotEmpty()
+                        TextButton(
+                            onClick = { showGoDexDisconnectConfirmation = true },
+                            enabled = !goDexSyncUiState.isSyncing
                         ) {
-                            Text("View synced Pok\u00E9mon ($totalCount)")
+                            Text("Disconnect GoDex")
                         }
                     }
 
-                    goDexSyncUiState.errorMessage?.let { error ->
-                        Text(
-                            error,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
                 }
                 }
                 
@@ -909,19 +945,210 @@ fun SettingsScreen(
                 
                 Spacer(modifier = Modifier.height(24.dp))
             }
+            }
         }
     }
 
-    if (showGoDexDebugList) {
-        val debugEntries = remember(goDexEntries) {
-            viewModel.buildGoDexDebugEntries(goDexEntries)
+    if (showGoDexDisconnectConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showGoDexDisconnectConfirmation = false },
+            title = { Text("Disconnect GoDex?") },
+            text = { Text(goDexDisconnectMessage(goDexSyncUiState.pendingCount)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showGoDexDisconnectConfirmation = false
+                        viewModel.disconnectGoDex()
+                    }
+                ) {
+                    Text("Disconnect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGoDexDisconnectConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun GoDexSettingsProgressCard(
+    neededCount: Int,
+    totalCount: Int,
+    onOpenCollection: () -> Unit
+) {
+    val caughtCount = totalCount - neededCount
+    val progress = if (totalCount == 0) 0f else caughtCount.toFloat() / totalCount
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpenCollection),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column {
+                    Text(
+                        text = if (neededCount == 0) "Checklist complete" else "$neededCount still needed",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = "$caughtCount caught \u2022 $totalCount total",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                Text(
+                    text = "Open",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            androidx.compose.material3.LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.15f)
+            )
         }
-        GoDexDebugListDialog(
-            entries = debugEntries,
-            onDismiss = { showGoDexDebugList = false }
+    }
+}
+
+@Composable
+private fun GoDexSyncStatusCard(
+    config: GoDexConfig,
+    syncState: GoDexSyncUiState,
+    isStale: Boolean
+) {
+    val lastSyncText = if (config.lastSuccessfulSyncMillis > 0L) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(config.lastSuccessfulSyncMillis))
+    } else {
+        "Never"
+    }
+    val lastWriteText = if (syncState.lastSuccessfulWriteMillis > 0L) {
+        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+            .format(Date(syncState.lastSuccessfulWriteMillis))
+    } else {
+        null
+    }
+    data class Presentation(
+        val title: String,
+        val detail: String,
+        val containerColor: Color,
+        val contentColor: Color,
+        val showProgress: Boolean = false
+    )
+    val presentation = when {
+        syncState.isSyncing -> Presentation(
+            title = "Syncing latest checklist",
+            detail = "Downloading the newest caught and needed state from GoDex.",
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            showProgress = true
+        )
+        syncState.sessionState == GoDexSessionState.REAUTH_REQUIRED -> Presentation(
+            title = "Sign-in needed",
+            detail = if (syncState.pendingCount > 0) {
+                "${syncState.pendingCount} ${if (syncState.pendingCount == 1) "change is" else "changes are"} safe on this device and will resume after sign-in."
+            } else {
+                "Your cached checklist is still available. Sign in again to resume two-way sync."
+            },
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+        syncState.errorMessage != null -> Presentation(
+            title = "Sync needs attention",
+            detail = syncState.errorMessage,
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer
+        )
+        syncState.pendingCount > 0 -> Presentation(
+            title = "Sending ${syncState.pendingCount} ${if (syncState.pendingCount == 1) "change" else "changes"}",
+            detail = "Already saved on this device. GoDex will confirm each change in the background.",
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            showProgress = true
+        )
+        isStale -> Presentation(
+            title = "Update recommended",
+            detail = "Last updated $lastSyncText. The last successful checklist remains in use.",
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        else -> Presentation(
+            title = "Up to date",
+            detail = buildString {
+                append("Last checklist sync: $lastSyncText")
+                lastWriteText?.let { append(" \u2022 Last change sent: $it") }
+                append(". Auto-sync runs in the background.")
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
         )
     }
 
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = presentation.containerColor,
+        contentColor = presentation.contentColor,
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (presentation.showProgress) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.dp,
+                    color = presentation.contentColor
+                )
+            } else {
+                Icon(
+                    imageVector = if (
+                        syncState.sessionState == GoDexSessionState.REAUTH_REQUIRED ||
+                        syncState.errorMessage != null
+                    ) {
+                        Icons.Filled.Info
+                    } else {
+                        Icons.Filled.CheckCircle
+                    },
+                    contentDescription = null,
+                    tint = presentation.contentColor
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = presentation.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = presentation.detail,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -949,137 +1176,6 @@ private fun PermissionStatusRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun GoDexDebugListDialog(
-    entries: List<GoDexDebugEntry>,
-    onDismiss: () -> Unit
-) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var selectedStatusName by rememberSaveable { mutableStateOf<String?>(null) }
-    val selectedStatus = selectedStatusName?.let { name ->
-        GoDexMatchStatus.entries.firstOrNull { it.name == name }
-    }
-    val filteredEntries = remember(entries, query, selectedStatus) {
-        val normalizedQuery = query.trim().lowercase()
-        entries.filter { entry ->
-            val statusMatches = selectedStatus == null || entry.result.status == selectedStatus
-            val queryMatches = normalizedQuery.isEmpty() || listOf(
-                entry.displayName,
-                entry.entryKey,
-                entry.pokedexId.toString(),
-                entry.formSlug.orEmpty(),
-                entry.gender,
-                entry.statusLabel
-            ).any { it.lowercase().contains(normalizedQuery) }
-            statusMatches && queryMatches
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text("Synced GoDex Pok\u00E9mon")
-                Text(
-                    "${filteredEntries.size} of ${entries.size} entries",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search name, number, form or status") },
-                    singleLine = true
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    listOf(
-                        null to "All",
-                        GoDexMatchStatus.NEEDED to "Needed",
-                        GoDexMatchStatus.EVOLUTION_NEEDED to "Evolution needed",
-                        GoDexMatchStatus.FORM_CHANGE_NEEDED to "Form change needed",
-                        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED to "Evolution + form change",
-                        GoDexMatchStatus.COLLECTED to "Collected",
-                        GoDexMatchStatus.UNKNOWN to "Unknown"
-                    ).forEach { (status, label) ->
-                        FilterChip(
-                            selected = selectedStatus == status,
-                            onClick = { selectedStatusName = status?.name },
-                            label = { Text(label) }
-                        )
-                    }
-                }
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 240.dp, max = 520.dp)
-                ) {
-                    items(filteredEntries, key = { it.entryKey }) { entry ->
-                        GoDexDebugEntryRow(entry)
-                        HorizontalDivider()
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
-}
-
-@Composable
-private fun GoDexDebugEntryRow(entry: GoDexDebugEntry) {
-    val statusColor = when (entry.result.status) {
-        GoDexMatchStatus.NEEDED -> MaterialTheme.colorScheme.primary
-        GoDexMatchStatus.EVOLUTION_NEEDED -> MaterialTheme.colorScheme.tertiary
-        GoDexMatchStatus.FORM_CHANGE_NEEDED -> MaterialTheme.colorScheme.tertiary
-        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> MaterialTheme.colorScheme.tertiary
-        GoDexMatchStatus.COLLECTED -> MaterialTheme.colorScheme.onSurfaceVariant
-        GoDexMatchStatus.UNKNOWN -> MaterialTheme.colorScheme.error
-        GoDexMatchStatus.NOT_CONFIGURED -> MaterialTheme.colorScheme.error
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp)
-    ) {
-        Text(
-            "#${entry.pokedexId.toString().padStart(4, '0')} ${entry.displayName}",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold
-        )
-        val variant = buildList {
-            entry.formSlug?.let { add("form: $it") }
-            entry.gender.takeUnless { it == "none" }?.let { add("gender: $it") }
-        }.joinToString(" \u2022 ")
-        if (variant.isNotEmpty()) {
-            Text(
-                variant,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Text(
-            entry.entryKey,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
-        )
-        Text(
-            entry.statusLabel,
-            style = MaterialTheme.typography.bodyMedium,
-            color = statusColor,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
 @Composable
 private fun SettingsOverview(
     themeMode: Int,
@@ -1089,6 +1185,7 @@ private fun SettingsOverview(
     notificationsEnabled: Boolean,
     foregroundLocationGranted: Boolean,
     backgroundLocationGranted: Boolean,
+    goDexSummary: String,
     onDestinationSelected: (SettingsDestination) -> Unit
 ) {
     val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
@@ -1126,6 +1223,13 @@ private fun SettingsOverview(
             title = "Alert filters",
             summary = "$selectedArea - $distanceLabel",
             onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.AccountCircle,
+            title = "GoDex checklist",
+            summary = goDexSummary,
+            onClick = { onDestinationSelected(SettingsDestination.GODEX) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
         SettingsOverviewRow(

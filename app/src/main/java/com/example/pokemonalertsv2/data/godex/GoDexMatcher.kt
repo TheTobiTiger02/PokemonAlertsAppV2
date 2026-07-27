@@ -25,8 +25,6 @@ object GoDexMatcher {
         val resolved = resolveDirect(pokedexId, alert.pokemonForm, alertGender, entries)
             ?: return GoDexMatchResult(GoDexMatchStatus.UNKNOWN)
 
-        if (resolved.needed) return GoDexMatchResult(GoDexMatchStatus.NEEDED, resolved.entryKey)
-
         val targets = evolutionGraph?.let {
             findNeededDescendants(
                 sourceId = pokedexId,
@@ -46,6 +44,7 @@ object GoDexMatcher {
             )
         }.orEmpty()
         val status = when {
+            resolved.needed -> GoDexMatchStatus.NEEDED
             targets.isNotEmpty() && formChangeTargets.isNotEmpty() ->
                 GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
             targets.isNotEmpty() -> GoDexMatchStatus.EVOLUTION_NEEDED

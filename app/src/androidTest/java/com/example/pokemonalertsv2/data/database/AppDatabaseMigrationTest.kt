@@ -165,6 +165,62 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate16To17_preservesGoDexEntriesAndPendingUpdates() {
+        helper.createDatabase(TEST_DATABASE, 16).apply {
+            execSQL(
+                """
+                INSERT INTO godex_entries
+                    (entryKey, pokedexId, formSlug, gender, displayName, needed)
+                VALUES ('0026_alola-female', 26, 'alola', 'female', 'Raichu', 1)
+                """.trimIndent()
+            )
+            execSQL(
+                """
+                INSERT INTO godex_pending_updates
+                    (entryKey, caught, revision, timestamp, attemptCount, lastError)
+                VALUES ('0026_alola-female', 1, 123, 120, 2, 'offline')
+                """.trimIndent()
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            17,
+            true,
+            AppDatabase.MIGRATION_16_17
+        ).apply {
+            query(
+                """
+                SELECT pokedexId, formSlug, gender, needed, spriteUrl
+                FROM godex_entries WHERE entryKey = '0026_alola-female'
+                """.trimIndent()
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(26, cursor.getInt(0))
+                assertEquals("alola", cursor.getString(1))
+                assertEquals("female", cursor.getString(2))
+                assertEquals(1, cursor.getInt(3))
+                assertNull(cursor.getString(4))
+            }
+            query(
+                """
+                SELECT caught, revision, timestamp, attemptCount, lastError
+                FROM godex_pending_updates WHERE entryKey = '0026_alola-female'
+                """.trimIndent()
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(1, cursor.getInt(0))
+                assertEquals(123L, cursor.getLong(1))
+                assertEquals(120L, cursor.getLong(2))
+                assertEquals(2, cursor.getInt(3))
+                assertEquals("offline", cursor.getString(4))
+            }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }

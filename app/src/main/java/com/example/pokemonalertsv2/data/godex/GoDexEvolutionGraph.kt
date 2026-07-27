@@ -49,6 +49,10 @@ class GoDexEvolutionGraph private constructor(
             require(edge.toForm == null || edge.toForm in SUPPORTED_FORMS) {
                 "Evolution graph contains unsupported target form: ${edge.toForm}"
             }
+            require(edge.fromForm != null || edge.toForm !in REGIONAL_FORMS) {
+                "Regional target evolutions require an explicit regional source form: " +
+                    "${edge.from} -> ${edge.to} (${edge.toForm})"
+            }
         }
         val visiting = HashSet<Pair<Int, String?>>()
         val visited = HashSet<Pair<Int, String?>>()
@@ -67,6 +71,7 @@ class GoDexEvolutionGraph private constructor(
     companion object {
         private val json = Json { ignoreUnknownKeys = false }
         private val SUPPORTED_GENDERS = setOf("male", "female")
+        private val REGIONAL_FORMS = setOf("alola", "galar", "hisui", "paldea")
         private val SUPPORTED_FORMS = setOf(
             "alola", "galar", "hisui", "paldea", "white", "red", "blue",
             "east", "west", "plant", "sandy", "trash", "spring", "summer",

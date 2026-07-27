@@ -7,8 +7,6 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
-import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
-import com.example.pokemonalertsv2.data.godex.GoDexDebugEntry
 import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,9 +22,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val goDexConfig = goDexRepository.config
     val goDexEntries = goDexRepository.entries
     val goDexSyncUiState = goDexRepository.syncUiState
-
-    fun buildGoDexDebugEntries(entries: List<GoDexEntryEntity>): List<GoDexDebugEntry> =
-        goDexRepository.debugEntries(entries)
+    val goDexPendingEntryKeys = goDexRepository.pendingEntryKeys
 
     val onboardingCompleted: StateFlow<Boolean?> = repository.observeOnboardingCompleted()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -230,9 +226,21 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun refreshGoDexForPageEntry() {
+        viewModelScope.launch {
+            runCatching { goDexRepository.refreshForPageEntry() }
+        }
+    }
+
     fun updateGoDexNotificationFilter(enabled: Boolean) {
         viewModelScope.launch {
             goDexRepository.setNotificationFilterEnabled(enabled)
+        }
+    }
+
+    fun setGoDexEntryCaught(entryKey: String, caught: Boolean) {
+        viewModelScope.launch {
+            goDexRepository.markAsCaught(entryKey, caught)
         }
     }
 

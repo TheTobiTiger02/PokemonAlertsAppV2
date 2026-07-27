@@ -28,6 +28,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
     private val formChangeGraph = GoDexFormChangeGraph.load(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val syncMutex = Mutex()
+    @Volatile private var lastRefreshAttemptMillis = 0L
 
     val entries: StateFlow<List<GoDexEntryEntity>> = dao.observeAll()
         .stateIn(scope, SharingStarted.Eagerly, emptyList())
@@ -53,6 +54,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
     suspend fun connect(url: String) = synchronize(url, schedulePeriodicRefresh = true)
 
     private suspend fun synchronize(url: String, schedulePeriodicRefresh: Boolean) = syncMutex.withLock {
+        lastRefreshAttemptMillis = System.currentTimeMillis()
         syncOperationState.value = GoDexSyncUiState(isSyncing = true)
         val cookies = preferences.config.first().sessionCookies
         runCatching { importer.import(url, cookies) }
@@ -88,6 +90,22 @@ class GoDexRepository private constructor(private val appContext: Context) {
         synchronize(url, schedulePeriodicRefresh = false)
     }
 
+    suspend fun refreshForPageEntry(nowMillis: Long = System.currentTimeMillis()) {
+        val current = preferences.config.first()
+        if (
+            !shouldAttemptGoDexPageRefresh(
+                isConnected = current.isConnected,
+                isSyncInProgress = syncMutex.isLocked || syncOperationState.value.isSyncing,
+                lastAttemptMillis = lastRefreshAttemptMillis,
+                nowMillis = nowMillis
+            )
+        ) {
+            return
+        }
+        val url = current.url.ifBlank { current.writeBackUrl }
+        if (url.isNotBlank()) synchronize(url, schedulePeriodicRefresh = false)
+    }
+
     suspend fun setNotificationFilterEnabled(enabled: Boolean) {
         preferences.setNotificationFilterEnabled(enabled)
     }
@@ -118,6 +136,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
         syncOperationState.value = GoDexSyncUiState()
         GoDexSyncWorker.cancel(appContext)
         GoDexWriteWorker.cancel(appContext)
+        lastRefreshAttemptMillis = 0L
     }
 
     fun match(
@@ -204,6 +223,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
 
     companion object {
         const val STALE_WARNING_MILLIS = 48L * 60L * 60L * 1000L
+        internal const val PAGE_REFRESH_INTERVAL_MILLIS = 15L * 60L * 1000L
         private const val STALE_REFRESH_MILLIS = 4L * 60L * 60L * 1000L
 
         @Volatile private var instance: GoDexRepository? = null
@@ -213,3 +233,13 @@ class GoDexRepository private constructor(private val appContext: Context) {
         }
     }
 }
+
+internal fun shouldAttemptGoDexPageRefresh(
+    isConnected: Boolean,
+    isSyncInProgress: Boolean,
+    lastAttemptMillis: Long,
+    nowMillis: Long
+): Boolean =
+    isConnected &&
+        !isSyncInProgress &&
+        nowMillis - lastAttemptMillis >= GoDexRepository.PAGE_REFRESH_INTERVAL_MILLIS

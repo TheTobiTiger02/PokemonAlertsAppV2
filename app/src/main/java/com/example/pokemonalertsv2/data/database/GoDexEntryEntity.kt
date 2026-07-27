@@ -14,5 +14,6 @@ data class GoDexEntryEntity(
     val formSlug: String?,
     val gender: String,
     val displayName: String,
-    val needed: Boolean
+    val needed: Boolean,
+    val spriteUrl: String? = null
 )

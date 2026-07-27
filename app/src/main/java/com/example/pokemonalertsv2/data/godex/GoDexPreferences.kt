@@ -18,13 +18,11 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             notificationFilterEnabled = prefs[FILTER_ENABLED_KEY] ?: false,
             sessionCookies = prefs[COOKIES_KEY].orEmpty(),
             writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty(),
-            sessionState = prefs[SESSION_STATE_KEY]
-                ?.let { runCatching { GoDexSessionState.valueOf(it) }.getOrNull() }
-                ?: if (prefs[COOKIES_KEY].isNullOrBlank()) {
-                    GoDexSessionState.NONE
-                } else {
-                    GoDexSessionState.AUTHENTICATED
-                },
+            sessionState = resolveGoDexSessionState(
+                storedName = prefs[SESSION_STATE_KEY],
+                cookies = prefs[COOKIES_KEY].orEmpty(),
+                writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty()
+            ),
             lastSuccessfulWriteMillis = prefs[LAST_WRITE_KEY] ?: 0L,
             lastWriteError = prefs[LAST_WRITE_ERROR_KEY]
         )
@@ -114,3 +112,16 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         val LAST_WRITE_ERROR_KEY = stringPreferencesKey("godex_last_write_error")
     }
 }
+
+internal fun resolveGoDexSessionState(
+    storedName: String?,
+    cookies: String,
+    writeBackUrl: String
+): GoDexSessionState =
+    storedName
+        ?.let { runCatching { GoDexSessionState.valueOf(it) }.getOrNull() }
+        ?: if (cookies.isNotBlank() && writeBackUrl.isNotBlank()) {
+            GoDexSessionState.AUTHENTICATED
+        } else {
+            GoDexSessionState.NONE
+        }

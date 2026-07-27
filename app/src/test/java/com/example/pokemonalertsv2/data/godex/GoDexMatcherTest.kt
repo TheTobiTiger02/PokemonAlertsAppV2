@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.data.godex
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -421,19 +422,104 @@ class GoDexMatcherTest {
     }
 
     @Test
+    fun basePokemonDoNotOfferRegionalEventOnlyEvolutions() {
+        data class Family(
+            val sourceId: Int,
+            val targetId: Int,
+            val targetForm: String
+        )
+        val families = listOf(
+            Family(25, 26, "alola"),
+            Family(102, 103, "alola"),
+            Family(104, 105, "alola"),
+            Family(109, 110, "galar"),
+            Family(155, 157, "hisui"),
+            Family(501, 503, "hisui"),
+            Family(548, 549, "hisui"),
+            Family(627, 628, "hisui"),
+            Family(722, 724, "hisui")
+        )
+        val bundledGraph = GoDexEvolutionGraph.parse(
+            File("src/main/assets/godex/evolution_paths_v1.json").readText()
+        )
+
+        families.forEach { family ->
+            val entries = listOf(
+                entry(
+                    "${family.sourceId}-none",
+                    family.sourceId,
+                    null,
+                    needed = false,
+                    name = "Source"
+                ),
+                entry(
+                    "${family.targetId}_${family.targetForm}-none",
+                    family.targetId,
+                    family.targetForm,
+                    needed = true,
+                    name = "Regional target"
+                )
+            )
+
+            assertEquals(
+                "Unexpected regional recommendation for #${family.sourceId}",
+                GoDexMatchStatus.COLLECTED,
+                matchResult(
+                    family.sourceId,
+                    null,
+                    entries,
+                    graph = bundledGraph
+                ).status
+            )
+            assertEquals(
+                listOf("${family.sourceId}-none"),
+                GoDexMatcher.getCaughtEntries(
+                    alert = PokemonAlert(name = "Source", pokedexId = family.sourceId),
+                    entries = entries.map { it.copy(needed = false) },
+                    evolutionGraph = bundledGraph
+                ).map { it.entryKey }
+            )
+        }
+    }
+
+    @Test
     fun directNeededPrecedesEvolutionAndUnknownCostumeDoesNotEvolve() {
         val graph = GoDexEvolutionGraph.forTests(listOf(GoDexEvolutionEdge(25, 26)))
         val neededEntries = listOf(
             entry("0025-none", 25, null, needed = true, name = "Pikachu"),
             entry("0026-none", 26, null, needed = true, name = "Raichu")
         )
-        assertEquals(GoDexMatchStatus.NEEDED, matchResult(25, null, neededEntries, graph = graph).status)
+        val result = matchResult(25, null, neededEntries, graph = graph)
+        assertEquals(GoDexMatchStatus.NEEDED, result.status)
+        assertEquals("0025-none", result.matchedEntryKey)
+        assertEquals(listOf("0026-none"), result.evolutionTargets.map { it.entryKey })
 
         val costumeEntries = neededEntries.map { if (it.pokedexId == 25) it.copy(needed = false) else it }
         assertEquals(
             GoDexMatchStatus.UNKNOWN,
             matchResult(25, "Holiday 2025", costumeEntries, graph = graph).status
         )
+    }
+
+    @Test
+    fun neededScorbunnyAlsoOffersEveryNeededReachableEvolution() {
+        val graph = GoDexEvolutionGraph.forTests(
+            listOf(
+                GoDexEvolutionEdge(813, 814),
+                GoDexEvolutionEdge(814, 815)
+            )
+        )
+        val entries = listOf(
+            entry("0813-none", 813, null, needed = true, name = "Scorbunny"),
+            entry("0814-none", 814, null, needed = true, name = "Raboot"),
+            entry("0815-none", 815, null, needed = false, name = "Cinderace")
+        )
+
+        val result = matchResult(813, null, entries, graph = graph)
+
+        assertEquals(GoDexMatchStatus.NEEDED, result.status)
+        assertEquals("0813-none", result.matchedEntryKey)
+        assertEquals(listOf("0814-none"), result.evolutionTargets.map { it.entryKey })
     }
 
     @Test

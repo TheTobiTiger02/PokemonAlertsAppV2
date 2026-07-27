@@ -1371,97 +1371,10 @@ private fun MapAlertDetailContent(
                     GoDexStatusPill(goDexStatus)
                 }
             }
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
-            val repository = remember(context) { GoDexRepository.getInstance(context) }
-            val config by repository.config.collectAsState()
-            val pendingEntryKeys by repository.pendingEntryKeys.collectAsState()
-            var showTargetDialog by remember { mutableStateOf(false) }
-            var showUncatchDialog by remember { mutableStateOf(false) }
-            var caughtEntries by remember { mutableStateOf<List<GoDexEntryEntity>>(emptyList()) }
-
-            if (config.hasSession && alert.hasType("hundo")) {
-                val isCollected = goDexStatus.status == GoDexMatchStatus.COLLECTED
-                val isNeeded = goDexStatus.status == GoDexMatchStatus.NEEDED
-                val targetKey = goDexStatus.matchedEntryKey
-                val isGoDexChangePending = targetKey != null && targetKey in pendingEntryKeys
-                val hasDescendantsNeeded = goDexStatus.status == GoDexMatchStatus.EVOLUTION_NEEDED ||
-                        goDexStatus.status == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
-                        goDexStatus.status == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
-                val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        android.util.Log.d("GoDexClickMap", "Clicked map checkmark: isCollected=$isCollected, status=${goDexStatus.status}, hasDescendantsNeeded=$hasDescendantsNeeded, targetKey=$targetKey")
-                        if (isCollected) {
-                            val caught = repository.getCaughtEntries(alert)
-                            if (caught.size > 1) {
-                                caughtEntries = caught
-                                showUncatchDialog = true
-                            } else {
-                                val keyToUncheck = caught.firstOrNull()?.entryKey ?: targetKey
-                                if (keyToUncheck != null) {
-                                    scope.launch {
-                                        repository.markAsCaught(keyToUncheck, false)
-                                    }
-                                }
-                            }
-                        } else {
-                            if (hasDescendantsNeeded) {
-                                showTargetDialog = true
-                            } else {
-                                if (targetKey != null) {
-                                    scope.launch {
-                                        repository.markAsCaught(targetKey, true)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector = if (isCollected) Icons.Filled.CheckCircle else Icons.Outlined.CheckCircle,
-                        contentDescription = when {
-                            isGoDexChangePending -> "GoDex checklist change pending"
-                            isCollected -> "Mark as needed"
-                            else -> "Mark as caught"
-                        },
-                        tint = when {
-                            isGoDexChangePending -> MaterialTheme.colorScheme.tertiary
-                            isCollected -> Color(0xFF4CAF50)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        }
-                    )
-                }
-
-                if (showTargetDialog) {
-                    GoDexCatchTargetDialog(
-                        pokemonName = alert.pokemon ?: "Unknown",
-                        matchResult = goDexStatus,
-                        onDismiss = { showTargetDialog = false },
-                        onConfirm = { selectedKey ->
-                            showTargetDialog = false
-                            scope.launch {
-                                repository.markAsCaught(selectedKey, true)
-                            }
-                        }
-                    )
-                }
-                if (showUncatchDialog) {
-                    GoDexUncatchTargetDialog(
-                        pokemonName = alert.pokemon ?: "Unknown",
-                        caughtEntries = caughtEntries,
-                        onDismiss = { showUncatchDialog = false },
-                        onConfirm = { selectedKey ->
-                            showUncatchDialog = false
-                            scope.launch {
-                                repository.markAsCaught(selectedKey, false)
-                            }
-                        }
-                    )
-                }
-            }
+            GoDexCaughtAction(
+                alert = alert,
+                matchResult = goDexStatus
+            )
 
             IconButton(onClick = onDismiss) {
                 Icon(

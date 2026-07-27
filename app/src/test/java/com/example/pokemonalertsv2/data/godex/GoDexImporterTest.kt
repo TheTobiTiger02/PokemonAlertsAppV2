@@ -8,6 +8,7 @@ import org.junit.Test
 
 class GoDexImporterTest {
     private val importer = GoDexImporter()
+    private val baseUrl = "https://godex.site/public-collection/ABC123"
 
     @Test
     fun validatesAndNormalizesOnlyPublicHttpsGoDexUrls() {
@@ -30,7 +31,8 @@ class GoDexImporterTest {
             <div wire:key="0025-none"><img dusk="pokemon-sprite" alt="Pikachu"></div>
             <div wire:key="0026_alola-female"><img dusk="pokemon-sprite" alt="Raichu (Alola)"></div>
             """.trimIndent(),
-            caughtKeys = setOf("0025-none")
+            caughtKeys = setOf("0025-none"),
+            baseUrl = baseUrl
         )
 
         assertEquals(2, entries.size)
@@ -43,7 +45,7 @@ class GoDexImporterTest {
     }
 
     @Test
-    fun parsesInitialPageOnlyWhenAllElevenRegionsArePresent() {
+    fun parsesInitialPageWithCurrentElevenRegionCollection() {
         val regions = (1..11).joinToString("\n") { index ->
             "<div wire:snapshot='snapshot-$index' x-init=\"__lazyLoad('mount-$index')\"></div>"
         }
@@ -67,8 +69,46 @@ class GoDexImporterTest {
     }
 
     @Test
-    fun incompleteInitialPageFailsValidation() {
+    fun acceptsCompleteEventCollectionWithTenRegions() {
+        val regions = (1..10).joinToString("\n") { index ->
+            "<div wire:snapshot='snapshot-$index' x-init=\"__lazyLoad('mount-$index')\"></div>"
+        }
+        val page = importer.parseInitialPage(
+            """
+            <meta name="csrf-token" content="csrf-value">
+            <img src="/images/collections/hundo.png" alt="Event Hundos">
+            <span wire:snapshot='{&quot;data&quot;:{&quot;totalPokemons&quot;:590,&quot;caughtPokemons&quot;:474}}'></span>
+            $regions
+            """.trimIndent(),
+            baseUrl
+        )
+
+        assertEquals(10, page.lazyComponents.size)
+        assertEquals(590, page.expectedTotalCount)
+        assertEquals(474, page.expectedCollectedCount)
+    }
+
+    @Test
+    fun duplicateRegionComponentsFailValidation() {
+        val regions = (1..10).joinToString("\n") {
+            "<div wire:snapshot='snapshot-$it' x-init=\"__lazyLoad('same-mount')\"></div>"
+        }
         assertThrows(IllegalArgumentException::class.java) {
+            importer.parseInitialPage(
+                """
+                <meta name="csrf-token" content="csrf-value">
+                <img src="/images/collections/hundo.png" alt="Hundos">
+                <span wire:snapshot='{&quot;data&quot;:{&quot;totalPokemons&quot;:10,&quot;caughtPokemons&quot;:0}}'></span>
+                $regions
+                """.trimIndent(),
+                baseUrl
+            )
+        }
+    }
+
+    @Test
+    fun initialPageWithoutCollectionTotalsFailsValidation() {
+        assertThrows(IllegalStateException::class.java) {
             importer.parseInitialPage(
                 """
                 <meta name="csrf-token" content="csrf-value">
@@ -76,6 +116,20 @@ class GoDexImporterTest {
                 <div wire:snapshot="snapshot" x-init="__lazyLoad('mount')"></div>
                 """.trimIndent(),
                 "https://godex.site/public-collection/ABC123"
+            )
+        }
+    }
+
+    @Test
+    fun initialPageWithoutRegionComponentsFailsValidation() {
+        assertThrows(IllegalArgumentException::class.java) {
+            importer.parseInitialPage(
+                """
+                <meta name="csrf-token" content="csrf-value">
+                <img src="/images/collections/hundo.png" alt="Hundos">
+                <span wire:snapshot='{&quot;data&quot;:{&quot;totalPokemons&quot;:10,&quot;caughtPokemons&quot;:0}}'></span>
+                """.trimIndent(),
+                baseUrl
             )
         }
     }
@@ -116,7 +170,8 @@ class GoDexImporterTest {
                 "0710b_average-none",
                 "0710c_large-none",
                 "0710d_super-none"
-            )
+            ),
+            baseUrl = baseUrl
         )
 
         assertEquals(8, entries.size)
@@ -131,7 +186,8 @@ class GoDexImporterTest {
         assertThrows(IllegalArgumentException::class.java) {
             importer.parseEntries(
                 "<div wire:key='unexpected-key'><img dusk='pokemon-sprite' alt='Unknown'></div>",
-                emptySet()
+                emptySet(),
+                baseUrl
             )
         }
     }
@@ -143,7 +199,8 @@ class GoDexImporterTest {
             <div wire:key="0710a_small-none"><img dusk="pokemon-sprite" alt="Pumpkaboo (Small)"></div>
             <div wire:key="0710b_average-none"><img dusk="pokemon-sprite" alt="Pumpkaboo (Average)"></div>
             """.trimIndent(),
-            caughtKeys = setOf("0710b_average-none")
+            caughtKeys = setOf("0710b_average-none"),
+            baseUrl = baseUrl
         )
 
         assertThrows(IllegalArgumentException::class.java) {
@@ -160,7 +217,53 @@ class GoDexImporterTest {
     @Test
     fun malformedOrChangedRegionMarkupFailsInsteadOfClearingCache() {
         assertThrows(IllegalArgumentException::class.java) {
-            importer.parseEntries("<div data-key='0025-none'></div>", emptySet())
+            importer.parseEntries("<div data-key='0025-none'></div>", emptySet(), baseUrl)
         }
+    }
+
+    @Test
+    fun explicitlyEmptyRegionIsAcceptedWithoutWeakeningNormalMarkupValidation() {
+        assertTrue(
+            importer.parseEntries(
+                html = "<div>No entries in this region</div>",
+                caughtKeys = emptySet(),
+                baseUrl = baseUrl,
+                allowEmpty = true
+            ).isEmpty()
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            importer.parseEntries(
+                html = "<div>No entries in this region</div>",
+                caughtKeys = emptySet(),
+                baseUrl = baseUrl
+            )
+        }
+    }
+
+    @Test
+    fun resolvesAndSanitizesExactEntrySpriteUrls() {
+        val entries = importer.parseEntries(
+            """
+            <div wire:key="0001_halloween-male">
+              <img dusk="pokemon-sprite" alt="Halloween Bulbasaur (Male)"
+                   src="/images/pokemons/regular/0001_halloween.webp?v=1709459385">
+            </div>
+            <div wire:key="0025-none">
+              <img dusk="pokemon-sprite" alt="Pikachu" src="https://example.com/pikachu.webp">
+            </div>
+            <div wire:key="0026_alola-female">
+              <img dusk="pokemon-sprite" alt="Raichu (Alola)">
+            </div>
+            """.trimIndent(),
+            caughtKeys = emptySet(),
+            baseUrl = baseUrl
+        )
+
+        assertEquals(
+            "https://godex.site/images/pokemons/regular/0001_halloween.webp?v=1709459385",
+            entries.single { it.entryKey == "0001_halloween-male" }.spriteUrl
+        )
+        assertEquals(null, entries.single { it.entryKey == "0025-none" }.spriteUrl)
+        assertEquals(null, entries.single { it.entryKey == "0026_alola-female" }.spriteUrl)
     }
 }

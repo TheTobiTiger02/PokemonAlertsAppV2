@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
@@ -24,6 +25,7 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.ln
+import kotlin.math.roundToInt
 import kotlin.math.tan
 
 /**
@@ -35,7 +37,11 @@ object MapFallbackImageGenerator {
 
     private const val TILE_SIZE = 256
     private const val DEFAULT_ZOOM = 17
-    private const val STYLE_VERSION = 5
+    private const val STYLE_VERSION = 8
+    private const val SPRITE_SIZE_FRACTION = 0.24f
+    private const val SPRITE_MIN_SIZE = 32
+    private const val SPRITE_MAX_SIZE = 128
+    private const val VISIBLE_ALPHA_THRESHOLD = 8
     private const val TILE_USER_AGENT_REPOSITORY =
         "https://github.com/TheTobiTiger02/PokemonAlertsAppV2"
     private val bitmapCache = object : LruCache<String, Bitmap>(32 * 1024) {
@@ -229,7 +235,7 @@ object MapFallbackImageGenerator {
         return ColorMatrixColorFilter(matrix)
     }
 
-    private fun drawPokemonAtCoordinate(
+    internal fun drawPokemonAtCoordinate(
         canvas: Canvas,
         coordinateX: Float,
         coordinateY: Float,
@@ -237,21 +243,98 @@ object MapFallbackImageGenerator {
         sprite: Bitmap?
     ) {
         if (sprite != null) {
-            val spriteSize = (minDimension * 0.18f).toInt().coerceIn(24, 112)
-            val scaled = Bitmap.createScaledBitmap(sprite, spriteSize, spriteSize, true)
+            val visibleBounds = visibleContentBounds(sprite)
+            if (visibleBounds == null) {
+                sprite.recycle()
+                drawCoordinateDot(canvas, coordinateX, coordinateY, minDimension)
+                return
+            }
+
+            val cropped = if (
+                visibleBounds.left == 0 &&
+                visibleBounds.top == 0 &&
+                visibleBounds.right == sprite.width &&
+                visibleBounds.bottom == sprite.height
+            ) {
+                sprite
+            } else {
+                Bitmap.createBitmap(
+                    sprite,
+                    visibleBounds.left,
+                    visibleBounds.top,
+                    visibleBounds.width(),
+                    visibleBounds.height()
+                )
+            }
+            val maxSpriteDimension = spriteTargetSizeFor(minDimension).toFloat()
+            val scale = minOf(
+                maxSpriteDimension / cropped.width,
+                maxSpriteDimension / cropped.height
+            )
+            val scaledWidth = (cropped.width * scale).roundToInt().coerceAtLeast(1)
+            val scaledHeight = (cropped.height * scale).roundToInt().coerceAtLeast(1)
+            val scaled = Bitmap.createScaledBitmap(cropped, scaledWidth, scaledHeight, true)
             val spriteLeft = coordinateX - scaled.width / 2f
             val spriteTop = coordinateY - scaled.height / 2f
-            canvas.drawBitmap(scaled, spriteLeft, spriteTop, null)
-            if (scaled !== sprite) scaled.recycle()
-            sprite.recycle()
-        } else {
-            canvas.drawCircle(
-                coordinateX,
-                coordinateY,
-                (minDimension * 0.025f).coerceIn(4f, 14f),
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2869D8.toInt() }
+
+            canvas.drawBitmap(
+                scaled,
+                spriteLeft,
+                spriteTop,
+                Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
             )
+
+            if (scaled !== cropped) scaled.recycle()
+            if (cropped !== sprite) cropped.recycle()
+            if (!sprite.isRecycled) sprite.recycle()
+        } else {
+            drawCoordinateDot(canvas, coordinateX, coordinateY, minDimension)
         }
+    }
+
+    internal fun spriteTargetSizeFor(minDimension: Int): Int {
+        val proportional = (minDimension * SPRITE_SIZE_FRACTION).roundToInt()
+        val bounded = proportional.coerceIn(SPRITE_MIN_SIZE, SPRITE_MAX_SIZE)
+        return bounded.coerceAtMost((minDimension * 0.6f).roundToInt().coerceAtLeast(1))
+    }
+
+    internal fun visibleContentBounds(bitmap: Bitmap): Rect? {
+        val row = IntArray(bitmap.width)
+        var left = bitmap.width
+        var top = bitmap.height
+        var right = -1
+        var bottom = -1
+
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+            for (x in row.indices) {
+                if (android.graphics.Color.alpha(row[x]) <= VISIBLE_ALPHA_THRESHOLD) continue
+                left = minOf(left, x)
+                top = minOf(top, y)
+                right = maxOf(right, x)
+                bottom = maxOf(bottom, y)
+            }
+        }
+
+        return if (right < left || bottom < top) {
+            null
+        } else {
+            Rect(left, top, right + 1, bottom + 1)
+        }
+    }
+
+    private fun drawCoordinateDot(
+        canvas: Canvas,
+        coordinateX: Float,
+        coordinateY: Float,
+        minDimension: Int
+    ) {
+        canvas.drawCircle(
+            coordinateX,
+            coordinateY,
+            (minDimension * 0.025f).coerceIn(4f, 14f),
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF2869D8.toInt() }
+        )
     }
 
     private fun drawOpenStreetMapAttribution(
