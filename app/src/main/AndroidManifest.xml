@@ -128,6 +128,24 @@
                 android:resource="@xml/alerts_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".widget.NearbyRadarWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_radar_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_REFRESH_RADAR" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.pokemonalertsv2.widget.ACTION_TIMER_TICK_RADAR" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nearby_radar_widget_info" />
+        </receiver>
+
         <service
             android:name=".widget.AlertsWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"

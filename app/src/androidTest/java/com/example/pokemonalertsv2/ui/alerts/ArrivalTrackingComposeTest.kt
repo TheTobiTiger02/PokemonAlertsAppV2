@@ -32,8 +32,7 @@ class ArrivalTrackingComposeTest {
                     distanceInfo = AlertDistanceInfo(null, null, null),
                     onOpenMaps = {},
                     onShowDetails = {},
-                    onPipClick = {},
-                    onShareClick = {},
+                    onSecondaryAction = {},
                     isGoing = isGoing,
                     onGoingClick = { isGoing = !isGoing }
                 )

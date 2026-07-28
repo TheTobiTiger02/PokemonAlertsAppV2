@@ -77,7 +77,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -173,9 +172,7 @@ fun PokemonAlertsRoute(
         }
     }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        rememberTopAppBarState()
-    )
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
@@ -284,28 +281,20 @@ fun AlertHistoryRoute(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(
-        rememberTopAppBarState()
-    )
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
         topBar = {
             if (showTopBar) {
-                LargeTopAppBar(
+                TopAppBar(
+                    windowInsets = WindowInsets(0),
                     title = {
-                        Column {
-                            Text(
-                                text = "Alert History",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Browse past alerts",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = "Alert History",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     },
                     actions = {
                         FilledIconButton(
@@ -702,6 +691,8 @@ fun PokemonAlertsPage(
                 onSearchQueryChanged = { searchQuery = it },
                 selectedArea = selectedArea,
                 maxDistance = maxDistance,
+                onClearAreaFilter = { onSelectedAreaChange("All") },
+                onClearDistanceFilter = { onMaxDistanceChange(0) },
                 onClearAllFilters = {
                     onSelectedFilterChange(AlertFilter.ALL)
                     showDismissed = false
@@ -779,11 +770,14 @@ private fun AlertsList(
     onSearchQueryChanged: (String) -> Unit = {},
     selectedArea: String = "All",
     maxDistance: Int = 0,
+    onClearAreaFilter: () -> Unit = {},
+    onClearDistanceFilter: () -> Unit = {},
     onClearAllFilters: () -> Unit = {}
 ) {
     val arrivalTracking = rememberArrivalTrackingUiController()
     val countdownNow = rememberCountdownNow()
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     val activeFilterCount = listOf(
         selectedFilter != AlertFilter.ALL,
         showDismissed,
@@ -802,43 +796,63 @@ private fun AlertsList(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            text = selectedFilter.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "${filteredAlerts.size} active alerts",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+                    Text(
+                        text = "${filteredAlerts.size} active alerts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        IconButton(onClick = { searchExpanded = !searchExpanded }) {
+                            Icon(
+                                imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                                contentDescription = if (searchExpanded) "Close search" else "Search alerts"
+                            )
+                        }
                         SortingButton(
                             currentSort = sortPreference,
                             onSortChanged = onSortChanged
                         )
-                        FilledTonalButton(onClick = { showFilterSheet = true }) {
-                            Text(if (activeFilterCount == 0) "Filters" else "Filters ($activeFilterCount)")
+                        Box {
+                            IconButton(onClick = { showFilterSheet = true }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_filter),
+                                    contentDescription = "Filter alerts"
+                                )
+                            }
+                            if (activeFilterCount > 0) {
+                                Surface(
+                                    modifier = Modifier.align(Alignment.TopEnd),
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ) {
+                                    Text(
+                                        text = activeFilterCount.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-                AlertSearchBar(
-                    query = searchQuery,
-                    onQueryChanged = onSearchQueryChanged,
-                    placeholder = stringResource(R.string.alerts_search_hint)
-                )
+                AnimatedVisibility(visible = searchExpanded) {
+                    AlertSearchBar(
+                        query = searchQuery,
+                        onQueryChanged = onSearchQueryChanged,
+                        placeholder = stringResource(R.string.alerts_search_hint)
+                    )
+                }
                 if (locationPrecisionInsufficient) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -856,14 +870,17 @@ private fun AlertsList(
                         }
                     }
                 }
-                if (selectedFilter != AlertFilter.ALL || showDismissed) {
+                if (activeFilterCount > 0) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (selectedFilter != AlertFilter.ALL) {
                             item {
                                 FilterChip(
                                     selected = true,
-                                    onClick = { showFilterSheet = true },
-                                    label = { Text(selectedFilter.label) }
+                                    onClick = { onFilterChanged(AlertFilter.ALL) },
+                                    label = { Text(selectedFilter.label) },
+                                    trailingIcon = {
+                                        Icon(Icons.Filled.Close, contentDescription = "Clear type filter", modifier = Modifier.size(16.dp))
+                                    }
                                 )
                             }
                         }
@@ -875,6 +892,45 @@ private fun AlertsList(
                                     label = { Text("Dismissed") },
                                     trailingIcon = {
                                         Icon(Icons.Filled.Close, contentDescription = "Remove dismissed filter", modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
+                        }
+                        if (selectedArea != "All") {
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = onClearAreaFilter,
+                                    label = { Text(selectedArea) },
+                                    trailingIcon = {
+                                        Icon(Icons.Filled.Close, contentDescription = "Clear area filter", modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
+                        }
+                        if (maxDistance > 0) {
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = onClearDistanceFilter,
+                                    label = { Text("Within $maxDistance km") },
+                                    trailingIcon = {
+                                        Icon(Icons.Filled.Close, contentDescription = "Clear distance filter", modifier = Modifier.size(16.dp))
+                                    }
+                                )
+                            }
+                        }
+                        if (searchQuery.isNotBlank()) {
+                            item {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = {
+                                        onSearchQueryChanged("")
+                                        searchExpanded = false
+                                    },
+                                    label = { Text("\u201c$searchQuery\u201d") },
+                                    trailingIcon = {
+                                        Icon(Icons.Filled.Close, contentDescription = "Clear search", modifier = Modifier.size(16.dp))
                                     }
                                 )
                             }
@@ -1019,9 +1075,13 @@ private fun AlertsList(
                         nowMillis = countdownNow,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
-                        onPipClick = { onPipClick(model.alert) },
-                        onShareClick = { onShareClick(model.alert) },
-                        onSnoozeClick = { onSnoozeClick(model.alert) },
+                        onSecondaryAction = { action ->
+                            when (action) {
+                                AlertSecondaryAction.SNOOZE -> onSnoozeClick(model.alert)
+                                AlertSecondaryAction.PICTURE_IN_PICTURE -> onPipClick(model.alert)
+                                AlertSecondaryAction.SHARE -> onShareClick(model.alert)
+                            }
+                        },
                         isGoing = arrivalTracking.isTracking(model.alert),
                         onGoingClick = if (model.alert.isEligibleArrivalDestination()) {
                             { arrivalTracking.onToggle(model.alert) }
@@ -1045,7 +1105,7 @@ private fun AlertsList(
             }
 
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Spacer(modifier = Modifier.height(80.dp))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -1163,37 +1223,19 @@ private fun SortingButton(
     var expanded by remember { mutableStateOf(false) }
     
     Box(modifier = modifier) {
-        ElevatedAssistChip(
-            onClick = { expanded = true },
-            label = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Sort",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = when (currentSort) {
-                            SortPreference.POSTED_TIME -> "Posted"
-                            SortPreference.DISTANCE -> "Distance"
-                            SortPreference.TIME_REMAINING -> "Time"
-                            SortPreference.NAME -> "Name"
-                        }
-                    )
-                }
-            },
-            colors = AssistChipDefaults.elevatedAssistChipColors(
-                containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
-                labelColor = MaterialTheme.colorScheme.onSurface
-            ),
-            border = BorderStroke(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = "Sort alerts, current: ${
+                    when (currentSort) {
+                        SortPreference.POSTED_TIME -> "posted time"
+                        SortPreference.DISTANCE -> "distance"
+                        SortPreference.TIME_REMAINING -> "time remaining"
+                        SortPreference.NAME -> "name"
+                    }
+                }"
             )
-        )
+        }
         
         DropdownMenu(
             expanded = expanded,
@@ -1361,20 +1403,14 @@ private fun AlertsToolbar(
     onRefresh: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
-    LargeTopAppBar(
+    TopAppBar(
+        windowInsets = WindowInsets(0),
         title = {
-            Column {
-                Text(
-                    text = stringResource(id = R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(id = R.string.alerts_toolbar_tagline),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            Text(
+                text = stringResource(id = R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
         },
         actions = {
             FilledIconButton(onClick = onRefresh, shape = CircleShape) {
@@ -1458,6 +1494,7 @@ private fun AlertHistoryPage(
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showHistoryFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var searchExpanded by rememberSaveable { mutableStateOf(uiState.searchQuery.isNotBlank()) }
     var userLocation by remember { mutableStateOf<Location?>(null) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
@@ -1702,6 +1739,12 @@ private fun AlertHistoryPage(
             calendar.get(java.util.Calendar.YEAR)
         )
     }
+    val activeHistoryFilterCount = listOf(
+        selectedTypeFilter != AlertFilter.ALL,
+        selectedAreaFilter != HistoryAreaFilter.BOTH,
+        selectedDateMillis != null,
+        uiState.searchQuery.isNotBlank()
+    ).count { it }
     val applyHistoryTypeFilter: (AlertFilter) -> Unit = { filter ->
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         selectedTypeFilter = filter
@@ -1753,8 +1796,8 @@ private fun AlertHistoryPage(
                 columns = GridCells.Fixed(columns),
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -1780,10 +1823,24 @@ private fun AlertHistoryPage(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "${filteredAlerts.size} loaded",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { searchExpanded = !searchExpanded }) {
+                                Icon(
+                                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                                    contentDescription = if (searchExpanded) "Close history search" else "Search history"
+                                )
+                            }
                             SortingButton(
                                 currentSort = sortPreference,
                                 onSortChanged = {
@@ -1791,57 +1848,66 @@ private fun AlertHistoryPage(
                                     sortPreference = it
                                 }
                             )
-                            FilledTonalButton(onClick = { showHistoryFilterSheet = true }) {
-                                Text("Filters")
+                            Box {
+                                IconButton(onClick = { showHistoryFilterSheet = true }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_filter),
+                                        contentDescription = "Filter history"
+                                    )
+                                }
+                                if (activeHistoryFilterCount > 0) {
+                                    Surface(
+                                        modifier = Modifier.align(Alignment.TopEnd),
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ) {
+                                        Text(
+                                            text = activeHistoryFilterCount.toString(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                    AlertSearchBar(
-                        query = uiState.searchQuery,
-                        onQueryChanged = onSearchChanged,
-                        placeholder = "Search history…"
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item {
-                            FilterChip(
-                                selected = uiState.selectedDate == historyDateString(0),
-                                onClick = {
-                                    val millis = historyDateMillis(0)
-                                    selectedDateMillis = millis
-                                    onDateChanged(historyDateString(0))
-                                },
-                                label = { Text("Today") }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = uiState.selectedDate == historyDateString(1),
-                                onClick = {
-                                    val millis = historyDateMillis(1)
-                                    selectedDateMillis = millis
-                                    onDateChanged(historyDateString(1))
-                                },
-                                label = { Text("Yesterday") }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = uiState.selectedDate != null &&
-                                    uiState.selectedDate != historyDateString(0) &&
-                                    uiState.selectedDate != historyDateString(1),
-                                onClick = showHistoryDatePicker,
-                                label = { Text("Custom") },
-                                leadingIcon = { Icon(Icons.Filled.DateRange, contentDescription = null) }
-                            )
-                        }
+                    AnimatedVisibility(visible = searchExpanded) {
+                        AlertSearchBar(
+                            query = uiState.searchQuery,
+                            onQueryChanged = onSearchChanged,
+                            placeholder = "Search history\u2026"
+                        )
                     }
-                    if (selectedTypeFilter != AlertFilter.ALL || selectedAreaFilter != HistoryAreaFilter.BOTH || selectedDateLabel != null) {
+                    if (activeHistoryFilterCount > 0) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (selectedTypeFilter != AlertFilter.ALL) item {
-                                FilterChip(true, { showHistoryFilterSheet = true }, { Text(selectedTypeFilter.label) })
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { applyHistoryTypeFilter(AlertFilter.ALL) },
+                                    label = { Text(selectedTypeFilter.label) },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Filled.Close,
+                                            contentDescription = "Clear type filter",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                )
                             }
                             if (selectedAreaFilter != HistoryAreaFilter.BOTH) item {
-                                FilterChip(true, { showHistoryFilterSheet = true }, { Text(selectedAreaFilter.label) })
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { selectedAreaFilter = HistoryAreaFilter.BOTH },
+                                    label = { Text(selectedAreaFilter.label) },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Filled.Close,
+                                            contentDescription = "Clear area filter",
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                )
                             }
                             selectedDateLabel?.let { label ->
                                 item {
@@ -1856,6 +1922,25 @@ private fun AlertHistoryPage(
                                             }) {
                                                 Icon(Icons.Filled.Close, contentDescription = "Clear date", modifier = Modifier.size(16.dp))
                                             }
+                                        }
+                                    )
+                                }
+                            }
+                            if (uiState.searchQuery.isNotBlank()) {
+                                item {
+                                    FilterChip(
+                                        selected = true,
+                                        onClick = {
+                                            onSearchChanged("")
+                                            searchExpanded = false
+                                        },
+                                        label = { Text("\u201c${uiState.searchQuery}\u201d") },
+                                        trailingIcon = {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = "Clear history search",
+                                                modifier = Modifier.size(16.dp)
+                                            )
                                         }
                                     )
                                 }
@@ -1893,8 +1978,7 @@ private fun AlertHistoryPage(
                     ),
                     shape = MaterialTheme.shapes.large
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Header
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1902,20 +1986,16 @@ private fun AlertHistoryPage(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text(
-                                    text = "Statistics for $statsScopeText",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "${statistics["total"]} total alerts" +
-                                        if ((statistics["today"] ?: 0) > 0) " · ${statistics["today"]} today" else "",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "${statistics["total"]} alerts \u00b7 $statsScopeText" +
+                                    if ((statistics["today"] ?: 0) > 0) " \u00b7 ${statistics["today"]} today" else "",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                 contentDescription = if (isExpanded) "Collapse" else "Expand",
@@ -1923,10 +2003,9 @@ private fun AlertHistoryPage(
                             )
                         }
                         
-                        // Expandable breakdown
                         AnimatedVisibility(visible = isExpanded) {
                             Column(
-                                modifier = Modifier.padding(top = 16.dp),
+                                modifier = Modifier.padding(top = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if ((statistics["raids"] ?: 0) > 0) {
@@ -1976,27 +2055,47 @@ private fun AlertHistoryPage(
                 }
             }
 
-            gridItems(
-                items = filteredAlerts,
-                key = { it.uniqueId },
-                contentType = { "alert_card" }
-            ) { alert ->
-                AlertCard(
-                    alert = alert,
-                    distanceInfo = AlertDistanceInfo(null, null, null),
-                    nowMillis = countdownNow,
-                    onOpenMaps = { openMapForAlert(context, alert) },
-                    onShowDetails = { 
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onAlertClick(alert) 
-                    },
-                    onPipClick = { openAlertInPictureInPicture(context, alert) },
-                    onShareClick = {
-                        scope.launch {
-                            AlertShareCard.share(context, alert)
-                        }
+            filteredAlerts.forEachIndexed { index, alert ->
+                val dayLabel = historyDayLabel(alert)
+                val previousDayLabel = filteredAlerts.getOrNull(index - 1)?.let(::historyDayLabel)
+                if (sortPreference == SortPreference.POSTED_TIME && dayLabel != previousDayLabel) {
+                    item(
+                        key = "history_day_${index}_$dayLabel",
+                        span = { GridItemSpan(maxLineSpan) },
+                        contentType = "history_day"
+                    ) {
+                        Text(
+                            text = dayLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = if (index == 0) 0.dp else 4.dp)
+                        )
                     }
-                )
+                }
+                item(key = alert.uniqueId, contentType = "alert_card") {
+                    AlertCard(
+                        alert = alert,
+                        distanceInfo = AlertDistanceInfo(null, null, null),
+                        nowMillis = countdownNow,
+                        cardContext = AlertCardContext.HISTORY,
+                        onOpenMaps = { openMapForAlert(context, alert) },
+                        onShowDetails = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAlertClick(alert)
+                        },
+                        onSecondaryAction = { action ->
+                            when (action) {
+                                AlertSecondaryAction.SNOOZE -> Unit
+                                AlertSecondaryAction.PICTURE_IN_PICTURE ->
+                                    openAlertInPictureInPicture(context, alert)
+                                AlertSecondaryAction.SHARE -> {
+                                    scope.launch { AlertShareCard.share(context, alert) }
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             // Loading indicator while fetching the next page
@@ -2070,25 +2169,60 @@ private fun AlertHistoryPage(
                         selectedAreaFilter = it
                     }
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilledTonalButton(
-                        onClick = showHistoryDatePicker,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Filled.DateRange, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(selectedDateLabel ?: "Select date")
+                Text("Date", style = MaterialTheme.typography.titleSmall)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item {
+                        FilterChip(
+                            selected = selectedDateMillis == null,
+                            onClick = {
+                                selectedDateMillis = null
+                                onDateChanged(null)
+                            },
+                            label = { Text("All") }
+                        )
                     }
-                    if (selectedDateMillis != null) {
-                        FilledIconButton(onClick = {
+                    item {
+                        FilterChip(
+                            selected = uiState.selectedDate == historyDateString(0),
+                            onClick = {
+                                selectedDateMillis = historyDateMillis(0)
+                                onDateChanged(historyDateString(0))
+                            },
+                            label = { Text("Today") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = uiState.selectedDate == historyDateString(1),
+                            onClick = {
+                                selectedDateMillis = historyDateMillis(1)
+                                onDateChanged(historyDateString(1))
+                            },
+                            label = { Text("Yesterday") }
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = selectedDateMillis != null &&
+                                uiState.selectedDate != historyDateString(0) &&
+                                uiState.selectedDate != historyDateString(1),
+                            onClick = showHistoryDatePicker,
+                            label = { Text("Custom") },
+                            leadingIcon = { Icon(Icons.Filled.DateRange, contentDescription = null) }
+                        )
+                    }
+                }
+                if (activeHistoryFilterCount > 0) {
+                    TextButton(
+                        onClick = {
+                            applyHistoryTypeFilter(AlertFilter.ALL)
+                            selectedAreaFilter = HistoryAreaFilter.BOTH
                             selectedDateMillis = null
                             onDateChanged(null)
-                        }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear date")
+                            onSearchChanged("")
                         }
+                    ) {
+                        Text("Clear all filters")
                     }
                 }
                 Button(
@@ -2114,6 +2248,23 @@ internal fun historyDateMillis(daysAgo: Int, nowMillis: Long = System.currentTim
 
 internal fun historyDateString(daysAgo: Int, nowMillis: Long = System.currentTimeMillis()): String =
     java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(historyDateMillis(daysAgo, nowMillis)))
+
+internal fun historyDayLabel(
+    alert: PokemonAlert,
+    nowMillis: Long = System.currentTimeMillis()
+): String {
+    val timestamp = TimeUtils.parseEndTimeToMillis(alert.createdAt)
+        ?: TimeUtils.parseEndTimeToMillis(alert.endTime)
+        ?: return "Date unavailable"
+    val zone = java.time.ZoneId.systemDefault()
+    val date = java.time.Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate()
+    val today = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    return when (date) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMM"))
+    }
+}
 
 @Composable
 private fun StatRow(label: String, count: Int, color: Color) {

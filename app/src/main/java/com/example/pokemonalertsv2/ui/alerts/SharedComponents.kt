@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.pokemonalertsv2.ui.alerts
 
 import android.annotation.SuppressLint
@@ -109,6 +111,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -175,6 +179,17 @@ data class AlertUiModel(
     val endMillis: Long? = null,
     val typeKeys: Set<String> = emptySet()
 )
+
+internal enum class AlertCardContext {
+    LIVE,
+    HISTORY
+}
+
+internal enum class AlertSecondaryAction {
+    SNOOZE,
+    PICTURE_IN_PICTURE,
+    SHARE
+}
 
 @Composable
 fun rememberCountdownNow(tickMillis: Long = 1000L): Long {
@@ -273,14 +288,14 @@ private fun formatAlertTitleRaw(alert: PokemonAlert): String {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AlertCard(
+internal fun AlertCard(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo,
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
-    onPipClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onSnoozeClick: (() -> Unit)? = null,
+    onSecondaryAction: (AlertSecondaryAction) -> Unit,
+    cardContext: AlertCardContext = AlertCardContext.LIVE,
+    snoozeEnabled: Boolean = cardContext == AlertCardContext.LIVE,
     isGoing: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     nowMillis: Long = System.currentTimeMillis(),
@@ -300,7 +315,6 @@ fun AlertCard(
     }
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     val resolvedCp = alert.displayCp
-
     LinearModernCard(
         modifier = modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -314,7 +328,7 @@ fun AlertCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(144.dp)
+                    .height(112.dp)
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             ) {
                 AlertImage(
@@ -324,7 +338,7 @@ fun AlertCard(
                     contentScale = ContentScale.Crop
                 )
                 Surface(
-                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
                     shape = MaterialTheme.shapes.small,
                     color = categoryAccent.copy(alpha = 0.92f)
                 ) {
@@ -336,7 +350,7 @@ fun AlertCard(
                     )
                 }
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
                     shape = MaterialTheme.shapes.small,
                     color = if (remaining != null && remaining <= 0) {
                         MaterialTheme.colorScheme.errorContainer
@@ -361,8 +375,8 @@ fun AlertCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -420,7 +434,8 @@ fun AlertCard(
 
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    maxLines = 2
                 ) {
                     GoDexStatusPill(goDexStatus)
                     displayIv?.let {
@@ -429,11 +444,6 @@ fun AlertCard(
                             isPrimary = true
                         )
                     }
-                    AlertPill(
-                        text = visualStyle.label,
-                        containerColor = categoryAccent.copy(alpha = 0.16f),
-                        contentColor = categoryAccent
-                    )
                     resolvedCp?.let {
                         AlertPill(
                             text = "CP $it",
@@ -449,75 +459,34 @@ fun AlertCard(
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
-                    distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let {
+                    val travelText = listOfNotNull(
+                        distanceInfo.distanceText?.takeIf { it.isNotBlank() },
+                        distanceInfo.walkingText?.takeIf { it.isNotBlank() }
+                    ).joinToString(" \u00b7 ")
+                    travelText.takeIf { it.isNotBlank() }?.let {
                         AlertPill(
                             text = it,
                             painter = painterResource(id = R.drawable.ic_map),
                             isPrimary = true
                         )
                     }
-                    distanceInfo.walkingText?.takeIf { it.isNotBlank() }?.let {
-                        AlertPill(text = it, isPrimary = false)
-                    }
                 }
 
-                FlowRow(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (onSnoozeClick != null) {
-                        FilledIconButton(
-                            onClick = onSnoozeClick,
-                            modifier = Modifier.size(48.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Notifications,
-                                contentDescription = "Snooze alert"
-                            )
-                        }
-                    }
-                    FilledIconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(
-                                androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
-                            )
-                            onPipClick()
-                        },
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_pip),
-                            contentDescription = stringResource(id = R.string.open_alert_in_pip)
-                        )
-                    }
                     GoDexCaughtAction(
                         alert = alert,
                         matchResult = goDexStatus
                     )
 
-                    FilledIconButton(
-                        onClick = onShareClick,
-                        modifier = Modifier.size(48.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Icon(Icons.Filled.Share, contentDescription = "Share")
-                    }
-                    if (onGoingClick != null) {
+                    if (cardContext == AlertCardContext.LIVE && onGoingClick != null) {
                         FilledTonalButton(
                             onClick = onGoingClick,
-                            modifier = Modifier.height(48.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = if (isGoing) {
                                     MaterialTheme.colorScheme.errorContainer
@@ -532,7 +501,7 @@ fun AlertCard(
                             )
                         ) {
                             Icon(Icons.Filled.LocationOn, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 if (isGoing) "Stop" else "I\u2019m going",
                                 style = MaterialTheme.typography.labelLarge
@@ -541,7 +510,8 @@ fun AlertCard(
                     }
                     FilledTonalButton(
                         onClick = onOpenMaps,
-                        modifier = Modifier.height(48.dp),
+                        modifier = Modifier.weight(1.15f).height(48.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = categoryAccent.copy(alpha = 0.22f),
                             contentColor = categoryAccent
@@ -551,12 +521,93 @@ fun AlertCard(
                             painter = painterResource(id = R.drawable.ic_map),
                             contentDescription = stringResource(id = R.string.open_in_maps)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text("Navigate", style = MaterialTheme.typography.labelLarge)
                     }
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (snoozeEnabled) {
+                        CompactAlertActionButton(
+                            text = "Snooze",
+                            accessibilityLabel = "Snooze alert",
+                            onClick = { onSecondaryAction(AlertSecondaryAction.SNOOZE) },
+                            modifier = Modifier.weight(1f),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Notifications,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        )
+                    }
+                    CompactAlertActionButton(
+                        text = "PiP",
+                        accessibilityLabel = "Open alert in picture-in-picture",
+                        onClick = {
+                            onSecondaryAction(AlertSecondaryAction.PICTURE_IN_PICTURE)
+                        },
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_pip),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    )
+                    CompactAlertActionButton(
+                        text = "Share",
+                        accessibilityLabel = "Share alert",
+                        onClick = { onSecondaryAction(AlertSecondaryAction.SHARE) },
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Share,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun CompactAlertActionButton(
+    text: String,
+    accessibilityLabel: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit
+) {
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .semantics { contentDescription = accessibilityLabel },
+        shape = MaterialTheme.shapes.medium,
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        colors = ButtonDefaults.filledTonalButtonColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        )
+    ) {
+        icon()
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1140,7 +1191,7 @@ fun AlertDetailScreen(
     val arrivalTracking = rememberArrivalTrackingUiController()
     val isGoing = arrivalTracking.isTracking(alert)
     val goDexStatus = rememberGoDexStatus(alert)
-    val actionBarClearance = 84.dp +
+    val actionBarClearance = 132.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -1504,6 +1555,7 @@ fun AlertDetailScreen(
                 goingEnabled = alert.isEligibleArrivalDestination(),
                 onGoingClick = { arrivalTracking.onToggle(alert) },
                 onNavigateClick = { openMapForAlert(context, alert) },
+                onPipClick = onEnterPictureInPicture,
                 onShareClick = {
                     scope.launch {
                         AlertShareCard.share(context, alert)
@@ -1744,6 +1796,7 @@ private fun AlertDetailActionBar(
     goingEnabled: Boolean,
     onGoingClick: () -> Unit,
     onNavigateClick: () -> Unit,
+    onPipClick: (() -> Unit)?,
     onShareClick: () -> Unit
 ) {
     Surface(
@@ -1752,108 +1805,133 @@ private fun AlertDetailActionBar(
         tonalElevation = 8.dp,
         shadowElevation = 12.dp
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
-                .height(56.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilledIconButton(
-                onClick = onSnoozeClick,
-                modifier = Modifier.size(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    contentColor = MaterialTheme.colorScheme.onSurface
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Notifications,
-                    contentDescription = "Snooze alert",
-                    modifier = Modifier.size(22.dp)
-                )
+                FilledTonalButton(
+                    onClick = onGoingClick,
+                    enabled = goingEnabled || isGoing,
+                    modifier = Modifier.weight(1.2f).height(56.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = if (isGoing) {
+                            MaterialTheme.colorScheme.errorContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        contentColor = if (isGoing) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                    )
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (isGoing) "Stop" else "I\u2019m going",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+                }
+                FilledTonalButton(
+                    onClick = onNavigateClick,
+                    modifier = Modifier.weight(1.4f).height(56.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = accent,
+                        contentColor = if (accent.luminance() > 0.55f) {
+                            Color(0xFF171A20)
+                        } else {
+                            Color.White
+                        }
+                    )
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_map),
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Navigate",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+                }
             }
-            FilledTonalButton(
-                onClick = onGoingClick,
-                enabled = goingEnabled || isGoing,
-                modifier = Modifier.weight(1.2f).height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = if (isGoing) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    },
-                    contentColor = if (isGoing) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactAlertActionButton(
+                    text = "Snooze",
+                    accessibilityLabel = "Snooze alert",
+                    onClick = onSnoozeClick,
+                    modifier = Modifier.weight(1f),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Filled.Notifications,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 )
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (isGoing) "Stop" else "I\u2019m going",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                if (onPipClick != null) {
+                    CompactAlertActionButton(
+                        text = "PiP",
+                        accessibilityLabel = "Open alert in picture-in-picture",
+                        onClick = onPipClick,
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_pip),
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                 }
-            }
-            FilledTonalButton(
-                onClick = onNavigateClick,
-                modifier = Modifier.weight(1.4f).height(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = accent,
-                    contentColor = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
-                )
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_map),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Navigate",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
-                    )
-                }
-            }
-            FilledIconButton(
-                onClick = onShareClick,
-                modifier = Modifier.size(56.dp),
-                shape = MaterialTheme.shapes.medium,
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Share,
-                    contentDescription = "Share alert",
-                    modifier = Modifier.size(22.dp)
+                CompactAlertActionButton(
+                    text = "Share",
+                    accessibilityLabel = "Share alert",
+                    onClick = onShareClick,
+                    modifier = Modifier.weight(1f),
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Filled.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 )
             }
         }

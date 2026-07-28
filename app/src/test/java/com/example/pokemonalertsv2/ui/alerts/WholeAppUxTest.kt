@@ -47,4 +47,31 @@ class WholeAppUxTest {
         assertTrue(historyDateString(0, fixed).matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
         assertEquals(86_400_000L, historyDateMillis(0, fixed) - historyDateMillis(1, fixed))
     }
+
+    @Test
+    fun historyDayLabelsUseFriendlyRelativeDates() {
+        val fixed = 1_753_200_000_000L
+        assertEquals(
+            "Today",
+            historyDayLabel(PokemonAlert(name = "Today", createdAt = fixed.toString()), fixed)
+        )
+        assertEquals(
+            "Yesterday",
+            historyDayLabel(
+                PokemonAlert(name = "Yesterday", createdAt = (fixed - 86_400_000L).toString()),
+                fixed
+            )
+        )
+        assertEquals(
+            "Date unavailable",
+            historyDayLabel(PokemonAlert(name = "Unknown"), fixed)
+        )
+    }
+
+    @Test
+    fun mapLoadStatePrefersReadyAndExposesFailures() {
+        assertEquals(MapLoadState.LOADING, resolveMapLoadState(loaded = false, failed = false))
+        assertEquals(MapLoadState.ERROR, resolveMapLoadState(loaded = false, failed = true))
+        assertEquals(MapLoadState.READY, resolveMapLoadState(loaded = true, failed = true))
+    }
 }

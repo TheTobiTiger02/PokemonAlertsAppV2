@@ -34,6 +34,7 @@ internal object WidgetUpdateCoordinator {
                 .debounce(DEBOUNCE_MILLIS)
                 .collect {
                     AlertsWidgetProvider.sendUpdateBroadcast(appContext)
+                    NearbyRadarWidgetProvider.sendUpdateBroadcast(appContext)
                 }
         }
 

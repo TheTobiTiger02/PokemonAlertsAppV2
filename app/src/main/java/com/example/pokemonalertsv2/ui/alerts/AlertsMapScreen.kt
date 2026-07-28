@@ -16,6 +16,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -28,6 +30,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,9 +42,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +69,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -79,6 +83,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -275,7 +280,16 @@ internal fun AlertsMapScreenContent(
     }
     var googleMapLoaded by remember { mutableStateOf(false) }
     var openStreetMapLoaded by remember { mutableStateOf(false) }
+    var mapLoadFailed by remember { mutableStateOf(false) }
+    var mapLoadAttempt by rememberSaveable { mutableIntStateOf(0) }
     var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedClusterAlerts by remember { mutableStateOf<List<PokemonAlert>>(emptyList()) }
+    var expandedClusterAlertIds by rememberSaveable {
+        mutableStateOf<ArrayList<String>>(arrayListOf())
+    }
+    var expandedClusterOriginZoom by rememberSaveable {
+        mutableStateOf<Double?>(null)
+    }
     val selectedAlert = remember(alerts, selectedAlertId) {
         alerts.firstOrNull { it.uniqueId == selectedAlertId }
     }
@@ -290,7 +304,7 @@ internal fun AlertsMapScreenContent(
     } else {
         MapType.NORMAL
     }
-    var showFilterMenu by rememberSaveable { mutableStateOf(false) }
+    var showLayersSheet by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -540,6 +554,24 @@ internal fun AlertsMapScreenContent(
         if (selectedFilter !in availableFilters) onSelectedFilterChange(AlertFilter.ALL)
     }
 
+    LaunchedEffect(selectedFilter, mapSource) {
+        expandedClusterAlertIds = arrayListOf()
+        expandedClusterOriginZoom = null
+    }
+
+    LaunchedEffect(filteredAlerts) {
+        val retainedIds = retainActiveExpandedAlertIds(
+            expandedAlertIds = expandedClusterAlertIds,
+            activeAlertIds = filteredAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
+        )
+        if (retainedIds.size != expandedClusterAlertIds.size) {
+            expandedClusterAlertIds = ArrayList(retainedIds)
+        }
+        if (retainedIds.isEmpty()) {
+            expandedClusterOriginZoom = null
+        }
+    }
+
     val mapUiSettings = remember(hasLocationPermission) {
         MapUiSettings(
             zoomControlsEnabled = false,
@@ -569,6 +601,58 @@ internal fun AlertsMapScreenContent(
         googleMapLoaded
     } else {
         openStreetMapLoaded
+    }
+    val mapLoadState = resolveMapLoadState(currentMapLoaded, mapLoadFailed)
+
+    LaunchedEffect(mapSource, mapLoadAttempt, currentMapLoaded) {
+        if (currentMapLoaded) {
+            mapLoadFailed = false
+            return@LaunchedEffect
+        }
+        mapLoadFailed = false
+        kotlinx.coroutines.delay(12_000)
+        if (!currentMapLoaded) mapLoadFailed = true
+    }
+
+    fun retryMapLoad() {
+        if (mapSource == MapDisplaySource.GOOGLE) {
+            googleMapLoaded = false
+        } else {
+            openStreetMapLoaded = false
+        }
+        mapLoadFailed = false
+        mapLoadAttempt += 1
+    }
+
+    fun toggleMapSource() {
+        mapLoadFailed = false
+        mapLoadAttempt += 1
+        if (mapSource == MapDisplaySource.GOOGLE) {
+            val position = cameraPositionState.position
+            updateRetainedCamera(
+                MapCameraSnapshot(
+                    position.target.latitude,
+                    position.target.longitude,
+                    position.zoom.toDouble()
+                )
+            )
+            openStreetMapLoaded = false
+            mapStyle = MapStylePreference.OPENSTREETMAP
+            onMapStyleChanged(MapStylePreference.OPENSTREETMAP)
+        } else {
+            googleMapLoaded = false
+            mapStyle = MapStylePreference.GOOGLE_STANDARD
+            onMapStyleChanged(MapStylePreference.GOOGLE_STANDARD)
+            scope.launch {
+                val retained = retainedCamera()
+                cameraPositionState.move(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(retained.latitude, retained.longitude),
+                        retained.zoom.toFloat()
+                    )
+                )
+            }
+        }
     }
 
     LaunchedEffect(cameraPositionState) {
@@ -637,10 +721,9 @@ internal fun AlertsMapScreenContent(
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useSidePanel = maxWidth >= 840.dp
         val controlsEndPadding = if (useSidePanel) 392.dp else 16.dp
-        val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val mapContentPadding = PaddingValues(
             start = 16.dp,
-            top = statusBarPadding + 88.dp,
+            top = 72.dp,
             end = if (useSidePanel) 392.dp else 16.dp,
             bottom = if (useSidePanel) 24.dp else 96.dp
         )
@@ -650,14 +733,44 @@ internal fun AlertsMapScreenContent(
         val openStreetMapInsets = with(density) {
             MapContentInsets(
                 left = 16.dp.roundToPx(),
-                top = (statusBarPadding + 88.dp).roundToPx(),
+                top = 72.dp.roundToPx(),
                 right = (if (useSidePanel) 392.dp else 16.dp).roundToPx(),
                 bottom = (if (useSidePanel) 24.dp else 96.dp).roundToPx()
             )
         }
         val visibleCoordinates = remember(filteredAlerts) { resolveFitAllCoordinates(filteredAlerts) }
+        val displayZoom = if (mapSource == MapDisplaySource.GOOGLE) {
+            cameraPositionState.position.zoom.toDouble()
+        } else {
+            retainedZoom
+        }
+        val expandedAlertIdSet = remember(expandedClusterAlertIds) {
+            expandedClusterAlertIds.toSet()
+        }
+        val markerItems = remember(
+            filteredAlerts,
+            displayZoom,
+            density.density,
+            expandedAlertIdSet
+        ) {
+            clusterMapAlerts(
+                alerts = filteredAlerts,
+                zoom = displayZoom,
+                density = density.density,
+                expandedAlertIds = expandedAlertIdSet
+            )
+        }
+
+        LaunchedEffect(displayZoom, expandedClusterOriginZoom) {
+            if (shouldClearExpandedMapCluster(expandedClusterOriginZoom, displayZoom)) {
+                expandedClusterAlertIds = arrayListOf()
+                expandedClusterOriginZoom = null
+            }
+        }
 
         fun fitVisibleAlerts() {
+            expandedClusterAlertIds = arrayListOf()
+            expandedClusterOriginZoom = null
             applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
             if (visibleCoordinates.isEmpty()) {
                 Toast.makeText(context, R.string.map_no_alerts_to_show, Toast.LENGTH_SHORT).show()
@@ -694,14 +807,18 @@ internal fun AlertsMapScreenContent(
         }
 
         if (mapSource == MapDisplaySource.GOOGLE) {
-            GoogleMap(
+            key(mapLoadAttempt) {
+                GoogleMap(
                 modifier = Modifier.fillMaxSize(),
                 cameraPositionState = cameraPositionState,
                 contentPadding = mapContentPadding,
-                onMapLoaded = { googleMapLoaded = true },
+                onMapLoaded = {
+                    googleMapLoaded = true
+                    mapLoadFailed = false
+                },
                 properties = mapProperties,
                 uiSettings = mapUiSettings
-            ) {
+                ) {
                 userPose?.let { pose ->
                     val location = pose.location
                     Circle(
@@ -739,44 +856,117 @@ internal fun AlertsMapScreenContent(
                         )
                     }
                 }
-                filteredAlerts.forEach { alert ->
-                    key(alert.uniqueId) {
-                        MapMarker(
-                            alert = alert,
-                            now = now,
-                            density = density,
-                            showTimeLabel = showTimeLabels,
-                            goDexEntries = goDexEntries,
-                            goDexConfig = goDexConfig,
-                            onClick = { selectedAlertId = alert.uniqueId }
-                        )
+                markerItems.forEach { item ->
+                    when (item) {
+                        is MapMarkerItem.Alert -> key(item.alert.uniqueId) {
+                            MapMarker(
+                                alert = item.alert,
+                                now = now,
+                                density = density,
+                                showTimeLabel = showTimeLabels,
+                                goDexEntries = goDexEntries,
+                                goDexConfig = goDexConfig,
+                                onClick = { selectedAlertId = item.alert.uniqueId }
+                            )
+                        }
+                        is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
+                            Marker(
+                                state = MarkerState(LatLng(item.latitude, item.longitude)),
+                                icon = BitmapDescriptorFactory.fromBitmap(
+                                    remember(item.id, item.sharedCategory, item.alerts.size) {
+                                        createClusterMarkerBitmap(
+                                            context = context,
+                                            count = item.alerts.size,
+                                            sharedCategory = item.sharedCategory
+                                        )
+                                    }
+                                ),
+                                anchor = Offset(0.5f, 0.5f),
+                                zIndex = 850f,
+                                onClick = {
+                                    when (
+                                        val interaction = resolveMapClusterInteraction(
+                                            cluster = item,
+                                            currentZoom = displayZoom
+                                        )
+                                    ) {
+                                        MapClusterInteraction.ShowMembers -> {
+                                            selectedClusterAlerts = item.alerts
+                                        }
+                                        is MapClusterInteraction.Expand -> {
+                                            expandedClusterAlertIds = ArrayList(interaction.alertIds)
+                                            expandedClusterOriginZoom = interaction.originZoom
+                                            scope.launch {
+                                                val bounds = LatLngBounds(
+                                                    LatLng(item.bounds.south, item.bounds.west),
+                                                    LatLng(item.bounds.north, item.bounds.east)
+                                                )
+                                                cameraPositionState.animate(
+                                                    CameraUpdateFactory.newLatLngBounds(bounds, fitPaddingPx),
+                                                    600
+                                                )
+                                            }
+                                        }
+                                    }
+                                    true
+                                }
+                            )
+                        }
                     }
+                }
                 }
             }
         } else {
-            OpenStreetMapView(
-                modifier = Modifier.fillMaxSize(),
-                alerts = filteredAlerts,
-                userPose = userPose,
-                cameraSnapshot = retainedCamera(),
-                contentInsets = openStreetMapInsets,
-                showTimeLabels = showTimeLabels,
-                now = now,
-                controller = openStreetMapController,
-                onMapLoaded = { openStreetMapLoaded = true },
-                onLoadError = {
-                    Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
-                },
-                onAlertClick = { selectedAlertId = it.uniqueId },
-                onCameraChanged = ::updateRetainedCamera,
-                onUserGesture = {
-                    applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
-                },
-                goDexEntries = goDexEntries,
-                goDexConfig = goDexConfig,
-                showSpawnRadius = showSpawnRadius,
-                spacialRendEnabled = spacialRendEnabled
-            )
+            key(mapLoadAttempt) {
+                OpenStreetMapView(
+                    modifier = Modifier.fillMaxSize(),
+                    alerts = filteredAlerts,
+                    userPose = userPose,
+                    cameraSnapshot = retainedCamera(),
+                    contentInsets = openStreetMapInsets,
+                    showTimeLabels = showTimeLabels,
+                    now = now,
+                    controller = openStreetMapController,
+                    onMapLoaded = {
+                        openStreetMapLoaded = true
+                        mapLoadFailed = false
+                    },
+                    onLoadError = {
+                        mapLoadFailed = true
+                        Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
+                    },
+                    onAlertClick = { selectedAlertId = it.uniqueId },
+                    onClusterClick = { cluster ->
+                        when (
+                            val interaction = resolveMapClusterInteraction(
+                                cluster = cluster,
+                                currentZoom = retainedZoom
+                            )
+                        ) {
+                            MapClusterInteraction.ShowMembers -> {
+                                selectedClusterAlerts = cluster.alerts
+                            }
+                            is MapClusterInteraction.Expand -> {
+                                expandedClusterAlertIds = ArrayList(interaction.alertIds)
+                                expandedClusterOriginZoom = interaction.originZoom
+                                openStreetMapController.fitAlerts(
+                                    cluster.alerts.mapNotNull(PokemonAlert::mapCoordinatesOrNull),
+                                    fitPaddingPx
+                                )
+                            }
+                        }
+                    },
+                    onCameraChanged = ::updateRetainedCamera,
+                    onUserGesture = {
+                        applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
+                    },
+                    expandedAlertIds = expandedAlertIdSet,
+                    goDexEntries = goDexEntries,
+                    goDexConfig = goDexConfig,
+                    showSpawnRadius = showSpawnRadius,
+                    spacialRendEnabled = spacialRendEnabled
+                )
+            }
 
             Surface(
                 modifier = Modifier
@@ -799,92 +989,162 @@ internal fun AlertsMapScreenContent(
             }
         }
 
+        if (mapLoadState != MapLoadState.READY) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    shape = MaterialTheme.shapes.large,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (mapLoadState == MapLoadState.LOADING) {
+                            CircularProgressIndicator(
+                                progress = { 0.66f },
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Text(
+                                text = "Loading ${
+                                    if (mapSource == MapDisplaySource.GOOGLE) "Google Maps" else "OpenStreetMap"
+                                }\u2026",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        } else {
+                            Text(
+                                text = "Map couldn\u2019t be loaded",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Check your connection, retry, or use the other map provider.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Button(onClick = ::retryMapLoad) {
+                                Icon(Icons.Filled.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Retry")
+                            }
+                            TextButton(onClick = ::toggleMapSource) {
+                                Text(
+                                    if (mapSource == MapDisplaySource.GOOGLE) {
+                                        "Use OpenStreetMap"
+                                    } else {
+                                        "Use Google Maps"
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(WindowInsets.statusBars.asPaddingValues())
                 .padding(top = 8.dp, start = 16.dp, end = controlsEndPadding),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MapTopAppBar(
                 visibleAlertCount = filteredAlerts.size,
-                showTimeLabels = showTimeLabels,
-                hybridMap = mapType == MapType.HYBRID,
-                mapSource = mapSource,
                 showBackButton = showBackButton,
-                showSpawnRadius = showSpawnRadius,
-                spacialRendEnabled = spacialRendEnabled,
+                activeLayerCount = listOf(
+                    mapStyle != MapStylePreference.GOOGLE_STANDARD,
+                    showTimeLabels,
+                    showSpawnRadius,
+                    spacialRendEnabled
+                ).count { it },
                 onBack = onBack,
-                onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
-                onToggleSpawnRadius = onToggleSpawnRadius,
-                onToggleSpacialRend = onToggleSpacialRend,
                 onRefresh = onRefresh,
-                onToggleMapType = {
-                    val nextStyle = if (mapStyle == MapStylePreference.GOOGLE_SATELLITE) {
-                        MapStylePreference.GOOGLE_STANDARD
-                    } else {
-                        MapStylePreference.GOOGLE_SATELLITE
-                    }
-                    mapStyle = nextStyle
-                    onMapStyleChanged(nextStyle)
-                },
-                onToggleMapSource = {
-                    if (mapSource == MapDisplaySource.GOOGLE) {
-                        val position = cameraPositionState.position
-                        updateRetainedCamera(
-                            MapCameraSnapshot(
-                                position.target.latitude,
-                                position.target.longitude,
-                                position.zoom.toDouble()
-                            )
-                        )
-                        openStreetMapLoaded = false
-                        mapStyle = MapStylePreference.OPENSTREETMAP
-                        onMapStyleChanged(MapStylePreference.OPENSTREETMAP)
-                    } else {
-                        googleMapLoaded = false
-                        mapStyle = MapStylePreference.GOOGLE_STANDARD
-                        onMapStyleChanged(MapStylePreference.GOOGLE_STANDARD)
-                        scope.launch {
-                            val retained = retainedCamera()
-                            cameraPositionState.move(
-                                CameraUpdateFactory.newLatLngZoom(
-                                    LatLng(retained.latitude, retained.longitude),
-                                    retained.zoom.toFloat()
-                                )
-                            )
-                        }
-                    }
-                },
-                onOpenFilters = { showFilterMenu = true }
+                onOpenLayers = { showLayersSheet = true }
             )
 
+            MapFilterRow(
+                filters = availableFilters,
+                selectedFilter = selectedFilter,
+                visibleAlertCount = filteredAlerts.size,
+                onFilterSelected = onSelectedFilterChange
+            )
             MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+        }
 
-            DropdownMenu(
-                expanded = showFilterMenu,
-                onDismissRequest = { showFilterMenu = false },
-                containerColor = MaterialTheme.colorScheme.surface
+        if (selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(24.dp),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                shadowElevation = 4.dp
             ) {
-                AlertFilter.values().filter { it in availableFilters }.forEach { filter ->
-                    val filterAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
-                    DropdownMenuItem(
-                        text = { Text(filter.label) },
-                        onClick = {
-                            onSelectedFilterChange(filter)
-                            showFilterMenu = false
-                        },
-                        leadingIcon = if (selectedFilter == filter) {
-                            {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .background(filterAccent, RoundedCornerShape(50))
-                                )
-                            }
-                        } else null
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("No ${selectedFilter.label.lowercase()} alerts nearby")
+                    TextButton(onClick = { onSelectedFilterChange(AlertFilter.ALL) }) {
+                        Text("Clear filter")
+                    }
+                }
+            }
+        }
+
+        if (showLayersSheet) {
+            MapLayersSheet(
+                mapStyle = mapStyle,
+                showTimeLabels = showTimeLabels,
+                showSpawnRadius = showSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled,
+                onDismiss = { showLayersSheet = false },
+                onMapStyleChanged = {
+                    mapStyle = it
+                    onMapStyleChanged(it)
+                },
+                onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
+                onToggleSpawnRadius = onToggleSpawnRadius,
+                onToggleSpacialRend = onToggleSpacialRend
+            )
+        }
+
+        if (selectedClusterAlerts.isNotEmpty()) {
+            ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        "${selectedClusterAlerts.size} alerts here",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
+                    selectedClusterAlerts.take(12).forEach { alert ->
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                selectedClusterAlerts = emptyList()
+                                selectedAlertId = alert.uniqueId
+                            }
+                        ) {
+                            Text(alert.name, modifier = Modifier.weight(1f))
+                            Text(mapCountdownLabel(alert.endTime, now))
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
             }
         }
@@ -1008,6 +1268,18 @@ internal fun AlertsMapScreenContent(
     }
 }
 
+internal enum class MapLoadState {
+    LOADING,
+    READY,
+    ERROR
+}
+
+internal fun resolveMapLoadState(loaded: Boolean, failed: Boolean): MapLoadState = when {
+    loaded -> MapLoadState.READY
+    failed -> MapLoadState.ERROR
+    else -> MapLoadState.LOADING
+}
+
 @Composable
 private fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
     val text = status.mapStatusMessage() ?: return
@@ -1030,25 +1302,16 @@ private fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
 @Composable
 private fun MapTopAppBar(
     visibleAlertCount: Int,
-    showTimeLabels: Boolean,
-    hybridMap: Boolean,
-    mapSource: MapDisplaySource,
     showBackButton: Boolean,
-    showSpawnRadius: Boolean,
-    spacialRendEnabled: Boolean,
+    activeLayerCount: Int,
     onBack: () -> Unit,
-    onToggleTimeLabels: () -> Unit,
-    onToggleSpawnRadius: () -> Unit,
-    onToggleSpacialRend: () -> Unit,
     onRefresh: () -> Unit,
-    onToggleMapType: () -> Unit,
-    onToggleMapSource: () -> Unit,
-    onOpenFilters: () -> Unit
+    onOpenLayers: () -> Unit
 ) {
-    var moreExpanded by remember { mutableStateOf(false) }
     Surface(
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
         shadowElevation = 2.dp,
         border = androidx.compose.foundation.BorderStroke(
@@ -1066,8 +1329,9 @@ private fun MapTopAppBar(
             if (showBackButton) {
                 IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back)
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back),
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -1080,6 +1344,7 @@ private fun MapTopAppBar(
                     text = stringResource(R.string.map_title),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1
                 )
                 Surface(
@@ -1094,135 +1359,33 @@ private fun MapTopAppBar(
                     )
                 }
             }
-            IconButton(onClick = onOpenFilters, modifier = Modifier.size(44.dp)) {
+            IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_filter),
-                    contentDescription = stringResource(R.string.map_filter_alerts)
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = stringResource(R.string.refresh_alerts)
                 )
             }
             Box {
-                IconButton(
-                    onClick = { moreExpanded = true },
-                    modifier = Modifier.size(44.dp)
-                ) {
+                IconButton(onClick = onOpenLayers, modifier = Modifier.size(48.dp)) {
                     Icon(
-                        imageVector = Icons.Default.MoreVert,
-                        contentDescription = stringResource(R.string.map_more_options)
+                        painter = painterResource(R.drawable.ic_layers),
+                        contentDescription = "Map layers",
+                        tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                DropdownMenu(
-                    expanded = moreExpanded,
-                    onDismissRequest = { moreExpanded = false },
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (mapSource == MapDisplaySource.GOOGLE) {
-                                        R.string.map_use_openstreetmap
-                                    } else {
-                                        R.string.map_use_google
-                                    }
-                                )
-                            )
-                        },
-                        onClick = {
-                            moreExpanded = false
-                            onToggleMapSource()
-                        },
-                        leadingIcon = {
-                            Icon(painterResource(id = R.drawable.ic_map), contentDescription = null)
-                        }
-                    )
-                    if (mapSource == MapDisplaySource.GOOGLE) DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (hybridMap) R.string.map_switch_standard else R.string.map_switch_satellite
-                                )
-                            )
-                        },
-                        onClick = {
-                            moreExpanded = false
-                            onToggleMapType()
-                        },
-                        leadingIcon = {
-                            Icon(painterResource(id = R.drawable.ic_layers), contentDescription = null)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (showTimeLabels) R.string.map_hide_countdowns
-                                    else R.string.map_show_countdowns
-                                )
-                            )
-                        },
-                        onClick = {
-                            moreExpanded = false
-                            onToggleTimeLabels()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_timer),
-                                contentDescription = null
-                            )
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                stringResource(
-                                    if (showSpawnRadius) R.string.map_hide_spawn_radius
-                                    else R.string.map_show_spawn_radius
-                                )
-                            )
-                        },
-                        onClick = {
-                            moreExpanded = false
-                            onToggleSpawnRadius()
-                        },
-                        leadingIcon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_my_location),
-                                contentDescription = null
-                            )
-                        }
-                    )
-                    if (showSpawnRadius) {
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    stringResource(
-                                        if (spacialRendEnabled) R.string.map_disable_spacial_rend
-                                        else R.string.map_enable_spacial_rend
-                                    )
-                                )
-                            },
-                            onClick = {
-                                moreExpanded = false
-                                onToggleSpacialRend()
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_fit_map),
-                                    contentDescription = null
-                                )
-                            }
+                if (activeLayerCount > 0) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopEnd),
+                        shape = RoundedCornerShape(50),
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    ) {
+                        Text(
+                            text = "$activeLayerCount",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.refresh_alerts)) },
-                        onClick = {
-                            moreExpanded = false
-                            onRefresh()
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
-                        }
-                    )
                 }
             }
         }
@@ -1230,36 +1393,116 @@ private fun MapTopAppBar(
 }
 
 @Composable
-private fun MapFilterRow(
-    filters: List<AlertFilter>,
+private fun MapLayersSheet(
+    mapStyle: MapStylePreference,
+    showTimeLabels: Boolean,
+    showSpawnRadius: Boolean,
+    spacialRendEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onMapStyleChanged: (MapStylePreference) -> Unit,
+    onToggleTimeLabels: () -> Unit,
+    onToggleSpawnRadius: () -> Unit,
+    onToggleSpacialRend: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Map layers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Provider and style", style = MaterialTheme.typography.labelLarge)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(MapStylePreference.values()) { style ->
+                    FilterChip(
+                        selected = mapStyle == style,
+                        onClick = { onMapStyleChanged(style) },
+                        label = {
+                            Text(
+                                when (style) {
+                                    MapStylePreference.GOOGLE_STANDARD -> "Google standard"
+                                    MapStylePreference.GOOGLE_SATELLITE -> "Google satellite"
+                                    MapStylePreference.OPENSTREETMAP -> "OpenStreetMap"
+                                }
+                            )
+                        }
+                    )
+                }
+            }
+            FilterChip(
+                selected = showTimeLabels,
+                onClick = onToggleTimeLabels,
+                label = { Text("Countdown labels") },
+                leadingIcon = if (showTimeLabels) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
+                } else null
+            )
+            FilterChip(
+                selected = showSpawnRadius,
+                onClick = onToggleSpawnRadius,
+                label = { Text("Spawn radius") },
+                leadingIcon = if (showSpawnRadius) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
+                } else null
+            )
+            FilterChip(
+                selected = spacialRendEnabled,
+                enabled = showSpawnRadius,
+                onClick = onToggleSpacialRend,
+                label = { Text("Spacial Rend") },
+                leadingIcon = if (spacialRendEnabled) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
+                } else null
+            )
+            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+internal fun MapFilterRow(
+    filters: Collection<AlertFilter>,
     selectedFilter: AlertFilter,
-    visibleAlertCount: Int,
+    @Suppress("UNUSED_PARAMETER") visibleAlertCount: Int,
     onFilterSelected: (AlertFilter) -> Unit
 ) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(filters, key = { it.name }) { filter ->
-            FilterChip(
-                selected = selectedFilter == filter,
-                onClick = { onFilterSelected(filter) },
-                label = { Text(filter.label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        }
-        item(key = "map-alert-count") {
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
-                shadowElevation = 2.dp
-            ) {
-                Text(
-                    text = "$visibleAlertCount alerts",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("map_filter_rail"),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = 4.dp,
+        shadowElevation = 3.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(filters.toList(), key = { it.name }) { filter ->
+                val selected = selectedFilter == filter
+                FilterChip(
+                    modifier = Modifier.border(
+                        width = 1.dp,
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.outline
+                        },
+                        shape = RoundedCornerShape(50)
+                    ),
+                    selected = selected,
+                    onClick = { onFilterSelected(filter) },
+                    label = { Text(filter.label, maxLines = 1) },
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
             }
         }
@@ -1304,7 +1547,7 @@ private fun MapAlertSidePanel(
 }
 
 @Composable
-private fun MapAlertDetailContent(
+internal fun MapAlertDetailContent(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
@@ -1315,6 +1558,9 @@ private fun MapAlertDetailContent(
     onOpenFullDetail: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showSnoozeDialog by rememberSaveable(alert.uniqueId) { mutableStateOf(false) }
     var currentTime by remember(alert.uniqueId) { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(alert.uniqueId) {
         while (true) {
@@ -1330,21 +1576,19 @@ private fun MapAlertDetailContent(
     val isExpired = remaining <= 0L
 
     Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.heightIn(max = 640.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        AlertImage(
-            alert = alert,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(164.dp),
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            AlertImage(
+                alert = alert,
+                modifier = Modifier.size(88.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
             val goDexStatus = rememberGoDexStatus(alert)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
@@ -1384,6 +1628,62 @@ private fun MapAlertDetailContent(
             }
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            FilledTonalButton(
+                onClick = onGoing,
+                enabled = isGoing || alert.isEligibleArrivalDestination(),
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+                Text(if (isGoing) "Stop" else "I’m going")
+            }
+            Button(
+                onClick = onOpenMaps,
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map),
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("Directions")
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilledTonalButton(
+                onClick = { showSnoozeDialog = true },
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+                Text("Snooze")
+            }
+            FilledTonalButton(
+                onClick = { openAlertInPictureInPicture(context, alert) },
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+                Text("PiP")
+            }
+            FilledTonalButton(
+                onClick = onShare,
+                modifier = Modifier.weight(1f).height(48.dp)
+            ) {
+                Text("Share")
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
         val venue = alert.venueName
         val venueType = alert.venueTypeLabel
         val address = alert.pokemonLocation
@@ -1485,56 +1785,27 @@ private fun MapAlertDetailContent(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilledTonalButton(
-                onClick = onGoing,
-                enabled = isGoing || alert.isEligibleArrivalDestination(),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Text(if (isGoing) "Stop" else "I\u2019m going")
-            }
-            Button(
-                onClick = onOpenMaps,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_map),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.size(8.dp))
-                Text("Directions")
-            }
         }
+        FilledTonalButton(
+            onClick = onOpenFullDetail,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("map_open_details")
+        ) {
+            Text("Open details")
+        }
+    }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            FilledTonalButton(
-                onClick = onShare,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Text("Share")
+    if (showSnoozeDialog) {
+        SnoozeDurationDialog(
+            defaultMinutes = 10,
+            onDismiss = { showSnoozeDialog = false },
+            onConfirm = { minutes ->
+                showSnoozeDialog = false
+                scope.launch { snoozeAlertFromUi(context, alert, minutes) }
             }
-            FilledTonalButton(
-                onClick = onOpenFullDetail,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(48.dp)
-            ) {
-                Text("Open details")
-            }
-        }
+        )
     }
 }
 
@@ -1697,45 +1968,62 @@ private fun MapMarker(
     val palette = remember(basePalette, visualStyle.category) {
         basePalette.copy(primary = visualStyle.category.accentArgb.toInt())
     }
-    var markerIcon by remember(alert.uniqueId) { mutableStateOf<MapMarkerIcon?>(null) }
-
-    LaunchedEffect(
-        alert.uniqueId,
+    val markerIconRequest = remember(
+        markerSizePx,
         markerLabel,
-        visualStyle.category,
         speciesName,
         speciesImageUrl,
+        alert.endTime,
         showTimeLabel,
         timeLabel,
-        markerSizePx,
         palette,
         matchResult.status
     ) {
+        MapMarkerIconRequest(
+            sizePx = markerSizePx,
+            categoryCode = markerLabel,
+            speciesName = speciesName,
+            speciesImageUrl = speciesImageUrl,
+            endTime = alert.endTime,
+            showTimeLabel = showTimeLabel,
+            timeLabel = if (showTimeLabel) timeLabel else null,
+            palette = palette,
+            goDexStatus = matchResult.status
+        )
+    }
+    val markerCacheKey = remember(markerIconRequest) {
+        mapMarkerIconCacheKey(markerIconRequest)
+    }
+    var markerIcon by remember(markerCacheKey) {
+        mutableStateOf(resolveInitialMapMarkerIcon(markerIconRequest, markerCacheKey))
+    }
+
+    LaunchedEffect(alert.uniqueId, markerIconRequest, markerCacheKey) {
         val renderedIcon = withContext(Dispatchers.IO) {
             createMapMarkerIcon(
                 context = context,
-                sizePx = markerSizePx,
-                categoryCode = markerLabel,
-                speciesName = speciesName,
-                speciesImageUrl = speciesImageUrl,
-                endTime = alert.endTime,
-                showTimeLabel = showTimeLabel,
-                timeLabel = if (showTimeLabel) timeLabel else null,
-                palette = palette,
-                goDexStatus = matchResult.status
+                sizePx = markerIconRequest.sizePx,
+                categoryCode = markerIconRequest.categoryCode,
+                speciesName = markerIconRequest.speciesName,
+                speciesImageUrl = markerIconRequest.speciesImageUrl,
+                endTime = markerIconRequest.endTime,
+                showTimeLabel = markerIconRequest.showTimeLabel,
+                timeLabel = markerIconRequest.timeLabel,
+                palette = markerIconRequest.palette,
+                goDexStatus = markerIconRequest.goDexStatus
             )
         }
         currentCoroutineContext().ensureActive()
-        markerIcon = renderedIcon
+        if (renderedIcon != null) markerIcon = renderedIcon
     }
     val googleMarkerDescriptor = remember(markerIcon) {
-        markerIcon?.bitmap?.let(BitmapDescriptorFactory::fromBitmap)
+        BitmapDescriptorFactory.fromBitmap(markerIcon.bitmap)
     }
 
     MarkerInfoWindowContent(
         state = remember(position) { MarkerState(position = position) },
         icon = googleMarkerDescriptor,
-        anchor = markerIcon?.anchor ?: Offset(0.5f, 1f),
+        anchor = markerIcon.anchor,
         title = formatAlertTitle(alert, matchResult.status),
         visible = true,
         onClick = {
@@ -1762,7 +2050,134 @@ internal data class MapMarkerIcon(
     val anchor: Offset
 )
 
+internal data class MapMarkerIconRequest(
+    val sizePx: Int,
+    val categoryCode: String,
+    val speciesName: String,
+    val speciesImageUrl: String?,
+    val endTime: String?,
+    val showTimeLabel: Boolean,
+    val timeLabel: String?,
+    val palette: MapMarkerPalette,
+    val goDexStatus: GoDexMatchStatus
+)
+
 private val markerIconCache = LruCache<String, MapMarkerIcon>(256)
+
+internal fun mapMarkerIconCacheKey(
+    request: MapMarkerIconRequest,
+    nowMillis: Long = System.currentTimeMillis()
+): String = listOf(
+    "material3-marker-compact",
+    request.sizePx,
+    request.categoryCode,
+    request.speciesName,
+    request.speciesImageUrl.orEmpty(),
+    request.showTimeLabel,
+    request.timeLabel.orEmpty(),
+    isMapMarkerUrgent(request.endTime, nowMillis),
+    request.palette,
+    request.goDexStatus
+).joinToString("|")
+
+internal fun resolveInitialMapMarkerIcon(
+    request: MapMarkerIconRequest,
+    cacheKey: String = mapMarkerIconCacheKey(request)
+): MapMarkerIcon = markerIconCache.get(cacheKey) ?: createFallbackMapMarkerIcon(request)
+
+internal fun createFallbackMapMarkerIcon(
+    request: MapMarkerIconRequest,
+    nowMillis: Long = System.currentTimeMillis()
+): MapMarkerIcon {
+    val sizePx = request.sizePx
+    val padding = (sizePx * 0.14f).toInt()
+    val pinRadius = sizePx * 0.33f
+    val tailHeight = sizePx * 0.20f
+    val labelGap = (sizePx * 0.07f).toInt()
+    val timeHeight = if (request.showTimeLabel && request.timeLabel != null) {
+        (sizePx * 0.26f).toInt().coerceAtLeast(16)
+    } else {
+        0
+    }
+    val totalWidth = sizePx + padding * 2
+    val totalHeight = (
+        padding + pinRadius * 2 + tailHeight +
+            (if (timeHeight > 0) labelGap + timeHeight else 0) + padding
+        ).toInt()
+    val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val centerX = totalWidth / 2f
+    val centerY = padding + pinRadius
+    val pinTipY = centerY + pinRadius + tailHeight
+    val tailHalfWidth = pinRadius * 0.46f
+    val tailPath = android.graphics.Path().apply {
+        moveTo(centerX - tailHalfWidth, centerY + pinRadius * 0.56f)
+        lineTo(centerX + tailHalfWidth, centerY + pinRadius * 0.56f)
+        lineTo(centerX, pinTipY)
+        close()
+    }
+    val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = request.palette.primary
+    }
+    canvas.drawPath(tailPath, primaryPaint)
+    canvas.drawCircle(centerX, centerY, pinRadius, primaryPaint)
+    val innerRadius = pinRadius * 0.71f
+    canvas.drawCircle(
+        centerX,
+        centerY,
+        innerRadius,
+        Paint(Paint.ANTI_ALIAS_FLAG).apply { color = request.palette.surface }
+    )
+    val initialsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = request.palette.onSurface
+        textSize = innerRadius * 0.68f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    val initials = request.speciesName
+        .trim()
+        .split(Regex("\\s+"))
+        .mapNotNull { it.firstOrNull()?.uppercaseChar() }
+        .take(2)
+        .joinToString("")
+        .ifBlank { request.categoryCode }
+    val initialsY = centerY - (initialsPaint.descent() + initialsPaint.ascent()) / 2f
+    canvas.drawText(initials, centerX, initialsY, initialsPaint)
+    canvas.drawMarkerLabel(
+        centerX = centerX,
+        top = centerY + innerRadius * 0.34f,
+        height = sizePx * 0.18f,
+        text = request.categoryCode,
+        background = request.palette.surface,
+        foreground = request.palette.primary,
+        outline = request.palette.primary,
+        maxWidth = pinRadius * 1.55f
+    )
+    if (timeHeight > 0 && request.timeLabel != null) {
+        val urgent = isMapMarkerUrgent(request.endTime, nowMillis)
+        canvas.drawMarkerLabel(
+            centerX = centerX,
+            top = pinTipY + labelGap,
+            height = timeHeight.toFloat(),
+            text = request.timeLabel,
+            background = if (urgent) request.palette.error else request.palette.surface,
+            foreground = if (urgent) request.palette.onError else request.palette.onSurface,
+            outline = if (urgent) request.palette.error else request.palette.outline,
+            maxWidth = totalWidth - padding * 2f
+        )
+    }
+    return MapMarkerIcon(
+        bitmap = bitmap,
+        anchor = Offset(0.5f, (pinTipY / totalHeight).coerceIn(0f, 1f))
+    )
+}
+
+private fun isMapMarkerUrgent(endTime: String?, nowMillis: Long): Boolean {
+    val timeRemainingMs = endTime?.let(TimeUtils::parseEndTimeToMillis)?.let {
+        it - nowMillis
+    } ?: Long.MAX_VALUE
+    return timeRemainingMs < 10 * 60 * 1_000
+}
 
 internal suspend fun createMapMarkerIcon(
     context: android.content.Context,
@@ -1777,22 +2192,19 @@ internal suspend fun createMapMarkerIcon(
     goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED
 ): MapMarkerIcon? {
     try {
-        val timeRemainingMs = endTime?.let(TimeUtils::parseEndTimeToMillis)?.let {
-            it - System.currentTimeMillis()
-        } ?: Long.MAX_VALUE
-        val isUrgent = timeRemainingMs < 10 * 60 * 1_000
-        val cacheKey = listOf(
-            "material3-marker-compact",
-            sizePx,
-            categoryCode,
-            speciesName,
-            speciesImageUrl.orEmpty(),
-            showTimeLabel,
-            timeLabel.orEmpty(),
-            isUrgent,
-            palette,
-            goDexStatus
-        ).joinToString("|")
+        val request = MapMarkerIconRequest(
+            sizePx = sizePx,
+            categoryCode = categoryCode,
+            speciesName = speciesName,
+            speciesImageUrl = speciesImageUrl,
+            endTime = endTime,
+            showTimeLabel = showTimeLabel,
+            timeLabel = timeLabel,
+            palette = palette,
+            goDexStatus = goDexStatus
+        )
+        val isUrgent = isMapMarkerUrgent(endTime, System.currentTimeMillis())
+        val cacheKey = mapMarkerIconCacheKey(request)
         markerIconCache.get(cacheKey)?.let { return it }
 
         val speciesDrawable = speciesImageUrl?.let { url ->
@@ -2033,6 +2445,39 @@ private fun Canvas.drawMarkerLabel(
     )
     val textY = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
     drawText(text, centerX, textY, textPaint)
+}
+
+private fun createClusterMarkerBitmap(
+    context: android.content.Context,
+    count: Int,
+    sharedCategory: AlertFilter?
+): Bitmap {
+    val density = context.resources.displayMetrics.density
+    val size = (48f * density).toInt().coerceAtLeast(48)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val fill = sharedCategory
+        ?.let { resolveAlertVisualStyle(it.label).category.accentArgb.toInt() }
+        ?: 0xFF455A64.toInt()
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.44f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+    })
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.38f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fill
+    })
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        textSize = size * if (count >= 100) 0.31f else 0.38f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    canvas.drawText(
+        if (count > 999) "999+" else count.toString(),
+        size / 2f,
+        size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f,
+        textPaint
+    )
+    return bitmap
 }
 
 private const val ALSBACH_LATITUDE = 49.74677

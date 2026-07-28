@@ -128,4 +128,12 @@
     <string name="map_hide_spawn_radius">Hide spawn radius</string>
     <string name="map_enable_spacial_rend">Enable Spacial Rend (80m)</string>
     <string name="map_disable_spacial_rend">Disable Spacial Rend (40m)</string>
+    <string name="widget_radar_title">Nearby Radar</string>
+    <string name="widget_radar_description">See nearby active alerts on a compact map.</string>
+    <string name="widget_radar_map_cd">Nearby alerts map. Tap to open the Map tab.</string>
+    <string name="widget_radar_show_overview_cd">Show all alerts</string>
+    <string name="widget_radar_show_focus_cd">Focus selected alert</string>
+    <string name="widget_radar_next_default_cd">Next alert</string>
+    <string name="widget_radar_next_cd">Next alert. Showing %1$d of %2$d.</string>
+    <string name="widget_alert_image_cd">Alert image</string>
 </resources>

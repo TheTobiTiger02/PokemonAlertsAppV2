@@ -31,12 +31,15 @@ object CachedLocationProvider {
     suspend fun get(
         context: Context,
         timeoutMs: Long = 4000,
-        highAccuracy: Boolean = false
+        highAccuracy: Boolean = false,
+        forceRefresh: Boolean = false
     ): Location? {
         val now = System.currentTimeMillis()
-        cachedLocation
-            ?.takeIf { now - cachedAtMillis < STALE_LOCATION_MS }
-            ?.let { return it }
+        if (!forceRefresh) {
+            cachedLocation
+                ?.takeIf { now - cachedAtMillis < STALE_LOCATION_MS }
+                ?.let { return it }
+        }
 
         val appContext = context.applicationContext
         val freshLocation = LocationUtils.getCurrentLocationOrNull(

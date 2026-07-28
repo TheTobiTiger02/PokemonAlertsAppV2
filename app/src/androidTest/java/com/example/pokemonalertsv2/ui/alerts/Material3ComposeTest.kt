@@ -29,9 +29,7 @@ class Material3ComposeTest {
                     ),
                     onOpenMaps = {},
                     onShowDetails = {},
-                    onPipClick = {},
-                    onShareClick = {},
-                    onSnoozeClick = {},
+                    onSecondaryAction = {},
                     nowMillis = 0L
                 )
             }
@@ -41,12 +39,12 @@ class Material3ComposeTest {
         composeRule.onNodeWithText("CP 1234").assertExists()
         composeRule.onNodeWithText("Hundo").assertExists()
         composeRule.onNodeWithText("420 m").assertExists()
-        composeRule.onNodeWithContentDescription("Snooze alert").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Share").assertHasClickAction()
+        composeRule.onNodeWithText("Snooze").assertHasClickAction()
+        composeRule.onNodeWithText("Share").assertHasClickAction()
         composeRule
-            .onNodeWithContentDescription(composeRule.activity.getString(R.string.open_alert_in_pip))
+            .onNodeWithContentDescription("Open alert in picture-in-picture")
             .assertHasClickAction()
-        composeRule.onNodeWithContentDescription("More alert actions").assertDoesNotExist()
+        composeRule.onNodeWithText("More").assertDoesNotExist()
         composeRule
             .onNodeWithContentDescription(composeRule.activity.getString(R.string.open_in_maps))
             .assertHasClickAction()
@@ -56,14 +54,17 @@ class Material3ComposeTest {
     fun detailScreenKeepsPersistentActionsAccessible() {
         composeRule.setContent {
             PokemonAlertsV2Theme {
-                AlertDetailScreen(alert = sampleAlert())
+                AlertDetailScreen(alert = sampleAlert(), onEnterPictureInPicture = {})
             }
         }
 
-        composeRule.onNodeWithContentDescription("Snooze alert").assertHasClickAction()
         composeRule.onNodeWithText("I\u2019m going").assertHasClickAction()
         composeRule.onNodeWithText("Navigate").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Share alert").assertHasClickAction()
+        composeRule.onNodeWithText("Snooze").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Open alert in picture-in-picture")
+            .assertHasClickAction()
+        composeRule.onNodeWithText("Share").assertHasClickAction()
+        composeRule.onNodeWithText("More").assertDoesNotExist()
     }
 
     @Test

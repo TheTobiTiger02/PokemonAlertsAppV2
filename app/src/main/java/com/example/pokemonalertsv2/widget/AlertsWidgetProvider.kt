@@ -114,6 +114,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             ACTION_REFRESH,
             ACTION_TIMER_TICK,
             AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
+                if (intent.action == ACTION_REFRESH) showRefreshingFeedback(context)
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {
@@ -131,6 +132,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                         val prefs = AlertPreferences(context.alertPreferencesDataStore)
                         prefs.addDismissedAlert(alertId)
                         updateAllSerialized(context, scheduleNext = true)
+                        NearbyRadarWidgetProvider.sendUpdateBroadcast(context)
                     } finally {
                         try { pending.finish() } catch (_: Throwable) {}
                     }
@@ -169,6 +171,26 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     private suspend fun updateAllSerialized(context: Context, scheduleNext: Boolean = false) {
         updateMutex.withLock {
             updateAll(context, scheduleNext)
+        }
+    }
+
+    private fun showRefreshingFeedback(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java)).forEach { id ->
+            val options = manager.getAppWidgetOptions(id)
+            val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+            val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            val compact = width <= 0 || height <= 0 || width < 300 || height < 190
+            val views = RemoteViews(
+                context.packageName,
+                if (compact) R.layout.widget_alerts_compact else R.layout.widget_alerts
+            )
+            if (compact) {
+                views.setTextViewText(R.id.tv_compact_count, "Refreshing…")
+            } else {
+                views.setTextViewText(R.id.tv_last_updated, "Refreshing…")
+            }
+            manager.partiallyUpdateAppWidget(id, views)
         }
     }
 
@@ -238,7 +260,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         return BuiltWidget(views = views, mode = mode)
     }
 
-    private fun buildCompactViews(
+    private suspend fun buildCompactViews(
         context: Context,
         appWidgetId: Int,
         alertCount: Int,
@@ -270,6 +292,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
         views.setTextViewText(R.id.tv_compact_count, "$alertCount active")
         if (alert == null) {
+            views.setViewVisibility(R.id.iv_compact_image, View.GONE)
+            views.setViewVisibility(R.id.btn_compact_navigate, View.GONE)
             views.setTextViewText(R.id.tv_compact_alert_title, context.getString(R.string.widget_empty_title))
             val emptyMeta = context.getString(R.string.widget_empty_subtitle)
             views.setTextViewText(
@@ -282,6 +306,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             )
             views.setTextViewText(R.id.tv_compact_countdown, "")
         } else {
+            views.setViewVisibility(R.id.iv_compact_image, View.VISIBLE)
+            views.setImageViewBitmap(
+                R.id.iv_compact_image,
+                WidgetAlertImageRenderer.render(context, alert, 48, palette)
+            )
             val visualStyle = resolveAlertVisualStyle(alert)
             val goDexStatus = if (alert.hasType("hundo")) {
                 GoDexRepository.getInstance(context).match(alert)
@@ -319,6 +348,26 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
             )
             views.setOnClickPendingIntent(R.id.compact_alert_content, detailPending)
+            val latitude = alert.latitude
+            val longitude = alert.longitude
+            if (latitude != null && longitude != null) {
+                views.setViewVisibility(R.id.btn_compact_navigate, View.VISIBLE)
+                views.setOnClickPendingIntent(
+                    R.id.btn_compact_navigate,
+                    PendingIntent.getBroadcast(
+                        context,
+                        appWidgetId * 10 + 9,
+                        Intent(context, AlertsWidgetProvider::class.java).apply {
+                            action = ACTION_NAVIGATE
+                            putExtra(EXTRA_NAV_LAT, latitude)
+                            putExtra(EXTRA_NAV_LNG, longitude)
+                        },
+                        PendingIntent.FLAG_UPDATE_CURRENT or mutableFlag()
+                    )
+                )
+            } else {
+                views.setViewVisibility(R.id.btn_compact_navigate, View.GONE)
+            }
         }
 
         return views
@@ -371,7 +420,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
 
         // Last updated
-        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(nowMillis))
+        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nowMillis))
         views.setTextViewText(R.id.tv_last_updated, context.getString(R.string.widget_updated_at, time))
         views.setViewVisibility(
             R.id.tv_distance_status,
@@ -457,12 +506,13 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 generation = loadedAlerts.generation
             )
         } catch (_: Throwable) {
+            val previous = WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
             WidgetAlertCounts(
-                visibleCount = 0,
-                cadenceCount = 0,
-                alerts = emptyList(),
-                distanceUnavailable = false,
-                generation = 0L
+                visibleCount = previous?.alerts?.size ?: 0,
+                cadenceCount = previous?.alerts?.size ?: 0,
+                alerts = previous?.alerts.orEmpty(),
+                distanceUnavailable = previous?.distanceUnavailable ?: false,
+                generation = previous?.generation ?: 0L
             )
         }
     }

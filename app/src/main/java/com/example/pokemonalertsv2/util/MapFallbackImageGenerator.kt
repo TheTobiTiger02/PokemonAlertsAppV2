@@ -73,7 +73,8 @@ object MapFallbackImageGenerator {
         thumbnailUrl: String?,
         outputWidth: Int = 512,
         outputHeight: Int = 256,
-        zoom: Int = DEFAULT_ZOOM
+        zoom: Int = DEFAULT_ZOOM,
+        drawCenterMarker: Boolean = true
     ): Bitmap? = withContext(Dispatchers.IO) {
         try {
             // Validate coordinates
@@ -82,7 +83,7 @@ object MapFallbackImageGenerator {
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
             val cacheKey =
-                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom"
+                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom|$drawCenterMarker"
             bitmapCache.get(cacheKey)
                 ?.takeUnless { it.isRecycled }
                 ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
@@ -166,7 +167,9 @@ object MapFallbackImageGenerator {
             val cy = outputHeight / 2f
 
             val minDimension = minOf(outputWidth, outputHeight)
-            drawPokemonAtCoordinate(canvas, cx, cy, minDimension, spriteBmp)
+            if (drawCenterMarker) {
+                drawPokemonAtCoordinate(canvas, cx, cy, minDimension, spriteBmp)
+            }
             drawOpenStreetMapAttribution(canvas, context, outputWidth, outputHeight)
 
             // Recycle tile bitmaps

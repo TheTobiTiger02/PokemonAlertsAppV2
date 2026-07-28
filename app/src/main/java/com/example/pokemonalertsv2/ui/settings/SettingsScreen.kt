@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -250,6 +251,7 @@ fun SettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
+                    windowInsets = WindowInsets(0),
                     title = { Text(destination.title, fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         if (destination != SettingsDestination.OVERVIEW) {
@@ -295,10 +297,8 @@ fun SettingsScreen(
                     .padding(padding)
                     .padding(horizontal = 16.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
                 if (destination == SettingsDestination.OVERVIEW) {
                     SettingsOverview(
                         themeMode = themeMode,
@@ -315,6 +315,12 @@ fun SettingsScreen(
                             goDexConfig.hasWriteBackUrl ->
                                 "${goDexEntries.count { it.needed }} still needed - two-way sync"
                             else -> "${goDexEntries.count { it.needed }} still needed - read-only"
+                        },
+                        goDexBadge = when {
+                            !goDexConfig.isConnected -> "Connect"
+                            goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED -> "Sign in"
+                            goDexSyncUiState.errorMessage != null -> "Sync issue"
+                            else -> null
                         },
                         onDestinationSelected = navigateTo
                     )
@@ -1186,6 +1192,7 @@ private fun SettingsOverview(
     foregroundLocationGranted: Boolean,
     backgroundLocationGranted: Boolean,
     goDexSummary: String,
+    goDexBadge: String?,
     onDestinationSelected: (SettingsDestination) -> Unit
 ) {
     val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
@@ -1229,6 +1236,7 @@ private fun SettingsOverview(
             icon = Icons.Default.AccountCircle,
             title = "GoDex checklist",
             summary = goDexSummary,
+            statusBadge = goDexBadge,
             onClick = { onDestinationSelected(SettingsDestination.GODEX) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
@@ -1236,6 +1244,11 @@ private fun SettingsOverview(
             icon = Icons.Default.Notifications,
             title = "Notifications",
             summary = notificationSummary,
+            statusBadge = when {
+                notificationsEnabled && !foregroundLocationGranted -> "Location needed"
+                notificationsEnabled && !backgroundLocationGranted -> "Background off"
+                else -> null
+            },
             onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
@@ -1253,13 +1266,14 @@ private fun SettingsOverviewRow(
     icon: ImageVector,
     title: String,
     summary: String,
+    statusBadge: String? = null,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1288,6 +1302,20 @@ private fun SettingsOverviewRow(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            statusBadge?.let { badge ->
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = badge,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                    )
+                }
+            }
         }
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowForward,

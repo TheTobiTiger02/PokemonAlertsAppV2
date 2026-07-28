@@ -4,6 +4,7 @@ import android.content.Context
 import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.flow.first
@@ -14,17 +15,32 @@ internal object WidgetAlertLoader {
         val cadenceAlerts: List<PokemonAlert>,
         val location: Location?,
         val distanceUnavailable: Boolean,
-        val generation: Long
+        val generation: Long,
+        val state: WidgetLoadState
     )
 
     suspend fun load(
         context: Context,
         appWidgetId: Int,
         fallbackLocation: Location? = null,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        highAccuracyLocation: Boolean = false
     ): LoadedAlerts {
         val repo = PokemonAlertsRepository.create(context)
-        val alerts = runCatching { repo.getLocalAlerts() }.getOrElse { emptyList() }
+        val alertsResult = runCatching { repo.getLocalAlerts() }
+        val alerts = alertsResult.getOrElse { emptyList() }
+        if (alertsResult.isFailure) {
+            WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)?.let { previous ->
+                return LoadedAlerts(
+                    alerts = previous.alerts,
+                    cadenceAlerts = previous.alerts,
+                    location = previous.location ?: fallbackLocation,
+                    distanceUnavailable = previous.distanceUnavailable,
+                    generation = previous.generation,
+                    state = WidgetLoadState.ERROR
+                )
+            }
+        }
         val dismissedIds = runCatching {
             repo.alertPreferences.dismissedAlertIds.first()
         }.getOrElse { emptySet() }
@@ -32,14 +48,24 @@ internal object WidgetAlertLoader {
         val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
         val sortPreference = runCatching { repo.alertPreferences.sortPreference.first() }
             .getOrElse { com.example.pokemonalertsv2.data.SortPreference.POSTED_TIME }
-        val filterTypes = WidgetFilterPrefs.getFilters(context, appWidgetId)
+        val configuration = WidgetConfigurationStore.get(context, appWidgetId)
+        val filterTypes = configuration.selectedAlertTypes
         val location = runCatching {
-            CachedLocationProvider.get(context)
+            CachedLocationProvider.get(
+                context = context,
+                timeoutMs = if (highAccuracyLocation) 6_000 else 4_000,
+                highAccuracy = highAccuracyLocation,
+                forceRefresh = highAccuracyLocation
+            )
         }.getOrNull() ?: fallbackLocation
         val criteria = WidgetAlertFilter.Criteria(
             dismissedAlertIds = dismissedIds,
             selectedArea = selectedArea,
-            maxDistanceKm = maxDistance,
+            maxDistanceKm = when (val mode = configuration.distance) {
+                WidgetDistanceMode.InheritApp -> maxDistance
+                WidgetDistanceMode.Unlimited -> 0
+                is WidgetDistanceMode.Fixed -> mode.kilometers
+            },
             widgetFilterTypes = filterTypes,
             nowMillis = nowMillis
         )
@@ -58,9 +84,15 @@ internal object WidgetAlertLoader {
             origin = origin,
             walkingRoutes = walkingRoutes
         )
+        val effectiveSort = when (configuration.priority) {
+            WidgetPriority.APP_DEFAULT -> sortPreference
+            WidgetPriority.NEAREST -> if (origin == null) SortPreference.TIME_REMAINING else SortPreference.DISTANCE
+            WidgetPriority.ENDING_SOON -> SortPreference.TIME_REMAINING
+            WidgetPriority.NEWEST -> SortPreference.POSTED_TIME
+        }
         val visibleAlerts = WidgetAlertSorter.sort(
             alerts = resolvedAlerts.alerts,
-            preference = sortPreference,
+            preference = effectiveSort,
             origin = origin,
             walkingRoutes = walkingRoutes
         )
@@ -69,7 +101,7 @@ internal object WidgetAlertLoader {
                 alerts = alerts,
                 criteria = criteria
             ),
-            preference = sortPreference,
+            preference = effectiveSort,
             origin = origin,
             walkingRoutes = walkingRoutes
         ).also { WidgetAlertSnapshotStore.updateCadence(appWidgetId, it) }
@@ -87,7 +119,14 @@ internal object WidgetAlertLoader {
             cadenceAlerts = cadenceAlerts,
             location = location,
             distanceUnavailable = renderSnapshot.distanceUnavailable,
-            generation = renderSnapshot.generation
+            generation = renderSnapshot.generation,
+            state = when {
+                alertsResult.isFailure -> WidgetLoadState.ERROR
+                configuration.priority == WidgetPriority.NEAREST && location == null ->
+                    WidgetLoadState.LOCATION_UNAVAILABLE
+                visibleAlerts.isEmpty() -> WidgetLoadState.EMPTY
+                else -> WidgetLoadState.CONTENT
+            }
         )
     }
 }

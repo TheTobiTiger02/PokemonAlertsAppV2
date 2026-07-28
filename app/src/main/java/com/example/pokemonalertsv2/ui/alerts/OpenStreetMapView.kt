@@ -78,7 +78,7 @@ internal data class MapContentInsets(
 )
 
 internal data class OpenStreetMapMarker(
-    val alert: PokemonAlert,
+    val item: MapMarkerItem,
     val icon: MapMarkerIcon
 )
 
@@ -148,6 +148,7 @@ internal class OpenStreetMapController {
     private var pendingUserPose: MapUserPose? = null
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     var onAlertClick: (PokemonAlert) -> Unit = {}
+    var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
     var onUserGesture: () -> Unit = {}
 
@@ -157,9 +158,14 @@ internal class OpenStreetMapController {
             if (this.map !== map) {
                 false
             } else {
-                pendingMarkers.firstOrNull { it.alert.uniqueId == marker.title }
-                    ?.alert
-                    ?.let { onAlertClick(it) }
+                pendingMarkers.firstOrNull { markerId(it.item) == marker.title }
+                    ?.item
+                    ?.let {
+                        when (it) {
+                            is MapMarkerItem.Alert -> onAlertClick(it.alert)
+                            is MapMarkerItem.Cluster -> onClusterClick(it)
+                        }
+                    }
                 true
             }
         }
@@ -299,11 +305,10 @@ internal class OpenStreetMapController {
         currentMap.removeAnnotations()
         val iconFactory = IconFactory.getInstance(context)
         pendingMarkers.forEach { model ->
-            val coordinates = model.alert.mapCoordinatesOrNull() ?: return@forEach
             currentMap.addMarker(
                 MarkerOptions()
-                    .position(LatLng(coordinates.latitude, coordinates.longitude))
-                    .title(model.alert.uniqueId)
+                    .position(LatLng(model.item.latitude, model.item.longitude))
+                    .title(markerId(model.item))
                     .icon(iconFactory.fromBitmap(model.icon.bitmap))
             )
         }
@@ -369,6 +374,11 @@ internal class OpenStreetMapController {
         const val USER_DOT_IMAGE = "user-location-dot"
         const val USER_ARROW_IMAGE = "user-location-arrow"
     }
+
+    private fun markerId(item: MapMarkerItem): String = when (item) {
+        is MapMarkerItem.Alert -> item.alert.uniqueId
+        is MapMarkerItem.Cluster -> "cluster-${item.id}"
+    }
 }
 
 internal fun createAccuracyPolygon(
@@ -408,8 +418,10 @@ internal fun OpenStreetMapView(
     onMapLoaded: () -> Unit,
     onLoadError: () -> Unit,
     onAlertClick: (PokemonAlert) -> Unit,
+    onClusterClick: (MapMarkerItem.Cluster) -> Unit = {},
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
+    expandedAlertIds: Set<String> = emptySet(),
     goDexEntries: List<GoDexEntryEntity> = emptyList(),
     goDexConfig: GoDexConfig = GoDexConfig(),
     showSpawnRadius: Boolean = false,
@@ -453,6 +465,7 @@ internal fun OpenStreetMapView(
     }
 
     controller.onAlertClick = onAlertClick
+    controller.onClusterClick = onClusterClick
     controller.onCameraChanged = onCameraChanged
     controller.onUserGesture = onUserGesture
     controller.setContentInsets(contentInsets)
@@ -511,10 +524,29 @@ internal fun OpenStreetMapView(
         }
     )
 
-    LaunchedEffect(alerts, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
+    val markerItems = remember(alerts, cameraSnapshot.zoom, density.density, expandedAlertIds) {
+        clusterMapAlerts(
+            alerts = alerts,
+            zoom = cameraSnapshot.zoom,
+            density = density.density,
+            expandedAlertIds = expandedAlertIds
+        )
+    }
+    LaunchedEffect(markerItems, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
         val markers = withContext(Dispatchers.IO) {
             val goDexRepository = GoDexRepository.getInstance(context)
-            alerts.mapNotNull { alert ->
+            markerItems.mapNotNull { item ->
+                if (item is MapMarkerItem.Cluster) {
+                    return@mapNotNull OpenStreetMapMarker(
+                        item,
+                        createOpenStreetMapClusterIcon(
+                            item.alerts.size,
+                            item.sharedCategory,
+                            markerSizePx
+                        )
+                    )
+                }
+                val alert = (item as MapMarkerItem.Alert).alert
                 val visualStyle = resolveAlertVisualStyle(alert)
                 val matchResult = if (alert.hasType("hundo")) {
                     goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
@@ -540,7 +572,7 @@ internal fun OpenStreetMapView(
                     palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
                     goDexStatus = matchResult.status
                 ) ?: return@mapNotNull null
-                OpenStreetMapMarker(alert, icon)
+                OpenStreetMapMarker(item, icon)
             }
         }
         currentCoroutineContext().ensureActive()
@@ -582,4 +614,36 @@ private fun openStreetMapStyleJson(): String {
           ]
         }
     """.trimIndent()
+}
+
+private fun createOpenStreetMapClusterIcon(
+    count: Int,
+    sharedCategory: AlertFilter?,
+    markerSizePx: Int
+): MapMarkerIcon {
+    val size = (markerSizePx * 0.78f).toInt().coerceAtLeast(48)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val color = sharedCategory
+        ?.let { resolveAlertVisualStyle(it.label).category.accentArgb.toInt() }
+        ?: AndroidColor.parseColor("#455A64")
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.46f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = AndroidColor.WHITE
+    })
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.39f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+    })
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = AndroidColor.WHITE
+        textAlign = Paint.Align.CENTER
+        textSize = size * 0.36f
+        isFakeBoldText = true
+    }
+    canvas.drawText(
+        if (count > 999) "999+" else count.toString(),
+        size / 2f,
+        size / 2f - (textPaint.ascent() + textPaint.descent()) / 2f,
+        textPaint
+    )
+    return MapMarkerIcon(bitmap, androidx.compose.ui.geometry.Offset(0.5f, 0.5f))
 }

@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
@@ -33,6 +35,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -85,7 +89,7 @@ class WidgetConfigActivity : ComponentActivity() {
         }
 
         // Load existing prefs for this widget (if reconfiguring)
-        val existing = WidgetFilterPrefs.getFilters(this, appWidgetId)
+        val existing = WidgetConfigurationStore.get(this, appWidgetId)
 
         setContent {
             val themeMode by repository.observeThemeMode()
@@ -95,9 +99,9 @@ class WidgetConfigActivity : ComponentActivity() {
                 .resolveDark(isSystemInDarkTheme())
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 WidgetConfigScreen(
-                    initialFilters = existing,
-                    onConfirm = { filters ->
-                        WidgetFilterPrefs.saveFilters(this@WidgetConfigActivity, appWidgetId, filters)
+                    initialConfiguration = existing,
+                    onConfirm = { configuration ->
+                        WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, configuration)
                         if (needsExactAlarmAccess()) {
                             showExactAlarmDialog.value = true
                         } else {
@@ -183,12 +187,13 @@ val ALL_FILTER_TYPES = listOf(
     "Weather" to "Weather changes"
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun WidgetConfigScreen(
-    initialFilters: Set<String>,
-    onConfirm: (Set<String>) -> Unit
+internal fun WidgetConfigScreen(
+    initialConfiguration: WidgetConfiguration,
+    onConfirm: (WidgetConfiguration) -> Unit
 ) {
+    val initialFilters = initialConfiguration.selectedAlertTypes
     val enabledTypes = remember(initialFilters) {
         mutableStateMapOf<String, Boolean>().apply {
             ALL_FILTER_TYPES.forEach { (key, _) ->
@@ -198,6 +203,11 @@ fun WidgetConfigScreen(
     }
     val selectedCount = enabledTypes.count { it.value }
     val allSelected = selectedCount == ALL_FILTER_TYPES.size
+    var priority by remember { mutableStateOf(initialConfiguration.priority) }
+    var distanceMode by remember { mutableStateOf(initialConfiguration.distance) }
+    var fixedDistance by remember {
+        mutableStateOf((initialConfiguration.distance as? WidgetDistanceMode.Fixed)?.kilometers ?: 10)
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -345,6 +355,70 @@ fun WidgetConfigScreen(
                         }
                     }
                 }
+                Text(
+                    text = "Priority",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WidgetPriority.values().forEach { option ->
+                        FilterChip(
+                            selected = priority == option,
+                            onClick = { priority = option },
+                            label = {
+                                Text(
+                                    when (option) {
+                                        WidgetPriority.APP_DEFAULT -> "App default"
+                                        WidgetPriority.NEAREST -> "Nearest"
+                                        WidgetPriority.ENDING_SOON -> "Ending soon"
+                                        WidgetPriority.NEWEST -> "Newest"
+                                    }
+                                )
+                            }
+                        )
+                    }
+                }
+                Text(
+                    text = "Distance",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Inherit", "Unlimited", "Fixed").forEach { label ->
+                        val selected = when (label) {
+                            "Inherit" -> distanceMode is WidgetDistanceMode.InheritApp
+                            "Unlimited" -> distanceMode is WidgetDistanceMode.Unlimited
+                            else -> distanceMode is WidgetDistanceMode.Fixed
+                        }
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                distanceMode = when (label) {
+                                    "Inherit" -> WidgetDistanceMode.InheritApp
+                                    "Unlimited" -> WidgetDistanceMode.Unlimited
+                                    else -> WidgetDistanceMode.Fixed(fixedDistance)
+                                }
+                            },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+                if (distanceMode is WidgetDistanceMode.Fixed) {
+                    Text("$fixedDistance km", style = MaterialTheme.typography.labelLarge)
+                    Slider(
+                        value = fixedDistance.toFloat(),
+                        onValueChange = {
+                            fixedDistance = it.toInt().coerceIn(1, 50)
+                            distanceMode = WidgetDistanceMode.Fixed(fixedDistance)
+                        },
+                        valueRange = 1f..50f,
+                        steps = 48
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -353,7 +427,13 @@ fun WidgetConfigScreen(
             Button(
                 onClick = {
                     val selected = enabledTypes.filter { it.value }.keys
-                    onConfirm(selected)
+                    onConfirm(
+                        WidgetConfiguration(
+                            selectedAlertTypes = selected,
+                            priority = priority,
+                            distance = distanceMode
+                        )
+                    )
                 },
                 enabled = selectedCount > 0,
                 modifier = Modifier
@@ -386,36 +466,30 @@ private fun widgetFilterLabelResource(key: String): Int = when (key) {
  * Utility to read/write per-widget type filter preferences.
  */
 object WidgetFilterPrefs {
-    private const val PREFS_NAME = "widget_filter_prefs"
-    private const val KEY_PREFIX = "widget_filters_"
-    private val LEGACY_ALL_FILTER_TYPES = setOf(
-        "Hundo", "Nundo", "PvP", "Spawn", "Raid", "Rocket", "Quest", "Kecleon"
-    )
-    private val NEW_DEFAULT_FILTER_TYPES = setOf("Rare", "Weather")
-
     fun saveFilters(context: Context, appWidgetId: Int, enabledTypes: Set<String>) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putStringSet("$KEY_PREFIX$appWidgetId", enabledTypes)
-            .apply()
+        val existing = WidgetConfigurationStore.get(context, appWidgetId)
+        WidgetConfigurationStore.save(
+            context,
+            appWidgetId,
+            existing.copy(selectedAlertTypes = enabledTypes)
+        )
     }
 
-    fun getFilters(context: Context, appWidgetId: Int): Set<String> {
-        val filters = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getStringSet("$KEY_PREFIX$appWidgetId", emptySet())
-            ?.toSet()
-            .orEmpty()
-        return if (filters.containsAll(LEGACY_ALL_FILTER_TYPES)) {
-            filters + NEW_DEFAULT_FILTER_TYPES
-        } else {
-            filters
-        }
-    }
+    fun getFilters(context: Context, appWidgetId: Int): Set<String> =
+        WidgetConfigurationStore.get(context, appWidgetId).selectedAlertTypes
 
     fun removeFilters(context: Context, appWidgetId: Int) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .remove("$KEY_PREFIX$appWidgetId")
-            .apply()
+        WidgetConfigurationStore.remove(context, appWidgetId)
     }
+}
+
+@Composable
+fun WidgetConfigScreen(
+    initialFilters: Set<String>,
+    onConfirm: (Set<String>) -> Unit
+) {
+    WidgetConfigScreen(
+        initialConfiguration = WidgetConfiguration(selectedAlertTypes = initialFilters),
+        onConfirm = { onConfirm(it.selectedAlertTypes) }
+    )
 }
