@@ -24,13 +24,49 @@ class BaselineProfileGenerator {
         device.waitForIdle()
         device.findObject(By.text("Allow"))?.click()
         device.waitForIdle()
+
+        // Alerts: exercise card composition, feed scrolling, overflow, and details.
+        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+            device.displayWidth / 2, device.displayHeight / 3, 18)
+        device.waitForIdle()
+        device.findObject(By.desc("More alert actions"))?.let { overflow ->
+            overflow.click()
+            device.waitForIdle()
+            device.pressBack()
+        }
+        device.findObject(By.textContains("Rocket"))?.click()
+        device.waitForIdle()
+        device.pressBack()
+
+        // Map: include initialization, filter chips, and map-detail rendering when data exists.
         device.findObject(By.text("Map"))?.click()
         device.waitForIdle()
+        device.findObject(By.text("Raids"))?.click()
+        device.waitForIdle()
+        device.click(device.displayWidth / 2, device.displayHeight / 2)
+        device.waitForIdle()
+        device.findObject(By.desc("More map alert actions"))?.let { overflow ->
+            overflow.click()
+            device.waitForIdle()
+            device.pressBack()
+        }
+
         device.findObject(By.text("Alerts"))?.click()
         device.waitForIdle()
         device.findObject(By.text("History"))?.click()
         device.waitForIdle()
+        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+            device.displayWidth / 2, device.displayHeight / 3, 18)
+        device.waitForIdle()
+        device.findObject(By.desc("More alert actions"))?.let { overflow ->
+            overflow.click()
+            device.waitForIdle()
+            device.pressBack()
+        }
         device.findObject(By.text("Settings"))?.click()
+        device.waitForIdle()
+        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+            device.displayWidth / 2, device.displayHeight / 3, 18)
         device.waitForIdle()
     }
 }

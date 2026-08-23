@@ -60,6 +60,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
@@ -69,11 +70,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -84,15 +88,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -109,7 +115,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -151,6 +156,10 @@ import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.validAlertCoordinates
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -196,15 +205,125 @@ internal enum class AlertSecondaryAction {
 }
 
 @Composable
-fun rememberCountdownNow(tickMillis: Long = 1000L): Long {
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(tickMillis) {
-        while (true) {
-            delay(tickMillis)
-            now = System.currentTimeMillis()
+fun rememberCountdownClock(tickMillis: Long = 1_000L): State<Long> {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val now = remember(tickMillis) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lifecycleOwner, tickMillis) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val currentTime = System.currentTimeMillis()
+                now.longValue = currentTime
+                val delayUntilNextTick = tickMillis - (currentTime % tickMillis)
+                delay(delayUntilNextTick.coerceAtLeast(1L))
+            }
         }
     }
     return now
+}
+
+@Immutable
+internal data class AlertActionPolicy(
+    val showGoing: Boolean,
+    val showNavigate: Boolean,
+    val overflowActions: List<AlertSecondaryAction>
+)
+
+internal fun alertActionPolicy(
+    context: AlertCardContext,
+    isExpired: Boolean,
+    snoozeEnabled: Boolean,
+    hasGoingAction: Boolean
+): AlertActionPolicy {
+    val isLiveAndActive = context == AlertCardContext.LIVE && !isExpired
+    return AlertActionPolicy(
+        showGoing = isLiveAndActive && hasGoingAction,
+        showNavigate = !isExpired,
+        overflowActions = buildList {
+            if (isLiveAndActive && snoozeEnabled) add(AlertSecondaryAction.SNOOZE)
+            if (!isExpired) add(AlertSecondaryAction.PICTURE_IN_PICTURE)
+            add(AlertSecondaryAction.SHARE)
+        }
+    )
+}
+
+private val NoGoDexMatch = GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+
+@Composable
+internal fun rememberGoDexMatchResults(
+    alerts: List<PokemonAlert>
+): Map<String, GoDexMatchResult> {
+    if (alerts.none { it.hasType("hundo") }) return emptyMap()
+    val context = LocalContext.current.applicationContext
+    val repository = remember(context) { GoDexRepository.getInstance(context) }
+    val entries by repository.entries.collectAsStateWithLifecycle()
+    val config by repository.config.collectAsStateWithLifecycle()
+    return rememberGoDexMatchResults(alerts, entries, config.isConnected)
+}
+
+@Composable
+internal fun rememberGoDexMatchResults(
+    alerts: List<PokemonAlert>,
+    entries: List<GoDexEntryEntity>,
+    configured: Boolean
+): Map<String, GoDexMatchResult> {
+    if (alerts.none { it.hasType("hundo") }) return emptyMap()
+    val context = LocalContext.current.applicationContext
+    val repository = remember(context) { GoDexRepository.getInstance(context) }
+    val matches by produceState<Map<String, GoDexMatchResult>>(
+        initialValue = emptyMap(),
+        alerts,
+        entries,
+        configured
+    ) {
+        value = withContext(Dispatchers.Default) {
+            alerts.asSequence()
+                .filter { it.hasType("hundo") }
+                .associate { alert ->
+                    alert.uniqueId to repository.match(
+                        alert = alert,
+                        snapshot = entries,
+                        configured = configured
+                    )
+                }
+        }
+    }
+    return matches
+}
+
+@Composable
+private fun AlertCountdownBadge(
+    endTime: String,
+    categoryAccent: Color,
+    categoryOnAccent: Color,
+    countdownClock: State<Long>
+) {
+    val endMillis = remember(endTime) { TimeUtils.parseEndTimeToMillis(endTime) }
+    val remaining = endMillis?.minus(countdownClock.value)
+    val countdown = when {
+        remaining == null -> "TIME --"
+        remaining <= 0 -> "EXPIRED"
+        else -> TimeUtils.formatDurationShort(remaining)
+    }
+    Surface(
+        shape = MaterialTheme.shapes.small,
+        color = if (remaining != null && remaining <= 0) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            categoryAccent.copy(alpha = 0.92f)
+        }
+    ) {
+        Text(
+            text = countdown,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            style = MetricTextStyle,
+            color = if (remaining != null && remaining <= 0) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                categoryOnAccent
+            },
+            maxLines = 1
+        )
+    }
 }
 
 /**
@@ -244,8 +363,15 @@ private fun formatAlertTitleRaw(alert: PokemonAlert): String {
     
     // Handle Team Rocket - show grunt type
     if (alert.hasTypeContaining("rocket") || alert.gruntType != null) {
-        val gruntLabel = alert.gruntType?.replaceFirstChar { it.uppercaseChar() } ?: "Rocket"
-        return "$gruntLabel Rocket"
+        val gruntLabel = alert.gruntType
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.replaceFirstChar { it.uppercaseChar() }
+        return when {
+            gruntLabel == null || gruntLabel.equals("rocket", ignoreCase = true) -> "Team Rocket"
+            gruntLabel.endsWith("rocket", ignoreCase = true) -> gruntLabel
+            else -> "$gruntLabel Rocket"
+        }
     }
     
     // Handle Kecleon
@@ -290,11 +416,22 @@ private fun formatAlertTitleRaw(alert: PokemonAlert): String {
     }
 }
 
+internal fun shouldShowAlertCategoryLabel(title: String, categoryLabel: String): Boolean {
+    val titleWords = title.lowercase(Locale.ROOT)
+        .split(Regex("[^a-z0-9]+"))
+        .filterTo(mutableSetOf()) { it.isNotBlank() }
+    val categoryWords = categoryLabel.lowercase(Locale.ROOT)
+        .split(Regex("[^a-z0-9]+"))
+        .filter { it.isNotBlank() }
+    return categoryWords.isEmpty() || !titleWords.containsAll(categoryWords)
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AlertCard(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo,
+    goDexStatus: GoDexMatchResult = NoGoDexMatch,
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
     onSecondaryAction: (AlertSecondaryAction) -> Unit,
@@ -302,21 +439,13 @@ internal fun AlertCard(
     snoozeEnabled: Boolean = cardContext == AlertCardContext.LIVE,
     isGoing: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
-    nowMillis: Long = System.currentTimeMillis(),
+    countdownClock: State<Long> = rememberCountdownClock(),
     modifier: Modifier = Modifier
 ) {
-    val goDexStatus = rememberGoDexStatus(alert)
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
+    val formattedTitle = remember(alert) { formatAlertTitle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
     val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
-    val haptic = LocalHapticFeedback.current
-    val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
-    val remaining = endMillis?.minus(nowMillis)
-    val countdown = when {
-        remaining == null -> "TIME --"
-        remaining <= 0 -> "EXPIRED"
-        else -> TimeUtils.formatDurationShort(remaining)
-    }
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     val resolvedCp = alert.displayCp
     LinearModernCard(
@@ -324,7 +453,6 @@ internal fun AlertCard(
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
         borderColor = MaterialTheme.colorScheme.outlineVariant,
         onClick = {
-            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
             onShowDetails()
         }
     ) {
@@ -341,37 +469,26 @@ internal fun AlertCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                Surface(
-                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = categoryAccent.copy(alpha = 0.92f)
-                ) {
-                    Text(
-                        text = visualStyle.label,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = categoryOnAccent
-                    )
-                }
-                Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = if (remaining != null && remaining <= 0) {
-                        MaterialTheme.colorScheme.errorContainer
-                    } else {
-                        categoryAccent.copy(alpha = 0.92f)
+                if (shouldShowAlertCategoryLabel(formattedTitle, visualStyle.label)) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                        shape = MaterialTheme.shapes.small,
+                        color = categoryAccent.copy(alpha = 0.92f)
+                    ) {
+                        Text(
+                            text = visualStyle.label,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = categoryOnAccent
+                        )
                     }
-                ) {
-                    Text(
-                        text = countdown,
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        style = MetricTextStyle,
-                        color = if (remaining != null && remaining <= 0) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            categoryOnAccent
-                        },
-                        maxLines = 1
+                }
+                Box(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
+                    AlertCountdownBadge(
+                        endTime = alert.endTime,
+                        categoryAccent = categoryAccent,
+                        categoryOnAccent = categoryOnAccent,
+                        countdownClock = countdownClock
                     )
                 }
             }
@@ -389,7 +506,7 @@ internal fun AlertCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = formatAlertTitle(alert),
+                            text = formattedTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -405,6 +522,14 @@ internal fun AlertCard(
                             )
                         }
                     }
+                    AlertActionsOverflow(
+                        context = cardContext,
+                        endTime = alert.endTime,
+                        countdownClock = countdownClock,
+                        snoozeEnabled = snoozeEnabled,
+                        hasGoingAction = onGoingClick != null,
+                        onAction = onSecondaryAction
+                    )
                 }
 
                 val cardLocationText = alert.venueName ?: alert.locationDisplay
@@ -476,114 +601,87 @@ internal fun AlertCard(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    GoDexCaughtAction(
-                        alert = alert,
-                        matchResult = goDexStatus
-                    )
+                AlertCardPrimaryActions(
+                    alert = alert,
+                    goDexStatus = goDexStatus,
+                    context = cardContext,
+                    snoozeEnabled = snoozeEnabled,
+                    countdownClock = countdownClock,
+                    isGoing = isGoing,
+                    onGoingClick = onGoingClick,
+                    onOpenMaps = onOpenMaps,
+                    categoryAccent = categoryAccent
+                )
+            }
+        }
+    }
+}
 
-                    if (cardContext == AlertCardContext.LIVE && onGoingClick != null) {
-                        FilledTonalButton(
-                            onClick = onGoingClick,
-                            modifier = Modifier.weight(1f).height(48.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp),
-                            colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = if (isGoing) {
-                                    MaterialTheme.colorScheme.errorContainer
-                                } else {
-                                    MaterialTheme.colorScheme.secondaryContainer
-                                },
-                                contentColor = if (isGoing) {
-                                    MaterialTheme.colorScheme.onErrorContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                }
-                            )
-                        ) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = null)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            AnimatedContent(
-                                targetState = isGoing,
-                                transitionSpec = { appFadeThrough() },
-                                label = "alert_card_going_action"
-                            ) { going ->
-                                Text(
-                                    if (going) "Stop" else "I\u2019m going",
-                                    style = MaterialTheme.typography.labelLarge
-                                )
+@Composable
+private fun AlertActionsOverflow(
+    context: AlertCardContext,
+    endTime: String,
+    countdownClock: State<Long>,
+    snoozeEnabled: Boolean,
+    hasGoingAction: Boolean,
+    onAction: (AlertSecondaryAction) -> Unit
+) {
+    val policy = alertActionPolicy(
+        context = context,
+        isExpired = TimeUtils.parseEndTimeToMillis(endTime)?.let { it <= countdownClock.value } ?: false,
+        snoozeEnabled = snoozeEnabled,
+        hasGoingAction = hasGoingAction
+    )
+    AlertSecondaryActionsMenu(
+        actions = policy.overflowActions,
+        onAction = onAction
+    )
+}
+
+@Composable
+internal fun AlertSecondaryActionsMenu(
+    actions: List<AlertSecondaryAction>,
+    onAction: (AlertSecondaryAction) -> Unit,
+    contentDescription: String = "More alert actions"
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = Icons.Filled.MoreVert,
+                contentDescription = contentDescription
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            actions.forEach { action ->
+                val label = when (action) {
+                    AlertSecondaryAction.SNOOZE -> "Snooze"
+                    AlertSecondaryAction.PICTURE_IN_PICTURE -> "Open in picture-in-picture"
+                    AlertSecondaryAction.SHARE -> "Share"
+                }
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    leadingIcon = {
+                        when (action) {
+                            AlertSecondaryAction.SNOOZE -> {
+                                Icon(Icons.Filled.Notifications, contentDescription = null)
+                            }
+                            AlertSecondaryAction.PICTURE_IN_PICTURE -> {
+                                Icon(painterResource(R.drawable.ic_pip), contentDescription = null)
+                            }
+                            AlertSecondaryAction.SHARE -> {
+                                Icon(Icons.Filled.Share, contentDescription = null)
                             }
                         }
+                    },
+                    onClick = {
+                        expanded = false
+                        onAction(action)
                     }
-                    FilledTonalButton(
-                        onClick = onOpenMaps,
-                        modifier = Modifier.weight(1.15f).height(48.dp),
-                        contentPadding = PaddingValues(horizontal = 8.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = categoryAccent.copy(alpha = 0.22f),
-                            contentColor = categoryAccent
-                        )
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_map),
-                            contentDescription = stringResource(id = R.string.open_in_maps)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Navigate", style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (snoozeEnabled) {
-                        CompactAlertActionButton(
-                            text = "Snooze",
-                            accessibilityLabel = "Snooze alert",
-                            onClick = { onSecondaryAction(AlertSecondaryAction.SNOOZE) },
-                            modifier = Modifier.weight(1f),
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Notifications,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        )
-                    }
-                    CompactAlertActionButton(
-                        text = "PiP",
-                        accessibilityLabel = "Open alert in picture-in-picture",
-                        onClick = {
-                            onSecondaryAction(AlertSecondaryAction.PICTURE_IN_PICTURE)
-                        },
-                        modifier = Modifier.weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_pip),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    )
-                    CompactAlertActionButton(
-                        text = "Share",
-                        accessibilityLabel = "Share alert",
-                        onClick = { onSecondaryAction(AlertSecondaryAction.SHARE) },
-                        modifier = Modifier.weight(1f),
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Share,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    )
-                }
+                )
             }
         }
     }
@@ -620,6 +718,86 @@ private fun CompactAlertActionButton(
         )
     }
 }
+
+@Composable
+private fun AlertCardPrimaryActions(
+    alert: PokemonAlert,
+    goDexStatus: GoDexMatchResult,
+    context: AlertCardContext,
+    snoozeEnabled: Boolean,
+    countdownClock: State<Long>,
+    isGoing: Boolean,
+    onGoingClick: (() -> Unit)?,
+    onOpenMaps: () -> Unit,
+    categoryAccent: Color
+) {
+    val policy = alertActionPolicy(
+        context = context,
+        isExpired = alert.isExpiredAt(countdownClock.value),
+        snoozeEnabled = snoozeEnabled,
+        hasGoingAction = onGoingClick != null
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        GoDexCaughtAction(alert = alert, matchResult = goDexStatus)
+        if (policy.showGoing && onGoingClick != null) {
+            FilledTonalButton(
+                onClick = onGoingClick,
+                modifier = Modifier.weight(1f).height(48.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = if (isGoing) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.secondaryContainer
+                    },
+                    contentColor = if (isGoing) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                )
+            ) {
+                Icon(Icons.Filled.LocationOn, contentDescription = null)
+                Spacer(modifier = Modifier.width(4.dp))
+                AnimatedContent(
+                    targetState = isGoing,
+                    transitionSpec = { appFadeThrough() },
+                    label = "alert_card_going_action"
+                ) { going ->
+                    Text(
+                        if (going) "Stop" else "I\u2019m going",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+        }
+        if (policy.showNavigate) {
+            FilledTonalButton(
+                onClick = onOpenMaps,
+                modifier = Modifier.weight(1.15f).height(48.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = categoryAccent.copy(alpha = 0.22f),
+                    contentColor = categoryAccent
+                )
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_map),
+                    contentDescription = stringResource(id = R.string.open_in_maps)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Navigate", style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+internal fun PokemonAlert.isExpiredAt(nowMillis: Long): Boolean =
+    TimeUtils.parseEndTimeToMillis(endTime)?.let { it <= nowMillis } ?: false
 
 @Composable
 private fun WeatherChangeCardSummary(alert: PokemonAlert) {
@@ -731,14 +909,8 @@ private fun AlertPill(
 
 @Composable
 internal fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
-    if (!alert.hasType("hundo")) return GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-    val context = LocalContext.current.applicationContext
-    val repository = remember(context) { GoDexRepository.getInstance(context) }
-    val entries by repository.entries.collectAsState()
-    val config by repository.config.collectAsState()
-    return remember(alert, entries, config.url) {
-        repository.match(alert, entries)
-    }
+    if (!alert.hasType("hundo")) return NoGoDexMatch
+    return rememberGoDexMatchResults(listOf(alert))[alert.uniqueId] ?: NoGoDexMatch
 }
 
 @Composable
@@ -1537,14 +1709,14 @@ fun AlertDetailScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            val statusNow = rememberCountdownNow()
+                            val statusClock = rememberCountdownClock()
                             Text(
                                 text = "Status",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            CountdownAndEndTimeRow(alert = alert, nowMillis = statusNow)
+                            CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
                             
                             // Created at timestamp
                             TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
@@ -2897,7 +3069,11 @@ private fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, nowMillis: Long) {
+fun AlertMetaRow(
+    alert: PokemonAlert,
+    distanceInfo: AlertDistanceInfo,
+    countdownClock: State<Long> = rememberCountdownClock()
+) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val typeLabel = alert.typeDisplay?.uppercase(Locale.getDefault())
         val distanceLabel = distanceInfo.distanceText
@@ -2928,7 +3104,7 @@ fun AlertMetaRow(alert: PokemonAlert, distanceInfo: AlertDistanceInfo, nowMillis
                 AlertTag(text = walkingLabel, icon = null)
             }
         }
-        CountdownAndEndTimeRow(alert = alert, nowMillis = nowMillis)
+        CountdownAndEndTimeRow(alert = alert, countdownClock = countdownClock)
     }
 }
 
@@ -2938,7 +3114,11 @@ fun AlertTag(text: String, icon: ImageVector? = null) {
 }
 
 @Composable
-fun CountdownAndEndTimeRow(alert: PokemonAlert, nowMillis: Long = System.currentTimeMillis()) {
+fun CountdownAndEndTimeRow(
+    alert: PokemonAlert,
+    countdownClock: State<Long> = rememberCountdownClock()
+) {
+    val nowMillis = countdownClock.value
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val remaining = endMillis?.let { it - nowMillis } ?: -1
     val expiredLabel = if (endMillis != null && remaining <= 0) {

@@ -69,6 +69,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -293,7 +294,7 @@ internal fun AlertsMapScreenContent(
     var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedClusterAlerts by remember { mutableStateOf<List<PokemonAlert>>(emptyList()) }
     var expandedClusterAlertIds by rememberSaveable {
-        mutableStateOf<ArrayList<String>>(arrayListOf())
+        mutableStateOf<List<String>>(emptyList())
     }
     var expandedClusterOriginZoom by rememberSaveable {
         mutableStateOf<Double?>(null)
@@ -494,14 +495,8 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    // A live timer is only needed while a time label or the selected-alert panel is visible.
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(showTimeLabels, selectedAlert?.uniqueId) {
-        while (true) {
-            now = System.currentTimeMillis()
-            kotlinx.coroutines.delay(if (showTimeLabels || selectedAlert != null) 1_000 else 30_000)
-        }
-    }
+    val expirationClock = rememberCountdownClock(30_000L)
+    val markerCountdownClock = rememberCountdownClock(if (showTimeLabels) 1_000L else 30_000L)
 
     var selectedWalkingRoute by remember { mutableStateOf<WalkingRouteInfo?>(null) }
     LaunchedEffect(
@@ -520,11 +515,12 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    val filteredAlerts = remember(alerts, selectedFilter, now) {
+    val expirationNow = expirationClock.value
+    val filteredAlerts = remember(alerts, selectedFilter, expirationNow) {
         val activeAlerts = alerts.filter {
             it.mapCoordinatesOrNull() != null &&
                 !it.isInvalidated &&
-                (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > now
+                (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > expirationNow
         }
         when (selectedFilter) {
             AlertFilter.ALL -> activeAlerts
@@ -539,6 +535,11 @@ internal fun AlertsMapScreenContent(
             AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasType("WeatherChange") }
         }
     }
+    val goDexMatches = rememberGoDexMatchResults(
+        alerts = filteredAlerts,
+        entries = goDexEntries,
+        configured = goDexConfig.isConnected
+    )
 
     val availableFilters = remember(alerts) {
         val mappableAlerts = alerts.filter {
@@ -563,7 +564,7 @@ internal fun AlertsMapScreenContent(
     }
 
     LaunchedEffect(selectedFilter, mapSource) {
-        expandedClusterAlertIds = arrayListOf()
+        expandedClusterAlertIds = emptyList()
         expandedClusterOriginZoom = null
     }
 
@@ -573,7 +574,7 @@ internal fun AlertsMapScreenContent(
             activeAlertIds = filteredAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
         )
         if (retainedIds.size != expandedClusterAlertIds.size) {
-            expandedClusterAlertIds = ArrayList(retainedIds)
+            expandedClusterAlertIds = retainedIds.toList()
         }
         if (retainedIds.isEmpty()) {
             expandedClusterOriginZoom = null
@@ -771,13 +772,13 @@ internal fun AlertsMapScreenContent(
 
         LaunchedEffect(displayZoom, expandedClusterOriginZoom) {
             if (shouldClearExpandedMapCluster(expandedClusterOriginZoom, displayZoom)) {
-                expandedClusterAlertIds = arrayListOf()
+                expandedClusterAlertIds = emptyList()
                 expandedClusterOriginZoom = null
             }
         }
 
         fun fitVisibleAlerts() {
-            expandedClusterAlertIds = arrayListOf()
+            expandedClusterAlertIds = emptyList()
             expandedClusterOriginZoom = null
             applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
             if (visibleCoordinates.isEmpty()) {
@@ -869,11 +870,11 @@ internal fun AlertsMapScreenContent(
                         is MapMarkerItem.Alert -> key(item.alert.uniqueId) {
                             MapMarker(
                                 alert = item.alert,
-                                now = now,
+                                countdownClock = markerCountdownClock,
                                 density = density,
                                 showTimeLabel = showTimeLabels,
-                                goDexEntries = goDexEntries,
-                                goDexConfig = goDexConfig,
+                                goDexMatchResult = goDexMatches[item.alert.uniqueId]
+                                    ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                                 onClick = { selectedAlertId = item.alert.uniqueId }
                             )
                         }
@@ -902,7 +903,7 @@ internal fun AlertsMapScreenContent(
                                             selectedClusterAlerts = item.alerts
                                         }
                                         is MapClusterInteraction.Expand -> {
-                                            expandedClusterAlertIds = ArrayList(interaction.alertIds)
+                                            expandedClusterAlertIds = interaction.alertIds.toList()
                                             expandedClusterOriginZoom = interaction.originZoom
                                             scope.launch {
                                                 val bounds = LatLngBounds(
@@ -933,7 +934,8 @@ internal fun AlertsMapScreenContent(
                     cameraSnapshot = retainedCamera(),
                     contentInsets = openStreetMapInsets,
                     showTimeLabels = showTimeLabels,
-                    now = now,
+                    countdownClock = markerCountdownClock,
+                    goDexMatches = goDexMatches,
                     controller = openStreetMapController,
                     onMapLoaded = {
                         openStreetMapLoaded = true
@@ -955,7 +957,7 @@ internal fun AlertsMapScreenContent(
                                 selectedClusterAlerts = cluster.alerts
                             }
                             is MapClusterInteraction.Expand -> {
-                                expandedClusterAlertIds = ArrayList(interaction.alertIds)
+                                expandedClusterAlertIds = interaction.alertIds.toList()
                                 expandedClusterOriginZoom = interaction.originZoom
                                 openStreetMapController.fitAlerts(
                                     cluster.alerts.mapNotNull(PokemonAlert::mapCoordinatesOrNull),
@@ -969,8 +971,6 @@ internal fun AlertsMapScreenContent(
                         applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
                     },
                     expandedAlertIds = expandedAlertIdSet,
-                    goDexEntries = goDexEntries,
-                    goDexConfig = goDexConfig,
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled
                 )
@@ -1077,7 +1077,7 @@ internal fun AlertsMapScreenContent(
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .padding(top = 8.dp, start = 16.dp, end = controlsEndPadding),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             MapTopAppBar(
                 visibleAlertCount = filteredAlerts.size,
@@ -1166,7 +1166,7 @@ internal fun AlertsMapScreenContent(
                             }
                         ) {
                             Text(alert.name, modifier = Modifier.weight(1f))
-                            Text(mapCountdownLabel(alert.endTime, now))
+                            MapCountdownText(alert.endTime, markerCountdownClock)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -1259,6 +1259,8 @@ internal fun AlertsMapScreenContent(
             if (useSidePanel) {
                 MapAlertSidePanel(
                     alert = alert,
+                    goDexStatus = goDexMatches[alert.uniqueId]
+                        ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                     distanceInfo = distanceInfo,
                     onDismiss = { selectedAlertId = null },
                     isGoing = arrivalTracking.isTracking(alert),
@@ -1280,6 +1282,8 @@ internal fun AlertsMapScreenContent(
                 ) {
                     MapAlertDetailContent(
                         alert = alert,
+                        goDexStatus = goDexMatches[alert.uniqueId]
+                            ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                         distanceInfo = distanceInfo,
                         onDismiss = { selectedAlertId = null },
                         isGoing = arrivalTracking.isTracking(alert),
@@ -1515,37 +1519,31 @@ internal fun MapFilterRow(
     @Suppress("UNUSED_PARAMETER") visibleAlertCount: Int,
     onFilterSelected: (AlertFilter) -> Unit
 ) {
-    Surface(
+    LazyRow(
         modifier = Modifier.fillMaxWidth().testTag("map_filter_rail"),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 4.dp,
-        shadowElevation = 3.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant
-        )
+        contentPadding = PaddingValues(horizontal = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(filters.toList(), key = { it.name }) { filter ->
-                val selected = selectedFilter == filter
-                FilterChip(
+        items(filters.toList(), key = { it.name }) { filter ->
+            val selected = selectedFilter == filter
+            FilterChip(
+                selected = selected,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label, maxLines = 1) },
+                shape = RoundedCornerShape(50),
+                border = FilterChipDefaults.filterChipBorder(
+                    enabled = true,
                     selected = selected,
-                    onClick = { onFilterSelected(filter) },
-                    label = { Text(filter.label, maxLines = 1) },
-                    shape = RoundedCornerShape(50),
-                    colors = FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        labelColor = MaterialTheme.colorScheme.onSurface,
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    selectedBorderColor = MaterialTheme.colorScheme.primary
+                ),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    labelColor = MaterialTheme.colorScheme.onSurface,
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
-            }
+            )
         }
     }
 }
@@ -1553,6 +1551,7 @@ internal fun MapFilterRow(
 @Composable
 private fun MapAlertSidePanel(
     alert: PokemonAlert,
+    goDexStatus: GoDexMatchResult,
     distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
     isGoing: Boolean,
@@ -1575,6 +1574,7 @@ private fun MapAlertSidePanel(
     ) {
         MapAlertDetailContent(
             alert = alert,
+            goDexStatus = goDexStatus,
             distanceInfo = distanceInfo,
             onDismiss = onDismiss,
             isGoing = isGoing,
@@ -1590,6 +1590,7 @@ private fun MapAlertSidePanel(
 @Composable
 internal fun MapAlertDetailContent(
     alert: PokemonAlert,
+    goDexStatus: GoDexMatchResult = GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
     distanceInfo: AlertDistanceInfo?,
     onDismiss: () -> Unit,
     isGoing: Boolean,
@@ -1602,19 +1603,12 @@ internal fun MapAlertDetailContent(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showSnoozeDialog by rememberSaveable(alert.uniqueId) { mutableStateOf(false) }
-    var currentTime by remember(alert.uniqueId) { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(alert.uniqueId) {
-        while (true) {
-            currentTime = System.currentTimeMillis()
-            kotlinx.coroutines.delay(1_000)
-        }
-    }
-
-    val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
-    val remaining = endMillis?.let { it - currentTime } ?: 0L
+    val countdownClock = rememberCountdownClock()
     val visualStyle = resolveAlertVisualStyle(alert)
     val categoryAccent = Color(visualStyle.category.accentArgb)
-    val isExpired = remaining <= 0L
+    val formattedTitle = remember(alert, goDexStatus.status) {
+        formatAlertTitle(alert, goDexStatus.status)
+    }
 
     Column(
         modifier = modifier.heightIn(max = 640.dp),
@@ -1630,10 +1624,9 @@ internal fun MapAlertDetailContent(
                 modifier = Modifier.size(88.dp),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
-            val goDexStatus = rememberGoDexStatus(alert)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = formatAlertTitle(alert, goDexStatus.status),
+                    text = formattedTitle,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -1642,16 +1635,18 @@ internal fun MapAlertDetailContent(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.small,
-                        color = categoryAccent.copy(alpha = 0.18f)
-                    ) {
-                        Text(
-                            text = "${visualStyle.shortCode} · ${visualStyle.label}",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = categoryAccent,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+                    if (shouldShowAlertCategoryLabel(formattedTitle, visualStyle.label)) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = categoryAccent.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = visualStyle.label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = categoryAccent,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                     GoDexStatusPill(goDexStatus)
                 }
@@ -1659,6 +1654,23 @@ internal fun MapAlertDetailContent(
             GoDexCaughtAction(
                 alert = alert,
                 matchResult = goDexStatus
+            )
+            AlertSecondaryActionsMenu(
+                actions = listOf(
+                    AlertSecondaryAction.SNOOZE,
+                    AlertSecondaryAction.PICTURE_IN_PICTURE,
+                    AlertSecondaryAction.SHARE
+                ),
+                onAction = { action ->
+                    when (action) {
+                        AlertSecondaryAction.SNOOZE -> showSnoozeDialog = true
+                        AlertSecondaryAction.PICTURE_IN_PICTURE -> {
+                            openAlertInPictureInPicture(context, alert)
+                        }
+                        AlertSecondaryAction.SHARE -> onShare()
+                    }
+                },
+                contentDescription = "More map alert actions"
             )
 
             IconButton(onClick = onDismiss) {
@@ -1691,30 +1703,6 @@ internal fun MapAlertDetailContent(
                 )
                 Spacer(modifier = Modifier.size(8.dp))
                 Text("Directions")
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilledTonalButton(
-                onClick = { showSnoozeDialog = true },
-                modifier = Modifier.weight(1f).height(48.dp)
-            ) {
-                Text("Snooze")
-            }
-            FilledTonalButton(
-                onClick = { openAlertInPictureInPicture(context, alert) },
-                modifier = Modifier.weight(1f).height(48.dp)
-            ) {
-                Text("PiP")
-            }
-            FilledTonalButton(
-                onClick = onShare,
-                modifier = Modifier.weight(1f).height(48.dp)
-            ) {
-                Text("Share")
             }
         }
 
@@ -1801,30 +1789,11 @@ internal fun MapAlertDetailContent(
             }
         }
 
-        Surface(
-            shape = MaterialTheme.shapes.medium,
-            color = if (isExpired) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                categoryAccent.copy(alpha = 0.18f)
-            }
-        ) {
-            Text(
-                text = if (isExpired) {
-                    "Expired"
-                } else {
-                    "Ends in ${TimeUtils.formatDurationShort(remaining)}"
-                },
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isExpired) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    categoryAccent
-                },
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-            )
-        }
+        MapAlertCountdown(
+            endTime = alert.endTime,
+            categoryAccent = categoryAccent,
+            countdownClock = countdownClock
+        )
 
         }
         FilledTonalButton(
@@ -1848,6 +1817,42 @@ internal fun MapAlertDetailContent(
             }
         )
     }
+}
+
+@Composable
+private fun MapAlertCountdown(
+    endTime: String,
+    categoryAccent: Color,
+    countdownClock: State<Long>
+) {
+    val endMillis = remember(endTime) { TimeUtils.parseEndTimeToMillis(endTime) }
+    val remaining = endMillis?.minus(countdownClock.value) ?: 0L
+    val isExpired = remaining <= 0L
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (isExpired) {
+            MaterialTheme.colorScheme.errorContainer
+        } else {
+            categoryAccent.copy(alpha = 0.18f)
+        }
+    ) {
+        Text(
+            text = if (isExpired) "Expired" else "Ends in ${TimeUtils.formatDurationShort(remaining)}",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = if (isExpired) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                categoryAccent
+            },
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
+        )
+    }
+}
+
+@Composable
+private fun MapCountdownText(endTime: String, countdownClock: State<Long>) {
+    Text(mapCountdownLabel(endTime, countdownClock.value))
 }
 
 internal data class AlertMapCoordinates(
@@ -1949,11 +1954,10 @@ internal fun resolveInitialMapViewport(
 @Composable
 private fun MapMarker(
     alert: PokemonAlert,
-    now: Long,
+    countdownClock: State<Long>,
     density: androidx.compose.ui.unit.Density,
     showTimeLabel: Boolean,
-    goDexEntries: List<GoDexEntryEntity>,
-    goDexConfig: GoDexConfig,
+    goDexMatchResult: GoDexMatchResult,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1964,15 +1968,6 @@ private fun MapMarker(
     val position = remember(coordinates) { LatLng(coordinates.latitude, coordinates.longitude) }
     val visualStyle = resolveAlertVisualStyle(alert)
     
-    val goDexRepository = remember(context) { GoDexRepository.getInstance(context) }
-    val matchResult = remember(alert, goDexEntries, goDexConfig) {
-        if (alert.hasType("hundo")) {
-            goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
-        } else {
-            GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-        }
-    }
-    
     val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
         AlertCategory.HUNDO -> "100%"
         AlertCategory.NUNDO -> "0%"
@@ -1981,6 +1976,7 @@ private fun MapMarker(
     val speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName
     val speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
+    val now = countdownClock.value
     val timeLabel = remember(now, alert.endTime) {
         mapCountdownLabel(alert.endTime, now)
     }
@@ -2018,7 +2014,7 @@ private fun MapMarker(
         showTimeLabel,
         timeLabel,
         palette,
-        matchResult.status
+        goDexMatchResult.status
     ) {
         MapMarkerIconRequest(
             sizePx = markerSizePx,
@@ -2029,7 +2025,7 @@ private fun MapMarker(
             showTimeLabel = showTimeLabel,
             timeLabel = if (showTimeLabel) timeLabel else null,
             palette = palette,
-            goDexStatus = matchResult.status
+            goDexStatus = goDexMatchResult.status
         )
     }
     val markerCacheKey = remember(markerIconRequest) {
@@ -2065,7 +2061,7 @@ private fun MapMarker(
         state = remember(position) { MarkerState(position = position) },
         icon = googleMarkerDescriptor,
         anchor = markerIcon.anchor,
-        title = formatAlertTitle(alert, matchResult.status),
+        title = formatAlertTitle(alert, goDexMatchResult.status),
         visible = true,
         onClick = {
             onClick()

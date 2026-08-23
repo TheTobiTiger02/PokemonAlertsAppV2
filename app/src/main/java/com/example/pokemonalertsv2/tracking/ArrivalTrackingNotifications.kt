@@ -82,7 +82,9 @@ internal object ArrivalTrackingNotifications {
         val content = when {
             waitingForPreciseLocation -> "Waiting for precise location"
             distanceMeters != null -> {
-                "${formatDistance(distanceMeters)} away \u2022 Arrival at ${destination.radiusMeters} m"
+                "${formatDistance(distanceMeters)} away \u2022 " +
+                    "${formatWalkingEstimate(distanceMeters)} \u2022 " +
+                    "Arrival at ${destination.radiusMeters} m"
             }
             else -> "Finding your precise location \u2022 Arrival at ${destination.radiusMeters} m"
         }
@@ -315,6 +317,19 @@ internal object ArrivalTrackingNotifications {
         } else {
             String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
         }
+
+    internal fun formatWalkingEstimate(distanceMeters: Float): String {
+        val minutes = (distanceMeters.coerceAtLeast(0f) / 1.4f / 60f)
+            .roundToInt()
+            .coerceAtLeast(1)
+        return if (minutes < 60) {
+            "$minutes min walk"
+        } else {
+            val hours = minutes / 60
+            val remainingMinutes = minutes % 60
+            if (remainingMinutes == 0) "$hours h walk" else "$hours h $remainingMinutes min walk"
+        }
+    }
 
     private fun immutableFlag(): Int = PendingIntent.FLAG_IMMUTABLE
 }

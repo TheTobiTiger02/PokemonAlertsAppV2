@@ -413,7 +413,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
         // Active count badge
         if (alertCount > 0) {
-            views.setTextViewText(R.id.tv_count, context.getString(R.string.widget_active_count, alertCount))
+            views.setTextViewText(
+                R.id.tv_count,
+                context.resources.getQuantityString(
+                    R.plurals.widget_active_count,
+                    alertCount,
+                    alertCount
+                )
+            )
             views.setViewVisibility(R.id.tv_count, View.VISIBLE)
         } else {
             views.setViewVisibility(R.id.tv_count, View.GONE)

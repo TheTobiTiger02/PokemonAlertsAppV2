@@ -99,19 +99,36 @@
     <string name="alerts_empty_cta">Refresh feed</string>
     <string name="alert_expired">Expired</string>
     <string name="widget_description">Shows active Pokémon alerts with countdown timers, distance info, and quick actions.</string>
-    <string name="widget_active_count">%1$d active</string>
+    <plurals name="widget_active_count">
+        <item quantity="one">%1$d active</item>
+        <item quantity="other">%1$d active</item>
+    </plurals>
     <string name="widget_dismiss_cd">Dismiss alert</string>
     <string name="widget_navigate_cd">Navigate to alert</string>
     <string name="widget_open_map_cd">Open alerts map</string>
     <string name="widget_active_alerts_label">Active alerts</string>
-    <string name="widget_compact_count">%1$d active alerts</string>
+    <plurals name="widget_compact_count">
+        <item quantity="one">%1$d active alert</item>
+        <item quantity="other">%1$d active alerts</item>
+    </plurals>
 
     <string name="widget_config_title">Select Alert Types</string>
     <string name="widget_config_subtitle">Choose which alert types appear on this widget.</string>
     <string name="widget_config_show_all">Show all types</string>
     <string name="widget_config_show_all_subtitle">Enable every alert category</string>
     <string name="widget_config_types_heading">Alert types</string>
-    <string name="widget_config_selected_count">%1$d of %2$d selected</string>
+    <plurals name="widget_config_selected_count">
+        <item quantity="one">%1$d of %2$d selected</item>
+        <item quantity="other">%1$d of %2$d selected</item>
+    </plurals>
+    <plurals name="alerts_active_count">
+        <item quantity="one">%1$d active alert</item>
+        <item quantity="other">%1$d active alerts</item>
+    </plurals>
+    <plurals name="history_loaded_count">
+        <item quantity="one">%1$d loaded</item>
+        <item quantity="other">%1$d loaded</item>
+    </plurals>
     <string name="widget_config_confirm">Done</string>
     <string name="widget_filter_hundo">Hundos (100% IV)</string>
     <string name="widget_filter_nundo">Nundos (0% IV)</string>

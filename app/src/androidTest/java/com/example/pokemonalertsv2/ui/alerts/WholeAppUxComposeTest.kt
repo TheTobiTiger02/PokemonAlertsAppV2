@@ -58,7 +58,7 @@ class WholeAppUxComposeTest {
     }
 
     @Test
-    fun alertCardShowsSecondaryActionsAndInvokesTheirCallbacksDirectly() {
+    fun alertCardExposesSecondaryActionsFromOverflowAndInvokesCallbacks() {
         var selectedAction: AlertSecondaryAction? = null
         composeRule.setContent {
             PokemonAlertsV2Theme {
@@ -72,22 +72,25 @@ class WholeAppUxComposeTest {
             }
         }
 
+        composeRule.onNodeWithText("Snooze").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("More alert actions").performClick()
         composeRule.onNodeWithText("Snooze")
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()
         assertEquals(AlertSecondaryAction.SNOOZE, selectedAction)
 
-        composeRule.onNodeWithContentDescription("Open alert in picture-in-picture")
+        composeRule.onNodeWithContentDescription("More alert actions").performClick()
+        composeRule.onNodeWithText("Open in picture-in-picture")
             .assertIsDisplayed()
             .assertHasClickAction()
             .performClick()
         assertEquals(AlertSecondaryAction.PICTURE_IN_PICTURE, selectedAction)
 
+        composeRule.onNodeWithContentDescription("More alert actions").performClick()
         composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
             .performClick()
         assertEquals(AlertSecondaryAction.SHARE, selectedAction)
-        composeRule.onNodeWithText("More").assertDoesNotExist()
     }
 
     @Test
@@ -95,7 +98,11 @@ class WholeAppUxComposeTest {
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 AlertCard(
-                    alert = PokemonAlert(name = "Expired Pikachu", type = listOf("Spawn")),
+                    alert = PokemonAlert(
+                        name = "Expired Pikachu",
+                        type = listOf("Spawn"),
+                        endTime = "2020-01-01T00:00:00Z"
+                    ),
                     distanceInfo = AlertDistanceInfo(null, null, null),
                     onOpenMaps = {},
                     onShowDetails = {},
@@ -105,14 +112,14 @@ class WholeAppUxComposeTest {
             }
         }
 
-        composeRule.onNodeWithText("Navigate").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Open alert in picture-in-picture")
-            .assertIsDisplayed()
-            .assertHasClickAction()
-        composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Navigate").assertDoesNotExist()
+        composeRule.onNodeWithText("Share").assertDoesNotExist()
         composeRule.onNodeWithText("Snooze").assertDoesNotExist()
         composeRule.onNodeWithText("I\u2019m going").assertDoesNotExist()
-        composeRule.onNodeWithText("More").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("More alert actions").performClick()
+        composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Open in picture-in-picture").assertDoesNotExist()
+        composeRule.onNodeWithText("Snooze").assertDoesNotExist()
     }
 
     @Test
@@ -134,11 +141,13 @@ class WholeAppUxComposeTest {
             }
         }
 
+        composeRule.onNodeWithContentDescription("More alert actions")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+            .performClick()
         composeRule.onNodeWithText("Snooze").assertHasClickAction()
         composeRule.onNodeWithText("Share").assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Open alert in picture-in-picture")
-            .assertHasClickAction()
-        composeRule.onNodeWithText("More").assertDoesNotExist()
+        composeRule.onNodeWithText("Open in picture-in-picture").assertHasClickAction()
     }
 
     @Test
@@ -171,16 +180,15 @@ class WholeAppUxComposeTest {
 
         composeRule.onNodeWithText("I\u2019m going").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Navigate").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithText("Snooze").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithContentDescription("Open alert in picture-in-picture")
+        composeRule.onNodeWithText("Snooze").assertDoesNotExist()
+        composeRule.onNodeWithText("Share").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("More alert actions")
             .assertIsDisplayed()
             .assertHasClickAction()
-        composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithText("More").assertDoesNotExist()
     }
 
     @Test
-    fun mapFilterRailKeepsEveryFilterOnAnOpaqueControlSurface() {
+    fun mapFilterRailKeepsEveryFilterAvailableAtNarrowPhoneWidth() {
         composeRule.setContent {
             PokemonAlertsV2Theme(darkTheme = true) {
                 Box(modifier = androidx.compose.ui.Modifier.width(360.dp)) {
@@ -201,7 +209,7 @@ class WholeAppUxComposeTest {
     }
 
     @Test
-    fun mapAlertDetailsPinsOpenDetailsWhileKeepingDirectActionsVisible() {
+    fun mapAlertDetailsPinsOpenDetailsAndMovesSecondaryActionsToOverflow() {
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 Box(
@@ -240,7 +248,15 @@ class WholeAppUxComposeTest {
             .assertHasClickAction()
         composeRule.onNodeWithText("I’m going").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Directions").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Snooze").assertDoesNotExist()
+        composeRule.onNodeWithText("Share").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("More map alert actions")
+            .assertIsDisplayed()
+            .performClick()
         composeRule.onNodeWithText("Snooze").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Open in picture-in-picture")
+            .assertIsDisplayed()
+            .assertHasClickAction()
         composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
     }
 }

@@ -128,6 +128,11 @@ class ArrivalTrackingServiceInstrumentedTest {
         )
 
         assertEquals("275 m", notification.shortCriticalText)
+        assertTrue(
+            notification.extras
+                .getCharSequence(Notification.EXTRA_TEXT)
+                ?.contains("min walk") == true
+        )
         assertTrue(notification.hasPromotableCharacteristics())
         assertTrue(notification.extras.getBoolean("android.requestPromotedOngoing"))
         assertTrue(

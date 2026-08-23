@@ -7,6 +7,7 @@ import android.graphics.Paint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -20,9 +21,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
-import com.example.pokemonalertsv2.data.godex.GoDexConfig
-import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import kotlinx.coroutines.Dispatchers
@@ -413,7 +411,8 @@ internal fun OpenStreetMapView(
     cameraSnapshot: MapCameraSnapshot,
     contentInsets: MapContentInsets,
     showTimeLabels: Boolean,
-    now: Long,
+    countdownClock: State<Long>,
+    goDexMatches: Map<String, GoDexMatchResult>,
     controller: OpenStreetMapController,
     onMapLoaded: () -> Unit,
     onLoadError: () -> Unit,
@@ -422,15 +421,20 @@ internal fun OpenStreetMapView(
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
     expandedAlertIds: Set<String> = emptySet(),
-    goDexEntries: List<GoDexEntryEntity> = emptyList(),
-    goDexConfig: GoDexConfig = GoDexConfig(),
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false
 ) {
     val context = LocalContext.current
+    val mapLibreReady = remember(context) { MapLibreInitializer.ensureInitialized(context) }
+    LaunchedEffect(mapLibreReady) {
+        if (!mapLibreReady) onLoadError()
+    }
+    if (!mapLibreReady) return
+
     val density = LocalDensity.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val colors = androidx.compose.material3.MaterialTheme.colorScheme
+    val now = countdownClock.value
     val markerSizePx = remember(density) { with(density) { 68.dp.toPx().toInt() } }
     val basePalette = remember(
         colors.primary,
@@ -532,9 +536,8 @@ internal fun OpenStreetMapView(
             expandedAlertIds = expandedAlertIds
         )
     }
-    LaunchedEffect(markerItems, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexEntries, goDexConfig) {
+    LaunchedEffect(markerItems, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexMatches) {
         val markers = withContext(Dispatchers.IO) {
-            val goDexRepository = GoDexRepository.getInstance(context)
             markerItems.mapNotNull { item ->
                 if (item is MapMarkerItem.Cluster) {
                     return@mapNotNull OpenStreetMapMarker(
@@ -548,11 +551,8 @@ internal fun OpenStreetMapView(
                 }
                 val alert = (item as MapMarkerItem.Alert).alert
                 val visualStyle = resolveAlertVisualStyle(alert)
-                val matchResult = if (alert.hasType("hundo")) {
-                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
-                } else {
-                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-                }
+                val matchResult = goDexMatches[alert.uniqueId]
+                    ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
                 val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
                     AlertCategory.HUNDO -> "100%"
                     AlertCategory.NUNDO -> "0%"
@@ -576,15 +576,21 @@ internal fun OpenStreetMapView(
             }
         }
         currentCoroutineContext().ensureActive()
-        controller.setMarkers(context, markers, alerts)
+        withContext(Dispatchers.Main.immediate) {
+            controller.setMarkers(context, markers, alerts)
+        }
     }
 
     LaunchedEffect(showSpawnRadius, spacialRendEnabled, alerts) {
-        controller.setSpawnRadiusOptions(showSpawnRadius, spacialRendEnabled)
+        withContext(Dispatchers.Main.immediate) {
+            controller.setSpawnRadiusOptions(showSpawnRadius, spacialRendEnabled)
+        }
     }
 
     LaunchedEffect(userPose) {
-        controller.setUserPose(userPose)
+        withContext(Dispatchers.Main.immediate) {
+            controller.setUserPose(userPose)
+        }
     }
 }
 

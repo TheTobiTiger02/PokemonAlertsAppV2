@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
@@ -299,8 +300,9 @@ internal fun WidgetConfigScreen(
                     modifier = Modifier.weight(1f)
                 )
                 Text(
-                    text = stringResource(
-                        R.string.widget_config_selected_count,
+                    text = pluralStringResource(
+                        R.plurals.widget_config_selected_count,
+                        selectedCount,
                         selectedCount,
                         ALL_FILTER_TYPES.size
                     ),

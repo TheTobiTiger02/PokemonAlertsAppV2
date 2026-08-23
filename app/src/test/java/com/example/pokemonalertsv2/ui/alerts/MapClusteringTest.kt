@@ -114,16 +114,18 @@ class MapClusteringTest {
 
     @Test
     fun expansionStateClearsOnlyAfterZoomingOutAndDropsInactiveMembers() {
+        val original = listOf("expired", "active")
         assertFalse(shouldClearExpandedMapCluster(15.0, 15.0))
         assertFalse(shouldClearExpandedMapCluster(15.0, 16.0))
         assertTrue(shouldClearExpandedMapCluster(15.0, 14.8))
         assertEquals(
             listOf("active"),
             retainActiveExpandedAlertIds(
-                expandedAlertIds = listOf("expired", "active"),
+                expandedAlertIds = original,
                 activeAlertIds = setOf("active", "other")
             )
         )
+        assertEquals(listOf("expired", "active"), original)
     }
 
     @Test

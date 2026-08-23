@@ -23,9 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import okhttp3.OkHttpClient
-import org.maplibre.android.MapLibre
-import org.maplibre.android.module.http.HttpRequestUtil
+import kotlinx.coroutines.withContext
 
 class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoaderFactory,
     DefaultLifecycleObserver {
@@ -34,24 +32,6 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onCreate() {
         super<Application>.onCreate()
-        runCatching {
-            MapLibre.getInstance(this)
-            HttpRequestUtil.setOkHttpClient(
-                OkHttpClient.Builder()
-                    .addInterceptor { chain ->
-                        val identifiedRequest = chain.request().newBuilder()
-                            .header(
-                                "User-Agent",
-                                "PokemonAlertsV2/${BuildConfig.VERSION_NAME} (Android; ${BuildConfig.APPLICATION_ID})"
-                            )
-                            .build()
-                        chain.proceed(identifiedRequest)
-                    }
-                    .build()
-            )
-        }.onFailure { error ->
-            Log.e("PokemonAlertsApp", "OpenStreetMap initialization failed", error)
-        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         try {
             AlertNotifier.ensureChannel(this)
@@ -66,7 +46,9 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         if (PendingInstallStore.hasPending(this)) return
         ArrivalTrackingService.resumeIfActive(this)
         applicationScope.launch {
-            GoDexRepository.getInstance(this@PokemonAlertsApplication).refreshIfStale()
+            withContext(Dispatchers.IO) {
+                GoDexRepository.getInstance(this@PokemonAlertsApplication).refreshIfStale()
+            }
             InAppUpdateManager.checkForUpdates(UpdateCheckSource.AUTOMATIC)
         }
     }

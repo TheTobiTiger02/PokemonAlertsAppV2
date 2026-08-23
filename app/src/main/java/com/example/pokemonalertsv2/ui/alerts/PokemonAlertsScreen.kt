@@ -70,7 +70,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedAssistChip
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -128,6 +127,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -141,6 +141,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
@@ -188,7 +190,6 @@ fun PokemonAlertsRoute(
             if (showTopBar) {
                 AlertsToolbar(
                     onRefresh = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.refreshAlerts()
                     },
                     refreshing = alertsUiState.isLoading,
@@ -306,13 +307,7 @@ fun AlertHistoryRoute(
                         )
                     },
                     actions = {
-                        FilledIconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onRefresh()
-                            },
-                            shape = CircleShape
-                        ) {
+                        IconButton(onClick = onRefresh) {
                             AnimatedRefreshIcon(
                                 refreshing = uiState.isLoading,
                                 contentDescription = stringResource(id = R.string.refresh_alerts)
@@ -416,6 +411,7 @@ fun PokemonAlertsPage(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
     val haptic = LocalHapticFeedback.current
+    val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
 
     suspend fun refreshUserLocation() {
         val permissionGranted = hasForegroundLocationPermission(context)
@@ -434,14 +430,9 @@ fun PokemonAlertsPage(
         locationLookupComplete = true
     }
 
-    // Expiration filtering only needs a coarse tick; visible countdown rows update themselves.
-    var filterNow by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(30_000)
-            filterNow = System.currentTimeMillis()
-        }
-    }
+    // Expiration filtering only needs a coarse lifecycle-aware tick; visible countdown rows
+    // subscribe to their own clock so unrelated screen content stays stable.
+    val filterNow = rememberCountdownClock(30_000L).value
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -627,7 +618,6 @@ fun PokemonAlertsPage(
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onRefresh()
         },
         modifier = Modifier.fillMaxSize(),
@@ -654,6 +644,7 @@ fun PokemonAlertsPage(
                 )
             FeedContentState.CONTENT -> AlertsList(
                 filteredAlerts = filteredAlerts,
+                goDexMatches = goDexMatches,
                 selectedFilter = selectedFilter,
                 sortPreference = sortPreference,
                 showDismissed = showDismissed,
@@ -670,10 +661,7 @@ fun PokemonAlertsPage(
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     showDismissed = it
                 },
-                onAlertSelected = { 
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onAlertSelected(it) 
-                },
+                onAlertSelected = onAlertSelected,
                 onPipClick = { alert -> openAlertInPictureInPicture(context, alert) },
                 onOpenMaps = { alert -> openMapForAlert(context, alert) },
                 onShareClick = onShareClick,
@@ -778,6 +766,7 @@ private fun SyncStatusBanner(
 @Composable
 private fun AlertsList(
     filteredAlerts: List<AlertUiModel>,
+    goDexMatches: Map<String, GoDexMatchResult>,
     selectedFilter: AlertFilter,
     sortPreference: SortPreference,
     showDismissed: Boolean,
@@ -807,7 +796,7 @@ private fun AlertsList(
     onClearAllFilters: () -> Unit = {}
 ) {
     val arrivalTracking = rememberArrivalTrackingUiController()
-    val countdownNow = rememberCountdownNow()
+    val countdownClock = rememberCountdownClock()
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     val activeFilterCount = listOf(
@@ -818,7 +807,29 @@ private fun AlertsList(
         maxDistance > 0
     ).count { it }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        AlertListControls(
+            visibleCount = filteredAlerts.size,
+            activeFilterCount = activeFilterCount,
+            searchExpanded = searchExpanded,
+            onSearchExpandedChange = { searchExpanded = it },
+            searchQuery = searchQuery,
+            onSearchQueryChanged = onSearchQueryChanged,
+            sortPreference = sortPreference,
+            onSortChanged = onSortChanged,
+            onOpenFilters = { showFilterSheet = true },
+            locationPrecisionInsufficient = locationPrecisionInsufficient,
+            onRequestLocationPermission = onRequestLocationPermission,
+            selectedFilter = selectedFilter,
+            onFilterChanged = onFilterChanged,
+            showDismissed = showDismissed,
+            onShowDismissedChanged = onShowDismissedChanged,
+            selectedArea = selectedArea,
+            onClearAreaFilter = onClearAreaFilter,
+            maxDistance = maxDistance,
+            onClearDistanceFilter = onClearDistanceFilter
+        )
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -827,175 +838,6 @@ private fun AlertsList(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item(key = "filters", span = { GridItemSpan(maxLineSpan) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AnimatedContent(
-                        targetState = filteredAlerts.size,
-                        transitionSpec = { appFadeThrough() },
-                        label = "active_alert_count"
-                    ) { count ->
-                        Text(
-                            text = if (count == 1) "1 active alert" else "$count active alerts",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                            Icon(
-                                imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                                contentDescription = if (searchExpanded) "Close search" else "Search alerts"
-                            )
-                        }
-                        SortingButton(
-                            currentSort = sortPreference,
-                            onSortChanged = onSortChanged
-                        )
-                        Box {
-                            IconButton(onClick = { showFilterSheet = true }) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_filter),
-                                    contentDescription = "Filter alerts"
-                                )
-                            }
-                            AnimatedContent(
-                                targetState = activeFilterCount,
-                                transitionSpec = { appFadeThrough() },
-                                modifier = Modifier.align(Alignment.TopEnd),
-                                label = "active_filter_count"
-                            ) { count ->
-                                if (count > 0) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ) {
-                                        Text(
-                                            text = count.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                AnimatedVisibility(
-                    visible = searchExpanded,
-                    enter = appExpandIn(),
-                    exit = appCollapseOut()
-                ) {
-                    AlertSearchBar(
-                        query = searchQuery,
-                        onQueryChanged = onSearchQueryChanged,
-                        placeholder = stringResource(R.string.alerts_search_hint)
-                    )
-                }
-                AnimatedVisibility(
-                    visible = locationPrecisionInsufficient,
-                    enter = appExpandIn(),
-                    exit = appCollapseOut()
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Location is approximate. Enable Precise location for walking routes.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(onClick = onRequestLocationPermission) {
-                            Text("Improve")
-                        }
-                    }
-                }
-                AnimatedVisibility(
-                    visible = activeFilterCount > 0,
-                    enter = appExpandIn(),
-                    exit = appCollapseOut()
-                ) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (selectedFilter != AlertFilter.ALL) {
-                            item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { onFilterChanged(AlertFilter.ALL) },
-                                    label = { Text(selectedFilter.label) },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, contentDescription = "Clear type filter", modifier = Modifier.size(16.dp))
-                                    }
-                                )
-                            }
-                        }
-                        if (showDismissed) {
-                            item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { onShowDismissedChanged(false) },
-                                    label = { Text("Dismissed") },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, contentDescription = "Remove dismissed filter", modifier = Modifier.size(16.dp))
-                                    }
-                                )
-                            }
-                        }
-                        if (selectedArea != "All") {
-                            item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = onClearAreaFilter,
-                                    label = { Text(selectedArea) },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, contentDescription = "Clear area filter", modifier = Modifier.size(16.dp))
-                                    }
-                                )
-                            }
-                        }
-                        if (maxDistance > 0) {
-                            item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = onClearDistanceFilter,
-                                    label = { Text("Within $maxDistance km") },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, contentDescription = "Clear distance filter", modifier = Modifier.size(16.dp))
-                                    }
-                                )
-                            }
-                        }
-                        if (searchQuery.isNotBlank()) {
-                            item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = {
-                                        onSearchQueryChanged("")
-                                        searchExpanded = false
-                                    },
-                                    label = { Text("\u201c$searchQuery\u201d") },
-                                    trailingIcon = {
-                                        Icon(Icons.Filled.Close, contentDescription = "Clear search", modifier = Modifier.size(16.dp))
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            }
-
             if (filteredAlerts.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
@@ -1131,7 +973,9 @@ private fun AlertsList(
                     AlertCard(
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
-                        nowMillis = countdownNow,
+                        goDexStatus = goDexMatches[model.alert.uniqueId]
+                            ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
+                        countdownClock = countdownClock,
                         onOpenMaps = { onOpenMaps(model.alert) },
                         onShowDetails = { onAlertSelected(model.alert) },
                         onSecondaryAction = { action ->
@@ -1168,6 +1012,7 @@ private fun AlertsList(
             }
         }
     }
+    }
 
     if (showFilterSheet) {
         ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
@@ -1203,6 +1048,357 @@ private fun AlertsList(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Done")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlertListControls(
+    visibleCount: Int,
+    activeFilterCount: Int,
+    searchExpanded: Boolean,
+    onSearchExpandedChange: (Boolean) -> Unit,
+    searchQuery: String,
+    onSearchQueryChanged: (String) -> Unit,
+    sortPreference: SortPreference,
+    onSortChanged: (SortPreference) -> Unit,
+    onOpenFilters: () -> Unit,
+    locationPrecisionInsufficient: Boolean,
+    onRequestLocationPermission: () -> Unit,
+    selectedFilter: AlertFilter,
+    onFilterChanged: (AlertFilter) -> Unit,
+    showDismissed: Boolean,
+    onShowDismissedChanged: (Boolean) -> Unit,
+    selectedArea: String,
+    onClearAreaFilter: () -> Unit,
+    maxDistance: Int,
+    onClearDistanceFilter: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedContent(
+                    targetState = visibleCount,
+                    transitionSpec = { appFadeThrough() },
+                    label = "active_alert_count"
+                ) { count ->
+                    Text(
+                        text = pluralStringResource(R.plurals.alerts_active_count, count, count),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
+                        Icon(
+                            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                            contentDescription = if (searchExpanded) "Close search" else "Search alerts"
+                        )
+                    }
+                    SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
+                    Box {
+                        IconButton(onClick = onOpenFilters) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_filter),
+                                contentDescription = "Filter alerts"
+                            )
+                        }
+                        AnimatedContent(
+                            targetState = activeFilterCount,
+                            transitionSpec = { appFadeThrough() },
+                            modifier = Modifier.align(Alignment.TopEnd),
+                            label = "active_filter_count"
+                        ) { count ->
+                            if (count > 0) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    contentColor = MaterialTheme.colorScheme.onPrimary
+                                ) {
+                                    Text(
+                                        text = count.toString(),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            AnimatedVisibility(
+                visible = searchExpanded,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
+                AlertSearchBar(
+                    query = searchQuery,
+                    onQueryChanged = onSearchQueryChanged,
+                    placeholder = stringResource(R.string.alerts_search_hint)
+                )
+            }
+            AnimatedVisibility(
+                visible = locationPrecisionInsufficient,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Location is approximate. Enable Precise location for walking routes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = onRequestLocationPermission) { Text("Improve") }
+                }
+            }
+            AnimatedVisibility(
+                visible = activeFilterCount > 0,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selectedFilter != AlertFilter.ALL) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = { onFilterChanged(AlertFilter.ALL) },
+                                label = { Text(selectedFilter.label) },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear type filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    if (showDismissed) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = { onShowDismissedChanged(false) },
+                                label = { Text("Dismissed") },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Remove dismissed filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    if (selectedArea != "All") {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = onClearAreaFilter,
+                                label = { Text(selectedArea) },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear area filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    if (maxDistance > 0) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = onClearDistanceFilter,
+                                label = { Text("Within $maxDistance km") },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear distance filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    if (searchQuery.isNotBlank()) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = {
+                                    onSearchQueryChanged("")
+                                    onSearchExpandedChange(false)
+                                },
+                                label = { Text("“$searchQuery”") },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear search", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryListControls(
+    visibleCount: Int,
+    activeFilterCount: Int,
+    searchExpanded: Boolean,
+    onSearchExpandedChange: (Boolean) -> Unit,
+    searchQuery: String,
+    onSearchChanged: (String) -> Unit,
+    sortPreference: SortPreference,
+    onSortChanged: (SortPreference) -> Unit,
+    onOpenFilters: () -> Unit,
+    selectedTypeFilter: AlertFilter,
+    onClearTypeFilter: () -> Unit,
+    selectedAreaFilter: HistoryAreaFilter,
+    onClearAreaFilter: () -> Unit,
+    selectedDateLabel: String?,
+    onOpenDateFilter: () -> Unit,
+    onClearDateFilter: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedContent(
+                    targetState = visibleCount,
+                    transitionSpec = { appFadeThrough() },
+                    label = "history_loaded_count"
+                ) { count ->
+                    Text(
+                        text = pluralStringResource(R.plurals.history_loaded_count, count, count),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
+                        Icon(
+                            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
+                            contentDescription = if (searchExpanded) {
+                                "Close history search"
+                            } else {
+                                "Search history"
+                            }
+                        )
+                    }
+                    SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
+                    Box {
+                        IconButton(onClick = onOpenFilters) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_filter),
+                                contentDescription = "Filter history"
+                            )
+                        }
+                        if (activeFilterCount > 0) {
+                            Surface(
+                                modifier = Modifier.align(Alignment.TopEnd),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            ) {
+                                Text(
+                                    text = activeFilterCount.toString(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            AnimatedVisibility(
+                visible = searchExpanded,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
+                AlertSearchBar(
+                    query = searchQuery,
+                    onQueryChanged = onSearchChanged,
+                    placeholder = "Search history…"
+                )
+            }
+            AnimatedVisibility(
+                visible = activeFilterCount > 0,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (selectedTypeFilter != AlertFilter.ALL) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = onClearTypeFilter,
+                                label = { Text(selectedTypeFilter.label) },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear type filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    if (selectedAreaFilter != HistoryAreaFilter.BOTH) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = onClearAreaFilter,
+                                label = { Text(selectedAreaFilter.label) },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear area filter", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
+                    selectedDateLabel?.let { label ->
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = onOpenDateFilter,
+                                label = { Text(label) },
+                                trailingIcon = {
+                                    IconButton(onClick = onClearDateFilter) {
+                                        Icon(Icons.Filled.Close, "Clear date", Modifier.size(16.dp))
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    if (searchQuery.isNotBlank()) {
+                        item {
+                            FilterChip(
+                                selected = true,
+                                onClick = {
+                                    onSearchChanged("")
+                                    onSearchExpandedChange(false)
+                                },
+                                label = { Text("“$searchQuery”") },
+                                trailingIcon = {
+                                    Icon(Icons.Filled.Close, "Clear history search", Modifier.size(16.dp))
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1491,7 +1687,7 @@ private fun AlertsToolbar(
             )
         },
         actions = {
-            FilledIconButton(onClick = onRefresh, shape = CircleShape) {
+            IconButton(onClick = onRefresh) {
                 AnimatedRefreshIcon(
                     refreshing = refreshing,
                     contentDescription = stringResource(id = R.string.refresh_alerts)
@@ -1861,14 +2057,39 @@ private fun AlertHistoryPage(
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onRefresh()
         },
         modifier = Modifier.fillMaxSize(),
         state = rememberPullToRefreshState()
     ) {
-        val countdownNow = rememberCountdownNow()
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val countdownClock = rememberCountdownClock()
+        val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
+        Column(modifier = Modifier.fillMaxSize()) {
+            HistoryListControls(
+                visibleCount = filteredAlerts.size,
+                activeFilterCount = activeHistoryFilterCount,
+                searchExpanded = searchExpanded,
+                onSearchExpandedChange = { searchExpanded = it },
+                searchQuery = uiState.searchQuery,
+                onSearchChanged = onSearchChanged,
+                sortPreference = sortPreference,
+                onSortChanged = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    sortPreference = it
+                },
+                onOpenFilters = { showHistoryFilterSheet = true },
+                selectedTypeFilter = selectedTypeFilter,
+                onClearTypeFilter = { applyHistoryTypeFilter(AlertFilter.ALL) },
+                selectedAreaFilter = selectedAreaFilter,
+                onClearAreaFilter = { selectedAreaFilter = HistoryAreaFilter.BOTH },
+                selectedDateLabel = selectedDateLabel,
+                onOpenDateFilter = { showHistoryFilterSheet = true },
+                onClearDateFilter = {
+                    selectedDateMillis = null
+                    onDateChanged(null)
+                }
+            )
+            BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val columns = if (maxWidth >= 840.dp) 2 else 1
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
@@ -1878,9 +2099,8 @@ private fun AlertHistoryPage(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    uiState.errorMessage?.let { message ->
+            uiState.errorMessage?.let { message ->
+                item(span = { GridItemSpan(maxLineSpan) }) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer,
@@ -1898,137 +2118,6 @@ private fun AlertHistoryPage(
                                 TextButton(onClick = onRefresh) { Text("Retry") }
                             }
                         }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${filteredAlerts.size} loaded",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = { searchExpanded = !searchExpanded }) {
-                                Icon(
-                                    imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                                    contentDescription = if (searchExpanded) "Close history search" else "Search history"
-                                )
-                            }
-                            SortingButton(
-                                currentSort = sortPreference,
-                                onSortChanged = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                    sortPreference = it
-                                }
-                            )
-                            Box {
-                                IconButton(onClick = { showHistoryFilterSheet = true }) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_filter),
-                                        contentDescription = "Filter history"
-                                    )
-                                }
-                                if (activeHistoryFilterCount > 0) {
-                                    Surface(
-                                        modifier = Modifier.align(Alignment.TopEnd),
-                                        shape = CircleShape,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    ) {
-                                        Text(
-                                            text = activeHistoryFilterCount.toString(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    AnimatedVisibility(
-                        visible = searchExpanded,
-                        enter = appExpandIn(),
-                        exit = appCollapseOut()
-                    ) {
-                        AlertSearchBar(
-                            query = uiState.searchQuery,
-                            onQueryChanged = onSearchChanged,
-                            placeholder = "Search history\u2026"
-                        )
-                    }
-                    if (activeHistoryFilterCount > 0) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (selectedTypeFilter != AlertFilter.ALL) item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { applyHistoryTypeFilter(AlertFilter.ALL) },
-                                    label = { Text(selectedTypeFilter.label) },
-                                    trailingIcon = {
-                                        Icon(
-                                            Icons.Filled.Close,
-                                            contentDescription = "Clear type filter",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                )
-                            }
-                            if (selectedAreaFilter != HistoryAreaFilter.BOTH) item {
-                                FilterChip(
-                                    selected = true,
-                                    onClick = { selectedAreaFilter = HistoryAreaFilter.BOTH },
-                                    label = { Text(selectedAreaFilter.label) },
-                                    trailingIcon = {
-                                        Icon(
-                                            Icons.Filled.Close,
-                                            contentDescription = "Clear area filter",
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                )
-                            }
-                            selectedDateLabel?.let { label ->
-                                item {
-                                    FilterChip(
-                                        selected = true,
-                                        onClick = { showHistoryFilterSheet = true },
-                                        label = { Text(label) },
-                                        trailingIcon = {
-                                            IconButton(onClick = {
-                                                selectedDateMillis = null
-                                                onDateChanged(null)
-                                            }) {
-                                                Icon(Icons.Filled.Close, contentDescription = "Clear date", modifier = Modifier.size(16.dp))
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-                            if (uiState.searchQuery.isNotBlank()) {
-                                item {
-                                    FilterChip(
-                                        selected = true,
-                                        onClick = {
-                                            onSearchChanged("")
-                                            searchExpanded = false
-                                        },
-                                        label = { Text("\u201c${uiState.searchQuery}\u201d") },
-                                        trailingIcon = {
-                                            Icon(
-                                                Icons.Filled.Close,
-                                                contentDescription = "Clear history search",
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
                 }
             }
             
@@ -2166,12 +2255,13 @@ private fun AlertHistoryPage(
                     AlertCard(
                         alert = alert,
                         distanceInfo = AlertDistanceInfo(null, null, null),
-                        nowMillis = countdownNow,
+                        goDexStatus = goDexMatches[alert.uniqueId]
+                            ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
+                        countdownClock = countdownClock,
                         cardContext = AlertCardContext.HISTORY,
                         modifier = Modifier.animateItem(),
                         onOpenMaps = { openMapForAlert(context, alert) },
                         onShowDetails = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onAlertClick(alert)
                         },
                         onSecondaryAction = { action ->
@@ -2218,6 +2308,7 @@ private fun AlertHistoryPage(
             }
             }
         }
+    }
     }
 
     if (showHistoryFilterSheet) {

@@ -1,10 +1,13 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.settings.SwitchSetting
@@ -30,7 +33,7 @@ class Material3ComposeTest {
                     onOpenMaps = {},
                     onShowDetails = {},
                     onSecondaryAction = {},
-                    nowMillis = 0L
+                    countdownClock = remember { mutableStateOf(0L) }
                 )
             }
         }
@@ -39,12 +42,14 @@ class Material3ComposeTest {
         composeRule.onNodeWithText("CP 1234").assertExists()
         composeRule.onNodeWithText("Hundo").assertExists()
         composeRule.onNodeWithText("420 m").assertExists()
+        composeRule.onNodeWithContentDescription("More alert actions")
+            .assertHasClickAction()
+            .performClick()
         composeRule.onNodeWithText("Snooze").assertHasClickAction()
         composeRule.onNodeWithText("Share").assertHasClickAction()
         composeRule
-            .onNodeWithContentDescription("Open alert in picture-in-picture")
+            .onNodeWithText("Open in picture-in-picture")
             .assertHasClickAction()
-        composeRule.onNodeWithText("More").assertDoesNotExist()
         composeRule
             .onNodeWithContentDescription(composeRule.activity.getString(R.string.open_in_maps))
             .assertHasClickAction()
