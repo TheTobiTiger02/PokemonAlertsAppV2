@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +20,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -38,6 +41,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.motion.appRiseIn
+import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
+import com.example.pokemonalertsv2.ui.motion.appSinkOut
 
 @Composable
 fun OnboardingScreen(
@@ -62,18 +69,51 @@ fun OnboardingScreen(
                 modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Text("Step ${step + 1} of 4", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                when (step) {
-                    0 -> SetupIntro()
-                    1 -> AreaSetup(area, distance, { area = it }, { distance = it })
-                    2 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
-                    else -> PermissionSetup()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "QUICK SETUP",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "${step + 1} / 4",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { (step + 1) / 4f },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                AnimatedContent(
+                    targetState = step,
+                    transitionSpec = { appSharedAxisX(forward = targetState > initialState) },
+                    label = "onboarding_step"
+                ) { currentStep ->
+                    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                        when (currentStep) {
+                            0 -> SetupIntro()
+                            1 -> AreaSetup(area, distance, { area = it }, { distance = it })
+                            2 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
+                            else -> PermissionSetup()
+                        }
+                    }
                 }
             }
             Column {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (step > 0) {
-                        OutlinedButton(onClick = { step-- }, modifier = Modifier.weight(1f)) { Text("Back") }
+                    AnimatedVisibility(
+                        visible = step > 0,
+                        enter = appRiseIn(),
+                        exit = appSinkOut(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        OutlinedButton(onClick = { step-- }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
                     }
                     Button(
                         onClick = {
@@ -85,9 +125,21 @@ fun OnboardingScreen(
                             }
                         },
                         modifier = Modifier.weight(1f)
-                    ) { Text(if (step == 3) "Enable & finish" else "Continue") }
+                    ) {
+                        AnimatedContent(
+                            targetState = step == 3,
+                            transitionSpec = { appFadeThrough() },
+                            label = "onboarding_primary_action"
+                        ) { finishing ->
+                            Text(if (finishing) "Enable & finish" else "Continue")
+                        }
+                    }
                 }
-                if (step == 3) {
+                AnimatedVisibility(
+                    visible = step == 3,
+                    enter = appRiseIn(),
+                    exit = appSinkOut()
+                ) {
                     Text(
                         "Android will ask for notification and location access next. You can decline and change these later in Settings.",
                         style = MaterialTheme.typography.bodySmall,

@@ -11,6 +11,7 @@ import android.widget.DatePicker
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -114,6 +115,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -123,6 +126,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -141,8 +145,12 @@ import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
+import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+import com.example.pokemonalertsv2.ui.motion.appCollapseOut
+import com.example.pokemonalertsv2.ui.motion.appExpandIn
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -183,6 +191,7 @@ fun PokemonAlertsRoute(
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.refreshAlerts()
                     },
+                    refreshing = alertsUiState.isLoading,
                     scrollBehavior = scrollBehavior
                 )
             }
@@ -304,8 +313,8 @@ fun AlertHistoryRoute(
                             },
                             shape = CircleShape
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_refresh),
+                            AnimatedRefreshIcon(
+                                refreshing = uiState.isLoading,
                                 contentDescription = stringResource(id = R.string.refresh_alerts)
                             )
                         }
@@ -369,6 +378,8 @@ private enum class HistoryAreaFilter(val label: String, val area: String?) {
         return area == null || alertArea.equals(area, ignoreCase = true)
     }
 }
+
+private enum class FeedContentState { LOADING, EMPTY, CONTENT }
 
 @Composable
 fun PokemonAlertsPage(
@@ -622,15 +633,26 @@ fun PokemonAlertsPage(
         modifier = Modifier.fillMaxSize(),
         state = rememberPullToRefreshState()
     ) {
-        when {
-            uiState.isLoading && uiState.alerts.isEmpty() -> LoadingState()
-            uiState.alerts.isEmpty() && !uiState.isLoading -> AnimatedEmptyState(
+        val contentState = when {
+            uiState.isLoading && uiState.alerts.isEmpty() -> FeedContentState.LOADING
+            uiState.alerts.isEmpty() -> FeedContentState.EMPTY
+            else -> FeedContentState.CONTENT
+        }
+        AnimatedContent(
+            targetState = contentState,
+            transitionSpec = { appFadeThrough() },
+            contentKey = { it.name },
+            label = "live_feed_state"
+        ) { state ->
+        when (state) {
+            FeedContentState.LOADING -> LoadingState()
+            FeedContentState.EMPTY -> AnimatedEmptyState(
                     title = "All caught up",
                     message = "No active alerts right now. Tap below to check again.",
                     ctaText = "Refresh feed",
                     onAction = onRefresh
                 )
-            else -> AlertsList(
+            FeedContentState.CONTENT -> AlertsList(
                 filteredAlerts = filteredAlerts,
                 selectedFilter = selectedFilter,
                 sortPreference = sortPreference,
@@ -702,6 +724,7 @@ fun PokemonAlertsPage(
                 }
             )
         }
+        }
     }
     }
 
@@ -723,21 +746,30 @@ private fun SyncStatusBanner(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val message = status.alertsStatusMessage() ?: return
+    val message = status.alertsStatusMessage()
     val isProblem = status is SyncStatus.Cached || status is SyncStatus.Failed
-    Surface(
+    AnimatedContent(
+        targetState = message to isProblem,
+        transitionSpec = { appFadeThrough() },
         modifier = modifier.fillMaxWidth(),
-        color = if (isProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = if (isProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(message, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-            if (status is SyncStatus.Cached || status is SyncStatus.Failed) {
-                TextButton(onClick = onRetry) { Text("Retry") }
+        label = "alerts_sync_status"
+    ) { (animatedMessage, animatedProblem) ->
+        if (animatedMessage != null) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = if (animatedProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = if (animatedProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(animatedMessage, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    if (animatedProblem) {
+                        TextButton(onClick = onRetry) { Text("Retry") }
+                    }
+                }
             }
         }
     }
@@ -802,12 +834,18 @@ private fun AlertsList(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${filteredAlerts.size} active alerts",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    AnimatedContent(
+                        targetState = filteredAlerts.size,
+                        transitionSpec = { appFadeThrough() },
+                        label = "active_alert_count"
+                    ) { count ->
+                        Text(
+                            text = if (count == 1) "1 active alert" else "$count active alerts",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
@@ -829,31 +867,45 @@ private fun AlertsList(
                                     contentDescription = "Filter alerts"
                                 )
                             }
-                            if (activeFilterCount > 0) {
-                                Surface(
-                                    modifier = Modifier.align(Alignment.TopEnd),
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ) {
-                                    Text(
-                                        text = activeFilterCount.toString(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                    )
+                            AnimatedContent(
+                                targetState = activeFilterCount,
+                                transitionSpec = { appFadeThrough() },
+                                modifier = Modifier.align(Alignment.TopEnd),
+                                label = "active_filter_count"
+                            ) { count ->
+                                if (count > 0) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ) {
+                                        Text(
+                                            text = count.toString(),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                AnimatedVisibility(visible = searchExpanded) {
+                AnimatedVisibility(
+                    visible = searchExpanded,
+                    enter = appExpandIn(),
+                    exit = appCollapseOut()
+                ) {
                     AlertSearchBar(
                         query = searchQuery,
                         onQueryChanged = onSearchQueryChanged,
                         placeholder = stringResource(R.string.alerts_search_hint)
                     )
                 }
-                if (locationPrecisionInsufficient) {
+                AnimatedVisibility(
+                    visible = locationPrecisionInsufficient,
+                    enter = appExpandIn(),
+                    exit = appCollapseOut()
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -870,7 +922,11 @@ private fun AlertsList(
                         }
                     }
                 }
-                if (activeFilterCount > 0) {
+                AnimatedVisibility(
+                    visible = activeFilterCount > 0,
+                    enter = appExpandIn(),
+                    exit = appCollapseOut()
+                ) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (selectedFilter != AlertFilter.ALL) {
                             item {
@@ -943,7 +999,10 @@ private fun AlertsList(
             if (filteredAlerts.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
+                        modifier = Modifier
+                            .animateItem()
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -1174,10 +1233,18 @@ private fun AlertSearchBar(
     placeholder: String,
     modifier: Modifier = Modifier
 ) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChanged,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester),
         placeholder = {
             Text(
                 text = placeholder,
@@ -1192,13 +1259,19 @@ private fun AlertSearchBar(
             )
         },
         trailingIcon = {
-            if (query.isNotEmpty()) {
-                androidx.compose.material3.IconButton(onClick = { onQueryChanged("") }) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = "Clear search",
-                        modifier = Modifier.size(20.dp)
-                    )
+            AnimatedContent(
+                targetState = query.isNotEmpty(),
+                transitionSpec = { appFadeThrough() },
+                label = "search_clear_action"
+            ) { showClear ->
+                if (showClear) {
+                    androidx.compose.material3.IconButton(onClick = { onQueryChanged("") }) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = "Clear search",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         },
@@ -1323,7 +1396,11 @@ private fun FilterRow(
             }
         }
 
-        AnimatedVisibility(visible = locationLookupComplete && !locationAvailable) {
+        AnimatedVisibility(
+            visible = locationLookupComplete && !locationAvailable,
+            enter = appExpandIn(),
+            exit = appCollapseOut()
+        ) {
             TextButton(onClick = onRequestLocationPermission) {
                 Text(
                     text = stringResource(
@@ -1401,6 +1478,7 @@ private fun HistoryAreaFilterRow(
 @Composable
 private fun AlertsToolbar(
     onRefresh: () -> Unit,
+    refreshing: Boolean,
     scrollBehavior: TopAppBarScrollBehavior
 ) {
     TopAppBar(
@@ -1414,8 +1492,8 @@ private fun AlertsToolbar(
         },
         actions = {
             FilledIconButton(onClick = onRefresh, shape = CircleShape) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_refresh),
+                AnimatedRefreshIcon(
+                    refreshing = refreshing,
                     contentDescription = stringResource(id = R.string.refresh_alerts)
                 )
             }
@@ -1872,7 +1950,11 @@ private fun AlertHistoryPage(
                             }
                         }
                     }
-                    AnimatedVisibility(visible = searchExpanded) {
+                    AnimatedVisibility(
+                        visible = searchExpanded,
+                        enter = appExpandIn(),
+                        exit = appCollapseOut()
+                    ) {
                         AlertSearchBar(
                             query = uiState.searchQuery,
                             onQueryChanged = onSearchChanged,
@@ -2003,7 +2085,11 @@ private fun AlertHistoryPage(
                             )
                         }
                         
-                        AnimatedVisibility(visible = isExpanded) {
+                        AnimatedVisibility(
+                            visible = isExpanded,
+                            enter = appExpandIn(),
+                            exit = appCollapseOut()
+                        ) {
                             Column(
                                 modifier = Modifier.padding(top = 10.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2050,7 +2136,8 @@ private fun AlertHistoryPage(
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     AnimatedEmptyState(
                         title = "No history found",
-                        message = "No alerts match your search or filters. Try changing the search, area, date, or type."
+                        message = "No alerts match your search or filters. Try changing the search, area, date, or type.",
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -2069,7 +2156,9 @@ private fun AlertHistoryPage(
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = if (index == 0) 0.dp else 4.dp)
+                            modifier = Modifier
+                                .animateItem()
+                                .padding(top = if (index == 0) 0.dp else 4.dp)
                         )
                     }
                 }
@@ -2079,6 +2168,7 @@ private fun AlertHistoryPage(
                         distanceInfo = AlertDistanceInfo(null, null, null),
                         nowMillis = countdownNow,
                         cardContext = AlertCardContext.HISTORY,
+                        modifier = Modifier.animateItem(),
                         onOpenMaps = { openMapForAlert(context, alert) },
                         onShowDetails = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)

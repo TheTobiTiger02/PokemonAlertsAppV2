@@ -96,6 +96,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexSessionState
 import com.example.pokemonalertsv2.data.godex.GoDexSyncUiState
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -113,6 +114,10 @@ import com.example.pokemonalertsv2.util.UpdateState
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.NotificationCategoryState
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
+import com.example.pokemonalertsv2.ui.motion.appCollapseOut
+import com.example.pokemonalertsv2.ui.motion.appExpandIn
 
 internal enum class SettingsDestination(val title: String) {
     OVERVIEW("Settings"),
@@ -252,14 +257,28 @@ fun SettingsScreen(
             topBar = {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
-                    title = { Text(destination.title, fontWeight = FontWeight.Bold) },
+                    title = {
+                        AnimatedContent(
+                            targetState = destination.title,
+                            transitionSpec = { appFadeThrough() },
+                            label = "settings_title"
+                        ) { title ->
+                            Text(title, fontWeight = FontWeight.Bold)
+                        }
+                    },
                     navigationIcon = {
-                        if (destination != SettingsDestination.OVERVIEW) {
-                            FilledIconButton(
-                                onClick = { navigateTo(parentDestination) },
-                                shape = CircleShape
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        AnimatedContent(
+                            targetState = destination != SettingsDestination.OVERVIEW,
+                            transitionSpec = { appFadeThrough() },
+                            label = "settings_back"
+                        ) { showBack ->
+                            if (showBack) {
+                                FilledIconButton(
+                                    onClick = { navigateTo(parentDestination) },
+                                    shape = CircleShape
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                }
                             }
                         }
                     },
@@ -273,7 +292,18 @@ fun SettingsScreen(
                 )
             }
         ) { padding ->
-            if (destination == SettingsDestination.GODEX_COLLECTION) {
+            AnimatedContent(
+                targetState = destination,
+                transitionSpec = {
+                    val movingDeeper = targetState != SettingsDestination.OVERVIEW &&
+                        (initialState == SettingsDestination.OVERVIEW ||
+                            targetState == SettingsDestination.GODEX_COLLECTION)
+                    appSharedAxisX(forward = movingDeeper)
+                },
+                contentKey = { it.name },
+                label = "settings_destination"
+            ) { animatedDestination ->
+            if (animatedDestination == SettingsDestination.GODEX_COLLECTION) {
                 GoDexCollectionContent(
                     entries = goDexEntries,
                     pendingEntryKeys = goDexPendingEntryKeys,
@@ -299,7 +329,7 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                if (destination == SettingsDestination.OVERVIEW) {
+                if (animatedDestination == SettingsDestination.OVERVIEW) {
                     SettingsOverview(
                         themeMode = themeMode,
                         sortPreference = savedSortPreference,
@@ -326,7 +356,7 @@ fun SettingsScreen(
                     )
                 }
 
-                if (destination == SettingsDestination.APPEARANCE_BEHAVIOR) {
+                if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
                 SettingsSection(title = "Display and sorting") {
                     Text(
                         text = "Theme",
@@ -375,7 +405,7 @@ fun SettingsScreen(
                 }
                 }
 
-                if (destination == SettingsDestination.ALERT_FILTERS) {
+                if (animatedDestination == SettingsDestination.ALERT_FILTERS) {
                 SettingsSection(title = "Location filters") {
                     Column {
                         Text(
@@ -500,7 +530,7 @@ fun SettingsScreen(
 
                 }
 
-                if (destination == SettingsDestination.GODEX) {
+                if (animatedDestination == SettingsDestination.GODEX) {
                 SettingsSection(title = "GoDex Hundo checklist") {
                     val totalCount = goDexEntries.size
                     val neededCount = goDexEntries.count { it.needed }
@@ -745,7 +775,7 @@ fun SettingsScreen(
                 }
                 }
                 
-                if (destination == SettingsDestination.NOTIFICATIONS) {
+                if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
                 SettingsSection(title = "Permission status") {
                     PermissionStatusRow(
                         title = "Notifications",
@@ -812,7 +842,12 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.updateNotificationsEnabled(it) }
                     )
                     
-                    if (notificationsEnabled) {
+                    AnimatedVisibility(
+                        visible = notificationsEnabled,
+                        enter = appExpandIn(),
+                        exit = appCollapseOut()
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         SwitchSetting(
                             title = "Raids",
                             subtitle = "Notifications for raid battles",
@@ -894,11 +929,12 @@ fun SettingsScreen(
                             onSilenceFor = { minutes -> viewModel.silenceNotificationsFor(minutes) },
                             onClearSilence = { viewModel.clearNotificationSilence() }
                         )
+                        }
                     }
                 }
                 }
                 
-                if (destination == SettingsDestination.ABOUT_UPDATES) {
+                if (animatedDestination == SettingsDestination.ABOUT_UPDATES) {
                 SettingsSection(title = "App information") {
                     val coroutineScope = rememberCoroutineScope()
                     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
@@ -950,6 +986,7 @@ fun SettingsScreen(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
+            }
             }
             }
         }
@@ -1214,7 +1251,7 @@ private fun SettingsOverview(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                MaterialTheme.colorScheme.surfaceContainer,
                 RoundedCornerShape(28.dp)
             )
     ) {
@@ -1303,9 +1340,20 @@ private fun SettingsOverviewRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             statusBadge?.let { badge ->
+                val problemBadge = badge.equals("Sync issue", ignoreCase = true) ||
+                    badge.contains("needed", ignoreCase = true) ||
+                    badge.contains("off", ignoreCase = true)
                 Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    color = if (problemBadge) {
+                        MaterialTheme.colorScheme.errorContainer
+                    } else {
+                        MaterialTheme.colorScheme.primaryContainer
+                    },
+                    contentColor = if (problemBadge) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    },
                     shape = MaterialTheme.shapes.small
                 ) {
                     Text(
@@ -1381,7 +1429,11 @@ private fun AdvancedNotificationFilters(
                 }
             )
         }
-        AnimatedVisibility(visible = expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = appExpandIn(),
+            exit = appCollapseOut()
+        ) {
             Column(
                 modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -2674,7 +2726,11 @@ private fun TypeFilterSection(
             )
         }
         
-        AnimatedVisibility(visible = expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = appExpandIn(),
+            exit = appCollapseOut()
+        ) {
             FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()

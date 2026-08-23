@@ -7,6 +7,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
@@ -63,6 +66,8 @@ import com.example.pokemonalertsv2.data.database.PokemonSpeciesEntity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import com.example.pokemonalertsv2.ui.motion.AppMotion
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 
 class SpeciesSelectionActivity : ComponentActivity() {
 
@@ -119,9 +124,15 @@ class SpeciesSelectionActivity : ComponentActivity() {
                                 placeholder = { Text("Search Pokémon...") },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                 trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                                    AnimatedContent(
+                                        targetState = searchQuery.isNotEmpty(),
+                                        transitionSpec = { appFadeThrough() },
+                                        label = "species_search_clear"
+                                    ) { showClear ->
+                                        if (showClear) {
+                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                            }
                                         }
                                     }
                                 },
@@ -146,6 +157,7 @@ class SpeciesSelectionActivity : ComponentActivity() {
                                 species = species,
                                 // An empty set means everything is allowed
                                 isSelected = allowedSpecies.isEmpty() || allowedSpecies.contains(species.name.lowercase()),
+                                modifier = Modifier.animateItem(),
                                 onToggle = { viewModel.toggleSpecies(species.name) }
                             )
                         }
@@ -170,14 +182,24 @@ class SpeciesSelectionActivity : ComponentActivity() {
 fun SpeciesCard(
     species: PokemonSpeciesEntity,
     isSelected: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        animationSpec = tween(AppMotion.Standard),
+        label = "species_selection_color"
+    )
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onToggle),
-        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        color = containerColor,
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(

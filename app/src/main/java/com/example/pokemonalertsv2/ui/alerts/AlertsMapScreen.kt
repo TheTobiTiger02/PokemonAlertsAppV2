@@ -14,6 +14,8 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -118,6 +120,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
+import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
+import com.example.pokemonalertsv2.ui.motion.appCollapseOut
+import com.example.pokemonalertsv2.ui.motion.appExpandIn
+import com.example.pokemonalertsv2.ui.motion.appFadeIn
+import com.example.pokemonalertsv2.ui.motion.appFadeOut
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -989,7 +997,11 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        if (mapLoadState != MapLoadState.READY) {
+        AnimatedVisibility(
+            visible = mapLoadState != MapLoadState.READY,
+            enter = appFadeIn(),
+            exit = appFadeOut()
+        ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1010,41 +1022,49 @@ internal fun AlertsMapScreenContent(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (mapLoadState == MapLoadState.LOADING) {
-                            CircularProgressIndicator(
-                                progress = { 0.66f },
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Text(
-                                text = "Loading ${
-                                    if (mapSource == MapDisplaySource.GOOGLE) "Google Maps" else "OpenStreetMap"
-                                }\u2026",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        } else {
-                            Text(
-                                text = "Map couldn\u2019t be loaded",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Check your connection, retry, or use the other map provider.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Button(onClick = ::retryMapLoad) {
-                                Icon(Icons.Filled.Refresh, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Retry")
-                            }
-                            TextButton(onClick = ::toggleMapSource) {
-                                Text(
-                                    if (mapSource == MapDisplaySource.GOOGLE) {
-                                        "Use OpenStreetMap"
-                                    } else {
-                                        "Use Google Maps"
+                        AnimatedContent(
+                            targetState = mapLoadState,
+                            transitionSpec = { appFadeThrough() },
+                            label = "map_load_state"
+                        ) { state ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (state == MapLoadState.LOADING) {
+                                    CircularProgressIndicator(modifier = Modifier.size(36.dp))
+                                    Text(
+                                        text = "Loading ${
+                                            if (mapSource == MapDisplaySource.GOOGLE) "Google Maps" else "OpenStreetMap"
+                                        }\u2026",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Map couldn\u2019t be loaded",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Check your connection, retry, or use the other map provider.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Button(onClick = ::retryMapLoad) {
+                                        Icon(Icons.Filled.Refresh, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Retry")
                                     }
-                                )
+                                    TextButton(onClick = ::toggleMapSource) {
+                                        Text(
+                                            if (mapSource == MapDisplaySource.GOOGLE) {
+                                                "Use OpenStreetMap"
+                                            } else {
+                                                "Use Google Maps"
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -1062,6 +1082,7 @@ internal fun AlertsMapScreenContent(
             MapTopAppBar(
                 visibleAlertCount = filteredAlerts.size,
                 showBackButton = showBackButton,
+                refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
                 activeLayerCount = listOf(
                     mapStyle != MapStylePreference.GOOGLE_STANDARD,
                     showTimeLabels,
@@ -1082,10 +1103,14 @@ internal fun AlertsMapScreenContent(
             MapSyncStatus(status = syncStatus, onRetry = onRefresh)
         }
 
-        if (selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty()) {
+        AnimatedVisibility(
+            visible = selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty(),
+            enter = appExpandIn(),
+            exit = appCollapseOut(),
+            modifier = Modifier.align(Alignment.Center)
+        ) {
             Surface(
                 modifier = Modifier
-                    .align(Alignment.Center)
                     .padding(24.dp),
                 shape = MaterialTheme.shapes.large,
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
@@ -1149,10 +1174,14 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        if (currentMapLoaded && (useSidePanel || selectedAlert == null)) {
+        AnimatedVisibility(
+            visible = currentMapLoaded && (useSidePanel || selectedAlert == null),
+            enter = appFadeIn(),
+            exit = appFadeOut(),
+            modifier = Modifier.align(Alignment.BottomEnd)
+        ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
                     .then(
                         if (showBackButton) {
                             Modifier.windowInsetsPadding(WindowInsets.navigationBars)
@@ -1282,19 +1311,27 @@ internal fun resolveMapLoadState(loaded: Boolean, failed: Boolean): MapLoadState
 
 @Composable
 private fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
-    val text = status.mapStatusMessage() ?: return
+    val text = status.mapStatusMessage()
     val problem = status is SyncStatus.Cached || status is SyncStatus.Failed
-    Surface(
-        color = if (problem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-        contentColor = if (problem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-            if (problem) TextButton(onClick = onRetry) { Text("Retry") }
+    AnimatedContent(
+        targetState = text to problem,
+        transitionSpec = { appFadeThrough() },
+        label = "map_sync_status"
+    ) { (animatedText, animatedProblem) ->
+        if (animatedText != null) {
+            Surface(
+                color = if (animatedProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                contentColor = if (animatedProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(animatedText, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    if (animatedProblem) TextButton(onClick = onRetry) { Text("Retry") }
+                }
+            }
         }
     }
 }
@@ -1303,6 +1340,7 @@ private fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
 private fun MapTopAppBar(
     visibleAlertCount: Int,
     showBackButton: Boolean,
+    refreshing: Boolean,
     activeLayerCount: Int,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -1351,17 +1389,23 @@ private fun MapTopAppBar(
                     shape = MaterialTheme.shapes.small,
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
-                    Text(
-                        text = "$visibleAlertCount",
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    AnimatedContent(
+                        targetState = visibleAlertCount,
+                        transitionSpec = { appFadeThrough() },
+                        label = "map_alert_count"
+                    ) { count ->
+                        Text(
+                            text = "$count",
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             }
             IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
+                AnimatedRefreshIcon(
+                    refreshing = refreshing,
                     contentDescription = stringResource(R.string.refresh_alerts)
                 )
             }
@@ -1373,18 +1417,24 @@ private fun MapTopAppBar(
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
-                if (activeLayerCount > 0) {
-                    Surface(
-                        modifier = Modifier.align(Alignment.TopEnd),
-                        shape = RoundedCornerShape(50),
-                        color = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    ) {
-                        Text(
-                            text = "$activeLayerCount",
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                        )
+                AnimatedContent(
+                    targetState = activeLayerCount,
+                    transitionSpec = { appFadeThrough() },
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    label = "map_layer_count"
+                ) { count ->
+                    if (count > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Text(
+                                text = "$count",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1484,15 +1534,6 @@ internal fun MapFilterRow(
             items(filters.toList(), key = { it.name }) { filter ->
                 val selected = selectedFilter == filter
                 FilterChip(
-                    modifier = Modifier.border(
-                        width = 1.dp,
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.outline
-                        },
-                        shape = RoundedCornerShape(50)
-                    ),
                     selected = selected,
                     onClick = { onFilterSelected(filter) },
                     label = { Text(filter.label, maxLines = 1) },

@@ -1,10 +1,8 @@
 package com.example.pokemonalertsv2.ui.components
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -27,7 +25,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -40,12 +42,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.ui.motion.AppMotion
 
 /**
  * A restrained Material 3 empty state for active alerts and alert history.
  *
- * Decorative motion is deliberately subtle; its title and explanation are visible
- * immediately and announced as a polite state change for assistive technology.
+ * A short entrance helps users notice the state change, then the surface stays still
+ * so empty screens remain calm and immediately readable.
  */
 @Composable
 fun AnimatedEmptyState(
@@ -55,24 +58,17 @@ fun AnimatedEmptyState(
     onAction: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "empty_state")
-    val bounceOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = -6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "icon_bounce"
+    var entered by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { entered = true }
+    val iconOffset by animateDpAsState(
+        targetValue = if (entered) 0.dp else 12.dp,
+        animationSpec = tween(AppMotion.Emphasized, easing = LinearOutSlowInEasing),
+        label = "empty_state_icon_offset"
     )
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 0.96f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1_600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "icon_scale"
+    val iconScale by animateFloatAsState(
+        targetValue = if (entered) 1f else 0.92f,
+        animationSpec = tween(AppMotion.Emphasized, easing = LinearOutSlowInEasing),
+        label = "empty_state_icon_scale"
     )
 
     Column(
@@ -97,7 +93,7 @@ fun AnimatedEmptyState(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(104.dp)
+                        .size(88.dp)
                         .scale(iconScale)
                         .background(
                             color = MaterialTheme.colorScheme.primaryContainer,
@@ -109,8 +105,8 @@ fun AnimatedEmptyState(
                         painter = painterResource(id = R.drawable.ic_placeholder),
                         contentDescription = null,
                         modifier = Modifier
-                            .size(64.dp)
-                            .offset(y = bounceOffset.dp),
+                            .size(54.dp)
+                            .offset(y = iconOffset),
                         tint = Color.Unspecified
                     )
                 }

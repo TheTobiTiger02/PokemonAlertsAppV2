@@ -11,6 +11,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -138,6 +139,9 @@ import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
+import com.example.pokemonalertsv2.ui.motion.appCollapseOut
+import com.example.pokemonalertsv2.ui.motion.appExpandIn
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
 import com.example.pokemonalertsv2.ui.components.GradientText
 import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
@@ -502,10 +506,16 @@ internal fun AlertCard(
                         ) {
                             Icon(Icons.Filled.LocationOn, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                if (isGoing) "Stop" else "I\u2019m going",
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                            AnimatedContent(
+                                targetState = isGoing,
+                                transitionSpec = { appFadeThrough() },
+                                label = "alert_card_going_action"
+                            ) { going ->
+                                Text(
+                                    if (going) "Stop" else "I\u2019m going",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
                         }
                     }
                     FilledTonalButton(
@@ -1492,7 +1502,11 @@ fun AlertDetailScreen(
                     
                     // Location Card
                     LocationCard(alert = alert)
-                    if (isGoing) {
+                    AnimatedVisibility(
+                        visible = isGoing,
+                        enter = appExpandIn(),
+                        exit = appCollapseOut()
+                    ) {
                         AlertPill(
                             text = "Arrival tracking active",
                             icon = Icons.Filled.LocationOn,
@@ -1846,12 +1860,18 @@ private fun AlertDetailActionBar(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isGoing) "Stop" else "I\u2019m going",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1
-                        )
+                        AnimatedContent(
+                            targetState = isGoing,
+                            transitionSpec = { appFadeThrough() },
+                            label = "detail_going_action"
+                        ) { going ->
+                            Text(
+                                text = if (going) "Stop" else "I\u2019m going",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
                 FilledTonalButton(

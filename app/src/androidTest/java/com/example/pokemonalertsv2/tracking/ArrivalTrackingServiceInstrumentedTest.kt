@@ -1,10 +1,12 @@
 package com.example.pokemonalertsv2.tracking
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.location.Location
+import android.os.Build
 import android.os.SystemClock
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -12,8 +14,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.PokemonAlert
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -92,6 +96,49 @@ class ArrivalTrackingServiceInstrumentedTest {
                         .getCharSequence(android.app.Notification.EXTRA_TITLE)
                         ?.contains("in range") == true
             }
+        )
+    }
+
+    @Test
+    fun ongoingNotificationUsesAndroid16LiveProgressContract() {
+        assumeTrue(Build.VERSION.SDK_INT >= 36)
+        assertEquals(
+            android.content.pm.PackageManager.PERMISSION_GRANTED,
+            context.packageManager.checkPermission(
+                "android.permission.POST_PROMOTED_NOTIFICATIONS",
+                context.packageName
+            )
+        )
+        val notification = ArrivalTrackingNotifications.ongoing(
+            context = context,
+            destination = TrackedDestination(
+                alert = PokemonAlert(
+                    name = "Hundo Pikachu",
+                    pokemon = "Pikachu",
+                    type = listOf("Hundo"),
+                    cp = 938,
+                    latitude = 49.86,
+                    longitude = 8.65,
+                    endTime = (System.currentTimeMillis() + 60_000L).toString()
+                ),
+                radiusMeters = 40,
+                startedAtMillis = System.currentTimeMillis()
+            ),
+            distanceMeters = 275f
+        )
+
+        assertEquals("275 m", notification.shortCriticalText)
+        assertTrue(notification.hasPromotableCharacteristics())
+        assertTrue(notification.extras.getBoolean("android.requestPromotedOngoing"))
+        assertTrue(
+            notification.extras
+                .getString(Notification.EXTRA_TEMPLATE)
+                ?.contains("ProgressStyle") == true
+        )
+        assertTrue(
+            notification.extras
+                .getCharSequence(Notification.EXTRA_TITLE)
+                ?.contains("CP 938") == true
         )
     }
 

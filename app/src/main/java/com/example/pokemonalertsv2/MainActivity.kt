@@ -7,12 +7,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import android.view.animation.DecelerateInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
@@ -79,6 +81,8 @@ import com.example.pokemonalertsv2.ui.alerts.AlertsMapRoute
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
@@ -189,7 +193,17 @@ class MainActivity : ComponentActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setOnExitAnimationListener { splashView ->
+            splashView.view.animate()
+                .alpha(0f)
+                .scaleX(1.035f)
+                .scaleY(1.035f)
+                .setDuration(240L)
+                .setInterpolator(DecelerateInterpolator())
+                .withEndAction(splashView::remove)
+                .start()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleNavigationIntent(intent)
@@ -231,32 +245,38 @@ class MainActivity : ComponentActivity() {
                     return@PokemonAlertsV2Theme
                 }
 
-                if (showOnboarding == true) {
-                    com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
-                        initialArea = onboardingArea,
-                        initialMaxDistance = onboardingDistance,
-                        onAreaChanged = settingsViewModel::updateSelectedArea,
-                        onMaxDistanceChanged = settingsViewModel::updateMaxDistance,
-                        onPresetSelected = settingsViewModel::applyNotificationPreset,
-                        onFinish = {
-                            settingsViewModel.completeOnboarding()
-                            showOnboarding = false
-                        }
-                    )
-                } else {
-                    MainScaffold(
-                        alertsViewModel = alertsViewModel,
-                        historyViewModelProvider = { historyViewModel },
-                        settingsViewModel = settingsViewModel,
-                        requestedTab = requestedTab,
-                        onRequestedTabConsumed = { requestedRootTab.value = null },
-                        onManageLocationPermissions = ::restartLocationPermissionFlow,
-                        onOpenUnknownSourcesSettings = {
-                            unknownSourcesSettingsLauncher.launch(
-                                InAppUpdateManager.unknownSourcesSettingsIntent(this@MainActivity)
-                            )
-                        }
-                    )
+                AnimatedContent(
+                    targetState = showOnboarding == true,
+                    transitionSpec = { appSharedAxisX(forward = !targetState) },
+                    label = "onboarding_to_app"
+                ) { onboardingVisible ->
+                    if (onboardingVisible) {
+                        com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen(
+                            initialArea = onboardingArea,
+                            initialMaxDistance = onboardingDistance,
+                            onAreaChanged = settingsViewModel::updateSelectedArea,
+                            onMaxDistanceChanged = settingsViewModel::updateMaxDistance,
+                            onPresetSelected = settingsViewModel::applyNotificationPreset,
+                            onFinish = {
+                                settingsViewModel.completeOnboarding()
+                                showOnboarding = false
+                            }
+                        )
+                    } else {
+                        MainScaffold(
+                            alertsViewModel = alertsViewModel,
+                            historyViewModelProvider = { historyViewModel },
+                            settingsViewModel = settingsViewModel,
+                            requestedTab = requestedTab,
+                            onRequestedTabConsumed = { requestedRootTab.value = null },
+                            onManageLocationPermissions = ::restartLocationPermissionFlow,
+                            onOpenUnknownSourcesSettings = {
+                                unknownSourcesSettingsLauncher.launch(
+                                    InAppUpdateManager.unknownSourcesSettingsIntent(this@MainActivity)
+                                )
+                            }
+                        )
+                    }
                 }
 
                 if (showBackgroundLocationDialog) {
@@ -444,13 +464,20 @@ private fun MainScaffold(
                             selected = selectedTab == index,
                             onClick = { selectedTab = index },
                             icon = {
-                                Icon(
-                                    imageVector = if (selectedTab == index)
-                                        destination.selectedIcon
-                                    else
-                                        destination.unselectedIcon,
-                                    contentDescription = destination.label
-                                )
+                                AnimatedContent(
+                                    targetState = selectedTab == index,
+                                    transitionSpec = { appFadeThrough() },
+                                    label = "${destination.label}_nav_icon"
+                                ) { selected ->
+                                    Icon(
+                                        imageVector = if (selected) {
+                                            destination.selectedIcon
+                                        } else {
+                                            destination.unselectedIcon
+                                        },
+                                        contentDescription = destination.label
+                                    )
+                                }
                             },
                             label = {
                                 Text(
@@ -474,8 +501,14 @@ private fun MainScaffold(
             }
         ) { paddingValues ->
             Box(modifier = Modifier.padding(paddingValues)) {
-                saveableStateHolder.SaveableStateProvider(selectedTab) {
-                    when (selectedTab) {
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = { appSharedAxisX(forward = targetState > initialState) },
+                    contentKey = { it },
+                    label = "root_destination"
+                ) { destinationIndex ->
+                saveableStateHolder.SaveableStateProvider(destinationIndex) {
+                    when (destinationIndex) {
                         0 -> {
                             PokemonAlertsRoute(
                                 viewModel = alertsViewModel,
@@ -499,7 +532,8 @@ private fun MainScaffold(
                         2 -> {
                             AlertsMapRoute(
                                 viewModel = alertsViewModel,
-                                onBack = { selectedTab = ALERTS_TAB_INDEX }
+                                onBack = { selectedTab = ALERTS_TAB_INDEX },
+                                showBackButton = false
                             )
                         }
                         3 -> {
@@ -509,6 +543,7 @@ private fun MainScaffold(
                             )
                         }
                     }
+                }
                 }
             }
         }

@@ -1,5 +1,11 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -69,6 +75,8 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
+import com.example.pokemonalertsv2.ui.motion.AppMotion
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -273,6 +281,7 @@ internal fun GoDexCollectionContent(
                         canEdit = canEdit,
                         sessionState = sessionState,
                         selected = selection?.entryKey == entry.entryKey,
+                        modifier = Modifier.animateItem(),
                         onSelect = {
                             selection = toggleGoDexCollectionSelection(selection, entry)
                         }
@@ -280,16 +289,22 @@ internal fun GoDexCollectionContent(
                 }
             }
         }
-        selectedEntry?.let { entry ->
-            GoDexCollectionConfirmationBar(
-                entry = entry,
-                isPending = entry.entryKey in pendingEntryKeys,
-                onConfirm = { confirmSelection(entry) },
-                onCancel = { selection = null },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
-            )
+        AnimatedContent(
+            targetState = selectedEntry?.entryKey,
+            transitionSpec = { appFadeThrough() },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+            label = "godex_confirmation"
+        ) { selectedEntryKey ->
+            entries.firstOrNull { it.entryKey == selectedEntryKey }?.let { entry ->
+                GoDexCollectionConfirmationBar(
+                    entry = entry,
+                    isPending = entry.entryKey in pendingEntryKeys,
+                    onConfirm = { confirmSelection(entry) },
+                    onCancel = { selection = null }
+                )
+            }
         }
         SnackbarHost(
             hostState = snackbarHostState,
@@ -434,7 +449,8 @@ private fun GoDexCollectionEntryTile(
     canEdit: Boolean,
     sessionState: GoDexSessionState,
     selected: Boolean,
-    onSelect: () -> Unit
+    onSelect: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val caught = !entry.needed
     val variant = goDexEntryVariantLabel(entry).ifBlank { "Base form" }
@@ -463,8 +479,27 @@ private fun GoDexCollectionEntryTile(
             append(". Read-only")
         }
     }
+    val containerColor by animateColorAsState(
+        targetValue = when {
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            entry.needed -> MaterialTheme.colorScheme.surfaceContainerHigh
+            else -> MaterialTheme.colorScheme.surfaceContainer
+        },
+        animationSpec = tween(AppMotion.Standard),
+        label = "godex_tile_color"
+    )
+    val selectionBorderWidth by animateDpAsState(
+        targetValue = if (selected) 3.dp else 0.dp,
+        animationSpec = tween(AppMotion.Standard),
+        label = "godex_tile_border"
+    )
+    val artworkAlpha by animateFloatAsState(
+        targetValue = if (caught) 0.62f else 1f,
+        animationSpec = tween(AppMotion.Standard),
+        label = "godex_artwork_alpha"
+    )
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(0.78f)
             .heightIn(min = 136.dp)
@@ -478,18 +513,10 @@ private fun GoDexCollectionEntryTile(
                     else -> "Needed"
                 }
             },
-        colors = CardDefaults.cardColors(
-            containerColor = when {
-                selected -> MaterialTheme.colorScheme.primaryContainer
-                entry.needed -> {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-                }
-                else -> {
-                MaterialTheme.colorScheme.surfaceContainer
-                }
-            }
-        ),
-        border = if (selected) BorderStroke(3.dp, MaterialTheme.colorScheme.primary) else null,
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        border = selectionBorderWidth.takeIf { it > 0.dp }?.let {
+            BorderStroke(it, MaterialTheme.colorScheme.primary)
+        },
         shape = RoundedCornerShape(16.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -499,7 +526,7 @@ private fun GoDexCollectionEntryTile(
                     .align(Alignment.Center)
                     .padding(bottom = 42.dp)
                     .size(84.dp)
-                    .alpha(if (caught) 0.62f else 1f)
+                    .alpha(artworkAlpha)
             )
             Surface(
                 modifier = Modifier
@@ -524,30 +551,42 @@ private fun GoDexCollectionEntryTile(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    if (caught) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(27.dp),
-                            tint = Color(0xFF2E7D32)
-                        )
-                    } else {
-                        Surface(
-                            modifier = Modifier.size(25.dp),
-                            shape = CircleShape,
-                            color = Color.Transparent,
-                            border = BorderStroke(
-                                width = 2.dp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    AnimatedContent(
+                        targetState = caught,
+                        transitionSpec = { appFadeThrough() },
+                        label = "godex_caught_state"
+                    ) { isCaught ->
+                        if (isCaught) {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(27.dp),
+                                tint = Color(0xFF2E7D32)
                             )
-                        ) {}
+                        } else {
+                            Surface(
+                                modifier = Modifier.size(25.dp),
+                                shape = CircleShape,
+                                color = Color.Transparent,
+                                border = BorderStroke(
+                                    width = 2.dp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {}
+                        }
                     }
-                    if (isPending) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(38.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.tertiary
-                        )
+                    AnimatedContent(
+                        targetState = isPending,
+                        transitionSpec = { appFadeThrough() },
+                        label = "godex_pending_state"
+                    ) { pending ->
+                        if (pending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(38.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
                     }
                 }
             }

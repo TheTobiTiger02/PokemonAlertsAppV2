@@ -11,7 +11,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import kotlinx.coroutines.launch
 
 /**
@@ -68,7 +70,15 @@ class GoDexLoginActivity : ComponentActivity() {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text(statusText) },
+                        title = {
+                            AnimatedContent(
+                                targetState = statusText,
+                                transitionSpec = { appFadeThrough() },
+                                label = "godex_login_title"
+                            ) { title ->
+                                Text(title)
+                            }
+                        },
                         navigationIcon = {
                             IconButton(onClick = { finish() }) {
                                 Icon(Icons.Default.Close, contentDescription = "Close")
@@ -101,41 +111,49 @@ class GoDexLoginActivity : ComponentActivity() {
                         .fillMaxSize()
                         .padding(padding)
                 ) {
-                    AnimatedVisibility(visible = step == Step.LOGIN) {
+                    AnimatedContent(
+                        targetState = step,
+                        transitionSpec = { appSharedAxisX(forward = targetState == Step.PICK_CHECKLIST) },
+                        label = "godex_login_step"
+                    ) { currentStep ->
+                        val pickingChecklist = currentStep == Step.PICK_CHECKLIST
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .background(
+                                    if (pickingChecklist) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    }
+                                )
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {
                             Text(
-                                text = "Google or Discord may remember your account for faster reauthentication.",
+                                text = if (pickingChecklist) {
+                                    "Signed in — open the checklist you want to sync."
+                                } else {
+                                    "Google or Discord may remember your account for faster reauthentication."
+                                },
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (pickingChecklist) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                             Text(
-                                text = "Pokémon Alerts never stores your email or password.",
+                                text = if (pickingChecklist) {
+                                    "Tap one of your collections below."
+                                } else {
+                                    "Pokémon Alerts never stores your email or password."
+                                },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = step == Step.PICK_CHECKLIST) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = "✅ Logged in! Now open the checklist you want to sync.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = "Tap on one of your collections below.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                color = if (pickingChecklist) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }

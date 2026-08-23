@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
@@ -68,11 +69,12 @@ class MainNavigationComposeTest {
     }
 
     @Test
-    fun mapIntentOpensMapAndToolbarBackReturnsToAlerts() {
+    fun mapIntentOpensRootMapWithoutToolbarBack() {
         openMapFromIntent()
 
-        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed().performClick()
-        waitForAlertsScreen()
+        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
+        composeRule.onNodeWithText("Map").assertIsSelected()
     }
 
     @Test

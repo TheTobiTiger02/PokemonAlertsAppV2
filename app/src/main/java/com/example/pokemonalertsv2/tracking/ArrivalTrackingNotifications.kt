@@ -8,13 +8,18 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.Icon
 import android.os.Build
+import android.os.Bundle
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
+import com.example.pokemonalertsv2.ui.alerts.displayCp
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -26,6 +31,11 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_STOP = 40_041
     private const val REQUEST_OPEN = 40_042
     private const val REQUEST_MAPS = 40_043
+
+    /** Android 16+ (API 36) exposes the Now Bar / live-update surfaces. */
+    private const val LIVE_NOTIFICATION_MIN_SDK = 36
+    /** Assumed max journey distance for the progress bar, in meters. */
+    private const val PROGRESS_MAX_METERS = 10_000f
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -81,17 +91,110 @@ internal object ArrivalTrackingNotifications {
             ?.takeIf { it > 0L }
             ?.let { " \u2022 ${TimeUtils.formatDurationShort(it)} left" }
             .orEmpty()
+        val title = ongoingTitle(alert)
+        val expandedBody = buildExpandedBody(alert, content, remaining)
+        val chip = when {
+            waitingForPreciseLocation -> null
+            distanceMeters != null -> formatDistance(distanceMeters)
+            else -> null
+        } ?: remaining.trim().takeIf { it.isNotBlank() }
+
+        if (Build.VERSION.SDK_INT >= LIVE_NOTIFICATION_MIN_SDK) {
+            return liveBuilder(context, alert)
+                .setContentTitle(title)
+                .setContentText(content)
+                .setContentIntent(openAlertPendingIntent(context, alert))
+                .addAction(
+                    Notification.Action.Builder(
+                        Icon.createWithResource(context, R.drawable.ic_poke_notification),
+                        "Stop",
+                        stopPendingIntent(context)
+                    ).build()
+                )
+                .setStyle(
+                    buildProgressStyle(
+                        context = context,
+                        alert = alert,
+                        distanceMeters = distanceMeters,
+                        waitingForPreciseLocation = waitingForPreciseLocation
+                    )
+                )
+                .apply {
+                    chip?.let { setShortCriticalText(it) }
+                }
+                .build()
+        }
         return ongoingBuilder(context)
-            .setContentTitle("Going to ${displayName(alert)}")
-            .setContentText(content + remaining)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(content + remaining))
+            .setContentTitle(title)
+            .setContentText(content)
             .setContentIntent(openAlertPendingIntent(context, alert))
             .addAction(
                 R.drawable.ic_poke_notification,
                 "Stop",
                 stopPendingIntent(context)
             )
+            .setRequestPromotedOngoing(true)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(expandedBody))
             .build()
+    }
+
+    internal fun ongoingTitle(alert: PokemonAlert): String {
+        val name = displayName(alert)
+        val cp = alert.displayCp?.let { " \u2022 CP $it" }.orEmpty()
+        return "Going to $name$cp"
+    }
+
+    internal fun buildExpandedBody(alert: PokemonAlert, content: String, remaining: String): String {
+        val detail = buildList {
+            remaining.trim().takeIf { it.isNotBlank() }?.let { add(it) }
+            alert.displayCp?.let { add("CP $it") }
+        }
+        return if (detail.isEmpty()) content else "$content\n${detail.joinToString(" \u2022 ")}"
+    }
+
+    @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
+    private fun buildProgressStyle(
+        context: Context,
+        alert: PokemonAlert,
+        distanceMeters: Float?,
+        waitingForPreciseLocation: Boolean
+    ): Notification.ProgressStyle {
+        val accent = resolveAlertVisualStyle(alert).category.accentArgb.toInt()
+        val style = Notification.ProgressStyle()
+            .setStyledByProgress(true)
+            .setProgressStartIcon(Icon.createWithResource(context, R.drawable.ic_my_location))
+            .setProgressEndIcon(Icon.createWithResource(context, R.drawable.ic_poke_notification))
+            .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_navigate))
+            .addProgressPoint(
+                Notification.ProgressStyle.Point(PROGRESS_MAX_METERS.roundToInt()).setColor(accent)
+            )
+        if (waitingForPreciseLocation || distanceMeters == null) {
+            return style.setProgressIndeterminate(true)
+        }
+        val remaining = distanceMeters.coerceAtLeast(0f)
+        val travelled = (PROGRESS_MAX_METERS - remaining).coerceAtLeast(0f)
+        return style
+            .addProgressSegment(
+                Notification.ProgressStyle.Segment(PROGRESS_MAX_METERS.roundToInt())
+                    .setColor(accent)
+            )
+            .setProgress(travelled.roundToInt())
+    }
+
+    @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
+    private fun liveBuilder(context: Context, alert: PokemonAlert): Notification.Builder {
+        val builder = Notification.Builder(context, CHANNEL_ONGOING)
+            .setSmallIcon(R.drawable.ic_poke_notification)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+            .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+        val extras = Bundle().apply {
+            putBoolean("android.requestPromotedOngoing", true)
+        }
+        return builder.addExtras(extras)
     }
 
     fun postArrival(context: Context, destination: TrackedDestination) {
