@@ -16,13 +16,25 @@ class StartupBenchmark {
     val rule = MacrobenchmarkRule()
 
     @Test
-    fun coldStartup() = rule.measureRepeated(
+    fun coldStartupNoCompilation() = measureColdStartup(CompilationMode.None())
+
+    @Test
+    fun coldStartupWithBaselineProfile() = measureColdStartup(
+        CompilationMode.Partial(BaselineProfileMode.Require)
+    )
+
+    private fun measureColdStartup(compilationMode: CompilationMode) = rule.measureRepeated(
         packageName = "com.example.pokemonalertsv2",
         metrics = listOf(StartupTimingMetric()),
-        compilationMode = CompilationMode.Partial(BaselineProfileMode.Require),
+        compilationMode = compilationMode,
         startupMode = StartupMode.COLD,
         iterations = 10,
-        setupBlock = { pressHome() }
+        setupBlock = {
+            device.prepareBenchmarkPermissions()
+            startActivityAndWait()
+            device.completeOnboardingIfNeeded()
+            pressHome()
+        }
     ) {
         startActivityAndWait()
     }

@@ -54,7 +54,7 @@ object InAppUpdateManager {
         coerceInputValues = true
     }
 
-    private val client = OkHttpClient.Builder().build()
+    private val client by lazy { OkHttpClient.Builder().build() }
 
     fun resetState() {
         _updateState.value = UpdateState.Idle

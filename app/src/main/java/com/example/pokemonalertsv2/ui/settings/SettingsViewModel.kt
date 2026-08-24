@@ -3,9 +3,10 @@ package com.example.pokemonalertsv2.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
@@ -16,201 +17,203 @@ import kotlinx.coroutines.launch
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = PokemonAlertsRepository.create(application)
-    private val goDexRepository = GoDexRepository.getInstance(application)
+    private val preferences = AlertPreferences(application.alertPreferencesDataStore)
+    private val goDexRepository by lazy(LazyThreadSafetyMode.NONE) {
+        GoDexRepository.getInstance(application)
+    }
 
-    val goDexConfig = goDexRepository.config
-    val goDexEntries = goDexRepository.entries
-    val goDexSyncUiState = goDexRepository.syncUiState
-    val goDexPendingEntryKeys = goDexRepository.pendingEntryKeys
+    val goDexConfig get() = goDexRepository.config
+    val goDexEntries get() = goDexRepository.entries
+    val goDexSyncUiState get() = goDexRepository.syncUiState
+    val goDexPendingEntryKeys get() = goDexRepository.pendingEntryKeys
 
-    val onboardingCompleted: StateFlow<Boolean?> = repository.observeOnboardingCompleted()
+    val onboardingCompleted: StateFlow<Boolean?> = preferences.onboardingCompleted
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val themeMode: StateFlow<Int> = repository.observeThemeMode()
+    val themeMode: StateFlow<Int> = preferences.themeMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    val sortPreference: StateFlow<SortPreference> = repository.alertPreferences.sortPreference
+    val sortPreference: StateFlow<SortPreference> = preferences.sortPreference
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortPreference.POSTED_TIME)
     
-    val notificationsEnabled: StateFlow<Boolean> = repository.alertPreferences.notificationsEnabled
+    val notificationsEnabled: StateFlow<Boolean> = preferences.notificationsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val raidsNotifications: StateFlow<Boolean> = repository.alertPreferences.raidsNotifications
+    val raidsNotifications: StateFlow<Boolean> = preferences.raidsNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val spawnsNotifications: StateFlow<Boolean> = repository.alertPreferences.spawnsNotifications
+    val spawnsNotifications: StateFlow<Boolean> = preferences.spawnsNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val questsNotifications: StateFlow<Boolean> = repository.alertPreferences.questsNotifications
+    val questsNotifications: StateFlow<Boolean> = preferences.questsNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val hundosNotifications: StateFlow<Boolean> = repository.alertPreferences.hundosNotifications
+    val hundosNotifications: StateFlow<Boolean> = preferences.hundosNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val pvpNotifications: StateFlow<Boolean> = repository.alertPreferences.pvpNotifications
+    val pvpNotifications: StateFlow<Boolean> = preferences.pvpNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val nundosNotifications: StateFlow<Boolean> = repository.alertPreferences.nundosNotifications
+    val nundosNotifications: StateFlow<Boolean> = preferences.nundosNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val kecleonNotifications: StateFlow<Boolean> = repository.alertPreferences.kecleonNotifications
+    val kecleonNotifications: StateFlow<Boolean> = preferences.kecleonNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val rocketNotifications: StateFlow<Boolean> = repository.alertPreferences.rocketNotifications
+    val rocketNotifications: StateFlow<Boolean> = preferences.rocketNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val notificationVibrate: StateFlow<Boolean> = repository.alertPreferences.notificationVibrate
+    val notificationVibrate: StateFlow<Boolean> = preferences.notificationVibrate
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
-    val silenceUntil: StateFlow<Long> = repository.alertPreferences.silenceUntil
+    val silenceUntil: StateFlow<Long> = preferences.silenceUntil
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
         
-    val selectedArea: StateFlow<String> = repository.alertPreferences.selectedArea
+    val selectedArea: StateFlow<String> = preferences.selectedArea
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "All")
         
-    val maxDistance: StateFlow<Int> = repository.alertPreferences.maxDistance
+    val maxDistance: StateFlow<Int> = preferences.maxDistance
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
         
-    val snoozeDuration: StateFlow<Int> = repository.alertPreferences.snoozeDuration
+    val snoozeDuration: StateFlow<Int> = preferences.snoozeDuration
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 10)
     
     // Excluded type preferences
-    val excludedHundoTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedHundoTypes
+    val excludedHundoTypes: StateFlow<Set<String>> = preferences.excludedHundoTypes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     
-    val excludedNundoTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedNundoTypes
+    val excludedNundoTypes: StateFlow<Set<String>> = preferences.excludedNundoTypes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     
-    val excludedPvpTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedPvpTypes
+    val excludedPvpTypes: StateFlow<Set<String>> = preferences.excludedPvpTypes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     
-    val excludedSpawnTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedSpawnTypes
+    val excludedSpawnTypes: StateFlow<Set<String>> = preferences.excludedSpawnTypes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     
-    val excludedRocketTypes: StateFlow<Set<String>> = repository.alertPreferences.excludedRocketTypes
+    val excludedRocketTypes: StateFlow<Set<String>> = preferences.excludedRocketTypes
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
     
-    val excludedRaidTiers: StateFlow<Set<String>> = repository.alertPreferences.excludedRaidTiers
+    val excludedRaidTiers: StateFlow<Set<String>> = preferences.excludedRaidTiers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     fun completeOnboarding() {
         viewModelScope.launch {
-            repository.setOnboardingCompleted(true)
+            preferences.setOnboardingCompleted(true)
         }
     }
 
     fun updateThemeMode(mode: Int) {
         viewModelScope.launch {
-            repository.setThemeMode(mode.coerceIn(0, 2))
+            preferences.updateThemeMode(mode.coerceIn(0, 2))
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
 
     fun updateSortPreference(preference: SortPreference) {
         viewModelScope.launch {
-            repository.alertPreferences.updateSortPreference(preference)
+            preferences.updateSortPreference(preference)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
 
     fun updateNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateNotificationsEnabled(enabled)
+            preferences.updateNotificationsEnabled(enabled)
         }
     }
     
     fun updateRaidsNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateRaidsNotifications(enabled)
+            preferences.updateRaidsNotifications(enabled)
         }
     }
     
     fun updateSpawnsNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateSpawnsNotifications(enabled)
+            preferences.updateSpawnsNotifications(enabled)
         }
     }
     
     fun updateQuestsNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateQuestsNotifications(enabled)
+            preferences.updateQuestsNotifications(enabled)
         }
     }
     
     fun updateHundosNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateHundosNotifications(enabled)
+            preferences.updateHundosNotifications(enabled)
         }
     }
     
     fun updatePvpNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updatePvpNotifications(enabled)
+            preferences.updatePvpNotifications(enabled)
         }
     }
     
     fun updateNundosNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateNundosNotifications(enabled)
+            preferences.updateNundosNotifications(enabled)
         }
     }
     
     fun updateKecleonNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateKecleonNotifications(enabled)
+            preferences.updateKecleonNotifications(enabled)
         }
     }
     
     fun updateRocketNotifications(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateRocketNotifications(enabled)
+            preferences.updateRocketNotifications(enabled)
         }
     }
     
     fun updateNotificationVibrate(enabled: Boolean) {
         viewModelScope.launch {
-            repository.alertPreferences.updateNotificationVibrate(enabled)
+            preferences.updateNotificationVibrate(enabled)
         }
     }
     
     fun silenceNotificationsFor(durationMinutes: Int) {
         viewModelScope.launch {
             val silenceUntil = System.currentTimeMillis() + (durationMinutes * 60 * 1000L)
-            repository.alertPreferences.updateSilenceUntil(silenceUntil)
+            preferences.updateSilenceUntil(silenceUntil)
         }
     }
     
     fun clearNotificationSilence() {
         viewModelScope.launch {
-            repository.alertPreferences.updateSilenceUntil(0L)
+            preferences.updateSilenceUntil(0L)
         }
     }
     
     fun updateSelectedArea(area: String) {
         viewModelScope.launch {
-            repository.alertPreferences.updateSelectedArea(area)
+            preferences.updateSelectedArea(area)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
 
     fun applyNotificationPreset(preset: NotificationPreset) {
         viewModelScope.launch {
-            repository.alertPreferences.applyNotificationPreset(preset)
+            preferences.applyNotificationPreset(preset)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
     
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
-            repository.alertPreferences.updateMaxDistance(distance)
+            preferences.updateMaxDistance(distance)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
     
     fun updateSnoozeDuration(minutes: Int) {
         viewModelScope.launch {
-            repository.alertPreferences.updateSnoozeDuration(minutes)
+            preferences.updateSnoozeDuration(minutes)
         }
     }
 
@@ -261,7 +264,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedHundoTypes.value
             val updated = if (type in current) current - type else current + type
-            repository.alertPreferences.updateExcludedHundoTypes(updated)
+            preferences.updateExcludedHundoTypes(updated)
         }
     }
     
@@ -269,7 +272,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedNundoTypes.value
             val updated = if (type in current) current - type else current + type
-            repository.alertPreferences.updateExcludedNundoTypes(updated)
+            preferences.updateExcludedNundoTypes(updated)
         }
     }
     
@@ -277,7 +280,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedPvpTypes.value
             val updated = if (type in current) current - type else current + type
-            repository.alertPreferences.updateExcludedPvpTypes(updated)
+            preferences.updateExcludedPvpTypes(updated)
         }
     }
     
@@ -285,7 +288,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedSpawnTypes.value
             val updated = if (type in current) current - type else current + type
-            repository.alertPreferences.updateExcludedSpawnTypes(updated)
+            preferences.updateExcludedSpawnTypes(updated)
         }
     }
     
@@ -293,7 +296,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedRocketTypes.value
             val updated = if (type in current) current - type else current + type
-            repository.alertPreferences.updateExcludedRocketTypes(updated)
+            preferences.updateExcludedRocketTypes(updated)
         }
     }
     
@@ -301,7 +304,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             val current = excludedRaidTiers.value
             val updated = if (tier in current) current - tier else current + tier
-            repository.alertPreferences.updateExcludedRaidTiers(updated)
+            preferences.updateExcludedRaidTiers(updated)
         }
     }
 }

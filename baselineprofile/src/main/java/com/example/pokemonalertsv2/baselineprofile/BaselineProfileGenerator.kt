@@ -15,56 +15,44 @@ class BaselineProfileGenerator {
     @Test
     fun criticalUserJourneys() = rule.collect(
         packageName = "com.example.pokemonalertsv2",
-        includeInStartupProfile = true
+        includeInStartupProfile = false,
+        maxIterations = 5
     ) {
         pressHome()
+        device.prepareBenchmarkPermissions()
         startActivityAndWait()
         device.waitForIdle()
-        device.findObject(By.text("Skip"))?.click()
-        device.waitForIdle()
-        device.findObject(By.text("Allow"))?.click()
-        device.waitForIdle()
+        device.completeOnboardingIfNeeded()
 
         // Alerts: exercise card composition, feed scrolling, overflow, and details.
         device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
             device.displayWidth / 2, device.displayHeight / 3, 18)
         device.waitForIdle()
-        device.findObject(By.desc("More alert actions"))?.let { overflow ->
-            overflow.click()
-            device.waitForIdle()
+        if (device.clickIfPresent(By.desc("More alert actions"), timeoutMillis = 500)) {
             device.pressBack()
         }
-        device.findObject(By.textContains("Rocket"))?.click()
+        device.clickIfPresent(By.textContains("Rocket"), timeoutMillis = 500)
         device.waitForIdle()
         device.pressBack()
 
         // Map: include initialization, filter chips, and map-detail rendering when data exists.
-        device.findObject(By.text("Map"))?.click()
-        device.waitForIdle()
-        device.findObject(By.text("Raids"))?.click()
-        device.waitForIdle()
+        device.clickIfPresent(By.text("Map"))
+        device.clickIfPresent(By.text("Raids"), timeoutMillis = 500)
         device.click(device.displayWidth / 2, device.displayHeight / 2)
         device.waitForIdle()
-        device.findObject(By.desc("More map alert actions"))?.let { overflow ->
-            overflow.click()
-            device.waitForIdle()
+        if (device.clickIfPresent(By.desc("More map alert actions"), timeoutMillis = 500)) {
             device.pressBack()
         }
 
-        device.findObject(By.text("Alerts"))?.click()
-        device.waitForIdle()
-        device.findObject(By.text("History"))?.click()
-        device.waitForIdle()
+        device.clickIfPresent(By.text("Alerts"))
+        device.clickIfPresent(By.text("History"))
         device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
             device.displayWidth / 2, device.displayHeight / 3, 18)
         device.waitForIdle()
-        device.findObject(By.desc("More alert actions"))?.let { overflow ->
-            overflow.click()
-            device.waitForIdle()
+        if (device.clickIfPresent(By.desc("More alert actions"), timeoutMillis = 500)) {
             device.pressBack()
         }
-        device.findObject(By.text("Settings"))?.click()
-        device.waitForIdle()
+        device.clickIfPresent(By.text("Settings"))
         device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
             device.displayWidth / 2, device.displayHeight / 3, 18)
         device.waitForIdle()

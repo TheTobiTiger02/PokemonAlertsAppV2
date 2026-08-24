@@ -16,35 +16,35 @@ class FrameTimingBenchmark {
     val rule = MacrobenchmarkRule()
 
     @Test
-    fun primaryNavigationAndScrolling() = rule.measureRepeated(
+    fun primaryNavigationAndScrollingNoCompilation() = measureNavigation(
+        CompilationMode.None()
+    )
+
+    @Test
+    fun primaryNavigationAndScrollingWithBaselineProfile() = measureNavigation(
+        CompilationMode.Partial(BaselineProfileMode.Require)
+    )
+
+    private fun measureNavigation(compilationMode: CompilationMode) = rule.measureRepeated(
         packageName = "com.example.pokemonalertsv2",
         metrics = listOf(FrameTimingMetric()),
-        compilationMode = CompilationMode.Partial(BaselineProfileMode.Require),
+        compilationMode = compilationMode,
         iterations = 5,
         setupBlock = { pressHome() }
     ) {
+        device.prepareBenchmarkPermissions()
         startActivityAndWait()
-        device.findObject(By.text("Skip"))?.click()
-        device.findObject(By.text("Allow"))?.click()
-        device.waitForIdle()
+        device.completeOnboardingIfNeeded()
 
-        repeat(2) {
+        listOf("History", "Settings", "Map", "Alerts").forEach { tab ->
+            device.clickIfPresent(By.text(tab))
             device.swipe(
                 device.displayWidth / 2,
                 device.displayHeight * 3 / 4,
                 device.displayWidth / 2,
                 device.displayHeight / 3,
-                18
+                24
             )
-        }
-        device.findObject(By.desc("More alert actions"))?.let { overflow ->
-            overflow.click()
-            device.waitForIdle()
-            device.pressBack()
-        }
-        listOf("Map", "History", "Settings", "Alerts").forEach { tab ->
-            device.findObject(By.text(tab))?.click()
-            device.waitForIdle()
         }
     }
 }

@@ -88,6 +88,7 @@ import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 import androidx.lifecycle.lifecycleScope
@@ -208,7 +209,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleNavigationIntent(intent)
 
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
         }
 
