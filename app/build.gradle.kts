@@ -68,6 +68,11 @@ val osmTileUrl: String =
         ?: providers.environmentVariable("OSM_TILE_URL").orNull?.takeIf { it.isNotBlank() }
         ?: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
+val pokebattlerApiBaseUrl: String =
+    localProperties.getProperty("POKEBATTLER_API_BASE_URL")?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("POKEBATTLER_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
+        ?: "https://fight.pokebattler.com/"
+
 android {
     namespace = "com.example.pokemonalertsv2"
     compileSdk = 36
@@ -83,6 +88,7 @@ android {
         resValue("string", "maps_api_key", googleMapsApiKey)
         buildConfigField("String", "ALERTS_API_BASE_URL", "\"${alertsApiBaseUrl.trimEnd('/')}/\"")
         buildConfigField("String", "OSM_TILE_URL", "\"$osmTileUrl\"")
+        buildConfigField("String", "POKEBATTLER_API_BASE_URL", "\"${pokebattlerApiBaseUrl.trimEnd('/')}/\"")
     }
 
     signingConfigs {

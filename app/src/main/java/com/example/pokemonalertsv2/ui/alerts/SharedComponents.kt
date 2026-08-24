@@ -132,6 +132,9 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.ui.counters.RaidCountersActions
+import com.example.pokemonalertsv2.ui.counters.RaidCountersCard
+import com.example.pokemonalertsv2.ui.counters.RaidCountersUiState
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -1362,7 +1365,10 @@ fun AlertDetailScreen(
     alert: PokemonAlert,
     onBack: (() -> Unit)? = null,
     isInPictureInPicture: Boolean = false,
-    onEnterPictureInPicture: (() -> Unit)? = null
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    // Defaulted so existing call sites and previews keep compiling untouched.
+    raidCountersState: RaidCountersUiState = RaidCountersUiState(),
+    raidCountersActions: RaidCountersActions = RaidCountersActions.Noop
 ) {
     if (isInPictureInPicture) {
         AlertPictureInPictureContent(alert = alert)
@@ -1671,6 +1677,12 @@ fun AlertDetailScreen(
                     alert.moves?.let { moves ->
                         MovesCard(moves = moves)
                     }
+
+                    // Best counters (raids only; the card hides itself otherwise)
+                    RaidCountersCard(
+                        state = raidCountersState,
+                        actions = raidCountersActions
+                    )
                     
                     // Location Card
                     LocationCard(alert = alert)

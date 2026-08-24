@@ -13,9 +13,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         HistoryAlertEntity::class,
         PokemonSpeciesEntity::class,
         GoDexEntryEntity::class,
-        GoDexPendingUpdateEntity::class
+        GoDexPendingUpdateEntity::class,
+        PokebattlerRaidBossEntity::class,
+        RaidCounterCacheEntity::class,
+        PokeGenieMonEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -23,6 +26,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun historyAlertDao(): HistoryAlertDao
     abstract fun pokemonSpeciesDao(): PokemonSpeciesDao
     abstract fun goDexEntryDao(): GoDexEntryDao
+    abstract fun raidCounterDao(): RaidCounterDao
+    abstract fun pokeGenieDao(): PokeGenieDao
 
     companion object {
         @Volatile
@@ -422,6 +427,77 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 17 -> 18: adds the raid counters cache and the Poke Genie box. */
+        internal val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pokebattler_raid_bosses` (
+                        `tier` TEXT NOT NULL,
+                        `pokemonId` TEXT NOT NULL,
+                        `displayName` TEXT NOT NULL,
+                        `cp` INTEGER,
+                        `shiny` INTEGER NOT NULL,
+                        `fetchedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`tier`, `pokemonId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pokebattler_raid_bosses_pokemonId` " +
+                        "ON `pokebattler_raid_bosses` (`pokemonId`)"
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `raid_counter_cache` (
+                        `cacheKey` TEXT NOT NULL,
+                        `bossPokemonId` TEXT NOT NULL,
+                        `raidLevel` TEXT NOT NULL,
+                        `bossCp` INTEGER,
+                        `bossMove1` TEXT,
+                        `bossMove2` TEXT,
+                        `countersJson` TEXT NOT NULL,
+                        `fetchedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`cacheKey`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `poke_genie_mons` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `scanIndex` INTEGER,
+                        `displayName` TEXT NOT NULL,
+                        `form` TEXT,
+                        `pokedexNumber` INTEGER,
+                        `matchKey` TEXT NOT NULL,
+                        `altMatchKeys` TEXT NOT NULL,
+                        `cp` INTEGER,
+                        `hp` INTEGER,
+                        `atkIv` INTEGER,
+                        `defIv` INTEGER,
+                        `staIv` INTEGER,
+                        `levelMin` REAL,
+                        `levelMax` REAL,
+                        `level` REAL,
+                        `quickMove` TEXT,
+                        `chargeMove` TEXT,
+                        `chargeMove2` TEXT,
+                        `gender` TEXT,
+                        `shadowState` TEXT NOT NULL,
+                        `lucky` INTEGER NOT NULL,
+                        `favorite` INTEGER NOT NULL,
+                        `importedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_poke_genie_mons_matchKey` " +
+                        "ON `poke_genie_mons` (`matchKey`)"
+                )
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -452,7 +528,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_13_14,
                     MIGRATION_14_15,
                     MIGRATION_15_16,
-                    MIGRATION_16_17
+                    MIGRATION_16_17,
+                    MIGRATION_17_18
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()
