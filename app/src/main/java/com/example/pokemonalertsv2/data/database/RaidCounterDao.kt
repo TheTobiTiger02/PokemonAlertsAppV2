@@ -45,12 +45,17 @@ interface RaidCounterDao {
         "DELETE FROM raid_counter_cache WHERE cacheKey NOT IN " +
             "(SELECT cacheKey FROM raid_counter_cache ORDER BY fetchedAt DESC LIMIT :keep)"
     )
-    suspend fun trimCache(keep: Int = 60)
+    suspend fun trimCache(keep: Int)
 
     @Transaction
     suspend fun saveCache(entry: RaidCounterCacheEntity) {
         upsertCache(entry)
-        trimCache()
+        trimCache(MAX_CACHED_RESULTS)
+    }
+
+    companion object {
+        /** Roughly 8 KB per row, so this bounds the cache at a few hundred KB. */
+        const val MAX_CACHED_RESULTS = 60
     }
 }
 

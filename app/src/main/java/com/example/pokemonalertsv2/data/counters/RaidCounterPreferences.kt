@@ -34,7 +34,7 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         RaidCounterSettings(
             options = RaidCounterOptions(
                 attackerLevel = prefs[LEVEL_KEY] ?: RaidCounterOptions.DEFAULT_ATTACKER_LEVEL,
-                weather = prefs[WEATHER_KEY].toEnum(PokebattlerWeather.EXTREME),
+                weather = prefs[WEATHER_KEY].toEnum(PokebattlerWeather.NONE),
                 friendship = prefs[FRIENDSHIP_KEY].toEnum(PokebattlerFriendship.NONE),
                 dodge = prefs[DODGE_KEY].toEnum(PokebattlerDodge.NONE),
                 sort = prefs[SORT_KEY].toEnum(PokebattlerSort.OVERALL),
