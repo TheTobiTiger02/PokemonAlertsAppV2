@@ -55,7 +55,7 @@ sealed interface PokeGenieParseResult {
  */
 object PokeGenieCsvParser {
 
-    private const val BOM = '﻿'
+    private const val BOM = '\uFEFF'
 
     fun parse(reader: Reader): PokeGenieParseResult {
         val text = reader.readText().let { if (it.startsWith(BOM)) it.substring(1) else it }
