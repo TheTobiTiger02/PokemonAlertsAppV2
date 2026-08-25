@@ -48,7 +48,11 @@ fun PokebattlerCountersResponse.toPayload(sort: PokebattlerSort): RaidCountersPa
     val bossId = block.pokemonId ?: return null
     val moveset = block.randomMove ?: block.byMove.firstOrNull() ?: return null
 
-    val counters = moveset.defenders.mapIndexed { index, defender ->
+    // Pokebattler returns `defenders` WORST-FIRST for every sort: with sort=ESTIMATOR the
+    // array runs 1.60 -> 1.11, so the genuine best counter is the LAST element. Reversing
+    // reproduces Pokebattler's own ranking exactly, for every sort, without having to encode
+    // a direction per metric. asReversed() is a view, not a copy.
+    val counters = moveset.defenders.asReversed().mapIndexed { index, defender ->
         val best = selectBestByMove(defender, sort)
         RaidCounter(
             rank = index + 1,
@@ -72,27 +76,36 @@ fun PokebattlerCountersResponse.toPayload(sort: PokebattlerSort): RaidCountersPa
     return RaidCountersPayload(
         bossPokemonId = bossId,
         bossCp = block.cp,
-        bossMove1 = prettifyMoveName(moveset.move1),
-        bossMove2 = prettifyMoveName(moveset.move2),
+        // Raw ids, not display names: the local simulator needs to look these up.
+        bossMove1 = moveset.move1,
+        bossMove2 = moveset.move2,
         counters = counters
     )
 }
 
 /**
- * Picks the moveset Pokebattler would headline for this counter, matching the sort the
- * user asked for. Ties fall back to the API's own ordering.
+ * Picks the moveset Pokebattler headlines: the one whose result equals `defender.total`.
+ *
+ * Inside `byMove`, `overallRating`, `estimator` and `power` are COSTS — lower is better.
+ * Verified on HONCHKROW_SHADOW_FORM against Lunala: Snarl/Dark Pulse scores overallRating
+ * 0.3622 and Peck/Frustration 19.1847, and `total.overallRating` equals the minimum exactly.
+ * Only `tdo` is genuinely higher-is-better. Taking the maximum is what put
+ * "Peck / Frustration" on a Dark counter facing a Psychic/Ghost boss.
  */
 internal fun selectBestByMove(defender: PbDefender, sort: PokebattlerSort): PbByMove? {
     val moves = defender.byMove.filter { it.result != null }
     if (moves.isEmpty()) return defender.byMove.firstOrNull()
-    return when (sort) {
-        // Lower is better: fewer trainers, less time.
+
+    val chosen = when (sort) {
+        PokebattlerSort.OVERALL -> moves.minByOrNull { it.result?.overallRating ?: Double.MAX_VALUE }
         PokebattlerSort.ESTIMATOR,
         PokebattlerSort.TIME -> moves.minByOrNull { it.result?.estimator ?: Double.MAX_VALUE }
-        PokebattlerSort.POWER -> moves.maxByOrNull { it.result?.power ?: Double.MIN_VALUE }
+        PokebattlerSort.POWER -> moves.minByOrNull { it.result?.power ?: Double.MAX_VALUE }
         PokebattlerSort.TDO -> moves.maxByOrNull { it.result?.tdo ?: Double.MIN_VALUE }
-        PokebattlerSort.OVERALL -> moves.maxByOrNull { it.result?.overallRating ?: Double.MIN_VALUE }
     }
+    // The chosen sort's metric can be missing on an entry; the estimator is always present
+    // and always agrees with the correct moveset.
+    return chosen ?: moves.minByOrNull { it.result?.estimator ?: Double.MAX_VALUE }
 }
 
 /** `SHADOW_CLAW_FAST` -> "Shadow Claw". Saves fetching the 196 KB move list. */

@@ -7,9 +7,15 @@ import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
+import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
+import com.example.pokemonalertsv2.data.counters.RaidCounterSettings
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportResult
+import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
 import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -20,6 +26,47 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     private val preferences = AlertPreferences(application.alertPreferencesDataStore)
     private val goDexRepository by lazy(LazyThreadSafetyMode.NONE) {
         GoDexRepository.getInstance(application)
+    }
+
+    private val raidCounterPreferences = RaidCounterPreferences(application.alertPreferencesDataStore)
+    private val pokeGenieRepository by lazy(LazyThreadSafetyMode.NONE) {
+        PokeGenieRepository.getInstance(application)
+    }
+
+    val raidCounterSettings: StateFlow<RaidCounterSettings> = raidCounterPreferences.settings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RaidCounterSettings())
+
+    private val _pokeGenieImportStatus = MutableStateFlow<String?>(null)
+
+    /** Result of the last CSV import, shown under the import button. */
+    val pokeGenieImportStatus: StateFlow<String?> = _pokeGenieImportStatus
+
+    fun updateRaidCounterDefaults(options: RaidCounterOptions) {
+        viewModelScope.launch { raidCounterPreferences.updateDefaults(options) }
+    }
+
+    fun importPokeGenieCsv(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _pokeGenieImportStatus.value = "Importing..."
+            _pokeGenieImportStatus.value = when (val result = pokeGenieRepository.importFromUri(uri)) {
+                is PokeGenieImportResult.Success -> {
+                    val summary = result.summary
+                    buildString {
+                        append("Imported ${summary.importedCount} Pokemon")
+                        if (summary.skippedCount > 0) append(", skipped ${summary.skippedCount} rows")
+                        append(".")
+                    }
+                }
+                is PokeGenieImportResult.Failure -> result.message
+            }
+        }
+    }
+
+    fun clearPokeGenie() {
+        viewModelScope.launch {
+            pokeGenieRepository.clear()
+            _pokeGenieImportStatus.value = null
+        }
     }
 
     val goDexConfig get() = goDexRepository.config

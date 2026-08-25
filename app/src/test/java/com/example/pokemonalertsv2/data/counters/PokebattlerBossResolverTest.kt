@@ -78,6 +78,38 @@ class PokebattlerNameNormalizerTest {
     }
 
     @Test
+    fun `accepts the Forme spelling`() {
+        assertTrue(
+            PokebattlerNameNormalizer.candidateIds("Giratina Altered Forme")
+                .contains("GIRATINA_ALTERED_FORM")
+        )
+    }
+
+    @Test
+    fun `reads a form written after the species name`() {
+        val ids = PokebattlerNameNormalizer.candidateIds("Shadow Giratina Altered Forme")
+        // Shadow outranks form: Pokebattler has one shadow Giratina, not one per form.
+        assertTrue(ids.toString(), ids.contains("GIRATINA_SHADOW_FORM"))
+        assertTrue(
+            "shadow must be offered before the non-shadow form id",
+            ids.indexOf("GIRATINA_SHADOW_FORM") < ids.indexOf("GIRATINA_ALTERED_FORM")
+        )
+    }
+
+    @Test
+    fun `handles a two word trailing form`() {
+        assertTrue(
+            PokebattlerNameNormalizer.candidateIds("Necrozma Dawn Wings")
+                .contains("NECROZMA_DAWN_WINGS_FORM")
+        )
+    }
+
+    @Test
+    fun `a single word name is never emptied`() {
+        assertEquals(listOf("LUNALA"), PokebattlerNameNormalizer.candidateIds("Lunala"))
+    }
+
+    @Test
     fun `loose key ignores underscores`() {
         assertEquals("KYUREMBLACKFORM", PokebattlerNameNormalizer.looseKey("KYUREM_BLACK_FORM"))
     }
@@ -115,15 +147,56 @@ class PokebattlerBossResolverTest {
     }
 
     @Test
-    fun `never queries the catch-all unset bucket`() {
+    fun `substitutes a real tier rather than querying the unset bucket`() {
         val onlyUnset = listOf(RaidBossCatalogEntry("RAID_LEVEL_UNSET", "DITTO", "Ditto", 0))
-        // No tier on the alert and no real tier in the catalogue: refuse rather than
-        // query RAID_LEVEL_UNSET, which is the "every Pokemon" bucket, not a raid tier.
-        val r = resolveBossFromCatalogue(listOf("DITTO"), null, onlyUnset, "Ditto")
-        assertTrue(r is BossResolution.Unresolved)
-        // With a tier on the alert the same id resolves fine.
+        // RAID_LEVEL_UNSET is the "every Pokemon" bucket, not a raid tier, so it must never
+        // be queried. Refusing outright used to lose 34 of 252 real alerts, so an inferred
+        // tier is substituted instead.
+        val r = resolveBossFromCatalogue(listOf("DITTO"), null, onlyUnset, "Ditto") as BossResolution.Resolved
+        assertEquals("RAID_LEVEL_3", r.raidLevel)
+        assertTrue(r.raidLevel != "RAID_LEVEL_UNSET")
+        // A tier on the alert still wins.
         val ok = resolveBossFromCatalogue(listOf("DITTO"), RaidTier.TIER_1, onlyUnset, "Ditto") as BossResolution.Resolved
         assertEquals("RAID_LEVEL_1", ok.raidLevel)
+    }
+
+    @Test
+    fun `uses rarity to infer the tier of an unset legendary`() {
+        // Solgaleo is only in the unset bucket, and the feed sends no tier token.
+        val onlyUnset = listOf(RaidBossCatalogEntry("RAID_LEVEL_UNSET", "SOLGALEO", "Solgaleo", 0))
+        val r = resolveBossFromCatalogue(listOf("SOLGALEO"), null, onlyUnset, "Solgaleo") {
+            "POKEMON_RARITY_LEGENDARY"
+        } as BossResolution.Resolved
+        assertEquals("RAID_LEVEL_5", r.raidLevel)
+    }
+
+    @Test
+    fun `a shadow legendary falls back to the shadow tier`() {
+        val onlyUnset = listOf(
+            RaidBossCatalogEntry("RAID_LEVEL_UNSET", "PALKIA_SHADOW_FORM", "Shadow Palkia", 0)
+        )
+        val r = resolveBossFromCatalogue(
+            listOf("PALKIA_SHADOW_FORM"), null, onlyUnset, "Shadow Palkia"
+        ) { "POKEMON_RARITY_LEGENDARY" } as BossResolution.Resolved
+        assertEquals("RAID_LEVEL_5_SHADOW", r.raidLevel)
+    }
+
+    @Test
+    fun `resolves a shadow boss whose form is written into the name`() {
+        // The single most common raid in the real feed, and the one that used to fail.
+        // Pokebattler models ONE shadow Giratina, so shadow must beat the form: picking
+        // GIRATINA_ALTERED_FORM would silently return a non-shadow boss.
+        val cat = listOf(
+            RaidBossCatalogEntry("RAID_LEVEL_UNSET", "GIRATINA", "Giratina", 0),
+            RaidBossCatalogEntry("RAID_LEVEL_5", "GIRATINA_ALTERED_FORM", "Giratina (Altered)", 0),
+            RaidBossCatalogEntry("RAID_LEVEL_5", "GIRATINA_ORIGIN_FORM", "Giratina (Origin)", 0),
+            RaidBossCatalogEntry("RAID_LEVEL_5", "GIRATINA_SHADOW_FORM", "Shadow Giratina", 0)
+        )
+        val ids = PokebattlerNameNormalizer.candidateIds("Shadow Giratina Altered Forme")
+        val r = resolveBossFromCatalogue(ids, null, cat, "Shadow Giratina Altered Forme")
+            as BossResolution.Resolved
+        assertEquals("GIRATINA_SHADOW_FORM", r.raidLevel.let { r.pokemonId })
+        assertEquals("RAID_LEVEL_5", r.raidLevel)
     }
 
     @Test

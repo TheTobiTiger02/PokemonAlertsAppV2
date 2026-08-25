@@ -47,7 +47,9 @@ internal fun resolveBossFromCatalogue(
     candidates: List<String>,
     parsedTier: RaidTier?,
     catalogue: List<RaidBossCatalogEntry>,
-    attemptedName: String
+    attemptedName: String,
+    /** Species rarity by Pokebattler id; empty until the game master has synced. */
+    rarityFor: (String) -> String? = { null }
 ): BossResolution {
     if (candidates.isEmpty()) {
         return BossResolution.Unresolved(attemptedName, "No usable name on the alert")
@@ -63,12 +65,12 @@ internal fun resolveBossFromCatalogue(
         ?: return BossResolution.Unresolved(attemptedName, "No Pokebattler raid boss matched")
 
     val entry = matches.bestEntry()
+    // The alert wins when it states a tier; otherwise take the catalogue's, and only then
+    // fall back to a tier inferred from the species. Refusing here used to lose 34 of 252
+    // real alerts, including every Shadow Palkia.
     val raidLevel = parsedTier?.pokebattlerRaidLevel
         ?: matches.firstRealTier()
-        ?: return BossResolution.Unresolved(
-            attemptedName,
-            "Matched ${entry.pokemonId} but no raid tier is known for it"
-        )
+        ?: fallbackRaidLevel(entry.pokemonId, rarityFor(entry.pokemonId))
 
     return BossResolution.Resolved(entry.pokemonId, raidLevel, entry.displayName, entry.cp)
 }

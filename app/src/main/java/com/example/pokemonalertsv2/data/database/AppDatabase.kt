@@ -16,9 +16,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GoDexPendingUpdateEntity::class,
         PokebattlerRaidBossEntity::class,
         RaidCounterCacheEntity::class,
-        PokeGenieMonEntity::class
+        PokeGenieMonEntity::class,
+        PokebattlerSpeciesEntity::class,
+        PokebattlerMoveEntity::class,
+        PokebattlerRaidTierEntity::class
     ],
-    version = 18,
+    version = 20,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +31,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun goDexEntryDao(): GoDexEntryDao
     abstract fun raidCounterDao(): RaidCounterDao
     abstract fun pokeGenieDao(): PokeGenieDao
+    abstract fun gameMasterDao(): GameMasterDao
 
     companion object {
         @Volatile
@@ -498,6 +502,66 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 18 -> 19: adds the game master tables used by the local raid simulator. */
+        internal val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pokebattler_species` (
+                        `pokemonId` TEXT NOT NULL,
+                        `type1` TEXT,
+                        `type2` TEXT,
+                        `baseAttack` INTEGER NOT NULL,
+                        `baseDefense` INTEGER NOT NULL,
+                        `baseStamina` INTEGER NOT NULL,
+                        `quickMoves` TEXT NOT NULL,
+                        `chargedMoves` TEXT NOT NULL,
+                        `fetchedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`pokemonId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pokebattler_moves` (
+                        `moveId` TEXT NOT NULL,
+                        `type` TEXT,
+                        `power` REAL NOT NULL,
+                        `durationMs` INTEGER NOT NULL,
+                        `energyDelta` INTEGER NOT NULL,
+                        `fetchedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`moveId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pokebattler_raid_tiers` (
+                        `tier` TEXT NOT NULL,
+                        `hp` INTEGER NOT NULL,
+                        `cpm` REAL NOT NULL,
+                        `combatTimeMs` INTEGER NOT NULL,
+                        `fetchedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`tier`)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        /** Migration 19 -> 20: species rarity and dex number, for tier fallback and sprites. */
+        internal val MIGRATION_19_20 = object : Migration(19, 20) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pokebattler_species` ADD COLUMN `rarity` TEXT")
+                db.execSQL("ALTER TABLE `pokebattler_species` ADD COLUMN `dexNumber` INTEGER")
+                // Existing rows predate both columns. Zeroing the timestamp makes the TTL
+                // read as expired so the next card open backfills them.
+                db.execSQL("UPDATE `pokebattler_species` SET `fetchedAt` = 0")
+                // Every cached counters payload was stored worst-first by the old mapper.
+                db.execSQL("DELETE FROM `raid_counter_cache`")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -529,7 +593,9 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_14_15,
                     MIGRATION_15_16,
                     MIGRATION_16_17,
-                    MIGRATION_17_18
+                    MIGRATION_17_18,
+                    MIGRATION_18_19,
+                    MIGRATION_19_20
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

@@ -7,6 +7,8 @@ import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.PokebattlerRaidBossEntity
 import com.example.pokemonalertsv2.data.database.RaidCounterCacheEntity
+import com.example.pokemonalertsv2.data.database.GameMasterDao
+import com.example.pokemonalertsv2.data.database.PokebattlerRaidTierEntity
 import com.example.pokemonalertsv2.data.database.RaidCounterDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -36,6 +38,7 @@ sealed interface CountersError {
 class RaidCountersRepository @VisibleForTesting internal constructor(
     private val service: PokebattlerService,
     private val dao: RaidCounterDao,
+    private val gameMasterDao: GameMasterDao,
     private val now: () -> Long = System::currentTimeMillis
 ) {
 
@@ -53,14 +56,21 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         catalogueMutex.withLock {
             val fetchedAt = dao.catalogueFetchedAt() ?: 0L
             val age = now() - fetchedAt
+            // The same payload also carries the per-tier boss stats, so refresh when those
+            // are missing even if the boss list itself is still fresh.
+            val tiersMissing = gameMasterDao.raidTierCount() == 0
             val due = if (force) age >= CATALOGUE_FORCE_FLOOR_MILLIS else age >= CATALOGUE_TTL_MILLIS
-            if (!due) return@withLock
+            if (!due && !tiersMissing) return@withLock
 
             runCatching { service.getRaidCatalogue() }
                 .onSuccess { response ->
                     val timestamp = now()
                     val entities = response.toEntities(timestamp)
                     if (entities.isNotEmpty()) dao.replaceCatalogue(entities)
+                    // The same payload carries each tier boss HP and CPM, which the local
+                    // simulator needs and which no other endpoint exposes.
+                    val tiers = response.toTierEntities(timestamp)
+                    if (tiers.isNotEmpty()) gameMasterDao.insertRaidTiers(tiers)
                 }
             // A failure here is not fatal: any previously cached catalogue still resolves
             // bosses, and the caller reports its own error if resolution then fails.
@@ -84,7 +94,15 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         val catalogue = dao.getCatalogue().map {
             RaidBossCatalogEntry(it.tier, it.pokemonId, it.displayName, it.cp)
         }
-        return resolveBossFromCatalogue(candidates, RaidTierParser.parse(alert), catalogue, name)
+        // Rarity drives the tier fallback for bosses the catalogue only knows as "unset".
+        val lookupIds = (candidates + candidates.map { PokebattlerNameNormalizer.baseSpeciesId(it) })
+            .distinct()
+        val rarity = runCatching { gameMasterDao.speciesLookup(lookupIds) }
+            .getOrDefault(emptyList())
+            .associate { it.pokemonId to it.rarity }
+        return resolveBossFromCatalogue(candidates, RaidTierParser.parse(alert), catalogue, name) { id ->
+            rarity[id] ?: rarity[PokebattlerNameNormalizer.baseSpeciesId(id)]
+        }
     }
 
     /**
@@ -118,17 +136,27 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
                 }
             }
 
-            val attempt = runCatching {
-                service.getCounters(
-                    path = PokebattlerUrls.countersPath(
-                        bossPokemonId = boss.pokemonId,
-                        raidLevel = boss.raidLevel,
-                        attacker = attacker,
-                        attackStrategy = options.attackStrategy.apiValue
-                    ),
-                    query = PokebattlerUrls.queryParams(options),
-                    authorization = source.authorizationHeader()
-                )
+            suspend fun request(pokemonId: String, raidLevel: String) = service.getCounters(
+                path = PokebattlerUrls.countersPath(
+                    bossPokemonId = pokemonId,
+                    raidLevel = raidLevel,
+                    attacker = attacker,
+                    attackStrategy = options.attackStrategy.apiValue
+                ),
+                query = PokebattlerUrls.queryParams(options),
+                authorization = source.authorizationHeader()
+            )
+
+            var attempt = runCatching { request(boss.pokemonId, boss.raidLevel) }
+
+            // Pokebattler has no ranking for some shadow bosses at all and answers 429
+            // "Ranking capacity is busy" for every tier -- PALKIA_SHADOW_FORM does this while
+            // plain PALKIA and MEWTWO_SHADOW_FORM both work. A shadow boss has the same
+            // typing as its base form, so the base ranking is very nearly the same list and
+            // beats showing nothing.
+            val base = PokebattlerNameNormalizer.baseSpeciesId(boss.pokemonId)
+            if (attempt.isFailure && base != boss.pokemonId.uppercase(java.util.Locale.ROOT)) {
+                attempt = runCatching { request(base, normalizeTier(boss.raidLevel).removeSuffix("_SHADOW")) }
             }
 
             attempt.getOrNull()?.toPayload(options.sort)?.let { payload ->
@@ -187,7 +215,8 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: RaidCountersRepository(
                     service = PokebattlerApi.service(context.applicationContext),
-                    dao = AppDatabase.getDatabase(context.applicationContext).raidCounterDao()
+                    dao = AppDatabase.getDatabase(context.applicationContext).raidCounterDao(),
+                    gameMasterDao = AppDatabase.getDatabase(context.applicationContext).gameMasterDao()
                 ).also { INSTANCE = it }
             }
         }
@@ -226,3 +255,18 @@ private fun PokebattlerRaidsResponse.toEntities(timestamp: Long): List<Pokebattl
             )
         }
     }.distinctBy { it.tier to it.pokemonId }
+
+/** Per-tier boss stats, keyed by the normalized (queryable) tier token. */
+private fun PokebattlerRaidsResponse.toTierEntities(timestamp: Long): List<PokebattlerRaidTierEntity> =
+    tiers.mapNotNull { bucket ->
+        val tier = bucket.tier ?: return@mapNotNull null
+        val info = bucket.info ?: return@mapNotNull null
+        if (info.hp <= 0 || info.cpm <= 0.0) return@mapNotNull null
+        PokebattlerRaidTierEntity(
+            tier = normalizeTier(tier),
+            hp = info.hp,
+            cpm = info.cpm,
+            combatTimeMs = info.combatTimeMs.takeIf { it > 0 } ?: 180_000,
+            fetchedAt = timestamp
+        )
+    }.distinctBy { it.tier }

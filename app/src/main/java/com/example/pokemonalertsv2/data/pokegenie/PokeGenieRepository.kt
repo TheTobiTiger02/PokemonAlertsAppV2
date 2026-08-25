@@ -38,6 +38,11 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
         PokeGenieMatcher.index(dao.getAll().map { it.toOwned() })
     }
 
+    /** Every scanned Pokemon, for the local raid simulator to rank. */
+    suspend fun ownedForSimulation(): List<OwnedPokemon> = withContext(Dispatchers.IO) {
+        dao.getAll().map { it.toOwned() }
+    }
+
     /**
      * Reads, parses and stores a Poke Genie export.
      *

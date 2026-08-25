@@ -64,7 +64,8 @@ enum class PokebattlerFriendship(val apiValue: String, val label: String) {
     GREAT("FRIENDSHIP_LEVEL_2", "Great friend"),
     ULTRA("FRIENDSHIP_LEVEL_3", "Ultra friend"),
     BEST("FRIENDSHIP_LEVEL_4", "Best friend"),
-    LUCKY("FRIENDSHIP_LEVEL_5", "Lucky friend")
+    /** Level 5 is the game's "Forever Friend" tier; lucky is a separate, unrelated flag. */
+    FOREVER("FRIENDSHIP_LEVEL_5", "Forever Friend")
 }
 
 /**

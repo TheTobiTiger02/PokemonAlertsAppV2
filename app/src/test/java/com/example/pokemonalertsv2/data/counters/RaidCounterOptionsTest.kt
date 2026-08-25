@@ -37,7 +37,8 @@ class RaidCounterOptionsTest {
         assertEquals(6, PokebattlerFriendship.entries.size)
         assertEquals("FRIENDSHIP_LEVEL_0", PokebattlerFriendship.NONE.apiValue)
         assertEquals("FRIENDSHIP_LEVEL_4", PokebattlerFriendship.BEST.apiValue)
-        assertEquals("FRIENDSHIP_LEVEL_5", PokebattlerFriendship.LUCKY.apiValue)
+        assertEquals("FRIENDSHIP_LEVEL_5", PokebattlerFriendship.FOREVER.apiValue)
+        assertEquals("Forever Friend", PokebattlerFriendship.FOREVER.label)
     }
 
     @Test

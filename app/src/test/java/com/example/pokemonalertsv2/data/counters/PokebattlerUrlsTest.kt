@@ -72,7 +72,7 @@ class PokebattlerUrlsTest {
         val mutations = listOf(
             base.copy(attackerLevel = 30),
             base.copy(weather = PokebattlerWeather.RAINY),
-            base.copy(friendship = PokebattlerFriendship.LUCKY),
+            base.copy(friendship = PokebattlerFriendship.FOREVER),
             base.copy(dodge = PokebattlerDodge.PERFECT),
             base.copy(sort = PokebattlerSort.ESTIMATOR),
             base.copy(attackStrategy = PokebattlerAttackStrategy.DODGE_WEAVE),

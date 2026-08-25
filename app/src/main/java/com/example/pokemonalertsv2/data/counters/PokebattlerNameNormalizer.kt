@@ -14,6 +14,11 @@ import java.util.Locale
  */
 object PokebattlerNameNormalizer {
 
+    /** `PALKIA_SHADOW_FORM` -> `PALKIA`. Shadow forms have no game master entry of their own. */
+    fun baseSpeciesId(pokemonId: String): String = pokemonId.uppercase(Locale.ROOT)
+        .removeSuffix("_SHADOW_FORM")
+        .removeSuffix("_SHADOW")
+
     /** Underscore-insensitive lookup key, for near-miss matching. */
     fun looseKey(pokemonId: String): String =
         pokemonId.uppercase(Locale.ROOT).replace("_", "")
@@ -56,17 +61,29 @@ object PokebattlerNameNormalizer {
         if (isShadow) suffixes += "SHADOW"
 
         val candidates = LinkedHashSet<String>()
-        suffixes.forEach { suffix ->
-            candidates += "${base}_${suffix}_FORM"
-            candidates += "${base}_$suffix"
-        }
-        // Combined regional/form + shadow, which the catalogue does carry for shadow raids.
+        val formSuffixes = suffixes.filter { it != "SHADOW" }
+
+        // Shadow-ness outranks form-ness. Pokebattler models exactly ONE shadow Giratina
+        // (GIRATINA_SHADOW_FORM), not a shadow per form, and GIRATINA_ALTERED_FORM does
+        // exist and is NOT shadow -- so emitting the form first would confidently resolve a
+        // Shadow Giratina to the wrong boss. Shadow is a 1.2x attack multiplier; a form is
+        // usually a stat reshuffle, so shadow is the one to keep when only one can be had.
         if (isShadow) {
-            suffixes.filter { it != "SHADOW" }.forEach { suffix ->
+            formSuffixes.forEach { suffix ->
                 candidates += "${base}_${suffix}_SHADOW_FORM"
                 candidates += "${base}_${suffix}_SHADOW"
             }
+            candidates += "${base}_SHADOW_FORM"
+            candidates += "${base}_SHADOW"
         }
+
+        formSuffixes.forEach { suffix ->
+            candidates += "${base}_${suffix}_FORM"
+            candidates += "${base}_$suffix"
+        }
+        // A mega or primal of a form still needs the plain mega/primal id as a fallback.
+        if (isMega && variant == null) candidates += "${base}_MEGA"
+        if (isPrimal) candidates += "${base}_PRIMAL"
         // A mega or primal is a different Pokémon to Pokebattler, with its own id and its own
         // stats, so the bare species must NOT be offered as a fallback: it would resolve a
         // "Mega Charizard X" raid to plain Charizard, and would report a Mega Y Mewtwo in the
@@ -124,6 +141,30 @@ object PokebattlerNameNormalizer {
             }
         }
 
+        // "Shadow Giratina Altered Forme" glues the form onto the name with no form field.
+        // Peel a trailing "Form"/"Forme" word, then a trailing one- or two-word form we
+        // already recognise, so the base species is left on its own. Never empty the name.
+        if (regional == null) {
+            var words = working.split(" ").filter { it.isNotEmpty() }
+            if (words.size > 1 && words.last().lowercase(Locale.ROOT) in FORM_WORDS) {
+                words = words.dropLast(1)
+            }
+            if (words.size > 2) {
+                val pair = words.takeLast(2).joinToString(" ").lowercase(Locale.ROOT)
+                FORM_SUFFIX_ALIASES[pair]?.let {
+                    regional = it
+                    words = words.dropLast(2)
+                }
+            }
+            if (regional == null && words.size > 1) {
+                FORM_SUFFIX_ALIASES[words.last().lowercase(Locale.ROOT)]?.let {
+                    regional = it
+                    words = words.dropLast(1)
+                }
+            }
+            if (words.isNotEmpty()) working = words.joinToString(" ")
+        }
+
         // "Mega Charizard X" / "Mega Charizard Y" -> variant suffix on the id.
         if (mega) {
             val last = working.substringAfterLast(' ', "")
@@ -150,6 +191,8 @@ object PokebattlerNameNormalizer {
         value = value.replace(Regex("""['.:,]"""), "")
         value = value.replace(Regex("""[^A-Z0-9]+"""), "_")
         value = value.replace(Regex("""_+"""), "_")
+        // The alert feed writes "Altered Forme"; Pokebattler writes "_FORM".
+        value = value.replace(Regex("""(^|_)FORME(?=_|$)"""), "$1FORM")
         return value.trim('_')
     }
 
@@ -173,6 +216,9 @@ object PokebattlerNameNormalizer {
         "Paldean" to "PALDEA",
         "Paldea" to "PALDEA"
     )
+
+    /** Words the feed appends that only mark "this is a form", carrying no meaning. */
+    private val FORM_WORDS = setOf("form", "forme")
 
     private val BASE_FORM_LABELS = setOf(
         "normal", "normal form", "natural", "natural form",

@@ -47,8 +47,10 @@ class PokebattlerMapperTest {
         val payload = response(defender).toPayload(PokebattlerSort.OVERALL)!!
         assertEquals("MEWTWO", payload.bossPokemonId)
         assertEquals(54148, payload.bossCp)
-        assertEquals("Confusion", payload.bossMove1)
-        assertEquals("Focus Blast", payload.bossMove2)
+        // Boss moves are kept as raw ids, not display names: the local simulator has to
+        // look them up in the game master. The card prettifies them at render time.
+        assertEquals("CONFUSION_FAST", payload.bossMove1)
+        assertEquals("FOCUS_BLAST", payload.bossMove2)
         assertEquals(1, payload.counters.size)
 
         val c = payload.counters.first()
@@ -63,33 +65,60 @@ class PokebattlerMapperTest {
     }
 
     @Test
-    fun `ranks are one based and follow api order`() {
+    fun `ranks reverse the api order so rank one is the strongest`() {
+        // Pokebattler emits `defenders` worst-first: verified against Lunala, where the array
+        // runs estimator 1.60 -> 1.11 and the genuine best counter is the LAST element.
         val second = defender.copy(pokemonId = "ETERNATUS")
         val payload = response(defender, second).toPayload(PokebattlerSort.OVERALL)!!
         assertEquals(listOf(1, 2), payload.counters.map { it.rank })
-        assertEquals(listOf("KYUREM_BLACK_FORM", "ETERNATUS"), payload.counters.map { it.pokemonId })
+        assertEquals(listOf("ETERNATUS", "KYUREM_BLACK_FORM"), payload.counters.map { it.pokemonId })
     }
 
     @Test
     fun `best moveset depends on the chosen sort`() {
         fun pick(sort: PokebattlerSort) = selectBestByMove(defender, sort)?.move1
-        // Higher is better for rating, power and damage.
-        assertEquals("DRAGON_BREATH_FAST", pick(PokebattlerSort.OVERALL))
-        assertEquals("SHADOW_CLAW_FAST", pick(PokebattlerSort.POWER))
-        assertEquals("BITE_FAST", pick(PokebattlerSort.TDO))
-        // Lower is better for the estimator: fewer trainers needed to win.
+        // Inside byMove, overallRating / estimator / power are COSTS - lower is better.
+        // Only tdo is genuinely higher-is-better.
+        assertEquals("BITE_FAST", pick(PokebattlerSort.OVERALL))
+        assertEquals("DRAGON_BREATH_FAST", pick(PokebattlerSort.POWER))
         assertEquals("IRON_TAIL_FAST", pick(PokebattlerSort.ESTIMATOR))
         assertEquals("IRON_TAIL_FAST", pick(PokebattlerSort.TIME))
+        assertEquals("BITE_FAST", pick(PokebattlerSort.TDO))
+    }
+
+    @Test
+    fun `never headlines the worst moveset of a counter`() {
+        // The real Shadow Honchkrow shape against Lunala: Snarl/Dark Pulse scores
+        // overallRating 0.3622, Peck/Frustration 19.1847. Taking the maximum is what put
+        // "Peck / Frustration" on a Dark counter facing a Psychic/Ghost boss.
+        val honchkrow = PbDefender(
+            pokemonId = "HONCHKROW_SHADOW_FORM",
+            total = PbResult(overallRating = 0.3622, estimator = 1.6431),
+            byMove = listOf(
+                move("PECK_FAST", "FRUSTRATION", rating = 19.1847, est = 10.8389, tdo = 189.0, power = 9.792),
+                move("SNARL_FAST", "DARK_PULSE", rating = 0.3622, est = 1.6431, tdo = 189.0, power = 1.443)
+            )
+        )
+        assertEquals("SNARL_FAST", selectBestByMove(honchkrow, PokebattlerSort.OVERALL)?.move1)
+        assertEquals("DARK_PULSE", selectBestByMove(honchkrow, PokebattlerSort.OVERALL)?.move2)
+    }
+
+    @Test
+    fun `picks the moveset that achieves the total metric`() {
+        // Verified against the live API: total.overallRating == min(byMove overallRating).
+        val chosen = selectBestByMove(defender, PokebattlerSort.OVERALL)
+        val minimum = defender.byMove.minOf { it.result!!.overallRating!! }
+        assertEquals(minimum, chosen!!.result!!.overallRating!!, 1e-9)
     }
 
     @Test
     fun `the persisted moveset is the one the chosen sort headlines`() {
         val overall = response(defender).toPayload(PokebattlerSort.OVERALL)!!.counters.single()
-        assertEquals("Dragon Breath", overall.fastMove)
-        assertEquals("Outrage", overall.chargedMove)
-        val tdo = response(defender).toPayload(PokebattlerSort.TDO)!!.counters.single()
-        assertEquals("Bite", tdo.fastMove)
-        assertEquals("Surf", tdo.chargedMove)
+        assertEquals("Bite", overall.fastMove)
+        assertEquals("Surf", overall.chargedMove)
+        val estimator = response(defender).toPayload(PokebattlerSort.ESTIMATOR)!!.counters.single()
+        assertEquals("Iron Tail", estimator.fastMove)
+        assertEquals("Crunch", estimator.chargedMove)
     }
 
     @Test

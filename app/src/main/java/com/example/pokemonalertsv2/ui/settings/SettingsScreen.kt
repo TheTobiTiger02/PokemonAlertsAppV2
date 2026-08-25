@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -125,6 +126,7 @@ internal enum class SettingsDestination(val title: String) {
     ALERT_FILTERS("Alert filters"),
     GODEX("GoDex checklist"),
     GODEX_COLLECTION("GoDex collection"),
+    RAID_COUNTERS("Raid counters"),
     NOTIFICATIONS("Notifications"),
     ABOUT_UPDATES("About & updates")
 }
@@ -200,6 +202,10 @@ fun SettingsScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     
+    val raidCounterSettings by viewModel.raidCounterSettings.collectAsStateWithLifecycle(
+        initialValue = com.example.pokemonalertsv2.data.counters.RaidCounterSettings()
+    )
+    val pokeGenieImportStatus by viewModel.pokeGenieImportStatus.collectAsStateWithLifecycle(initialValue = null)
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
     val raidsNotifications by viewModel.raidsNotifications.collectAsStateWithLifecycle(initialValue = true)
     val spawnsNotifications by viewModel.spawnsNotifications.collectAsStateWithLifecycle(initialValue = true)
@@ -352,7 +358,28 @@ fun SettingsScreen(
                             goDexSyncUiState.errorMessage != null -> "Sync issue"
                             else -> null
                         },
+                        raidCountersSummary = buildString {
+                            append("Level ${raidCounterSettings.options.attackerLevel}")
+                            append(" - ")
+                            append(
+                                if (raidCounterSettings.pokeGenieCount > 0) {
+                                    "${raidCounterSettings.pokeGenieCount} of yours imported"
+                                } else {
+                                    "Poke Genie not imported"
+                                }
+                            )
+                        },
                         onDestinationSelected = navigateTo
+                    )
+                }
+
+                if (animatedDestination == SettingsDestination.RAID_COUNTERS) {
+                    RaidCountersSettingsContent(
+                        settings = raidCounterSettings,
+                        onOptionsChanged = viewModel::updateRaidCounterDefaults,
+                        onImportCsv = viewModel::importPokeGenieCsv,
+                        onClearPokeGenie = viewModel::clearPokeGenie,
+                        importStatus = pokeGenieImportStatus
                     )
                 }
 
@@ -1230,6 +1257,7 @@ private fun SettingsOverview(
     backgroundLocationGranted: Boolean,
     goDexSummary: String,
     goDexBadge: String?,
+    raidCountersSummary: String,
     onDestinationSelected: (SettingsDestination) -> Unit
 ) {
     val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
@@ -1275,6 +1303,13 @@ private fun SettingsOverview(
             summary = goDexSummary,
             statusBadge = goDexBadge,
             onClick = { onDestinationSelected(SettingsDestination.GODEX) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.Star,
+            title = "Raid counters",
+            summary = raidCountersSummary,
+            onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
         SettingsOverviewRow(

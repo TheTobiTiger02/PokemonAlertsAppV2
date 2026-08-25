@@ -35,7 +35,11 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
             options = RaidCounterOptions(
                 attackerLevel = prefs[LEVEL_KEY] ?: RaidCounterOptions.DEFAULT_ATTACKER_LEVEL,
                 weather = prefs[WEATHER_KEY].toEnum(PokebattlerWeather.NONE),
-                friendship = prefs[FRIENDSHIP_KEY].toEnum(PokebattlerFriendship.NONE),
+                friendship = when (prefs[FRIENDSHIP_KEY]) {
+                    // Renamed by the "Forever Friend" fix; keep saved defaults working.
+                    "LUCKY" -> PokebattlerFriendship.FOREVER
+                    else -> prefs[FRIENDSHIP_KEY].toEnum(PokebattlerFriendship.NONE)
+                },
                 dodge = prefs[DODGE_KEY].toEnum(PokebattlerDodge.NONE),
                 sort = prefs[SORT_KEY].toEnum(PokebattlerSort.OVERALL),
                 attackStrategy = prefs[STRATEGY_KEY].toEnum(PokebattlerAttackStrategy.CINEMATIC),

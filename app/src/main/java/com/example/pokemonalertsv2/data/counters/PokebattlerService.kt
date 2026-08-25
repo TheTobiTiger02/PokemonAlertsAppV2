@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data.counters
 
+import com.example.pokemonalertsv2.data.gamemaster.PokebattlerMovesResponse
+import com.example.pokemonalertsv2.data.gamemaster.PokebattlerPokemonResponse
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.QueryMap
@@ -26,4 +28,12 @@ interface PokebattlerService {
 
     @GET("raids")
     suspend fun getRaidCatalogue(): PokebattlerRaidsResponse
+
+    /** Base stats, types and legal movesets. About 400 KB gzipped. */
+    @GET("pokemon")
+    suspend fun getPokemon(): PokebattlerPokemonResponse
+
+    /** Move power, duration and energy. About 13 KB. */
+    @GET("moves")
+    suspend fun getMoves(): PokebattlerMovesResponse
 }

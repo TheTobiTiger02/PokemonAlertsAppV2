@@ -95,7 +95,16 @@ data class PokebattlerRaidsResponse(
 data class PbRaidTierBucket(
     val tier: String? = null,
     val type: String? = null,
+    /** Fixed boss stats for the tier: HP, CPM and the raid timer. */
+    val info: PbRaidTierInfo? = null,
     val raids: List<PbRaidEntry> = emptyList()
+)
+
+@Serializable
+data class PbRaidTierInfo(
+    val hp: Int = 0,
+    val cpm: Double = 0.0,
+    val combatTimeMs: Int = 0
 )
 
 @Serializable

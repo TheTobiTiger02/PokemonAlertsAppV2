@@ -61,7 +61,11 @@ object PokebattlerApi {
             .addInterceptor(OfflineCacheInterceptor(appContext))
             .addInterceptor(RateLimitRetryInterceptor())
             .addInterceptor(logging)
-            .callTimeout(45, TimeUnit.SECONDS)
+            // The ranking endpoint is slow when busy; the 10s default read timeout fires
+            // and surfaces as a misleading connection error.
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(60, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()
@@ -124,10 +128,15 @@ object PokebattlerApi {
             var attempt = 0
             var response = chain.proceed(chain.request())
             while (response.code == HTTP_TOO_MANY_REQUESTS && attempt < MAX_RETRIES) {
-                val waitMillis = response.retryAfterMillis() ?: BACKOFF_MILLIS[attempt]
+                val requested = response.retryAfterMillis()
+                // Waiting longer than the service asks for is pointless, and waiting longer
+                // than the call timeout turns a rate limit into a misleading "check your
+                // connection". If it wants more time than we have, surface the 429 now.
+                if (requested != null && requested > MAX_WAIT_MILLIS) return response
+
                 response.close()
                 try {
-                    Thread.sleep(waitMillis)
+                    Thread.sleep(requested ?: BACKOFF_MILLIS[attempt])
                 } catch (interrupted: InterruptedException) {
                     Thread.currentThread().interrupt()
                     return chain.proceed(chain.request())
@@ -141,13 +150,15 @@ object PokebattlerApi {
         private fun Response.retryAfterMillis(): Long? = header("Retry-After")
             ?.trim()
             ?.toLongOrNull()
-            ?.coerceIn(0, MAX_RETRY_AFTER_SECONDS)
+            ?.coerceAtLeast(0)
             ?.let { it * 1000 }
 
         private companion object {
             const val HTTP_TOO_MANY_REQUESTS = 429
             const val MAX_RETRIES = 2
-            const val MAX_RETRY_AFTER_SECONDS = 30L
+
+            /** Total backoff must stay well inside the 45s call timeout. */
+            const val MAX_WAIT_MILLIS = 5_000L
             val BACKOFF_MILLIS = longArrayOf(1_000L, 4_000L)
         }
     }
