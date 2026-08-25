@@ -23,11 +23,14 @@ class PersonalCounterEngineTest {
     private val splash = SimMove("SPLASH_FAST", PokemonType.WATER, 0.0, 1.23, 4)
     private val struggle = SimMove("STRUGGLE", PokemonType.NORMAL, 35.0, 2.2, -33)
 
-    private val speciesMap = listOf(tyranitar, tyranitarShadow, magikarp).associateBy { it.pokemonId }
+    private val tyranitarMega = SimSpecies("TYRANITAR_MEGA", 309, 276, 225, listOf(PokemonType.ROCK, PokemonType.DARK))
+    private val speciesMap =
+        listOf(tyranitar, tyranitarShadow, tyranitarMega, magikarp).associateBy { it.pokemonId }
     private val moveMap = listOf(bite, smackDown, crunch, stoneEdge, splash, struggle).associateBy { it.moveId }
     private val legalMoves = mapOf(
         "TYRANITAR" to (listOf("BITE_FAST", "SMACK_DOWN_FAST") to listOf("CRUNCH", "STONE_EDGE")),
         "TYRANITAR_SHADOW_FORM" to (listOf("BITE_FAST", "SMACK_DOWN_FAST") to listOf("CRUNCH", "STONE_EDGE")),
+        "TYRANITAR_MEGA" to (listOf("BITE_FAST", "SMACK_DOWN_FAST") to listOf("CRUNCH", "STONE_EDGE")),
         "MAGIKARP" to (listOf("SPLASH_FAST") to listOf("STRUGGLE"))
     )
 
@@ -50,6 +53,7 @@ class PersonalCounterEngineTest {
         sta: Int? = 15,
         quick: String? = null,
         charge: String? = null,
+        charge2: String? = null,
         shadow: Boolean = false,
         cp: Int? = 3000
     ) = OwnedPokemon(
@@ -62,6 +66,7 @@ class PersonalCounterEngineTest {
         cp = cp,
         quickMove = quick,
         chargeMove = charge,
+        chargeMove2 = charge2,
         shadow = shadow,
         lucky = false,
         matchKeys = listOf(id)
@@ -90,6 +95,37 @@ class PersonalCounterEngineTest {
         val counter = result.ranked.single()
         assertEquals("SMACK_DOWN_FAST", counter.fastMove.moveId)
         assertEquals("STONE_EDGE", counter.chargedMove.moveId)
+    }
+
+    @Test
+    fun `considers the second charge move`() {
+        // Real case: Shadow Garchomp has Earth Power as its first charge move and Breaking
+        // Swipe as its second. Only the second is super effective here, and ignoring it kept
+        // it out of the rankings entirely.
+        val onlyFirst = rank(
+            owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Stone Edge")
+        ).ranked.single()
+        val withSecond = rank(
+            owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Stone Edge", charge2 = "Crunch")
+        ).ranked.single()
+
+        assertEquals("STONE_EDGE", onlyFirst.chargedMove.moveId)
+        assertEquals("CRUNCH", withSecond.chargedMove.moveId)
+        assertTrue(withSecond.dps > onlyFirst.dps)
+        // Both moves are ones the user actually has, so this is a choice, not a guess.
+        assertFalse(withSecond.movesetAssumed)
+    }
+
+    @Test
+    fun `a team brings at most one mega`() {
+        val megas = (1..6).map { owned("Tyranitar", "TYRANITAR_MEGA", quick = "Bite", charge = "Crunch") }
+        val rest = (1..6).map { owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch") }
+        val result = PersonalCounterEngine.rank(megas + rest, boss, speciesMap, moveMap, legalMoves)
+        assertEquals(6, result.team.sumOf { it.count })
+        assertEquals(
+            1,
+            result.team.filter { it.counter.pokemonId.contains("_MEGA") }.sumOf { it.count }
+        )
     }
 
     @Test

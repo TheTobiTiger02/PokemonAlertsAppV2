@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PokebattlerMoveEntity::class,
         PokebattlerRaidTierEntity::class
     ],
-    version = 20,
+    version = 21,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -562,6 +562,16 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 20 -> 21: sprite variant numbers, so forms get their own icon. */
+        internal val MIGRATION_20_21 = object : Migration(20, 21) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pokebattler_species` ADD COLUMN `formId` INTEGER")
+                db.execSQL("ALTER TABLE `pokebattler_species` ADD COLUMN `megaEvoId` INTEGER")
+                // Existing rows predate both columns; expire them so the next sync backfills.
+                db.execSQL("UPDATE `pokebattler_species` SET `fetchedAt` = 0")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -595,7 +605,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_16_17,
                     MIGRATION_17_18,
                     MIGRATION_18_19,
-                    MIGRATION_19_20
+                    MIGRATION_19_20,
+                    MIGRATION_20_21
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

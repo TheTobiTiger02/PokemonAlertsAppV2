@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data.counters
 
+import com.example.pokemonalertsv2.data.gamemaster.MasterfileResponse
 import com.example.pokemonalertsv2.data.gamemaster.PokebattlerMovesResponse
 import com.example.pokemonalertsv2.data.gamemaster.PokebattlerPokemonResponse
 import retrofit2.http.GET
@@ -36,4 +37,12 @@ interface PokebattlerService {
     /** Move power, duration and energy. About 13 KB. */
     @GET("moves")
     suspend fun getMoves(): PokebattlerMovesResponse
+
+    /**
+     * The UICONS masterfile, fetched by absolute URL from a different host.
+     *
+     * Only used to turn Pokebattler form names into the icon set numeric ids.
+     */
+    @GET
+    suspend fun getMasterfile(@Url url: String): MasterfileResponse
 }

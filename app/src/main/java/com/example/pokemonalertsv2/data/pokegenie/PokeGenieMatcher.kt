@@ -19,6 +19,8 @@ data class OwnedPokemon(
     val cp: Int?,
     val quickMove: String?,
     val chargeMove: String?,
+    /** Poke Genie records a second charge move when one is unlocked. */
+    val chargeMove2: String? = null,
     val shadow: Boolean,
     val lucky: Boolean,
     val matchKeys: List<String>
@@ -101,6 +103,7 @@ object PokeGenieMatcher {
         cp = row.cp,
         quickMove = row.quickMove,
         chargeMove = row.chargeMove,
+        chargeMove2 = row.chargeMove2,
         shadow = row.shadowState == ShadowState.SHADOW,
         lucky = row.lucky,
         matchKeys = matchKeysFor(row)

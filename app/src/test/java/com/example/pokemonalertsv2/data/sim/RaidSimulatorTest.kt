@@ -270,6 +270,36 @@ class TeamBuilderTest {
     }
 
     @Test
+    fun `a team may contain at most one mega`() {
+        // Only one Mega Evolution can be active at a time, so six megas is not a real team.
+        val mega = SimSpecies("TYRANITAR_MEGA", 309, 276, 225, listOf(PokemonType.ROCK, PokemonType.DARK))
+        val candidates = (1..6).map { owned("mega$it", mega, 40.0) } +
+            (1..6).map { owned("ttar$it", tyranitar, 40.0) }
+        val team = TeamBuilder.buildTeam(TeamBuilder.rank(candidates, boss), boss)
+        assertEquals(6, team.members.size)
+        assertEquals(
+            1,
+            team.members.count { it.attacker.species.pokemonId.contains("_MEGA") }
+        )
+    }
+
+    @Test
+    fun `primals occupy the same slot as megas`() {
+        val megaTtar = SimSpecies("TYRANITAR_MEGA", 309, 276, 225, listOf(PokemonType.ROCK, PokemonType.DARK))
+        val primal = SimSpecies("GROUDON_PRIMAL", 353, 268, 218, listOf(PokemonType.ROCK, PokemonType.DARK))
+        val candidates = listOf(owned("mega", megaTtar, 40.0), owned("primal", primal, 40.0)) +
+            (1..6).map { owned("ttar$it", tyranitar, 40.0) }
+        val team = TeamBuilder.buildTeam(TeamBuilder.rank(candidates, boss), boss)
+        assertEquals(
+            1,
+            team.members.count {
+                val id = it.attacker.species.pokemonId
+                id.contains("_MEGA") || id.contains("_PRIMAL")
+            }
+        )
+    }
+
+    @Test
     fun `never suggests the same copy twice`() {
         val ranked = TeamBuilder.rank(listOf(owned("only", tyranitar, 40.0)), boss)
         val team = TeamBuilder.buildTeam(ranked, boss)

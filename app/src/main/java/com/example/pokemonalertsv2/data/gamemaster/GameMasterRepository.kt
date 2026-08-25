@@ -54,9 +54,15 @@ class GameMasterRepository @VisibleForTesting internal constructor(
             if (!force && !stale && complete) return@withLock true
 
             val timestamp = now()
+            // Sprite variant numbers are a nice-to-have: without them forms fall back to the
+            // base icon, so a failure here must not fail the whole sync.
+            val variants = runCatching {
+                SpriteVariantIndex.from(service.getMasterfile(SpriteVariantIndex.MASTERFILE_URL))
+            }.getOrNull()
+
             val speciesOk = runCatching { service.getPokemon() }
                 .mapCatching { response ->
-                    val rows = response.toEntities(timestamp)
+                    val rows = response.toEntities(timestamp, variants)
                     if (rows.isNotEmpty()) dao.replaceSpecies(rows)
                     rows.isNotEmpty()
                 }
@@ -126,7 +132,13 @@ class GameMasterRepository @VisibleForTesting internal constructor(
     suspend fun spriteUrls(ids: Collection<String>): Map<String, List<String>> {
         val lookup = speciesLookup(ids)
         return ids.distinct().mapNotNull { id ->
-            val urls = PokemonSpriteUrls.candidates(lookup[id]?.dexNumber, id)
+            val row = lookup[id]
+            val urls = PokemonSpriteUrls.candidates(
+                dexNumber = row?.dexNumber,
+                pokemonId = id,
+                formId = row?.formId,
+                megaEvoId = row?.megaEvoId
+            )
             urls.takeIf { it.isNotEmpty() }?.let { id to it }
         }.toMap()
     }
@@ -196,7 +208,10 @@ private fun PbMove.toEntity(timestamp: Long) = PokebattlerMoveEntity(
  * A temporary evolution inherits its base form legal moves, which is correct in game: a
  * Mega Tyranitar knows whatever the Tyranitar knew.
  */
-internal fun PokebattlerPokemonResponse.toEntities(timestamp: Long): List<PokebattlerSpeciesEntity> {
+internal fun PokebattlerPokemonResponse.toEntities(
+    timestamp: Long,
+    variants: SpriteVariantIndex? = null
+): List<PokebattlerSpeciesEntity> {
     val rows = mutableListOf<PokebattlerSpeciesEntity>()
     pokemon.forEach { species ->
         val stats = species.stats ?: return@forEach
@@ -214,6 +229,11 @@ internal fun PokebattlerPokemonResponse.toEntities(timestamp: Long): List<Pokeba
             chargedMoves = charged,
             rarity = species.rarity,
             dexNumber = species.pokedex?.pokemonNum,
+            formId = variants?.formId(
+                species.pokedex?.pokemonNum,
+                species.pokedex?.form,
+                species.pokedex?.pokemonId
+            ),
             fetchedAt = timestamp
         )
 
@@ -234,6 +254,13 @@ internal fun PokebattlerPokemonResponse.toEntities(timestamp: Long): List<Pokeba
                 // raid tier fallback.
                 rarity = species.rarity,
                 dexNumber = species.pokedex?.pokemonNum,
+                formId = variants?.formId(
+                    species.pokedex?.pokemonNum,
+                    species.pokedex?.form,
+                    species.pokedex?.pokemonId
+                ),
+                // Matched on base attack so Mega Charizard X and Y cannot be swapped.
+                megaEvoId = variants?.megaEvoId(species.pokedex?.pokemonNum, tempStats.baseAttack),
                 fetchedAt = timestamp
             )
         }

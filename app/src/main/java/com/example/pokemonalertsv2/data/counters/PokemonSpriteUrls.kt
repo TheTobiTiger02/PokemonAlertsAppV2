@@ -6,13 +6,12 @@ import java.util.Locale
  * Sprite URLs for a Pokebattler id.
  *
  * Uses the same UICONS set the alert feed already points at, so counters look like the rest
- * of the app. The set names variants `{dex}_e{n}` for temporary evolutions (megas),
- * `{dex}_a{n}` for alignment (shadow) and `{dex}_f{n}` for forms, but coverage is uneven, so
- * these are offered as a best-first list and the caller falls through on a load error. The
- * plain `{dex}.png` always exists and is always last.
+ * of the app. Filenames carry variants as `_f{n}` for a form, `_e{n}` for a temporary
+ * evolution (mega) and `_a1` for shadow, in that order, e.g. `487_f90_a1.png` for Shadow
+ * Giratina Altered.
  *
- * Form variants are deliberately not attempted: the numeric form index is not derivable from
- * a Pokebattler id.
+ * Coverage is uneven, so these are returned best-first and the caller falls through on a
+ * load error. The plain `{dex}.png` always exists and is always last.
  */
 object PokemonSpriteUrls {
 
@@ -21,16 +20,37 @@ object PokemonSpriteUrls {
             "UICONS_Full_Shiny_Sparkle_128/pokemon"
 
     /** Best-first URLs to try, or empty when the dex number is unknown. */
-    fun candidates(dexNumber: Int?, pokemonId: String?): List<String> {
+    fun candidates(
+        dexNumber: Int?,
+        pokemonId: String?,
+        formId: Int? = null,
+        megaEvoId: Int? = null
+    ): List<String> {
         val dex = dexNumber?.takeIf { it > 0 } ?: return emptyList()
         val id = pokemonId?.uppercase(Locale.ROOT).orEmpty()
-        val plain = "$BASE/$dex.png"
+        val shadow = id.endsWith("_SHADOW_FORM") || id.endsWith("_SHADOW")
+        val mega = id.contains("_MEGA")
 
-        val variant = when {
-            id.contains("_MEGA") -> "$BASE/${dex}_e1.png"
-            id.endsWith("_SHADOW_FORM") || id.endsWith("_SHADOW") -> "$BASE/${dex}_a1.png"
-            else -> null
+        // Most specific first, so a miss degrades one step at a time rather than straight to
+        // the base sprite.
+        val variants = buildList {
+            val evo = megaEvoId?.takeIf { it > 0 }
+            val form = formId?.takeIf { it > 0 }
+            if (mega && evo != null) {
+                if (shadow) add("_e${evo}_a1")
+                add("_e$evo")
+            }
+            if (mega && evo == null) {
+                if (shadow) add("_e1_a1")
+                add("_e1")
+            }
+            if (form != null) {
+                if (shadow) add("_f${form}_a1")
+                add("_f$form")
+            }
+            if (shadow) add("_a1")
+            add("")
         }
-        return listOfNotNull(variant, plain).distinct()
+        return variants.distinct().map { suffix -> "$BASE/$dex$suffix.png" }
     }
 }

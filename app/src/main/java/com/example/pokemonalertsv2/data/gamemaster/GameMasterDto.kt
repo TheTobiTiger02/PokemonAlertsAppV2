@@ -29,7 +29,9 @@ data class PbSpecies(
 data class PbPokedex(
     val pokemonId: String? = null,
     /** National dex number; drives the sprite filename. */
-    val pokemonNum: Int? = null
+    val pokemonNum: Int? = null,
+    /** Form name, e.g. `NECROZMA_DAWN_WINGS`. Absent for the base form. */
+    val form: String? = null
 )
 
 @Serializable
@@ -45,6 +47,37 @@ data class PbBaseStats(
     val baseStamina: Int = 0,
     val baseAttack: Int = 0,
     val baseDefense: Int = 0
+)
+
+/**
+ * The UICONS companion masterfile, used only to resolve sprite variant numbers.
+ *
+ * Pokebattler names forms (`NECROZMA_DAWN_WINGS`) but the icon set numbers them
+ * (`800_f2719.png`), and this is the mapping between the two. About 80 KB.
+ */
+@Serializable
+data class MasterfileResponse(
+    val monsters: Map<String, MfMonster> = emptyMap()
+)
+
+@Serializable
+data class MfMonster(
+    val id: Int = 0,
+    val name: String? = null,
+    val form: MfForm? = null,
+    val tempEvolutions: List<MfTempEvolution> = emptyList()
+)
+
+@Serializable
+data class MfForm(
+    val id: Int = 0,
+    val name: String? = null
+)
+
+@Serializable
+data class MfTempEvolution(
+    val tempEvoId: Int = 0,
+    val stats: PbBaseStats? = null
 )
 
 /** `GET /moves` — power, duration and energy for every move. */

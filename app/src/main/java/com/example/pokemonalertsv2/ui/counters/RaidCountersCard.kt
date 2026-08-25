@@ -115,7 +115,10 @@ private fun Header(state: RaidCountersUiState) {
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         CounterSprite(
-            urls = state.spriteUrls[state.bossPokemonId].orEmpty(),
+            // The feed thumbnail is form-exact, so prefer it and keep the rebuilt URLs as
+            // the fallback for alerts that arrive without one.
+            urls = listOfNotNull(state.bossThumbnailUrl) +
+                state.spriteUrls[state.bossPokemonId].orEmpty(),
             size = 40.dp
         ) {
             Text(text = "🛡️", style = MaterialTheme.typography.titleMedium)

@@ -173,6 +173,7 @@ private fun PokeGenieMonEntity.toOwned(): OwnedPokemon {
         cp = cp,
         quickMove = quickMove,
         chargeMove = chargeMove,
+        chargeMove2 = chargeMove2,
         shadow = shadowState == ShadowState.SHADOW.name,
         lucky = lucky,
         matchKeys = keys

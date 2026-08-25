@@ -95,7 +95,9 @@ object PersonalCounterEngine {
             )
         }
 
-        val teamMembers = ranked.take(teamSize)
+        // buildTeam, not take(): it enforces the one-mega-at-a-time rule.
+        val suggested = TeamBuilder.buildTeam(ranked, boss, teamSize)
+        val teamMembers = suggested.members
         val team = TeamBuilder.groupTeam(teamMembers).map { group ->
             val (mon, pokemonId, built) = group.representative.owned
             PersonalTeamSlot(
@@ -156,19 +158,23 @@ object PersonalCounterEngine {
         val sta = mon.staIv ?: DEFAULT_IV
 
         val recordedFast = moveLookup.fast(mon.quickMove)
-        val recordedCharged = moveLookup.charged(mon.chargeMove)
-        if (recordedFast != null && recordedCharged != null) {
-            return BuiltAttacker(
-                SimAttacker(species, level, atk, def, sta, recordedFast, recordedCharged, mon.shadow),
-                assumed = false
-            )
-        }
+        // Poke Genie records a second charge move when one is unlocked, and it is often the
+        // better one against a given boss: a Shadow Garchomp with Earth Power AND Breaking
+        // Swipe is a strong Dragon counter only if the second move is considered.
+        val recordedCharged = listOfNotNull(
+            moveLookup.charged(mon.chargeMove),
+            moveLookup.charged(mon.chargeMove2)
+        ).distinctBy { it.moveId }
 
-        val legalFast = moveLookup.legalFast(species.pokemonId)
-        val legalCharged = moveLookup.legalCharged(species.pokemonId)
-        val fastOptions = listOfNotNull(recordedFast).ifEmpty { legalFast }
-        val chargedOptions = listOfNotNull(recordedCharged).ifEmpty { legalCharged }
+        val fastOptions = listOfNotNull(recordedFast)
+            .ifEmpty { moveLookup.legalFast(species.pokemonId) }
+        val chargedOptions = recordedCharged
+            .ifEmpty { moveLookup.legalCharged(species.pokemonId) }
         if (fastOptions.isEmpty() || chargedOptions.isEmpty()) return null
+
+        // Only flagged as assumed when the scan did not tell us the moveset at all; picking
+        // between two moves the user actually has is a real choice, not a guess.
+        val assumed = recordedFast == null || recordedCharged.isEmpty()
 
         var best: SimAttacker? = null
         var bestRating = -1.0
@@ -184,7 +190,7 @@ object PersonalCounterEngine {
                 }
             }
         }
-        return best?.let { BuiltAttacker(it, assumed = recordedFast == null || recordedCharged == null) }
+        return best?.let { BuiltAttacker(it, assumed = assumed) }
     }
 
     private const val DEFAULT_IV = 10

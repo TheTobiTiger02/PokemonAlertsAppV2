@@ -42,6 +42,11 @@ data class RaidCountersUiState(
     val visible: Boolean = false,
     val isLoading: Boolean = false,
     val bossPokemonId: String? = null,
+    /**
+     * The alert feed's own thumbnail, which already names the exact form
+     * (`487_f90_a1.png` for Shadow Giratina Altered), so it beats anything we rebuild.
+     */
+    val bossThumbnailUrl: String? = null,
     val bossDisplayName: String? = null,
     val bossCp: Int? = null,
     val bossMove1: String? = null,
@@ -126,6 +131,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 visible = true,
                 isLoading = true,
                 options = options,
+                bossThumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() },
                 source = if (ownedCount > 0) settings.source else CounterSourceId.ALL_POKEMON,
                 ownedOnly = settings.ownedOnly,
                 pokeGenieCount = ownedCount

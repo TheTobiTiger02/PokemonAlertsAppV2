@@ -24,6 +24,10 @@ data class PokebattlerSpeciesEntity(
     val rarity: String? = null,
     /** National dex number, used to build sprite URLs. */
     val dexNumber: Int? = null,
+    /** Icon-set form number, e.g. 2719 for Necrozma Dawn Wings -> `800_f2719.png`. */
+    val formId: Int? = null,
+    /** Icon-set temporary-evolution number for megas, e.g. 2 for Mega Charizard X. */
+    val megaEvoId: Int? = null,
     val fetchedAt: Long
 )
 
@@ -31,7 +35,9 @@ data class PokebattlerSpeciesEntity(
 data class SpeciesLookupRow(
     val pokemonId: String,
     val rarity: String?,
-    val dexNumber: Int?
+    val dexNumber: Int?,
+    val formId: Int?,
+    val megaEvoId: Int?
 )
 
 @Entity(tableName = "pokebattler_moves")

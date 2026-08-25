@@ -33,6 +33,9 @@ object TeamBuilder {
 
     const val TEAM_SIZE = 6
 
+    /** Only one Mega Evolution can be active at a time in game. */
+    const val MAX_MEGAS = 1
+
     fun <T> rank(
         candidates: List<Pair<T, SimAttacker>>,
         boss: SimBoss,
@@ -49,14 +52,29 @@ object TeamBuilder {
         }
         .sortedByDescending { it.result.rating }
 
+    /**
+     * Takes the strongest [teamSize], allowing at most one mega or primal.
+     *
+     * Only one Mega Evolution can be active at a time in game, so a team of six megas is not
+     * a team the user could actually bring. Primals occupy the same slot.
+     */
     fun <T> buildTeam(
         ranked: List<RankedOwned<T>>,
         boss: SimBoss,
-        teamSize: Int = TEAM_SIZE
+        teamSize: Int = TEAM_SIZE,
+        maxMegas: Int = MAX_MEGAS
     ): SuggestedTeam<T> {
-        val members = ranked.take(teamSize)
+        val members = mutableListOf<RankedOwned<T>>()
+        var megas = 0
+        for (candidate in ranked) {
+            if (members.size >= teamSize) break
+            val isMega = candidate.attacker.species.pokemonId.isMegaOrPrimal()
+            if (isMega && megas >= maxMegas) continue
+            if (isMega) megas++
+            members += candidate
+        }
         return SuggestedTeam(
-            members = members,
+            members = members.toList(),
             combinedTdo = members.sumOf { it.result.tdo },
             bossHp = boss.hp
         )
@@ -87,6 +105,9 @@ object TeamBuilder {
         }
     }
 }
+
+private fun String.isMegaOrPrimal(): Boolean =
+    contains("_MEGA", ignoreCase = true) || contains("_PRIMAL", ignoreCase = true)
 
 /** Identical Pokemon in a suggested team, shown as one row with a count. */
 data class TeamGroup<T>(
