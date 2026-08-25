@@ -8,9 +8,11 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
+Thumbs.db
 /build
 /app/release/
 /captures
+.codex-qa/
 .externalNativeBuild
 .cxx
 local.properties
@@ -23,9 +25,27 @@ keystore.properties
 *.pfx
 *.pem
 *.key
+*.apk
+*.aab
+*.hprof
+
+# Local environment and editor artifacts
+.env
+.env.*
+!.env.example
+*.orig
+*.swp
+
+# Local imports/exports containing personal Pokemon data
+poke_genie_export*.csv
+
+# Service-account credentials
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
 
 # Firebase Configuration
-app/google-services.json
+google-services.json
 
 # Build logs and diagnostics
 *.log

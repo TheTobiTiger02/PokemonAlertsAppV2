@@ -9,6 +9,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.viewModels
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,7 +17,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -28,6 +31,8 @@ import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
 import com.example.pokemonalertsv2.data.PvpRanking
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.counters.RaidCountersActions
+import com.example.pokemonalertsv2.ui.counters.RaidCountersViewModel
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,6 +45,12 @@ class AlertDetailActivity : ComponentActivity() {
     private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
     private var currentAlert: PokemonAlert? by mutableStateOf(null)
     private var isInPipMode by mutableStateOf(false)
+
+    /**
+     * The detail screen is built from Intent extras and has no ViewModel of its own, but
+     * the counters card is async and option-driven, so it needs one to survive rotation.
+     */
+    private val countersViewModel: RaidCountersViewModel by viewModels()
     private var canEnterPictureInPicture: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,15 +76,35 @@ class AlertDetailActivity : ComponentActivity() {
                     contentColor = MaterialTheme.colorScheme.onBackground
                 ) {
                     currentAlert?.let { alert ->
+                        val inPip = isInPipMode || isInPictureInPictureMode
+                        val countersState by countersViewModel.uiState
+                            .collectAsStateWithLifecycle()
+                        val countersActions = remember(countersViewModel) {
+                            RaidCountersActions(
+                                onOptionsChanged = countersViewModel::onOptionsChanged,
+                                onSaveAsDefault = countersViewModel::onSaveAsDefault,
+                                onSourceChanged = countersViewModel::onSourceChanged,
+                                onOwnedOnlyChanged = countersViewModel::onOwnedOnlyChanged,
+                                onToggleExpanded = countersViewModel::onToggleExpanded,
+                                onRetry = countersViewModel::onRetry
+                            )
+                        }
+                        // Never start a fetch for a window the user cannot read.
+                        LaunchedEffect(alert.uniqueId, inPip) {
+                            if (!inPip) countersViewModel.onAlertShown(alert)
+                        }
+
                         AlertDetailScreen(
                             alert = alert,
                             onBack = { onBackPressedDispatcher.onBackPressed() },
-                            isInPictureInPicture = isInPipMode || isInPictureInPictureMode,
+                            isInPictureInPicture = inPip,
                             onEnterPictureInPicture = if (canEnterPictureInPicture) {
                                 { enterImagePictureInPicture() }
                             } else {
                                 null
-                            }
+                            },
+                            raidCountersState = countersState,
+                            raidCountersActions = countersActions
                         )
                     }
                 }
