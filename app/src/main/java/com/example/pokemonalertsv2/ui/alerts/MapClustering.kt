@@ -2,12 +2,24 @@ package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.pow
 
 internal const val MAP_CLUSTER_MAX_ZOOM = 17.0
-internal const val MAP_CLUSTER_CELL_DP = 56f
+
+/**
+ * Cluster distance in *map dp*. [projectMapAlertToScreen] projects with 256 units per tile, which is
+ * the density-independent unit both map backends use for a given zoom, so this must never be scaled
+ * by the display density. 48 dp matches the rendered cluster icon, i.e. markers are only merged once
+ * they would actually overlap.
+ */
+internal const val MAP_CLUSTER_CELL_DP = 48f
+
+private const val MIN_VISIBLE_RADIUS_DP = 8.0
+private const val METERS_PER_MAP_DP_AT_ZOOM_ZERO = 156_543.03392
 
 internal data class MapGeoBounds(
     val south: Double,
@@ -50,15 +62,26 @@ internal sealed interface MapClusterInteraction {
     ) : MapClusterInteraction
 }
 
+/** Radius of the drawn spawn circle, or null when spawn radii are hidden. */
+internal fun spawnRadiusMeters(showSpawnRadius: Boolean, spacialRendEnabled: Boolean): Double? =
+    when {
+        !showSpawnRadius -> null
+        spacialRendEnabled -> 80.0
+        else -> 40.0
+    }
+
 /**
  * Provider-independent screen-space clustering. At maximum zoom only coincident
  * coordinates are grouped, so stacked alerts remain selectable.
+ *
+ * When spawn radii are drawn ([spawnRadiusMeters] non-null) two spawn alerts are only merged while
+ * their circles still overlap, so visibly separate circles never hide behind a count bubble.
  */
 internal fun clusterMapAlerts(
     alerts: List<PokemonAlert>,
     zoom: Double,
-    density: Float,
     cellDp: Float = MAP_CLUSTER_CELL_DP,
+    spawnRadiusMeters: Double? = null,
     expandedAlertIds: Set<String> = emptySet()
 ): List<MapMarkerItem> {
     val positioned = alerts.mapNotNull { alert ->
@@ -71,7 +94,9 @@ internal fun clusterMapAlerts(
 
     val groups = if (zoom < MAP_CLUSTER_MAX_ZOOM) {
         val scale = 256.0 * 2.0.pow(zoom)
-        val thresholdPx = max(1.0, (cellDp * density).toDouble())
+        val thresholdDp = max(1.0, cellDp.toDouble())
+        val radiusGuardDp = spawnCircleGuardDp(positioned, zoom, spawnRadiusMeters)
+        val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
         val normalAlerts = positioned.filterNot { it.alert.uniqueId in expandedAlertIds }
         val expandedGroups = positioned
             .filter { it.alert.uniqueId in expandedAlertIds }
@@ -79,7 +104,12 @@ internal fun clusterMapAlerts(
             .values
             .map { it.toList() }
         val normalPoints = normalAlerts.map { projectMapAlertToScreen(it, scale) }
-        val normalGroups = connectedMapScreenComponents(normalPoints, thresholdPx).map { indices ->
+        val guarded = BooleanArray(normalAlerts.size) { index ->
+            radiusGuardDp != null && normalAlerts[index].alert.isSpawnAlert
+        }
+        val normalGroups = connectedMapScreenComponents(normalPoints) { first, second ->
+            if (guarded[first] && guarded[second]) guardedThresholdDp else thresholdDp
+        }.map { indices ->
             indices.map(normalAlerts::get)
         }
         (normalGroups + expandedGroups).sortedBy { members ->
@@ -114,6 +144,11 @@ internal fun clusterMapAlerts(
 internal fun connectedMapScreenComponents(
     points: List<MapScreenPoint>,
     thresholdPx: Double
+): List<List<Int>> = connectedMapScreenComponents(points) { _, _ -> thresholdPx }
+
+internal fun connectedMapScreenComponents(
+    points: List<MapScreenPoint>,
+    thresholdFor: (Int, Int) -> Double
 ): List<List<Int>> {
     if (points.isEmpty()) return emptyList()
     val parent = IntArray(points.size) { it }
@@ -138,14 +173,14 @@ internal fun connectedMapScreenComponents(
         }
     }
 
-    val thresholdSquared = thresholdPx.coerceAtLeast(1.0).let { it * it }
     points.indices.forEach { firstIndex ->
         for (secondIndex in firstIndex + 1 until points.size) {
             val first = points[firstIndex]
             val second = points[secondIndex]
             val deltaX = first.x - second.x
             val deltaY = first.y - second.y
-            if (deltaX * deltaX + deltaY * deltaY <= thresholdSquared) {
+            val threshold = thresholdFor(firstIndex, secondIndex).coerceAtLeast(1.0)
+            if (deltaX * deltaX + deltaY * deltaY <= threshold * threshold) {
                 union(firstIndex, secondIndex)
             }
         }
@@ -209,6 +244,25 @@ private data class PositionedAlert(
     val latitude: Double,
     val longitude: Double
 )
+
+/**
+ * Centre distance in map dp at which two drawn spawn circles stop overlapping, or null when the
+ * circles are hidden or too small on screen to tell apart.
+ */
+private fun spawnCircleGuardDp(
+    positioned: List<PositionedAlert>,
+    zoom: Double,
+    spawnRadiusMeters: Double?
+): Double? {
+    if (spawnRadiusMeters == null || spawnRadiusMeters <= 0.0) return null
+    val meanLatitude = positioned.sumOf { it.latitude } / positioned.size
+    val metersPerDp =
+        METERS_PER_MAP_DP_AT_ZOOM_ZERO * cos(meanLatitude * PI / 180.0) / 2.0.pow(zoom)
+    if (metersPerDp <= 0.0) return null
+    val radiusDp = spawnRadiusMeters / metersPerDp
+    if (radiusDp < MIN_VISIBLE_RADIUS_DP) return null
+    return 2.0 * radiusDp
+}
 
 private fun projectMapAlertToScreen(alert: PositionedAlert, scale: Double): MapScreenPoint {
     val sine = kotlin.math.sin(alert.latitude * PI / 180.0)

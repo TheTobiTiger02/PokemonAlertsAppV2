@@ -343,11 +343,11 @@ internal class OpenStreetMapController {
     private fun renderSpawnRadii() {
         val currentStyle = style ?: return
         val radiusSource = currentStyle.getSourceAs<GeoJsonSource>(SPAWN_RADIUS_SOURCE) ?: return
-        if (!pendingShowSpawnRadius) {
+        val radiusMeters = spawnRadiusMeters(pendingShowSpawnRadius, pendingSpacialRendEnabled)
+        if (radiusMeters == null) {
             radiusSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
             return
         }
-        val radiusMeters = if (pendingSpacialRendEnabled) 80.0 else 40.0
         val features = pendingAlerts.filter { it.isSpawnAlert }.mapNotNull { alert ->
             val coords = alert.mapCoordinatesOrNull() ?: return@mapNotNull null
             Feature.fromGeometry(
@@ -528,11 +528,17 @@ internal fun OpenStreetMapView(
         }
     )
 
-    val markerItems = remember(alerts, cameraSnapshot.zoom, density.density, expandedAlertIds) {
+    val clusterSpawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
+    val markerItems = remember(
+        alerts,
+        cameraSnapshot.zoom,
+        clusterSpawnRadiusMeters,
+        expandedAlertIds
+    ) {
         clusterMapAlerts(
             alerts = alerts,
             zoom = cameraSnapshot.zoom,
-            density = density.density,
+            spawnRadiusMeters = clusterSpawnRadiusMeters,
             expandedAlertIds = expandedAlertIds
         )
     }

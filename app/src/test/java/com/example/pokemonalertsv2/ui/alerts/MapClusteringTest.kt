@@ -12,8 +12,7 @@ class MapClusteringTest {
     fun nearbyAlertsClusterBelowThreshold() {
         val items = clusterMapAlerts(
             alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73801, 8.61801)),
-            zoom = 14.0,
-            density = 3f
+            zoom = 14.0
         )
 
         assertEquals(1, items.size)
@@ -24,8 +23,7 @@ class MapClusteringTest {
     fun separateAlertsRemainIndividualAtMaximumZoom() {
         val items = clusterMapAlerts(
             alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73801, 8.61801)),
-            zoom = MAP_CLUSTER_MAX_ZOOM,
-            density = 3f
+            zoom = MAP_CLUSTER_MAX_ZOOM
         )
 
         assertTrue(items.all { it is MapMarkerItem.Alert })
@@ -35,8 +33,7 @@ class MapClusteringTest {
     fun coincidentAlertsRemainClusteredAtMaximumZoom() {
         val items = clusterMapAlerts(
             alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.7380, 8.6180)),
-            zoom = 20.0,
-            density = 3f
+            zoom = 20.0
         )
 
         assertTrue(items.single() is MapMarkerItem.Cluster)
@@ -49,8 +46,7 @@ class MapClusteringTest {
                 alert("a", 49.7380, 8.6180, listOf("Raid")),
                 alert("b", 49.7380, 8.6180, listOf("Quest"))
             ),
-            zoom = 14.0,
-            density = 3f
+            zoom = 14.0
         )
 
         assertNull((items.single() as MapMarkerItem.Cluster).sharedCategory)
@@ -64,7 +60,6 @@ class MapClusteringTest {
         val items = clusterMapAlerts(
             alerts = listOf(first, second),
             zoom = 14.0,
-            density = 3f,
             expandedAlertIds = setOf(first.uniqueId, second.uniqueId)
         )
 
@@ -80,7 +75,6 @@ class MapClusteringTest {
         val items = clusterMapAlerts(
             alerts = listOf(first, second),
             zoom = 14.0,
-            density = 3f,
             expandedAlertIds = setOf(first.uniqueId, second.uniqueId)
         )
 
@@ -98,7 +92,6 @@ class MapClusteringTest {
         val items = clusterMapAlerts(
             alerts = listOf(expandedFirst, expandedSecond, normalFirst, normalSecond),
             zoom = 14.0,
-            density = 3f,
             expandedAlertIds = setOf(expandedFirst.uniqueId, expandedSecond.uniqueId)
         )
 
@@ -134,13 +127,11 @@ class MapClusteringTest {
         val second = alert("b", 49.73801, 8.61801)
         val distinctCluster = clusterMapAlerts(
             alerts = listOf(first, second),
-            zoom = 14.0,
-            density = 3f
+            zoom = 14.0
         ).single() as MapMarkerItem.Cluster
         val stackedCluster = clusterMapAlerts(
             alerts = listOf(first, second.copy(latitude = first.latitude, longitude = first.longitude)),
-            zoom = 20.0,
-            density = 3f
+            zoom = 20.0
         ).single() as MapMarkerItem.Cluster
 
         val expansion = resolveMapClusterInteraction(distinctCluster, currentZoom = 14.0)
@@ -197,9 +188,9 @@ class MapClusteringTest {
             alert("c", 49.73802, 8.61802)
         )
 
-        val first = clusterMapAlerts(alerts, zoom = 14.0, density = 3f)
+        val first = clusterMapAlerts(alerts, zoom = 14.0)
             .single() as MapMarkerItem.Cluster
-        val second = clusterMapAlerts(alerts.reversed(), zoom = 14.0, density = 3f)
+        val second = clusterMapAlerts(alerts.reversed(), zoom = 14.0)
             .single() as MapMarkerItem.Cluster
 
         assertEquals(first.id, second.id)
@@ -211,6 +202,68 @@ class MapClusteringTest {
             alerts.map(PokemonAlert::uniqueId).sorted(),
             first.alerts.map(PokemonAlert::uniqueId)
         )
+    }
+
+    @Test
+    fun clusterDistanceIsMeasuredInMapDpNotPhysicalPixels() {
+        // ~200 m apart is 65 map dp at zoom 15, beyond the 48 dp cluster distance.
+        val items = clusterMapAlerts(
+            alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73980, 8.6180)),
+            zoom = 15.0
+        )
+
+        assertEquals(2, items.size)
+        assertTrue(items.all { it is MapMarkerItem.Alert })
+    }
+
+    @Test
+    fun spawnAlertsWithSeparateCirclesDoNotCluster() {
+        // ~100 m apart: within the 48 dp cluster distance at zoom 15, but the 40 m circles
+        // are visibly separate, so the markers must stay individual.
+        val alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73890, 8.6180))
+
+        val guarded = clusterMapAlerts(alerts = alerts, zoom = 15.0, spawnRadiusMeters = 40.0)
+        val unguarded = clusterMapAlerts(alerts = alerts, zoom = 15.0)
+
+        assertEquals(2, guarded.size)
+        assertTrue(guarded.all { it is MapMarkerItem.Alert })
+        assertTrue(unguarded.single() is MapMarkerItem.Cluster)
+    }
+
+    @Test
+    fun spawnAlertsWithOverlappingCirclesStillCluster() {
+        val items = clusterMapAlerts(
+            alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.738450, 8.6180)),
+            zoom = 15.0,
+            spawnRadiusMeters = 40.0
+        )
+
+        assertTrue(items.single() is MapMarkerItem.Cluster)
+    }
+
+    @Test
+    fun spawnCircleGuardIsInertWhenCirclesAreTooSmallToSee() {
+        val items = clusterMapAlerts(
+            alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73890, 8.6180)),
+            zoom = 12.0,
+            spawnRadiusMeters = 40.0
+        )
+
+        assertTrue(items.single() is MapMarkerItem.Cluster)
+    }
+
+    @Test
+    fun spawnCircleGuardDoesNotApplyToAlertsWithoutACircle() {
+        val items = clusterMapAlerts(
+            alerts = listOf(
+                alert("a", 49.7380, 8.6180, listOf("Raid")),
+                alert("b", 49.73890, 8.6180)
+            ),
+            zoom = 15.0,
+            spawnRadiusMeters = 40.0
+        )
+
+        assertTrue(items.single() is MapMarkerItem.Cluster)
     }
 
     private fun alert(

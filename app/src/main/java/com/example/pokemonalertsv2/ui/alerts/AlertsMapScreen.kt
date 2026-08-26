@@ -756,16 +756,17 @@ internal fun AlertsMapScreenContent(
         val expandedAlertIdSet = remember(expandedClusterAlertIds) {
             expandedClusterAlertIds.toSet()
         }
+        val spawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
         val markerItems = remember(
             filteredAlerts,
             displayZoom,
-            density.density,
+            spawnRadiusMeters,
             expandedAlertIdSet
         ) {
             clusterMapAlerts(
                 alerts = filteredAlerts,
                 zoom = displayZoom,
-                density = density.density,
+                spawnRadiusMeters = spawnRadiusMeters,
                 expandedAlertIds = expandedAlertIdSet
             )
         }
@@ -851,13 +852,12 @@ internal fun AlertsMapScreenContent(
                         zIndex = 1_000f
                     )
                 }
-                if (showSpawnRadius) {
-                    val radiusMeters = if (spacialRendEnabled) 80.0 else 40.0
+                if (spawnRadiusMeters != null) {
                     filteredAlerts.filter { it.isSpawnAlert }.forEach { alert ->
                         val coords = alert.mapCoordinatesOrNull() ?: return@forEach
                         Circle(
                             center = LatLng(coords.latitude, coords.longitude),
-                            radius = radiusMeters,
+                            radius = spawnRadiusMeters,
                             fillColor = Color(0x471A73E8),
                             strokeColor = Color(0xFF1A73E8),
                             strokeWidth = 2.5f * density.density,
