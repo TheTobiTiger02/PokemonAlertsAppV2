@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RaidCounterDao {
@@ -67,6 +68,10 @@ interface PokeGenieDao {
 
     @Query("SELECT COUNT(*) FROM poke_genie_mons")
     suspend fun count(): Int
+
+    /** Observed so a CSV imported while a raid card is open enables "My Pokémon" at once. */
+    @Query("SELECT COUNT(*) FROM poke_genie_mons")
+    fun countFlow(): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(mons: List<PokeGenieMonEntity>)

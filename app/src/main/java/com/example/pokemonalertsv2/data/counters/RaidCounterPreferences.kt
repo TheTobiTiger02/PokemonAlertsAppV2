@@ -18,7 +18,13 @@ data class RaidCounterSettings(
     val pokeGenieCount: Int = 0,
     val pokeGenieMatchedCount: Int = 0,
     val pokeGenieFileName: String? = null,
-    val pokeGenieImportedAtMillis: Long = 0L
+    val pokeGenieImportedAtMillis: Long = 0L,
+    /**
+     * Left over from the trainer-number Pokébox attempt. Pokébattler has no public Pokébox
+     * endpoint — `attackers/users/<trainer number>` 404s — so the account is linked through
+     * `PokebattlerAuth` instead. Still read so an upgrade can clear it; never written.
+     */
+    val pokebattlerTrainerNumber: String? = null
 )
 
 /**
@@ -40,8 +46,10 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
                     "LUCKY" -> PokebattlerFriendship.FOREVER
                     else -> prefs[FRIENDSHIP_KEY].toEnum(PokebattlerFriendship.NONE)
                 },
+                // Pokebattler ignores dodgeStrategy, so the control is gone; the stored
+                // value is still read so an existing preference does not read as corrupt.
                 dodge = prefs[DODGE_KEY].toEnum(PokebattlerDodge.NONE),
-                sort = prefs[SORT_KEY].toEnum(PokebattlerSort.OVERALL),
+                sort = prefs[SORT_KEY].toEnum(PokebattlerSort.ESTIMATOR),
                 attackStrategy = prefs[STRATEGY_KEY].toEnum(PokebattlerAttackStrategy.CINEMATIC),
                 includeMegas = prefs[MEGAS_KEY] ?: true,
                 includeShadow = prefs[SHADOW_KEY] ?: true,
@@ -52,7 +60,8 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
             pokeGenieCount = prefs[PG_COUNT_KEY] ?: 0,
             pokeGenieMatchedCount = prefs[PG_MATCHED_KEY] ?: 0,
             pokeGenieFileName = prefs[PG_FILE_KEY],
-            pokeGenieImportedAtMillis = prefs[PG_IMPORTED_AT_KEY] ?: 0L
+            pokeGenieImportedAtMillis = prefs[PG_IMPORTED_AT_KEY] ?: 0L,
+            pokebattlerTrainerNumber = prefs[PB_TRAINER_KEY]
         )
     }
 
@@ -76,6 +85,11 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setOwnedOnly(ownedOnly: Boolean) {
         dataStore.edit { it[OWNED_ONLY_KEY] = ownedOnly }
+    }
+
+    /** Drops the obsolete trainer number left by earlier versions. */
+    suspend fun clearPokebattlerTrainerNumber() {
+        dataStore.edit { it.remove(PB_TRAINER_KEY) }
     }
 
     suspend fun recordPokeGenieImport(
@@ -124,5 +138,6 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         val PG_MATCHED_KEY = intPreferencesKey("poke_genie_matched_count")
         val PG_FILE_KEY = stringPreferencesKey("poke_genie_file_name")
         val PG_IMPORTED_AT_KEY = longPreferencesKey("poke_genie_imported_at")
+        val PB_TRAINER_KEY = stringPreferencesKey("pokebattler_trainer_number")
     }
 }

@@ -63,14 +63,28 @@
             android:exported="false"
             android:theme="@style/Theme.PokemonAlertsV2" />
         <activity
+            android:name=".ui.auth.PokebattlerLoginActivity"
+            android:exported="false"
+            android:label="Sign in to Pokébattler"
+            android:theme="@style/Theme.PokemonAlertsV2" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.App.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/csv" />
+                <data android:mimeType="text/comma-separated-values" />
+                <data android:mimeType="application/csv" />
+                <data android:mimeType="application/vnd.ms-excel" />
             </intent-filter>
         </activity>
         <service

@@ -82,6 +82,8 @@ class AlertDetailActivity : ComponentActivity() {
                         val countersActions = remember(countersViewModel) {
                             RaidCountersActions(
                                 onOptionsChanged = countersViewModel::onOptionsChanged,
+                                onBossMovesetChanged = countersViewModel::onBossMovesetChanged,
+                                onPersonalMovesModeChanged = countersViewModel::onPersonalMovesModeChanged,
                                 onSaveAsDefault = countersViewModel::onSaveAsDefault,
                                 onSourceChanged = countersViewModel::onSourceChanged,
                                 onOwnedOnlyChanged = countersViewModel::onOwnedOnlyChanged,

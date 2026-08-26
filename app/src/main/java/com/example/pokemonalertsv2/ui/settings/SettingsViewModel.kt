@@ -1,7 +1,10 @@
 package com.example.pokemonalertsv2.ui.settings
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.SortPreference
@@ -12,16 +15,23 @@ import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
 import com.example.pokemonalertsv2.data.counters.RaidCounterSettings
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportResult
+import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportCandidate
+import com.example.pokemonalertsv2.data.pokegenie.PokeGeniePrepareResult
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
+import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportUiState
 import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+class SettingsViewModel(
+    application: Application,
+    private val savedStateHandle: SavedStateHandle
+) : AndroidViewModel(application) {
 
     private val preferences = AlertPreferences(application.alertPreferencesDataStore)
     private val goDexRepository by lazy(LazyThreadSafetyMode.NONE) {
@@ -41,31 +51,110 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     /** Result of the last CSV import, shown under the import button. */
     val pokeGenieImportStatus: StateFlow<String?> = _pokeGenieImportStatus
 
+    private val _pendingPokeGenieImport = MutableStateFlow<PokeGenieImportCandidate?>(null)
+    private val _pokeGenieImportUiState = MutableStateFlow<PokeGenieImportUiState>(PokeGenieImportUiState.Idle)
+    private var prepareJob: Job? = null
+    private var preparingUri: String? = null
+
+    init {
+        savedStateHandle.get<String>(PENDING_IMPORT_URI_KEY)
+            ?.let(Uri::parse)
+            ?.let(::preparePokeGenieImport)
+    }
+
+    /** Parsed content waiting for explicit replacement confirmation. */
+    val pendingPokeGenieImport: StateFlow<PokeGenieImportCandidate?> = _pendingPokeGenieImport
+    val pokeGenieImportUiState: StateFlow<PokeGenieImportUiState> = _pokeGenieImportUiState
+
     fun updateRaidCounterDefaults(options: RaidCounterOptions) {
         viewModelScope.launch { raidCounterPreferences.updateDefaults(options) }
     }
 
+
     fun importPokeGenieCsv(uri: android.net.Uri) {
-        viewModelScope.launch {
-            _pokeGenieImportStatus.value = "Importing..."
-            _pokeGenieImportStatus.value = when (val result = pokeGenieRepository.importFromUri(uri)) {
-                is PokeGenieImportResult.Success -> {
-                    val summary = result.summary
-                    buildString {
-                        append("Imported ${summary.importedCount} Pokemon")
-                        if (summary.skippedCount > 0) append(", skipped ${summary.skippedCount} rows")
-                        append(".")
-                    }
+        // Keep the old entry point source-compatible, but route it through the same explicit
+        // preview flow so no caller can replace the roster without confirmation.
+        preparePokeGenieImport(uri)
+    }
+
+    fun preparePokeGenieImport(uri: Uri) {
+        val uriKey = uri.toString()
+        if (preparingUri == uriKey &&
+            _pokeGenieImportUiState.value !is PokeGenieImportUiState.Error &&
+            _pokeGenieImportUiState.value !is PokeGenieImportUiState.Imported
+        ) return
+        preparingUri = uriKey
+        savedStateHandle[PENDING_IMPORT_URI_KEY] = uriKey
+        runCatching {
+            getApplication<Application>().contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        prepareJob?.cancel()
+        prepareJob = viewModelScope.launch {
+            _pokeGenieImportStatus.value = "Reading CSV..."
+            _pokeGenieImportUiState.value = PokeGenieImportUiState.Reading
+            when (val result = pokeGenieRepository.prepareImport(uri)) {
+                is PokeGeniePrepareResult.Success -> {
+                    _pendingPokeGenieImport.value = result.candidate
+                    _pokeGenieImportUiState.value = PokeGenieImportUiState.Preview(result.candidate)
+                    _pokeGenieImportStatus.value = null
                 }
-                is PokeGenieImportResult.Failure -> result.message
+                is PokeGeniePrepareResult.Failure -> {
+                    _pendingPokeGenieImport.value = null
+                    _pokeGenieImportUiState.value = PokeGenieImportUiState.Error(result.message)
+                    _pokeGenieImportStatus.value = result.message
+                    preparingUri = null
+                    savedStateHandle.remove<String>(PENDING_IMPORT_URI_KEY)
+                }
             }
         }
     }
 
+    fun commitPokeGenieImport() {
+        val candidate = _pendingPokeGenieImport.value ?: return
+        viewModelScope.launch {
+            _pokeGenieImportStatus.value = "Importing..."
+            _pokeGenieImportUiState.value = PokeGenieImportUiState.Reading
+            _pokeGenieImportStatus.value = when (val result = pokeGenieRepository.commitImport(candidate)) {
+                is PokeGenieImportResult.Success -> {
+                    _pendingPokeGenieImport.value = null
+                    _pokeGenieImportUiState.value = PokeGenieImportUiState.Imported(result.summary)
+                    preparingUri = null
+                    savedStateHandle.remove<String>(PENDING_IMPORT_URI_KEY)
+                    importSuccessMessage(result.summary)
+                }
+                is PokeGenieImportResult.Failure -> {
+                    _pokeGenieImportUiState.value = PokeGenieImportUiState.Error(result.message)
+                    result.message
+                }
+            }
+        }
+    }
+
+    fun cancelPokeGenieImport() {
+        _pendingPokeGenieImport.value = null
+        _pokeGenieImportUiState.value = PokeGenieImportUiState.Idle
+        preparingUri = null
+        savedStateHandle.remove<String>(PENDING_IMPORT_URI_KEY)
+    }
+
+    private fun importSuccessMessage(summary: com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportSummary): String =
+        buildString {
+            append("Imported ${summary.importedCount} Pokémon")
+            if (summary.skippedCount > 0) append(", skipped ${summary.skippedCount} rows")
+            append(".")
+        }
+
     fun clearPokeGenie() {
         viewModelScope.launch {
             pokeGenieRepository.clear()
+            _pendingPokeGenieImport.value = null
+            _pokeGenieImportUiState.value = PokeGenieImportUiState.Idle
             _pokeGenieImportStatus.value = null
+            preparingUri = null
+            savedStateHandle.remove<String>(PENDING_IMPORT_URI_KEY)
         }
     }
 
@@ -353,5 +442,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val updated = if (tier in current) current - tier else current + tier
             preferences.updateExcludedRaidTiers(updated)
         }
+    }
+
+    private companion object {
+        const val PENDING_IMPORT_URI_KEY = "raid_counters_pending_import_uri"
     }
 }

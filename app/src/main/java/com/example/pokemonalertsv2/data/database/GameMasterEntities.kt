@@ -47,6 +47,8 @@ data class PokebattlerMoveEntity(
     val power: Double,
     val durationMs: Int,
     val energyDelta: Int,
+    val damageWindowStartMs: Int = 0,
+    val damageWindowEndMs: Int = 0,
     val fetchedAt: Long
 )
 

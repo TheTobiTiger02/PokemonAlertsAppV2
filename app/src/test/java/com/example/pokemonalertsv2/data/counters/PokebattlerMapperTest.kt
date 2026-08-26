@@ -122,6 +122,52 @@ class PokebattlerMapperTest {
     }
 
     @Test
+    fun `normalizes reciprocal percentage metrics`() {
+        val counter = response(defender).toPayload(PokebattlerSort.OVERALL)!!.counters.single()
+        assertEquals(100.0 / 0.5226068, counter.metrics().overallPercent!!, 1e-9)
+        assertEquals(100.0 / 2.0837, counter.metrics().powerPercent!!, 1e-9)
+        assertEquals(2.2523618, counter.metrics().estimator!!, 1e-9)
+        assertEquals(204.938, counter.metrics().tdo!!, 1e-9)
+        assertEquals(7.02, counter.metrics().deaths!!, 1e-9)
+    }
+
+    @Test
+    fun `fastest chooses combat time rather than estimator`() {
+        val timed = defender.copy(
+            byMove = listOf(
+                move("SLOW_FAST", "SLOW_CHARGE", rating = 1.0, est = 1.0, tdo = 100.0, power = 1.0)
+                    .copy(result = PbResult(estimator = 1.0, totalCombatTime = 220_000.0)),
+                move("FAST_FAST", "FAST_CHARGE", rating = 2.0, est = 3.0, tdo = 100.0, power = 2.0)
+                    .copy(result = PbResult(estimator = 3.0, totalCombatTime = 150_000.0))
+            )
+        )
+        assertEquals("FAST_FAST", selectBestByMove(timed, PokebattlerSort.TIME)?.move1)
+    }
+
+    @Test
+    fun `exact boss moveset selection exposes average and concrete choices`() {
+        val response = PokebattlerCountersResponse(
+            attackers = listOf(
+                PbAttackerBlock(
+                    pokemonId = "MEWTWO",
+                    randomMove = PbMoveset("RANDOM", "RANDOM", listOf(defender)),
+                    byMove = listOf(
+                        PbMoveset("CONFUSION_FAST", "FOCUS_BLAST", listOf(defender)),
+                        PbMoveset("PSYCHO_CUT_FAST", "ICE_BEAM", listOf(defender))
+                    )
+                )
+            )
+        )
+        val payload = response.toPayload(
+            PokebattlerSort.ESTIMATOR,
+            RaidBossMoveset("PSYCHO_CUT_FAST", "ICE_BEAM")
+        )!!
+        assertEquals("PSYCHO_CUT_FAST", payload.bossMove1)
+        assertEquals("ICE_BEAM", payload.bossMove2)
+        assertEquals(3, payload.availableBossMovesets.size)
+    }
+
+    @Test
     fun `survives a counter with no moveset breakdown`() {
         val bare = PbDefender(pokemonId = "DITTO")
         val payload = response(bare).toPayload(PokebattlerSort.OVERALL)!!

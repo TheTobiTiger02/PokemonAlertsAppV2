@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.data.counters
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PokebattlerUrlsTest {
@@ -31,7 +32,9 @@ class PokebattlerUrlsTest {
         )
         assertEquals("OVERALL", query["sort"])
         assertEquals("NO_WEATHER", query["weatherCondition"])
-        assertEquals("DODGE_REACTION_TIME", query["dodgeStrategy"])
+        // Pokebattler validates dodgeStrategy but ignores its value — every setting returns
+        // a byte-identical body — so the request pins it rather than following the option.
+        assertEquals("DODGE_0", query["dodgeStrategy"])
         assertEquals("AVERAGE", query["aggregation"])
         assertEquals("-1", query["randomAssistants"])
         assertEquals("FRIENDSHIP_LEVEL_0", query["friendLevel"])
@@ -61,7 +64,7 @@ class PokebattlerUrlsTest {
     }
 
     @Test
-    fun `every option field participates in the cache key`() {
+    fun `every option that changes the answer participates in the cache key`() {
         val base = RaidCounterOptions()
         fun key(o: RaidCounterOptions) =
             raidCounterCacheKey("MEWTWO", "RAID_LEVEL_5", AttackerSpec.Level(o.attackerLevel), o)
@@ -73,8 +76,7 @@ class PokebattlerUrlsTest {
             base.copy(attackerLevel = 30),
             base.copy(weather = PokebattlerWeather.RAINY),
             base.copy(friendship = PokebattlerFriendship.FOREVER),
-            base.copy(dodge = PokebattlerDodge.PERFECT),
-            base.copy(sort = PokebattlerSort.ESTIMATOR),
+            base.copy(sort = PokebattlerSort.OVERALL),
             base.copy(attackStrategy = PokebattlerAttackStrategy.DODGE_WEAVE),
             base.copy(includeMegas = false),
             base.copy(includeShadow = false),
@@ -90,5 +92,21 @@ class PokebattlerUrlsTest {
             raidCounterCacheKey("MEWTWO", "RAID_LEVEL_5", AttackerSpec.Level(40), o),
             raidCounterCacheKey("MEWTWO", "RAID_LEVEL_5", AttackerSpec.PokebattlerUser("u1"), o)
         )
+    }
+
+    @Test
+    fun `boss moveset participates in versioned cache identity`() {
+        val options = RaidCounterOptions()
+        val average = raidCounterCacheKey(
+            "MEWTWO", "RAID_LEVEL_5", AttackerSpec.Level(40), options
+        )
+        val exact = raidCounterCacheKey(
+            "MEWTWO", "RAID_LEVEL_5", AttackerSpec.Level(40), options,
+            RaidBossMoveset("CONFUSION_FAST", "FOCUS_BLAST")
+        )
+        // v4 dropped dodgeStrategy from the key; the bump retires the old rows.
+        assertTrue(average.startsWith("v4|"))
+        assertNotEquals(average, exact)
+        assertTrue(exact.endsWith("CONFUSION_FAST|FOCUS_BLAST"))
     }
 }

@@ -118,14 +118,29 @@ private fun List<RaidBossCatalogEntry>.bestEntry(): RaidBossCatalogEntry =
 
 /** The best real (queryable, non-unset) tier among the matched entries, if any. */
 private fun List<RaidBossCatalogEntry>.firstRealTier(): String? = this
-    .filter { it.tier.uppercase(Locale.ROOT) != TIER_UNSET }
+    .filter { isQueryableTier(it.tier) }
     .minByOrNull { tierRank(it.tier) }
     ?.let { normalizeTier(it.tier) }
+
+/**
+ * Whether a catalogue tier can actually be asked about on the raids endpoint.
+ *
+ * [TIER_UNSET] is the 2172-row "every Pokemon" bucket and was never queryable. `_MAX` tiers
+ * are Max Battles, a different game mode: `RAID_LEVEL_1_MAX` answers 504 while plain
+ * `RAID_LEVEL_1` answers in under a second. Excluding them matters because a Pokemon often
+ * carries both -- CHARMANDER is listed at `RAID_LEVEL_1_LEGACY` *and* `RAID_LEVEL_1_MAX`,
+ * and [tierRank] rates a bare `_MAX` as current, so it used to win and lose the counters.
+ */
+private fun isQueryableTier(tier: String): Boolean {
+    val upper = tier.uppercase(Locale.ROOT)
+    return upper != TIER_UNSET && !upper.contains("_MAX")
+}
 
 private fun tierRank(tier: String): Int {
     val upper = tier.uppercase(Locale.ROOT)
     return when {
-        upper == TIER_UNSET -> 3
+        upper == TIER_UNSET -> 4
+        !isQueryableTier(upper) -> 3
         upper.endsWith("_LEGACY") -> 2
         upper.endsWith("_FUTURE") -> 1
         else -> 0

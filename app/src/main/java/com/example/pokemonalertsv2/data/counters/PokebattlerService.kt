@@ -27,6 +27,32 @@ interface PokebattlerService {
         @Header("X-Authorization") authorization: String?
     ): PokebattlerCountersResponse
 
+    /**
+     * The signed-in account.
+     *
+     * The Pokébox path segment needs Pokébattler's internal user id, which is *not* the
+     * in-game trainer number — `attackers/users/<trainer number>` 404s. This is the only
+     * way to learn it, and a 200 here is also how a stored token is proven still valid.
+     */
+    @GET("secure/user")
+    suspend fun getCurrentUser(
+        @Header("X-Authorization") authorization: String
+    ): PokebattlerUserResponse
+
+    /**
+     * The same account lookup against an explicit host.
+     *
+     * Sign-in happens on `user.pokebattler.com`, a different host from the `fight.` one
+     * this client is based at. Both answer `/secure/user` with 401 when unauthenticated,
+     * so which of them owns the account record is not observable from outside — the
+     * repository tries the base host first and falls back here.
+     */
+    @GET
+    suspend fun getCurrentUserAt(
+        @Url url: String,
+        @Header("X-Authorization") authorization: String
+    ): PokebattlerUserResponse
+
     @GET("raids")
     suspend fun getRaidCatalogue(): PokebattlerRaidsResponse
 

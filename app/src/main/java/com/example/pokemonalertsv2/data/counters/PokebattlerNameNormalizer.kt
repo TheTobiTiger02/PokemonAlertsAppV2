@@ -57,7 +57,7 @@ object PokebattlerNameNormalizer {
         if (isMega && variant == null) suffixes += "MEGA"
         if (isPrimal) suffixes += "PRIMAL"
         parsed.regional?.let { suffixes += it }
-        formSuffix(form)?.let { suffixes += it }
+        formSuffix(form, base)?.let { suffixes += it }
         if (isShadow) suffixes += "SHADOW"
 
         val candidates = LinkedHashSet<String>()
@@ -196,11 +196,40 @@ object PokebattlerNameNormalizer {
         return value.trim('_')
     }
 
-    private fun formSuffix(form: String?): String? {
-        val key = form?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() } ?: return null
+    /**
+     * @param base the already-normalized species id, so a form that repeats the species
+     *   name can be reduced to the part that actually names the form.
+     */
+    private fun formSuffix(form: String?, base: String): String? {
+        val trimmed = form?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val key = trimmed.lowercase(Locale.ROOT)
         FORM_SUFFIX_ALIASES[key]?.let { return it }
         if (key in BASE_FORM_LABELS) return null
+        // The feed writes the form as "Black Kyurem", not "Black". Left alone that becomes
+        // KYUREM_BLACK_KYUREM_FORM, which does not exist, and the candidate list then falls
+        // through to the bare KYUREM -- a different boss with different typing. Drop the
+        // species word and the remainder ("Black") hits the alias table and KYUREM_BLACK_FORM.
+        val withoutSpecies = dropSpeciesWords(trimmed, base)
+        if (withoutSpecies != null) {
+            FORM_SUFFIX_ALIASES[withoutSpecies.lowercase(Locale.ROOT)]?.let { return it }
+            if (withoutSpecies.lowercase(Locale.ROOT) !in BASE_FORM_LABELS) {
+                return coreNormalize(withoutSpecies).takeIf { it.isNotEmpty() }
+            }
+        }
         return coreNormalize(key).takeIf { it.isNotEmpty() }
+    }
+
+    /** Removes words of [base] from [form], or null when nothing would be left. */
+    private fun dropSpeciesWords(form: String, base: String): String? {
+        val speciesWords = base.split("_").filter { it.isNotEmpty() }.toSet()
+        if (speciesWords.isEmpty()) return null
+        val kept = form.split(" ")
+            .filter { it.isNotEmpty() }
+            .filter { coreNormalize(it) !in speciesWords }
+        if (kept.isEmpty() || kept.size == form.split(" ").filter { it.isNotEmpty() }.size) {
+            return null
+        }
+        return kept.joinToString(" ")
     }
 
     private val PREFIXES: List<Pair<String, String>> = listOf(

@@ -146,14 +146,22 @@ internal fun goDexDisconnectMessage(pendingCount: Int): String =
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen(
+internal fun SettingsScreen(
     viewModel: SettingsViewModel,
-    onManageLocationPermissions: () -> Unit
+    onManageLocationPermissions: () -> Unit,
+    requestedDestination: SettingsDestination? = null,
+    onRequestedDestinationConsumed: () -> Unit = {}
 ) {
     var destinationName by rememberSaveable { mutableStateOf(SettingsDestination.OVERVIEW.name) }
     val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
         ?: SettingsDestination.OVERVIEW
     val navigateTo: (SettingsDestination) -> Unit = { destinationName = it.name }
+    LaunchedEffect(requestedDestination) {
+        requestedDestination?.let {
+            navigateTo(it)
+            onRequestedDestinationConsumed()
+        }
+    }
     val parentDestination = if (destination == SettingsDestination.GODEX_COLLECTION) {
         SettingsDestination.GODEX
     } else {
@@ -206,6 +214,13 @@ fun SettingsScreen(
         initialValue = com.example.pokemonalertsv2.data.counters.RaidCounterSettings()
     )
     val pokeGenieImportStatus by viewModel.pokeGenieImportStatus.collectAsStateWithLifecycle(initialValue = null)
+    val pendingPokeGenieImport by viewModel.pendingPokeGenieImport.collectAsStateWithLifecycle(initialValue = null)
+    val pokeGenieImportUiState by viewModel.pokeGenieImportUiState.collectAsStateWithLifecycle()
+    val previewCandidate = when (val importState = pokeGenieImportUiState) {
+        is com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportUiState.Preview ->
+            importState.candidate
+        else -> pendingPokeGenieImport
+    }
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
     val raidsNotifications by viewModel.raidsNotifications.collectAsStateWithLifecycle(initialValue = true)
     val spawnsNotifications by viewModel.spawnsNotifications.collectAsStateWithLifecycle(initialValue = true)
@@ -377,7 +392,10 @@ fun SettingsScreen(
                     RaidCountersSettingsContent(
                         settings = raidCounterSettings,
                         onOptionsChanged = viewModel::updateRaidCounterDefaults,
-                        onImportCsv = viewModel::importPokeGenieCsv,
+                        onPrepareCsv = viewModel::preparePokeGenieImport,
+                        pendingImport = previewCandidate,
+                        onConfirmImport = viewModel::commitPokeGenieImport,
+                        onCancelImport = viewModel::cancelPokeGenieImport,
                         onClearPokeGenie = viewModel::clearPokeGenie,
                         importStatus = pokeGenieImportStatus
                     )

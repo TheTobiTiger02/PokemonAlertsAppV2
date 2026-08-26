@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.ui.counters
 
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -20,14 +21,19 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,20 +46,27 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.counters.CounterSourceId
+import com.example.pokemonalertsv2.data.counters.CounterMetric
 import com.example.pokemonalertsv2.data.counters.DecoratedCounter
 import com.example.pokemonalertsv2.data.counters.PersonalCounter
+import com.example.pokemonalertsv2.data.counters.PersonalMovesMode
 import com.example.pokemonalertsv2.data.counters.PersonalRanking
-import com.example.pokemonalertsv2.data.counters.PokebattlerDodge
 import com.example.pokemonalertsv2.data.counters.PokebattlerFriendship
 import com.example.pokemonalertsv2.data.counters.PokebattlerSort
 import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
 import com.example.pokemonalertsv2.data.counters.RaidCounter
 import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
+import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import java.util.Locale
 
@@ -62,20 +75,23 @@ private const val COLLAPSED_COUNT = 6
 /**
  * Best counters for a raid boss.
  *
- * Two modes. "All Pokemon" is Pokebattler's ranking of generic level-N attackers, with the
- * ones the user owns highlighted. "My Pokemon" is ranked locally from the Poke Genie
- * import, using each Pokemon actual level, IVs and moveset, and suggests a team of six.
+ * Two modes. "Pokébattler" is its generic ranking of level-N attackers, with the ones the
+ * user owns highlighted. "My Pokémon" joins a CSV or Pokébox roster to Pokébattler's own
+ * server metrics; the former uses one exact-level request per distinct imported level.
  *
  * Kept out of `SharedComponents.kt`, which is already past 3000 lines, but deliberately
  * mirrors the card styling of its neighbours there.
  */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun RaidCountersCard(
     state: RaidCountersUiState,
     actions: RaidCountersActions,
     modifier: Modifier = Modifier
 ) {
     if (!state.visible) return
+
+    var setupSheetOpen by rememberSaveable { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(
@@ -87,13 +103,28 @@ fun RaidCountersCard(
         Column(modifier = Modifier.padding(16.dp)) {
             Header(state)
 
-            if (state.pokeGenieCount > 0) {
-                Spacer(modifier = Modifier.height(12.dp))
-                SourceSelector(state, actions)
-            }
+            Spacer(modifier = Modifier.height(12.dp))
+            SourceSelector(state, actions)
 
             Spacer(modifier = Modifier.height(10.dp))
-            OptionRow(state, actions)
+            BattleSetupSummary(state, onOpen = { setupSheetOpen = true })
+            // Pokébattler serves precomputed rankings only, and for a boss outside the
+            // current raid rotation just one combination exists. Rather than show nothing,
+            // the repository retries at that baseline — so say which settings were dropped
+            // instead of quietly changing the numbers under the user.
+            if (state.degradedOptions.isNotEmpty()) {
+                Text(
+                    text = "Pokébattler has no ranking for this boss at " +
+                        state.degradedOptions.joinToString(" · ") +
+                        ". Showing its level 40, no-friendship results.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+            if (state.hasCounters && (state.isLoading || state.isStale || state.rateLimited)) {
+                InlineRefreshStatus(state, actions)
+            }
             Spacer(modifier = Modifier.height(14.dp))
 
             when {
@@ -104,6 +135,41 @@ fun RaidCountersCard(
                 state.hasCounters -> GeneralList(state, actions)
                 else -> EmptyState(state)
             }
+        }
+    }
+
+    if (setupSheetOpen) {
+        ModalBottomSheet(onDismissRequest = { setupSheetOpen = false }) {
+            BattleSetupSheet(
+                state = state,
+                actions = actions,
+                onDismiss = { setupSheetOpen = false }
+            )
+        }
+    }
+}
+
+@Composable
+private fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCountersActions) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = when {
+                state.rateLimited -> "Pokébattler is busy"
+                state.isLoading -> "Refreshing counters…"
+                else -> "Showing cached counters"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        if (state.rateLimited || state.isStale) {
+            TextButton(onClick = actions.onRetry) { Text("Retry") }
         }
     }
 }
@@ -154,46 +220,162 @@ private fun Header(state: RaidCountersUiState) {
             CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
         }
     }
-    if (state.isStale) {
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Offline — showing cached counters",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
 }
 
 @Composable
 private fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersActions) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        CounterChip(
-            label = "All Pokémon",
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        SegmentedChoice(
+            label = "Pokébattler",
             selected = state.source == CounterSourceId.ALL_POKEMON,
+            modifier = Modifier.weight(1f),
             onClick = { actions.onSourceChanged(CounterSourceId.ALL_POKEMON) }
         )
-        CounterChip(
+        SegmentedChoice(
             label = "My Pokémon",
-            selected = state.source == CounterSourceId.POKE_GENIE,
-            onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
+            selected = state.showingPersonal,
+            enabled = state.pokeGenieCount > 0 || !state.pokebattlerUserId.isNullOrBlank(),
+            modifier = Modifier.weight(1f),
+            onClick = {
+                actions.onSourceChanged(
+                    if (state.pokeGenieCount > 0) CounterSourceId.POKE_GENIE
+                    else CounterSourceId.POKEBATTLER_POKEBOX
+                )
+            }
         )
+    }
+    if (state.showingPersonal &&
+        state.pokeGenieCount > 0 && !state.pokebattlerUserId.isNullOrBlank()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            SegmentedChoice(
+                label = "PokéGenie CSV",
+                selected = state.source == CounterSourceId.POKE_GENIE,
+                modifier = Modifier.weight(1f),
+                onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
+            )
+            SegmentedChoice(
+                label = state.pokebattlerAccountName?.let { "Pokébox · $it" } ?: "My Pokébox",
+                selected = state.source == CounterSourceId.POKEBATTLER_POKEBOX,
+                modifier = Modifier.weight(1f),
+                onClick = { actions.onSourceChanged(CounterSourceId.POKEBATTLER_POKEBOX) }
+            )
+        }
     }
 }
 
 @Composable
-private fun OptionRow(state: RaidCountersUiState, actions: RaidCountersActions) {
+private fun SegmentedChoice(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .height(40.dp)
+            .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = onClick),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
+        },
+        contentColor = if (selected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+private fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) {
     val options = state.options
-    Row(
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "Open battle setup",
+                onClick = onOpen
+            )
+            .semantics {
+                contentDescription = "Battle setup: level ${options.attackerLevel}, " +
+                    "${options.weather.label}, ${options.friendship.label}, ${options.sort.label}"
+            },
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
     ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Battle setup", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = buildString {
+                        append("L${options.attackerLevel} · ${options.weather.label} · ")
+                        append(options.friendship.label)
+                        append(" · ${options.sort.label}")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            TextButton(onClick = onOpen) { Text("Tune") }
+        }
+    }
+}
+
+@Composable
+private fun BattleSetupSheet(
+    state: RaidCountersUiState,
+    actions: RaidCountersActions,
+    onDismiss: () -> Unit
+) {
+    val options = state.options
+    Column(
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Battle setup", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "These controls match the Pokébattler raid defaults. Results stay visible while a new query loads.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         OptionDropdown(
-            label = "L${options.attackerLevel}",
+            label = state.selectedBossMoveset?.displayName ?: "Average moveset",
+            entries = buildList {
+                add(null to "Average moveset")
+                state.bossMovesets.filterNot { it.isRandom }.forEach { add(it to it.displayName) }
+            }.distinctBy { it.first?.cacheToken() ?: "AVERAGE" },
+            onSelect = actions.onBossMovesetChanged
+        )
+        OptionDropdown(
+            label = "Level ${options.attackerLevel}",
             entries = RaidCounterOptions.ATTACKER_LEVELS.map { it to "Level $it" },
             onSelect = { actions.onOptionsChanged(options.copy(attackerLevel = it)) },
-            // The level only drives the Pokebattler list; personal results use real levels.
             enabled = !state.showingPersonal
         )
         OptionDropdown(
@@ -207,16 +389,75 @@ private fun OptionRow(state: RaidCountersUiState, actions: RaidCountersActions) 
             onSelect = { actions.onOptionsChanged(options.copy(friendship = it)) }
         )
         OptionDropdown(
-            label = options.dodge.label,
-            entries = PokebattlerDodge.entries.map { it to it.label },
-            onSelect = { actions.onOptionsChanged(options.copy(dodge = it)) }
+            label = options.attackStrategy.label,
+            entries = com.example.pokemonalertsv2.data.counters.PokebattlerAttackStrategy.entries
+                .map { it to it.label },
+            onSelect = { actions.onOptionsChanged(options.copy(attackStrategy = it)) }
         )
         OptionDropdown(
             label = options.sort.label,
             entries = PokebattlerSort.entries.map { it to it.label },
-            onSelect = { actions.onOptionsChanged(options.copy(sort = it)) },
-            enabled = !state.showingPersonal
+            onSelect = { actions.onOptionsChanged(options.copy(sort = it)) }
         )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        SheetSwitchRow("Include megas", options.includeMegas) {
+            actions.onOptionsChanged(options.copy(includeMegas = it))
+        }
+        SheetSwitchRow("Include shadows", options.includeShadow) {
+            actions.onOptionsChanged(options.copy(includeShadow = it))
+        }
+        SheetSwitchRow("Include legendaries", options.includeLegendary) {
+            actions.onOptionsChanged(options.copy(includeLegendary = it))
+        }
+        SheetSwitchRow("Owned only", state.ownedOnly, actions.onOwnedOnlyChanged)
+
+        if (state.showingPersonal) {
+            Text("My Pokémon moves", style = MaterialTheme.typography.labelLarge)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                PersonalMovesMode.entries.forEach { mode ->
+                    SegmentedChoice(
+                        label = mode.label,
+                        selected = state.personalMovesMode == mode,
+                        modifier = Modifier.weight(1f),
+                        onClick = { actions.onPersonalMovesModeChanged(mode) }
+                    )
+                }
+            }
+            Text(
+                if (state.personalMovesMode == PersonalMovesMode.CURRENT) {
+                    "Only imports with a recorded fast move and at least one charged move are ranked."
+                } else {
+                    "Known moves are kept; only missing components use the best legal move."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        TextButton(onClick = actions.onSaveAsDefault) { Text("Save as default") }
+        TextButton(onClick = onDismiss) { Text("Done") }
+    }
+}
+
+@Composable
+private fun SheetSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -270,32 +511,110 @@ private fun <T> OptionDropdown(
 private fun PersonalContent(state: RaidCountersUiState, actions: RaidCountersActions) {
     val personal = state.personal
     when {
-        state.personalError != null -> Column {
+        state.personalError != null && personal == null -> Column {
             Text(
                 text = state.personalError,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row {
+                TextButton(onClick = actions.onRetry) { Text("Retry") }
+                // A failing Pokébox should not strand the user on it when their imported
+                // roster is right there and works.
+                if (state.source == CounterSourceId.POKEBATTLER_POKEBOX && state.pokeGenieCount > 0) {
+                    TextButton(
+                        onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
+                    ) { Text("Use Poké Genie CSV") }
+                }
+            }
+        }
+
+        // Loading is its own state, distinct from "nothing to show". Keying this on
+        // `personal == null` alone made every stalled or aborted job look like progress.
+        personal == null && state.personalLoading -> LoadingRow(
+            state.personalProgress
+                ?.takeIf { it.totalLevels > 0 }
+                ?.let { "Ranking your Pokémon… (${it.completedLevels}/${it.totalLevels})" }
+                ?: "Ranking your Pokémon…"
+        )
+
+        personal == null -> Column {
+            Text(
+                text = "No ranking yet.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             TextButton(onClick = actions.onRetry) { Text("Retry") }
         }
 
-        personal == null || state.personalLoading -> LoadingRow("Ranking your Pokémon…")
-
-        personal.ranked.isEmpty() -> Text(
-            text = "None of your ${state.pokeGenieCount} imported Pokémon could be matched.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        personal.ranked.isEmpty() -> Column {
+            Text(
+                text = if (state.source == CounterSourceId.POKEBATTLER_POKEBOX) {
+                    "Your Pokébattler Pokébox is empty, or the account has no Pokémon saved."
+                } else {
+                    "None of your ${state.pokeGenieCount} imported Pokémon is among Pokébattler's " +
+                        "top counters for this boss at level 40 or above."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = actions.onRetry) { Text("Retry") }
+        }
 
         else -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            TeamSection(personal, state.spriteUrls)
+            if (state.personalLoading) {
+                Text(
+                    state.personalProgress
+                        ?.takeIf { it.totalLevels > 0 }
+                        ?.let { "Updating… Pokébattler levels ${it.completedLevels}/${it.totalLevels}" }
+                        ?: "Updating your ranking…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Say what actually happened. Pokébattler returns only its top 30 counters for
+            // the boss, so this is a match count against those 30 — not "your best N out of
+            // 2405", which is what the old wording implied.
+            state.personalProgress?.takeIf { it.serverCandidates > 0 }?.let { progress ->
+                Text(
+                    "Matched ${personal.ranked.size} of your Pokémon to Pokébattler's top " +
+                        "${progress.serverCandidates} counters for this boss · " +
+                        "level 40+ only",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            // Only levels/40 is precomputed for an off-rotation boss, so the level-50
+            // bucket gets scored against the level-40 response. Understating is fine;
+            // hiding it is not.
+            state.personalProgress?.substitutedLevels?.takeIf { it.isNotEmpty() }?.let { levels ->
+                Text(
+                    "Pokébattler has no level " +
+                        levels.joinToString(", ") { formatLevel(it) } +
+                        " ranking for this boss; those Pokémon are scored at level 40.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            state.personalError?.let { error ->
+                Text(
+                    error,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            TeamSection(personal, state.spriteUrls, state.options.sort.toCounterMetric())
             PersonalList(state, personal, actions)
         }
     }
 }
 
 @Composable
-private fun TeamSection(personal: PersonalRanking, spriteUrls: Map<String, List<String>>) {
+private fun TeamSection(
+    personal: PersonalRanking,
+    spriteUrls: Map<String, List<String>>,
+    metric: CounterMetric
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionLabel("Suggested team")
 
@@ -305,29 +624,51 @@ private fun TeamSection(personal: PersonalRanking, spriteUrls: Map<String, List<
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
-                val percent = (personal.bossFraction * 100).toInt()
                 Text(
-                    text = if (personal.canSolo) {
+                    text = if (personal.serverBacked) {
+                        "Pokébattler's top six for the selected setup"
+                    } else if (personal.canSolo) {
                         "These six can take it down on their own."
                     } else {
-                        "These six deal about $percent% of its HP."
+                        "These six deal about ${(personal.bossFraction * 100).toInt()}% of its HP."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { personal.bossFraction.toFloat() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                val teamDetails = if (personal.serverBacked) {
+                    listOf("Individual rows and metrics are copied from Pokébattler")
+                } else buildList {
+                    if (personal.teamDeaths > 0.0) {
+                        add("${"%.1f".format(Locale.US, personal.teamDeaths)} faints")
+                    }
+                    personal.teamTimeToWinSeconds?.let {
+                        add("${"%.0f".format(Locale.US, it)}s to win")
+                    }
+                }
+                if (teamDetails.isNotEmpty()) {
+                    Text(
+                        text = teamDetails.joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!personal.serverBacked) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { personal.bossFraction.toFloat() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
             }
         }
 
+        TeamSlots(personal, spriteUrls)
+
         personal.team.forEach { slot ->
-            TeamRow(slot.counter, slot.count, spriteUrls)
+            TeamRow(slot.counter, slot.count, spriteUrls, metric)
         }
     }
 }
@@ -336,7 +677,8 @@ private fun TeamSection(personal: PersonalRanking, spriteUrls: Map<String, List<
 private fun TeamRow(
     counter: PersonalCounter,
     count: Int,
-    spriteUrls: Map<String, List<String>>
+    spriteUrls: Map<String, List<String>>,
+    metric: CounterMetric
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -375,7 +717,7 @@ private fun TeamRow(
             )
         }
         Text(
-            text = "%.0f DPS".format(Locale.US, counter.dps),
+            text = counter.metrics.headline(metric),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
@@ -393,7 +735,7 @@ private fun PersonalList(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionLabel("Your best counters")
         shown.forEachIndexed { index, counter ->
-            PersonalRow(index + 1, counter, state.spriteUrls)
+            PersonalRow(index + 1, counter, state.spriteUrls, state.options.sort.toCounterMetric())
         }
         if (personal.ranked.size > COLLAPSED_COUNT) {
             TextButton(onClick = actions.onToggleExpanded) {
@@ -402,10 +744,24 @@ private fun PersonalList(
         }
         if (personal.ranked.any { it.movesetAssumed }) {
             Text(
-                text = "Where Poké Genie has no moveset recorded, the best legal one is assumed.",
+                text = if (state.personalMovesMode == PersonalMovesMode.CURRENT) {
+                    "Current moves excludes imports without a recorded fast and charged move."
+                } else {
+                    "Assumed moves are shown when Poké Genie did not record that move component."
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+        if (state.personalMovesMode == PersonalMovesMode.CURRENT) {
+            val excluded = (state.pokeGenieCount - personal.ranked.size).coerceAtLeast(0)
+            if (excluded > 0) {
+                Text(
+                    "$excluded imported Pokémon excluded from Current moves (missing moves or unmatched).",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -414,9 +770,23 @@ private fun PersonalList(
 private fun PersonalRow(
     rank: Int,
     counter: PersonalCounter,
-    spriteUrls: Map<String, List<String>>
+    spriteUrls: Map<String, List<String>>,
+    metric: CounterMetric
 ) {
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    var expanded by remember(counter.owned.displayName, counter.pokemonId, rank) {
+        mutableStateOf(false)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .semantics {
+                role = Role.Button
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+            },
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         RankBadge(rank)
         CounterSprite(spriteUrls[counter.pokemonId].orEmpty(), size = 32.dp)
         Column(modifier = Modifier.weight(1f)) {
@@ -430,11 +800,9 @@ private fun PersonalRow(
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.weight(1f))
-                // Ranking balances damage against staying alive, so a slightly lower DPS
-                // can still rank higher. Showing total damage makes that legible.
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "%.0f DPS".format(Locale.US, counter.dps),
+                        text = counter.metrics.headline(metric),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -446,7 +814,7 @@ private fun PersonalRow(
                 }
             }
             Text(
-                text = counter.moveLine() + if (counter.movesetAssumed) " (assumed)" else "",
+                text = counter.moveLine(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -457,6 +825,27 @@ private fun PersonalRow(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary
             )
+            if (counter.movesetAssumed) {
+                Text(
+                    "Assumed move(s)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
+            if (expanded) {
+                Text(
+                    text = listOfNotNull(
+                        counter.metrics.headline(CounterMetric.OVERALL),
+                        counter.metrics.headline(CounterMetric.ESTIMATOR),
+                        counter.metrics.headline(CounterMetric.TIME),
+                        counter.metrics.headline(CounterMetric.POWER),
+                        counter.metrics.headline(CounterMetric.TDO),
+                        counter.metrics.deaths?.let { "${"%.1f".format(Locale.US, it)} faints" }
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -465,10 +854,22 @@ private fun PersonalRow(
 
 @Composable
 private fun GeneralList(state: RaidCountersUiState, actions: RaidCountersActions) {
-    val all = state.counters
+    val all = if (state.ownedOnly) state.counters.filter { it.isOwned } else state.counters
+    if (all.isEmpty()) {
+        Text(
+            if (state.ownedOnly) {
+                "None of your imported Pokémon appears in this ranking. Turn off Owned only to see all counters."
+            } else {
+                "No counters available."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
     val shown = if (state.expanded) all else all.take(COLLAPSED_COUNT)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        shown.forEach { GeneralRow(it, state.spriteUrls) }
+        shown.forEach { GeneralRow(it, state.spriteUrls, state.options.sort.toCounterMetric()) }
         if (all.size > COLLAPSED_COUNT) {
             TextButton(onClick = actions.onToggleExpanded) {
                 Text(if (state.expanded) "Show fewer" else "Show all ${all.size}")
@@ -486,8 +887,28 @@ private fun GeneralList(state: RaidCountersUiState, actions: RaidCountersActions
 
 @Composable
 private fun GeneralRow(entry: DecoratedCounter, spriteUrls: Map<String, List<String>>) {
+    GeneralRow(entry, spriteUrls, CounterMetric.ESTIMATOR)
+}
+
+@Composable
+private fun GeneralRow(
+    entry: DecoratedCounter,
+    spriteUrls: Map<String, List<String>>,
+    metric: CounterMetric
+) {
     val counter = entry.counter
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    var expanded by remember(entry.counter.pokemonId, entry.counter.rank) { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .semantics {
+                role = Role.Button
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+            },
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         RankBadge(counter.rank, highlighted = entry.isOwned)
         CounterSprite(spriteUrls[counter.pokemonId].orEmpty(), size = 32.dp)
         Column(modifier = Modifier.weight(1f)) {
@@ -502,7 +923,7 @@ private fun GeneralRow(entry: DecoratedCounter, spriteUrls: Map<String, List<Str
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    text = headlineMetric(counter),
+                    text = headlineMetric(counter, metric),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -530,6 +951,92 @@ private fun GeneralRow(entry: DecoratedCounter, spriteUrls: Map<String, List<Str
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+            if (expanded) {
+                val metrics = counter.metrics()
+                val details = buildList {
+                    counter.level?.let { add("Level $it") }
+                    if (counter.atkIv != null && counter.defIv != null && counter.staIv != null) {
+                        add("IV ${counter.atkIv}/${counter.defIv}/${counter.staIv}")
+                    }
+                    counter.cp?.let { add("CP $it") }
+                }
+                if (details.isNotEmpty()) {
+                    Text(
+                        text = details.joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    text = listOfNotNull(
+                        metrics.headline(CounterMetric.OVERALL),
+                        metrics.headline(CounterMetric.ESTIMATOR),
+                        metrics.headline(CounterMetric.TIME),
+                        metrics.headline(CounterMetric.POWER),
+                        metrics.headline(CounterMetric.TDO),
+                        metrics.deaths?.let { "${"%.1f".format(Locale.US, it)} faints" }
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TeamSlots(personal: PersonalRanking, spriteUrls: Map<String, List<String>>) {
+    val slots = personal.team.flatMap { slot -> List(slot.count) { slot.counter } }.take(6)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        (0 until 6).chunked(3).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                row.forEach { index ->
+                    val counter = slots.getOrNull(index)
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .semantics {
+                                contentDescription = "Team slot ${index + 1}: " +
+                                    (counter?.displayName ?: "Empty")
+                            },
+                        shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+                        ) {
+                        if (counter == null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(66.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Empty", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CounterSprite(
+                                    spriteUrls[counter.pokemonId].orEmpty(),
+                                    size = 36.dp,
+                                    fallback = { Text("•") }
+                                )
+                                Text(
+                                    counter.displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -670,9 +1177,17 @@ private fun PersonalCounter.moveLine(): String =
 
 private fun PersonalCounter.statLine(): String = buildString {
     owned.level?.let { append("L").append(formatLevel(it)) }
+    evaluatedLevel?.takeIf { owned.level == null || it != owned.level }?.let {
+        if (isNotEmpty()) append(" · ")
+        append("PB L").append(formatLevel(it))
+    }
     if (owned.atkIv != null && owned.defIv != null && owned.staIv != null) {
         if (isNotEmpty()) append(" · ")
         append("${owned.atkIv}/${owned.defIv}/${owned.staIv}")
+    }
+    if (rankingIgnoresIv) {
+        if (isNotEmpty()) append(" · ")
+        append("IVs ignored by PB")
     }
     owned.cp?.let {
         if (isNotEmpty()) append(" · ")
@@ -687,7 +1202,18 @@ private fun PersonalCounter.statLine(): String = buildString {
  * up as a quality score, and rendered as a meaningless "36%".
  */
 internal fun headlineMetric(counter: RaidCounter): String =
-    counter.estimator?.let { "%.1f trainers".format(Locale.US, it) }.orEmpty()
+    headlineMetric(counter, CounterMetric.ESTIMATOR)
+
+internal fun headlineMetric(counter: RaidCounter, metric: CounterMetric): String =
+    counter.metrics().headline(metric)
+
+private fun PokebattlerSort.toCounterMetric(): CounterMetric = when (this) {
+    PokebattlerSort.OVERALL -> CounterMetric.OVERALL
+    PokebattlerSort.ESTIMATOR -> CounterMetric.ESTIMATOR
+    PokebattlerSort.TIME -> CounterMetric.TIME
+    PokebattlerSort.POWER -> CounterMetric.POWER
+    PokebattlerSort.TDO -> CounterMetric.TDO
+}
 
 /** Levels are half steps, so 40.0 reads as "40" and 31.5 as "31.5". */
 private fun formatLevel(level: Double): String =

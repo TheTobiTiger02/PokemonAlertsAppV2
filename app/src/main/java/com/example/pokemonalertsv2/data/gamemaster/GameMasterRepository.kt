@@ -190,7 +190,9 @@ private fun PokebattlerMoveEntity.toSimMove() = SimMove(
     type = PokemonType.fromApiValue(type),
     power = power,
     durationSeconds = durationMs / 1000.0,
-    energyDelta = energyDelta
+    energyDelta = energyDelta,
+    damageWindowStartSeconds = damageWindowStartMs / 1000.0,
+    damageWindowEndSeconds = damageWindowEndMs / 1000.0
 )
 
 private fun PbMove.toEntity(timestamp: Long) = PokebattlerMoveEntity(
@@ -199,6 +201,8 @@ private fun PbMove.toEntity(timestamp: Long) = PokebattlerMoveEntity(
     power = power,
     durationMs = durationMs,
     energyDelta = energyDelta,
+    damageWindowStartMs = damageWindowStartMs,
+    damageWindowEndMs = damageWindowEndMs,
     fetchedAt = timestamp
 )
 

@@ -84,6 +84,7 @@ import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
+import com.example.pokemonalertsv2.ui.settings.SettingsDestination
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
@@ -133,6 +134,8 @@ class MainActivity : ComponentActivity() {
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
     private val requestedRootTab = MutableStateFlow<Int?>(null)
+    private val requestedSettingsDestination = MutableStateFlow<SettingsDestination?>(null)
+    private var lastExternalCsvUri: String? = null
     private var permissionStep = PermissionStep.IDLE
 
     private val locationPermissionLauncher =
@@ -207,6 +210,9 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Re-prepare the URI after process recreation; preparation is read-only and the
+        // candidate remains uncommitted until the user confirms it.
+        lastExternalCsvUri = null
         handleNavigationIntent(intent)
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -221,6 +227,9 @@ class MainActivity : ComponentActivity() {
             val showBackgroundLocationDialog by backgroundLocationPermissionNeeded.collectAsStateWithLifecycle()
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             val requestedTab by requestedRootTab.collectAsStateWithLifecycle()
+            val requestedSettings by requestedSettingsDestination.collectAsStateWithLifecycle()
+            val pendingPokeGenieImport by settingsViewModel.pendingPokeGenieImport
+                .collectAsStateWithLifecycle(initialValue = null)
             
             val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val onboardingArea by settingsViewModel.selectedArea.collectAsStateWithLifecycle()
@@ -237,6 +246,15 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(showOnboarding) {
                 if (showOnboarding == false) {
                     startPermissionFlow()
+                }
+            }
+
+            // A pending CSV URI is restored by SettingsViewModel after process recreation.
+            // Re-open the same destination so the user never has to hunt for the preview.
+            LaunchedEffect(pendingPokeGenieImport) {
+                if (pendingPokeGenieImport != null) {
+                    requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
+                    requestedSettingsDestination.value = SettingsDestination.RAID_COUNTERS
                 }
             }
 
@@ -270,6 +288,10 @@ class MainActivity : ComponentActivity() {
                             settingsViewModel = settingsViewModel,
                             requestedTab = requestedTab,
                             onRequestedTabConsumed = { requestedRootTab.value = null },
+                            requestedSettingsDestination = requestedSettings,
+                            onRequestedSettingsDestinationConsumed = {
+                                requestedSettingsDestination.value = null
+                            },
                             onManageLocationPermissions = ::restartLocationPermissionFlow,
                             onOpenUnknownSourcesSettings = {
                                 unknownSourcesSettingsLauncher.launch(
@@ -306,6 +328,46 @@ class MainActivity : ComponentActivity() {
 
     internal fun handleNavigationIntent(intent: Intent) {
         requestedTab(intent)?.let { requestedRootTab.value = it }
+        val uri = intent.data ?: return
+        if (intent.action != Intent.ACTION_VIEW || !isSupportedCsvIntent(intent)) return
+        val key = uri.toString()
+        if (key == lastExternalCsvUri) return
+        lastExternalCsvUri = key
+        runCatching {
+            val read = intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0
+            val write = intent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION != 0
+            when {
+                read && write -> contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                read -> contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                write -> contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+        }
+        settingsViewModel.preparePokeGenieImport(uri)
+        requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
+        requestedSettingsDestination.value = SettingsDestination.RAID_COUNTERS
+    }
+
+    private fun isSupportedCsvIntent(intent: Intent): Boolean {
+        val mime = intent.type?.lowercase()?.substringBefore(';')
+        val mimeSupported = mime in setOf(
+            "text/csv",
+            "text/comma-separated-values",
+            "application/csv",
+            "application/vnd.ms-excel"
+        )
+        val extensionSupported = intent.data?.lastPathSegment
+            ?.substringBefore('?')
+            ?.endsWith(".csv", ignoreCase = true) == true
+        return mimeSupported || extensionSupported
     }
 
     private fun startPermissionFlow() {
@@ -383,6 +445,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_INITIAL_TAB = "extra_initial_tab"
+        private const val NAV_SETTINGS_TAB_INDEX = 3
 
         internal fun createAlertsIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java).apply {
@@ -411,6 +474,8 @@ private fun MainScaffold(
     settingsViewModel: SettingsViewModel,
     requestedTab: Int?,
     onRequestedTabConsumed: () -> Unit,
+    requestedSettingsDestination: SettingsDestination?,
+    onRequestedSettingsDestinationConsumed: () -> Unit,
     onManageLocationPermissions: () -> Unit,
     onOpenUnknownSourcesSettings: () -> Unit
 ) {
@@ -540,7 +605,9 @@ private fun MainScaffold(
                         3 -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
-                                onManageLocationPermissions = onManageLocationPermissions
+                                onManageLocationPermissions = onManageLocationPermissions,
+                                requestedDestination = requestedSettingsDestination,
+                                onRequestedDestinationConsumed = onRequestedSettingsDestinationConsumed
                             )
                         }
                     }

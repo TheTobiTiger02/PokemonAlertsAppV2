@@ -96,6 +96,8 @@ data class PbMove(
     val type: String? = null,
     val power: Double = 0.0,
     val durationMs: Int = 0,
+    val damageWindowStartMs: Int = 0,
+    val damageWindowEndMs: Int = 0,
     /** Positive for fast moves, negative for charged moves. */
     val energyDelta: Int = 0
 )

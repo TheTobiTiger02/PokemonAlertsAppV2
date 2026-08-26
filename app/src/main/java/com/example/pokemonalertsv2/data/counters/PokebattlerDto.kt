@@ -43,6 +43,7 @@ data class PbMoveset(
 @Serializable
 data class PbDefender(
     val pokemonId: String,
+    val nickname: String? = null,
     val cp: Int? = null,
     val stats: PbStats? = null,
     val total: PbResult? = null,
@@ -60,7 +61,7 @@ data class PbByMove(
 data class PbResult(
     /** Estimated number of trainers needed to win. Lower is better. */
     val estimator: Double? = null,
-    /** Pokebattler's headline 0..1 score. Higher is better. */
+    /** Raw Pokebattler overall cost; the app displays its reciprocal percentage. */
     val overallRating: Double? = null,
     val tdo: Double? = null,
     val power: Double? = null,

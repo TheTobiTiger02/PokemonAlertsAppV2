@@ -15,7 +15,32 @@ sealed interface AttackerSpec {
         override val pathSegment: String get() = "levels/$level"
     }
 
-    /** A signed-in user's Pokébox. Requires an auth token; not wired up yet. */
+    /**
+     * An imported Pokémon's exact half-level, e.g. 37.5 or 50.
+     *
+     * The upper bound is 51 rather than 50 because Best Buddy adds a level. Whether the
+     * service actually answers for 51 is unverified, so callers must be prepared to fall
+     * back to 50 — see `RaidCountersRepository.loadPokeGeniePersonal`.
+     */
+    data class ExactLevel(val level: Double) : AttackerSpec {
+        init {
+            require(level.isFinite() && level in 1.0..51.0 && level * 2.0 % 1.0 == 0.0) {
+                "Pokebattler levels must be valid half-levels between 1 and 51"
+            }
+        }
+
+        override val pathSegment: String
+            get() = "levels/" + if (level % 1.0 == 0.0) {
+                level.toInt().toString()
+            } else {
+                "%.1f".format(java.util.Locale.US, level)
+            }
+    }
+
+    /**
+     * A signed-in user's Pokébox. Requires the session token in `X-Authorization`, and
+     * [userId] is Pokébattler's account id rather than the in-game trainer number.
+     */
     data class PokebattlerUser(val userId: String) : AttackerSpec {
         override val pathSegment: String get() = "users/$userId"
     }
@@ -48,7 +73,9 @@ object PokebattlerUrls {
     fun queryParams(options: RaidCounterOptions): Map<String, String> = linkedMapOf(
         "sort" to options.sort.apiValue,
         "weatherCondition" to options.weather.apiValue,
-        "dodgeStrategy" to options.dodge.apiValue,
+        // Pokebattler validates this token but ignores its value: every dodge setting
+        // returns a byte-identical body. Send the neutral one and do not expose a control.
+        "dodgeStrategy" to PokebattlerDodge.NONE.apiValue,
         "aggregation" to "AVERAGE",
         "randomAssistants" to "-1",
         "friendLevel" to options.friendship.apiValue,

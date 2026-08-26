@@ -77,7 +77,10 @@ class PersonalCounterEngineTest {
         boss = boss,
         species = speciesMap,
         moves = moveMap,
-        legalMoves = legalMoves
+        legalMoves = legalMoves,
+        // These legacy ranking assertions exercise optimistic move filling explicitly;
+        // the production default is CURRENT.
+        movesMode = PersonalMovesMode.BEST_POTENTIAL
     )
 
     @Test
@@ -87,6 +90,48 @@ class PersonalCounterEngineTest {
         assertEquals("BITE_FAST", counter.fastMove.moveId)
         assertEquals("CRUNCH", counter.chargedMove.moveId)
         assertFalse(counter.movesetAssumed)
+    }
+
+    @Test
+    fun `current moves excludes scans without a complete recorded moveset`() {
+        val missing = rank(owned("Tyranitar", "TYRANITAR"))
+        val partial = PersonalCounterEngine.rank(
+            owned = listOf(owned("Tyranitar", "TYRANITAR", quick = "Bite")),
+            boss = boss,
+            species = speciesMap,
+            moves = moveMap,
+            legalMoves = legalMoves,
+            movesMode = PersonalMovesMode.CURRENT
+        )
+        assertTrue(missing.ranked.isNotEmpty())
+        assertTrue(partial.ranked.isEmpty())
+    }
+
+    @Test
+    fun `current moves keeps a complete recorded moveset`() {
+        val result = PersonalCounterEngine.rank(
+            owned = listOf(owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch")),
+            boss = boss,
+            species = speciesMap,
+            moves = moveMap,
+            legalMoves = legalMoves,
+            movesMode = PersonalMovesMode.CURRENT,
+            trials = 2
+        )
+        assertEquals(1, result.ranked.size)
+        assertFalse(result.ranked.single().movesetAssumed)
+    }
+
+    @Test
+    fun `current moves is the production default`() {
+        val result = PersonalCounterEngine.rank(
+            owned = listOf(owned("Tyranitar", "TYRANITAR")),
+            boss = boss,
+            species = speciesMap,
+            moves = moveMap,
+            legalMoves = legalMoves
+        )
+        assertTrue(result.ranked.isEmpty())
     }
 
     @Test
@@ -166,13 +211,18 @@ class PersonalCounterEngineTest {
             owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch"),
             owned("Tyranitar", "TYRANITAR_SHADOW_FORM", quick = "Bite", charge = "Crunch", shadow = true)
         )
-        assertTrue(result.ranked.first().owned.shadow)
+        val shadow = result.ranked.first { it.owned.shadow }
+        val regular = result.ranked.first { !it.owned.shadow }
+        assertTrue(shadow.dps > regular.dps)
     }
 
     @Test
     fun `suggests six and repeats a species the user owns several of`() {
         val mons = (1..8).map { owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch") }
-        val result = PersonalCounterEngine.rank(mons, boss, speciesMap, moveMap, legalMoves)
+        val result = PersonalCounterEngine.rank(
+            mons, boss, speciesMap, moveMap, legalMoves,
+            movesMode = PersonalMovesMode.BEST_POTENTIAL
+        )
         assertEquals(6, result.team.sumOf { it.count })
         // All six are the same Pokemon and moveset, so they collapse into one row of six.
         assertEquals(1, result.team.size)
@@ -184,7 +234,10 @@ class PersonalCounterEngineTest {
     fun `a mixed team keeps the strongest first`() {
         val mons = (1..3).map { owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch") } +
             (1..4).map { owned("Magikarp", "MAGIKARP") }
-        val result = PersonalCounterEngine.rank(mons, boss, speciesMap, moveMap, legalMoves)
+        val result = PersonalCounterEngine.rank(
+            mons, boss, speciesMap, moveMap, legalMoves,
+            movesMode = PersonalMovesMode.BEST_POTENTIAL
+        )
         assertEquals(6, result.team.sumOf { it.count })
         assertEquals("Tyranitar", result.team.first().counter.displayName)
         assertEquals(3, result.team.first().count)
@@ -195,7 +248,10 @@ class PersonalCounterEngineTest {
     @Test
     fun `reports team damage against boss hp`() {
         val mons = (1..6).map { owned("Tyranitar", "TYRANITAR", quick = "Bite", charge = "Crunch") }
-        val result = PersonalCounterEngine.rank(mons, boss, speciesMap, moveMap, legalMoves)
+        val result = PersonalCounterEngine.rank(
+            mons, boss, speciesMap, moveMap, legalMoves,
+            movesMode = PersonalMovesMode.BEST_POTENTIAL
+        )
         assertEquals(15000, result.bossHp)
         assertTrue(result.combinedTdo > 0)
         assertTrue(result.bossFraction > 0.0 && result.bossFraction <= 1.0)

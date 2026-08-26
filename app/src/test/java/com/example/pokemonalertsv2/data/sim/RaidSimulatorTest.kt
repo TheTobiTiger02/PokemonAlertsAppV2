@@ -230,6 +230,41 @@ class RaidSimulatorTest {
         val result = RaidSimulator.simulate(attacker(), boss())
         assertEquals(15000 / result.tdo, result.estimatedAttackers, 1e-6)
     }
+
+    @Test
+    fun `event trials are seeded and respect damage windows`() {
+        val early = bite.copy(
+            durationSeconds = 1.0,
+            damageWindowStartSeconds = 0.0,
+            damageWindowEndSeconds = 0.1
+        )
+        val late = early.copy(damageWindowStartSeconds = 0.8, damageWindowEndSeconds = 0.9)
+        val shortBoss = boss().copy(combatTimeSeconds = 0.75, fastMove = null, chargedMove = null)
+        val first = RaidSimulator.simulateTrials(attacker(fast = early), shortBoss, trials = 8)
+        val repeat = RaidSimulator.simulateTrials(attacker(fast = early), shortBoss, trials = 8)
+        val delayed = RaidSimulator.simulateTrials(attacker(fast = late), shortBoss, trials = 8)
+
+        assertEquals(first, repeat)
+        assertTrue(first.totalDamageWithinTimer > 0.0)
+        assertEquals(0.0, delayed.totalDamageWithinTimer, 1e-9)
+    }
+
+    @Test
+    fun `team trials advance through faints and relobby`() {
+        val dangerousBoss = boss(
+            fast = SimMove("BOSS_FAST", PokemonType.PSYCHIC, 500.0, 0.5, 15),
+            charged = SimMove("BOSS_CHARGED", PokemonType.GHOST, 500.0, 1.0, -50)
+        ).copy(combatTimeSeconds = 45.0)
+        val result = RaidSimulator.simulateTeamTrials(
+            team = listOf(attacker(sta = 0), attacker(sta = 1)),
+            boss = dangerousBoss,
+            trials = 8
+        )
+
+        assertTrue(result.deaths > 0.0)
+        assertTrue(result.totalDamageWithinTimer > 0.0)
+        assertTrue(result.timeToWinSeconds == null || result.timeToWinSeconds!! <= 45.0)
+    }
 }
 
 class TeamBuilderTest {

@@ -41,6 +41,7 @@ data class RaidCounterCacheEntity(
     val bossMove1: String?,
     val bossMove2: String?,
     val countersJson: String,
+    val availableBossMovesetsJson: String = "[]",
     val fetchedAt: Long
 )
 

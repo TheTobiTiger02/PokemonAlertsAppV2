@@ -10,10 +10,10 @@ import com.example.pokemonalertsv2.data.pokegenie.OwnedPokemon
  * choice without pulling in the repositories the implementations need.
  */
 enum class CounterSourceId(val label: String) {
-    ALL_POKEMON("All Pokémon"),
+    ALL_POKEMON("Pokébattler"),
     POKE_GENIE("My Pokémon"),
 
-    /** Declared so the type is stable; the implementation lands with account linking. */
+    /** Requires a linked Pokébattler account; see `PokebattlerAuth`. */
     POKEBATTLER_POKEBOX("My Pokébox")
 }
 

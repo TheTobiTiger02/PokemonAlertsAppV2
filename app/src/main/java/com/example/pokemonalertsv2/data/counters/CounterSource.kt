@@ -55,3 +55,26 @@ class PokeGenieSource(private val repository: PokeGenieRepository) : CounterSour
         return counters.map { DecoratedCounter(it, index.bestOwned(it.pokemonId)) }
     }
 }
+
+/**
+ * The signed-in user's Pokébox, ranked server-side with their real IVs and movesets.
+ *
+ * [userId] is Pokébattler's internal account id from `GET /secure/user`, *not* the in-game
+ * trainer number — `attackers/users/<trainer number>` 404s, and the endpoint is not public
+ * in any case, which is why [authorizationHeader] must carry the session token.
+ */
+class PokebattlerPokeBoxSource(
+    private val userId: String,
+    private val authorization: String?
+) : CounterSource {
+    override val id = CounterSourceId.POKEBATTLER_POKEBOX
+
+    override suspend fun attackerSpec(options: RaidCounterOptions) =
+        AttackerSpec.PokebattlerUser(userId)
+
+    override suspend fun isAvailable() = userId.isNotBlank() && !authorization.isNullOrBlank()
+
+    override suspend fun authorizationHeader(): String? = authorization
+
+    override suspend fun decorate(counters: List<RaidCounter>) = counters.map { DecoratedCounter(it) }
+}

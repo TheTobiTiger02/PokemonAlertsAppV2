@@ -29,7 +29,10 @@ import java.util.concurrent.TimeUnit
 object PokebattlerApi {
 
     private const val CACHE_DIR = "pokebattler_http"
-    private const val CACHE_BYTES = 6L * 1024 * 1024
+    // A single counters response is ~330 KB gzipped and the personal ranking needs the
+    // level-40 and level-50 responses to live alongside the generic list, so 6 MB used to
+    // thrash.
+    private const val CACHE_BYTES = 32L * 1024 * 1024
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -49,23 +52,31 @@ object PokebattlerApi {
     private fun build(appContext: Context): PokebattlerService {
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BASIC
+                // HEADERS, not BASIC, so it is visible whether the Pokébox request carried
+                // its session token — an unauthenticated one hangs rather than 401ing, which
+                // is indistinguishable from a slow one in the log otherwise.
+                HttpLoggingInterceptor.Level.HEADERS
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
+            // The token is a bearer credential; never let it reach logcat.
+            redactHeader("X-Authorization")
         }
 
         val client = OkHttpClient.Builder()
             .cache(Cache(File(appContext.cacheDir, CACHE_DIR), CACHE_BYTES))
             .addInterceptor(UserAgentInterceptor())
             .addInterceptor(OfflineCacheInterceptor(appContext))
-            .addInterceptor(RateLimitRetryInterceptor())
+            .addInterceptor(RateLimitPassthroughInterceptor())
             .addInterceptor(logging)
             // The ranking endpoint is slow when busy; the 10s default read timeout fires
             // and surfaces as a misleading connection error.
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(60, TimeUnit.SECONDS)
+            // Pokébox ranking is far slower than a by-level one: Pokebattler's gateway
+            // itself gives up at 30 s, so a 30 s read timeout raced it and surfaced the
+            // server's 504 as a misleading "check your connection".
+            .readTimeout(45, TimeUnit.SECONDS)
+            .callTimeout(75, TimeUnit.SECONDS)
             .build()
 
         return Retrofit.Builder()
@@ -116,50 +127,19 @@ object PokebattlerApi {
     }
 
     /**
-     * Backs off on HTTP 429.
+     * Surfaces HTTP 429 immediately, on purpose.
      *
-     * Pokebattler rate-limits in earnest, so this honours `Retry-After` when present and
-     * otherwise waits a widening interval. It gives up after [MAX_RETRIES] and lets the 429
-     * surface, which the repository turns into a "busy, try again" state — never a tight
-     * retry loop.
+     * This used to sleep and retry twice. On the counters endpoint a 429 does not mean
+     * "you are going too fast" — it means Pokebattler has not precomputed that parameter
+     * combination for that boss, and it always comes with `Retry-After: 5`. Waiting never
+     * helps: five attempts spread over four minutes returned 429, 429, 504, 429, 429. The
+     * retries cost ~20 s and buried the useful signal, so the repository's fallback to
+     * [RaidCounterOptions.precomputedBaseline] now handles it instead — that request is
+     * both fast and actually available.
+     *
+     * Kept as a named marker rather than deleted so the reason survives in one place.
      */
-    private class RateLimitRetryInterceptor : Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response {
-            var attempt = 0
-            var response = chain.proceed(chain.request())
-            while (response.code == HTTP_TOO_MANY_REQUESTS && attempt < MAX_RETRIES) {
-                val requested = response.retryAfterMillis()
-                // Waiting longer than the service asks for is pointless, and waiting longer
-                // than the call timeout turns a rate limit into a misleading "check your
-                // connection". If it wants more time than we have, surface the 429 now.
-                if (requested != null && requested > MAX_WAIT_MILLIS) return response
-
-                response.close()
-                try {
-                    Thread.sleep(requested ?: BACKOFF_MILLIS[attempt])
-                } catch (interrupted: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    return chain.proceed(chain.request())
-                }
-                attempt++
-                response = chain.proceed(chain.request())
-            }
-            return response
-        }
-
-        private fun Response.retryAfterMillis(): Long? = header("Retry-After")
-            ?.trim()
-            ?.toLongOrNull()
-            ?.coerceAtLeast(0)
-            ?.let { it * 1000 }
-
-        private companion object {
-            const val HTTP_TOO_MANY_REQUESTS = 429
-            const val MAX_RETRIES = 2
-
-            /** Total backoff must stay well inside the 45s call timeout. */
-            const val MAX_WAIT_MILLIS = 5_000L
-            val BACKOFF_MILLIS = longArrayOf(1_000L, 4_000L)
-        }
+    private class RateLimitPassthroughInterceptor : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response = chain.proceed(chain.request())
     }
 }

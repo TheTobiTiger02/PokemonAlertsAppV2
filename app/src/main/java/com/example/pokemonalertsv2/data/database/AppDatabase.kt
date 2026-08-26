@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PokebattlerMoveEntity::class,
         PokebattlerRaidTierEntity::class
     ],
-    version = 21,
+    version = 22,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -572,6 +572,25 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 21 -> 22: move timing and boss-moveset-aware counter caches. */
+        internal val MIGRATION_21_22 = object : Migration(21, 22) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `pokebattler_moves` ADD COLUMN `damageWindowStartMs` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE `pokebattler_moves` ADD COLUMN `damageWindowEndMs` INTEGER NOT NULL DEFAULT 0"
+                )
+                db.execSQL(
+                    "ALTER TABLE `raid_counter_cache` ADD COLUMN `availableBossMovesetsJson` TEXT NOT NULL DEFAULT '[]'"
+                )
+                // The mapper and cache identity changed; these are disposable derived rows.
+                db.execSQL("DELETE FROM `raid_counter_cache`")
+                // Force the next game-master sync to refill the new timing fields.
+                db.execSQL("DELETE FROM `pokebattler_moves`")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -606,7 +625,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_17_18,
                     MIGRATION_18_19,
                     MIGRATION_19_20,
-                    MIGRATION_20_21
+                    MIGRATION_20_21,
+                    MIGRATION_21_22
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

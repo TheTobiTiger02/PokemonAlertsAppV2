@@ -94,6 +94,57 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate21To22_addsTimingAndMovesetColumnsAndClearsDerivedRows() {
+        helper.createDatabase(TEST_DATABASE, 21).apply {
+            execSQL(
+                """
+                INSERT INTO pokebattler_moves
+                    (moveId, type, power, durationMs, energyDelta, fetchedAt)
+                VALUES ('TACKLE_FAST', 'NORMAL', 5.0, 500, 5, 1)
+                """.trimIndent()
+            )
+            execSQL(
+                """
+                INSERT INTO raid_counter_cache
+                    (cacheKey, bossPokemonId, raidLevel, bossCp, bossMove1,
+                     bossMove2, countersJson, fetchedAt)
+                VALUES ('old', 'MEWTWO', 'RAID_LEVEL_5', 1000, 'CONFUSION_FAST',
+                        'FOCUS_BLAST', '[]', 1)
+                """.trimIndent()
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            22,
+            true,
+            AppDatabase.MIGRATION_21_22
+        ).apply {
+            query("PRAGMA table_info(pokebattler_moves)").use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) columns += cursor.getString(1)
+                assertEquals(true, "damageWindowStartMs" in columns)
+                assertEquals(true, "damageWindowEndMs" in columns)
+            }
+            query("PRAGMA table_info(raid_counter_cache)").use { cursor ->
+                val columns = mutableSetOf<String>()
+                while (cursor.moveToNext()) columns += cursor.getString(1)
+                assertEquals(true, "availableBossMovesetsJson" in columns)
+            }
+            query("SELECT COUNT(*) FROM pokebattler_moves").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(0, cursor.getInt(0))
+            }
+            query("SELECT COUNT(*) FROM raid_counter_cache").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals(0, cursor.getInt(0))
+            }
+            close()
+        }
+    }
+
+    @Test
     fun migrate13To14_createsGoDexCacheTableAndIndex() {
         helper.createDatabase(TEST_DATABASE, 13).close()
 
