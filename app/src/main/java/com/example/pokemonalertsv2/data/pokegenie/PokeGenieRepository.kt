@@ -10,6 +10,7 @@ import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.PokeGenieDao
 import com.example.pokemonalertsv2.data.database.PokeGenieMonEntity
+import com.example.pokemonalertsv2.data.gamemaster.GameMasterRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -17,12 +18,28 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import java.io.FileInputStream
 
+/** One species/form pair the game master has no id for, and how many copies were scanned. */
+data class UnmatchedForm(
+    val name: String,
+    val form: String?,
+    val count: Int
+)
+
 /** Outcome of importing a CSV, for the confirmation message. */
 data class PokeGenieImportSummary(
     val fileName: String?,
     val importedCount: Int,
     val skippedCount: Int,
-    val ignoredColumnCount: Int
+    val ignoredColumnCount: Int,
+    /** Rows that reached a real Pokebattler id. Equals [importedCount] when all did. */
+    val matchedCount: Int = importedCount,
+    /** The distinct species/form pairs behind `importedCount - matchedCount`. */
+    val unmatchedForms: List<UnmatchedForm> = emptyList(),
+    /**
+     * False when the game master has not synced, in which case nothing could be checked --
+     * reporting "0 unmatched" then would be a promise the import cannot make.
+     */
+    val formsChecked: Boolean = false
 )
 
 /** Parsed CSV content held until the user confirms replacement of the current roster. */
@@ -56,8 +73,31 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
     private val dao: PokeGenieDao,
     private val preferences: RaidCounterPreferences,
     private val openStream: suspend (Uri) -> java.io.InputStream?,
-    private val resolveFileName: suspend (Uri) -> String?
+    private val resolveFileName: suspend (Uri) -> String?,
+    /** Pokebattler ids from the game-master cache; empty until it has synced. */
+    private val speciesIds: suspend () -> Set<String> = { emptySet() }
 ) {
+
+    @Volatile
+    private var cachedCatalogue: SpeciesCatalogue? = null
+
+    @Volatile
+    private var cachedCatalogueSize: Int = -1
+
+    /**
+     * The game-master id snapshot, rebuilt only when the cache size changes.
+     *
+     * Reading the ids is cheap; grouping 2400 of them by species on every raid card open is
+     * not. A failure here degrades to "no opinion", never to a failed import.
+     */
+    private suspend fun catalogue(): SpeciesCatalogue {
+        val ids = runCatching { speciesIds() }.getOrDefault(emptySet())
+        cachedCatalogue?.takeIf { cachedCatalogueSize == ids.size }?.let { return it }
+        return SpeciesCatalogue(ids).also {
+            cachedCatalogue = it
+            cachedCatalogueSize = ids.size
+        }
+    }
 
     suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }
 
@@ -65,12 +105,13 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
     fun countFlow(): Flow<Int> = dao.countFlow().distinctUntilChanged()
 
     suspend fun index(): PokeGenieIndex = withContext(Dispatchers.IO) {
-        PokeGenieMatcher.index(dao.getAll().map { it.toOwned() })
+        PokeGenieMatcher.index(ownedForSimulation())
     }
 
     /** Every scanned Pokemon, for the local raid simulator to rank. */
     suspend fun ownedForSimulation(): List<OwnedPokemon> = withContext(Dispatchers.IO) {
-        dao.getAll().map { it.toOwned() }
+        val catalogue = catalogue()
+        dao.getAll().map { it.toOwned(catalogue) }
     }
 
     /** Imported rows used as identity/move constraints for server-backed Pokébattler scoring. */
@@ -97,11 +138,15 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
                 PokeGeniePrepareResult.Failure(parsed.userMessage())
             is PokeGenieParseResult.Success -> {
                 val fileName = runCatching { resolveFileName(uri) }.getOrNull()
+                val unmatched = unmatchedForms(parsed.rows, catalogue())
                 val summary = PokeGenieImportSummary(
                     fileName = fileName,
                     importedCount = parsed.rows.size,
                     skippedCount = parsed.skippedLineCount,
-                    ignoredColumnCount = parsed.unmappedHeaders.size
+                    ignoredColumnCount = parsed.unmappedHeaders.size,
+                    matchedCount = parsed.rows.size - unmatched.sumOf { it.count },
+                    unmatchedForms = unmatched,
+                    formsChecked = !catalogue().isEmpty
                 )
                 PokeGeniePrepareResult.Success(
                     PokeGenieImportCandidate(fileName, parsed.rows, summary)
@@ -120,7 +165,7 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
                 preferences.recordPokeGenieImport(
                     fileName = candidate.fileName,
                     rowCount = entities.size,
-                    matchedCount = entities.count { it.matchKey.isNotEmpty() },
+                    matchedCount = candidate.summary.matchedCount,
                     timestamp = now
                 )
                 PokeGenieImportResult.Success(
@@ -163,7 +208,8 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
             dao = AppDatabase.getDatabase(appContext).pokeGenieDao(),
             preferences = RaidCounterPreferences(appContext.alertPreferencesDataStore),
             openStream = { uri -> appContext.openPokeGenieStream(uri) },
-            resolveFileName = { uri -> appContext.displayNameOf(uri) }
+            resolveFileName = { uri -> appContext.displayNameOf(uri) },
+            speciesIds = { GameMasterRepository.getInstance(appContext).speciesIds() }
         )
 
         private fun Context.openPokeGenieStream(uri: Uri): java.io.InputStream? = when {
@@ -187,6 +233,26 @@ private fun PokeGenieParseResult.Failure.userMessage(): String = when (reason) {
     PokeGenieParseResult.Reason.NO_NAME_COLUMN ->
         "That doesn't look like a Poké Genie export — it has no Name column." +
             (detail?.let { "\n$it" } ?: "")
+}
+
+/**
+ * The species/form pairs the game master has no id for, commonest first.
+ *
+ * This is the check that was missing when Poke Genie's "Sword" quietly stopped reaching
+ * ZACIAN_CROWNED_SWORD_FORM: every row produces at least a bare-species key, so counting
+ * rows that produced keys can never find a bad one. Only the catalogue can.
+ */
+private suspend fun unmatchedForms(
+    rows: List<PokeGenieRow>,
+    catalogue: SpeciesCatalogue
+): List<UnmatchedForm> = withContext(Dispatchers.Default) {
+    if (catalogue.isEmpty) return@withContext emptyList()
+    rows.filter { catalogue.resolve(PokeGenieMatcher.matchKeysFor(it)) == null }
+        .groupBy { it.name to it.form?.trim().orEmpty() }
+        .map { (pair, matching) ->
+            UnmatchedForm(pair.first, pair.second.takeIf { it.isNotEmpty() }, matching.size)
+        }
+        .sortedWith(compareByDescending<UnmatchedForm> { it.count }.thenBy { it.name })
 }
 
 private fun PokeGenieRow.toEntity(importedAt: Long): PokeGenieMonEntity {
@@ -217,7 +283,7 @@ private fun PokeGenieRow.toEntity(importedAt: Long): PokeGenieMonEntity {
     )
 }
 
-private fun PokeGenieMonEntity.toOwned(): OwnedPokemon {
+private fun PokeGenieMonEntity.toOwned(catalogue: SpeciesCatalogue): OwnedPokemon {
     // Derived rather than read back from matchKey/altMatchKeys: the stored keys are a
     // snapshot of the form aliases as they were at import, so a fix to the alias table
     // would otherwise only reach people who re-imported their CSV. The columns are still
@@ -228,7 +294,8 @@ private fun PokeGenieMonEntity.toOwned(): OwnedPokemon {
             form = form,
             shadowState = ShadowState.entries.firstOrNull { it.name == shadowState }
                 ?: ShadowState.NORMAL
-        )
+        ),
+        catalogue
     ).ifEmpty {
         buildList {
             if (matchKey.isNotEmpty()) add(matchKey)

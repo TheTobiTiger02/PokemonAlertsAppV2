@@ -105,8 +105,11 @@ private fun findMatches(
 /**
  * Picks between sibling forms sharing a prefix. Prefers the base "standard" form, then the
  * shortest id, so the choice is deterministic rather than dependent on catalogue order.
+ *
+ * Shared with the Poke Genie box resolver: a boss and the copy of it in the user's box must
+ * never disagree about which sibling form a loose name means.
  */
-private val FORM_PREFERENCE = compareBy<String>(
+internal val FORM_PREFERENCE = compareBy<String>(
     { if (it.contains("_STANDARD")) 0 else 1 },
     { it.length },
     { it }

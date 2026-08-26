@@ -96,6 +96,53 @@ class PokeGenieMatcherTest {
         assertFalse(keys.any { it.contains("CROWNED") })
     }
 
+    private val catalogue = SpeciesCatalogue(
+        listOf(
+            "ZACIAN", "ZACIAN_HERO_FORM", "ZACIAN_CROWNED_SWORD_FORM",
+            "HOUNDOOM", "HOUNDOOM_SHADOW_FORM",
+            "PIKACHU", "PIKACHU_FLYING_01_FORM",
+            "MEWTWO"
+        )
+    )
+
+    @Test
+    fun `a separately modelled form stops answering for the bare species`() {
+        // Owning a Crowned Sword Zacian is not owning a Hero Zacian, exactly as owning a
+        // Mega Gengar is not owning a Gengar.
+        val keys = PokeGenieMatcher.matchKeysFor(row("Zacian", "Sword"), catalogue)
+        assertEquals("ZACIAN_CROWNED_SWORD_FORM", keys.first())
+        assertFalse(keys.toString(), keys.contains("ZACIAN"))
+    }
+
+    @Test
+    fun `a cosmetic form keeps its species key`() {
+        // Pokebattler has no id for this costume, so dropping PIKACHU would lose the copy
+        // altogether -- worse than the loose match it would replace.
+        val keys = PokeGenieMatcher.matchKeysFor(row("Pikachu", "Kariyushi"), catalogue)
+        assertTrue(keys.toString(), keys.contains("PIKACHU"))
+    }
+
+    @Test
+    fun `a shadow copy keeps its species key`() {
+        // Shadow and non-shadow are already separated by the flag, and shadow ids are
+        // patchier than form ids, so nothing is trimmed here.
+        val keys = PokeGenieMatcher.matchKeysFor(
+            row("Houndoom", shadow = ShadowState.SHADOW),
+            catalogue
+        )
+        assertEquals("HOUNDOOM_SHADOW_FORM", keys.first())
+        assertTrue(keys.toString(), keys.contains("HOUNDOOM"))
+    }
+
+    @Test
+    fun `an unsynced catalogue changes nothing`() {
+        val row = row("Zacian", "Sword")
+        assertEquals(
+            PokeGenieMatcher.matchKeysFor(row),
+            PokeGenieMatcher.matchKeysFor(row, SpeciesCatalogue(emptyList()))
+        )
+    }
+
     @Test
     fun `picks the best copy by level then IVs then CP`() {
         val box = index(

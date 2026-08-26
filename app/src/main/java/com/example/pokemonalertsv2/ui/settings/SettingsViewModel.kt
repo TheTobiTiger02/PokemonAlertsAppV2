@@ -145,6 +145,15 @@ class SettingsViewModel(
             append("Imported ${summary.importedCount} Pokémon")
             if (summary.skippedCount > 0) append(", skipped ${summary.skippedCount} rows")
             append(".")
+            val missed = summary.importedCount - summary.matchedCount
+            if (missed > 0) {
+                append(" $missed had no Pokébattler match")
+                summary.unmatchedForms.firstOrNull()?.let { first ->
+                    val label = first.form?.let { "${first.name} ($it)" } ?: first.name
+                    append(if (summary.unmatchedForms.size > 1) " (e.g. $label)" else " ($label)")
+                }
+                append(".")
+            }
         }
 
     fun clearPokeGenie() {

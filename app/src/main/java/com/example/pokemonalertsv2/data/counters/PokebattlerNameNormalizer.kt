@@ -19,6 +19,15 @@ object PokebattlerNameNormalizer {
         .removeSuffix("_SHADOW_FORM")
         .removeSuffix("_SHADOW")
 
+    /**
+     * True when [form] only says "this is the ordinary one" and names no real variant.
+     *
+     * Poke Genie writes "Normal" for plain Pokemon, so callers that need to know whether a
+     * row actually carries a form cannot just check for a non-empty string.
+     */
+    fun isBaseFormLabel(form: String?): Boolean =
+        form?.trim()?.lowercase(Locale.ROOT).orEmpty() in BASE_FORM_LABELS
+
     /** Underscore-insensitive lookup key, for near-miss matching. */
     fun looseKey(pokemonId: String): String =
         pokemonId.uppercase(Locale.ROOT).replace("_", "")

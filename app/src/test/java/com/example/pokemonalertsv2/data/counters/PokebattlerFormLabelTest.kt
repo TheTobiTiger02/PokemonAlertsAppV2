@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data.counters
 
+import com.example.pokemonalertsv2.data.pokegenie.SpeciesCatalogue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -85,6 +86,17 @@ class PokebattlerFormLabelTest {
             val candidates = PokebattlerNameNormalizer.candidateIds(species, form)
             val chosen = candidates.first { it in catalogue }
             assertEquals("$species ($form)", expected, chosen)
+        }
+    }
+
+    @Test
+    fun `the catalogue resolver reaches the same id`() {
+        // The static tables and the downloaded catalogue must not disagree: the resolver is
+        // what carries a form Pokebattler ships after this table was last edited.
+        val resolver = SpeciesCatalogue(catalogue)
+        cases.forEach { (species, form, expected) ->
+            val candidates = PokebattlerNameNormalizer.candidateIds(species, form)
+            assertEquals("$species ($form)", expected, resolver.resolve(candidates))
         }
     }
 

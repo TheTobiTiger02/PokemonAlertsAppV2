@@ -45,12 +45,45 @@ class PokeGenieRepositoryTest {
         assertEquals(1, dao.replaceCalls)
     }
 
-    private fun repository(dao: FakePokeGenieDao, csv: String) = PokeGenieRepository(
+    private fun repository(
+        dao: FakePokeGenieDao,
+        csv: String,
+        speciesIds: Set<String> = emptySet()
+    ) = PokeGenieRepository(
         dao = dao,
         preferences = RaidCounterPreferences(InMemoryPreferencesDataStore()),
         openStream = { ByteArrayInputStream(csv.toByteArray()) },
-        resolveFileName = { "scan.csv" }
+        resolveFileName = { "scan.csv" },
+        speciesIds = { speciesIds }
     )
+
+    @Test
+    fun previewNamesRowsWithNoPokebattlerMatch() = runBlocking {
+        val repository = repository(
+            FakePokeGenieDao(),
+            "Name,Form,CP\nZacian,Sword,5629\nGrumbleweed,Normal,10\n",
+            speciesIds = setOf("ZACIAN", "ZACIAN_CROWNED_SWORD_FORM")
+        )
+
+        val prepared = repository.prepareImport(Uri.parse("content://files/good.csv"))
+
+        val summary = (prepared as PokeGeniePrepareResult.Success).candidate.summary
+        assertEquals(2, summary.importedCount)
+        assertEquals(1, summary.matchedCount)
+        assertEquals(listOf("Grumbleweed"), summary.unmatchedForms.map { it.name })
+        assertTrue(summary.formsChecked)
+    }
+
+    @Test
+    fun anUnsyncedGameMasterReportsNothingRatherThanAllClear() = runBlocking {
+        val repository = repository(FakePokeGenieDao(), "Name,Form,CP\nGrumbleweed,Normal,10\n")
+
+        val prepared = repository.prepareImport(Uri.parse("content://files/good.csv"))
+
+        val summary = (prepared as PokeGeniePrepareResult.Success).candidate.summary
+        assertEquals(emptyList<UnmatchedForm>(), summary.unmatchedForms)
+        assertEquals(false, summary.formsChecked)
+    }
 
     private fun existingRow() = PokeGenieMonEntity(
         displayName = "Mewtwo",

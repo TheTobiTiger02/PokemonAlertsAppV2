@@ -21,6 +21,10 @@ interface GameMasterDao {
     )
     suspend fun speciesLookup(ids: List<String>): List<SpeciesLookupRow>
 
+    /** Ids only: enough to arbitrate a guessed form spelling, without the stats rows. */
+    @Query("SELECT pokemonId FROM pokebattler_species")
+    suspend fun allSpeciesIds(): List<String>
+
     @Query("SELECT COUNT(*) FROM pokebattler_species")
     suspend fun speciesCount(): Int
 

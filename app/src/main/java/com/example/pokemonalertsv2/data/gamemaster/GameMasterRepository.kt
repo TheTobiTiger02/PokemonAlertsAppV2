@@ -84,6 +84,16 @@ class GameMasterRepository @VisibleForTesting internal constructor(
         }
     }
 
+    /**
+     * Every Pokebattler id the cache holds, for arbitrating guessed form spellings.
+     *
+     * Empty until the first sync, which callers must treat as "no opinion" rather than as
+     * "that form does not exist".
+     */
+    suspend fun speciesIds(): Set<String> = withContext(Dispatchers.IO) {
+        dao.allSpeciesIds().toSet()
+    }
+
     suspend fun simSpecies(pokemonId: String): SimSpecies? = withContext(Dispatchers.IO) {
         dao.species(pokemonId)?.toSimSpecies()
     }

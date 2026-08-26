@@ -201,6 +201,39 @@ fun RaidCountersSettingsContent(
                     if (candidate.summary.ignoredColumnCount > 0) {
                         Text("${candidate.summary.ignoredColumnCount} columns are not used.")
                     }
+                    // Named, not just counted: an unrecognised form is almost always a
+                    // spelling this app has not learned yet, and the pair is what makes it
+                    // reportable.
+                    val unmatched = candidate.summary.unmatchedForms
+                    if (unmatched.isNotEmpty()) {
+                        val missed = candidate.summary.importedCount - candidate.summary.matchedCount
+                        Text(
+                            "$missed of ${candidate.summary.importedCount} won't be usable as " +
+                                "counters — no Pokébattler data for them:",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        unmatched.take(5).forEach { form ->
+                            val label = form.form?.let { "${form.name} ($it)" } ?: form.name
+                            Text(
+                                if (form.count > 1) "• $label ×${form.count}" else "• $label",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (unmatched.size > 5) {
+                            Text(
+                                "…and ${unmatched.size - 5} more.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (!candidate.summary.formsChecked) {
+                        Text(
+                            "Pokémon data hasn't downloaded yet, so forms couldn't be checked.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (settings.pokeGenieCount > 0) {
                         Text(
                             "Confirming replaces the current ${settings.pokeGenieCount}-Pokémon roster.",

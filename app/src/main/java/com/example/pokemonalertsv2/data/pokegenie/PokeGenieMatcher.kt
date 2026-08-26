@@ -93,6 +93,33 @@ object PokeGenieMatcher {
         )
     }
 
+    /**
+     * [matchKeysFor], reordered and trimmed against what the game master actually carries.
+     *
+     * Two things the static tables cannot do on their own: promote the spelling Pokebattler
+     * really uses (Poke Genie's "Sword" is CROWNED_SWORD), and stop a separately-modelled
+     * form from also answering for the bare species -- owning a Crowned Sword Zacian is not
+     * owning a Hero Zacian, exactly as owning a Mega Gengar is not owning a Gengar.
+     *
+     * A row with no form of its own keeps every key it had -- including a plain shadow copy,
+     * which the shadow flag already separates, and a costumed Pikachu, which Pokebattler has
+     * no id for and would be lost outright rather than merely matched loosely.
+     */
+    fun matchKeysFor(row: PokeGenieRow, catalogue: SpeciesCatalogue): List<String> {
+        val keys = matchKeysFor(row)
+        val resolved = catalogue.resolve(keys) ?: return keys
+        val species = keys.lastOrNull()
+        val dropSpecies = species != null &&
+            resolved != species &&
+            !PokebattlerNameNormalizer.isBaseFormLabel(row.form)
+        return buildList {
+            add(resolved)
+            keys.forEach { key ->
+                if (key != resolved && !(dropSpecies && key == species)) add(key)
+            }
+        }
+    }
+
     fun toOwned(row: PokeGenieRow): OwnedPokemon = OwnedPokemon(
         displayName = row.name,
         form = row.form,
