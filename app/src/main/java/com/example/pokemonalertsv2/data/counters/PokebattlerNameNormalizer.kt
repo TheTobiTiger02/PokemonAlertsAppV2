@@ -57,7 +57,7 @@ object PokebattlerNameNormalizer {
         if (isMega && variant == null) suffixes += "MEGA"
         if (isPrimal) suffixes += "PRIMAL"
         parsed.regional?.let { suffixes += it }
-        formSuffix(form, base)?.let { suffixes += it }
+        suffixes += formSuffixes(form, base)
         if (isShadow) suffixes += "SHADOW"
 
         val candidates = LinkedHashSet<String>()
@@ -197,26 +197,70 @@ object PokebattlerNameNormalizer {
     }
 
     /**
+     * Ordered, best-first form suffixes for [form].
+     *
+     * One Poke Genie label can legitimately map to more than one Pokebattler spelling --
+     * "Sword" is CROWNED_SWORD on Zacian, "Paldean Blaze" is PALDEA_BLAZE, "Pom-Pom" is
+     * POMPOM. Emitting several suffixes lets the candidate list arbitrate rather than
+     * requiring this function to be exactly right, and a wrong guess simply never matches.
+     *
      * @param base the already-normalized species id, so a form that repeats the species
-     *   name can be reduced to the part that actually names the form.
+     *   name can be reduced to the part that actually names the form, and so a
+     *   species-scoped alias can be applied.
      */
-    private fun formSuffix(form: String?, base: String): String? {
-        val trimmed = form?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    private fun formSuffixes(form: String?, base: String): List<String> {
+        val trimmed = form?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
         val key = trimmed.lowercase(Locale.ROOT)
-        FORM_SUFFIX_ALIASES[key]?.let { return it }
-        if (key in BASE_FORM_LABELS) return null
+
+        val suffixes = LinkedHashSet<String>()
+        SPECIES_FORM_ALIASES[base to key]?.let { suffixes += it }
+        FORM_SUFFIX_ALIASES[key]?.let { suffixes += it }
+        if (suffixes.isEmpty() && key in BASE_FORM_LABELS) return emptyList()
+
         // The feed writes the form as "Black Kyurem", not "Black". Left alone that becomes
         // KYUREM_BLACK_KYUREM_FORM, which does not exist, and the candidate list then falls
         // through to the bare KYUREM -- a different boss with different typing. Drop the
         // species word and the remainder ("Black") hits the alias table and KYUREM_BLACK_FORM.
         val withoutSpecies = dropSpeciesWords(trimmed, base)
         if (withoutSpecies != null) {
-            FORM_SUFFIX_ALIASES[withoutSpecies.lowercase(Locale.ROOT)]?.let { return it }
-            if (withoutSpecies.lowercase(Locale.ROOT) !in BASE_FORM_LABELS) {
-                return coreNormalize(withoutSpecies).takeIf { it.isNotEmpty() }
-            }
+            val stripped = withoutSpecies.lowercase(Locale.ROOT)
+            FORM_SUFFIX_ALIASES[stripped]?.let { suffixes += it }
+            if (stripped !in BASE_FORM_LABELS) suffixes += spellings(withoutSpecies)
         }
-        return coreNormalize(key).takeIf { it.isNotEmpty() }
+        suffixes += spellings(trimmed)
+        return suffixes.toList()
+    }
+
+    /**
+     * Plausible Pokebattler spellings of one unrecognized form label, best-first.
+     *
+     * Pokebattler is not consistent about how it writes a multi-word form, so rather than
+     * enumerate every label this normalizes the pieces and offers each spelling.
+     */
+    private fun spellings(form: String): List<String> {
+        val words = coreNormalize(form).split("_").filter { it.isNotEmpty() }
+        if (words.isEmpty()) return emptyList()
+        val out = LinkedHashSet<String>()
+
+        // "Paldean Blaze" -> PALDEA_BLAZE. A regional is spelled one way on its own and
+        // another inside a longer form, so the alias has to be applied word by word.
+        val regionalized = words.map { word ->
+            val lower = word.lowercase(Locale.ROOT)
+            if (lower in REGIONAL_WORDS) FORM_SUFFIX_ALIASES.getValue(lower) else word
+        }
+        out += regionalized.joinToString("_")
+        out += words.joinToString("_")
+
+        // "Two-Segment" -> TWO, "Plant Cloak" -> PLANT. Only drops words that carry no
+        // meaning of their own, and only while something is left. GASTRODON_EAST_SEA_FORM
+        // is why "sea" is not on the list.
+        val meaningful = regionalized.filter { it.lowercase(Locale.ROOT) !in FORM_NOISE_WORDS }
+        if (meaningful.isNotEmpty()) out += meaningful.joinToString("_")
+
+        // "Pom-Pom" -> POMPOM. Pokebattler glues some multi-word forms together, and the
+        // exact species lookup in PersonalCounterEngine has no loose-key fallback.
+        if (words.size > 1) out += words.joinToString("")
+        return out.toList()
     }
 
     /** Removes words of [base] from [form], or null when nothing would be left. */
@@ -252,6 +296,35 @@ object PokebattlerNameNormalizer {
     private val BASE_FORM_LABELS = setOf(
         "normal", "normal form", "natural", "natural form",
         "default", "default form", "base", "base form", ""
+    )
+
+    /** Form words that only mark a variant group and are absent from the Pokebattler id. */
+    private val FORM_NOISE_WORDS = setOf("form", "forme", "cloak", "style", "size", "mode", "segment")
+
+    /** Alias keys that name a region, and so also apply to a single word inside a form. */
+    private val REGIONAL_WORDS =
+        setOf("alola", "alolan", "galar", "galarian", "hisui", "hisuian", "paldea", "paldean")
+
+    /**
+     * Forms whose label only becomes unambiguous once the species is known.
+     *
+     * Poke Genie writes short labels: Zacian's Crowned Sword is just "Sword". A global
+     * "sword"/"shield" alias would be wrong for everyone else -- AEGISLASH_SHIELD_FORM and
+     * AEGISLASH_BLADE_FORM are real ids and must keep resolving to themselves.
+     */
+    private val SPECIES_FORM_ALIASES: Map<Pair<String, String>, String> = mapOf(
+        ("ZACIAN" to "sword") to "CROWNED_SWORD",
+        ("ZACIAN" to "crowned") to "CROWNED_SWORD",
+        ("ZAMAZENTA" to "shield") to "CROWNED_SHIELD",
+        ("ZAMAZENTA" to "crowned") to "CROWNED_SHIELD",
+        // There is no bare GALARIAN Darmanitan; its default Galarian form is Standard.
+        ("DARMANITAN" to "galar") to "GALARIAN_STANDARD",
+        ("DARMANITAN" to "galarian") to "GALARIAN_STANDARD",
+        // Pokebattler spells the percentages out, and coreNormalize would drop the sign.
+        ("ZYGARDE" to "50%") to "FIFTY_PERCENT",
+        ("ZYGARDE" to "50") to "FIFTY_PERCENT",
+        ("ZYGARDE" to "10%") to "TEN_PERCENT",
+        ("ZYGARDE" to "10") to "TEN_PERCENT"
     )
 
     /** Mirrors the spirit of `GoDexMatcher.FORM_ALIASES`, mapped onto Pokebattler spellings. */

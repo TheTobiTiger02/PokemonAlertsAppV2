@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.data.pokegenie
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -72,6 +73,27 @@ class PokeGenieMatcherTest {
     fun `matches regional forms`() {
         val box = index(row("Marowak", form = "Alola"))
         assertEquals("Marowak", box.bestOwned("MAROWAK_ALOLA_FORM")?.displayName)
+    }
+
+    @Test
+    fun `matches the crowned forms Poke Genie abbreviates`() {
+        // Regression: Poke Genie writes Zacian's Crowned Sword as just "Sword", so the box
+        // only offered ZACIAN_SWORD_FORM and then fell through to the bare ZACIAN. The copy
+        // never matched the ZACIAN_CROWNED_SWORD_FORM counter and vanished from My Pokemon.
+        val box = index(
+            row("Zacian", form = "Sword", cp = 5629),
+            row("Zamazenta", form = "Shield", cp = 4717)
+        )
+        assertEquals(5629, box.bestOwned("ZACIAN_CROWNED_SWORD_FORM")?.cp)
+        assertEquals(4717, box.bestOwned("ZAMAZENTA_CROWNED_SHIELD_FORM")?.cp)
+    }
+
+    @Test
+    fun `the crowned alias does not leak onto other species`() {
+        // AEGISLASH_SHIELD_FORM and AEGISLASH_BLADE_FORM are real ids of their own.
+        val keys = PokeGenieMatcher.matchKeysFor(row("Aegislash", "Shield"))
+        assertEquals("AEGISLASH_SHIELD_FORM", keys.first())
+        assertFalse(keys.any { it.contains("CROWNED") })
     }
 
     @Test

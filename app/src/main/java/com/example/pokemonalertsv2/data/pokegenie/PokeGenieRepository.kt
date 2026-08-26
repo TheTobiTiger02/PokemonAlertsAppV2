@@ -218,9 +218,24 @@ private fun PokeGenieRow.toEntity(importedAt: Long): PokeGenieMonEntity {
 }
 
 private fun PokeGenieMonEntity.toOwned(): OwnedPokemon {
-    val keys = buildList {
-        if (matchKey.isNotEmpty()) add(matchKey)
-        if (altMatchKeys.isNotEmpty()) addAll(altMatchKeys.split("\n").filter { it.isNotEmpty() })
+    // Derived rather than read back from matchKey/altMatchKeys: the stored keys are a
+    // snapshot of the form aliases as they were at import, so a fix to the alias table
+    // would otherwise only reach people who re-imported their CSV. The columns are still
+    // written, because the Room index on matchKey is part of the schema.
+    val keys = PokeGenieMatcher.matchKeysFor(
+        PokeGenieRow(
+            name = displayName,
+            form = form,
+            shadowState = ShadowState.entries.firstOrNull { it.name == shadowState }
+                ?: ShadowState.NORMAL
+        )
+    ).ifEmpty {
+        buildList {
+            if (matchKey.isNotEmpty()) add(matchKey)
+            if (altMatchKeys.isNotEmpty()) {
+                addAll(altMatchKeys.split("\n").filter { it.isNotEmpty() })
+            }
+        }
     }
     return OwnedPokemon(
         displayName = displayName,
