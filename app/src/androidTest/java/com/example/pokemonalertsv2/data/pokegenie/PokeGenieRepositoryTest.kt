@@ -81,13 +81,24 @@ class PokeGenieRepositoryTest {
         var rows = mutableListOf<PokeGenieMonEntity>()
         var replaceCalls = 0
 
+        /** Backs [countFlow] so a roster change is observable, as Room's would be. */
+        private val counts = MutableStateFlow(0)
+
         override suspend fun getAll(): List<PokeGenieMonEntity> = rows.toList()
         override suspend fun count(): Int = rows.size
-        override suspend fun insertAll(mons: List<PokeGenieMonEntity>) { rows += mons }
-        override suspend fun clear() { rows.clear() }
+        override fun countFlow(): Flow<Int> = counts
+        override suspend fun insertAll(mons: List<PokeGenieMonEntity>) {
+            rows += mons
+            counts.value = rows.size
+        }
+        override suspend fun clear() {
+            rows.clear()
+            counts.value = 0
+        }
         override suspend fun replaceAll(mons: List<PokeGenieMonEntity>) {
             replaceCalls++
             rows = mons.toMutableList()
+            counts.value = rows.size
         }
     }
 
