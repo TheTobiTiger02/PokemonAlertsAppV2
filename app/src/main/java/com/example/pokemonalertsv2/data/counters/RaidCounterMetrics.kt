@@ -43,3 +43,31 @@ data class CounterMetrics(
 internal fun reciprocalPercent(rawCost: Double?): Double? =
     rawCost?.takeIf { it > 0.0 }?.let { 100.0 / it }
 
+/**
+ * True when a smaller number is the better counter.
+ *
+ * The estimator ("how many trainers") and the time to win are costs; overall, power and total
+ * damage are scores. Every list-relative comparison has to know which way the metric runs.
+ */
+fun CounterMetric.isLowerBetter(): Boolean =
+    this == CounterMetric.ESTIMATOR || this == CounterMetric.TIME
+
+/**
+ * How strong [value] is against [best], as 0f..1f.
+ *
+ * Deliberately a ratio to the best row rather than a position between best and worst: "this
+ * counter is 78% as good as the top one" survives filtering the list, whereas a
+ * worst-to-best span would rescale every bar whenever the tail changes.
+ */
+fun CounterMetric.strengthRatio(value: Double?, best: Double?): Float {
+    if (value == null || best == null || value <= 0.0 || best <= 0.0) return 0f
+    val ratio = if (isLowerBetter()) best / value else value / best
+    return ratio.toFloat().coerceIn(0f, 1f)
+}
+
+/** The winning value for [metric] across [values], honouring the metric's direction. */
+fun CounterMetric.bestOf(values: Iterable<Double?>): Double? {
+    val present = values.filterNotNull().filter { it > 0.0 }
+    if (present.isEmpty()) return null
+    return if (isLowerBetter()) present.min() else present.max()
+}

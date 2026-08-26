@@ -128,7 +128,7 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         val name = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName
         val candidates = PokebattlerNameNormalizer.candidateIds(name, alert.pokemonForm)
         val catalogue = dao.getCatalogue().map {
-            RaidBossCatalogEntry(it.tier, it.pokemonId, it.displayName, it.cp)
+            RaidBossCatalogEntry(it.tier, it.pokemonId, it.displayName, it.cp, it.shiny)
         }
         // Rarity drives the tier fallback for bosses the catalogue only knows as "unset".
         val lookupIds = (candidates + candidates.map { PokebattlerNameNormalizer.baseSpeciesId(it) })

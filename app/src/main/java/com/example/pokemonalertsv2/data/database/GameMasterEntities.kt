@@ -37,7 +37,9 @@ data class SpeciesLookupRow(
     val rarity: String?,
     val dexNumber: Int?,
     val formId: Int?,
-    val megaEvoId: Int?
+    val megaEvoId: Int?,
+    val type1: String?,
+    val type2: String?
 )
 
 @Entity(tableName = "pokebattler_moves")

@@ -16,7 +16,7 @@ interface GameMasterDao {
     suspend fun species(id: String): PokebattlerSpeciesEntity?
 
     @Query(
-        "SELECT pokemonId, rarity, dexNumber, formId, megaEvoId " +
+        "SELECT pokemonId, rarity, dexNumber, formId, megaEvoId, type1, type2 " +
             "FROM pokebattler_species WHERE pokemonId IN (:ids)"
     )
     suspend fun speciesLookup(ids: List<String>): List<SpeciesLookupRow>

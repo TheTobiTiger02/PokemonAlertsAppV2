@@ -25,12 +25,32 @@ data class DecoratedCounter(
 ) {
     val isOwned: Boolean get() = owned != null
 
-    /** True when the user's copy does not know the moveset the ranking assumes. */
-    val movesetDiffers: Boolean
+    /**
+     * The recommended moves the user's copy cannot use, prettified for display.
+     *
+     * Both slots are checked, and a second charged move counts: Poke Genie records one when
+     * it is unlocked, so a copy that already knows the recommended charged move in slot two
+     * needs no TM. A move component the import simply did not record is not a mismatch.
+     */
+    val missingMoves: List<String>
         get() {
-            val mine = owned ?: return false
-            val recommendedFast = counter.fastMove ?: return false
-            val myFast = mine.quickMove ?: return false
-            return !myFast.equals(recommendedFast, ignoreCase = true)
+            val mine = owned ?: return emptyList()
+            return buildList {
+                val fast = counter.fastMove
+                val myFast = mine.quickMove
+                if (fast != null && myFast != null && !myFast.equals(fast, ignoreCase = true)) {
+                    add(fast)
+                }
+                val charged = counter.chargedMove
+                val myCharged = listOfNotNull(mine.chargeMove, mine.chargeMove2)
+                if (charged != null && myCharged.isNotEmpty() &&
+                    myCharged.none { it.equals(charged, ignoreCase = true) }
+                ) {
+                    add(charged)
+                }
+            }
         }
+
+    /** True when the user's copy does not know the moveset the ranking assumes. */
+    val movesetDiffers: Boolean get() = missingMoves.isNotEmpty()
 }

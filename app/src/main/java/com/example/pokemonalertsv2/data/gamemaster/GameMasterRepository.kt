@@ -12,6 +12,7 @@ import com.example.pokemonalertsv2.data.database.PokebattlerRaidTierEntity
 import com.example.pokemonalertsv2.data.database.PokebattlerSpeciesEntity
 import com.example.pokemonalertsv2.data.database.SpeciesLookupRow
 import com.example.pokemonalertsv2.data.counters.PokebattlerNameNormalizer
+import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import com.example.pokemonalertsv2.data.sim.PokemonType
 import com.example.pokemonalertsv2.data.sim.SimMove
 import com.example.pokemonalertsv2.data.sim.SimSpecies
@@ -137,6 +138,38 @@ class GameMasterRepository @VisibleForTesting internal constructor(
                 row?.let { id to it }
             }.toMap()
         }
+
+    /**
+     * The one or two types per Pokebattler id, for tinting rows.
+     *
+     * Rides on [speciesLookup] so that shadow forms inherit the base species' types, and
+     * costs one local query — the same one the sprite cascade already runs.
+     */
+    suspend fun typesFor(ids: Collection<String>): Map<String, List<String>> {
+        val lookup = speciesLookup(ids)
+        return lookup.mapValues { (_, row) -> listOfNotNull(row.type1, row.type2) }
+            .filterValues { it.isNotEmpty() }
+    }
+
+    /**
+     * Move type keyed by both the raw move id and its prettified label.
+     *
+     * The counters payload persists move *names*, not ids, so a display label is the only
+     * key the cached rows can be looked up by. Keying on both avoids a payload schema
+     * change that every cached entry would have to be re-fetched to fill in.
+     */
+    suspend fun moveTypesByLabel(): Map<String, String> = withContext(Dispatchers.IO) {
+        cachedMoveTypes ?: buildMap {
+            dao.allMoves().forEach { move ->
+                val type = move.type ?: return@forEach
+                put(move.moveId.uppercase(java.util.Locale.ROOT), type)
+                prettifyMoveName(move.moveId)?.let { put(it.uppercase(java.util.Locale.ROOT), type) }
+            }
+        }.also { cachedMoveTypes = it }
+    }
+
+    @Volatile
+    private var cachedMoveTypes: Map<String, String>? = null
 
     /** Best-first sprite URLs per id, for the counters card. */
     suspend fun spriteUrls(ids: Collection<String>): Map<String, List<String>> {

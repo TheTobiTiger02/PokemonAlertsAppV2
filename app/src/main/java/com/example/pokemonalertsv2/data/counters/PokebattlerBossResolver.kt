@@ -13,7 +13,9 @@ data class RaidBossCatalogEntry(
     val tier: String,
     val pokemonId: String,
     val displayName: String,
-    val cp: Int?
+    val cp: Int?,
+    /** Whether the boss can be caught shiny, straight from the raids catalogue. */
+    val shiny: Boolean = false
 )
 
 sealed interface BossResolution {
@@ -21,7 +23,8 @@ sealed interface BossResolution {
         val pokemonId: String,
         val raidLevel: String,
         val displayName: String,
-        val bossCp: Int?
+        val bossCp: Int?,
+        val shiny: Boolean = false
     ) : BossResolution
 
     data class Unresolved(val attemptedName: String, val reason: String) : BossResolution
@@ -72,7 +75,13 @@ internal fun resolveBossFromCatalogue(
         ?: matches.firstRealTier()
         ?: fallbackRaidLevel(entry.pokemonId, rarityFor(entry.pokemonId))
 
-    return BossResolution.Resolved(entry.pokemonId, raidLevel, entry.displayName, entry.cp)
+    return BossResolution.Resolved(
+        entry.pokemonId,
+        raidLevel,
+        entry.displayName,
+        entry.cp,
+        entry.shiny
+    )
 }
 
 private fun findMatches(

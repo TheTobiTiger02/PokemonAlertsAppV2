@@ -28,7 +28,18 @@ data class RaidCounter(
     /** Normalized website-style reciprocal percentage; raw [power] remains for compatibility. */
     val powerPercent: Double? = null,
     val deaths: Double? = null,
-    val timeToWinSeconds: Double? = null
+    val timeToWinSeconds: Double? = null,
+    /**
+     * The runner-up movesets for this counter, best first, excluding the chosen one.
+     *
+     * The response already carries every legal moveset's full result; collapsing to one and
+     * discarding the rest threw away the answer to "how much does the wrong moveset cost me",
+     * which is the question a player with an unTM'd copy actually has. Capped at
+     * [MOVESET_ALTERNATIVES] so the durable cache stays small.
+     *
+     * Empty for a payload cached before this existed; the UI simply shows nothing.
+     */
+    val alternatives: List<CounterMoveset> = emptyList()
 ) {
     fun metrics(): CounterMetrics = CounterMetrics(
         estimator = estimator,
@@ -39,6 +50,19 @@ data class RaidCounter(
         timeToWinSeconds = timeToWinSeconds
     )
 }
+
+/** One legal moveset for a counter, with the number the list is ranked by. */
+@Serializable
+@Immutable
+data class CounterMoveset(
+    val fastMove: String,
+    val chargedMove: String,
+    val estimator: Double? = null,
+    val timeToWinSeconds: Double? = null
+)
+
+/** How many runner-up movesets are worth persisting per counter. */
+const val MOVESET_ALTERNATIVES = 4
 
 @Serializable
 @Immutable
@@ -96,7 +120,8 @@ fun PokebattlerCountersResponse.toPayload(
             powerPercent = reciprocalPercent(defender.total?.power),
             deaths = defender.total?.effectiveDeaths ?: defender.total?.deaths,
             timeToWinSeconds = (defender.total?.combatTime ?: defender.total?.totalCombatTime)
-                ?.let { it / 1000.0 }
+                ?.let { it / 1000.0 },
+            alternatives = alternativeMovesets(defender, best)
         )
     }
     return RaidCountersPayload(
@@ -233,3 +258,30 @@ private val MOVE_NAME_OVERRIDES = mapOf(
 private val MOVE_SPECIES_SUFFIXES = listOf(
     "BLASTOISE", "CHARIZARD", "VENUSAUR", "MEWTWO", "RAICHU", "PIKACHU", "GENGAR"
 )
+
+/**
+ * Every other legal moveset for one counter, ordered best first.
+ *
+ * Ordered by estimator regardless of the requested sort: the estimator is the one metric
+ * `byMove` always carries, and the comparison here is "which moveset", not "which counter".
+ */
+internal fun alternativeMovesets(defender: PbDefender, chosen: PbByMove?): List<CounterMoveset> =
+    defender.byMove
+        .asSequence()
+        .filter { it.result?.estimator != null }
+        .filterNot { it.move1 == chosen?.move1 && it.move2 == chosen?.move2 }
+        .sortedBy { it.result?.estimator ?: Double.MAX_VALUE }
+        .mapNotNull { entry ->
+            val fast = prettifyMoveName(entry.move1) ?: return@mapNotNull null
+            val charged = prettifyMoveName(entry.move2) ?: return@mapNotNull null
+            CounterMoveset(
+                fastMove = fast,
+                chargedMove = charged,
+                estimator = entry.result?.estimator,
+                timeToWinSeconds = (entry.result?.combatTime ?: entry.result?.totalCombatTime)
+                    ?.let { it / 1000.0 }
+            )
+        }
+        .distinctBy { it.fastMove to it.chargedMove }
+        .take(MOVESET_ALTERNATIVES)
+        .toList()

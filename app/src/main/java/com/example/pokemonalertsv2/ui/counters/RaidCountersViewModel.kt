@@ -20,6 +20,7 @@ import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
 import com.example.pokemonalertsv2.data.counters.RaidBossMovesetSelection
 import com.example.pokemonalertsv2.data.counters.toMovesetOrNull
 import com.example.pokemonalertsv2.data.counters.toSelection
+import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
 import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
 import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
 import com.example.pokemonalertsv2.data.counters.RaidCountersRepository
@@ -51,6 +52,9 @@ data class RaidCountersUiState(
     val bossThumbnailUrl: String? = null,
     val bossDisplayName: String? = null,
     val bossCp: Int? = null,
+    /** Fixed HP for the boss's tier, from the weekly game master. Available offline. */
+    val bossHp: Int? = null,
+    val bossShiny: Boolean = false,
     val bossMove1: String? = null,
     val bossMove2: String? = null,
     /** Average plus every concrete moveset returned by Pokebattler. */
@@ -78,6 +82,10 @@ data class RaidCountersUiState(
      * Keyed by id so the pure engine types stay free of presentation concerns.
      */
     val spriteUrls: Map<String, List<String>> = emptyMap(),
+    /** One or two types per Pokebattler id, for tinting rows and the boss header. */
+    val pokemonTypes: Map<String, List<String>> = emptyMap(),
+    /** Move type keyed by the uppercased move id *and* its display label. */
+    val moveTypes: Map<String, String> = emptyMap(),
     /** Showing a cached list because the network was unavailable. */
     val isStale: Boolean = false,
     /**
@@ -87,6 +95,8 @@ data class RaidCountersUiState(
      * the chosen setup — see [RaidCounterOptions.precomputedBaseline].
      */
     val degradedOptions: List<String> = emptyList(),
+    /** True when [options] weather came from the alert rather than from the saved default. */
+    val weatherFromAlert: Boolean = false,
     val fetchedAtMillis: Long = 0L,
     val unresolvedBossName: String? = null,
     val pokebattlerWebUrl: String? = null,
@@ -185,9 +195,15 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
             val settings = preferences.settings.first()
             val ownedCount = runCatching { pokeGenieRepository.count() }.getOrDefault(0)
             val linkedAccount = pokebattlerAuth.account.value
-            // Keep an explicitly saved Pokébattler setup intact; raid weather is available as
-            // an optional control, but must not silently replace the user's no-weather default.
-            val options = settings.options
+            // Keep an explicitly saved Pokébattler setup intact. The one exception is a saved
+            // weather of "No boost", which is the app default and means "I have not said" —
+            // there, the weather the alert itself reports is strictly better than nothing.
+            // Any other saved weather is a real choice and is never overwritten.
+            val alertWeather = PokebattlerWeather.fromAlertWeather(alert.weatherTo ?: alert.weatherFrom)
+                ?.takeIf { settings.options.weather == PokebattlerWeather.NONE }
+            val options = alertWeather
+                ?.let { settings.options.copy(weather = it) }
+                ?: settings.options
             val alertMoveset = alert.moves
                 ?.let { RaidBossMoveset(it.fast, it.charged) }
                 ?.takeUnless { it.isRandom }
@@ -195,6 +211,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 visible = true,
                 isLoading = true,
                 options = options,
+                weatherFromAlert = alertWeather != null,
                 bossMovesetSelection = alertMoveset.toSelection(),
                 bossThumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() },
                 source = when {
@@ -217,7 +234,10 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
 
     fun onOptionsChanged(options: RaidCounterOptions) {
         if (_uiState.value.options == options) return
-        _uiState.update { it.copy(options = options) }
+        // Touching weather at all makes it the user's, so the "from this raid" note goes away.
+        val stillFromAlert = _uiState.value.weatherFromAlert &&
+            options.weather == _uiState.value.options.weather
+        _uiState.update { it.copy(options = options, weatherFromAlert = stillFromAlert) }
         // Debounced: chips are easy to flick through and the service rate-limits.
         scheduleLoad(debounceMillis = OPTION_DEBOUNCE_MILLIS)
         if (_uiState.value.showingPersonal) computePersonal()
@@ -311,23 +331,31 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
             }
         }
 
+        // Tier HP is a local game-master read, so it costs nothing and works offline.
+        val tierHp = runCatching { gameMaster.raidTier(resolution.raidLevel)?.hp }.getOrNull()
+
         val source = AllPokemonSource()
         val requestedMoveset = _uiState.value.selectedBossMoveset
         repository.loadCounters(resolution, _uiState.value.options, source, requestedMoveset)
             .onSuccess { result ->
                 val decorated = decorate(result.payload.counters)
-                val sprites = runCatching {
-                    gameMaster.spriteUrls(
-                        listOf(resolution.pokemonId) + decorated.map { entry -> entry.counter.pokemonId }
-                    )
-                }.getOrDefault(emptyMap())
+                val ids = listOf(resolution.pokemonId) +
+                    decorated.map { entry -> entry.counter.pokemonId }
+                val sprites = runCatching { gameMaster.spriteUrls(ids) }.getOrDefault(emptyMap())
+                val types = runCatching { gameMaster.typesFor(ids) }.getOrDefault(emptyMap())
+                // One local read for the whole move table, memoized in the repository.
+                val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         bossPokemonId = resolution.pokemonId,
                         spriteUrls = it.spriteUrls + sprites,
+                        pokemonTypes = it.pokemonTypes + types,
+                        moveTypes = if (moveTypes.isEmpty()) it.moveTypes else moveTypes,
                         bossDisplayName = resolution.displayName,
                         bossCp = result.payload.bossCp ?: resolution.bossCp,
+                        bossHp = tierHp,
+                        bossShiny = resolution.shiny,
                         bossMove1 = result.payload.bossMove1,
                         bossMove2 = result.payload.bossMove2,
                         bossMovesets = result.payload.availableBossMovesets,
@@ -519,11 +547,10 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
     /** Applies a full or partial Pokébattler ranking, fetching sprites for the new rows. */
     private suspend fun publishPersonal(result: PokebattlerPersonalResult, stillLoading: Boolean) {
         val ranking = result.ranking
-        val sprites = runCatching {
-            gameMaster.spriteUrls(
-                ranking.ranked.map { it.pokemonId } + ranking.team.map { it.counter.pokemonId }
-            )
-        }.getOrDefault(emptyMap())
+        val ids = ranking.ranked.map { it.pokemonId } + ranking.team.map { it.counter.pokemonId }
+        val sprites = runCatching { gameMaster.spriteUrls(ids) }.getOrDefault(emptyMap())
+        val types = runCatching { gameMaster.typesFor(ids) }.getOrDefault(emptyMap())
+        val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
         _uiState.update {
             it.copy(
                 personalLoading = stillLoading,
@@ -535,7 +562,9 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                         "Pokébattler loaded ${progress.completedLevels}/${progress.totalLevels} levels. " +
                             "${progress.missingLevels.joinToString(", ")} could not be loaded; Retry to complete."
                     },
-                spriteUrls = it.spriteUrls + sprites
+                spriteUrls = it.spriteUrls + sprites,
+                pokemonTypes = it.pokemonTypes + types,
+                moveTypes = if (moveTypes.isEmpty()) it.moveTypes else moveTypes
             )
         }
     }
