@@ -15,6 +15,9 @@ import com.example.pokemonalertsv2.data.counters.CountersException
 import com.example.pokemonalertsv2.data.counters.DecoratedCounter
 import com.example.pokemonalertsv2.data.counters.PersonalMovesMode
 import com.example.pokemonalertsv2.data.counters.PersonalRanking
+import com.example.pokemonalertsv2.data.counters.PersonalTeamSlot
+import com.example.pokemonalertsv2.data.counters.suggestTeam
+import com.example.pokemonalertsv2.data.gamemaster.MegaSpecies
 import com.example.pokemonalertsv2.data.counters.PokebattlerUrls
 import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
 import com.example.pokemonalertsv2.data.counters.RaidBossMovesetSelection
@@ -66,9 +69,22 @@ data class RaidCountersUiState(
     val ownedOnly: Boolean = false,
     val ownedMatchCount: Int = 0,
     val pokeGenieCount: Int = 0,
-    val expanded: Boolean = false,
     /** Ranking of the user's own Pokémon copied from Pokébattler. Null until computed. */
     val personal: PersonalRanking? = null,
+    /**
+     * The suggested six, derived here rather than in the repository.
+     *
+     * Which Pokémon may take a slot depends on [activeMegaId], which does not change the
+     * Pokébattler request — deriving it in the ViewModel is what lets the mega picker take
+     * effect instantly instead of forcing a refetch.
+     */
+    val team: List<PersonalTeamSlot> = emptyList(),
+    /** Pokebattler id of the Mega Evolution the trainer has active, or null for none. */
+    val activeMegaId: String? = null,
+    /** Every mega the game master knows, best-guess-owned first. */
+    val megaOptions: List<MegaSpecies> = emptyList(),
+    /** Base species in the roster, for marking which megas are actually reachable. */
+    val ownedBaseSpeciesIds: Set<String> = emptySet(),
     val personalMovesMode: PersonalMovesMode = PersonalMovesMode.CURRENT,
     val personalLoading: Boolean = false,
     val personalError: String? = null,
@@ -84,6 +100,8 @@ data class RaidCountersUiState(
     val spriteUrls: Map<String, List<String>> = emptyMap(),
     /** One or two types per Pokebattler id, for tinting rows and the boss header. */
     val pokemonTypes: Map<String, List<String>> = emptyMap(),
+    /** National dex number per id; the Pokemon GO search identifies species by number. */
+    val dexNumbers: Map<String, Int> = emptyMap(),
     /** Move type keyed by the uppercased move id *and* its display label. */
     val moveTypes: Map<String, String> = emptyMap(),
     /** Showing a cached list because the network was unavailable. */
@@ -104,6 +122,17 @@ data class RaidCountersUiState(
     val rateLimited: Boolean = false
 ) {
     val hasCounters: Boolean get() = counters.isNotEmpty()
+
+    /** Whether the notice block would render anything, so an empty item is never emitted. */
+    val hasScreenNotices: Boolean
+        get() = degradedOptions.isNotEmpty() ||
+            (hasCounters && (isLoading || isStale || rateLimited))
+
+    val hasPersonalNotices: Boolean
+        get() = personalLoading ||
+            personalError != null ||
+            (personalProgress?.serverCandidates ?: 0) > 0 ||
+            personalProgress?.substitutedLevels?.isNotEmpty() == true
     val showingPersonal: Boolean get() = source != CounterSourceId.ALL_POKEMON
     val selectedBossMoveset: RaidBossMoveset? get() = bossMovesetSelection.toMovesetOrNull()
 }
@@ -114,9 +143,9 @@ data class RaidCountersActions(
     val onBossMovesetChanged: (RaidBossMoveset?) -> Unit = {},
     val onPersonalMovesModeChanged: (PersonalMovesMode) -> Unit = {},
     val onSaveAsDefault: () -> Unit = {},
+    val onActiveMegaChanged: (String?) -> Unit = {},
     val onSourceChanged: (CounterSourceId) -> Unit = {},
     val onOwnedOnlyChanged: (Boolean) -> Unit = {},
-    val onToggleExpanded: () -> Unit = {},
     val onRetry: () -> Unit = {}
 ) {
     companion object {
@@ -221,6 +250,8 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                     else -> CounterSourceId.ALL_POKEMON
                 },
                 ownedOnly = settings.ownedOnly,
+                activeMegaId = settings.activeMegaId,
+                megaOptions = _uiState.value.megaOptions,
                 pokeGenieCount = ownedCount,
                 pokebattlerUserId = linkedAccount?.userId,
                 pokebattlerAccountName = linkedAccount?.displayName
@@ -228,6 +259,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
             // The game master supplies dex numbers for sprites and rarity for the raid tier
             // fallback, so it can no longer wait for the "My Pokemon" tab. ~420 KB, weekly.
             runCatching { gameMaster.syncIfNeeded() }
+            loadMegaOptions()
             resolveAndLoad(force = false)
         }
     }
@@ -261,6 +293,55 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch { preferences.updateDefaults(_uiState.value.options) }
     }
 
+    /**
+     * Records which mega is evolved and re-derives the team on the spot.
+     *
+     * No request and no cache invalidation: the ranked list is unchanged, only which of its
+     * rows is allowed to fill a slot.
+     */
+    fun onActiveMegaChanged(pokemonId: String?) {
+        val normalized = pokemonId?.takeIf { it.isNotBlank() }
+        if (_uiState.value.activeMegaId == normalized) return
+        _uiState.update {
+            it.copy(
+                activeMegaId = normalized,
+                team = suggestTeam(it.personal?.ranked.orEmpty(), normalized)
+            )
+        }
+        viewModelScope.launch { preferences.setActiveMega(normalized) }
+    }
+
+    /**
+     * Megas the trainer could actually evolve sort first.
+     *
+     * The roster is only a hint — a stale CSV should not hide a mega the user really has —
+     * so unowned entries stay in the list rather than being filtered out.
+     */
+    private suspend fun loadMegaOptions() {
+        if (_uiState.value.megaOptions.isNotEmpty()) return
+        val options = runCatching { gameMaster.megaSpecies() }.getOrDefault(emptyList())
+        if (options.isEmpty()) return
+        val ownedBases = runCatching { pokeGenieRepository.ownedBaseSpeciesIds() }
+            .getOrDefault(emptySet())
+        // The picker draws artwork for ids the counters list never mentions, so they are
+        // not in the sprite map yet.
+        val sprites = runCatching { gameMaster.spriteUrls(options.map { it.pokemonId }) }
+            .getOrDefault(emptyMap())
+        val types = runCatching { gameMaster.typesFor(options.map { it.pokemonId }) }
+            .getOrDefault(emptyMap())
+        _uiState.update {
+            it.copy(
+                ownedBaseSpeciesIds = ownedBases,
+                spriteUrls = it.spriteUrls + sprites,
+                pokemonTypes = it.pokemonTypes + types,
+                megaOptions = options.sortedWith(
+                    compareByDescending<MegaSpecies> { mega -> mega.baseSpeciesId in ownedBases }
+                        .thenBy { mega -> mega.displayName }
+                )
+            )
+        }
+    }
+
     fun onSourceChanged(source: CounterSourceId) {
         if (source == CounterSourceId.POKEBATTLER_POKEBOX &&
             _uiState.value.pokebattlerUserId.isNullOrBlank()
@@ -282,10 +363,6 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
     fun onOwnedOnlyChanged(ownedOnly: Boolean) {
         _uiState.update { it.copy(ownedOnly = ownedOnly) }
         viewModelScope.launch { preferences.setOwnedOnly(ownedOnly) }
-    }
-
-    fun onToggleExpanded() {
-        _uiState.update { it.copy(expanded = !it.expanded) }
     }
 
     fun onRetry() {
@@ -343,6 +420,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                     decorated.map { entry -> entry.counter.pokemonId }
                 val sprites = runCatching { gameMaster.spriteUrls(ids) }.getOrDefault(emptyMap())
                 val types = runCatching { gameMaster.typesFor(ids) }.getOrDefault(emptyMap())
+                val dexes = runCatching { gameMaster.dexNumbersFor(ids) }.getOrDefault(emptyMap())
                 // One local read for the whole move table, memoized in the repository.
                 val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
                 _uiState.update {
@@ -351,6 +429,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                         bossPokemonId = resolution.pokemonId,
                         spriteUrls = it.spriteUrls + sprites,
                         pokemonTypes = it.pokemonTypes + types,
+                        dexNumbers = it.dexNumbers + dexes,
                         moveTypes = if (moveTypes.isEmpty()) it.moveTypes else moveTypes,
                         bossDisplayName = resolution.displayName,
                         bossCp = result.payload.bossCp ?: resolution.bossCp,
@@ -550,11 +629,13 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
         val ids = ranking.ranked.map { it.pokemonId } + ranking.team.map { it.counter.pokemonId }
         val sprites = runCatching { gameMaster.spriteUrls(ids) }.getOrDefault(emptyMap())
         val types = runCatching { gameMaster.typesFor(ids) }.getOrDefault(emptyMap())
+        val dexes = runCatching { gameMaster.dexNumbersFor(ids) }.getOrDefault(emptyMap())
         val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
         _uiState.update {
             it.copy(
                 personalLoading = stillLoading,
                 personal = ranking,
+                team = suggestTeam(ranking.ranked, it.activeMegaId),
                 personalProgress = result.progress,
                 personalError = result.progress
                     .takeUnless { progress -> stillLoading || progress.missingLevels.isEmpty() }
@@ -564,6 +645,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                     },
                 spriteUrls = it.spriteUrls + sprites,
                 pokemonTypes = it.pokemonTypes + types,
+                dexNumbers = it.dexNumbers + dexes,
                 moveTypes = if (moveTypes.isEmpty()) it.moveTypes else moveTypes
             )
         }

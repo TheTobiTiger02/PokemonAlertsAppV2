@@ -6,6 +6,8 @@ import android.provider.OpenableColumns
 import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Immutable
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.counters.PokebattlerNameNormalizer
+import com.example.pokemonalertsv2.data.counters.megaBaseSpeciesId
 import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.PokeGenieDao
@@ -116,6 +118,20 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
 
     /** Imported rows used as identity/move constraints for server-backed Pokébattler scoring. */
     suspend fun ownedForPokebattler(): List<OwnedPokemon> = ownedForSimulation()
+
+    /**
+     * Base species ids present in the roster, for marking which megas are actually reachable.
+     *
+     * Every match key is normalized to its base species, so a scanned Mega Charizard Y and a
+     * plain Charizard both report CHARIZARD — which is the right answer either way, because
+     * a mega is evolved from the base Pokémon.
+     */
+    suspend fun ownedBaseSpeciesIds(): Set<String> = withContext(Dispatchers.IO) {
+        ownedForSimulation()
+            .flatMap { it.matchKeys }
+            .map { PokebattlerNameNormalizer.baseSpeciesId(it).megaBaseSpeciesId() }
+            .toSet()
+    }
 
     /** Reads and validates a CSV without changing the stored roster. */
     suspend fun prepareImport(uri: Uri): PokeGeniePrepareResult = withContext(Dispatchers.IO) {

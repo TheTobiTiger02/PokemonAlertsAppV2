@@ -133,7 +133,11 @@ import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.counters.RaidCountersActions
-import com.example.pokemonalertsv2.ui.counters.RaidCountersCard
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
+import com.example.pokemonalertsv2.ui.counters.RaidCountersScreen
+import com.example.pokemonalertsv2.ui.counters.RaidCountersTeaser
 import com.example.pokemonalertsv2.ui.counters.RaidCountersUiState
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
@@ -1397,403 +1401,428 @@ fun AlertDetailScreen(
             AlertPreferences(context.alertPreferencesDataStore).snoozeDuration.first()
         }
     }
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Hero image section
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
-                ) {
-                    AlertImage(
-                        alert = alert,
-                        rounded = false,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable { showExpandedImage = true },
-                        onMapFallbackChanged = { isMapFallback = it }
-                    )
-                    
-                    // Top Bar Scrim
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(if (isMapFallback) 72.dp else 100.dp)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = if (isMapFallback) {
-                                        listOf(
-                                            MaterialTheme.colorScheme.scrim.copy(
-                                                alpha = if (darkTheme) 0.34f else 0f
-                                            ),
-                                            Color.Transparent
-                                        )
-                                    } else {
-                                        listOf(
-                                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f)
-                                        )
-                                    }
-                                )
-                            )
-                    )
-                    
-                    // Bottom Gradient for text readability
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(if (isMapFallback) 24.dp else 96.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = if (isMapFallback) {
-                                        listOf(
-                                            Color.Transparent,
-                                            MaterialTheme.colorScheme.background
-                                        )
-                                    } else {
-                                        listOf(
-                                            MaterialTheme.colorScheme.surface.copy(alpha = 0f),
-                                            MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
-                                            MaterialTheme.colorScheme.background
-                                        )
-                                    }
-                                )
-                            )
-                    )
-                    
-                    // Top-left actions
-                    val activity = LocalContext.current as? android.app.Activity
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .statusBarsPadding()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FilledIconButton(
-                            onClick = { onBack?.invoke() ?: activity?.finish() },
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.ArrowBack,
-                                contentDescription = stringResource(id = R.string.back)
-                            )
-                        }
+    // The counters are a screen, not a card. Mirrors the SettingsScreen destination
+    // pattern -- this project has no Compose Navigation, and a separate Activity would mean
+    // duplicating AlertDetailActivity's 45-extra alert flattening and losing PiP.
+    // Keyed on the alert so onNewIntent replacing it drops back to the detail view.
+    var countersOpen by rememberSaveable(alert.uniqueId) { mutableStateOf(false) }
+    val openCounters = { countersOpen = true }
+    BackHandler(enabled = countersOpen) { countersOpen = false }
 
-                        if (onEnterPictureInPicture != null) {
-                            Surface(
-                                onClick = { onEnterPictureInPicture() },
-                                modifier = Modifier.height(36.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.outlineVariant
-                                ),
-                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                tonalElevation = 2.dp
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        painter = painterResource(id = R.drawable.ic_pip),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp),
-                                        tint = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = stringResource(id = R.string.enter_pip_short),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Shiny indicator in top right
-                        if (alert.isShiny == true) {
-                        Surface(
+    AnimatedContent(
+        targetState = countersOpen,
+        transitionSpec = { appSharedAxisX(forward = targetState) },
+        label = "alert_detail_destination"
+    ) { showCounters ->
+    if (showCounters) {
+        RaidCountersScreen(
+            state = raidCountersState,
+            actions = raidCountersActions,
+            onBack = { countersOpen = false }
+        )
+    } else {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Hero image section
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
+                    ) {
+                        AlertImage(
+                            alert = alert,
+                            rounded = false,
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
+                                .fillMaxSize()
+                                .clickable { showExpandedImage = true },
+                            onMapFallbackChanged = { isMapFallback = it }
+                        )
+                    
+                        // Top Bar Scrim
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(if (isMapFallback) 72.dp else 100.dp)
+                                .align(Alignment.TopCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = if (isMapFallback) {
+                                            listOf(
+                                                MaterialTheme.colorScheme.scrim.copy(
+                                                    alpha = if (darkTheme) 0.34f else 0f
+                                                ),
+                                                Color.Transparent
+                                            )
+                                        } else {
+                                            listOf(
+                                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f),
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                            )
+                                        }
+                                    )
+                                )
+                        )
+                    
+                        // Bottom Gradient for text readability
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(if (isMapFallback) 24.dp else 96.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = if (isMapFallback) {
+                                            listOf(
+                                                Color.Transparent,
+                                                MaterialTheme.colorScheme.background
+                                            )
+                                        } else {
+                                            listOf(
+                                                MaterialTheme.colorScheme.surface.copy(alpha = 0f),
+                                                MaterialTheme.colorScheme.background.copy(alpha = 0.64f),
+                                                MaterialTheme.colorScheme.background
+                                            )
+                                        }
+                                    )
+                                )
+                        )
+                    
+                        // Top-left actions
+                        val activity = LocalContext.current as? android.app.Activity
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
                                 .statusBarsPadding()
                                 .padding(16.dp),
-                            shape = MaterialTheme.shapes.small,
-                            color = Color(0xFFFFB300).copy(alpha = 0.20f)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            FilledIconButton(
+                                onClick = { onBack?.invoke() ?: activity?.finish() },
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Star,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color(0xFFFFB300)
+                                    imageVector = Icons.Filled.ArrowBack,
+                                    contentDescription = stringResource(id = R.string.back)
                                 )
-                                Text(
-                                    text = "SHINY",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB300)
-                                )
+                            }
+
+                            if (onEnterPictureInPicture != null) {
+                                Surface(
+                                    onClick = { onEnterPictureInPicture() },
+                                    modifier = Modifier.height(36.dp),
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                    tonalElevation = 2.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_pip),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                            tint = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = stringResource(id = R.string.enter_pip_short),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-                
-                // Content section - scrollable
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f) // Fill remaining space
-                        .verticalScroll(rememberScrollState())
-                        .background(MaterialTheme.colorScheme.background)
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Pokemon Name and Type Badge Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = formatAlertTitle(alert),
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            // Pokemon form if available
-                            alert.pokemonForm?.takeIf { it.isNotBlank() }?.let { form ->
-                                Text(
-                                    text = form,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            GoDexStatusPill(goDexStatus)
-                            goDexStatus.evolutionTargets.forEach { target ->
-                                Text(
-                                    text = "Evolution needed: ${target.displayName}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            goDexStatus.formChangeTargets.forEach { target ->
-                                Text(
-                                    text = "Form change needed: ${target.displayName}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            GoDexCaughtAction(
-                                alert = alert,
-                                matchResult = goDexStatus,
-                                modifier = Modifier.padding(top = 8.dp),
-                                presentation = GoDexCaughtActionPresentation.LABELED
-                            )
-                            // Pokedex ID
-                            alert.pokedexId?.let { dexId ->
-                                Text(
-                                    text = "#${dexId.toString().padStart(4, '0')}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        
-                        // Type Badges
-                        val typeList = alert.type?.takeIf { it.isNotEmpty() }
-                        if (typeList != null) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.padding(start = 8.dp)
+                    
+                        // Shiny indicator in top right
+                            if (alert.isShiny == true) {
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .statusBarsPadding()
+                                    .padding(16.dp),
+                                shape = MaterialTheme.shapes.small,
+                                color = Color(0xFFFFB300).copy(alpha = 0.20f)
                             ) {
-                                typeList.forEach { typeName ->
-                                    AlertPill(
-                                        text = typeName.uppercase(),
-                                        containerColor = categoryAccent.copy(alpha = 0.18f),
-                                        contentColor = categoryAccent
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Star,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = Color(0xFFFFB300)
+                                    )
+                                    Text(
+                                        text = "SHINY",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFFB300)
                                     )
                                 }
                             }
                         }
                     }
-
-                    if (alert.isInvalidated) {
-                        InvalidationBanner(alert = alert)
-                    }
-
-                    if (alert.isWeatherChange &&
-                        (weatherTransitionLabel(alert) != null || alert.affectedAlerts.isNotEmpty())
+                
+                    // Content section - scrollable
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f) // Fill remaining space
+                            .verticalScroll(rememberScrollState())
+                            .background(MaterialTheme.colorScheme.background)
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        WeatherTransitionCard(alert = alert)
-                        alert.affectedAlerts.forEach { affectedAlert ->
-                            AffectedAlertDetailCard(alert = affectedAlert)
-                        }
-                    }
-                    
-                    // Stats Card (IVs, CP, Level, HundoCP)
-                    if (alert.formattedIv != null || alert.cp != null || alert.level != null || alert.hundoCP != null) {
-                        StatsCard(alert = alert)
-                    }
-                    
-                    // PvP Rankings Card
-                    alert.pvpRankings?.takeIf { it.isNotEmpty() }?.let { rankings ->
-                        PvpRankingsCard(rankings = rankings)
-                    }
-                    
-                    // Weather & Gender Info
-                    if (alert.isWeatherBoosted == true || alert.gender != null || alert.currentWeather != null) {
-                        WeatherAndGenderCard(alert = alert)
-                    }
-                    
-                    // Moves Card (for raids)
-                    alert.moves?.let { moves ->
-                        MovesCard(moves = moves)
-                    }
-
-                    // Best counters (raids only; the card hides itself otherwise)
-                    RaidCountersCard(
-                        state = raidCountersState,
-                        actions = raidCountersActions
-                    )
-                    
-                    // Location Card
-                    LocationCard(alert = alert)
-                    AnimatedVisibility(
-                        visible = isGoing,
-                        enter = appExpandIn(),
-                        exit = appCollapseOut()
-                    ) {
-                        AlertPill(
-                            text = "Arrival tracking active",
-                            icon = Icons.Filled.LocationOn,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    
-                    // Quest Info Card (for quests)
-                    if (alert.questTask != null || alert.questReward != null) {
-                        QuestCard(alert = alert)
-                    }
-                    
-                    // Rocket Info Card (for Rocket encounters)
-                    if (alert.gruntType?.isNotBlank() == true || alert.pokemonRewards?.isNotEmpty() == true) {
-                        RocketCard(
-                            gruntType = alert.gruntType,
-                            pokemonRewards = alert.pokemonRewards
-                        )
-                    }
-                    
-                    // Time & Status
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        ),
-                        shape = MaterialTheme.shapes.large,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            val statusClock = rememberCountdownClock()
-                            Text(
-                                text = "Status",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
-                            
-                            // Created at timestamp
-                            TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
-                                Spacer(modifier = Modifier.height(8.dp))
+                        // Pokemon Name and Type Badge Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = posted,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = formatAlertTitle(alert),
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
+                                // Pokemon form if available
+                                alert.pokemonForm?.takeIf { it.isNotBlank() }?.let { form ->
+                                    Text(
+                                        text = form,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                GoDexStatusPill(goDexStatus)
+                                goDexStatus.evolutionTargets.forEach { target ->
+                                    Text(
+                                        text = "Evolution needed: ${target.displayName}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                goDexStatus.formChangeTargets.forEach { target ->
+                                    Text(
+                                        text = "Form change needed: ${target.displayName}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                GoDexCaughtAction(
+                                    alert = alert,
+                                    matchResult = goDexStatus,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    presentation = GoDexCaughtActionPresentation.LABELED
+                                )
+                                // Pokedex ID
+                                alert.pokedexId?.let { dexId ->
+                                    Text(
+                                        text = "#${dexId.toString().padStart(4, '0')}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        
+                            // Type Badges
+                            val typeList = alert.type?.takeIf { it.isNotEmpty() }
+                            if (typeList != null) {
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.padding(start = 8.dp)
+                                ) {
+                                    typeList.forEach { typeName ->
+                                        AlertPill(
+                                            text = typeName.uppercase(),
+                                            containerColor = categoryAccent.copy(alpha = 0.18f),
+                                            contentColor = categoryAccent
+                                        )
+                                    }
+                                }
                             }
                         }
-                    }
+
+                        if (alert.isInvalidated) {
+                            InvalidationBanner(alert = alert)
+                        }
+
+                        if (alert.isWeatherChange &&
+                            (weatherTransitionLabel(alert) != null || alert.affectedAlerts.isNotEmpty())
+                        ) {
+                            WeatherTransitionCard(alert = alert)
+                            alert.affectedAlerts.forEach { affectedAlert ->
+                                AffectedAlertDetailCard(alert = affectedAlert)
+                            }
+                        }
                     
-                    Spacer(modifier = Modifier.height(actionBarClearance))
+                        // Stats Card (IVs, CP, Level, HundoCP)
+                        if (alert.formattedIv != null || alert.cp != null || alert.level != null || alert.hundoCP != null) {
+                            StatsCard(alert = alert)
+                        }
+                    
+                        // PvP Rankings Card
+                        alert.pvpRankings?.takeIf { it.isNotEmpty() }?.let { rankings ->
+                            PvpRankingsCard(rankings = rankings)
+                        }
+                    
+                        // Weather & Gender Info
+                        if (alert.isWeatherBoosted == true || alert.gender != null || alert.currentWeather != null) {
+                            WeatherAndGenderCard(alert = alert)
+                        }
+                    
+                        // Moves Card (for raids)
+                        alert.moves?.let { moves ->
+                            MovesCard(moves = moves)
+                        }
+
+                        // Best counters (raids only; the row hides itself otherwise). The
+                        // feature itself lives on RaidCountersScreen -- a screen's worth of UI
+                        // does not belong in this scroll column.
+                        RaidCountersTeaser(
+                            state = raidCountersState,
+                            actions = raidCountersActions,
+                            onOpen = { openCounters() }
+                        )
+                    
+                        // Location Card
+                        LocationCard(alert = alert)
+                        AnimatedVisibility(
+                            visible = isGoing,
+                            enter = appExpandIn(),
+                            exit = appCollapseOut()
+                        ) {
+                            AlertPill(
+                                text = "Arrival tracking active",
+                                icon = Icons.Filled.LocationOn,
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    
+                        // Quest Info Card (for quests)
+                        if (alert.questTask != null || alert.questReward != null) {
+                            QuestCard(alert = alert)
+                        }
+                    
+                        // Rocket Info Card (for Rocket encounters)
+                        if (alert.gruntType?.isNotBlank() == true || alert.pokemonRewards?.isNotEmpty() == true) {
+                            RocketCard(
+                                gruntType = alert.gruntType,
+                                pokemonRewards = alert.pokemonRewards
+                            )
+                        }
+                    
+                        // Time & Status
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                val statusClock = rememberCountdownClock()
+                                Text(
+                                    text = "Status",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
+                            
+                                // Created at timestamp
+                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = posted,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    
+                        Spacer(modifier = Modifier.height(actionBarClearance))
+                    }
                 }
+                AlertDetailActionBar(
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    accent = categoryAccent,
+                    onSnoozeClick = { showSnoozeDialog = true },
+                    isGoing = isGoing,
+                    goingEnabled = alert.isEligibleArrivalDestination(),
+                    onGoingClick = { arrivalTracking.onToggle(alert) },
+                    onNavigateClick = { openMapForAlert(context, alert) },
+                    onPipClick = onEnterPictureInPicture,
+                    onShareClick = {
+                        scope.launch {
+                            AlertShareCard.share(context, alert)
+                        }
+                    }
+                )
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(start = 16.dp, end = 16.dp, bottom = actionBarClearance)
+                )
             }
-            AlertDetailActionBar(
-                modifier = Modifier.align(Alignment.BottomCenter),
-                accent = categoryAccent,
-                onSnoozeClick = { showSnoozeDialog = true },
-                isGoing = isGoing,
-                goingEnabled = alert.isEligibleArrivalDestination(),
-                onGoingClick = { arrivalTracking.onToggle(alert) },
-                onNavigateClick = { openMapForAlert(context, alert) },
-                onPipClick = onEnterPictureInPicture,
-                onShareClick = {
+        }
+
+        if (showSnoozeDialog) {
+            SnoozeDurationDialog(
+                defaultMinutes = defaultSnoozeMinutes,
+                onDismiss = { showSnoozeDialog = false },
+                onConfirm = { minutes ->
+                    showSnoozeDialog = false
                     scope.launch {
-                        AlertShareCard.share(context, alert)
+                        val scheduled = snoozeAlertFromUi(context, alert, minutes)
+                        snackbarHostState.showSnackbar(
+                            if (scheduled) {
+                                "Snoozed for ${formatSnoozeDurationLabel(minutes)}"
+                            } else {
+                                "Alert ends before that snooze time"
+                            }
+                        )
                     }
                 }
             )
-            SnackbarHost(
-                hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = actionBarClearance)
+        }
+
+        if (showExpandedImage) {
+            ExpandedAlertImageViewer(
+                alert = alert,
+                onDismiss = { showExpandedImage = false }
             )
         }
     }
-
-    if (showSnoozeDialog) {
-        SnoozeDurationDialog(
-            defaultMinutes = defaultSnoozeMinutes,
-            onDismiss = { showSnoozeDialog = false },
-            onConfirm = { minutes ->
-                showSnoozeDialog = false
-                scope.launch {
-                    val scheduled = snoozeAlertFromUi(context, alert, minutes)
-                    snackbarHostState.showSnackbar(
-                        if (scheduled) {
-                            "Snoozed for ${formatSnoozeDurationLabel(minutes)}"
-                        } else {
-                            "Alert ends before that snooze time"
-                        }
-                    )
-                }
-            }
-        )
-    }
-
-    if (showExpandedImage) {
-        ExpandedAlertImageViewer(
-            alert = alert,
-            onDismiss = { showExpandedImage = false }
-        )
     }
 }
 

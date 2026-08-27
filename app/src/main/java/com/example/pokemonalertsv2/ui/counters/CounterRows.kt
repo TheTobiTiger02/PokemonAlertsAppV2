@@ -61,6 +61,7 @@ import com.example.pokemonalertsv2.data.counters.DecoratedCounter
 import com.example.pokemonalertsv2.data.counters.PersonalCounter
 import com.example.pokemonalertsv2.data.counters.PersonalMovesMode
 import com.example.pokemonalertsv2.data.counters.PersonalRanking
+import com.example.pokemonalertsv2.data.counters.PersonalTeamSlot
 import com.example.pokemonalertsv2.data.counters.PokebattlerFriendship
 import com.example.pokemonalertsv2.data.counters.PokebattlerSort
 import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
@@ -77,118 +78,26 @@ import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 
-// ── Personal mode ────────────────────────────────────────────────────────────
-
-@Composable
-internal fun PersonalContent(state: RaidCountersUiState, actions: RaidCountersActions) {
-    val personal = state.personal
-    when {
-        state.personalError != null && personal == null -> Column {
-            Text(
-                text = state.personalError,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row {
-                TextButton(onClick = actions.onRetry) { Text("Retry") }
-                // A failing Pokébox should not strand the user on it when their imported
-                // roster is right there and works.
-                if (state.source == CounterSourceId.POKEBATTLER_POKEBOX && state.pokeGenieCount > 0) {
-                    TextButton(
-                        onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
-                    ) { Text("Use Poké Genie CSV") }
-                }
-            }
-        }
-
-        // Loading is its own state, distinct from "nothing to show". Keying this on
-        // `personal == null` alone made every stalled or aborted job look like progress.
-        personal == null && state.personalLoading -> CounterSkeletonList(
-            state.personalProgress
-                ?.takeIf { it.totalLevels > 0 }
-                ?.let { "Ranking your Pokémon… (${it.completedLevels}/${it.totalLevels})" }
-                ?: "Ranking your Pokémon…"
-        )
-
-        personal == null -> Column {
-            Text(
-                text = "No ranking yet.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(onClick = actions.onRetry) { Text("Retry") }
-        }
-
-        personal.ranked.isEmpty() -> Column {
-            Text(
-                text = if (state.source == CounterSourceId.POKEBATTLER_POKEBOX) {
-                    "Your Pokébattler Pokébox is empty, or the account has no Pokémon saved."
-                } else {
-                    "None of your ${state.pokeGenieCount} imported Pokémon is among Pokébattler's " +
-                        "top counters for this boss at level 40 or above."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(onClick = actions.onRetry) { Text("Retry") }
-        }
-
-        else -> Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (state.personalLoading) {
-                Text(
-                    state.personalProgress
-                        ?.takeIf { it.totalLevels > 0 }
-                        ?.let { "Updating… Pokébattler levels ${it.completedLevels}/${it.totalLevels}" }
-                        ?: "Updating your ranking…",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            // Say what actually happened. Pokébattler returns only its top 30 counters for
-            // the boss, so this is a match count against those 30 — not "your best N out of
-            // 2405", which is what the old wording implied.
-            state.personalProgress?.takeIf { it.serverCandidates > 0 }?.let { progress ->
-                Text(
-                    "Matched ${personal.ranked.size} of your Pokémon to Pokébattler's top " +
-                        "${progress.serverCandidates} counters for this boss · " +
-                        "level 40+ only",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            // Only levels/40 is precomputed for an off-rotation boss, so the level-50
-            // bucket gets scored against the level-40 response. Understating is fine;
-            // hiding it is not.
-            state.personalProgress?.substitutedLevels?.takeIf { it.isNotEmpty() }?.let { levels ->
-                Text(
-                    "Pokébattler has no level " +
-                        levels.joinToString(", ") { formatLevel(it) } +
-                        " ranking for this boss; those Pokémon are scored at level 40.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            state.personalError?.let { error ->
-                Text(
-                    error,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-            TeamSection(personal, state.spriteUrls, state.options.sort.toCounterMetric())
-            PersonalList(state, personal, actions)
-        }
-    }
-}
+// -- Personal mode -----------------------------------------------------------
 
 @Composable
 internal fun TeamSection(
     personal: PersonalRanking,
+    team: List<PersonalTeamSlot>,
+    activeMegaId: String?,
     spriteUrls: Map<String, List<String>>,
-    metric: CounterMetric
+    metric: CounterMetric,
+    onCopyTeam: (CopyTeamFormat) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        SectionLabel("Suggested team")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SectionLabel("Suggested team")
+            Spacer(modifier = Modifier.weight(1f))
+            CopyTeamButton(enabled = team.isNotEmpty(), onCopy = onCopyTeam)
+        }
 
         Surface(
             shape = MaterialTheme.shapes.medium,
@@ -224,6 +133,16 @@ internal fun TeamSection(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                // Say why no mega is here, rather than leaving the trainer to wonder
+                // whether the ranking simply rates them badly.
+                if (activeMegaId == null) {
+                    Text(
+                        text = "No mega active, so none is suggested. " +
+                            "Set yours in Battle setup.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (!personal.serverBacked) {
                     Spacer(modifier = Modifier.height(8.dp))
                     LinearProgressIndicator(
@@ -237,9 +156,9 @@ internal fun TeamSection(
             }
         }
 
-        TeamSlots(personal, spriteUrls)
+        TeamSlots(team, spriteUrls)
 
-        personal.team.forEach { slot ->
+        team.forEach { slot ->
             TeamRow(slot.counter, slot.count, spriteUrls, metric)
         }
     }
@@ -294,59 +213,6 @@ internal fun TeamRow(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-    }
-}
-
-@Composable
-internal fun PersonalList(
-    state: RaidCountersUiState,
-    personal: PersonalRanking,
-    actions: RaidCountersActions
-) {
-    val metric = state.options.sort.toCounterMetric()
-    val shown = personal.ranked.take(COLLAPSED_COUNT)
-    val best = remember(personal.ranked, metric) {
-        metric.bestOf(personal.ranked.map { it.metrics.valueFor(metric) })
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SectionLabel("Your best counters")
-        shown.forEachIndexed { index, counter ->
-            PersonalRow(
-                rank = index + 1,
-                counter = counter,
-                spriteUrls = state.spriteUrls,
-                types = state.pokemonTypes,
-                moveTypes = state.moveTypes,
-                metric = metric,
-                best = best
-            )
-        }
-        if (personal.ranked.size > COLLAPSED_COUNT) {
-            TextButton(onClick = actions.onToggleExpanded) {
-                Text("Show all ${personal.ranked.size.coerceAtMost(PERSONAL_SHEET_LIMIT)}")
-            }
-        }
-        if (personal.ranked.any { it.movesetAssumed }) {
-            Text(
-                text = if (state.personalMovesMode == PersonalMovesMode.CURRENT) {
-                    "Current moves excludes imports without a recorded fast and charged move."
-                } else {
-                    "Assumed moves are shown when Poké Genie did not record that move component."
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (state.personalMovesMode == PersonalMovesMode.CURRENT) {
-            val excluded = (state.pokeGenieCount - personal.ranked.size).coerceAtLeast(0)
-            if (excluded > 0) {
-                Text(
-                    "$excluded imported Pokémon excluded from Current moves (missing moves or unmatched).",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
     }
 }
 
@@ -414,47 +280,7 @@ internal fun PersonalRow(
     }
 }
 
-@Composable
-internal fun GeneralList(state: RaidCountersUiState, actions: RaidCountersActions) {
-    val all = if (state.ownedOnly) state.counters.filter { it.isOwned } else state.counters
-    if (all.isEmpty()) {
-        Text(
-            if (state.ownedOnly) {
-                "None of your imported Pokémon appears in this ranking. Turn off Owned only to see all counters."
-            } else {
-                "No counters available."
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        return
-    }
-    val metric = state.options.sort.toCounterMetric()
-    // Always the short list here. The rest lives in AllCountersSheet, which can afford a
-    // LazyColumn; this Column is inside the alert-detail scroller and cannot.
-    val shown = all.take(COLLAPSED_COUNT)
-    // Once per list, not once per row: every bar is a ratio to the same winning value.
-    val best = remember(all, metric) {
-        metric.bestOf(all.map { it.counter.metrics().valueFor(metric) })
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        shown.forEach {
-            GeneralRow(it, state.spriteUrls, state.pokemonTypes, state.moveTypes, metric, best)
-        }
-        if (all.size > COLLAPSED_COUNT) {
-            TextButton(onClick = actions.onToggleExpanded) {
-                Text("Show all ${all.size}")
-            }
-        }
-        if (state.pokeGenieCount > 0 && state.ownedMatchCount > 0) {
-            Text(
-                text = "Highlighted are ${state.ownedMatchCount} you already own.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+// -- Pokebattler mode --------------------------------------------------------
 
 @Composable
 internal fun GeneralRow(
@@ -541,8 +367,8 @@ internal fun GeneralRow(
 }
 
 @Composable
-internal fun TeamSlots(personal: PersonalRanking, spriteUrls: Map<String, List<String>>) {
-    val slots = personal.team.flatMap { slot -> List(slot.count) { slot.counter } }.take(6)
+internal fun TeamSlots(team: List<PersonalTeamSlot>, spriteUrls: Map<String, List<String>>) {
+    val slots = team.flatMap { slot -> List(slot.count) { slot.counter } }.take(6)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         (0 until 6).chunked(3).forEach { row ->
             Row(
@@ -661,5 +487,21 @@ internal fun RowHeadline(name: String, value: String, expanded: Boolean) {
             )
         }
         ExpandChevron(expanded)
+    }
+}
+
+/** Which flavour of Pokémon GO query the trainer asked for. */
+internal enum class CopyTeamFormat { EXACT, SPECIES }
+
+/**
+ * Copies the team as a Pokémon GO search string.
+ *
+ * The app's first clipboard affordance. A plain tap gives the precise query — species,
+ * shadow, moves and CP — because that is what selects exactly these six and nothing else.
+ */
+@Composable
+private fun CopyTeamButton(enabled: Boolean, onCopy: (CopyTeamFormat) -> Unit) {
+    TextButton(onClick = { onCopy(CopyTeamFormat.EXACT) }, enabled = enabled) {
+        Text("Copy for GO", style = MaterialTheme.typography.labelMedium)
     }
 }

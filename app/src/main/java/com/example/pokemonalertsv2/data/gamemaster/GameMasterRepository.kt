@@ -12,6 +12,9 @@ import com.example.pokemonalertsv2.data.database.PokebattlerRaidTierEntity
 import com.example.pokemonalertsv2.data.database.PokebattlerSpeciesEntity
 import com.example.pokemonalertsv2.data.database.SpeciesLookupRow
 import com.example.pokemonalertsv2.data.counters.PokebattlerNameNormalizer
+import com.example.pokemonalertsv2.data.counters.isMegaOrPrimalId
+import com.example.pokemonalertsv2.data.counters.megaBaseSpeciesId
+import com.example.pokemonalertsv2.data.counters.prettifyPokemonName
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import com.example.pokemonalertsv2.data.sim.PokemonType
 import com.example.pokemonalertsv2.data.sim.SimMove
@@ -152,6 +155,20 @@ class GameMasterRepository @VisibleForTesting internal constructor(
     }
 
     /**
+     * National dex number per Pokebattler id.
+     *
+     * Rides on [speciesLookup] like [typesFor], so a shadow form resolves to its base
+     * species' number -- which is the right answer for the Pokemon GO search, since the
+     * number identifies the species and shadow is not a separate dex entry.
+     */
+    suspend fun dexNumbersFor(ids: Collection<String>): Map<String, Int> {
+        val lookup = speciesLookup(ids)
+        return lookup.mapNotNull { (id, row) ->
+            row.dexNumber?.takeIf { it > 0 }?.let { id to it }
+        }.toMap()
+    }
+
+    /**
      * Move type keyed by both the raw move id and its prettified label.
      *
      * The counters payload persists move *names*, not ids, so a display label is the only
@@ -170,6 +187,26 @@ class GameMasterRepository @VisibleForTesting internal constructor(
 
     @Volatile
     private var cachedMoveTypes: Map<String, String>? = null
+
+    /**
+     * Every Mega Evolution and Primal Reversion the game master knows, for the active-mega
+     * picker.
+     *
+     * Megas are their own species rows with their own ids and stats, so this is a plain
+     * local filter — no network, and it works from the same weekly sync the sprites use.
+     */
+    suspend fun megaSpecies(): List<MegaSpecies> = withContext(Dispatchers.IO) {
+        dao.allSpeciesIds()
+            .filter { it.isMegaOrPrimalId() }
+            .map { id ->
+                MegaSpecies(
+                    pokemonId = id,
+                    displayName = prettifyPokemonName(id),
+                    baseSpeciesId = id.megaBaseSpeciesId()
+                )
+            }
+            .sortedBy { it.displayName }
+    }
 
     /** Best-first sprite URLs per id, for the counters card. */
     suspend fun spriteUrls(ids: Collection<String>): Map<String, List<String>> {
@@ -314,3 +351,11 @@ internal fun PokebattlerPokemonResponse.toEntities(
     }
     return rows.distinctBy { it.pokemonId }
 }
+
+/** One selectable Mega Evolution or Primal Reversion. */
+data class MegaSpecies(
+    val pokemonId: String,
+    val displayName: String,
+    /** The species it evolves from, used to mark the ones the user could actually evolve. */
+    val baseSpeciesId: String
+)

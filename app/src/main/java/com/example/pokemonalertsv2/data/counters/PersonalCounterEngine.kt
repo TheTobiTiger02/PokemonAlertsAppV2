@@ -62,7 +62,18 @@ data class PersonalRanking(
 /** A row of the suggested six: one Pokemon, possibly brought several times. */
 data class PersonalTeamSlot(
     val counter: PersonalCounter,
-    val count: Int
+    val count: Int,
+    /**
+     * Every copy filling this slot.
+     *
+     * [counter] is only the representative. Each copy is a distinct scanned Pokemon with its
+     * own CP, so anything that has to identify the individuals -- the Pokemon GO search
+     * string in particular -- needs these and not [counter] repeated.
+     *
+     * Defaults to [count] repeats of [counter] for callers that never had the copies, which
+     * is the legacy engine below.
+     */
+    val copies: List<PersonalCounter> = List(count) { counter }
 )
 
 /**

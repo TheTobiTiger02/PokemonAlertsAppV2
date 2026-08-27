@@ -24,7 +24,16 @@ data class RaidCounterSettings(
      * endpoint — `attackers/users/<trainer number>` 404s — so the account is linked through
      * `PokebattlerAuth` instead. Still read so an upgrade can clear it; never written.
      */
-    val pokebattlerTrainerNumber: String? = null
+    val pokebattlerTrainerNumber: String? = null,
+    /**
+     * The Pokebattler id of the Mega Evolution the trainer currently has active, or null
+     * for none.
+     *
+     * Deliberately outside [options]: it changes which of the ranked Pokémon may take a
+     * team slot, not what Pokebattler is asked to simulate, so it must stay out of the
+     * request and out of the cache key.
+     */
+    val activeMegaId: String? = null
 )
 
 /**
@@ -61,7 +70,8 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
             pokeGenieMatchedCount = prefs[PG_MATCHED_KEY] ?: 0,
             pokeGenieFileName = prefs[PG_FILE_KEY],
             pokeGenieImportedAtMillis = prefs[PG_IMPORTED_AT_KEY] ?: 0L,
-            pokebattlerTrainerNumber = prefs[PB_TRAINER_KEY]
+            pokebattlerTrainerNumber = prefs[PB_TRAINER_KEY],
+            activeMegaId = prefs[ACTIVE_MEGA_KEY]
         )
     }
 
@@ -76,6 +86,14 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
             prefs[MEGAS_KEY] = options.includeMegas
             prefs[SHADOW_KEY] = options.includeShadow
             prefs[LEGENDARY_KEY] = options.includeLegendary
+        }
+    }
+
+    /** Null clears it: no mega evolved, so no mega may take a team slot. */
+    suspend fun setActiveMega(pokemonId: String?) {
+        dataStore.edit { prefs ->
+            if (pokemonId.isNullOrBlank()) prefs.remove(ACTIVE_MEGA_KEY)
+            else prefs[ACTIVE_MEGA_KEY] = pokemonId
         }
     }
 
@@ -139,5 +157,6 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         val PG_FILE_KEY = stringPreferencesKey("poke_genie_file_name")
         val PG_IMPORTED_AT_KEY = longPreferencesKey("poke_genie_imported_at")
         val PB_TRAINER_KEY = stringPreferencesKey("pokebattler_trainer_number")
+        val ACTIVE_MEGA_KEY = stringPreferencesKey("raid_counters_active_mega")
     }
 }

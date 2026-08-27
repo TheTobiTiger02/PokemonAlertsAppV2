@@ -195,19 +195,6 @@ internal fun RankBadge(rank: Int, highlighted: Boolean = false) {
 }
 
 @Composable
-internal fun LoadingRow(label: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
 internal fun UnresolvedState(state: RaidCountersUiState, actions: RaidCountersActions) {
     Column {
         Text(
@@ -481,16 +468,22 @@ internal fun CounterRowShell(
                 role = Role.Button
                 stateDescription = if (expanded) "Expanded" else "Collapsed"
             }
-            .drawBehind {
-                if (!owned) return@drawBehind
-                drawRoundRect(
-                    color = stripe,
-                    size = Size(STRIPE_WIDTH_PX, size.height),
-                    cornerRadius = CornerRadius(STRIPE_WIDTH_PX / 2f)
-                )
-            }
     ) {
-        Box(modifier = Modifier.padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 8.dp)) {
+        // Inside the Surface, so the card's own shape clips it. Painting this on the
+        // Surface's modifier instead put it outside that clip and left square corners
+        // hanging past the rounded edge.
+        Box(
+            modifier = Modifier
+                .drawBehind {
+                    if (!owned) return@drawBehind
+                    drawRoundRect(
+                        color = stripe,
+                        size = Size(STRIPE_WIDTH_PX, size.height),
+                        cornerRadius = CornerRadius(STRIPE_WIDTH_PX / 2f)
+                    )
+                }
+                .padding(start = 10.dp, top = 8.dp, end = 10.dp, bottom = 8.dp)
+        ) {
             content()
         }
     }

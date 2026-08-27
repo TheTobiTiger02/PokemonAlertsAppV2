@@ -70,7 +70,13 @@ import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import java.util.Locale
 import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.ui.draw.clip
+import com.example.pokemonalertsv2.ui.components.rememberShimmerBrush
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -108,75 +114,27 @@ internal fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCounte
     }
 }
 
+/**
+ * Boss CP, tier HP and shiny availability.
+ *
+ * All three were already in state and none was ever rendered. Tier HP is a local
+ * game-master read, so this line works offline.
+ */
 @Composable
-internal fun Header(state: RaidCountersUiState) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        CounterSprite(
-            // The feed thumbnail is form-exact, so prefer it and keep the rebuilt URLs as
-            // the fallback for alerts that arrive without one.
-            urls = listOfNotNull(state.bossThumbnailUrl) +
-                state.spriteUrls[state.bossPokemonId].orEmpty(),
-            size = 40.dp
-        ) {
-            Text(text = "🛡️", style = MaterialTheme.typography.titleMedium)
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = "Best counters",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            val subtitle = buildString {
-                state.bossDisplayName?.let { append(it) }
-                // Pokebattler uses the literal id RANDOM when it averages over movesets.
-                val moves = listOfNotNull(state.bossMove1, state.bossMove2)
-                    .filterNot { it.equals("RANDOM", ignoreCase = true) }
-                    .mapNotNull { prettifyMoveName(it) }
-                if (moves.isNotEmpty()) {
-                    if (isNotEmpty()) append(" · ")
-                    append(moves.joinToString(" / "))
-                }
-            }
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            // Boss CP and tier HP were both already in state and never rendered; the raid
-            // timer is what a group actually reads off before going in.
-            val facts = buildList {
-                state.bossCp?.takeIf { it > 0 }?.let { add("CP $it") }
-                state.bossHp?.takeIf { it > 0 }?.let { add("$it HP") }
-                if (state.bossShiny) add("Shiny possible")
-            }
-            state.bossPokemonId?.let { id ->
-                TypeBadges(
-                    types = state.pokemonTypes[id].orEmpty(),
-                    modifier = Modifier.padding(top = 3.dp)
-                )
-            }
-            if (facts.isNotEmpty()) {
-                Text(
-                    text = facts.joinToString(" · "),
-                    style = MetricTextStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        if (state.isLoading || state.personalLoading) {
-            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-        }
-        ShareCountersButton(state)
+internal fun BossFacts(state: RaidCountersUiState) {
+    val facts = buildList {
+        state.bossCp?.takeIf { it > 0 }?.let { add("CP $it") }
+        state.bossHp?.takeIf { it > 0 }?.let { add("$it HP") }
+        if (state.bossShiny) add("Shiny possible")
     }
+    if (facts.isEmpty()) return
+    Text(
+        text = facts.joinToString(" · "),
+        style = MetricTextStyle,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
 }
 
 @Composable
@@ -222,7 +180,14 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
                 onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
             )
             SegmentedChoice(
-                label = state.pokebattlerAccountName?.let { "Pokébox · $it" } ?: "My Pokébox",
+                // The account label is usually an email address, which wraps the chip onto
+                // a second line and doubles the height of the selector. The local part
+                // identifies the account well enough.
+                label = state.pokebattlerAccountName
+                    ?.substringBefore('@')
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { "Pokébox · $it" }
+                    ?: "My Pokébox",
                 selected = state.source == CounterSourceId.POKEBATTLER_POKEBOX,
                 modifier = Modifier.weight(1f),
                 onClick = { actions.onSourceChanged(CounterSourceId.POKEBATTLER_POKEBOX) }
@@ -256,7 +221,10 @@ internal fun SegmentedChoice(
             Text(
                 label,
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
     }
@@ -388,14 +356,131 @@ internal fun ShareCountersButton(state: RaidCountersUiState) {
                 sharing = false
             }
         },
-        enabled = !sharing,
-        modifier = Modifier.size(32.dp)
+        enabled = !sharing
     ) {
         Icon(
             imageVector = Icons.Default.Share,
             contentDescription = "Share these counters",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(20.dp)
         )
     }
+}
+
+// ── Detail-screen teaser ─────────────────────────────────────────────────────
+
+/**
+ * The one-line entry point on the alert detail screen.
+ *
+ * Everything the counters feature shows now lives on [RaidCountersScreen]; the detail page
+ * keeps only enough to say the feature is there and worth a tap — the boss's top few
+ * counters. A failure is reported here rather than swallowed, because a row that silently
+ * shows nothing is indistinguishable from a boss with no counters.
+ */
+@Composable
+fun RaidCountersTeaser(
+    state: RaidCountersUiState,
+    actions: RaidCountersActions,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!state.visible) return
+
+    val names = remember(state.counters, state.personal, state.showingPersonal) {
+        if (state.showingPersonal) {
+            state.personal?.ranked.orEmpty().map { it.displayName }
+        } else {
+            state.counters.map { it.counter.displayName }
+        }
+    }
+    val failed = state.errorMessage != null && names.isEmpty()
+
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(
+                enabled = !failed,
+                role = Role.Button,
+                onClickLabel = "Open best counters",
+                onClick = onOpen
+            )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CounterSprite(
+                urls = listOfNotNull(state.bossThumbnailUrl) +
+                    state.spriteUrls[state.bossPokemonId].orEmpty(),
+                size = 36.dp,
+                type = state.pokemonTypes[state.bossPokemonId]?.firstOrNull()
+            ) {
+                Text(text = "🛡️", style = MaterialTheme.typography.titleMedium)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Best counters",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                when {
+                    failed -> Text(
+                        text = state.errorMessage.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    names.isEmpty() && state.isLoading -> TeaserSkeletonLine()
+
+                    names.isEmpty() -> Text(
+                        text = "No counters available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    else -> Text(
+                        text = buildString {
+                            append(names.take(TEASER_NAMES).joinToString(" · "))
+                            val rest = names.size - TEASER_NAMES
+                            if (rest > 0) append(" +").append(rest)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            if (failed) {
+                TextButton(onClick = actions.onRetry) { Text("Retry") }
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Two names read as a pair; three starts to look like the list it is replacing. */
+private const val TEASER_NAMES = 2
+
+@Composable
+private fun TeaserSkeletonLine() {
+    val brush = rememberShimmerBrush()
+    Box(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .fillMaxWidth(0.55f)
+            .height(11.dp)
+            .clip(MaterialTheme.shapes.small)
+            .background(brush)
+    )
 }

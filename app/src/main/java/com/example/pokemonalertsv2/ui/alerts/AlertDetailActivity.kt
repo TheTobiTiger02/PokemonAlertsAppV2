@@ -85,9 +85,9 @@ class AlertDetailActivity : ComponentActivity() {
                                 onBossMovesetChanged = countersViewModel::onBossMovesetChanged,
                                 onPersonalMovesModeChanged = countersViewModel::onPersonalMovesModeChanged,
                                 onSaveAsDefault = countersViewModel::onSaveAsDefault,
+                                onActiveMegaChanged = countersViewModel::onActiveMegaChanged,
                                 onSourceChanged = countersViewModel::onSourceChanged,
                                 onOwnedOnlyChanged = countersViewModel::onOwnedOnlyChanged,
-                                onToggleExpanded = countersViewModel::onToggleExpanded,
                                 onRetry = countersViewModel::onRetry
                             )
                         }

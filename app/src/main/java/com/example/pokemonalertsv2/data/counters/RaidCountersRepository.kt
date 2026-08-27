@@ -529,14 +529,14 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         substitutedLevels: List<Double>
     ): PokebattlerPersonalResult {
         val sorted = ranked.sortedWith(personalComparator(metric))
-        val groupedTeam = buildPersonalTeam(sorted)
-            .groupBy { listOf(it.pokemonId, it.fastMove.moveId, it.chargedMove.moveId).joinToString("|") }
-            .values
-            .map { copies -> PersonalTeamSlot(copies.first(), copies.size) }
         return PokebattlerPersonalResult(
             ranking = PersonalRanking(
                 ranked = sorted,
-                team = groupedTeam,
+                // Left empty on purpose. The suggested six depends on which mega the
+                // trainer has evolved, which does not affect this request at all — so the
+                // ViewModel derives it with `suggestTeam` and can re-derive it instantly
+                // when that setting changes, without a refetch.
+                team = emptyList(),
                 combinedTdo = 0.0,
                 bossHp = 0,
                 teamDamageWithinTimer = 0.0,
@@ -571,14 +571,11 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         bossMoveset = bossMoveset
     ).map { result ->
         val ranked = result.payload.counters.map { it.toPersonalCounterFromPokeBox() }
-        val team = ranked.take(6)
-            .groupBy { listOf(it.pokemonId, it.fastMove.moveId, it.chargedMove.moveId).joinToString("|") }
-            .values
-            .map { copies -> PersonalTeamSlot(copies.first(), copies.size) }
         PokebattlerPersonalResult(
             ranking = PersonalRanking(
                 ranked = ranked,
-                team = team,
+                // Derived by the ViewModel; see the note in buildPersonalResult.
+                team = emptyList(),
                 combinedTdo = 0.0,
                 bossHp = 0,
                 teamDamageWithinTimer = 0.0,
@@ -737,16 +734,6 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
                 (right.evaluatedLevel ?: 0.0).compareTo(left.evaluatedLevel ?: 0.0)
             }
         }
-
-    private fun buildPersonalTeam(ranked: List<PersonalCounter>): List<PersonalCounter> {
-        var megaCount = 0
-        return ranked.filter { candidate ->
-            val mega = candidate.pokemonId.contains("_MEGA", true) || candidate.pokemonId.contains("_PRIMAL", true)
-            if (mega && megaCount >= 1) return@filter false
-            if (mega) megaCount++
-            true
-        }.take(6)
-    }
 
     private fun PbDefender.matches(mine: OwnedPokemon): Boolean {
         val pbShadow = pokemonId.contains("SHADOW", ignoreCase = true)
