@@ -114,6 +114,49 @@ class AlertsMapViewportTest {
         assertNull(resolveMapAlertDistanceInfo(49.7, 8.6, destination) { _, _ -> Float.NaN })
     }
 
+    @Test
+    fun `dismissed alerts stay off the map unless the toggle opts them back in`() {
+        val visible = alert("Visible", 49.8, 8.6)
+        val dismissed = alert("Dismissed", 49.9, 8.7)
+        val alerts = listOf(visible, dismissed)
+
+        val hidden = visibleMapAlerts(
+            alerts = alerts,
+            filter = AlertFilter.ALL,
+            dismissedAlertIds = setOf(dismissed.uniqueId),
+            showDismissed = false,
+            nowMillis = 0L
+        )
+        assertEquals(listOf(visible.uniqueId), hidden.map { it.uniqueId })
+
+        val shown = visibleMapAlerts(
+            alerts = alerts,
+            filter = AlertFilter.ALL,
+            dismissedAlertIds = setOf(dismissed.uniqueId),
+            showDismissed = true,
+            nowMillis = 0L
+        )
+        assertEquals(listOf(visible.uniqueId, dismissed.uniqueId), shown.map { it.uniqueId })
+    }
+
+    @Test
+    fun `dismissal is applied on top of the type filter and unmappable alerts`() {
+        val raid = alert("Raid gym", 49.8, 8.6).copy(type = listOf("Raid"))
+        val dismissedRaid = alert("Dismissed raid", 49.9, 8.7).copy(type = listOf("Raid"))
+        val quest = alert("Quest stop", 49.7, 8.5).copy(type = listOf("Quest"))
+        val unmappable = alert("No location", null, null).copy(type = listOf("Raid"))
+
+        val visible = visibleMapAlerts(
+            alerts = listOf(raid, dismissedRaid, quest, unmappable),
+            filter = AlertFilter.RAIDS,
+            dismissedAlertIds = setOf(dismissedRaid.uniqueId),
+            showDismissed = false,
+            nowMillis = 0L
+        )
+
+        assertEquals(listOf(raid.uniqueId), visible.map { it.uniqueId })
+    }
+
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(
         name = name,
         latitude = latitude,

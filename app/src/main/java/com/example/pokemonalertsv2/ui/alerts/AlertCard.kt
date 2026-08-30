@@ -450,6 +450,8 @@ internal fun AlertSecondaryActionsMenu(
                     AlertSecondaryAction.SNOOZE -> "Snooze"
                     AlertSecondaryAction.PICTURE_IN_PICTURE -> "Open in picture-in-picture"
                     AlertSecondaryAction.SHARE -> "Share"
+                    AlertSecondaryAction.DISMISS -> "Dismiss"
+                    AlertSecondaryAction.RESTORE -> "Restore"
                 }
                 DropdownMenuItem(
                     text = { Text(label) },
@@ -463,6 +465,12 @@ internal fun AlertSecondaryActionsMenu(
                             }
                             AlertSecondaryAction.SHARE -> {
                                 Icon(Icons.Filled.Share, contentDescription = null)
+                            }
+                            AlertSecondaryAction.DISMISS -> {
+                                Icon(Icons.Filled.Close, contentDescription = null)
+                            }
+                            AlertSecondaryAction.RESTORE -> {
+                                Icon(Icons.Filled.Refresh, contentDescription = null)
                             }
                         }
                     },

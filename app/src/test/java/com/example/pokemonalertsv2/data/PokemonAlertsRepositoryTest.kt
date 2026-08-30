@@ -137,6 +137,34 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun fetchAlerts_cachesAllAlertsSharingNameAndEndTimeWithDistinctIds() = runTest {
+        val first = sampleAlert("Quest Alert", endTime = "", id = 201)
+        val second = sampleAlert("Quest Alert", endTime = "", id = 202)
+        service.alerts = listOf(first, second)
+
+        repository.fetchAlerts()
+
+        assertEquals(
+            setOf(first.uniqueId, second.uniqueId),
+            dao.alerts.value.map { it.uniqueId }.toSet()
+        )
+    }
+
+    @Test
+    fun upsertAlert_keepsPreviousAlertWithSameNameAndEndTimeButDifferentId() = runTest {
+        val existing = sampleAlert("Quest Alert", endTime = "", id = 101)
+        dao.alerts.value = listOf(existing.toEntity())
+        val pushed = sampleAlert("Quest Alert", endTime = "", id = 102)
+
+        repository.upsertAlert(pushed)
+
+        assertEquals(
+            setOf(existing.uniqueId, pushed.uniqueId),
+            dao.alerts.value.map { it.uniqueId }.toSet()
+        )
+    }
+
+    @Test
     fun processIncomingAlert_weatherRemovesAffectedAlertByServerId() = runTest {
         val affected = sampleAlert("Zubat", id = 25).copy(
             pokemon = "Zubat",

@@ -193,7 +193,13 @@ data class PokemonAlert(
     val invalidationReason: String? = null,
     val invalidatedByAlertId: Int? = null
 ) {
-    val uniqueId: String get() = "${name.trim()}|${endTime.trim()}"
+    /**
+     * Stable local identity used as the Room primary key. Prefers the server id
+     * so alerts that share a dashboard-entered name and endTime (e.g. manual
+     * quest alerts) don't collide and overwrite each other; alerts without a
+     * server id fall back to the legacy name|endTime key.
+     */
+    val uniqueId: String get() = id?.let { "server-$it" } ?: "${name.trim()}|${endTime.trim()}"
     
     /** Returns true if this is a weather-change alert */
     val isWeatherChange: Boolean get() = hasType("WeatherChange")

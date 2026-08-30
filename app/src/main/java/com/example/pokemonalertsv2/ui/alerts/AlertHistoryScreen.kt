@@ -692,6 +692,9 @@ internal fun AlertHistoryPage(
                                 AlertSecondaryAction.SHARE -> {
                                     scope.launch { AlertShareCard.share(context, alert) }
                                 }
+                                // History cards never offer dismiss/restore.
+                                AlertSecondaryAction.DISMISS,
+                                AlertSecondaryAction.RESTORE -> Unit
                             }
                         }
                     )

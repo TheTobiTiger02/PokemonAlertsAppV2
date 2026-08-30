@@ -353,12 +353,14 @@ internal fun MapLayersSheet(
     showTimeLabels: Boolean,
     showSpawnRadius: Boolean,
     spacialRendEnabled: Boolean,
+    showDismissed: Boolean,
     mapCentre: MapCameraSnapshot,
     onDismiss: () -> Unit,
     onMapStyleChanged: (MapStylePreference) -> Unit,
     onToggleTimeLabels: () -> Unit,
     onToggleSpawnRadius: () -> Unit,
-    onToggleSpacialRend: () -> Unit
+    onToggleSpacialRend: () -> Unit,
+    onToggleDismissed: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -412,6 +414,16 @@ internal fun MapLayersSheet(
                     { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
                 } else null
             )
+            Text("Alerts", style = MaterialTheme.typography.labelLarge)
+            FilterChip(
+                selected = showDismissed,
+                onClick = onToggleDismissed,
+                label = { Text("Show dismissed alerts") },
+                leadingIcon = if (showDismissed) {
+                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
+                } else null,
+                modifier = Modifier.testTag("map_show_dismissed")
+            )
             Spacer(Modifier.height(12.dp))
         }
     }
@@ -464,7 +476,10 @@ internal fun MapAlertSidePanel(
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
     onOpenFullDetail: () -> Unit,
-    modifier: Modifier
+    modifier: Modifier,
+    isDismissed: Boolean = false,
+    onDismissAlert: () -> Unit = {},
+    onRestoreAlert: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier
@@ -486,6 +501,9 @@ internal fun MapAlertSidePanel(
             onOpenMaps = onOpenMaps,
             onShare = onShare,
             onOpenFullDetail = onOpenFullDetail,
+            isDismissed = isDismissed,
+            onDismissAlert = onDismissAlert,
+            onRestoreAlert = onRestoreAlert,
             modifier = Modifier.padding(24.dp)
         )
     }
@@ -502,7 +520,10 @@ internal fun MapAlertDetailContent(
     onOpenMaps: () -> Unit,
     onShare: () -> Unit,
     onOpenFullDetail: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDismissed: Boolean = false,
+    onDismissAlert: () -> Unit = {},
+    onRestoreAlert: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -554,6 +575,19 @@ internal fun MapAlertDetailContent(
                         }
                     }
                     GoDexStatusPill(goDexStatus)
+                    if (isDismissed) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = "Dismissed",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
                 }
             }
             GoDexCaughtAction(
@@ -564,7 +598,8 @@ internal fun MapAlertDetailContent(
                 actions = listOf(
                     AlertSecondaryAction.SNOOZE,
                     AlertSecondaryAction.PICTURE_IN_PICTURE,
-                    AlertSecondaryAction.SHARE
+                    AlertSecondaryAction.SHARE,
+                    if (isDismissed) AlertSecondaryAction.RESTORE else AlertSecondaryAction.DISMISS
                 ),
                 onAction = { action ->
                     when (action) {
@@ -573,6 +608,8 @@ internal fun MapAlertDetailContent(
                             openAlertInPictureInPicture(context, alert)
                         }
                         AlertSecondaryAction.SHARE -> onShare()
+                        AlertSecondaryAction.DISMISS -> onDismissAlert()
+                        AlertSecondaryAction.RESTORE -> onRestoreAlert()
                     }
                 },
                 contentDescription = "More map alert actions"
@@ -611,9 +648,19 @@ internal fun MapAlertDetailContent(
             }
         }
 
+        FilledTonalButton(
+            onClick = onOpenFullDetail,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp)
+                .testTag("map_open_details")
+        ) {
+            Text("Open details")
+        }
+
         Column(
             modifier = Modifier
-                .weight(1f)
+                .weight(1f, fill = false)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -736,15 +783,6 @@ internal fun MapAlertDetailContent(
             countdownClock = countdownClock
         )
 
-        }
-        FilledTonalButton(
-            onClick = onOpenFullDetail,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("map_open_details")
-        ) {
-            Text("Open details")
         }
     }
 

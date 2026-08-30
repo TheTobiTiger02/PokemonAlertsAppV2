@@ -190,6 +190,7 @@ fun AlertsMapRoute(
 
     val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle()
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
+    val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     AlertsMapScreen(
         alerts = uiState.alerts,
@@ -208,7 +209,10 @@ fun AlertsMapRoute(
         showSpawnRadius = showSpawnRadius,
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = { viewModel.updateShowSpawnRadius(!showSpawnRadius) },
-        onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) }
+        onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) },
+        dismissedAlertIds = dismissedAlertIds,
+        onDismissAlert = viewModel::dismissAlert,
+        onRestoreAlert = viewModel::undoDismissAlert
     )
 }
 
@@ -230,7 +234,10 @@ fun AlertsMapScreen(
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
-    onToggleSpacialRend: () -> Unit = {}
+    onToggleSpacialRend: () -> Unit = {},
+    dismissedAlertIds: Set<String> = emptySet(),
+    onDismissAlert: (String) -> Unit = {},
+    onRestoreAlert: (String) -> Unit = {}
 ) {
     AlertsMapScreenContent(
         alerts = alerts,
@@ -250,6 +257,9 @@ fun AlertsMapScreen(
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = onToggleSpawnRadius,
         onToggleSpacialRend = onToggleSpacialRend,
+        dismissedAlertIds = dismissedAlertIds,
+        onDismissAlert = onDismissAlert,
+        onRestoreAlert = onRestoreAlert,
         locationTrackerFactory = DefaultMapPoseTrackerFactory
     )
 }
@@ -273,6 +283,9 @@ internal fun AlertsMapScreenContent(
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
     onToggleSpacialRend: () -> Unit = {},
+    dismissedAlertIds: Set<String> = emptySet(),
+    onDismissAlert: (String) -> Unit = {},
+    onRestoreAlert: (String) -> Unit = {},
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
 ) {
     val context = LocalContext.current
@@ -313,6 +326,7 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showLayersSheet by rememberSaveable { mutableStateOf(false) }
+    var showDismissed by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -515,24 +529,14 @@ internal fun AlertsMapScreenContent(
     }
 
     val expirationNow = expirationClock.value
-    val filteredAlerts = remember(alerts, selectedFilter, expirationNow) {
-        val activeAlerts = alerts.filter {
-            it.mapCoordinatesOrNull() != null &&
-                !it.isInvalidated &&
-                (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > expirationNow
-        }
-        when (selectedFilter) {
-            AlertFilter.ALL -> activeAlerts
-            AlertFilter.RAIDS -> activeAlerts.filter { it.hasType("Raid") }
-            AlertFilter.QUESTS -> activeAlerts.filter { it.hasType("Quest") }
-            AlertFilter.RARES -> activeAlerts.filter { it.hasType("Rare") || it.hasType("Spawn") }
-            AlertFilter.HUNDOS -> activeAlerts.filter { it.hasType("Hundo") }
-            AlertFilter.PVP -> activeAlerts.filter { it.hasType("PvP") }
-            AlertFilter.NUNDOS -> activeAlerts.filter { it.hasType("Nundo") }
-            AlertFilter.KECLEON -> activeAlerts.filter { it.hasType("Kecleon") }
-            AlertFilter.ROCKET -> activeAlerts.filter { it.hasType("Rocket") }
-            AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasType("WeatherChange") }
-        }
+    val filteredAlerts = remember(alerts, selectedFilter, expirationNow, dismissedAlertIds, showDismissed) {
+        visibleMapAlerts(
+            alerts = alerts,
+            filter = selectedFilter,
+            dismissedAlertIds = dismissedAlertIds,
+            showDismissed = showDismissed,
+            nowMillis = expirationNow
+        )
     }
     val goDexMatches = rememberGoDexMatchResults(
         alerts = filteredAlerts,
@@ -540,9 +544,11 @@ internal fun AlertsMapScreenContent(
         configured = goDexConfig.isConnected
     )
 
-    val availableFilters = remember(alerts) {
+    val availableFilters = remember(alerts, dismissedAlertIds, showDismissed) {
         val mappableAlerts = alerts.filter {
-            it.mapCoordinatesOrNull() != null && !it.isInvalidated
+            it.mapCoordinatesOrNull() != null &&
+                !it.isInvalidated &&
+                (showDismissed || it.uniqueId !in dismissedAlertIds)
         }
         buildSet {
             add(AlertFilter.ALL)
@@ -1137,6 +1143,7 @@ internal fun AlertsMapScreenContent(
                 showTimeLabels = showTimeLabels,
                 showSpawnRadius = showSpawnRadius,
                 spacialRendEnabled = spacialRendEnabled,
+                showDismissed = showDismissed,
                 onDismiss = { showLayersSheet = false },
                 onMapStyleChanged = {
                     mapStyle = it
@@ -1144,7 +1151,8 @@ internal fun AlertsMapScreenContent(
                 },
                 onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
                 onToggleSpawnRadius = onToggleSpawnRadius,
-                onToggleSpacialRend = onToggleSpacialRend
+                onToggleSpacialRend = onToggleSpacialRend,
+                onToggleDismissed = { showDismissed = !showDismissed }
             )
         }
 
@@ -1258,6 +1266,17 @@ internal fun AlertsMapScreenContent(
             ) {
                 resolveMapAlertDistanceInfo(userLocation, alert, selectedWalkingRoute)
             }
+            val isDismissed = alert.uniqueId in dismissedAlertIds
+            val dismissFromMap = {
+                onDismissAlert(alert.uniqueId)
+                // The marker is gone once the card closes, unless dismissed alerts are shown.
+                if (!showDismissed) selectedAlertId = null
+                Toast.makeText(context, "Alert dismissed", Toast.LENGTH_SHORT).show()
+            }
+            val restoreFromMap = {
+                onRestoreAlert(alert.uniqueId)
+                Toast.makeText(context, "Alert restored", Toast.LENGTH_SHORT).show()
+            }
             if (useSidePanel) {
                 MapAlertSidePanel(
                     alert = alert,
@@ -1272,7 +1291,10 @@ internal fun AlertsMapScreenContent(
                     onOpenFullDetail = {
                         context.startActivity(AlertDetailActivity.createIntent(context, alert))
                     },
-                    modifier = Modifier.align(Alignment.TopEnd)
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    isDismissed = isDismissed,
+                    onDismissAlert = dismissFromMap,
+                    onRestoreAlert = restoreFromMap
                 )
             } else {
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -1295,11 +1317,45 @@ internal fun AlertsMapScreenContent(
                         onOpenFullDetail = {
                             context.startActivity(AlertDetailActivity.createIntent(context, alert))
                         },
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        isDismissed = isDismissed,
+                        onDismissAlert = dismissFromMap,
+                        onRestoreAlert = restoreFromMap
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * The markers the map should draw: mappable, still valid and unexpired alerts, minus the ones the
+ * user dismissed unless [showDismissed] opts them back in, narrowed to the selected [filter].
+ */
+internal fun visibleMapAlerts(
+    alerts: List<PokemonAlert>,
+    filter: AlertFilter,
+    dismissedAlertIds: Set<String>,
+    showDismissed: Boolean,
+    nowMillis: Long
+): List<PokemonAlert> {
+    val activeAlerts = alerts.filter {
+        it.mapCoordinatesOrNull() != null &&
+            !it.isInvalidated &&
+            (showDismissed || it.uniqueId !in dismissedAlertIds) &&
+            (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > nowMillis
+    }
+    return when (filter) {
+        AlertFilter.ALL -> activeAlerts
+        AlertFilter.RAIDS -> activeAlerts.filter { it.hasType("Raid") }
+        AlertFilter.QUESTS -> activeAlerts.filter { it.hasType("Quest") }
+        AlertFilter.RARES -> activeAlerts.filter { it.hasType("Rare") || it.hasType("Spawn") }
+        AlertFilter.HUNDOS -> activeAlerts.filter { it.hasType("Hundo") }
+        AlertFilter.PVP -> activeAlerts.filter { it.hasType("PvP") }
+        AlertFilter.NUNDOS -> activeAlerts.filter { it.hasType("Nundo") }
+        AlertFilter.KECLEON -> activeAlerts.filter { it.hasType("Kecleon") }
+        AlertFilter.ROCKET -> activeAlerts.filter { it.hasType("Rocket") }
+        AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasType("WeatherChange") }
     }
 }
 

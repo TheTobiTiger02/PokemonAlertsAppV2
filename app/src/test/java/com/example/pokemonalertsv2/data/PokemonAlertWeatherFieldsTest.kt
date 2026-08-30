@@ -11,6 +11,15 @@ import org.junit.Test
 class PokemonAlertWeatherFieldsTest {
 
     @Test
+    fun uniqueId_prefersServerId_overNameAndEndTime() {
+        val idBearing = PokemonAlert(id = 42, name = "Quest Alert", endTime = "")
+        val idLess = PokemonAlert(name = "Quest Alert", endTime = " 2026-08-30 18:00:00 ")
+
+        assertEquals("server-42", idBearing.uniqueId)
+        assertEquals("Quest Alert|2026-08-30 18:00:00", idLess.uniqueId)
+    }
+
+    @Test
     fun apiPayload_decodesWeatherAndInvalidationFields() {
         val alert = Json {
             ignoreUnknownKeys = true

@@ -1070,6 +1070,8 @@ internal fun AlertsList(
                                 AlertSecondaryAction.SNOOZE -> onSnoozeClick(model.alert)
                                 AlertSecondaryAction.PICTURE_IN_PICTURE -> onPipClick(model.alert)
                                 AlertSecondaryAction.SHARE -> onShareClick(model.alert)
+                                AlertSecondaryAction.DISMISS -> onDismissClick(model.alert.uniqueId)
+                                AlertSecondaryAction.RESTORE -> onRestoreClick(model.alert.uniqueId)
                             }
                         },
                         isGoing = arrivalTracking.isTracking(model.alert),

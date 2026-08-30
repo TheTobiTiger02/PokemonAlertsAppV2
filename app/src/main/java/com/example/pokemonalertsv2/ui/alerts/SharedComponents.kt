@@ -211,7 +211,9 @@ internal enum class AlertCardContext {
 internal enum class AlertSecondaryAction {
     SNOOZE,
     PICTURE_IN_PICTURE,
-    SHARE
+    SHARE,
+    DISMISS,
+    RESTORE
 }
 
 @Composable
