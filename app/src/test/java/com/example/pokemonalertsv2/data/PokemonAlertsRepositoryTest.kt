@@ -417,6 +417,23 @@ class PokemonAlertsRepositoryTest {
         assertEquals(listOf("2026-05-27"), service.totalStatsRequests)
     }
 
+    @Test
+    fun getCurrentWeather_trimsArea_andPreservesFreshness() = runTest {
+        service.currentWeatherResponse = CurrentWeatherResponse(
+            area = "Alsbach",
+            currentWeather = "Rain 🌧",
+            observedAt = "2026-08-30T12:15:00.000Z",
+            isCurrentHour = true
+        )
+
+        val response = repository.getCurrentWeather("  Alsbach  ")
+
+        assertEquals("Alsbach", response.area)
+        assertEquals("Rain 🌧", response.currentWeather)
+        assertTrue(response.isCurrentHour)
+        assertEquals(listOf("Alsbach"), service.currentWeatherRequests)
+    }
+
     private fun sampleAlert(
         name: String,
         endTime: String = "2099-10-07 23:59:59",
@@ -470,8 +487,10 @@ class PokemonAlertsRepositoryTest {
         var alerts: List<PokemonAlert> = emptyList()
         var historyResponse: HistoryResponse = HistoryResponse(data = emptyList())
         var totalStatsResponse: TotalStatsResponse = TotalStatsResponse()
+        var currentWeatherResponse: CurrentWeatherResponse = CurrentWeatherResponse()
         val pagedHistoryRequests = mutableListOf<HistoryPagedRequest>()
         val totalStatsRequests = mutableListOf<String?>()
+        val currentWeatherRequests = mutableListOf<String>()
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
         override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
@@ -491,6 +510,10 @@ class PokemonAlertsRepositoryTest {
         override suspend fun getTotalStats(date: String?): TotalStatsResponse {
             totalStatsRequests += date
             return totalStatsResponse
+        }
+        override suspend fun getCurrentWeather(area: String): CurrentWeatherResponse {
+            currentWeatherRequests += area
+            return currentWeatherResponse
         }
         override suspend fun getWalkingRoutes(request: WalkingRouteRequest): WalkingRoutesResponse =
             WalkingRoutesResponse(

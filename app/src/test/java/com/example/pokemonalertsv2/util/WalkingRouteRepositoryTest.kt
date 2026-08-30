@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.util
 
 import com.example.pokemonalertsv2.data.HistoryResponse
+import com.example.pokemonalertsv2.data.CurrentWeatherResponse
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsService
 import com.example.pokemonalertsv2.data.TotalStatsResponse
@@ -186,6 +187,8 @@ class WalkingRouteRepositoryTest {
         }
 
         override suspend fun getPokemonAlerts(): List<PokemonAlert> = emptyList()
+
+        override suspend fun getCurrentWeather(area: String): CurrentWeatherResponse = CurrentWeatherResponse()
 
         override suspend fun getHistory(
             type: String?,

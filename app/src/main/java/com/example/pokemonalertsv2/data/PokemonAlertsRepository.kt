@@ -59,6 +59,13 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         }
     }
 
+    /** Reads durable weather for [area], including the server freshness flag. */
+    suspend fun getCurrentWeather(area: String): CurrentWeatherResponse {
+        val normalizedArea = area.trim()
+        require(normalizedArea.isNotEmpty()) { "Area must not be blank" }
+        return service.getCurrentWeather(normalizedArea)
+    }
+
     suspend fun upsertAlert(alert: PokemonAlert) {
         processIncomingAlert(alert)
     }

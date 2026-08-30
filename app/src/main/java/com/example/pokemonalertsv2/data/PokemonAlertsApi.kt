@@ -27,6 +27,15 @@ data class HistoryResponse(
     @SerialName("data") val data: List<PokemonAlert> = emptyList()
 )
 
+/** Read-only weather state returned for one requested area. */
+@Serializable
+data class CurrentWeatherResponse(
+    val area: String = "",
+    val currentWeather: String? = null,
+    val observedAt: String? = null,
+    val isCurrentHour: Boolean = false
+)
+
 /**
  * Server response for /api/stats/total.
  * Passing a date query parameter (YYYY-MM-DD) returns stats scoped to that day.
@@ -83,6 +92,10 @@ data class WalkingRoutesResponse(
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
+
+    /** Looks up durable weather for one area without requiring an alert. */
+    @GET("api/current-weather")
+    suspend fun getCurrentWeather(@Query("area") area: String): CurrentWeatherResponse
 
     @GET("api/history/all")
     suspend fun getHistory(
