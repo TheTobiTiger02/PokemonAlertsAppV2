@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -431,7 +432,35 @@ class PokemonAlertsRepositoryTest {
         assertEquals("Alsbach", response.area)
         assertEquals("Rain 🌧", response.currentWeather)
         assertTrue(response.isCurrentHour)
+        assertTrue(response.confirmed)
         assertEquals(listOf("Alsbach"), service.currentWeatherRequests)
+    }
+
+    @Test
+    fun getCurrentWeather_prefersExplicitConfirmationOverFreshness() = runTest {
+        service.currentWeatherResponse = CurrentWeatherResponse(
+            area = "Alsbach",
+            currentWeather = "Partly Cloudy",
+            isCurrentHour = true,
+            currentWeatherConfirmed = false
+        )
+
+        val response = repository.getCurrentWeather("Alsbach")
+
+        assertFalse(response.confirmed)
+    }
+
+    @Test
+    fun getCurrentWeather_fallsBackToFreshnessWhenConfirmationAbsent() = runTest {
+        service.currentWeatherResponse = CurrentWeatherResponse(
+            area = "Alsbach",
+            currentWeather = "Snow",
+            isCurrentHour = false
+        )
+
+        val response = repository.getCurrentWeather("Alsbach")
+
+        assertFalse(response.confirmed)
     }
 
     private fun sampleAlert(

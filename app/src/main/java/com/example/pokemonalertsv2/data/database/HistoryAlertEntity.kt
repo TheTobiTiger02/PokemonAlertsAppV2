@@ -54,6 +54,7 @@ data class HistoryAlertEntity(
     // Weather
     val isWeatherBoosted: Boolean? = null,
     val currentWeather: String? = null,
+    val currentWeatherConfirmed: Boolean? = null,
 
     // Location details
     val pokemonLocation: String? = null,
@@ -129,6 +130,7 @@ fun HistoryAlertEntity.toDomain(): PokemonAlert {
         level = level,
         isWeatherBoosted = isWeatherBoosted,
         currentWeather = currentWeather,
+        currentWeatherConfirmed = currentWeatherConfirmed,
         pokemonLocation = pokemonLocation,
         gym = gym,
         pokestop = pokestop,
@@ -211,6 +213,7 @@ fun PokemonAlert.toHistoryEntity(): HistoryAlertEntity {
         level = level,
         isWeatherBoosted = isWeatherBoosted,
         currentWeather = currentWeather,
+        currentWeatherConfirmed = currentWeatherConfirmed,
         pokemonLocation = pokemonLocation,
         gym = gym,
         pokestop = pokestop,

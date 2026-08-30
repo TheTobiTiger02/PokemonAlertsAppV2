@@ -342,7 +342,7 @@ private fun BossSummary(state: RaidCountersUiState) {
 private fun ScreenNotices(state: RaidCountersUiState, actions: RaidCountersActions) {
     val showRefresh = state.hasCounters &&
         (state.isLoading || state.isStale || state.rateLimited)
-    if (state.degradedOptions.isEmpty() && !showRefresh) return
+    if (state.degradedOptions.isEmpty() && !state.weatherUnconfirmed && !showRefresh) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Pokébattler serves precomputed rankings only, and for a boss outside the current
         // raid rotation just one combination exists. Rather than show nothing, the repository
@@ -353,6 +353,15 @@ private fun ScreenNotices(state: RaidCountersUiState, actions: RaidCountersActio
                 text = "Pokébattler has no ranking for this boss at " +
                     state.degradedOptions.joinToString(" · ") +
                     ". Showing its level 40, no-friendship results.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // Ranked with this weather regardless — the last known reading beats assuming none —
+        // but say so, because the wrong boost reorders the counters.
+        if (state.weatherUnconfirmed) {
+            Text(
+                text = "Using ${state.options.weather.label} — this weather is not confirmed yet.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

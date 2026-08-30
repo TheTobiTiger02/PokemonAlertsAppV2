@@ -161,11 +161,39 @@ internal fun mapCountdownLabel(endTime: String?, nowMillis: Long): String {
     return if (remaining <= 0L) "Expired" else TimeUtils.formatDurationShort(remaining)
 }
 
+enum class MapPresentationMode {
+    FULL,
+    COMPACT_PICTURE_IN_PICTURE
+}
+
+internal fun mapFilterForPresentation(
+    selectedFilter: AlertFilter,
+    presentationMode: MapPresentationMode
+): AlertFilter = if (presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE) {
+    AlertFilter.ALL
+} else {
+    selectedFilter
+}
+
+internal fun normalizeMapPictureInPictureZoom(zoom: Double?): Double =
+    zoom?.takeIf(Double::isFinite)?.coerceIn(3.0, 20.0) ?: USER_LOCATION_ZOOM.toDouble()
+
+internal fun mapPictureInPictureZoom(
+    mapSource: MapDisplaySource,
+    googleMapZoom: Double,
+    retainedZoom: Double
+): Double = normalizeMapPictureInPictureZoom(
+    if (mapSource == MapDisplaySource.GOOGLE) googleMapZoom else retainedZoom
+)
+
 @Composable
 fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
     onBack: () -> Unit,
-    showBackButton: Boolean = true
+    showBackButton: Boolean = true,
+    presentationMode: MapPresentationMode = MapPresentationMode.FULL,
+    initialZoom: Double? = null,
+    onEnterPictureInPicture: ((Double) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
@@ -192,13 +220,19 @@ fun AlertsMapRoute(
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
+    val effectiveFilter = mapFilterForPresentation(selectedFilter, presentationMode)
+
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
         syncStatus = uiState.toSyncStatus(),
-        selectedFilter = selectedFilter,
-        onSelectedFilterChange = viewModel::updateSelectedAlertFilter,
+        selectedFilter = effectiveFilter,
+        onSelectedFilterChange = if (presentationMode == MapPresentationMode.FULL) {
+            viewModel::updateSelectedAlertFilter
+        } else {
+            {}
+        },
         initialMapStyle = savedMapStyle,
         onMapStyleChanged = viewModel::updateMapStylePreference,
         showTimeLabels = showMapCountdowns,
@@ -212,7 +246,10 @@ fun AlertsMapRoute(
         onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) },
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = viewModel::dismissAlert,
-        onRestoreAlert = viewModel::undoDismissAlert
+        onRestoreAlert = viewModel::undoDismissAlert,
+        presentationMode = presentationMode,
+        initialZoom = initialZoom,
+        onEnterPictureInPicture = onEnterPictureInPicture
     )
 }
 
@@ -237,7 +274,10 @@ fun AlertsMapScreen(
     onToggleSpacialRend: () -> Unit = {},
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
-    onRestoreAlert: (String) -> Unit = {}
+    onRestoreAlert: (String) -> Unit = {},
+    presentationMode: MapPresentationMode = MapPresentationMode.FULL,
+    initialZoom: Double? = null,
+    onEnterPictureInPicture: ((Double) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
         alerts = alerts,
@@ -260,6 +300,9 @@ fun AlertsMapScreen(
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = onDismissAlert,
         onRestoreAlert = onRestoreAlert,
+        presentationMode = presentationMode,
+        initialZoom = initialZoom,
+        onEnterPictureInPicture = onEnterPictureInPicture,
         locationTrackerFactory = DefaultMapPoseTrackerFactory
     )
 }
@@ -286,6 +329,9 @@ internal fun AlertsMapScreenContent(
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
     onRestoreAlert: (String) -> Unit = {},
+    presentationMode: MapPresentationMode = MapPresentationMode.FULL,
+    initialZoom: Double? = null,
+    onEnterPictureInPicture: ((Double) -> Unit)? = null,
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
 ) {
     val context = LocalContext.current
@@ -295,9 +341,12 @@ internal fun AlertsMapScreenContent(
     val lifecycleOwner = LocalLifecycleOwner.current
     val darkTheme = LocalAppDarkTheme.current
 
+    val compactPictureInPicture =
+        presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
+    val startingZoom = remember(initialZoom) { normalizeMapPictureInPictureZoom(initialZoom) }
     val defaultLatLng = remember { LatLng(ALSBACH_LATITUDE, ALSBACH_LONGITUDE) }
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(defaultLatLng, ALSBACH_ZOOM)
+        position = CameraPosition.fromLatLngZoom(defaultLatLng, startingZoom.toFloat())
     }
     var googleMapLoaded by remember { mutableStateOf(false) }
     var openStreetMapLoaded by remember { mutableStateOf(false) }
@@ -330,7 +379,9 @@ internal fun AlertsMapScreenContent(
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
-    var retainedZoom by rememberSaveable { mutableStateOf(ALSBACH_ZOOM.toDouble()) }
+    var retainedZoom by rememberSaveable(presentationMode, startingZoom) {
+        mutableStateOf(startingZoom)
+    }
     val openStreetMapController = remember { OpenStreetMapController() }
 
     fun retainedCamera() = MapCameraSnapshot(retainedLatitude, retainedLongitude, retainedZoom)
@@ -348,8 +399,12 @@ internal fun AlertsMapScreenContent(
     var hasLocationPermission by remember { mutableStateOf(hasLocationPermissionNow()) }
     var userLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var userPose by remember { mutableStateOf<MapUserPose?>(null) }
-    var trackingRequested by rememberSaveable { mutableStateOf(false) }
-    var cameraFollowEnabled by rememberSaveable { mutableStateOf(false) }
+    var trackingRequested by rememberSaveable(presentationMode) {
+        mutableStateOf(compactPictureInPicture)
+    }
+    var cameraFollowEnabled by rememberSaveable(presentationMode) {
+        mutableStateOf(compactPictureInPicture)
+    }
     var trackingStatus by remember { mutableStateOf(MapTrackingStatus.INACTIVE) }
     var locationLookupComplete by remember { mutableStateOf(!hasLocationPermission) }
     var lifecycleLocationRefreshJob by remember { mutableStateOf<Job?>(null) }
@@ -471,7 +526,9 @@ internal fun AlertsMapScreenContent(
             if (
                 trackingRequested &&
                 hasLocationPermission &&
-                lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                lifecycleOwner.lifecycle.currentState.isAtLeast(
+                    if (compactPictureInPicture) Lifecycle.State.STARTED else Lifecycle.State.RESUMED
+                )
             ) {
                 locationTracker.start()
             } else {
@@ -488,6 +545,18 @@ internal fun AlertsMapScreenContent(
         }
     }
 
+    var pendingPictureInPictureLaunch by rememberSaveable { mutableStateOf(false) }
+
+    fun currentPictureInPictureZoom(): Double = mapPictureInPictureZoom(
+        mapSource = mapSource,
+        googleMapZoom = cameraPositionState.position.zoom.toDouble(),
+        retainedZoom = retainedZoom
+    )
+
+    fun launchPictureInPicture() {
+        onEnterPictureInPicture?.invoke(currentPictureInPictureZoom())
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -498,8 +567,14 @@ internal fun AlertsMapScreenContent(
 
         if (hasLocationPermission) {
             showPreciseLocationGuidanceIfNeeded()
-            centerOnUserLocation()
+            if (pendingPictureInPictureLaunch) {
+                pendingPictureInPictureLaunch = false
+                launchPictureInPicture()
+            } else {
+                centerOnUserLocation()
+            }
         } else {
+            pendingPictureInPictureLaunch = false
             Toast.makeText(
                 context,
                 context.getString(R.string.map_location_permission_needed),
@@ -586,14 +661,16 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    val mapUiSettings = remember(hasLocationPermission) {
+    val mapUiSettings = remember(hasLocationPermission, compactPictureInPicture) {
         MapUiSettings(
             zoomControlsEnabled = false,
             myLocationButtonEnabled = false,
-            compassEnabled = true,
+            compassEnabled = !compactPictureInPicture,
             mapToolbarEnabled = false,
             rotationGesturesEnabled = false,
-            tiltGesturesEnabled = true
+            tiltGesturesEnabled = !compactPictureInPicture,
+            scrollGesturesEnabled = !compactPictureInPicture,
+            zoomGesturesEnabled = !compactPictureInPicture
         )
     }
 
@@ -688,7 +765,9 @@ internal fun AlertsMapScreenContent(
         val pose = userPose ?: return@LaunchedEffect
         if (!cameraFollowEnabled || !currentMapLoaded) return@LaunchedEffect
         val location = pose.location
-        val currentZoom = if (mapSource == MapDisplaySource.GOOGLE) {
+        val currentZoom = if (compactPictureInPicture) {
+            startingZoom
+        } else if (mapSource == MapDisplaySource.GOOGLE) {
             cameraPositionState.position.zoom.coerceAtLeast(16f).toDouble()
         } else {
             retainedZoom.coerceAtLeast(16.0)
@@ -710,11 +789,16 @@ internal fun AlertsMapScreenContent(
 
     LaunchedEffect(currentMapLoaded, filteredAlerts, locationLookupComplete, userLocation, mapSource) {
         if (currentMapLoaded && locationLookupComplete && !initialCameraPositioned) {
-            val viewport = resolveInitialMapViewport(
+            val resolvedViewport = resolveInitialMapViewport(
                 userLatitude = userLocation?.latitude,
                 userLongitude = userLocation?.longitude,
                 alerts = filteredAlerts
             )
+            val viewport = if (compactPictureInPicture) {
+                resolvedViewport.copy(zoom = startingZoom.toFloat())
+            } else {
+                resolvedViewport
+            }
             val target = MapCameraSnapshot(viewport.latitude, viewport.longitude, viewport.zoom.toDouble())
             updateRetainedCamera(target)
             runCatching {
@@ -732,24 +816,42 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val useSidePanel = maxWidth >= 840.dp
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(
+                if (compactPictureInPicture) "map_pip_content" else "map_full_content"
+            )
+    ) {
+        val useSidePanel = !compactPictureInPicture && maxWidth >= 840.dp
         val controlsEndPadding = if (useSidePanel) 392.dp else 16.dp
-        val mapContentPadding = PaddingValues(
-            start = 16.dp,
-            top = 72.dp,
-            end = if (useSidePanel) 392.dp else 16.dp,
-            bottom = if (useSidePanel) 24.dp else 96.dp
-        )
+        val mapContentPadding = if (compactPictureInPicture) {
+            PaddingValues(0.dp)
+        } else {
+            PaddingValues(
+                start = 16.dp,
+                top = 72.dp,
+                end = if (useSidePanel) 392.dp else 16.dp,
+                bottom = if (useSidePanel) 24.dp else 96.dp
+            )
+        }
         val fitPaddingPx = with(density) {
             (if (useSidePanel) 104.dp else 72.dp).roundToPx()
         }
         val openStreetMapInsets = with(density) {
             MapContentInsets(
-                left = 16.dp.roundToPx(),
-                top = 72.dp.roundToPx(),
-                right = (if (useSidePanel) 392.dp else 16.dp).roundToPx(),
-                bottom = (if (useSidePanel) 24.dp else 96.dp).roundToPx()
+                left = if (compactPictureInPicture) 0 else 16.dp.roundToPx(),
+                top = if (compactPictureInPicture) 0 else 72.dp.roundToPx(),
+                right = if (compactPictureInPicture) {
+                    0
+                } else {
+                    (if (useSidePanel) 392.dp else 16.dp).roundToPx()
+                },
+                bottom = if (compactPictureInPicture) {
+                    0
+                } else {
+                    (if (useSidePanel) 24.dp else 96.dp).roundToPx()
+                }
             )
         }
         val visibleCoordinates = remember(filteredAlerts) { resolveFitAllCoordinates(filteredAlerts) }
@@ -880,7 +982,11 @@ internal fun AlertsMapScreenContent(
                                 showTimeLabel = showTimeLabels,
                                 goDexMatchResult = goDexMatches[item.alert.uniqueId]
                                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
-                                onClick = { selectedAlertId = item.alert.uniqueId }
+                                onClick = {
+                                    if (!compactPictureInPicture) {
+                                        selectedAlertId = item.alert.uniqueId
+                                    }
+                                }
                             )
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
@@ -950,7 +1056,9 @@ internal fun AlertsMapScreenContent(
                         mapLoadFailed = true
                         Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
                     },
-                    onAlertClick = { selectedAlertId = it.uniqueId },
+                    onAlertClick = {
+                        if (!compactPictureInPicture) selectedAlertId = it.uniqueId
+                    },
                     onClusterClick = { cluster ->
                         when (
                             val interaction = resolveMapClusterInteraction(
@@ -1077,39 +1185,68 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(top = 8.dp, start = 16.dp, end = controlsEndPadding),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            MapTopAppBar(
-                visibleAlertCount = filteredAlerts.size,
-                showBackButton = showBackButton,
-                refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
-                activeLayerCount = listOf(
-                    mapStyle != MapStylePreference.GOOGLE_STANDARD,
-                    showTimeLabels,
-                    showSpawnRadius,
-                    spacialRendEnabled
-                ).count { it },
-                onBack = onBack,
-                onRefresh = onRefresh,
-                onOpenLayers = { showLayersSheet = true }
-            )
+        if (!compactPictureInPicture) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, start = 16.dp, end = controlsEndPadding),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                MapTopAppBar(
+                    visibleAlertCount = filteredAlerts.size,
+                    showBackButton = showBackButton,
+                    refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
+                    activeLayerCount = listOf(
+                        mapStyle != MapStylePreference.GOOGLE_STANDARD,
+                        showTimeLabels,
+                        showSpawnRadius,
+                        spacialRendEnabled
+                    ).count { it },
+                    onBack = onBack,
+                    onRefresh = onRefresh,
+                    onEnterPictureInPicture = onEnterPictureInPicture?.let {
+                        {
+                            if (hasLocationPermissionNow()) {
+                                hasLocationPermission = true
+                                showPreciseLocationGuidanceIfNeeded()
+                                launchPictureInPicture()
+                            } else {
+                                pendingPictureInPictureLaunch = true
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    onOpenLayers = { showLayersSheet = true }
+                )
 
-            MapFilterRow(
-                filters = availableFilters,
-                selectedFilter = selectedFilter,
-                visibleAlertCount = filteredAlerts.size,
-                onFilterSelected = onSelectedFilterChange
-            )
-            MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+                MapFilterRow(
+                    filters = availableFilters,
+                    selectedFilter = selectedFilter,
+                    visibleAlertCount = filteredAlerts.size,
+                    onFilterSelected = onSelectedFilterChange
+                )
+                MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+
+                // Weather for the area the user is actually standing in, mirroring the game's own
+                // corner badge. Nothing renders when they are outside every scanned area.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    MapWeatherBadge(userLocation = userLocation)
+                }
+            }
         }
 
         AnimatedVisibility(
-            visible = selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty(),
+            visible = !compactPictureInPicture &&
+                selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty(),
             enter = appExpandIn(),
             exit = appCollapseOut(),
             modifier = Modifier.align(Alignment.Center)
@@ -1134,7 +1271,7 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        if (showLayersSheet) {
+        if (!compactPictureInPicture && showLayersSheet) {
             MapLayersSheet(
                 // The retained camera, not the Google camera state: that one is not driven
                 // while the OpenStreetMap layer is the visible one.
@@ -1156,7 +1293,7 @@ internal fun AlertsMapScreenContent(
             )
         }
 
-        if (selectedClusterAlerts.isNotEmpty()) {
+        if (!compactPictureInPicture && selectedClusterAlerts.isNotEmpty()) {
             ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
@@ -1185,7 +1322,8 @@ internal fun AlertsMapScreenContent(
         }
 
         AnimatedVisibility(
-            visible = currentMapLoaded && (useSidePanel || selectedAlert == null),
+            visible = !compactPictureInPicture &&
+                currentMapLoaded && (useSidePanel || selectedAlert == null),
             enter = appFadeIn(),
             exit = appFadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -1257,7 +1395,7 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        selectedAlert?.let { alert ->
+        if (!compactPictureInPicture) selectedAlert?.let { alert ->
             val distanceInfo = remember(
                 alert.uniqueId,
                 userLocation?.latitude,

@@ -157,6 +157,37 @@ class AlertsMapViewportTest {
         assertEquals(listOf(raid.uniqueId), visible.map { it.uniqueId })
     }
 
+    @Test
+    fun `compact picture in picture forces all without changing full map filter`() {
+        assertEquals(
+            AlertFilter.ALL,
+            mapFilterForPresentation(
+                AlertFilter.RAIDS,
+                MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
+            )
+        )
+        assertEquals(
+            AlertFilter.RAIDS,
+            mapFilterForPresentation(AlertFilter.RAIDS, MapPresentationMode.FULL)
+        )
+    }
+
+    @Test
+    fun `picture in picture zoom uses the visible provider and clamps invalid values`() {
+        assertEquals(
+            12.5,
+            mapPictureInPictureZoom(MapDisplaySource.GOOGLE, 12.5, 17.0),
+            0.0
+        )
+        assertEquals(
+            17.0,
+            mapPictureInPictureZoom(MapDisplaySource.OPENSTREETMAP, 12.5, 17.0),
+            0.0
+        )
+        assertEquals(20.0, normalizeMapPictureInPictureZoom(99.0), 0.0)
+        assertEquals(16.0, normalizeMapPictureInPictureZoom(Double.NaN), 0.0)
+    }
+
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(
         name = name,
         latitude = latitude,

@@ -48,6 +48,11 @@ fun buildAlertGlanceMetadata(
     separator: String = " • "
 ): String = buildList {
     alert.displayCp?.let { add("CP $it") }
+    // Glance lines are single-line, so unconfirmed weather gets the compact caveat rather
+    // than a second line of its own.
+    currentWeatherDisplay(alert)
+        ?.takeUnless { alert.isWeatherChange }
+        ?.let { add(it.compactLabel) }
     distanceText?.takeIf { it.isNotBlank() }?.let(::add)
     walkingText?.takeIf { it.isNotBlank() }?.let(::add)
     if (includeCategory) add(resolveAlertVisualStyle(alert).label)

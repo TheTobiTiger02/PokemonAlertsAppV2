@@ -263,6 +263,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             result = 31 * result + level.hashCode()
             result = 31 * result + isWeatherBoosted.hashCode()
             result = 31 * result + currentWeather.hashCode()
+            result = 31 * result + currentWeatherConfirmed.hashCode()
             result = 31 * result + pokemonLocation.hashCode()
             result = 31 * result + gym.hashCode()
             result = 31 * result + pokestop.hashCode()

@@ -100,6 +100,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.MapStylePreference
@@ -763,6 +769,51 @@ internal fun createClusterMarkerBitmap(
 
 internal const val ALSBACH_LATITUDE = 49.74677
 internal const val ALSBACH_LONGITUDE = 8.62492
+internal const val DARMSTADT_LATITUDE = 49.87275
+internal const val DARMSTADT_LONGITUDE = 8.65112
+
+/**
+ * Rough centre of each scanned area, for answering "which area am I standing in?".
+ *
+ * The backend has no geometry to hand out, so a centre and a generous radius is as precise as
+ * this can get — and it only ever decides whether to show a weather badge.
+ */
+internal val AREA_CENTRES: Map<String, Pair<Double, Double>> = mapOf(
+    "Alsbach" to (ALSBACH_LATITUDE to ALSBACH_LONGITUDE),
+    "Darmstadt" to (DARMSTADT_LATITUDE to DARMSTADT_LONGITUDE)
+)
+
+private const val AREA_RADIUS_METERS = 15_000.0
+private const val EARTH_RADIUS_METERS = 6_371_000.0
+
+/** The nearest scanned area the user is standing in, or null when they are outside all of them. */
+internal fun areaAtLocation(latitude: Double, longitude: Double): String? = AREA_CENTRES
+    .mapNotNull { (area, centre) ->
+        val distance = metersBetween(latitude, longitude, centre.first, centre.second)
+        if (distance <= AREA_RADIUS_METERS) area to distance else null
+    }
+    .minByOrNull { it.second }
+    ?.first
+
+/**
+ * Great-circle distance, so the area check stays a pure function.
+ *
+ * `Location.distanceBetween` would do the same job but only on a device, which would put an
+ * emulator between this rule and any test of it.
+ */
+private fun metersBetween(
+    latitude: Double,
+    longitude: Double,
+    otherLatitude: Double,
+    otherLongitude: Double
+): Double {
+    val deltaLat = Math.toRadians(otherLatitude - latitude)
+    val deltaLon = Math.toRadians(otherLongitude - longitude)
+    val a = sin(deltaLat / 2).pow(2) +
+        cos(Math.toRadians(latitude)) * cos(Math.toRadians(otherLatitude)) *
+        sin(deltaLon / 2).pow(2)
+    return 2 * EARTH_RADIUS_METERS * asin(min(1.0, sqrt(a)))
+}
 internal const val USER_LOCATION_ZOOM = 16f
 internal const val ALERT_LOCATION_ZOOM = 14f
 internal const val ALSBACH_ZOOM = 13f

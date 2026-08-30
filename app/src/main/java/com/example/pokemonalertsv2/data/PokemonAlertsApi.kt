@@ -33,8 +33,17 @@ data class CurrentWeatherResponse(
     val area: String = "",
     val currentWeather: String? = null,
     val observedAt: String? = null,
-    val isCurrentHour: Boolean = false
-)
+    val isCurrentHour: Boolean = false,
+    val currentWeatherConfirmed: Boolean? = null
+) {
+    /**
+     * Whether the reported weather is confirmed rather than merely the last one seen.
+     *
+     * The server may name this either way; `isCurrentHour` is the older spelling and means the
+     * same thing, so an explicit `currentWeatherConfirmed` wins and it falls back otherwise.
+     */
+    val confirmed: Boolean get() = currentWeatherConfirmed ?: isCurrentHour
+}
 
 /**
  * Server response for /api/stats/total.

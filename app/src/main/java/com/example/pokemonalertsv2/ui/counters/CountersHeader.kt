@@ -266,10 +266,11 @@ internal fun QuickControls(state: RaidCountersUiState, actions: RaidCountersActi
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         OptionDropdown(
-            label = if (state.weatherFromAlert) {
-                "${options.weather.label} · from raid"
-            } else {
-                options.weather.label
+            label = when {
+                state.weatherFromAlert && state.weatherUnconfirmed ->
+                    "${options.weather.label} · unconfirmed"
+                state.weatherFromAlert -> "${options.weather.label} · from raid"
+                else -> options.weather.label
             },
             entries = PokebattlerWeather.entries.map { it to it.label },
             onSelect = { actions.onOptionsChanged(options.copy(weather = it)) },

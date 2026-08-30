@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
@@ -78,5 +79,78 @@ class MapLiveTrackingComposeTest {
         composeRule.onNodeWithContentDescription("Following your live location")
             .assertIsDisplayed()
         assertTrue(trackerStarted)
+    }
+
+    @Test
+    fun compactPictureInPictureStartsTrackingAndSuppressesFullMapControls() {
+        var trackerStarted = false
+        val pose = MapUserPose(
+            location = Location("test").apply {
+                latitude = 49.738
+                longitude = 8.603
+                accuracy = 3f
+                elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+            },
+            headingDegrees = 42f,
+            headingFromSensor = true
+        )
+        val trackerFactory: MapPoseTrackerFactory = { _, onPose, onStatus ->
+            object : MapPoseTracker {
+                override fun start() {
+                    trackerStarted = true
+                    onPose(pose)
+                    onStatus(MapTrackingStatus.ACTIVE)
+                }
+
+                override fun stop() = Unit
+            }
+        }
+
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                AlertsMapScreenContent(
+                    alerts = emptyList(),
+                    onBack = {},
+                    onRefresh = {},
+                    presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
+                    initialZoom = 12.5,
+                    onEnterPictureInPicture = {},
+                    locationTrackerFactory = trackerFactory
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("map_pip_content").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000L) { trackerStarted }
+        composeRule.onNodeWithContentDescription("Open map in picture-in-picture")
+            .assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Map layers").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Following your live location")
+            .assertDoesNotExist()
+        assertTrue(trackerStarted)
+    }
+
+    @Test
+    fun mapToolbarExposesPictureInPictureAction() {
+        var selected = false
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                MapTopAppBar(
+                    visibleAlertCount = 3,
+                    showBackButton = false,
+                    refreshing = false,
+                    activeLayerCount = 0,
+                    onBack = {},
+                    onRefresh = {},
+                    onEnterPictureInPicture = { selected = true },
+                    onOpenLayers = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Open map in picture-in-picture")
+            .assertIsDisplayed()
+            .performClick()
+        composeRule.runOnIdle { assertTrue(selected) }
     }
 }

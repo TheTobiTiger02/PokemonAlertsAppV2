@@ -19,6 +19,46 @@ class AlertGlanceMetadataTest {
     }
 
     @Test
+    fun weatherSitsBetweenCpAndDistance() {
+        val alert = PokemonAlert(
+            name = "Perfect Trubbish",
+            cp = 457,
+            type = listOf("Hundo"),
+            currentWeather = "Rain"
+        )
+
+        assertEquals(
+            "CP 457 • 🌧️ Rain • 15.5 km • Hundo",
+            buildAlertGlanceMetadata(alert, "15.5 km")
+        )
+    }
+
+    @Test
+    fun unconfirmedWeatherIsMarkedInline() {
+        val alert = PokemonAlert(
+            name = "Perfect Trubbish",
+            type = listOf("Hundo"),
+            currentWeather = "Snow",
+            currentWeatherConfirmed = false
+        )
+
+        // A glance line has no room for a caveat of its own.
+        assertEquals("❄️ Snow? • Hundo", buildAlertGlanceMetadata(alert))
+    }
+
+    @Test
+    fun weatherChangeAlertsKeepTheirTransitionInstead() {
+        val alert = PokemonAlert(
+            name = "Weather update",
+            newCp = 412,
+            type = listOf("WeatherChange"),
+            currentWeather = "Rain"
+        )
+
+        assertFalse(buildAlertGlanceMetadata(alert).contains("Rain"))
+    }
+
+    @Test
     fun weatherChangeUsesNewCp() {
         val alert = PokemonAlert(
             name = "Weather update",

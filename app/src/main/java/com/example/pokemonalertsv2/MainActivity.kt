@@ -699,7 +699,21 @@ private fun MainScaffold(
                             AlertsMapRoute(
                                 viewModel = alertsViewModel,
                                 onBack = { selectedTab = ALERTS_TAB_INDEX },
-                                showBackButton = false
+                                showBackButton = false,
+                                onEnterPictureInPicture = if (
+                                    context.packageManager.hasSystemFeature(
+                                        PackageManager.FEATURE_PICTURE_IN_PICTURE
+                                    )
+                                ) {
+                                    { zoom ->
+                                        context.startActivity(
+                                            com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
+                                                .createPictureInPictureIntent(context, zoom)
+                                        )
+                                    }
+                                } else {
+                                    null
+                                }
                             )
                         }
                         3 -> {

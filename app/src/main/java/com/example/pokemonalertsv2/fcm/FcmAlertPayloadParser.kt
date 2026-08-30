@@ -42,6 +42,9 @@ object FcmAlertPayloadParser {
         val descriptionFallback = data["description"].takeIfNotBlank() ?: data[KEY_BODY].takeIfNotBlank()
         val imageUrlFallback = data["imageUrl"].takeIfNotBlank()
         val thumbnailUrlFallback = data["thumbnailUrl"].takeIfNotBlank()
+        val currentWeatherFallback = data["currentWeather"].takeIfNotBlank()
+        val weatherBoostedFallback = data["isWeatherBoosted"].parseBooleanOrNull()
+        val weatherConfirmedFallback = data["currentWeatherConfirmed"].parseBooleanOrNull()
         val weatherFromFallback = data["weatherFrom"].takeIfNotBlank()
         val weatherToFallback = data["weatherTo"].takeIfNotBlank()
         val affectedAlertsFallback = data["affectedAlerts"].toAffectedAlerts()
@@ -60,6 +63,15 @@ object FcmAlertPayloadParser {
         }
         if (alert.thumbnailUrl.isNullOrBlank() && thumbnailUrlFallback != null) {
             alert = alert.copy(thumbnailUrl = thumbnailUrlFallback)
+        }
+        if (alert.currentWeather.isNullOrBlank() && currentWeatherFallback != null) {
+            alert = alert.copy(currentWeather = currentWeatherFallback)
+        }
+        if (alert.isWeatherBoosted == null && weatherBoostedFallback != null) {
+            alert = alert.copy(isWeatherBoosted = weatherBoostedFallback)
+        }
+        if (alert.currentWeatherConfirmed == null && weatherConfirmedFallback != null) {
+            alert = alert.copy(currentWeatherConfirmed = weatherConfirmedFallback)
         }
         if (alert.weatherFrom.isNullOrBlank() && weatherFromFallback != null) {
             alert = alert.copy(weatherFrom = weatherFromFallback)
@@ -104,6 +116,9 @@ object FcmAlertPayloadParser {
             area = data["area"].takeIfNotBlank(),
             imageUrl = data["imageUrl"].takeIfNotBlank(),
             thumbnailUrl = data["thumbnailUrl"].takeIfNotBlank(),
+            currentWeather = data["currentWeather"].takeIfNotBlank(),
+            isWeatherBoosted = data["isWeatherBoosted"].parseBooleanOrNull(),
+            currentWeatherConfirmed = data["currentWeatherConfirmed"].parseBooleanOrNull(),
             weatherFrom = data["weatherFrom"].takeIfNotBlank(),
             weatherTo = data["weatherTo"].takeIfNotBlank(),
             affectedAlerts = data["affectedAlerts"].toAffectedAlerts(),
@@ -122,6 +137,13 @@ object FcmAlertPayloadParser {
     private fun String?.parseIntOrNull(): Int? = this?.trim()?.toIntOrNull()
 
     private fun String?.parseDoubleOrNull(): Double? = this?.trim()?.toDoubleOrNull()
+
+    /** FCM data payloads are all strings, so booleans arrive as "true"/"false" (or 1/0). */
+    private fun String?.parseBooleanOrNull(): Boolean? = when (this?.trim()?.lowercase()) {
+        "true", "1", "yes" -> true
+        "false", "0", "no" -> false
+        else -> null
+    }
 
     private fun String?.toTypeList(): List<String>? {
         return this

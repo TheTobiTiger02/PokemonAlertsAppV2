@@ -34,4 +34,22 @@ class AlertsMapActivityRedirectTest {
             instrumentation.removeMonitor(monitor)
         }
     }
+
+    @Test
+    fun pictureInPictureIntentCarriesExplicitModeAndNormalizedZoom() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+        val intent = AlertsMapActivity.createPictureInPictureIntent(context, 12.75)
+
+        assertEquals(AlertsMapActivity::class.java.name, intent.component?.className)
+        assertEquals(true, AlertsMapActivity.isPictureInPictureLaunch(intent))
+        assertEquals(12.75, AlertsMapActivity.pictureInPictureZoom(intent), 0.0)
+        assertEquals(
+            20.0,
+            AlertsMapActivity.pictureInPictureZoom(
+                AlertsMapActivity.createPictureInPictureIntent(context, 50.0)
+            ),
+            0.0
+        )
+    }
 }

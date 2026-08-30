@@ -415,24 +415,42 @@ internal fun WeatherAndGenderCard(alert: PokemonAlert) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Weather Boost
-            if (alert.isWeatherBoosted == true) {
+            // Weather. Shown whenever the alert reports it, boosted or not.
+            val weather = currentWeatherDisplay(alert)
+            if (weather != null || alert.isWeatherBoosted == true) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        tint = accent
-                    )
-                    Text(
-                        text = "Weather Boosted",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent
-                    )
-                    alert.currentWeather?.let { weather ->
+                    if (weather != null) {
                         Text(
-                            text = weather,
-                            style = MaterialTheme.typography.bodySmall,
+                            text = weather.glyph,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Text(
+                            text = weather.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    if (alert.isWeatherBoosted == true) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = accent
+                            )
+                            Text(
+                                text = "Weather Boosted",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accent
+                            )
+                        }
+                    }
+                    // Unconfirmed weather is still used as reported; it is only labelled.
+                    if (weather?.confirmed == false) {
+                        Text(
+                            text = UNCONFIRMED_WEATHER_NOTE,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

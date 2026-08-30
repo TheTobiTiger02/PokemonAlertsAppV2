@@ -162,6 +162,7 @@ internal fun MapTopAppBar(
     activeLayerCount: Int,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)? = null,
     onOpenLayers: () -> Unit
 ) {
     Surface(
@@ -226,6 +227,18 @@ internal fun MapTopAppBar(
                     refreshing = refreshing,
                     contentDescription = stringResource(R.string.refresh_alerts)
                 )
+            }
+            if (onEnterPictureInPicture != null) {
+                IconButton(
+                    onClick = onEnterPictureInPicture,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_pip),
+                        contentDescription = "Open map in picture-in-picture",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
             }
             Box {
                 IconButton(onClick = onOpenLayers, modifier = Modifier.size(48.dp)) {

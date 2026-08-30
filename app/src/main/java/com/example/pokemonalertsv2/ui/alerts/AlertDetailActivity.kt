@@ -211,6 +211,8 @@ class AlertDetailActivity : ComponentActivity() {
         val level = getDoubleExtra(EXTRA_LEVEL, -1.0).takeIf { it >= 0 }
         val isWeatherBoosted = getBooleanExtra(EXTRA_IS_WEATHER_BOOSTED, false).takeIf { hasExtra(EXTRA_IS_WEATHER_BOOSTED) }
         val currentWeather = getStringExtra(EXTRA_CURRENT_WEATHER)
+        val currentWeatherConfirmed = getBooleanExtra(EXTRA_CURRENT_WEATHER_CONFIRMED, false)
+            .takeIf { hasExtra(EXTRA_CURRENT_WEATHER_CONFIRMED) }
         val pokemonLocation = getStringExtra(EXTRA_POKEMON_LOCATION)
         val gym = getStringExtra(EXTRA_GYM)
         val pokestop = getStringExtra(EXTRA_POKESTOP)
@@ -283,6 +285,7 @@ class AlertDetailActivity : ComponentActivity() {
             level = level,
             isWeatherBoosted = isWeatherBoosted,
             currentWeather = currentWeather,
+            currentWeatherConfirmed = currentWeatherConfirmed,
             pokemonLocation = pokemonLocation,
             gym = gym,
             pokestop = pokestop,
@@ -336,6 +339,7 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_LEVEL = "extra_level"
         private const val EXTRA_IS_WEATHER_BOOSTED = "extra_is_weather_boosted"
         private const val EXTRA_CURRENT_WEATHER = "extra_current_weather"
+        private const val EXTRA_CURRENT_WEATHER_CONFIRMED = "extra_current_weather_confirmed"
         private const val EXTRA_POKEMON_LOCATION = "extra_pokemon_location"
         private const val EXTRA_GYM = "extra_gym"
         private const val EXTRA_POKESTOP = "extra_pokestop"
@@ -412,6 +416,9 @@ class AlertDetailActivity : ComponentActivity() {
                 alert.level?.let { putExtra(EXTRA_LEVEL, it) }
                 alert.isWeatherBoosted?.let { putExtra(EXTRA_IS_WEATHER_BOOSTED, it) }
                 putExtra(EXTRA_CURRENT_WEATHER, alert.currentWeather)
+                alert.currentWeatherConfirmed?.let {
+                    putExtra(EXTRA_CURRENT_WEATHER_CONFIRMED, it)
+                }
                 putExtra(EXTRA_POKEMON_LOCATION, alert.pokemonLocation)
                 putExtra(EXTRA_GYM, alert.gym)
                 putExtra(EXTRA_POKESTOP, alert.pokestop)

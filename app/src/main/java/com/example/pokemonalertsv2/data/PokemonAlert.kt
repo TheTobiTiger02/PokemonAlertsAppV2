@@ -151,6 +151,7 @@ data class PokemonAlert(
     // Weather
     val isWeatherBoosted: Boolean? = null,
     val currentWeather: String? = null,
+    val currentWeatherConfirmed: Boolean? = null,
     
     // Location details
     val pokemonLocation: String? = null,

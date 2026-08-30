@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pokemonalertsv2.data.CurrentWeatherRepository
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -30,6 +31,7 @@ import com.example.pokemonalertsv2.data.counters.RaidCountersRepository
 import com.example.pokemonalertsv2.data.counters.PokebattlerPersonalProgress
 import com.example.pokemonalertsv2.data.counters.PokebattlerAuthRepository
 import com.example.pokemonalertsv2.data.counters.PokebattlerPersonalResult
+import com.example.pokemonalertsv2.data.counters.resolveAlertWeather
 import com.example.pokemonalertsv2.data.gamemaster.GameMasterRepository
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -120,6 +122,13 @@ data class RaidCountersUiState(
     val degradedOptions: List<String> = emptyList(),
     /** True when [options] weather came from the alert rather than from the saved default. */
     val weatherFromAlert: Boolean = false,
+    /**
+     * The weather in [options] is the last one reported rather than a confirmed reading.
+     *
+     * It is still used for the ranking — an unconfirmed reading beats assuming no weather —
+     * but the screen says so, because a wrong boost changes which counters win.
+     */
+    val weatherUnconfirmed: Boolean = false,
     val fetchedAtMillis: Long = 0L,
     val unresolvedBossName: String? = null,
     val pokebattlerWebUrl: String? = null,
@@ -131,6 +140,7 @@ data class RaidCountersUiState(
     /** Whether the notice block would render anything, so an empty item is never emitted. */
     val hasScreenNotices: Boolean
         get() = degradedOptions.isNotEmpty() ||
+            weatherUnconfirmed ||
             (hasCounters && (isLoading || isStale || rateLimited))
 
     val hasPersonalNotices: Boolean
@@ -165,6 +175,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
     private val gameMaster = GameMasterRepository.getInstance(application)
     private val preferences = RaidCounterPreferences(application.alertPreferencesDataStore)
     private val pokebattlerAuth = PokebattlerAuthRepository.getInstance(application)
+    private val currentWeather = CurrentWeatherRepository.getInstance(application)
 
     private val _uiState = MutableStateFlow(RaidCountersUiState())
     val uiState: StateFlow<RaidCountersUiState> = _uiState
@@ -236,12 +247,16 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
             val linkedAccount = pokebattlerAuth.account.value
             // Keep an explicitly saved Pokébattler setup intact. The one exception is a saved
             // weather of "No boost", which is the app default and means "I have not said" —
-            // there, the weather the alert itself reports is strictly better than nothing.
-            // Any other saved weather is a real choice and is never overwritten.
-            val alertWeather = PokebattlerWeather.fromAlertWeather(alert.weatherTo ?: alert.weatherFrom)
-                ?.takeIf { settings.options.weather == PokebattlerWeather.NONE }
+            // there, the weather reported for this raid is strictly better than nothing.
+            // Any other saved weather is a real choice, so nothing is looked up at all: the
+            // area lookup would only stall the screen on a result that could not be used.
+            val alertWeather = if (settings.options.weather == PokebattlerWeather.NONE) {
+                resolveAlertWeather(alert, currentWeather::weatherFor)
+            } else {
+                null
+            }
             val options = alertWeather
-                ?.let { settings.options.copy(weather = it) }
+                ?.let { settings.options.copy(weather = it.weather) }
                 ?: settings.options
             val alertMoveset = alert.moves
                 ?.let { RaidBossMoveset(it.fast, it.charged) }
@@ -251,6 +266,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 isLoading = true,
                 options = options,
                 weatherFromAlert = alertWeather != null,
+                weatherUnconfirmed = alertWeather?.confirmed == false,
                 bossMovesetSelection = alertMoveset.toSelection(),
                 raidEndTimeMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
                 bossThumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() },
@@ -284,7 +300,13 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
         // Touching weather at all makes it the user's, so the "from this raid" note goes away.
         val stillFromAlert = _uiState.value.weatherFromAlert &&
             options.weather == _uiState.value.options.weather
-        _uiState.update { it.copy(options = options, weatherFromAlert = stillFromAlert) }
+        _uiState.update {
+            it.copy(
+                options = options,
+                weatherFromAlert = stillFromAlert,
+                weatherUnconfirmed = stillFromAlert && it.weatherUnconfirmed
+            )
+        }
         // Debounced: chips are easy to flick through and the service rate-limits.
         scheduleLoad(debounceMillis = OPTION_DEBOUNCE_MILLIS)
         if (_uiState.value.showingPersonal) computePersonal()

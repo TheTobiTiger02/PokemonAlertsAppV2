@@ -354,6 +354,20 @@ internal fun AlertCard(
                             contentColor = categoryAccent
                         )
                     }
+                    // Weather the alert itself reports. Boost is already implied by the styling,
+                    // so the pill only ever adds the condition and, if needed, the caveat.
+                    currentWeatherDisplay(alert)
+                        ?.takeUnless { alert.isWeatherChange }
+                        ?.let { weather ->
+                            AlertPill(
+                                text = if (weather.confirmed) {
+                                    weather.labelWithGlyph
+                                } else {
+                                    "${weather.labelWithGlyph} · unconfirmed"
+                                },
+                                isPrimary = weather.boosted && weather.confirmed
+                            )
+                        }
                     invalidationBadgeText(alert)?.let {
                         AlertPill(
                             text = it,

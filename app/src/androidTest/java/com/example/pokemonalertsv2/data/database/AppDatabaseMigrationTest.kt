@@ -145,6 +145,60 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
+    fun migrate22To23_addsWeatherConfirmationWithoutLosingAlerts() {
+        helper.createDatabase(TEST_DATABASE, 22).apply {
+            execSQL(
+                """
+                INSERT INTO alerts (
+                    uniqueId, name, description, longitude, latitude,
+                    endTime, createdAt, currentWeather
+                ) VALUES (
+                    'active-id', 'Zubat', 'Cached before the upgrade', 8.62, 49.74,
+                    '2026-09-16 20:00:00', 1234, 'Rain'
+                )
+                """.trimIndent()
+            )
+            execSQL(
+                """
+                INSERT INTO history_alerts (
+                    historyId, uniqueId, name, description, longitude, latitude,
+                    endTime, cachedAt, currentWeather
+                ) VALUES (
+                    42, 'history-id', 'Pikachu', 'Cached before the upgrade', 8.62, 49.74,
+                    '2026-09-16 18:00:00', 5678, 'Snow'
+                )
+                """.trimIndent()
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DATABASE,
+            23,
+            true,
+            AppDatabase.MIGRATION_22_23
+        ).apply {
+            // Rows that predate the flag keep their weather and report it as unknown, which
+            // every surface treats as confirmed rather than sprouting a caveat.
+            query(
+                "SELECT currentWeather, currentWeatherConfirmed FROM alerts WHERE uniqueId = 'active-id'"
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("Rain", cursor.getString(0))
+                assertNull(cursor.getType(1).takeIf { it != 0 })
+            }
+            query(
+                "SELECT currentWeather, currentWeatherConfirmed FROM history_alerts WHERE historyId = 42"
+            ).use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("Snow", cursor.getString(0))
+                assertNull(cursor.getType(1).takeIf { it != 0 })
+            }
+            close()
+        }
+    }
+
+    @Test
     fun migrate13To14_createsGoDexCacheTableAndIndex() {
         helper.createDatabase(TEST_DATABASE, 13).close()
 
