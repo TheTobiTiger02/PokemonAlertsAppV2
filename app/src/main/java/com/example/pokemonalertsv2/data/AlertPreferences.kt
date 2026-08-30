@@ -9,6 +9,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import com.example.pokemonalertsv2.notifications.QuietHours
+import com.example.pokemonalertsv2.util.TravelTime
 
 private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
 private val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
@@ -30,6 +32,17 @@ private val KECLEON_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.bool
 private val ROCKET_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("rocket_notifications")
 private val NOTIFICATION_VIBRATE_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notification_vibrate")
 private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
+// A standing nightly window, distinct from the one-off SILENCE_UNTIL above.
+/** 22:00 local. */
+const val DEFAULT_QUIET_HOURS_START = 22 * 60
+/** 07:00 local. */
+const val DEFAULT_QUIET_HOURS_END = 7 * 60
+
+private val MAX_WALKING_MINUTES_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_walking_minutes")
+private val FILTER_PRESETS_KEY = androidx.datastore.preferences.core.stringPreferencesKey("filter_presets")
+private val QUIET_HOURS_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("quiet_hours_enabled")
+private val QUIET_HOURS_START_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_start_minute")
+private val QUIET_HOURS_END_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_end_minute")
 private val SELECTED_AREA_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_area")
 private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance")
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
@@ -132,6 +145,27 @@ interface AlertPreferencesStore {
     
     val silenceUntil: Flow<Long> // Timestamp in milliseconds, 0 means not silenced
     suspend fun updateSilenceUntil(timestampMillis: Long)
+
+    /**
+     * Reachability limit in walking minutes, 0 for off.
+     *
+     * Kept alongside the straight-line [maxDistance] rather than replacing it: the two
+     * answer different questions, and distance still works when routing does not.
+     */
+    val maxWalkingMinutes: Flow<Int>
+    suspend fun updateMaxWalkingMinutes(minutes: Int)
+
+    /** One-tap combinations of the feed's area, distance, type and sort controls. */
+    val filterPresets: Flow<List<FilterPreset>>
+    suspend fun saveFilterPreset(preset: FilterPreset)
+    suspend fun deleteFilterPreset(name: String)
+
+    /** Standing nightly quiet window, in minutes from local midnight. */
+    val quietHoursEnabled: Flow<Boolean>
+    val quietHoursStartMinute: Flow<Int>
+    val quietHoursEndMinute: Flow<Int>
+    suspend fun updateQuietHoursEnabled(enabled: Boolean)
+    suspend fun updateQuietHours(startMinute: Int, endMinute: Int)
     
     val selectedArea: Flow<String>
     suspend fun updateSelectedArea(area: String)
@@ -394,6 +428,64 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         preferences[SILENCE_UNTIL_KEY] ?: 0L
     }
     
+    override val maxWalkingMinutes: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[MAX_WALKING_MINUTES_KEY] ?: TravelTime.NO_LIMIT
+    }
+
+    override suspend fun updateMaxWalkingMinutes(minutes: Int) {
+        dataStore.edit { prefs ->
+            prefs[MAX_WALKING_MINUTES_KEY] = minutes.coerceIn(TravelTime.NO_LIMIT, 240)
+        }
+    }
+
+    override val filterPresets: Flow<List<FilterPreset>> = dataStore.data.map { preferences ->
+        FilterPresets.decode(preferences[FILTER_PRESETS_KEY])
+    }
+
+    override suspend fun saveFilterPreset(preset: FilterPreset) {
+        dataStore.edit { prefs ->
+            val existing = FilterPresets.decode(prefs[FILTER_PRESETS_KEY])
+            prefs[FILTER_PRESETS_KEY] = FilterPresets.encode(
+                FilterPresets.upsert(existing, preset)
+            )
+        }
+    }
+
+    override suspend fun deleteFilterPreset(name: String) {
+        dataStore.edit { prefs ->
+            val existing = FilterPresets.decode(prefs[FILTER_PRESETS_KEY])
+            prefs[FILTER_PRESETS_KEY] = FilterPresets.encode(
+                FilterPresets.remove(existing, name)
+            )
+        }
+    }
+
+    override val quietHoursEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[QUIET_HOURS_ENABLED_KEY] ?: false
+    }
+
+    // 22:00 to 07:00 by default: the window most people mean by "quiet hours", and one
+    // that exercises the wrap-past-midnight path rather than hiding it behind a default
+    // that never wraps.
+    override val quietHoursStartMinute: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[QUIET_HOURS_START_KEY] ?: DEFAULT_QUIET_HOURS_START
+    }
+
+    override val quietHoursEndMinute: Flow<Int> = dataStore.data.map { preferences ->
+        preferences[QUIET_HOURS_END_KEY] ?: DEFAULT_QUIET_HOURS_END
+    }
+
+    override suspend fun updateQuietHoursEnabled(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[QUIET_HOURS_ENABLED_KEY] = enabled }
+    }
+
+    override suspend fun updateQuietHours(startMinute: Int, endMinute: Int) {
+        dataStore.edit { prefs ->
+            prefs[QUIET_HOURS_START_KEY] = QuietHours.normalize(startMinute)
+            prefs[QUIET_HOURS_END_KEY] = QuietHours.normalize(endMinute)
+        }
+    }
+
     override suspend fun updateSilenceUntil(timestampMillis: Long) {
         dataStore.edit { prefs ->
             prefs[SILENCE_UNTIL_KEY] = timestampMillis

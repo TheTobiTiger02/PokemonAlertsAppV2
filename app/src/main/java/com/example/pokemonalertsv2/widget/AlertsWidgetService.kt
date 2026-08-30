@@ -20,6 +20,7 @@ import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
+import com.example.pokemonalertsv2.ui.alerts.questAlertPresentation
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -137,7 +138,7 @@ private class AlertsFactory(
         // 3. Description
         val type = alert.type?.firstOrNull() ?: "Alert"
         val usesMapFallback = alert.imageUrl.isNullOrBlank() && validAlertCoordinates(alert) != null
-        val descriptionText = if (usesMapFallback) {
+        val defaultDescriptionText = if (usesMapFallback) {
             alert.locationDisplay
                 ?: alert.area?.takeIf { it.isNotBlank() }
                 ?: alert.description.takeIf { it.isNotBlank() }
@@ -147,9 +148,14 @@ private class AlertsFactory(
                 ?: alert.locationDisplay
                 ?: type
         }
+        val quest = questAlertPresentation(alert)
+        val descriptionText = buildWidgetAlertDescription(
+            alert = alert,
+            fallback = defaultDescriptionText
+        )
         views.setTextViewText(
             R.id.item_desc,
-            if (descriptionText == type) type else "$type: $descriptionText"
+            if (quest != null) descriptionText else if (descriptionText == type) type else "$type: $descriptionText"
         )
 
         // 4. Meta Data (Distance and walking time)
@@ -297,3 +303,14 @@ private class AlertsFactory(
         }
     }
 }
+
+internal fun buildWidgetAlertDescription(alert: PokemonAlert, fallback: String): String {
+    val quest = questAlertPresentation(alert) ?: return fallback
+    return buildList {
+        quest.task?.let { add("Task: $it") }
+        quest.reward?.let { add("Reward: $it") }
+    }.takeIf { it.isNotEmpty() }?.joinToString(" • ") ?: fallback
+}
+
+internal fun buildCompactWidgetAlertMeta(alert: PokemonAlert, fallback: String): String =
+    questAlertPresentation(alert)?.task?.let { "Task: $it" } ?: fallback

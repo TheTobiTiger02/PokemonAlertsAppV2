@@ -13,6 +13,7 @@ Thumbs.db
 /app/release/
 /captures
 .codex-qa/
+.codex-remote-attachments/
 .externalNativeBuild
 .cxx
 local.properties

@@ -318,7 +318,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
             }
             views.setTextViewText(R.id.tv_compact_alert_title, formatAlertTitle(alert, goDexStatus.status))
-            val alertMeta = alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label
+            val defaultMeta = alert.displayCp?.let { "CP $it • ${visualStyle.label}" } ?: visualStyle.label
+            val alertMeta = buildCompactWidgetAlertMeta(alert, defaultMeta)
             views.setTextViewText(
                 R.id.tv_compact_meta,
                 if (distanceUnavailable) {

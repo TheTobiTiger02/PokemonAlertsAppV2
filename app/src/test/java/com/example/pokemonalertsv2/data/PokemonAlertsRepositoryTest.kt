@@ -589,6 +589,19 @@ class PokemonAlertsRepositoryTest {
         override suspend fun updateNotificationVibrate(enabled: Boolean) { vibrateState.value = enabled }
 
         override val silenceUntil: Flow<Long> = silenceState.asStateFlow()
+
+        override val maxWalkingMinutes: Flow<Int> = MutableStateFlow(0)
+        override suspend fun updateMaxWalkingMinutes(minutes: Int) = Unit
+
+        override val filterPresets: Flow<List<FilterPreset>> = MutableStateFlow(emptyList())
+        override suspend fun saveFilterPreset(preset: FilterPreset) = Unit
+        override suspend fun deleteFilterPreset(name: String) = Unit
+
+        override val quietHoursEnabled: Flow<Boolean> = MutableStateFlow(false)
+        override val quietHoursStartMinute: Flow<Int> = MutableStateFlow(DEFAULT_QUIET_HOURS_START)
+        override val quietHoursEndMinute: Flow<Int> = MutableStateFlow(DEFAULT_QUIET_HOURS_END)
+        override suspend fun updateQuietHoursEnabled(enabled: Boolean) = Unit
+        override suspend fun updateQuietHours(startMinute: Int, endMinute: Int) = Unit
         override suspend fun updateSilenceUntil(timestampMillis: Long) { silenceState.value = timestampMillis }
         
         override val selectedArea: Flow<String> = areaState.asStateFlow()

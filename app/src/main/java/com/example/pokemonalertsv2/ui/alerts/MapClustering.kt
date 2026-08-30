@@ -8,7 +8,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-internal const val MAP_CLUSTER_MAX_ZOOM = 17.0
+/** Neighborhood/default view and closer show individual markers; only exact stacks stay grouped. */
+internal const val MAP_CLUSTER_MAX_ZOOM = 13.0
 
 /**
  * Cluster distance in *map dp*. [projectMapAlertToScreen] projects with 256 units per tile, which is

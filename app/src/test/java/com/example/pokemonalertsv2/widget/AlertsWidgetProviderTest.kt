@@ -109,6 +109,33 @@ class AlertsWidgetProviderTest {
         assertTrue(second.endsWith("generation=11"))
     }
 
+    @Test
+    fun questWidgetCopyShowsTaskAndReward() {
+        val alert = PokemonAlert(
+            name = "Quest",
+            type = listOf("Quest"),
+            questTask = "Spin 5 PokéStops",
+            questReward = "Pikachu"
+        )
+
+        assertEquals(
+            "Task: Spin 5 PokéStops • Reward: Pikachu",
+            buildWidgetAlertDescription(alert, fallback = "Quest")
+        )
+        assertEquals(
+            "Task: Spin 5 PokéStops",
+            buildCompactWidgetAlertMeta(alert, fallback = "Quest")
+        )
+    }
+
+    @Test
+    fun widgetCopyFallsBackWhenQuestTaskIsMissing() {
+        val alert = PokemonAlert(name = "Quest", type = listOf("Quest"), questTask = " ")
+
+        assertEquals("PokéStop", buildWidgetAlertDescription(alert, fallback = "PokéStop"))
+        assertEquals("Quest", buildCompactWidgetAlertMeta(alert, fallback = "Quest"))
+    }
+
     private fun sampleAlert(endTime: String) = PokemonAlert(
         name = "Out Of Range",
         endTime = endTime,

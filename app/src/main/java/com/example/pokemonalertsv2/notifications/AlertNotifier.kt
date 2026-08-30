@@ -23,6 +23,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
@@ -37,12 +38,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
+import com.example.pokemonalertsv2.util.TravelTime
 
 object AlertNotifier {
     const val CHANNEL_ID = "pokemon_alerts_channel"
     const val CHANNEL_RAIDS = "pokemon_alerts_raids"
     const val CHANNEL_SPAWNS = "pokemon_alerts_spawns"
     const val CHANNEL_QUESTS = "pokemon_alerts_quests"
+
+    /** Beyond this the inbox style truncates anyway; the rest becomes a "+N more". */
+    private const val MAX_SUMMARY_LINES = 5
 
     internal fun buildNotificationContentText(
         alert: PokemonAlert,
@@ -122,6 +127,8 @@ object AlertNotifier {
             )
         } ?: emptyMap()
 
+        val postedByChannel = linkedMapOf<String, MutableList<PokemonAlert>>()
+
         alerts.forEachIndexed { index, alert ->
             // Area Filter
             if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEachIndexed
@@ -148,6 +155,17 @@ object AlertNotifier {
                 routeDisplayInfo.effectiveDistanceMeters?.let {
                     it > settings.maxDistance * 1000
                 } == true
+            ) {
+                return@forEachIndexed
+            }
+
+            // Reachability, where a routed duration is available. A missing duration keeps
+            // the alert: a routing outage must not look like a quiet evening.
+            if (
+                !TravelTime.isReachableWithin(
+                    walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
+                    maxMinutes = settings.maxWalkingMinutes
+                )
             ) {
                 return@forEachIndexed
             }
@@ -234,6 +252,9 @@ object AlertNotifier {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+                // Grouped by channel so a spawn wave collapses into one shade entry
+                // instead of burying everything else the user has.
+                .setGroup(channelId)
                 .setVibrate(if (settings.vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
@@ -268,8 +289,99 @@ object AlertNotifier {
 
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 notificationManager.notify(alert.uniqueId.hashCode(), notificationBuilder.build())
+                postedByChannel.getOrPut(channelId) { mutableListOf() }.add(alert)
             }
         }
+
+        postedByChannel.forEach { (channelId, posted) ->
+            postGroupSummary(context, notificationManager, channelId, posted)
+        }
+    }
+
+    /**
+     * One summary per channel, so the shade shows "5 raids nearby" with the individual
+     * alerts underneath rather than five top-level entries.
+     *
+     * Posted even for a single alert: without a summary the group is inconsistent, and
+     * Android collapses a one-child group into just that child anyway.
+     */
+    private fun postGroupSummary(
+        context: Context,
+        notificationManager: NotificationManagerCompat,
+        channelId: String,
+        posted: List<PokemonAlert>
+    ) {
+        if (posted.isEmpty()) return
+        if (ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) return
+
+        val summaryId = channelId.hashCode()
+        val label = groupLabel(channelId, posted.size)
+        val inbox = NotificationCompat.InboxStyle().setBigContentTitle(label)
+        posted.take(MAX_SUMMARY_LINES).forEach { alert ->
+            inbox.addLine(summaryLine(alert))
+        }
+        if (posted.size > MAX_SUMMARY_LINES) {
+            inbox.setSummaryText("+${posted.size - MAX_SUMMARY_LINES} more")
+        }
+
+        val dismissAll = PendingIntent.getBroadcast(
+            context,
+            summaryId,
+            Intent(context, NotificationActionReceiver::class.java).apply {
+                action = NotificationActionReceiver.ACTION_DISMISS_GROUP
+                putExtra(
+                    NotificationActionReceiver.EXTRA_ALERT_UNIQUE_IDS,
+                    posted.map { it.uniqueId }.toTypedArray()
+                )
+                putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, summaryId)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val summary = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_poke_notification)
+            .setContentTitle(label)
+            .setStyle(inbox)
+            .setGroup(channelId)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            // Silent: the child notifications already alerted, and a second buzz for the
+            // summary would double every delivery.
+            .setSilent(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    summaryId,
+                    MainActivity.createAlertsIntent(context),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            .addAction(R.drawable.ic_poke_notification, "Dismiss all", dismissAll)
+            .build()
+
+        notificationManager.notify(summaryId, summary)
+    }
+
+    internal fun groupLabel(channelId: String, count: Int): String {
+        val noun = when (channelId) {
+            CHANNEL_RAIDS -> if (count == 1) "raid" else "raids"
+            CHANNEL_SPAWNS -> if (count == 1) "spawn" else "spawns"
+            CHANNEL_QUESTS -> if (count == 1) "quest" else "quests"
+            else -> if (count == 1) "alert" else "alerts"
+        }
+        return "$count $noun"
+    }
+
+    private fun summaryLine(alert: PokemonAlert): String {
+        val name = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.name
+        val where = alert.gym?.takeIf { it.isNotBlank() }
+            ?: alert.pokestop?.takeIf { it.isNotBlank() }
+            ?: alert.area?.takeIf { it.isNotBlank() }
+        return if (where == null) name else "$name • $where"
     }
 
     internal data class NotificationSettings(
@@ -284,6 +396,10 @@ object AlertNotifier {
         val rocketEnabled: Boolean,
         val vibrateEnabled: Boolean,
         val silenceUntil: Long,
+        val maxWalkingMinutes: Int,
+        val quietHoursEnabled: Boolean,
+        val quietHoursStartMinute: Int,
+        val quietHoursEndMinute: Int,
         val selectedArea: String,
         val maxDistance: Int,
         val excludedHundoTypes: Set<String>,
@@ -299,7 +415,21 @@ object AlertNotifier {
         val goDexFilterEnabled: Boolean = false,
         val nowMillis: Long = System.currentTimeMillis()
     ) {
-        val isSilenced: Boolean get() = silenceUntil > nowMillis
+        /**
+         * Silenced by either mechanism: the one-off "quiet for N hours" timestamp, or the
+         * standing nightly window. They are independent -- turning one off must not
+         * override the other.
+         */
+        val isSilenced: Boolean
+            get() = silenceUntil > nowMillis || isWithinQuietHours
+
+        val isWithinQuietHours: Boolean
+            get() = QuietHours.isQuiet(
+                enabled = quietHoursEnabled,
+                startMinute = quietHoursStartMinute,
+                endMinute = quietHoursEndMinute,
+                nowMillis = nowMillis
+            )
 
         private val excludedHundoTypesLower = excludedHundoTypes.lowercaseSet()
         private val excludedNundoTypesLower = excludedNundoTypes.lowercaseSet()
@@ -385,6 +515,10 @@ object AlertNotifier {
                     rocketEnabled = preferences.rocketNotifications.first(),
                     vibrateEnabled = preferences.notificationVibrate.first(),
                     silenceUntil = preferences.silenceUntil.first(),
+                    maxWalkingMinutes = preferences.maxWalkingMinutes.first(),
+                    quietHoursEnabled = preferences.quietHoursEnabled.first(),
+                    quietHoursStartMinute = preferences.quietHoursStartMinute.first(),
+                    quietHoursEndMinute = preferences.quietHoursEndMinute.first(),
                     selectedArea = preferences.selectedArea.first(),
                     maxDistance = preferences.maxDistance.first(),
                     excludedHundoTypes = preferences.excludedHundoTypes.first(),

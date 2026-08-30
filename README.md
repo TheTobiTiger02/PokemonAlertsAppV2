@@ -1,10 +1,13 @@
 # Pokemon Alerts V2
 
-Pokemon Alerts V2 is an Android app written in Kotlin and Jetpack Compose that keeps you up-to-date with the latest Pokémon Go alerts from the community endpoint at `http://match-profiles.gl.at.ply.gg:1855/api/pokemon`.
+Pokemon Alerts V2 is an Android app written in Kotlin and Jetpack Compose that keeps you up-to-date with the latest Pokémon Go alerts from the community API. The base URL comes from `BuildConfig.ALERTS_API_BASE_URL` (default `https://api.alsbach-scanner.uk/`).
 
 ## Features
 
-- 🔔 **Background notifications:** A WorkManager job polls the endpoint and sends high-priority notifications whenever new alerts are published.
+- 🔔 **Push notifications:** Alerts arrive over Firebase Cloud Messaging and are handled by `FcmAlertWorker`, so a new spawn reaches you in seconds rather than on a poll interval. Notifications are grouped per channel with a summary.
+- 🗺️ **Offline-capable map:** Google Maps or OpenStreetMap, with OSM raster tiles cached on disk so the map still draws with no signal.
+- ⏱️ **Raid arrival Live Update:** tap **I’m going** and the first trustworthy fix within 80 m of the gym hands the journey off to a lock-screen raid card showing both hundo CPs. Expand it for the clean counter list, or tap it for the full counters screen and compact **Copy for GO** team search.
+- 🚶 **Travel-time filtering:** filter and warn by real walking routes rather than straight-line distance.
 - 🗺️ **Rich alert detail:** Each alert shows the full description, a generated map preview, and a one-tap shortcut into Google Maps for navigation.
 - 📋 **Composable UI:** A Material 3 list of current alerts with thumbnails, end times, and quick access to detailed dialogs.
 - 💾 **Smart deduplication:** Previously seen alerts are cached locally with Jetpack DataStore so you are only notified about truly new items.
@@ -20,7 +23,7 @@ Pokemon Alerts V2 is an Android app written in Kotlin and Jetpack Compose that k
 ## How it works
 
 - The `PokemonAlertsRepository` wraps Retrofit + Kotlin Serialization to fetch the list of alerts and keeps track of what has already been seen.
-- `AlertWorker` is scheduled on app startup and re-runs every 15 minutes (WorkManager minimum). It compares the latest payload to the cached IDs and pushes notifications for anything new.
+- Ingestion is push-first. `PokemonFirebaseMessagingService` hands each message to `FcmAlertWorker`, which parses it, reconciles it against the Room cache and notifies. `AlertWorker` still exists but only as the authoritative resync `FcmAlertWorker` requests when a payload is invalid or a weather change invalidates active alerts; there is no periodic poll.
 - Notifications open `AlertDetailActivity`, which renders the alert content with Compose and gives a button to jump straight into Google Maps.
 - While browsing the main list (`PokemonAlertsRoute`), tapping an alert opens an in-app dialog with the same details.
 
@@ -41,7 +44,7 @@ The suite currently focuses on repository behaviour. Add more tests around UI or
 
 ## Troubleshooting
 
-- If notifications are delayed, ensure battery optimizations are disabled for the app. WorkManager honours system constraints and may defer jobs under heavy restrictions.
+- If notifications are delayed, check that battery optimisation is disabled for the app and that Google Play services can reach FCM. Also check Settings → Notifications for an active quiet-hours window or a running "silence for N hours" timer.
 - Images in the feed come directly from the API payload. If an alert does not include an image URL, the app shows a placeholder tile.
 
 ## Maps setup

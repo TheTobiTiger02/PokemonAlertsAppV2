@@ -21,6 +21,8 @@ import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -76,18 +78,18 @@ internal object ArrivalTrackingNotifications {
         context: Context,
         destination: TrackedDestination,
         distanceMeters: Float? = null,
+        walkingRoute: WalkingRouteInfo? = null,
+        inRange: Boolean = false,
         waitingForPreciseLocation: Boolean = false
     ): Notification {
         val alert = destination.alert
-        val content = when {
-            waitingForPreciseLocation -> "Waiting for precise location"
-            distanceMeters != null -> {
-                "${formatDistance(distanceMeters)} away \u2022 " +
-                    "${formatWalkingEstimate(distanceMeters)} \u2022 " +
-                    "Arrival at ${destination.radiusMeters} m"
-            }
-            else -> "Finding your precise location \u2022 Arrival at ${destination.radiusMeters} m"
-        }
+        val content = ongoingContent(
+            destination = destination,
+            distanceMeters = distanceMeters,
+            walkingRoute = walkingRoute,
+            inRange = inRange,
+            waitingForPreciseLocation = waitingForPreciseLocation
+        )
         val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)
             ?.minus(System.currentTimeMillis())
             ?.takeIf { it > 0L }
@@ -96,7 +98,9 @@ internal object ArrivalTrackingNotifications {
         val title = ongoingTitle(alert)
         val expandedBody = buildExpandedBody(alert, content, remaining)
         val chip = when {
+            inRange -> "In range"
             waitingForPreciseLocation -> null
+            walkingRoute != null -> formatDistance(walkingRoute.distanceMeters.toFloat())
             distanceMeters != null -> formatDistance(distanceMeters)
             else -> null
         } ?: remaining.trim().takeIf { it.isNotBlank() }
@@ -138,6 +142,34 @@ internal object ArrivalTrackingNotifications {
             .setRequestPromotedOngoing(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedBody))
             .build()
+    }
+
+    internal fun ongoingContent(
+        destination: TrackedDestination,
+        distanceMeters: Float?,
+        walkingRoute: WalkingRouteInfo?,
+        inRange: Boolean,
+        waitingForPreciseLocation: Boolean
+    ): String {
+        val routeDisplay = WalkingRouteUtils.buildRouteDisplayInfo(
+            straightLineDistanceMeters = distanceMeters,
+            routeInfo = walkingRoute
+        )
+        val movement = if (walkingRoute != null && routeDisplay.distanceText != null) {
+            listOfNotNull(
+                "${routeDisplay.distanceText} walk",
+                routeDisplay.walkingText
+            ).joinToString(" \u2022 ")
+        } else {
+            routeDisplay.distanceText
+        }
+        val status = when {
+            inRange -> "In range"
+            waitingForPreciseLocation -> "Waiting for precise GPS"
+            distanceMeters == null -> "Finding your precise location"
+            else -> "Range at ${destination.radiusMeters} m direct"
+        }
+        return listOfNotNull(status, movement).joinToString(" \u2022 ")
     }
 
     internal fun ongoingTitle(alert: PokemonAlert): String {
@@ -317,19 +349,6 @@ internal object ArrivalTrackingNotifications {
         } else {
             String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
         }
-
-    internal fun formatWalkingEstimate(distanceMeters: Float): String {
-        val minutes = (distanceMeters.coerceAtLeast(0f) / 1.4f / 60f)
-            .roundToInt()
-            .coerceAtLeast(1)
-        return if (minutes < 60) {
-            "$minutes min walk"
-        } else {
-            val hours = minutes / 60
-            val remainingMinutes = minutes % 60
-            if (remainingMinutes == 0) "$hours h walk" else "$hours h $remainingMinutes min walk"
-        }
-    }
 
     private fun immutableFlag(): Int = PendingIntent.FLAG_IMMUTABLE
 }

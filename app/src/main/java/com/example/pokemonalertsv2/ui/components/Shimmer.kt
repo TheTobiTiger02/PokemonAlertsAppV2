@@ -33,6 +33,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.theme.Spacing
 
 /**
  * Creates a theme-aware shimmer brush shared by the placeholders in one loading card.
@@ -96,17 +98,24 @@ fun ShimmerAlertCard() {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(112.dp)
+                    // Must track the real alert card hero, or the skeleton stops
+                    // standing in for the content it replaces.
+                    .height(Dimens.AlertCardHeroHeight)
                     .background(shimmerBrush)
             )
 
             Column(
-                modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                modifier = Modifier.padding(
+                    start = Spacing.lg,
+                    top = Spacing.md,
+                    end = Spacing.sm,
+                    bottom = Spacing.sm
+                ),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
                     Box(
                         modifier = Modifier

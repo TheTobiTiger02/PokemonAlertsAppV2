@@ -73,6 +73,56 @@ class Material3ComposeTest {
     }
 
     @Test
+    fun questFeedShowsTaskRewardAndStop() {
+        val quest = questAlert()
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                AlertCard(
+                    alert = quest,
+                    distanceInfo = AlertDistanceInfo(null, null, null),
+                    onOpenMaps = {},
+                    onShowDetails = {},
+                    onSecondaryAction = {},
+                    countdownClock = remember { mutableStateOf(0L) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Task: Make 3 Great Throws").assertExists()
+        composeRule.onNodeWithText("Reward: Pikachu").assertExists()
+        composeRule.onNodeWithText("PokéStop: Town Hall Fountain").assertExists()
+    }
+
+    @Test
+    fun questDetailShowsTaskAndReward() {
+        composeRule.setContent {
+            PokemonAlertsV2Theme { AlertDetailScreen(alert = questAlert()) }
+        }
+        composeRule.onNodeWithText("Task: Make 3 Great Throws").assertExists()
+        composeRule.onNodeWithText("Reward: Pikachu").assertExists()
+    }
+
+    @Test
+    fun mapCountdownAdvancesEveryConsecutiveSecond() {
+        val now = mutableStateOf(1_000L)
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                MapAlertCountdown(
+                    endTime = "6000",
+                    categoryAccent = androidx.compose.ui.graphics.Color(0xFF00639A),
+                    countdownClock = now
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Ends in 5s").assertExists()
+        composeRule.runOnIdle { now.value = 2_000L }
+        composeRule.onNodeWithText("Ends in 4s").assertExists()
+        composeRule.runOnIdle { now.value = 3_000L }
+        composeRule.onNodeWithText("Ends in 3s").assertExists()
+    }
+
+    @Test
     fun settingsSwitchKeepsLabelAndControlAccessible() {
         composeRule.setContent {
             PokemonAlertsV2Theme {
@@ -104,5 +154,15 @@ class Material3ComposeTest {
         level = 35.0,
         latitude = 49.86,
         longitude = 8.65
+    )
+
+    private fun questAlert(): PokemonAlert = PokemonAlert(
+        name = "Pikachu Quest",
+        pokemon = "Pikachu",
+        pokestop = "Town Hall Fountain",
+        type = listOf("Quest"),
+        questTask = "Make 3 Great Throws",
+        questReward = "Pikachu",
+        endTime = "2099-01-01T00:00:00Z"
     )
 }

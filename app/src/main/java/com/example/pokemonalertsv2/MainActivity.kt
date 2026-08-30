@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import android.view.animation.DecelerateInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -20,8 +19,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
-import com.example.pokemonalertsv2.ui.theme.LocalLinearModernColors
+import com.example.pokemonalertsv2.ui.theme.Alphas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +48,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -84,12 +87,19 @@ import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.navigation.DeepLinkTarget
+import com.example.pokemonalertsv2.navigation.parseDeepLink
 import com.example.pokemonalertsv2.ui.settings.SettingsDestination
 import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 import androidx.lifecycle.lifecycleScope
@@ -138,42 +148,44 @@ class MainActivity : ComponentActivity() {
     private var lastExternalCsvUri: String? = null
     private var permissionStep = PermissionStep.IDLE
 
+    /**
+     * Permission callbacks fire outside composition, so their results are pushed here and
+     * shown on the app's own SnackbarHost rather than as a Toast that floats over whatever
+     * system dialog is still on screen.
+     */
+    private val transientMessages = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    private fun showMessage(text: String) {
+        transientMessages.tryEmit(text)
+    }
+
     private val locationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
             val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
             
             if (fineLocationGranted || coarseLocationGranted) {
-                Toast.makeText(this, "Location permission granted", Toast.LENGTH_SHORT).show()
+                showMessage("Location permission granted")
                 requestBackgroundLocationStep()
             } else {
-                Toast.makeText(
-                    this,
-                    "Location permission is needed for distance calculations and map features",
-                    Toast.LENGTH_LONG
-                ).show()
+                showMessage("Location permission is needed for distance calculations and map features")
                 finishPermissionFlow()
             }
         }
 
     private val backgroundLocationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-                Toast.makeText(this, "Background location access granted", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Background location access was not granted", Toast.LENGTH_SHORT).show()
-            }
+            showMessage(
+                if (isGranted) "Background location access granted"
+                else "Background location access was not granted"
+            )
             finishPermissionFlow()
         }
 
     private val notificationsPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (!isGranted) {
-                Toast.makeText(
-                    this,
-                    getString(R.string.notification_permission_rationale),
-                    Toast.LENGTH_LONG
-                ).show()
+                showMessage(getString(R.string.notification_permission_rationale))
             }
             requestForegroundLocationStep()
         }
@@ -181,11 +193,10 @@ class MainActivity : ComponentActivity() {
     private val backgroundLocationSettingsLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             val granted = hasBackgroundLocationPermission()
-            Toast.makeText(
-                this,
-                if (granted) "Background location access granted" else "Background location access was not granted",
-                Toast.LENGTH_SHORT
-            ).show()
+            showMessage(
+                if (granted) "Background location access granted"
+                else "Background location access was not granted"
+            )
             finishPermissionFlow()
         }
 
@@ -283,6 +294,7 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         MainScaffold(
+                            messages = transientMessages,
                             alertsViewModel = alertsViewModel,
                             historyViewModelProvider = { historyViewModel },
                             settingsViewModel = settingsViewModel,
@@ -329,6 +341,7 @@ class MainActivity : ComponentActivity() {
     internal fun handleNavigationIntent(intent: Intent) {
         requestedTab(intent)?.let { requestedRootTab.value = it }
         val uri = intent.data ?: return
+        if (handleDeepLink(uri.toString())) return
         if (intent.action != Intent.ACTION_VIEW || !isSupportedCsvIntent(intent)) return
         val key = uri.toString()
         if (key == lastExternalCsvUri) return
@@ -354,6 +367,49 @@ class MainActivity : ComponentActivity() {
         settingsViewModel.preparePokeGenieImport(uri)
         requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
         requestedSettingsDestination.value = SettingsDestination.RAID_COUNTERS
+    }
+
+    /**
+     * Routes a `pokemonalerts://` link onto the same state the tab extras drive.
+     * Returns true when the link was ours, so the CSV branch below is skipped.
+     */
+    private fun handleDeepLink(url: String): Boolean {
+        when (val target = parseDeepLink(url) ?: return false) {
+            is DeepLinkTarget.RootTab -> requestedRootTab.value = target.tabIndex
+            is DeepLinkTarget.Settings -> {
+                requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
+                requestedSettingsDestination.value = target.destination
+            }
+            is DeepLinkTarget.Alert -> {
+                // The alert has to be resolved from the repository before the detail screen
+                // can flatten it into extras; fall back to the feed when it is gone
+                // (expired, or never seen on this device).
+                lifecycleScope.launch {
+                    val alert = withContext(Dispatchers.IO) {
+                        runCatching {
+                            PokemonAlertsRepository.create(applicationContext)
+                                .getLocalAlerts()
+                                .firstOrNull {
+                                    it.uniqueId == target.alertId || it.id?.toString() == target.alertId
+                                }
+                        }.getOrNull()
+                    }
+                    if (alert != null) {
+                        startActivity(
+                            AlertDetailActivity.createIntent(
+                                this@MainActivity,
+                                alert,
+                                returnToAlerts = true
+                            )
+                        )
+                    } else {
+                        requestedRootTab.value = ALERTS_TAB_INDEX
+                        showMessage("That alert is no longer available")
+                    }
+                }
+            }
+        }
+        return true
     }
 
     private fun isSupportedCsvIntent(intent: Intent): Boolean {
@@ -467,8 +523,36 @@ class MainActivity : ComponentActivity() {
 
 // ── Main Scaffold with Bottom Navigation ─────────────────────────────────
 
+/**
+ * The icon and label are shared between [NavigationBarItem] and [NavigationRailItem]:
+ * two copies of the same selected/unselected treatment is exactly the kind of thing that
+ * drifts once one of the branches is edited.
+ */
+@Composable
+private fun NavDestinationIcon(destination: NavDestination, selected: Boolean) {
+    AnimatedContent(
+        targetState = selected,
+        transitionSpec = { appFadeThrough() },
+        label = "${destination.label}_nav_icon"
+    ) { isSelected ->
+        Icon(
+            imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
+            contentDescription = destination.label
+        )
+    }
+}
+
+@Composable
+private fun NavDestinationLabel(destination: NavDestination, selected: Boolean) {
+    Text(
+        text = destination.label,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+    )
+}
+
 @Composable
 private fun MainScaffold(
+    messages: SharedFlow<String>,
     alertsViewModel: PokemonAlertsViewModel,
     historyViewModelProvider: () -> AlertHistoryViewModel,
     settingsViewModel: SettingsViewModel,
@@ -483,6 +567,7 @@ private fun MainScaffold(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val saveableStateHolder = rememberSaveableStateHolder()
+    var downloadJob by remember { mutableStateOf<Job?>(null) }
     val context = LocalContext.current
     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
@@ -497,76 +582,91 @@ private fun MainScaffold(
         selectedTab = ALERTS_TAB_INDEX
     }
 
+    LaunchedEffect(Unit) {
+        messages.collect { snackbarHostState.showSnackbar(it) }
+    }
+
     LaunchedEffect(updateState) {
-        when (updateState) {
+        when (val state = updateState) {
             is UpdateState.UpToDate -> {
-                Toast.makeText(context, "App is up to date", Toast.LENGTH_SHORT).show()
+                snackbarHostState.showSnackbar("App is up to date")
                 InAppUpdateManager.resetState()
             }
             is UpdateState.Error -> {
-                val errorMsg = (updateState as UpdateState.Error).message
-                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
+                snackbarHostState.showSnackbar(state.message)
                 InAppUpdateManager.resetState()
             }
             else -> {}
         }
     }
 
-    val colors = LocalLinearModernColors.current
 
     LinearModernBackground(modifier = Modifier.fillMaxSize()) {
+        BoxWithConstraints {
+        // navigationLayoutModeForWidth is the single place the breakpoint lives; it is
+        // unit-tested, and until now nothing consumed the RAIL branch it returns.
+        val layoutMode = navigationLayoutModeForWidth(maxWidth)
         Scaffold(
             containerColor = Color.Transparent,
-            contentColor = colors.foreground,
+            contentColor = MaterialTheme.colorScheme.onSurface,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                NavigationBar(
-                    containerColor = colors.bgElevated.copy(alpha = 0.8f),
-                    modifier = Modifier.border(1.dp, Brush.verticalGradient(listOf(colors.borderDefault, Color.Transparent)), RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
-                    tonalElevation = 0.dp
-                ) {
-                    NAV_DESTINATIONS.forEachIndexed { index, destination ->
-                        NavigationBarItem(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            icon = {
-                                AnimatedContent(
-                                    targetState = selectedTab == index,
-                                    transitionSpec = { appFadeThrough() },
-                                    label = "${destination.label}_nav_icon"
-                                ) { selected ->
-                                    Icon(
-                                        imageVector = if (selected) {
-                                            destination.selectedIcon
-                                        } else {
-                                            destination.unselectedIcon
-                                        },
-                                        contentDescription = destination.label
-                                    )
-                                }
-                            },
-                            label = {
-                                Text(
-                                    text = destination.label,
-                                    fontWeight = if (selectedTab == index)
-                                        FontWeight.Bold
-                                    else
-                                        FontWeight.Normal
+                if (layoutMode == NavigationLayoutMode.BOTTOM_BAR) {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = Alphas.Elevated),
+                        modifier = Modifier.border(
+                            1.dp,
+                            Brush.verticalGradient(listOf(MaterialTheme.colorScheme.outline, Color.Transparent)),
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        ),
+                        tonalElevation = 0.dp
+                    ) {
+                        NAV_DESTINATIONS.forEachIndexed { index, destination ->
+                            NavigationBarItem(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                icon = { NavDestinationIcon(destination, selectedTab == index) },
+                                label = { NavDestinationLabel(destination, selectedTab == index) },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = Alphas.Elevated),
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = Alphas.Elevated)
                                 )
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = Color.White,
-                                selectedTextColor = colors.accent,
-                                indicatorColor = colors.accent,
-                                unselectedIconColor = colors.foregroundMuted.copy(alpha = 0.8f),
-                                unselectedTextColor = colors.foregroundMuted.copy(alpha = 0.8f)
                             )
-                        )
+                        }
                     }
                 }
             }
         ) { paddingValues ->
-            Box(modifier = Modifier.padding(paddingValues)) {
+            Row(modifier = Modifier.padding(paddingValues)) {
+                if (layoutMode == NavigationLayoutMode.RAIL) {
+                    NavigationRail(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = Alphas.Elevated),
+                        modifier = Modifier.border(
+                            1.dp,
+                            Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.outline, Color.Transparent)),
+                            RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                        )
+                    ) {
+                        NAV_DESTINATIONS.forEachIndexed { index, destination ->
+                            NavigationRailItem(
+                                selected = selectedTab == index,
+                                onClick = { selectedTab = index },
+                                icon = { NavDestinationIcon(destination, selectedTab == index) },
+                                label = { NavDestinationLabel(destination, selectedTab == index) },
+                                colors = NavigationRailItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    indicatorColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = Alphas.Elevated),
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = Alphas.Elevated)
+                                )
+                            )
+                        }
+                    }
+                }
                 AnimatedContent(
                     targetState = selectedTab,
                     transitionSpec = { appSharedAxisX(forward = targetState > initialState) },
@@ -615,6 +715,7 @@ private fun MainScaffold(
                 }
             }
         }
+        }
 
         // Dialogs for update flow
         when (val state = updateState) {
@@ -641,7 +742,7 @@ private fun MainScaffold(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                scope.launch {
+                                downloadJob = scope.launch {
                                     InAppUpdateManager.downloadAndInstall(context, state.release)
                                 }
                             }
@@ -658,7 +759,9 @@ private fun MainScaffold(
             }
             is UpdateState.Downloading -> {
                 AlertDialog(
-                    onDismissRequest = {}, // Force non-dismissable during download
+                    // Not dismissable by tapping outside, but Cancel below is always
+                    // reachable so a stalled download cannot trap the user.
+                    onDismissRequest = {},
                     title = { Text("Downloading Update") },
                     text = {
                         Column(
@@ -678,7 +781,18 @@ private fun MainScaffold(
                             )
                         }
                     },
-                    confirmButton = {}
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(
+                            onClick = {
+                                downloadJob?.cancel()
+                                downloadJob = null
+                                InAppUpdateManager.cancelPendingInstall(context)
+                            }
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
                 )
             }
             is UpdateState.AwaitingInstallPermission -> {

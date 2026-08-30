@@ -222,7 +222,9 @@ class WholeAppUxComposeTest {
                             name = "Außergewöhnlich langes Pikachu",
                             pokemon = "Pikachu",
                             pokemonLocation = "Sehr lange Straßenbezeichnung in Darmstadt",
-                            type = listOf("Spawn"),
+                            type = listOf("Quest"),
+                            questTask = "Make 3 Great Throws in a row",
+                            questReward = "Rare Candy",
                             endTime = "2099-01-01T00:00:00Z",
                             latitude = 49.87,
                             longitude = 8.65
@@ -248,6 +250,8 @@ class WholeAppUxComposeTest {
             .assertHasClickAction()
         composeRule.onNodeWithText("I’m going").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Directions").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Task: Make 3 Great Throws in a row").assertIsDisplayed()
+        composeRule.onNodeWithText("Reward: Rare Candy").assertIsDisplayed()
         composeRule.onNodeWithText("Snooze").assertDoesNotExist()
         composeRule.onNodeWithText("Share").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("More map alert actions")

@@ -43,6 +43,8 @@ private val json = Json { ignoreUnknownKeys = true }
 
 class AlertDetailActivity : ComponentActivity() {
     private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
+    private var openCountersOnLaunch: Boolean by mutableStateOf(false)
+    private var preferPersonalTeamOnLaunch: Boolean by mutableStateOf(false)
     private var currentAlert: PokemonAlert? by mutableStateOf(null)
     private var isInPipMode by mutableStateOf(false)
 
@@ -60,6 +62,9 @@ class AlertDetailActivity : ComponentActivity() {
             finish()
             return
         }
+        openCountersOnLaunch = intent?.getBooleanExtra(EXTRA_OPEN_COUNTERS, false) == true
+        preferPersonalTeamOnLaunch =
+            intent?.getBooleanExtra(EXTRA_PREFER_PERSONAL_TEAM, false) == true
         onBackPressedDispatcher.addCallback(this) { navigateBack() }
         syncPictureInPictureState()
         canEnterPictureInPicture =
@@ -92,8 +97,13 @@ class AlertDetailActivity : ComponentActivity() {
                             )
                         }
                         // Never start a fetch for a window the user cannot read.
-                        LaunchedEffect(alert.uniqueId, inPip) {
-                            if (!inPip) countersViewModel.onAlertShown(alert)
+                        LaunchedEffect(alert.uniqueId, inPip, preferPersonalTeamOnLaunch) {
+                            if (!inPip) {
+                                countersViewModel.onAlertShown(
+                                    alert,
+                                    preferPersonalTeam = preferPersonalTeamOnLaunch
+                                )
+                            }
                         }
 
                         AlertDetailScreen(
@@ -106,7 +116,8 @@ class AlertDetailActivity : ComponentActivity() {
                                 null
                             },
                             raidCountersState = countersState,
-                            raidCountersActions = countersActions
+                            raidCountersActions = countersActions,
+                            startOnCounters = openCountersOnLaunch
                         )
                     }
                 }
@@ -132,6 +143,8 @@ class AlertDetailActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         currentAlert = intent.toPokemonAlert() ?: currentAlert
+        openCountersOnLaunch = intent.getBooleanExtra(EXTRA_OPEN_COUNTERS, false)
+        preferPersonalTeamOnLaunch = intent.getBooleanExtra(EXTRA_PREFER_PERSONAL_TEAM, false)
         syncPictureInPictureState()
         // Auto-enter PiP if a caller explicitly requests it.
         if (intent.getBooleanExtra(EXTRA_LAUNCH_PIP, false) && canEnterPictureInPicture) {
@@ -352,6 +365,14 @@ class AlertDetailActivity : ComponentActivity() {
         private const val EXTRA_INVALIDATED_BY_ALERT_ID = "extra_invalidated_by_alert_id"
         private const val EXTRA_RETURN_TO_ALERTS = "extra_return_to_alerts"
         const val EXTRA_LAUNCH_PIP = "extra_launch_pip"
+
+        /**
+         * Opens the counters screen immediately instead of the detail page. Used by the
+         * raid watch notification, where the user already knows what the boss is and wants
+         * to know what to bring.
+         */
+        const val EXTRA_OPEN_COUNTERS = "extra_open_counters"
+        const val EXTRA_PREFER_PERSONAL_TEAM = "extra_prefer_personal_team"
 
         fun createIntent(
             context: Context,

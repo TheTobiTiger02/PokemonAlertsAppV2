@@ -14,6 +14,7 @@ import coil.memory.MemoryCache
 import com.example.pokemonalertsv2.fcm.FcmTopicSubscriber
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
+import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
@@ -46,6 +47,11 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         if (PendingInstallStore.hasPending(this)) return
         ArrivalTrackingService.resumeIfActive(this)
         applicationScope.launch {
+            // Re-post the watched raid and re-arm its tick: an alarm can be dropped when
+            // the process is killed, and a stale countdown is worse than none.
+            withContext(Dispatchers.IO) {
+                RaidWatchController.refresh(this@PokemonAlertsApplication)
+            }
             withContext(Dispatchers.IO) {
                 GoDexRepository.getInstance(this@PokemonAlertsApplication).refreshIfStale()
             }

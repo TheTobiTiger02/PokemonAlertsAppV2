@@ -5,6 +5,10 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -18,6 +22,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.IntSize
 
 /**
  * A small, shared motion language for the app.
@@ -29,6 +34,36 @@ internal object AppMotion {
     const val Quick = 140
     const val Standard = 240
     const val Emphasized = 320
+
+    /**
+     * Springs for motion the user causes directly - a list reordering, a card expanding,
+     * a digit ticking over. Physics reads as responsive here in a way a fixed duration
+     * does not, because the settle time follows how far the thing actually travelled.
+     *
+     * Screen and tab transitions keep the tweens above: those fire constantly while
+     * filtering and switching sections, where a predictable, clipped duration matters
+     * more than the bounce.
+     */
+    fun <T> springQuick(): SpringSpec<T> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
+
+    fun <T> springBouncy(): SpringSpec<T> = spring(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+
+    /**
+     * Size springs need an explicit visibility threshold, otherwise they keep animating
+     * across sub-pixel distances nobody can see and the layout stays dirty for longer
+     * than the motion is actually visible.
+     */
+    fun springSize(): SpringSpec<IntSize> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessMedium,
+        visibilityThreshold = IntSize.VisibilityThreshold
+    )
 }
 
 internal fun appFadeThrough(): ContentTransform =
@@ -82,7 +117,7 @@ internal fun appSharedAxisX(forward: Boolean): ContentTransform {
 internal fun appExpandIn(): EnterTransition =
     expandVertically(
         expandFrom = Alignment.Top,
-        animationSpec = tween(AppMotion.Standard, easing = LinearOutSlowInEasing)
+        animationSpec = AppMotion.springSize()
     ) + fadeIn(
         animationSpec = tween(AppMotion.Standard, delayMillis = 40, easing = LinearOutSlowInEasing)
     )
@@ -90,7 +125,7 @@ internal fun appExpandIn(): EnterTransition =
 internal fun appCollapseOut(): ExitTransition =
     shrinkVertically(
         shrinkTowards = Alignment.Top,
-        animationSpec = tween(AppMotion.Standard, easing = FastOutLinearInEasing)
+        animationSpec = AppMotion.springSize()
     ) + fadeOut(
         animationSpec = tween(AppMotion.Quick, easing = FastOutLinearInEasing)
     )

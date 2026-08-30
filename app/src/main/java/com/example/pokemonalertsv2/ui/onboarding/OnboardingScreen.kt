@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -60,9 +62,15 @@ fun OnboardingScreen(
     var distance by rememberSaveable(initialMaxDistance) { mutableIntStateOf(initialMaxDistance) }
     var presetName by rememberSaveable { mutableStateOf(NotificationPreset.EVERYTHING.name) }
 
+    BackHandler(enabled = step > 0) { step-- }
+
     LinearModernBackground(Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp, vertical = 32.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(

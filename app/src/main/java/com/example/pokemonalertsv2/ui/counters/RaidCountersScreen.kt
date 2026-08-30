@@ -27,6 +27,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,6 +54,8 @@ import com.example.pokemonalertsv2.data.counters.PokemonGoSearch
 import com.example.pokemonalertsv2.data.counters.bestOf
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import com.example.pokemonalertsv2.data.counters.toCounterMetric
+import com.example.pokemonalertsv2.ui.alerts.rememberCountdownClock
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.launch
 
 /**
@@ -170,8 +173,18 @@ fun RaidCountersScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            state.raidEndTimeMillis?.let { endMillis ->
+                item(key = "raid_time") { RaidTimeRemaining(endMillis) }
+            }
             item(key = "boss") { BossSummary(state) }
             item(key = "source") { SourceSelector(state, actions) }
+            if (state.personalTeamRequested &&
+                state.source == CounterSourceId.ALL_POKEMON &&
+                state.pokeGenieCount == 0 &&
+                state.pokebattlerUserId.isNullOrBlank()
+            ) {
+                item(key = "personal_setup") { PersonalTeamSetupGuidance() }
+            }
             item(key = "setup") { BattleSetupSummary(state, onOpen = { setupSheetOpen = true }) }
             if (state.showingPersonal) {
                 item(key = "mega") { ActiveMegaRow(state, onOpen = { megaSheetOpen = true }) }
@@ -219,6 +232,66 @@ fun RaidCountersScreen(
     }
 }
 
+@Composable
+private fun PersonalTeamSetupGuidance() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.tertiaryContainer
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Set up your recommended team",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = "Import a Poké Genie CSV or link Pokébattler in Settings → Raid counters. " +
+                    "Copy for GO is enabled only for a real personal team.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+        }
+    }
+}
+
+@Composable
+private fun RaidTimeRemaining(endMillis: Long) {
+    val now by rememberCountdownClock()
+    val remaining = (endMillis - now).coerceAtLeast(0L)
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Time remaining",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = if (remaining > 0L) {
+                    TimeUtils.formatDurationShort(remaining)
+                } else {
+                    "Raid ended"
+                },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+}
+
 /** Boss identity at the top of the list: artwork, moveset, types and the fixed tier facts. */
 @Composable
 private fun BossSummary(state: RaidCountersUiState) {
@@ -248,15 +321,17 @@ private fun BossSummary(state: RaidCountersUiState) {
             val moves = listOfNotNull(state.bossMove1, state.bossMove2)
                 .filterNot { it.equals("RANDOM", ignoreCase = true) }
                 .mapNotNull { prettifyMoveName(it) }
-            if (moves.isNotEmpty()) {
-                Text(
-                    text = moves.joinToString(" / "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            val movesetLabel = moves.takeIf { it.isNotEmpty() }
+                ?.joinToString(" / ")
+                ?: state.selectedBossMoveset?.displayName
+                ?: "Average moveset"
+            Text(
+                text = "Boss moveset · $movesetLabel",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             BossFacts(state)
         }
     }

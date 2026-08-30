@@ -78,6 +78,18 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!--
+                Deep links onto the same destinations the notification/widget
+                EXTRA_INITIAL_TAB extras already reach, so the app is linkable from
+                outside: pokemonalerts://alerts | history | map | settings[/<page>]
+                | alert/<id>
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pokemonalerts" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -98,6 +110,25 @@
             android:name=".tracking.ArrivalTrackingService"
             android:exported="false"
             android:foregroundServiceType="location" />
+        <!--
+            Drives the post-arrival raid Live Update: refresh alarms and the notification's
+            Dismiss action both land here.
+        -->
+        <receiver
+            android:name=".raidwatch.RaidWatchReceiver"
+            android:exported="false" />
+        <!--
+            The Live Update's "Copy team" action. Invisible and finishes immediately, so the
+            trainer stays in Pokémon GO; an Activity rather than a receiver because a
+            background app cannot reliably write the clipboard from Android 10 onward.
+        -->
+        <activity
+            android:name=".raidwatch.CopyRaidTeamActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <receiver
             android:name=".notifications.NotificationActionReceiver"
             android:exported="false">

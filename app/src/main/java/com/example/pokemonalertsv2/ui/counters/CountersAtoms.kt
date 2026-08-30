@@ -81,7 +81,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.draw.drawBehind
@@ -286,7 +286,9 @@ internal fun MetricBar(
 internal fun ExpandChevron(expanded: Boolean, modifier: Modifier = Modifier) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(AppMotion.Standard, easing = LinearOutSlowInEasing),
+        // Direct manipulation: the user taps the row, so physics fits better than a
+        // fixed duration.
+        animationSpec = AppMotion.springQuick(),
         label = "chevron"
     )
     Icon(
@@ -295,7 +297,7 @@ internal fun ExpandChevron(expanded: Boolean, modifier: Modifier = Modifier) {
         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         modifier = modifier
             .size(16.dp)
-            .rotate(rotation)
+            .graphicsLayer { rotationZ = rotation }
     )
 }
 

@@ -542,7 +542,35 @@ internal fun OpenStreetMapView(
             expandedAlertIds = expandedAlertIds
         )
     }
+
+    // Load static artwork independently from the per-second countdown job. Even when a network
+    // image is slow, the clock can keep replacing labels with an immediate custom fallback.
+    LaunchedEffect(markerItems, markerSizePx) {
+        withContext(Dispatchers.IO) {
+            markerItems.asSequence()
+                .filterIsInstance<MapMarkerItem.Alert>()
+                .map { it.alert }
+                .forEach { alert ->
+                    val url = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+                        ?: alert.imageUrl?.takeIf { it.isNotBlank() }
+                    if (url != null) loadMapMarkerArtwork(context, url, markerSizePx)
+                }
+        }
+    }
     LaunchedEffect(markerItems, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexMatches) {
+        val immediateMarkers = markerItems.map { item ->
+            createImmediateOpenStreetMapMarker(
+                item = item,
+                markerSizePx = markerSizePx,
+                showTimeLabels = showTimeLabels,
+                nowMillis = now,
+                basePalette = basePalette,
+                goDexMatches = goDexMatches
+            )
+        }
+        withContext(Dispatchers.Main.immediate) {
+            controller.setMarkers(context, immediateMarkers, alerts)
+        }
         val markers = withContext(Dispatchers.IO) {
             markerItems.mapNotNull { item ->
                 if (item is MapMarkerItem.Cluster) {
@@ -598,6 +626,42 @@ internal fun OpenStreetMapView(
             controller.setUserPose(userPose)
         }
     }
+}
+
+private fun createImmediateOpenStreetMapMarker(
+    item: MapMarkerItem,
+    markerSizePx: Int,
+    showTimeLabels: Boolean,
+    nowMillis: Long,
+    basePalette: MapMarkerPalette,
+    goDexMatches: Map<String, GoDexMatchResult>
+): OpenStreetMapMarker {
+    if (item is MapMarkerItem.Cluster) {
+        return OpenStreetMapMarker(
+            item,
+            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, markerSizePx)
+        )
+    }
+    val alert = (item as MapMarkerItem.Alert).alert
+    val visualStyle = resolveAlertVisualStyle(alert)
+    val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
+        AlertCategory.HUNDO -> "100%"
+        AlertCategory.NUNDO -> "0%"
+        else -> visualStyle.shortCode
+    }
+    val request = MapMarkerIconRequest(
+        sizePx = markerSizePx,
+        categoryCode = markerLabel,
+        speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
+        speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: alert.imageUrl?.takeIf { it.isNotBlank() },
+        endTime = alert.endTime,
+        showTimeLabel = showTimeLabels,
+        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis) else null,
+        palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
+        goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED
+    )
+    return OpenStreetMapMarker(item, resolveInitialMapMarkerIcon(request))
 }
 
 private fun openStreetMapStyleJson(): String {

@@ -14,6 +14,18 @@ internal object MapLibreInitializer {
     @Volatile
     private var initialized = false
 
+    /**
+     * The client MapLibre fetches tiles with.
+     *
+     * Kept so the tile cache can be cleared through the same [okhttp3.Cache] instance that
+     * wrote it, and so prefetching can reuse the connection pool rather than opening its
+     * own.
+     */
+    @Volatile
+    private var tileClient: OkHttpClient? = null
+
+    fun tileClient(): OkHttpClient? = tileClient
+
     fun ensureInitialized(context: Context): Boolean {
         if (initialized) return true
         synchronized(this) {
@@ -21,7 +33,7 @@ internal object MapLibreInitializer {
             return runCatching {
                 val appContext = context.applicationContext
                 MapLibre.getInstance(appContext)
-                HttpRequestUtil.setOkHttpClient(
+                val client = OpenStreetMapTileCache.install(
                     OkHttpClient.Builder()
                         .addInterceptor { chain ->
                             chain.proceed(
@@ -33,9 +45,11 @@ internal object MapLibreInitializer {
                                     )
                                     .build()
                             )
-                        }
-                        .build()
-                )
+                        },
+                    appContext
+                ).build()
+                tileClient = client
+                HttpRequestUtil.setOkHttpClient(client)
                 initialized = true
             }.onFailure { error ->
                 Log.e(TAG, "OpenStreetMap initialization failed", error)

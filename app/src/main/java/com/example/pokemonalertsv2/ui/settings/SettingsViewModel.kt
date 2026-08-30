@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_START
+import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_END
 
 class SettingsViewModel(
     application: Application,
@@ -213,6 +215,23 @@ class SettingsViewModel(
     
     val silenceUntil: StateFlow<Long> = preferences.silenceUntil
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    val quietHoursEnabled: StateFlow<Boolean> = preferences.quietHoursEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val quietHoursStartMinute: StateFlow<Int> = preferences.quietHoursStartMinute
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_QUIET_HOURS_START)
+
+    val quietHoursEndMinute: StateFlow<Int> = preferences.quietHoursEndMinute
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_QUIET_HOURS_END)
+
+    fun updateQuietHoursEnabled(enabled: Boolean) {
+        viewModelScope.launch { preferences.updateQuietHoursEnabled(enabled) }
+    }
+
+    fun updateQuietHours(startMinute: Int, endMinute: Int) {
+        viewModelScope.launch { preferences.updateQuietHours(startMinute, endMinute) }
+    }
         
     val selectedArea: StateFlow<String> = preferences.selectedArea
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "All")

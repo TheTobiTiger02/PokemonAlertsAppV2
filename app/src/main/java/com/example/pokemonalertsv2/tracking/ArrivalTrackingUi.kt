@@ -54,12 +54,13 @@ fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
     fun start(alert: PokemonAlert) {
         scope.launch {
             runCatching {
-                repository.startTracking(alert)
+                val destination = repository.startTracking(alert)
                 ArrivalTrackingService.start(context)
+                destination
             }.onSuccess {
                 Toast.makeText(
                     context,
-                    "Arrival alert set for ${repository.arrivalRadiusMeters.value} m",
+                    "Arrival alert set for ${it.radiusMeters} m",
                     Toast.LENGTH_SHORT
                 ).show()
             }.onFailure {

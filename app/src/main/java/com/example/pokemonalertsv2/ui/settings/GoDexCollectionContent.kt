@@ -50,6 +50,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -118,6 +119,8 @@ internal fun resolveGoDexCollectionSelection(
     }
 }
 
+private const val SEARCH_DEBOUNCE_MILLIS = 200L
+
 internal fun filterGoDexCollectionEntries(
     entries: List<GoDexEntryEntity>,
     filter: GoDexCollectionFilter,
@@ -161,20 +164,32 @@ internal fun GoDexCollectionContent(
     modifier: Modifier = Modifier
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    // The field value stays immediate so typing feels instant; only the ~1000-entry
+    // filter+sort below is debounced off the keystroke.
+    var debouncedQuery by remember { mutableStateOf(query) }
+    LaunchedEffect(query) {
+        if (query.isEmpty()) debouncedQuery = query else {
+            delay(SEARCH_DEBOUNCE_MILLIS)
+            debouncedQuery = query
+        }
+    }
     var filterName by rememberSaveable { mutableStateOf(GoDexCollectionFilter.NEEDED.name) }
     val filter = GoDexCollectionFilter.entries.firstOrNull { it.name == filterName }
         ?: GoDexCollectionFilter.NEEDED
-    val filteredEntries = remember(entries, filter, query) {
-        filterGoDexCollectionEntries(entries, filter, query)
+    val filteredEntries = remember(entries, filter, debouncedQuery) {
+        filterGoDexCollectionEntries(entries, filter, debouncedQuery)
     }
-    val neededCount = entries.count(GoDexEntryEntity::needed)
+    val neededCount = remember(entries) { entries.count(GoDexEntryEntity::needed) }
     val caughtCount = entries.size - neededCount
     val completion = if (entries.isEmpty()) 0f else caughtCount.toFloat() / entries.size
     var selection by remember { mutableStateOf<GoDexCollectionSelection?>(null) }
+    val visibleEntryKeys = remember(filteredEntries) {
+        filteredEntries.mapTo(mutableSetOf(), GoDexEntryEntity::entryKey)
+    }
     val selectedEntry = resolveGoDexCollectionSelection(
         selection = selection,
         entries = entries,
-        visibleEntryKeys = filteredEntries.mapTo(mutableSetOf(), GoDexEntryEntity::entryKey)
+        visibleEntryKeys = visibleEntryKeys
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -485,17 +500,17 @@ private fun GoDexCollectionEntryTile(
             entry.needed -> MaterialTheme.colorScheme.surfaceContainerHigh
             else -> MaterialTheme.colorScheme.surfaceContainer
         },
-        animationSpec = tween(AppMotion.Standard),
+        animationSpec = AppMotion.springQuick(),
         label = "godex_tile_color"
     )
     val selectionBorderWidth by animateDpAsState(
         targetValue = if (selected) 3.dp else 0.dp,
-        animationSpec = tween(AppMotion.Standard),
+        animationSpec = AppMotion.springQuick(),
         label = "godex_tile_border"
     )
     val artworkAlpha by animateFloatAsState(
         targetValue = if (caught) 0.62f else 1f,
-        animationSpec = tween(AppMotion.Standard),
+        animationSpec = AppMotion.springQuick(),
         label = "godex_artwork_alpha"
     )
     Card(

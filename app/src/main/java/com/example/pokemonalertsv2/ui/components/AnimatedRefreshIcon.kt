@@ -9,7 +9,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import com.example.pokemonalertsv2.R
 
@@ -20,23 +20,20 @@ internal fun AnimatedRefreshIcon(
     contentDescription: String,
     modifier: Modifier = Modifier
 ) {
-    val rotation = if (refreshing) {
-        val transition = rememberInfiniteTransition(label = "refresh")
-        val angle by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 850, easing = LinearEasing)
-            ),
-            label = "refresh_rotation"
-        )
-        angle
-    } else {
-        0f
-    }
+    val transition = rememberInfiniteTransition(label = "refresh")
+    val angle by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 850, easing = LinearEasing)
+        ),
+        label = "refresh_rotation"
+    )
     Icon(
         painter = painterResource(id = R.drawable.ic_refresh),
         contentDescription = contentDescription,
-        modifier = modifier.rotate(rotation)
+        // Read in the draw phase: reading the animated float in composition recomposed
+        // the icon on every frame of the spin.
+        modifier = modifier.graphicsLayer { rotationZ = if (refreshing) angle else 0f }
     )
 }

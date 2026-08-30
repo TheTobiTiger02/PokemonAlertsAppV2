@@ -111,4 +111,32 @@ class AlertGlanceMetadataTest {
     fun pipAlertWithoutCpOmitsCpLine() {
         assertNull(buildPipCpText(PokemonAlert(name = "Unknown alert")))
     }
+
+    @Test
+    fun questPresentationTrimsTaskRewardAndKeepsArRequirement() {
+        val presentation = questAlertPresentation(
+            PokemonAlert(
+                name = "Quest",
+                type = listOf("Quest"),
+                questTask = "  Make 3 Great Throws  ",
+                questReward = "  Rare Candy  ",
+                requiresAR = true
+            )
+        )
+
+        assertEquals("Make 3 Great Throws", presentation?.task)
+        assertEquals("Rare Candy", presentation?.reward)
+        assertEquals(true, presentation?.requiresAr)
+    }
+
+    @Test
+    fun questPresentationOmitsBlankFieldsAndRejectsNonQuests() {
+        val quest = questAlertPresentation(
+            PokemonAlert(name = "Quest", type = listOf("Quest"), questTask = "  ")
+        )
+
+        assertNull(quest?.task)
+        assertNull(quest?.reward)
+        assertNull(questAlertPresentation(PokemonAlert(name = "Spawn", type = listOf("Spawn"))))
+    }
 }

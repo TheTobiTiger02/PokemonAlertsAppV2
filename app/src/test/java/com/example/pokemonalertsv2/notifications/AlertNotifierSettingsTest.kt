@@ -7,6 +7,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
+import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_START
+import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_END
 
 class AlertNotifierSettingsTest {
 
@@ -103,7 +105,11 @@ class AlertNotifierSettingsTest {
         allowedHundoSpecies: Set<String> = emptySet(),
         excludedRaidTiers: Set<String> = emptySet(),
         nowMillis: Long = System.currentTimeMillis(),
-        goDexFilterEnabled: Boolean = false
+        goDexFilterEnabled: Boolean = false,
+        maxWalkingMinutes: Int = 0,
+        quietHoursEnabled: Boolean = false,
+        quietHoursStartMinute: Int = DEFAULT_QUIET_HOURS_START,
+        quietHoursEndMinute: Int = DEFAULT_QUIET_HOURS_END
     ) = AlertNotifier.NotificationSettings(
         notificationsEnabled = notificationsEnabled,
         raidsEnabled = true,
@@ -116,6 +122,10 @@ class AlertNotifierSettingsTest {
         rocketEnabled = rocketEnabled,
         vibrateEnabled = true,
         silenceUntil = silenceUntil,
+        maxWalkingMinutes = maxWalkingMinutes,
+        quietHoursEnabled = quietHoursEnabled,
+        quietHoursStartMinute = quietHoursStartMinute,
+        quietHoursEndMinute = quietHoursEndMinute,
         selectedArea = selectedArea,
         maxDistance = maxDistance,
         excludedHundoTypes = emptySet(),

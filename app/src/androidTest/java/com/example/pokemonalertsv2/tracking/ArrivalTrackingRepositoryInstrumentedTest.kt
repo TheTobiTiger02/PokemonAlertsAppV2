@@ -27,9 +27,8 @@ class ArrivalTrackingRepositoryInstrumentedTest {
         repository.updateArrivalRadius(65)
         repository.startTracking(
             PokemonAlert(
-                name = "Persisted Hundo",
-                pokemon = "Pikachu",
-                type = listOf("Hundo"),
+                name = "Persisted custom destination",
+                type = listOf("Custom"),
                 latitude = 49.86,
                 longitude = 8.65
             ),
@@ -37,7 +36,7 @@ class ArrivalTrackingRepositoryInstrumentedTest {
         )
 
         val stored = repository.currentDestination()
-        assertEquals("Persisted Hundo", stored?.alert?.name)
+        assertEquals("Persisted custom destination", stored?.alert?.name)
         assertEquals(65, stored?.radiusMeters)
 
         repository.updateArrivalRadius(80)

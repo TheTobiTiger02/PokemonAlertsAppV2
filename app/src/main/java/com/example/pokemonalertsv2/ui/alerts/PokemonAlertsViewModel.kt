@@ -6,16 +6,24 @@ import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.MapStylePreference
+import com.example.pokemonalertsv2.data.FilterPreset
+import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.example.pokemonalertsv2.util.TravelTime
+import androidx.compose.runtime.Immutable
 
+@Immutable
 data class AlertsUiState(
     val alerts: List<PokemonAlert> = emptyList(),
     val isLoading: Boolean = false,
@@ -126,6 +134,59 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         _uiState.update { current -> current.copy(errorMessage = null) }
     }
 
+    val maxWalkingMinutes = repository.alertPreferences.maxWalkingMinutes
+        .asPreferenceState(TravelTime.NO_LIMIT)
+
+    fun updateMaxWalkingMinutes(minutes: Int) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMaxWalkingMinutes(minutes)
+        }
+    }
+
+    val filterPresets = repository.alertPreferences.filterPresets
+        .asPreferenceState(emptyList())
+
+    /** Captures whatever the feed controls currently say, under [name]. */
+    fun saveFilterPreset(
+        name: String,
+        filter: AlertFilter,
+        sort: SortPreference,
+        area: String,
+        maxDistance: Int
+    ) {
+        viewModelScope.launch {
+            repository.alertPreferences.saveFilterPreset(
+                FilterPreset(
+                    name = name,
+                    filter = filter.name,
+                    sort = sort.name,
+                    area = area,
+                    maxDistance = maxDistance
+                )
+            )
+        }
+    }
+
+    fun deleteFilterPreset(name: String) {
+        viewModelScope.launch { repository.alertPreferences.deleteFilterPreset(name) }
+    }
+
+    /**
+     * Puts every control back at once.
+     *
+     * Unknown enum names fall back to the defaults rather than throwing: a preset saved by
+     * an older build must not be able to crash the feed.
+     */
+    fun applyFilterPreset(preset: FilterPreset) {
+        val filter = AlertFilter.entries.firstOrNull { it.name == preset.filter } ?: AlertFilter.ALL
+        val sort = SortPreference.entries.firstOrNull { it.name == preset.sort }
+            ?: SortPreference.POSTED_TIME
+        updateSelectedAlertFilter(filter)
+        updateSortPreference(sort)
+        updateSelectedArea(preset.area)
+        updateMaxDistance(preset.maxDistance)
+    }
+
     fun updateSelectedAlertFilter(filter: AlertFilter) {
         _selectedAlertFilter.value = filter
         viewModelScope.launch { repository.alertPreferences.updateSelectedAlertFilterName(filter.name) }
@@ -145,16 +206,31 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
     
+    // Hot StateFlows rather than the raw DataStore Flows: a cold flow makes every collector
+    // supply its own initialValue, which showed a frame of default filters ("All" area,
+    // unlimited distance) on each screen entry and opened one DataStore read per subscriber.
+    private fun <T> Flow<T>.asPreferenceState(initial: T): StateFlow<T> =
+        stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
+
     val dismissedAlertIds = repository.alertPreferences.dismissedAlertIds
+        .asPreferenceState(emptySet())
     val sortPreference = repository.alertPreferences.sortPreference
+        .asPreferenceState(SortPreference.POSTED_TIME)
     val mapStylePreference = repository.alertPreferences.mapStylePreference
+        .asPreferenceState(MapStylePreference.fromStoredValue(null))
     val showMapCountdowns = repository.alertPreferences.showMapCountdowns
+        .asPreferenceState(false)
     val showSpawnRadius = repository.alertPreferences.showSpawnRadius
+        .asPreferenceState(false)
     val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
-    
+        .asPreferenceState(false)
+
     val selectedArea = repository.alertPreferences.selectedArea
+        .asPreferenceState("All")
     val maxDistance = repository.alertPreferences.maxDistance
+        .asPreferenceState(0)
     val snoozeDuration = repository.alertPreferences.snoozeDuration
+        .asPreferenceState(10)
     
     fun dismissAlert(alertId: String) {
         viewModelScope.launch {

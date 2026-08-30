@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.ui.counters
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +37,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.pokemonalertsv2.ui.components.SpringSegmentedRow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +86,8 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import android.net.Uri
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.AnimatedContent
+import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import androidx.compose.foundation.rememberScrollState
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
@@ -98,16 +101,25 @@ internal fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCounte
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = when {
-                state.rateLimited -> "Pokébattler is busy"
-                state.isLoading -> "Refreshing counters…"
-                else -> "Showing cached counters"
-            },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        val statusLabel = when {
+            state.rateLimited -> "Pokébattler is busy"
+            state.isLoading -> "Refreshing counters…"
+            else -> "Showing cached counters"
+        }
+        // The status flips between three strings in the same spot. Crossing them over
+        // reads as one line changing its mind; a hard swap reads as a glitch.
+        AnimatedContent(
+            targetState = statusLabel,
+            transitionSpec = { appFadeThrough() },
+            label = "counters-refresh-status",
             modifier = Modifier.weight(1f)
-        )
+        ) { label ->
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (state.rateLimited || state.isStale) {
             TextButton(onClick = actions.onRetry) { Text("Retry") }
         }
@@ -139,16 +151,15 @@ internal fun BossFacts(state: RaidCountersUiState) {
 
 @Composable
 internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersActions) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    SpringSegmentedRow(
+        selectedIndex = if (state.showingPersonal) 1 else 0,
+        segmentCount = 2
     ) {
         SegmentedChoice(
             label = "Pokébattler",
             selected = state.source == CounterSourceId.ALL_POKEMON,
             modifier = Modifier.weight(1f),
+            transparent = true,
             onClick = { actions.onSourceChanged(CounterSourceId.ALL_POKEMON) }
         )
         SegmentedChoice(
@@ -156,6 +167,7 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
             selected = state.showingPersonal,
             enabled = state.pokeGenieCount > 0 || !state.pokebattlerUserId.isNullOrBlank(),
             modifier = Modifier.weight(1f),
+            transparent = true,
             onClick = {
                 actions.onSourceChanged(
                     if (state.pokeGenieCount > 0) CounterSourceId.POKE_GENIE
@@ -166,17 +178,16 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
     }
     if (state.showingPersonal &&
         state.pokeGenieCount > 0 && !state.pokebattlerUserId.isNullOrBlank()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp)
-                .selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        SpringSegmentedRow(
+            selectedIndex = if (state.source == CounterSourceId.POKEBATTLER_POKEBOX) 1 else 0,
+            segmentCount = 2,
+            modifier = Modifier.padding(top = 6.dp)
         ) {
             SegmentedChoice(
                 label = "PokéGenie CSV",
                 selected = state.source == CounterSourceId.POKE_GENIE,
                 modifier = Modifier.weight(1f),
+                transparent = true,
                 onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
             )
             SegmentedChoice(
@@ -190,6 +201,7 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
                     ?: "My Pokébox",
                 selected = state.source == CounterSourceId.POKEBATTLER_POKEBOX,
                 modifier = Modifier.weight(1f),
+                transparent = true,
                 onClick = { actions.onSourceChanged(CounterSourceId.POKEBATTLER_POKEBOX) }
             )
         }
@@ -202,16 +214,19 @@ internal fun SegmentedChoice(
     selected: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    // Set when the choice sits inside a SpringSegmentedRow, which paints the track and
+    // the travelling selection pill itself.
+    transparent: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
         modifier = modifier
             .height(40.dp)
             .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = onClick),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
+        color = when {
+            transparent -> Color.Transparent
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
         },
         contentColor = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.onSurfaceVariant,

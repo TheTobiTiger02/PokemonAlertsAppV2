@@ -32,6 +32,7 @@ import com.example.pokemonalertsv2.data.counters.PokebattlerAuthRepository
 import com.example.pokemonalertsv2.data.counters.PokebattlerPersonalResult
 import com.example.pokemonalertsv2.data.gamemaster.GameMasterRepository
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -60,12 +61,16 @@ data class RaidCountersUiState(
     val bossShiny: Boolean = false,
     val bossMove1: String? = null,
     val bossMove2: String? = null,
+    /** Raid expiry for the live countdown shown when the arrival notification opens here. */
+    val raidEndTimeMillis: Long? = null,
     /** Average plus every concrete moveset returned by Pokebattler. */
     val bossMovesets: List<RaidBossMoveset> = emptyList(),
     val bossMovesetSelection: RaidBossMovesetSelection = RaidBossMovesetSelection.Average,
     val counters: List<DecoratedCounter> = emptyList(),
     val options: RaidCounterOptions = RaidCounterOptions(),
     val source: CounterSourceId = CounterSourceId.ALL_POKEMON,
+    /** True when an arrived-raid notification opened this screen expecting a personal team. */
+    val personalTeamRequested: Boolean = false,
     val ownedOnly: Boolean = false,
     val ownedMatchCount: Int = 0,
     val pokeGenieCount: Int = 0,
@@ -171,6 +176,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
     private var personalKey: PersonalRequestKey? = null
     /** Guards the `finally` clear so a superseded job cannot unset a newer job's spinner. */
     private var personalGeneration = 0
+    private var preferPersonalTeamForAlert = false
 
     init {
         // The trainer-number Pokébox attempt never worked (there is no public endpoint);
@@ -205,9 +211,13 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /** Idempotent per alert, so recomposition and PiP transitions do not refetch. */
-    fun onAlertShown(alert: PokemonAlert) {
-        if (this.alert?.uniqueId == alert.uniqueId) return
+    fun onAlertShown(alert: PokemonAlert, preferPersonalTeam: Boolean = false) {
+        val sameAlert = this.alert?.uniqueId == alert.uniqueId
+        val effectivePreference = preferPersonalTeam ||
+            (sameAlert && preferPersonalTeamForAlert)
+        if (sameAlert && effectivePreference == preferPersonalTeamForAlert) return
         this.alert = alert
+        preferPersonalTeamForAlert = effectivePreference
         this.boss = null
         // A new boss invalidates any in-flight or completed personal ranking.
         personalJob?.cancel()
@@ -242,13 +252,18 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 options = options,
                 weatherFromAlert = alertWeather != null,
                 bossMovesetSelection = alertMoveset.toSelection(),
+                raidEndTimeMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
                 bossThumbnailUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() },
                 source = when {
                     settings.source == CounterSourceId.POKEBATTLER_POKEBOX &&
                         linkedAccount != null -> settings.source
                     settings.source == CounterSourceId.POKE_GENIE && ownedCount > 0 -> settings.source
+                    effectivePreference && ownedCount > 0 -> CounterSourceId.POKE_GENIE
+                    effectivePreference && linkedAccount != null ->
+                        CounterSourceId.POKEBATTLER_POKEBOX
                     else -> CounterSourceId.ALL_POKEMON
                 },
+                personalTeamRequested = effectivePreference,
                 ownedOnly = settings.ownedOnly,
                 activeMegaId = settings.activeMegaId,
                 megaOptions = _uiState.value.megaOptions,

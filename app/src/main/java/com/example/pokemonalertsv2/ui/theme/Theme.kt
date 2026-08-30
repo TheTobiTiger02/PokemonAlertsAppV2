@@ -10,62 +10,34 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-data class LinearModernColors(
-    val bgDeep: Color,
-    val bgBase: Color,
-    val bgElevated: Color,
-    val surfaceTranslucent: Color,
-    val surfaceTranslucentHover: Color,
-    val foreground: Color,
-    val foregroundMuted: Color,
-    val foregroundSubtle: Color,
-    val accent: Color,
-    val accentBright: Color,
-    val accentGlow: Color,
-    val borderDefault: Color,
-    val borderHover: Color,
-    val borderAccent: Color
-)
+/**
+ * The three accent roles that have no Material 3 counterpart.
+ *
+ * Everything else the app used to keep in a parallel `LinearModernColors` palette was a
+ * one-for-one duplicate of [MaterialTheme.colorScheme] under a second set of names, which
+ * meant the same pixel had two spellings and half the codebase reached for each. These are
+ * what was actually missing: alpha-derived accents that M3 does not define.
+ */
+object AppAccents {
+    @Composable
+    fun accentGlow(): Color = MaterialTheme.colorScheme.primary.copy(
+        alpha = if (LocalAppDarkTheme.current) 0.14f else 0.10f
+    )
 
-val DarkLinearModernColors = LinearModernColors(
-    bgDeep = AppDarkBackground,
-    bgBase = AppDarkBackground,
-    bgElevated = AppDarkSurface,
-    surfaceTranslucent = AppDarkSurfaceContainer,
-    surfaceTranslucentHover = AppDarkSurfaceContainerHigh,
-    foreground = AppDarkOnSurface,
-    foregroundMuted = AppDarkOnSurfaceVariant,
-    foregroundSubtle = AppDarkOnSurfaceVariant,
-    accent = AppDarkPrimary,
-    accentBright = AppDarkPrimary,
-    accentGlow = AppDarkPrimary.copy(alpha = 0.14f),
-    borderDefault = AppDarkOutline,
-    borderHover = AppDarkOnSurfaceVariant.copy(alpha = 0.45f),
-    borderAccent = AppDarkPrimary.copy(alpha = 0.55f)
-)
+    @Composable
+    fun borderHover(): Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+        alpha = if (LocalAppDarkTheme.current) 0.45f else 0.32f
+    )
 
-val LightLinearModernColors = LinearModernColors(
-    bgDeep = AppLightBackground,
-    bgBase = AppLightBackground,
-    bgElevated = AppLightSurface,
-    surfaceTranslucent = AppLightSurfaceContainer,
-    surfaceTranslucentHover = AppLightSurfaceContainerHigh,
-    foreground = AppLightOnSurface,
-    foregroundMuted = AppLightOnSurfaceVariant,
-    foregroundSubtle = AppLightOnSurfaceVariant,
-    accent = AppLightPrimary,
-    accentBright = AppLightPrimary,
-    accentGlow = AppLightPrimary.copy(alpha = 0.10f),
-    borderDefault = AppLightOutline,
-    borderHover = AppLightOnSurfaceVariant.copy(alpha = 0.32f),
-    borderAccent = AppLightPrimary.copy(alpha = 0.45f)
-)
+    @Composable
+    fun borderAccent(): Color = MaterialTheme.colorScheme.primary.copy(
+        alpha = if (LocalAppDarkTheme.current) 0.55f else 0.45f
+    )
+}
 
-val LocalLinearModernColors = staticCompositionLocalOf { DarkLinearModernColors }
 val LocalAppDarkTheme = staticCompositionLocalOf { false }
 
 private val DarkColorScheme = darkColorScheme(
@@ -141,18 +113,17 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun PokemonAlertsV2Theme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-    val appColors = if (darkTheme) DarkLinearModernColors else LightLinearModernColors
     val view = LocalView.current
 
+    // The bars themselves are made transparent by enableEdgeToEdge() in the hosting
+    // Activity; only the icon appearance has to follow the app theme, because the app can
+    // be in dark mode while the system is not.
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window ?: return@SideEffect
-            window.statusBarColor = Color.Transparent.toArgb()
-            window.navigationBarColor = Color.Transparent.toArgb()
             WindowCompat.getInsetsController(window, view).apply {
                 isAppearanceLightStatusBars = !darkTheme
                 isAppearanceLightNavigationBars = !darkTheme
@@ -161,7 +132,6 @@ fun PokemonAlertsV2Theme(
     }
 
     CompositionLocalProvider(
-        LocalLinearModernColors provides appColors,
         LocalAppDarkTheme provides darkTheme
     ) {
         MaterialTheme(

@@ -1,13 +1,12 @@
 package com.example.pokemonalertsv2.data.counters
 
 import com.example.pokemonalertsv2.data.pokegenie.OwnedPokemon
-import java.security.MessageDigest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Regression coverage for the parenthesis expansion used by MonGo Creative Search. */
+/** Regression coverage for compact recommended-team query generation. */
 class PokemonGoSearchTest {
 
     private fun counter(
@@ -69,51 +68,20 @@ class PokemonGoSearchTest {
     )
 
     @Test
-    fun `the supplied named example exactly matches the website`() {
-        val query = PokemonGoSearch.expandTerms(
-            listOf(
-                listOf("Chandelure", "shadow", "cp3555", "@Fire Spin", "@Overheat"),
-                listOf("Reshiram", "shadow", "cp4499", "@Fire Fang", "@Fusion Flare"),
-                listOf("Chandelure", "cp3268", "@Hex", "@Shadow Ball")
-            )
-        )
-
-        assertEquals(2_696, query.length)
-        assertEquals(100, query.clauseCount())
-        assertEquals(
-            "dc1131f75173cc90b7c18cb368aeab9a08429aa58480239500d48575f97a9a01",
-            query.sha256()
-        )
-    }
-
-    @Test
-    fun `the app's numbered team exactly matches the website`() {
+    fun `the app team is a compact grouped Pokemon GO query`() {
         val query = PokemonGoSearch.teamQuery(websiteTeam, dex)
 
-        assertEquals(2_316, query.length)
-        assertEquals(100, query.clauseCount())
         assertEquals(
-            "45b87c0087b6da81dcd75b9247bfe1f75f3b8614e2ffd07ac4962309475b1a66",
-            query.sha256()
+            "609,643&CP3555,CP4499,CP3268&@Fire Spin,@Fire Fang,@Hex&" +
+                "@Overheat,@Fusion Flare,@Shadow Ball",
+            query
         )
     }
 
     @Test
-    fun `website ordering and duplicate behavior are preserved`() {
+    fun `a single shadow Pokemon needs no shadow predicate when CP identifies the copy`() {
         assertEquals(
-            "B,A&B,a&b,A&b,a",
-            PokemonGoSearch.expandTerms(listOf(listOf("A", "a"), listOf("B", "b")))
-        )
-        assertEquals(
-            "A&A,x&x,A&x",
-            PokemonGoSearch.expandTerms(listOf(listOf("A", "x"), listOf("A", "x")))
-        )
-    }
-
-    @Test
-    fun `a single shadow Pokemon remains a normal conjunction`() {
-        assertEquals(
-            "609&shadow&CP3555&@Fire Spin&@Overheat",
+            "609&CP3555&@Fire Spin&@Overheat",
             PokemonGoSearch.teamQuery(listOf(slot(shadowChandelure)), dex)
         )
     }
@@ -145,11 +113,11 @@ class PokemonGoSearchTest {
         )
 
         assertEquals(
-            "609&shadow&@Fire Fang&@Overheat",
+            "609&@Fire Fang&@Overheat",
             PokemonGoSearch.teamQuery(listOf(slot(missingCp)), dex)
         )
         assertEquals(
-            "609&shadow&CP4499&@Overheat",
+            "609&CP4499&@Overheat",
             PokemonGoSearch.teamQuery(listOf(slot(missingFast)), dex)
         )
     }
@@ -160,7 +128,7 @@ class PokemonGoSearchTest {
             "Shadow Chandelure", "CHANDELURE_SHADOW_FORM", 0, " ", "Overheat"
         )
         assertEquals(
-            "609&shadow&@Overheat",
+            "609&@Overheat",
             PokemonGoSearch.teamQuery(listOf(slot(sparse)), dex)
         )
     }
@@ -192,26 +160,54 @@ class PokemonGoSearchTest {
     }
 
     @Test
-    fun `six complete members produce the bounded worst case`() {
-        val terms = (1..6).map { index ->
-            listOf("$index", "shadow", "CP$index", "@Fast $index", "@Charged $index")
-        }
-        val query = PokemonGoSearch.expandTerms(terms)
+    fun `species are stable in dex order even when ranking order changes`() {
+        val reverseRanked = listOf(
+            slot(counter("Eternatus", "ETERNATUS", 4966, "Dragon Tail", "Dynamax Cannon")),
+            slot(counter("Kyurem", "KYUREM_BLACK_FORM", 5206, "Dragon Tail", "Freeze Shock")),
+            slot(counter("Necrozma", "NECROZMA_DAWN_WINGS", 4634, "Shadow Claw", "Moongeist Beam")),
+            slot(counter("Garchomp", "GARCHOMP", 4370, "Dragon Tail", "Breaking Swipe"))
+        )
+        val dexNumbers = mapOf(
+            "GARCHOMP" to 445,
+            "KYUREM_BLACK_FORM" to 646,
+            "NECROZMA_DAWN_WINGS" to 800,
+            "ETERNATUS" to 890
+        )
 
-        assertEquals(15_625, query.clauseCount())
-        assertTrue(query.isNotEmpty())
+        assertTrue(PokemonGoSearch.teamQuery(reverseRanked, dexNumbers).startsWith("445,646,800,890&"))
+        assertEquals("445,646,800,890", PokemonGoSearch.speciesQuery(reverseRanked, dexNumbers))
+    }
+
+    @Test
+    fun `shadow Giratina Altered recommended team has the requested grouped shape`() {
+        val team = listOf(
+            slot(counter("Garchomp", "GARCHOMP", 4370, "Dragon Tail", "Breaking Swipe")),
+            slot(counter("Kyurem", "KYUREM_BLACK_FORM", 5206, "Dragon Tail", "Freeze Shock")),
+            slot(counter("Necrozma", "NECROZMA_DAWN_WINGS", 4634, "Shadow Claw", "Moongeist Beam")),
+            slot(counter("Garchomp", "GARCHOMP", 4436, "Dragon Tail", "Breaking Swipe")),
+            slot(counter("Garchomp", "GARCHOMP", 4459, "Dragon Tail", "Breaking Swipe")),
+            slot(counter("Eternatus", "ETERNATUS", 4966, "Dragon Tail", "Dynamax Cannon"))
+        )
+
+        assertEquals(
+            "445,646,800,890&CP4370,CP5206,CP4634,CP4436,CP4459,CP4966&" +
+                "@Dragon Tail,@Shadow Claw&" +
+                "@Breaking Swipe,@Freeze Shock,@Moongeist Beam,@Dynamax Cannon",
+            PokemonGoSearch.teamQuery(
+                team,
+                mapOf(
+                    "GARCHOMP" to 445,
+                    "KYUREM_BLACK_FORM" to 646,
+                    "NECROZMA_DAWN_WINGS" to 800,
+                    "ETERNATUS" to 890
+                )
+            )
+        )
     }
 
     @Test
     fun `an empty team produces no stray separators`() {
         assertEquals("", PokemonGoSearch.teamQuery(emptyList(), dex))
         assertEquals("", PokemonGoSearch.speciesQuery(emptyList(), dex))
-        assertEquals("", PokemonGoSearch.expandTerms(emptyList()))
     }
-
-    private fun String.clauseCount(): Int = if (isEmpty()) 0 else count { it == '&' } + 1
-
-    private fun String.sha256(): String = MessageDigest.getInstance("SHA-256")
-        .digest(toByteArray(Charsets.UTF_8))
-        .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
 }

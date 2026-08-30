@@ -2,6 +2,22 @@ package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 
+internal data class QuestAlertPresentation(
+    val task: String?,
+    val reward: String?,
+    val requiresAr: Boolean
+)
+
+/** Shared, whitespace-safe quest copy for cards, map details, and widgets. */
+internal fun questAlertPresentation(alert: PokemonAlert): QuestAlertPresentation? {
+    if (!alert.hasTypeContaining("quest")) return null
+    return QuestAlertPresentation(
+        task = alert.questTask?.trim()?.takeIf(String::isNotEmpty),
+        reward = alert.questReward?.trim()?.takeIf(String::isNotEmpty),
+        requiresAr = alert.requiresAR == true
+    )
+}
+
 /** Exact encounter CP to look for. Raid hundo ranges are intentionally excluded. */
 val PokemonAlert.displayCp: Int?
     get() = when {

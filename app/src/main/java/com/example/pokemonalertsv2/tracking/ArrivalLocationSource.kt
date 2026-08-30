@@ -51,7 +51,9 @@ private class FusedArrivalLocationSource(context: Context) : ArrivalLocationSour
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3_000L)
             .setMinUpdateIntervalMillis(2_000L)
             .setMinUpdateDistanceMeters(5f)
-            .setWaitForAccurateLocation(true)
+            // Deliver the best available fix instead of withholding updates while the
+            // fused provider waits for an accuracy threshold that can be unreachable indoors.
+            .setWaitForAccurateLocation(false)
             .build()
         return runCatching {
             fusedClient.requestLocationUpdates(request, newCallback, Looper.getMainLooper())

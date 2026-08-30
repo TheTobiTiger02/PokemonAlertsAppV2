@@ -191,7 +191,7 @@ fun SpeciesCard(
         } else {
             MaterialTheme.colorScheme.surfaceVariant
         },
-        animationSpec = tween(AppMotion.Standard),
+        animationSpec = AppMotion.springQuick(),
         label = "species_selection_color"
     )
     Surface(

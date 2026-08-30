@@ -7,13 +7,17 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.RaidTierParser
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -50,18 +54,50 @@ internal fun PokemonAlert.isEligibleArrivalDestination(
     return TimeUtils.parseEndTimeToMillis(endTime)?.let { it > nowMillis } ?: true
 }
 
+/**
+ * Gyms and PokeStops use Pokemon GO's fixed 80 m interaction distance. Pokemon spawns use
+ * 40 m normally and 80 m while Spacial Rend is enabled. Other free-coordinate alerts retain
+ * the user's configured radius.
+ */
+internal fun PokemonAlert.effectiveArrivalRadius(
+    configuredRadiusMeters: Int,
+    spacialRendEnabled: Boolean = false
+): Int = when {
+    usesPoiArrivalRadius() -> ArrivalTrackingRepository.POI_RADIUS_METERS
+    isSpawnAlert && spacialRendEnabled -> ArrivalTrackingRepository.SPACIAL_REND_RADIUS_METERS
+    isSpawnAlert -> ArrivalTrackingRepository.SPAWN_RADIUS_METERS
+    else -> ArrivalTrackingRepository.normalizeRadius(configuredRadiusMeters)
+}
+
+internal fun PokemonAlert.usesPoiArrivalRadius(): Boolean =
+    RaidTierParser.isRaid(this) ||
+        hasTypeContaining("quest") ||
+        !gym.isNullOrBlank() ||
+        !pokestop.isNullOrBlank()
+
+internal fun PokemonAlert.usesPokemonGoInteractionRadius(): Boolean =
+    usesPoiArrivalRadius() || isSpawnAlert
+
 class ArrivalTrackingRepository private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val dataStore = appContext.arrivalTrackingDataStore
+    private val alertPreferences = AlertPreferences(appContext.alertPreferencesDataStore)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
 
-    val destinationFlow: Flow<TrackedDestination?> = dataStore.data
+    private val storedDestinationFlow: Flow<TrackedDestination?> = dataStore.data
         .map { preferences -> preferences[ACTIVE_DESTINATION_KEY]?.decodeDestination() }
         .distinctUntilChanged()
+
+    val destinationFlow: Flow<TrackedDestination?> = combine(
+        storedDestinationFlow,
+        alertPreferences.spacialRendEnabled
+    ) { destination, spacialRendEnabled ->
+        destination?.withEffectiveRadius(spacialRendEnabled)
+    }.distinctUntilChanged()
 
     val activeDestination = destinationFlow.stateIn(
         scope = scope,
@@ -81,7 +117,9 @@ class ArrivalTrackingRepository private constructor(context: Context) {
         )
 
     suspend fun currentDestination(): TrackedDestination? =
-        dataStore.data.first()[ACTIVE_DESTINATION_KEY]?.decodeDestination()
+        dataStore.data.first()[ACTIVE_DESTINATION_KEY]
+            ?.decodeDestination()
+            ?.withEffectiveRadius(alertPreferences.spacialRendEnabled.first())
 
     suspend fun startTracking(
         alert: PokemonAlert,
@@ -90,8 +128,10 @@ class ArrivalTrackingRepository private constructor(context: Context) {
         require(alert.isEligibleArrivalDestination(nowMillis)) {
             "Alert is not an active destination with valid coordinates"
         }
-        val radius = normalizeRadius(
-            dataStore.data.first()[ARRIVAL_RADIUS_KEY] ?: DEFAULT_RADIUS_METERS
+        val radius = alert.effectiveArrivalRadius(
+            configuredRadiusMeters = dataStore.data.first()[ARRIVAL_RADIUS_KEY]
+                ?: DEFAULT_RADIUS_METERS,
+            spacialRendEnabled = alertPreferences.spacialRendEnabled.first()
         )
         val destination = TrackedDestination(
             alert = alert,
@@ -114,7 +154,11 @@ class ArrivalTrackingRepository private constructor(context: Context) {
             preferences[ARRIVAL_RADIUS_KEY] = normalized
             preferences[ACTIVE_DESTINATION_KEY]
                 ?.decodeDestination()
-                ?.copy(radiusMeters = normalized)
+                ?.let { destination ->
+                    destination.copy(
+                        radiusMeters = destination.alert.effectiveArrivalRadius(normalized)
+                    )
+                }
                 ?.let { preferences[ACTIVE_DESTINATION_KEY] = json.encodeToString(it) }
         }
     }
@@ -122,8 +166,18 @@ class ArrivalTrackingRepository private constructor(context: Context) {
     private fun String.decodeDestination(): TrackedDestination? =
         runCatching { json.decodeFromString<TrackedDestination>(this) }.getOrNull()
 
+    private fun TrackedDestination.withEffectiveRadius(spacialRendEnabled: Boolean) = copy(
+        radiusMeters = alert.effectiveArrivalRadius(
+            configuredRadiusMeters = radiusMeters,
+            spacialRendEnabled = spacialRendEnabled
+        )
+    )
+
     companion object {
         const val DEFAULT_RADIUS_METERS = 40
+        const val SPAWN_RADIUS_METERS = 40
+        const val SPACIAL_REND_RADIUS_METERS = 80
+        const val POI_RADIUS_METERS = 80
         const val MIN_RADIUS_METERS = 20
         const val MAX_RADIUS_METERS = 200
         const val RADIUS_STEP_METERS = 5
@@ -165,13 +219,24 @@ internal class ArrivalFixEvaluator(
         distanceMeters: Float,
         accuracyMeters: Float,
         radiusMeters: Int,
-        elapsedRealtimeMillis: Long
+        elapsedRealtimeMillis: Long,
+        gpsToleranceMeters: Float = 0f
     ): ArrivalFixResult {
-        val maximumAccuracy = minOf(radiusMeters.toFloat(), 50f)
-        val qualifying = distanceMeters.isFinite() &&
-            accuracyMeters.isFinite() &&
-            distanceMeters <= radiusMeters &&
-            accuracyMeters in 0f..maximumAccuracy
+        val usableAccuracy = accuracyMeters.isFinite() &&
+            accuracyMeters in 0f..MAX_DIRECT_FIX_ACCURACY_METERS
+        val directPositionIsInRange = distanceMeters.isFinite() && distanceMeters <= radiusMeters
+        val tolerance = if (
+            usableAccuracy && accuracyMeters <= MAX_TOLERANCE_FIX_ACCURACY_METERS
+        ) {
+            minOf(accuracyMeters.coerceAtLeast(0f), gpsToleranceMeters.coerceIn(0f, 20f))
+        } else {
+            0f
+        }
+        val tolerancePositionIsInRange = distanceMeters.isFinite() &&
+            tolerance > 0f &&
+            distanceMeters <= radiusMeters + tolerance
+        val qualifying = usableAccuracy &&
+            (directPositionIsInRange || tolerancePositionIsInRange)
 
         if (!qualifying) {
             firstQualifyingFixAtMillis = null
@@ -192,5 +257,10 @@ internal class ArrivalFixEvaluator(
 
     fun reset() {
         firstQualifyingFixAtMillis = null
+    }
+
+    companion object {
+        const val MAX_DIRECT_FIX_ACCURACY_METERS = 200f
+        const val MAX_TOLERANCE_FIX_ACCURACY_METERS = 100f
     }
 }

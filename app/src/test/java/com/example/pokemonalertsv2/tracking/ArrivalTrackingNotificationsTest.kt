@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.tracking
 
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -145,6 +146,67 @@ class ArrivalTrackingNotificationsTest {
         )
 
         assertTrue(title.contains("Going to Field Research"))
+    }
+
+    @Test
+    fun `in range is driven by direct distance while route remains visible`() {
+        val content = ArrivalTrackingNotifications.ongoingContent(
+            destination = TrackedDestination(
+                alert = PokemonAlert(
+                    name = "Legendary Raid",
+                    type = listOf("Raid"),
+                    latitude = 49.86,
+                    longitude = 8.65
+                ),
+                radiusMeters = 80,
+                startedAtMillis = 1_000L
+            ),
+            distanceMeters = 75f,
+            walkingRoute = WalkingRouteInfo(distanceMeters = 320, durationSeconds = 240),
+            inRange = true,
+            waitingForPreciseLocation = false
+        )
+
+        assertTrue(content.startsWith("In range"))
+        assertTrue(content.contains("320 m walk"))
+        assertTrue(content.contains("4 min walk"))
+    }
+
+    @Test
+    fun `short walking route cannot report in range when direct distance is outside`() {
+        val content = ArrivalTrackingNotifications.ongoingContent(
+            destination = TrackedDestination(
+                alert = PokemonAlert(name = "Other", latitude = 49.86, longitude = 8.65),
+                radiusMeters = 80,
+                startedAtMillis = 1_000L
+            ),
+            distanceMeters = 110f,
+            walkingRoute = WalkingRouteInfo(distanceMeters = 50, durationSeconds = 60),
+            inRange = false,
+            waitingForPreciseLocation = false
+        )
+
+        assertTrue(!content.contains("In range"))
+        assertTrue(content.contains("Range at 80 m direct"))
+        assertTrue(content.contains("50 m walk"))
+    }
+
+    @Test
+    fun `missing walking route is labeled as direct distance`() {
+        val content = ArrivalTrackingNotifications.ongoingContent(
+            destination = TrackedDestination(
+                alert = PokemonAlert(name = "Other", latitude = 49.86, longitude = 8.65),
+                radiusMeters = 40,
+                startedAtMillis = 1_000L
+            ),
+            distanceMeters = 110f,
+            walkingRoute = null,
+            inRange = false,
+            waitingForPreciseLocation = false
+        )
+
+        assertTrue(content.contains("110 m direct"))
+        assertTrue(!content.contains("min walk"))
     }
 
     @Test

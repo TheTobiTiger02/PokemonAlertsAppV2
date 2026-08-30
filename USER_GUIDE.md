@@ -33,9 +33,24 @@ When notifications are enabled, you can control:
 
 ### Quiet Hours
 
-- Toggle **Quiet Hours** to enable/disable
-- Default: 10 PM to 7 AM (no notifications during this time)
-- Prevents interruptions while you sleep!
+- Toggle **Quiet hours** to enable or disable the standing nightly window
+- Tap **From** and **To** to set the times; the default is 22:00 to 07:00
+- A window that runs past midnight is handled correctly
+- Separate from **Silence Notifications**, which is a one-off "quiet for the next N hours"
+  timer. Either can be on without the other.
+
+## 🚶 I’m going and raid arrival
+
+- **I’m going** tracks one active destination with precise location updates.
+- Gyms and PokéStops use an 80 m arrival radius; the configurable Settings radius applies
+  to other alert locations.
+- At a raid, the first trustworthy in-range fix replaces the journey notification with a raid
+  Live Update, so the normal and weather-boosted hundo CPs appear immediately.
+- Expand the raid Live Update for a numbered counter list; the boss image remains its artwork
+  because Android's promoted ongoing surface cannot render custom per-counter image rows. Tap
+  it for the full counters screen and a compact **Copy for GO** query grouped by unique species,
+  all six CPs, fast moves, and charged moves. Dismiss removes the raid card without restarting
+  the journey.
 
 ## 🏠 Using the Widget
 
@@ -143,8 +158,11 @@ These features are on the roadmap:
 - Advanced filtering options
 - Export alert history
 - Alert sharing with friends
-- Dark/light theme toggle
 - More widget size options
+
+Already shipped since this list was written: a dark/light theme toggle (Settings →
+Appearance), quiet hours with configurable start and end times, saved filter presets,
+travel-time filtering, offline map tiles, and settings backup and restore.
 
 ---
 

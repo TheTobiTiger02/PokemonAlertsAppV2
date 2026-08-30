@@ -44,7 +44,7 @@
                 android:textStyle="bold"
                 android:textSize="14sp"
                 android:textColor="@color/widget_on_surface"
-                android:maxLines="1"
+                android:maxLines="2"
                 android:ellipsize="end" />
         </RelativeLayout>
 
