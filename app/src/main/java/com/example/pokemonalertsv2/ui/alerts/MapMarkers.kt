@@ -790,6 +790,12 @@ internal val AREA_CENTRES: Map<String, Pair<Double, Double>> = mapOf(
     "Darmstadt" to (DARMSTADT_LATITUDE to DARMSTADT_LONGITUDE)
 )
 
+/** The scanned areas, in picker order. Single source for onboarding, settings and history. */
+val SCANNED_AREAS: List<String> = AREA_CENTRES.keys.toList()
+
+/** [SCANNED_AREAS] prefixed with the "no area filter" option. */
+val AREA_FILTER_OPTIONS: List<String> = listOf("All") + SCANNED_AREAS
+
 private const val AREA_RADIUS_METERS = 15_000.0
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 

@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Queried directly by the Pokebattler offline-cache interceptor; not relying on a
+         merged-in permission from another library. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -36,7 +39,7 @@
         tools:targetApi="31">
         <activity
             android:name=".ui.alerts.AlertDetailActivity"
-            android:exported="true"
+            android:exported="false"
             android:supportsPictureInPicture="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.PokemonAlertsV2"
@@ -58,6 +61,11 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".MainActivity" />
         </activity>
+        <activity
+            android:name=".ui.settings.PokeGenieRosterActivity"
+            android:exported="false"
+            android:label="Imported Pokémon"
+            android:theme="@style/Theme.PokemonAlertsV2" />
         <activity
             android:name=".ui.godex.GoDexLoginActivity"
             android:exported="false"
@@ -157,9 +165,12 @@
             </intent-filter>
         </activity>
 
+        <!-- exported=false: APPWIDGET_UPDATE and the exact-alarm broadcast come from the
+             system (which bypasses the exported check), and every other action arrives via
+             the widget's own PendingIntents. Custom actions stay unreachable to other apps. -->
         <receiver
             android:name=".widget.AlertsWidgetProvider"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/widget_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -189,7 +200,7 @@
 
         <receiver
             android:name=".widget.NearbyRadarWidgetProvider"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/widget_radar_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

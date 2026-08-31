@@ -183,6 +183,54 @@ class PokebattlerMapperTest {
     }
 
     @Test
+    fun `saturated capacity summary without defenders is not a ranking`() {
+        // Captured from a real "Ranking capacity is busy" answer: HTTP 200, the boss block
+        // with per-moveset totals, but every defenders list empty. It must read as
+        // "no data" so it is never cached as a valid empty ranking.
+        val summary = PokebattlerCountersResponse(
+            attackers = listOf(
+                PbAttackerBlock(
+                    pokemonId = "MALAMAR_MEGA",
+                    cp = 54281,
+                    boss = "RAID_LEVEL_MEGA",
+                    byMove = listOf(
+                        PbMoveset("PECK_FAST", "PSYBEAM"),
+                        PbMoveset("PECK_FAST", "SLUDGE_WAVE")
+                    )
+                )
+            )
+        )
+        assertEquals(false, summary.hasRankingData())
+        assertNull(summary.toPayload(PokebattlerSort.ESTIMATOR))
+    }
+
+    @Test
+    fun `empty exact moveset falls back to the ranked random move`() {
+        // Captured live: byMove blocks carry only moveset summaries while randomMove holds
+        // the actual ranking, so an exact moveset match with no defenders must not shadow it.
+        val ranking = PokebattlerCountersResponse(
+            attackers = listOf(
+                PbAttackerBlock(
+                    pokemonId = "MALAMAR_MEGA",
+                    cp = 54281,
+                    boss = "RAID_LEVEL_MEGA",
+                    randomMove = PbMoveset("CONFUSION_FAST", "FOCUS_BLAST", listOf(defender)),
+                    byMove = listOf(PbMoveset("PECK_FAST", "PSYBEAM"))
+                )
+            )
+        )
+        assertEquals(true, ranking.hasRankingData())
+
+        val payload = ranking.toPayload(
+            PokebattlerSort.ESTIMATOR,
+            RaidBossMoveset("PECK_FAST", "PSYBEAM")
+        )!!
+        assertEquals(1, payload.counters.size)
+        assertEquals("CONFUSION_FAST", payload.bossMove1)
+        assertEquals("FOCUS_BLAST", payload.bossMove2)
+    }
+
+    @Test
     fun `formats move names`() {
         assertEquals("Shadow Claw", prettifyMoveName("SHADOW_CLAW_FAST"))
         assertEquals("Iron Head", prettifyMoveName("IRON_HEAD"))

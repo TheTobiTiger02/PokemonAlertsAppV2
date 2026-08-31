@@ -16,7 +16,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
             collectionTitle = prefs[TITLE_KEY].orEmpty(),
             lastSuccessfulSyncMillis = prefs[LAST_SYNC_KEY] ?: 0L,
             notificationFilterEnabled = prefs[FILTER_ENABLED_KEY] ?: false,
-            sessionCookies = prefs[COOKIES_KEY].orEmpty(),
+            sessionCookies = GoDexSessionCipher.decrypt(prefs[COOKIES_KEY].orEmpty()),
             writeBackUrl = prefs[WRITE_BACK_URL_KEY].orEmpty(),
             sessionState = resolveGoDexSessionState(
                 storedName = prefs[SESSION_STATE_KEY],
@@ -38,7 +38,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
 
     suspend fun saveSessionCookies(cookies: String) {
         dataStore.edit { prefs ->
-            prefs[COOKIES_KEY] = cookies
+            prefs[COOKIES_KEY] = GoDexSessionCipher.encrypt(cookies)
             if (cookies.isBlank()) {
                 prefs[SESSION_STATE_KEY] = GoDexSessionState.NONE.name
                 prefs.remove(LAST_WRITE_ERROR_KEY)
@@ -48,7 +48,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
 
     suspend fun saveAuthenticatedSession(cookies: String, writeBackUrl: String) {
         dataStore.edit { prefs ->
-            prefs[COOKIES_KEY] = cookies
+            prefs[COOKIES_KEY] = GoDexSessionCipher.encrypt(cookies)
             prefs[WRITE_BACK_URL_KEY] = writeBackUrl
             prefs[URL_KEY] = writeBackUrl
             prefs[SESSION_STATE_KEY] = GoDexSessionState.AUTHENTICATED.name

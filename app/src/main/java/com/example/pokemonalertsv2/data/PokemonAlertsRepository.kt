@@ -13,6 +13,7 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.LinkedHashSet
 
 class PokemonAlertsRepository @VisibleForTesting internal constructor(
@@ -52,7 +53,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             if (!sameCachedAlerts(alertDao.getAllAlerts(), remoteEntities)) {
                 alertDao.replaceAll(remoteEntities)
             }
-            clearExpiredAlerts()
+            clearExpiredAlertsLocked()
             remoteAlerts
         } finally {
             fetchMutex.unlock()
@@ -66,17 +67,21 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         return service.getCurrentWeather(normalizedArea)
     }
 
-    suspend fun upsertAlert(alert: PokemonAlert) {
-        processIncomingAlert(alert)
-    }
-
     /**
      * Stores a pushed alert. Weather changes remove their affected active alerts
      * in the same Room transaction as the weather alert upsert.
      *
+     * Serialized with [fetchAlerts] on [fetchMutex]: a sync's read-then-replaceAll
+     * must never run between this method's read of the cache and its write, or the
+     * freshly pushed alert would be wiped.
+     *
      * @return unique IDs removed from the active cache.
      */
-    suspend fun processIncomingAlert(alert: PokemonAlert): Set<String> {
+    suspend fun processIncomingAlert(alert: PokemonAlert): Set<String> = fetchMutex.withLock {
+        processIncomingAlertLocked(alert)
+    }
+
+    private suspend fun processIncomingAlertLocked(alert: PokemonAlert): Set<String> {
         if (alert.isInvalidated) {
             alertDao.deleteAlert(alert.uniqueId, alert.id)
             return emptySet()
@@ -163,10 +168,14 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     }
     
     /**
-     * Clears expired alerts from the database.
-     * Should be called periodically.
+     * Clears expired alerts from the database. Serialized on [fetchMutex] so a
+     * concurrent push or sync cannot be wiped by the read-then-replace below.
      */
     suspend fun clearExpiredAlerts(nowMillis: Long = System.currentTimeMillis()) {
+        fetchMutex.withLock { clearExpiredAlertsLocked(nowMillis) }
+    }
+
+    private suspend fun clearExpiredAlertsLocked(nowMillis: Long = System.currentTimeMillis()) {
         val cachedAlerts = alertDao.getAllAlerts()
         val activeAlerts = cachedAlerts.filter { entity ->
             val endMillis = TimeUtils.parseEndTimeToMillis(entity.endTime)
@@ -177,20 +186,30 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         }
     }
 
+    /**
+     * Returns alerts not yet marked as seen. Guarded by [seenMutex] together with
+     * [markAlertsAsSeen]: both are read-modify-write cycles over the same DataStore
+     * set, and the FCM path and poll worker can run concurrently on different
+     * repository instances.
+     */
     suspend fun detectNewAlerts(alerts: List<PokemonAlert>): List<PokemonAlert> {
         if (alerts.isEmpty()) return emptyList()
-        val seenIds = preferences.getSeenAlertIds()
-        return alerts.filter { alert -> alert.seenKeys().none { it in seenIds } }
+        return seenMutex.withLock {
+            val seenIds = preferences.getSeenAlertIds()
+            alerts.filter { alert -> alert.seenKeys().none { it in seenIds } }
+        }
     }
 
     suspend fun markAlertsAsSeen(alerts: Collection<PokemonAlert>) {
         if (alerts.isEmpty()) return
-        val current = preferences.getSeenAlertIds()
-        val updated = LinkedHashSet<String>(current.size + alerts.size).apply {
-            addAll(current)
-            alerts.forEach { alert -> addAll(alert.seenKeys()) }
+        seenMutex.withLock {
+            val current = preferences.getSeenAlertIds()
+            val updated = LinkedHashSet<String>(current.size + alerts.size).apply {
+                addAll(current)
+                alerts.forEach { alert -> addAll(alert.seenKeys()) }
+            }
+            preferences.updateSeenAlertIds(updated)
         }
-        preferences.updateSeenAlertIds(updated)
     }
 
     fun observeSeenAlerts(): Flow<Set<String>> = preferences.seenAlertIds
@@ -218,6 +237,10 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     companion object {
         private val fetchMutex = Mutex()
+
+        // Serializes seen-set read-modify-write across repository instances
+        // (FCM worker, poll worker, and UI each build their own instance).
+        private val seenMutex = Mutex()
 
         internal fun PokemonAlert.seenKeys(): Set<String> {
             return buildSet {

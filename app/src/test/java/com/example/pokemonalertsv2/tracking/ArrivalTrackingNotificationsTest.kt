@@ -9,6 +9,7 @@ import org.junit.Test
 class ArrivalTrackingNotificationsTest {
     @Test
     fun `encounter arrival includes visibility cp iv form and remaining time`() {
+        val now = 1_000_000_000_000L
         val body = ArrivalTrackingNotifications.buildArrivalBody(
             alert = PokemonAlert(
                 name = "Hundo Pikachu",
@@ -19,10 +20,10 @@ class ArrivalTrackingNotificationsTest {
                 iv = "15/15/15",
                 latitude = 49.86,
                 longitude = 8.65,
-                endTime = "1060000"
+                endTime = (now + 60_000L).toString() // 1m 00s out
             ),
             radiusMeters = 40,
-            nowMillis = 1_000_000L
+            nowMillis = now
         )
 
         assertTrue(body.contains("visible in Pok\u00e9mon GO"))
@@ -216,7 +217,7 @@ class ArrivalTrackingNotificationsTest {
                 name = "Hundo Pikachu",
                 pokemon = "Pikachu",
                 cp = 938,
-                endTime = "1060000"
+                endTime = "1000060000000"
             ),
             content = "120 m away \u2022 Arrival at 40 m",
             remaining = " \u2022 1m 00s left"

@@ -7,9 +7,11 @@ import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.HistoryAlertEntity
 import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -108,7 +110,7 @@ class PokemonAlertsRepositoryTest {
 
     @Test
     fun fetchAlerts_prunesExpiredCacheWhenFetchedDataIsUnchanged() = runTest {
-        val expired = sampleAlert("Expired", endTime = "1000")
+        val expired = sampleAlert("Expired", endTime = "1500000000000")
         service.alerts = listOf(expired)
         dao.alerts.value = listOf(expired.toEntity().copy(createdAt = 123L))
 
@@ -121,12 +123,12 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
-    fun upsertAlert_insertsSingleAlertWithoutClearingCache() = runTest {
+    fun processIncomingAlert_insertsSingleAlertWithoutClearingCache() = runTest {
         val existing = sampleAlert("Existing", id = 1)
         dao.alerts.value = listOf(existing.toEntity())
         val pushed = sampleAlert("Pushed", id = 6215)
 
-        repository.upsertAlert(pushed)
+        repository.processIncomingAlert(pushed)
 
         assertEquals(
             listOf(existing.uniqueId, pushed.uniqueId),
@@ -152,15 +154,41 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
-    fun upsertAlert_keepsPreviousAlertWithSameNameAndEndTimeButDifferentId() = runTest {
+    fun processIncomingAlert_keepsPreviousAlertWithSameNameAndEndTimeButDifferentId() = runTest {
         val existing = sampleAlert("Quest Alert", endTime = "", id = 101)
         dao.alerts.value = listOf(existing.toEntity())
         val pushed = sampleAlert("Quest Alert", endTime = "", id = 102)
 
-        repository.upsertAlert(pushed)
+        repository.processIncomingAlert(pushed)
 
         assertEquals(
             setOf(existing.uniqueId, pushed.uniqueId),
+            dao.alerts.value.map { it.uniqueId }.toSet()
+        )
+    }
+
+    @Test
+    fun processIncomingAlert_survivesConcurrentFetchReplaceAll() = runTest {
+        val stale = sampleAlert("Stale", id = 1)
+        dao.alerts.value = listOf(stale.toEntity())
+        service.alerts = listOf(sampleAlert("Fresh", id = 2))
+        val gate = CompletableDeferred<Unit>()
+        service.fetchGate = gate
+
+        val fetchJob = launch { repository.fetchAlerts() }
+        testScheduler.runCurrent() // fetch owns fetchMutex and parks on the gate
+
+        val pushed = sampleAlert("Pushed", id = 3)
+        val processJob = launch { repository.processIncomingAlert(pushed) }
+        testScheduler.runCurrent() // process parks on fetchMutex behind the fetch
+
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+        fetchJob.join()
+        processJob.join()
+
+        assertEquals(
+            setOf("server-2", "server-3"),
             dao.alerts.value.map { it.uniqueId }.toSet()
         )
     }
@@ -308,7 +336,7 @@ class PokemonAlertsRepositoryTest {
 
     @Test
     fun clearExpiredAlerts_removesExpiredAndKeepsUnknownEndTimes() = runTest {
-        val expired = sampleAlert("Expired", endTime = "1000")
+        val expired = sampleAlert("Expired", endTime = "1500000000000")
         val active = sampleAlert("Active", endTime = "3000")
         val invalid = sampleAlert("Invalid", endTime = "not-a-date")
         val missing = sampleAlert("Missing", endTime = "")
@@ -319,7 +347,7 @@ class PokemonAlertsRepositoryTest {
             missing.toEntity()
         )
 
-        repository.clearExpiredAlerts(nowMillis = 2000)
+        repository.clearExpiredAlerts(nowMillis = 2000000000000)
 
         assertEquals(
             listOf(active.uniqueId, invalid.uniqueId, missing.uniqueId),
@@ -327,6 +355,18 @@ class PokemonAlertsRepositoryTest {
         )
         assertEquals(1, dao.clearCalls)
         assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun clearExpiredAlerts_treatsBogusNumericEndTimesAsUnknownNotExpired() = runTest {
+        // A yyyymmdd-style number must not be read as an epoch in 1970.
+        val bogus = sampleAlert("Bogus", endTime = "20251231")
+        dao.alerts.value = listOf(bogus.toEntity())
+
+        repository.clearExpiredAlerts(nowMillis = 2000000000000)
+
+        assertEquals(listOf(bogus.uniqueId), dao.alerts.value.map { it.uniqueId })
+        assertEquals(0, dao.clearCalls)
     }
 
     @Test
@@ -514,6 +554,7 @@ class PokemonAlertsRepositoryTest {
 
     private class FakePokemonAlertsService : PokemonAlertsService {
         var alerts: List<PokemonAlert> = emptyList()
+        var fetchGate: CompletableDeferred<Unit>? = null
         var historyResponse: HistoryResponse = HistoryResponse(data = emptyList())
         var totalStatsResponse: TotalStatsResponse = TotalStatsResponse()
         var currentWeatherResponse: CurrentWeatherResponse = CurrentWeatherResponse()
@@ -521,7 +562,10 @@ class PokemonAlertsRepositoryTest {
         val totalStatsRequests = mutableListOf<String?>()
         val currentWeatherRequests = mutableListOf<String>()
 
-        override suspend fun getPokemonAlerts(): List<PokemonAlert> = alerts
+        override suspend fun getPokemonAlerts(): List<PokemonAlert> {
+            fetchGate?.await()
+            return alerts
+        }
         override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
             historyResponse
         override suspend fun getHistoryPaged(
@@ -777,10 +821,6 @@ class PokemonAlertsRepositoryTest {
             alerts.value = alerts.value.filterNot {
                 it.uniqueId == uniqueId || (serverId != null && it.id == serverId)
             }
-        }
-
-        override suspend fun deleteExpired(currentTime: String) {
-            // No-op for test
         }
     }
 }

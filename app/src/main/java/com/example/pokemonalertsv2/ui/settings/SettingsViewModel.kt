@@ -146,6 +146,9 @@ class SettingsViewModel(
         buildString {
             append("Imported ${summary.importedCount} Pokémon")
             if (summary.skippedCount > 0) append(", skipped ${summary.skippedCount} rows")
+            if (summary.synthesizedBaseCount > 0) {
+                append(", ${summary.synthesizedBaseCount} base forms added for megas")
+            }
             append(".")
             val missed = summary.importedCount - summary.matchedCount
             if (missed > 0) {

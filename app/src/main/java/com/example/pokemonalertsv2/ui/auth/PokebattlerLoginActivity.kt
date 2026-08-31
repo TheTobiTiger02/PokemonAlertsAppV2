@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.auth
 
+import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -12,16 +13,25 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,10 +41,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.lifecycleScope
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.counters.PokebattlerAuthRepository
 import com.example.pokemonalertsv2.data.counters.PokebattlerLoginProvider
 import com.example.pokemonalertsv2.data.counters.PokebattlerLoginUrls
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import com.example.pokemonalertsv2.util.GoogleAccountLoginHint
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -49,7 +64,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * whichever of those Pokebattler actually uses, and a false positive costs one failed call.
  *
  * The user types their provider credentials into the provider's own page inside this
- * WebView; the app neither reads nor stores them.
+ * WebView; the app neither reads nor stores them. For Google the typed part is only the
+ * password: the system account chooser supplies the account, and it reaches Google's
+ * sign-in page as the OAuth `login_hint` ([GoogleAccountLoginHint]).
  */
 class PokebattlerLoginActivity : ComponentActivity() {
 
@@ -65,9 +82,46 @@ class PokebattlerLoginActivity : ComponentActivity() {
             ?: PokebattlerLoginProvider.GOOGLE
 
         setContent {
-            PokemonAlertsV2Theme {
+            // Every other activity resolves the user's app-level theme preference; without
+            // this the login screen stayed light in a dark app.
+            val themeMode by PokemonAlertsRepository.create(this)
+                .observeThemeMode()
+                .collectAsStateWithLifecycle(initialValue = 0)
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 var loading by remember { mutableStateOf(true) }
                 var status by remember { mutableStateOf<String?>(null) }
+                // The Google account picked from the device, applied to Google's sign-in
+                // page as login_hint. Session-only on purpose — the app does not store the
+                // email either, and the system picker makes re-picking one tap.
+                var googleAccount by remember { mutableStateOf<String?>(null) }
+                var webView by remember { mutableStateOf<WebView?>(null) }
+
+                val accountPickerLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult()
+                ) { result ->
+                    val email = result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
+                    if (!email.isNullOrBlank() && email != googleAccount) {
+                        googleAccount = email
+                        // Restart the hand-off so Google sees the hint from the first hop.
+                        webView?.loadUrl(PokebattlerLoginUrls.loginUrl(provider))
+                    }
+                }
+                // The chooser intent is "deprecated" in favor of Credential Manager, but
+                // Credential Manager only signs into the app's own OAuth client — picking
+                // an account for a third-party website's web login has no newer API, and
+                // this one needs no permissions because the user consents by choosing.
+                @Suppress("DEPRECATION")
+                fun pickGoogleAccount() {
+                    runCatching {
+                        AccountManager.newChooseAccountIntent(
+                            null, null, arrayOf("com.google"), true, null, null, null, null
+                        )
+                    }.onSuccess(accountPickerLauncher::launch)
+                        .onFailure { status = "Couldn't open the account picker." }
+                }
+
                 Surface(modifier = Modifier.fillMaxSize()) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         if (loading) {
@@ -81,6 +135,24 @@ class PokebattlerLoginActivity : ComponentActivity() {
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                             )
                         }
+                        if (provider == PokebattlerLoginProvider.GOOGLE) {
+                            TextButton(onClick = { pickGoogleAccount() }) {
+                                Icon(Icons.Filled.AccountCircle, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    if (googleAccount == null) "Choose Google account"
+                                    else "Change Google account"
+                                )
+                            }
+                            googleAccount?.let { email ->
+                                Text(
+                                    text = email,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
+                        }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
@@ -88,9 +160,10 @@ class PokebattlerLoginActivity : ComponentActivity() {
                                     buildWebView(
                                         context = context,
                                         provider = provider,
+                                        accountEmail = { googleAccount },
                                         onLoadingChanged = { loading = it },
                                         onError = { status = it }
-                                    )
+                                    ).also { webView = it }
                                 }
                             )
                             if (loading) CircularProgressIndicator()
@@ -104,6 +177,7 @@ class PokebattlerLoginActivity : ComponentActivity() {
     private fun buildWebView(
         context: Context,
         provider: PokebattlerLoginProvider,
+        accountEmail: () -> String?,
         onLoadingChanged: (Boolean) -> Unit,
         onError: (String?) -> Unit
     ): WebView = WebView(context).apply {
@@ -118,12 +192,16 @@ class PokebattlerLoginActivity : ComponentActivity() {
                 request: WebResourceRequest
             ): Boolean {
                 considerUrl(request.url.toString())
+                rewriteWithHint(view, request.url.toString())
                 return false
             }
 
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                 onLoadingChanged(true)
-                url?.let(::considerUrl)
+                url?.let {
+                    considerUrl(it)
+                    rewriteWithHint(view, it)
+                }
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -135,6 +213,16 @@ class PokebattlerLoginActivity : ComponentActivity() {
                 if (!onPokebattler) return
                 harvestFromPage(view)
                 harvestFromCookies(url, onError)
+            }
+
+            /**
+             * The hand-off onto accounts.google.com is a server-side redirect, which never
+             * passes through shouldOverrideUrlLoading — so the picked account has to be
+             * applied here as well, just as the sign-in page starts loading.
+             */
+            fun rewriteWithHint(view: WebView, url: String) {
+                val rewritten = GoogleAccountLoginHint.apply(url, accountEmail())
+                if (rewritten != null && !completed.get()) view.loadUrl(rewritten)
             }
         }
         loadUrl(PokebattlerLoginUrls.loginUrl(provider))

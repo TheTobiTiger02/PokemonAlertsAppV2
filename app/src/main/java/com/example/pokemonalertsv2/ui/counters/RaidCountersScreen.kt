@@ -542,7 +542,13 @@ private fun PersonalNotices(state: RaidCountersUiState, personal: PersonalRankin
         state.personalProgress?.takeIf { it.serverCandidates > 0 }?.let { progress ->
             Text(
                 "Matched ${personal.ranked.size} of your Pokémon to Pokébattler's top " +
-                    "${progress.serverCandidates} counters for this boss · level 40+ only",
+                    "${progress.serverCandidates} counters for this boss · level 40+ only · " +
+                    when (state.personalMovesMode) {
+                        // The mode lives in the setup sheet, so a roster silently scored on
+                        // ideal movesets is indistinguishable from a ranking bug. Name it.
+                        PersonalMovesMode.CURRENT -> "scored on your current moves"
+                        PersonalMovesMode.BEST_POTENTIAL -> "scored on best potential moves"
+                    },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

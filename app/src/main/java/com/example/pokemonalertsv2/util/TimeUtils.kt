@@ -9,9 +9,22 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 object TimeUtils {
+    // Bare numbers below these bounds are not real timestamps (e.g. a date encoded as
+    // yyyymmdd would land in 1970 and read as instantly expired), so reject them.
+    private const val MIN_EPOCH_MILLIS = 946_684_800_000L   // 2000-01-01
+    private const val MAX_EPOCH_SECONDS = 32_503_680_000L    // 3000-01-01
+
     private val parsers: List<(String) -> Long?> = listOf(
-        // Epoch millis as number
-        { s -> s.toLongOrNull() },
+        // Epoch millis (or seconds, scaled up) as a bare number
+        { s ->
+            s.toLongOrNull()?.let { n ->
+                when {
+                    n >= MIN_EPOCH_MILLIS -> n
+                    n in MIN_EPOCH_MILLIS / 1000..MAX_EPOCH_SECONDS -> n * 1000
+                    else -> null
+                }
+            }
+        },
         // ISO_INSTANT (e.g., 2025-10-10T12:34:56Z)
         { s -> runCatching { Instant.parse(s).toEpochMilli() }.getOrNull() },
         // ISO_OFFSET_DATE_TIME (e.g., 2025-10-10T12:34:56+02:00)

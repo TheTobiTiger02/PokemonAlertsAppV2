@@ -98,6 +98,7 @@ internal fun PbDefender.toPersonalCounter(
     selectedMove: PbByMove,
     evaluatedLevel: Double,
     movesetAssumed: Boolean,
+    movesetUnlisted: Boolean = false,
     rank: Int = 0
 ): PersonalCounter {
     val fastId = selectedMove.move1.orEmpty()
@@ -113,6 +114,7 @@ internal fun PbDefender.toPersonalCounter(
         fastMove = syntheticFastMove(fastId),
         chargedMove = syntheticChargedMove(chargedId),
         movesetAssumed = movesetAssumed,
+        movesetUnlisted = movesetUnlisted,
         dps = if (time > 0.0) tdo / time else 0.0,
         tdo = tdo,
         rating = metrics.overallPercent ?: 0.0,
@@ -162,6 +164,138 @@ internal fun RaidCounter.toPersonalCounterFromPokeBox(): PersonalCounter {
         rankingIgnoresIv = false,
         metrics = metrics
     )
+}
+
+// -- Personal ranking, extracted from the repository so it can be tested
+// against a captured response without standing up Retrofit, Room and DataStore.
+
+internal fun rankPersonalLevel(
+    level: Double,
+    owned: List<OwnedPokemon>,
+    response: PokebattlerCountersResponse,
+    movesMode: PersonalMovesMode,
+    metric: CounterMetric,
+    bossMoveset: RaidBossMoveset?
+): List<PersonalCounter> {
+    val block = response.attackers.firstOrNull() ?: return emptyList()
+    val moveset = selectPersonalBossMoveset(block, bossMoveset) ?: return emptyList()
+    val defenders = moveset.defenders.asReversed()
+    return owned.mapNotNull { mine ->
+        val defender = defenders.firstOrNull { it.matches(mine) } ?: return@mapNotNull null
+        val selected = selectOwnedMoves(defender, mine, movesMode, metric) ?: return@mapNotNull null
+        defender.toPersonalCounter(
+            owned = mine,
+            selectedMove = selected.move,
+            evaluatedLevel = level,
+            movesetAssumed = selected.assumed,
+            movesetUnlisted = selected.unlisted
+        )
+    }
+}
+
+/** The moveset a copy is scored on, and why it is that one. */
+internal data class OwnedMoveChoice(
+    val move: PbByMove,
+    val assumed: Boolean,
+    val unlisted: Boolean = false
+)
+
+internal fun selectOwnedMoves(
+    defender: PbDefender,
+    mine: OwnedPokemon,
+    mode: PersonalMovesMode,
+    metric: CounterMetric
+): OwnedMoveChoice? {
+    val moves = defender.byMove.filter { it.result != null }
+    if (moves.isEmpty()) return null
+    val fast = mine.quickMove
+    val charges = listOfNotNull(mine.chargeMove, mine.chargeMove2)
+    if (mode == PersonalMovesMode.CURRENT && (fast.isNullOrBlank() || charges.isEmpty())) return null
+
+    val constrained = moves.filter { candidate ->
+        (fast == null || personalMovesMatch(candidate.move1, fast)) &&
+            (charges.isEmpty() || charges.any { personalMovesMatch(candidate.move2, it) })
+    }
+    // A response lists only the ten best movesets per attacker, so a recorded set can be
+    // missing from it entirely. Scoring such a copy at the worst listed moveset understates
+    // it -- the real one is by definition worse than all ten -- which is the right way to
+    // be wrong. Dropping the row instead made the Pokemon vanish with no explanation.
+    if (mode == PersonalMovesMode.CURRENT && constrained.isEmpty()) {
+        val floor = worstPersonalMove(moves, metric) ?: return null
+        return OwnedMoveChoice(move = floor, assumed = false, unlisted = true)
+    }
+    val pool = if (mode == PersonalMovesMode.CURRENT) constrained else constrained.ifEmpty { moves }
+    val selected = selectPersonalMove(pool, metric) ?: return null
+    val assumed = mode == PersonalMovesMode.BEST_POTENTIAL &&
+        (fast.isNullOrBlank() || charges.isEmpty() ||
+            !personalMovesMatch(selected.move1, fast) ||
+            charges.none { personalMovesMatch(selected.move2, it) })
+    return OwnedMoveChoice(move = selected, assumed = assumed)
+}
+
+/** The floor of [moves] for [metric]: the exact inverse of [selectPersonalMove]. */
+internal fun worstPersonalMove(moves: List<PbByMove>, metric: CounterMetric): PbByMove? =
+    when (metric) {
+        CounterMetric.ESTIMATOR, CounterMetric.TIME -> moves.maxByOrNull {
+            pbMetric(it.result, metric) ?: Double.MIN_VALUE
+        }
+        CounterMetric.OVERALL, CounterMetric.POWER, CounterMetric.TDO -> moves.minByOrNull {
+            pbMetric(it.result, metric) ?: Double.MAX_VALUE
+        }
+    }
+
+internal fun selectPersonalMove(moves: List<PbByMove>, metric: CounterMetric): PbByMove? =
+    when (metric) {
+        CounterMetric.ESTIMATOR, CounterMetric.TIME -> moves.minByOrNull {
+            pbMetric(it.result, metric) ?: Double.MAX_VALUE
+        }
+        CounterMetric.OVERALL, CounterMetric.POWER, CounterMetric.TDO -> moves.maxByOrNull {
+            pbMetric(it.result, metric) ?: Double.MIN_VALUE
+        }
+    }
+
+internal fun personalComparator(metric: CounterMetric): Comparator<PersonalCounter> =
+    Comparator { left, right ->
+        val l = left.metrics.valueFor(metric) ?: Double.MAX_VALUE
+        val r = right.metrics.valueFor(metric) ?: Double.MAX_VALUE
+        val primary = when (metric) {
+            CounterMetric.ESTIMATOR, CounterMetric.TIME -> l.compareTo(r)
+            CounterMetric.OVERALL, CounterMetric.POWER, CounterMetric.TDO -> r.compareTo(l)
+        }
+        if (primary != 0) primary else {
+            (right.evaluatedLevel ?: 0.0).compareTo(left.evaluatedLevel ?: 0.0)
+        }
+    }
+
+internal fun PbDefender.matches(mine: OwnedPokemon): Boolean {
+    val pbShadow = pokemonId.contains("SHADOW", ignoreCase = true)
+    if (pbShadow != mine.shadow) return false
+    return mine.matchKeys.any { key ->
+        key.equals(pokemonId, ignoreCase = true) ||
+            PokebattlerNameNormalizer.looseKey(key) == PokebattlerNameNormalizer.looseKey(pokemonId)
+    }
+}
+
+internal fun selectPersonalBossMoveset(block: PbAttackerBlock, requested: RaidBossMoveset?): PbMoveset? {
+    // Same saturation shape as the by-level path: per-moveset blocks can come back
+    // without defenders while `randomMove` still carries the overall ranking.
+    fun ranked(vararg candidates: PbMoveset?): PbMoveset? =
+        candidates.firstOrNull { it?.defenders?.isNotEmpty() == true }
+    if (requested == null || requested.isRandom) {
+        return ranked(block.randomMove, block.byMove.firstOrNull())
+            ?: block.randomMove
+            ?: block.byMove.firstOrNull()
+    }
+    val exact = block.byMove.firstOrNull {
+        personalMovesMatch(it.move1, requested.move1) && personalMovesMatch(it.move2, requested.move2)
+    }
+    return ranked(
+        exact,
+        block.randomMove,
+        block.byMove.firstOrNull { it.defenders.isNotEmpty() }
+    ) ?: exact
+        ?: block.randomMove
+        ?: block.byMove.firstOrNull()
 }
 
 // ── Level bucketing ───────────────────────────────────────────────────────────

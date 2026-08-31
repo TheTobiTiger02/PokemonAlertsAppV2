@@ -22,9 +22,6 @@ abstract class AlertDao {
 
     @Query("DELETE FROM alerts")
     abstract suspend fun clearAll()
-    
-    @Query("DELETE FROM alerts WHERE endTime < :currentTime")
-    abstract suspend fun deleteExpired(currentTime: String)
 
     @Query("DELETE FROM alerts WHERE uniqueId IN (:uniqueIds)")
     abstract suspend fun deleteByUniqueIds(uniqueIds: List<String>)

@@ -104,11 +104,11 @@ class Material3ComposeTest {
 
     @Test
     fun mapCountdownAdvancesEveryConsecutiveSecond() {
-        val now = mutableStateOf(1_000L)
+        val now = mutableStateOf(1_756_000_000_000L)
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 MapAlertCountdown(
-                    endTime = "6000",
+                    endTime = (1_756_000_005_000L).toString(),
                     categoryAccent = androidx.compose.ui.graphics.Color(0xFF00639A),
                     countdownClock = now
                 )
@@ -116,9 +116,9 @@ class Material3ComposeTest {
         }
 
         composeRule.onNodeWithText("Ends in 5s").assertExists()
-        composeRule.runOnIdle { now.value = 2_000L }
+        composeRule.runOnIdle { now.value = 1_756_000_001_000L }
         composeRule.onNodeWithText("Ends in 4s").assertExists()
-        composeRule.runOnIdle { now.value = 3_000L }
+        composeRule.runOnIdle { now.value = 1_756_000_002_000L }
         composeRule.onNodeWithText("Ends in 3s").assertExists()
     }
 

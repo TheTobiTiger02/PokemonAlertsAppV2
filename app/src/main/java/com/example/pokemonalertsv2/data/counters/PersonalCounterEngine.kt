@@ -23,6 +23,15 @@ data class PersonalCounter(
     val chargedMove: SimMove,
     /** True when the scan had no moveset and the best legal one was assumed. */
     val movesetAssumed: Boolean,
+    /**
+     * True when Pokebattler does not rank the recorded moveset at all.
+     *
+     * A counters response carries at most the ten best movesets per attacker, so a copy
+     * sitting on a genuinely bad set can be absent from all of them. Such a row is scored
+     * at the worst moveset the server *did* return -- a floor, never a flattering guess --
+     * rather than being dropped from the ranking without a word.
+     */
+    val movesetUnlisted: Boolean = false,
     val dps: Double,
     val tdo: Double,
     val rating: Double,

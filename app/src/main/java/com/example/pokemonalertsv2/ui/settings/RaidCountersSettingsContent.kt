@@ -5,6 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AssistChip
@@ -46,6 +48,7 @@ import java.util.Date
  * Split out of `SettingsScreen.kt`, which is already very large, following the same
  * pattern as the GoDex collection screen.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RaidCountersSettingsContent(
     settings: RaidCounterSettings,
@@ -168,14 +171,22 @@ fun RaidCountersSettingsContent(
             )
         }
 
-        Row(
+        // Three buttons no longer fit one line on a narrow screen, and a Row breaks "Clear"
+        // across two lines mid-word rather than wrapping.
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(onClick = { picker.launch(POKE_GENIE_MIME_TYPES) }) {
                 Text(if (settings.pokeGenieCount > 0) "Re-import CSV" else "Import CSV")
             }
             if (settings.pokeGenieCount > 0) {
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(PokeGenieRosterActivity.createIntent(context))
+                    }
+                ) { Text("View roster") }
                 OutlinedButton(onClick = onClearPokeGenie) { Text("Clear") }
             }
         }
@@ -196,6 +207,14 @@ fun RaidCountersSettingsContent(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(candidate.fileName ?: "Poké Genie export")
                     Text("${candidate.summary.importedCount} Pokémon rows are ready to import.")
+                    if (candidate.summary.synthesizedBaseCount > 0) {
+                        Text(
+                            "${candidate.summary.synthesizedBaseCount} base forms were added " +
+                                "for your megas, so both forms show up as counters.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     if (candidate.summary.skippedCount > 0) {
                         Text("${candidate.summary.skippedCount} rows will be skipped.")
                     }

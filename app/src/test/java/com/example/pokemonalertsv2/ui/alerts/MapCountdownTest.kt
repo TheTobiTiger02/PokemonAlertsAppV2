@@ -27,15 +27,18 @@ class MapCountdownTest {
 
     @Test
     fun countdownLabelAdvancesSecondsAndExpires() {
-        val endTime = "313000"
+        // Real epoch millis: the countdown label only cares about the remaining time.
+        val now = 1_756_000_000_000L
+        val endTime = (now + 312_000L).toString() // 5m 12s out
 
-        assertEquals("5m 12s", mapCountdownLabel(endTime, 1_000L))
-        assertEquals("5m 11s", mapCountdownLabel(endTime, 2_000L))
-        assertEquals("Expired", mapCountdownLabel(endTime, 313_000L))
+        assertEquals("5m 12s", mapCountdownLabel(endTime, now))
+        assertEquals("5m 11s", mapCountdownLabel(endTime, now + 1_000L))
+        assertEquals("Expired", mapCountdownLabel(endTime, now + 313_000L))
     }
 
     @Test
     fun countdownAboveOneHourKeepsCompactFormat() {
-        assertEquals("1h 03m", mapCountdownLabel("3805000", 1_000L))
+        val now = 1_756_000_000_000L
+        assertEquals("1h 03m", mapCountdownLabel((now + 3_805_000L).toString(), now))
     }
 }

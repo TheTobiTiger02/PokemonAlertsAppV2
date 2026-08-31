@@ -29,7 +29,7 @@ import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
-import com.example.pokemonalertsv2.util.LocationUtils
+import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
@@ -60,48 +60,58 @@ object AlertNotifier {
     )
 
     fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
-            
-            // Generic channel
-            val name = context.getString(R.string.notification_channel_name)
-            val channelDescription = context.getString(R.string.notification_channel_description)
-            val channel = NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_HIGH).apply {
-                lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-                this.description = channelDescription
-                enableLights(true)
-                lightColor = Color.RED
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(channel)
+        val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
 
-            // Raids channel
-            val raidsChannel = NotificationChannel(CHANNEL_RAIDS, "Raids", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Notifications for Raid Battles"
-                enableLights(true)
-                lightColor = Color.MAGENTA
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(raidsChannel)
-
-            // Spawns channel
-            val spawnsChannel = NotificationChannel(CHANNEL_SPAWNS, "Spawns", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Notifications for Wild Spawns"
-                enableLights(true)
-                lightColor = Color.GREEN
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(spawnsChannel)
-
-            // Quests channel
-            val questsChannel = NotificationChannel(CHANNEL_QUESTS, "Quests", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Notifications for Field Research"
-                enableLights(true)
-                lightColor = Color.CYAN
-                enableVibration(true)
-            }
-            notificationManager.createNotificationChannel(questsChannel)
+        // Generic channel
+        val name = context.getString(R.string.notification_channel_name)
+        val channelDescription = context.getString(R.string.notification_channel_description)
+        val channel = NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_HIGH).apply {
+            lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+            this.description = channelDescription
+            enableLights(true)
+            lightColor = Color.RED
+            enableVibration(true)
         }
+        notificationManager.createNotificationChannel(channel)
+
+        // Raids channel
+        val raidsChannel = NotificationChannel(
+            CHANNEL_RAIDS,
+            context.getString(R.string.notification_channel_raids_name),
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = context.getString(R.string.notification_channel_raids_description)
+            enableLights(true)
+            lightColor = Color.MAGENTA
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(raidsChannel)
+
+        // Spawns channel
+        val spawnsChannel = NotificationChannel(
+            CHANNEL_SPAWNS,
+            context.getString(R.string.notification_channel_spawns_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = context.getString(R.string.notification_channel_spawns_description)
+            enableLights(true)
+            lightColor = Color.GREEN
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(spawnsChannel)
+
+        // Quests channel
+        val questsChannel = NotificationChannel(
+            CHANNEL_QUESTS,
+            context.getString(R.string.notification_channel_quests_name),
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = context.getString(R.string.notification_channel_quests_description)
+            enableLights(true)
+            lightColor = Color.CYAN
+            enableVibration(true)
+        }
+        notificationManager.createNotificationChannel(questsChannel)
     }
 
     suspend fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
@@ -118,7 +128,9 @@ object AlertNotifier {
         
         val notificationManager = NotificationManagerCompat.from(context)
         val imageLoader = PokemonAlertsApplication.imageLoader(context)
-        val userLocation = NotificationLocationCache.get(context)
+        // Shared app-wide source so notifications and widgets compute distances from the
+        // same fix during the same refresh instead of disagreeing.
+        val userLocation = CachedLocationProvider.get(context, timeoutMs = 4000)
         val walkingRoutes = userLocation?.let { location ->
             WalkingRouteRepository.getInstance().getWalkingRoutes(
                 origin = location,
@@ -183,8 +195,7 @@ object AlertNotifier {
             )
             val pendingIntent = PendingIntent.getActivity(
                 context,
-                // Use a stable, unique requestCode per alert to avoid PendingIntent collisions across runs
-                alert.uniqueId.hashCode(),
+                AlertNotificationIds.forAlert(alert.uniqueId),
                 notificationIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
@@ -193,7 +204,7 @@ object AlertNotifier {
             val mapsIntent = Intent(Intent.ACTION_VIEW, alert.googleMapsUri)
             val mapsPendingIntent = PendingIntent.getActivity(
                 context,
-                alert.uniqueId.hashCode() + 1, // Different request code
+                AlertNotificationIds.forAlertAction("directions", alert.uniqueId),
                 mapsIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
@@ -264,13 +275,13 @@ object AlertNotifier {
                 // Quick Action: Dismiss
                 .addAction(
                     R.drawable.ic_poke_notification,
-                    "Dismiss",
+                    context.getString(R.string.notification_action_dismiss),
                     createDismissPendingIntent(context, alert)
                 )
                 // Quick Action: Open in PiP
                 .addAction(
                     R.drawable.ic_pip,
-                    "PiP",
+                    context.getString(R.string.enter_pip_short),
                     createPipPendingIntent(context, alert)
                 )
 
@@ -288,7 +299,7 @@ object AlertNotifier {
             }
 
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                notificationManager.notify(alert.uniqueId.hashCode(), notificationBuilder.build())
+                notificationManager.notify(AlertNotificationIds.forAlert(alert.uniqueId), notificationBuilder.build())
                 postedByChannel.getOrPut(channelId) { mutableListOf() }.add(alert)
             }
         }
@@ -318,7 +329,7 @@ object AlertNotifier {
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) return
 
-        val summaryId = channelId.hashCode()
+        val summaryId = AlertNotificationIds.forSummary(channelId)
         val label = groupLabel(channelId, posted.size)
         val inbox = NotificationCompat.InboxStyle().setBigContentTitle(label)
         posted.take(MAX_SUMMARY_LINES).forEach { alert ->
@@ -330,7 +341,7 @@ object AlertNotifier {
 
         val dismissAll = PendingIntent.getBroadcast(
             context,
-            summaryId,
+            AlertNotificationIds.forSummaryAction("dismiss_all", channelId),
             Intent(context, NotificationActionReceiver::class.java).apply {
                 action = NotificationActionReceiver.ACTION_DISMISS_GROUP
                 putExtra(
@@ -355,12 +366,16 @@ object AlertNotifier {
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,
-                    summaryId,
+                    AlertNotificationIds.forSummaryAction("tap", channelId),
                     MainActivity.createAlertsIntent(context),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
             )
-            .addAction(R.drawable.ic_poke_notification, "Dismiss all", dismissAll)
+            .addAction(
+                R.drawable.ic_poke_notification,
+                context.getString(R.string.notification_action_dismiss_all),
+                dismissAll
+            )
             .build()
 
         notificationManager.notify(summaryId, summary)
@@ -536,73 +551,6 @@ object AlertNotifier {
         }
     }
 
-    private object NotificationLocationCache {
-        private const val STALE_LOCATION_MS = 10 * 60 * 1000L
-
-        @Volatile
-        private var cachedLocation: Location? = null
-
-        @Volatile
-        private var cachedAtMillis: Long = 0L
-
-        /**
-         * Suspending location fetch that actually waits for a fix.
-         * Falls back to FusedLocationProvider's last-known location if a fresh
-         * fix cannot be obtained within the timeout.
-         */
-        suspend fun get(context: Context): Location? {
-            val now = System.currentTimeMillis()
-            // Return cached if still fresh enough
-            cachedLocation?.takeIf { now - cachedAtMillis <= STALE_LOCATION_MS }?.let { return it }
-
-            val appContext = context.applicationContext
-            // Try a fresh location fix with a reasonable timeout
-            val freshLocation = LocationUtils.getCurrentLocationOrNull(
-                context = appContext,
-                timeoutMs = 4000,
-                highAccuracy = false
-            )
-            if (freshLocation != null) {
-                cachedLocation = freshLocation
-                cachedAtMillis = System.currentTimeMillis()
-                return freshLocation
-            }
-
-            // Fall back to last-known location from FusedLocationProvider
-            val lastKnown = getLastKnownLocation(appContext)
-            if (lastKnown != null) {
-                cachedLocation = lastKnown
-                cachedAtMillis = System.currentTimeMillis()
-                return lastKnown
-            }
-
-            return null
-        }
-
-        @android.annotation.SuppressLint("MissingPermission")
-        private suspend fun getLastKnownLocation(context: Context): Location? {
-            if (!hasLocationPermission(context)) return null
-            return withContext(Dispatchers.IO) {
-                runCatching {
-                    val fused = com.google.android.gms.location.LocationServices
-                        .getFusedLocationProviderClient(context)
-                    kotlinx.coroutines.suspendCancellableCoroutine<Location?> { cont ->
-                        fused.lastLocation
-                            .addOnSuccessListener { loc -> if (cont.isActive) cont.resume(loc) }
-                            .addOnFailureListener { _ -> if (cont.isActive) cont.resume(null) }
-                    }
-                }.getOrNull()
-            }
-        }
-
-        private fun hasLocationPermission(context: Context): Boolean {
-            val fine = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION)
-            val coarse = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION)
-            return fine == android.content.pm.PackageManager.PERMISSION_GRANTED ||
-                    coarse == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-
     private fun Set<String>.lowercaseSet(): Set<String> {
         return mapTo(LinkedHashSet(size)) { it.lowercase(Locale.ROOT) }
     }
@@ -630,11 +578,14 @@ object AlertNotifier {
         val dismissIntent = Intent(context, NotificationActionReceiver::class.java).apply {
             action = NotificationActionReceiver.ACTION_DISMISS
             putExtra(NotificationActionReceiver.EXTRA_ALERT_UNIQUE_ID, alert.uniqueId)
-            putExtra(NotificationActionReceiver.EXTRA_NOTIFICATION_ID, alert.uniqueId.hashCode())
+            putExtra(
+                NotificationActionReceiver.EXTRA_NOTIFICATION_ID,
+                AlertNotificationIds.forAlert(alert.uniqueId)
+            )
         }
         return PendingIntent.getBroadcast(
             context,
-            alert.uniqueId.hashCode() + 2000, // unique request code
+            AlertNotificationIds.forAlertAction("dismiss", alert.uniqueId),
             dismissIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
@@ -650,7 +601,7 @@ object AlertNotifier {
         }
         return PendingIntent.getActivity(
             context,
-            alert.uniqueId.hashCode() + 3000, // unique request code
+            AlertNotificationIds.forAlertAction("pip", alert.uniqueId),
             pipIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )

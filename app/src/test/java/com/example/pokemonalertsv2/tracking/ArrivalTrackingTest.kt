@@ -9,14 +9,14 @@ import org.junit.Test
 class ArrivalTrackingTest {
     @Test
     fun `eligible destination accepts future and missing end times`() {
-        val now = 1_000_000L
+        val now = 1_000_000_000_000L
         assertTrue(alert(endTime = (now + 60_000L).toString()).isEligibleArrivalDestination(now))
         assertTrue(alert(endTime = "").isEligibleArrivalDestination(now))
     }
 
     @Test
     fun `eligible destination rejects expired invalidated and invalid coordinates`() {
-        val now = 1_000_000L
+        val now = 1_000_000_000_000L
         assertFalse(alert(endTime = (now - 1L).toString()).isEligibleArrivalDestination(now))
         assertFalse(alert(invalidatedAt = "now").isEligibleArrivalDestination(now))
         assertFalse(alert(latitude = 0.0, longitude = 0.0).isEligibleArrivalDestination(now))

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
@@ -83,6 +84,31 @@ class PokeGenieRepositoryTest {
         val summary = (prepared as PokeGeniePrepareResult.Success).candidate.summary
         assertEquals(emptyList<UnmatchedForm>(), summary.unmatchedForms)
         assertEquals(false, summary.formsChecked)
+    }
+
+    @Test
+    fun aMegaRowAlsoImportsItsBaseForm() = runBlocking {
+        val dao = FakePokeGenieDao()
+        val repository = repository(
+            dao,
+            "Name,Form,CP,Level Min,Level Max\nCharizard,Mega Y,4429,52.0,52.0\n",
+            speciesIds = setOf("CHARIZARD", "CHARIZARD_MEGA_Y")
+        )
+
+        val prepared = repository.prepareImport(Uri.parse("content://files/mega.csv"))
+        val candidate = (prepared as PokeGeniePrepareResult.Success).candidate
+        assertEquals(2, candidate.summary.importedCount)
+        assertEquals(1, candidate.summary.synthesizedBaseCount)
+
+        repository.commitImport(candidate)
+
+        val stored = dao.getAll()
+        assertEquals(2, stored.size)
+        val base = stored.single { it.matchKey == "CHARIZARD" }
+        assertEquals(50.0, base.level!!, 1e-9)
+        assertNull(base.cp)
+        // The mega row itself is stored exactly as exported.
+        assertEquals(52.0, stored.single { it.matchKey.startsWith("CHARIZARD_MEGA") }.level!!, 1e-9)
     }
 
     private fun existingRow() = PokeGenieMonEntity(

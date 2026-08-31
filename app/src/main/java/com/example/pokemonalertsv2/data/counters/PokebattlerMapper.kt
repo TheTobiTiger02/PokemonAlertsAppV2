@@ -85,12 +85,26 @@ data class RaidCountersPayload(
 fun PokebattlerCountersResponse.toPayload(sort: PokebattlerSort): RaidCountersPayload? =
     toPayload(sort, requestedMoves = null)
 
+/**
+ * True when the response carries an actual attacker ranking.
+ *
+ * When the ranking engine is saturated, Pokebattler sometimes answers HTTP 200 with a
+ * moveset *summary* of the boss alone: every `defenders` list is empty. Treating that as
+ * a valid ranking once cached "No counters available" for a full hour, so it must read
+ * as "no data", not "no counters".
+ */
+fun PokebattlerCountersResponse.hasRankingData(): Boolean {
+    val block = attackers.firstOrNull() ?: return false
+    return (block.byMove + listOfNotNull(block.randomMove)).any { it.defenders.isNotEmpty() }
+}
+
 /** Distils a response while optionally selecting the alert's concrete boss moveset. */
 fun PokebattlerCountersResponse.toPayload(
     sort: PokebattlerSort,
     requestedMoves: RaidBossMoveset?
 ): RaidCountersPayload? {
     val block = attackers.firstOrNull() ?: return null
+    if (!hasRankingData()) return null
     val bossId = block.pokemonId ?: return null
     val moveset = selectBossMoveset(block, requestedMoves) ?: return null
 
@@ -146,14 +160,28 @@ private fun selectBossMoveset(
     block: PbAttackerBlock,
     requested: RaidBossMoveset?
 ): PbMoveset? {
+    // When the ranking engine is saturated the per-moveset blocks come back WITHOUT
+    // defenders while `randomMove` still carries the overall ranking, so an empty
+    // moveset is only ever a last-resort pick.
+    fun ranked(vararg candidates: PbMoveset?): PbMoveset? =
+        candidates.firstOrNull { it?.defenders?.isNotEmpty() == true }
+
     if (requested == null || requested.isRandom) {
-        return block.randomMove ?: block.byMove.firstOrNull()
+        return ranked(block.randomMove, block.byMove.firstOrNull())
+            ?: block.randomMove
+            ?: block.byMove.firstOrNull()
     }
     val exact = block.byMove.firstOrNull { moveSet ->
         moveNamesMatch(moveSet.move1, requested.move1) &&
             moveNamesMatch(moveSet.move2, requested.move2)
     }
-    return exact ?: block.randomMove ?: block.byMove.firstOrNull()
+    return ranked(
+        exact,
+        block.randomMove,
+        block.byMove.firstOrNull { it.defenders.isNotEmpty() }
+    ) ?: exact
+        ?: block.randomMove
+        ?: block.byMove.firstOrNull()
 }
 
 private fun moveNamesMatch(apiName: String?, requested: String?): Boolean {

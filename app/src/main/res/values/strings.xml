@@ -6,7 +6,6 @@
     <string name="navigation_map">Map</string>
     <string name="navigation_settings">Settings</string>
     <string name="alerts_section_history">History</string>
-    <string name="alerts_filter_title">Filter alerts</string>
     <string name="alerts_filter_open">Open filters</string>
     <string name="alerts_filter_type">Alert type</string>
     <string name="alerts_filter_sort">Sort</string>
@@ -27,9 +26,6 @@
     <string name="notification_default_body">New Pok&#x00E9;mon alert available</string>
     <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
-    <string name="location_permission_granted">Location access granted.</string>
-    <string name="location_permission_needed">Location access is needed for distance calculations and map features.</string>
-    <string name="background_location_granted">Background location access granted.</string>
     <string name="background_location_title">Background location access</string>
     <string name="background_location_message">To keep distances and location-based features accurate in the background, open app settings, choose Permissions, then Location, and select Allow all the time.</string>
     <string name="background_location_open_settings">Open app settings</string>
@@ -89,6 +85,7 @@
     <string name="tap_for_details">Tap for details</string>
     <string name="notification_action_directions">Directions</string>
     <string name="notification_action_dismiss">Dismiss</string>
+    <string name="notification_action_dismiss_all">Dismiss all</string>
     <string name="notification_action_snooze">Snooze</string>
     <string name="loading_alerts">Scanning for nearby spawns…</string>
     <string name="alerts_hero_title">Live alerts</string>

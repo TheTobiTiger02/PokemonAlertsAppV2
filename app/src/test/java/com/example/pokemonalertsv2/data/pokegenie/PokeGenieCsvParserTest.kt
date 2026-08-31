@@ -58,6 +58,22 @@ class PokeGenieCsvParserTest {
     }
 
     @Test
+    fun `reads a mega row in the real export layout`() {
+        // Poké Genie merges a base form and its mega into one entry; the exported row is
+        // the mega, with the mega's boosted level, and the form column says which one.
+        val csv = realHeader + "\n" +
+            "7,Charizard,Mega Y,6,♂,4429,157,15,14,15,97.8,52.0,52.0,Fire Spin,Blast Burn,," +
+                "\"2026-08-06 19:42\",8/3/2026,88.01kg,1.7m,0,0,0,9000,\n"
+
+        val row = success(csv).rows.single()
+        assertEquals("Charizard", row.name)
+        assertEquals("Mega Y", row.form)
+        assertEquals(52.0, row.level!!, 1e-9)
+        assertEquals(4429, row.cp)
+        assertEquals(ShadowState.NORMAL, row.shadowState)
+    }
+
+    @Test
     fun `reads the numeric shadow and purified flags`() {
         fun stateFor(flag: String): ShadowState {
             val csv = realHeader + "\n" +

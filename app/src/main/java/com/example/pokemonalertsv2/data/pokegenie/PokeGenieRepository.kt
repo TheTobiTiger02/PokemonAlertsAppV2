@@ -41,7 +41,9 @@ data class PokeGenieImportSummary(
      * False when the game master has not synced, in which case nothing could be checked --
      * reporting "0 unmatched" then would be a promise the import cannot make.
      */
-    val formsChecked: Boolean = false
+    val formsChecked: Boolean = false,
+    /** Base-form rows [MegaBaseExpander] added for scanned megas and primals. */
+    val synthesizedBaseCount: Int = 0
 )
 
 /** Parsed CSV content held until the user confirms replacement of the current roster. */
@@ -154,18 +156,23 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
                 PokeGeniePrepareResult.Failure(parsed.userMessage())
             is PokeGenieParseResult.Success -> {
                 val fileName = runCatching { resolveFileName(uri) }.getOrNull()
-                val unmatched = unmatchedForms(parsed.rows, catalogue())
+                // Poke Genie merges a base form and its mega into one entry and exports
+                // only the mega, so the base form is synthesized here; the preview and
+                // every count below describe the roster that will actually be stored.
+                val expanded = MegaBaseExpander.expand(parsed.rows)
+                val unmatched = unmatchedForms(expanded.rows, catalogue())
                 val summary = PokeGenieImportSummary(
                     fileName = fileName,
-                    importedCount = parsed.rows.size,
+                    importedCount = expanded.rows.size,
                     skippedCount = parsed.skippedLineCount,
                     ignoredColumnCount = parsed.unmappedHeaders.size,
-                    matchedCount = parsed.rows.size - unmatched.sumOf { it.count },
+                    matchedCount = expanded.rows.size - unmatched.sumOf { it.count },
                     unmatchedForms = unmatched,
-                    formsChecked = !catalogue().isEmpty
+                    formsChecked = !catalogue().isEmpty,
+                    synthesizedBaseCount = expanded.synthesizedBaseCount
                 )
                 PokeGeniePrepareResult.Success(
-                    PokeGenieImportCandidate(fileName, parsed.rows, summary)
+                    PokeGenieImportCandidate(fileName, expanded.rows, summary)
                 )
             }
         }

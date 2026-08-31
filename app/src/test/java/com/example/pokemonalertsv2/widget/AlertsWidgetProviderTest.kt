@@ -41,9 +41,9 @@ class AlertsWidgetProviderTest {
     fun calculateNextUpdateDelay_usesOneMinuteCadenceForDistanceFilteredAlert() {
         WidgetAlertSnapshotStore.updateCadence(
             appWidgetId = 7,
-            alerts = listOf(sampleAlert(endTime = "120000"))
+            alerts = listOf(sampleAlert(endTime = "120000000000000"))
         )
-        val nowMillis = 1_000L
+        val nowMillis = 1_000_000_000_000L
         val nextExpirationMillis = WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis)
 
         val delay = AlertsWidgetProvider.calculateNextUpdateDelay(

@@ -16,7 +16,6 @@ import java.util.concurrent.TimeUnit
 
 object AlertSnoozeScheduler {
     private const val TAG = "AlertSnoozeScheduler"
-    private const val REQUEST_CODE_OFFSET = 40_000
     private val json = Json { ignoreUnknownKeys = true }
 
     internal fun normalizedDurationMinutes(minutes: Int): Int {
@@ -94,21 +93,13 @@ object AlertSnoozeScheduler {
         }
         return PendingIntent.getBroadcast(
             context,
-            alert.uniqueId.hashCode() + REQUEST_CODE_OFFSET,
+            AlertNotificationIds.forAlertAction("snooze_trigger", alert.uniqueId),
             triggerIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 
     private fun canScheduleExact(context: Context, alarmManager: AlarmManager): Boolean {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
-    }
-
-    private fun immutableFlag(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_IMMUTABLE
-        } else {
-            0
-        }
     }
 }

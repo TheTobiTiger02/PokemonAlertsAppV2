@@ -38,12 +38,14 @@ class PokebattlerAuthRepository @VisibleForTesting internal constructor(
      * @return true when a usable session remains.
      */
     suspend fun refresh(): Boolean = withContext(Dispatchers.IO) {
-        val header = auth.authorizationHeader() ?: return@withContext false
-        fetchUser(header)
+        // Read the token once: every call re-runs Keystore decryption, so a failure
+        // between the header check and the save must not turn into an NPE.
+        val token = auth.token() ?: return@withContext false
+        fetchUser("Bearer: $token")
             .fold(
                 onSuccess = { user ->
                     val id = user.id?.takeIf { it.isNotBlank() } ?: return@fold false
-                    auth.save(auth.token()!!, PokebattlerAccount(id, user.displayName))
+                    auth.save(token, PokebattlerAccount(id, user.displayName))
                     true
                 },
                 onFailure = { throwable ->

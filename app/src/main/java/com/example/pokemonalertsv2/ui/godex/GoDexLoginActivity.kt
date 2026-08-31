@@ -1,16 +1,21 @@
 package com.example.pokemonalertsv2.ui.godex
 
 import android.annotation.SuppressLint
+import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -19,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,9 +43,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
+import com.example.pokemonalertsv2.util.GoogleAccountLoginHint
 import kotlinx.coroutines.launch
 
 /**
@@ -60,12 +72,49 @@ class GoDexLoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            // Same theme preference the rest of the app resolves; without it this screen
+            // stayed light in a dark app.
+            val themeMode by PokemonAlertsRepository.create(applicationContext)
+                .observeThemeMode()
+                .collectAsStateWithLifecycle(initialValue = 0)
+            val darkTheme = AppThemeMode.fromStored(themeMode)
+                .resolveDark(isSystemInDarkTheme())
+            PokemonAlertsV2Theme(darkTheme = darkTheme) {
             val scope = rememberCoroutineScope()
             val repository = GoDexRepository.getInstance(applicationContext)
             val startAtPicker = intent.getBooleanExtra("EXTRA_START_AT_PICKER", false)
             var step by remember { mutableStateOf(if (startAtPicker) Step.PICK_CHECKLIST else Step.LOGIN) }
             var statusText by remember { mutableStateOf(if (startAtPicker) "Select your checklist" else "Sign in with Google or Discord") }
             var webView by remember { mutableStateOf<WebView?>(null) }
+            // The Google account picked from the device, applied to Google's sign-in page
+            // as login_hint. Session-only on purpose: this screen promises the app never
+            // stores your email, and the system picker makes re-picking one tap.
+            var googleAccount by remember { mutableStateOf<String?>(null) }
+
+            val accountPickerLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartActivityForResult()
+            ) { result ->
+                val email = result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
+                if (!email.isNullOrBlank() && email != googleAccount) {
+                    googleAccount = email
+                    if (step == Step.LOGIN) {
+                        // Restart the hand-off so Google sees the hint from the first hop.
+                        webView?.loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
+                    }
+                }
+            }
+            // The chooser intent is "deprecated" in favor of Credential Manager, but
+            // Credential Manager only signs into the app's own OAuth client — picking an
+            // account for a third-party website's web login has no newer API, and this one
+            // needs no permissions because the user consents by choosing.
+            @Suppress("DEPRECATION")
+            fun pickGoogleAccount() {
+                runCatching {
+                    AccountManager.newChooseAccountIntent(
+                        null, null, arrayOf("com.google"), true, null, null, null, null
+                    )
+                }.onSuccess(accountPickerLauncher::launch)
+            }
 
             Scaffold(
                 topBar = {
@@ -86,6 +135,12 @@ class GoDexLoginActivity : ComponentActivity() {
                         },
                         actions = {
                             if (!startAtPicker) {
+                                IconButton(onClick = { pickGoogleAccount() }) {
+                                    Icon(
+                                        Icons.Filled.AccountCircle,
+                                        contentDescription = "Choose Google account"
+                                    )
+                                }
                                 TextButton(
                                     onClick = {
                                         GoDexWebSessionCookies.clearAllWebViewCookies {
@@ -172,6 +227,39 @@ class GoDexLoginActivity : ComponentActivity() {
                                     }
                                     webViewClient = object : WebViewClient() {
                                         private var loginCaptured = false
+
+                                        override fun shouldOverrideUrlLoading(
+                                            view: WebView?,
+                                            request: WebResourceRequest?
+                                        ): Boolean {
+                                            val url = request?.url?.toString()
+                                            if (url != null) rewriteWithGoogleHint(view, url)
+                                            return super.shouldOverrideUrlLoading(view, request)
+                                        }
+
+                                        override fun onPageStarted(
+                                            view: WebView?,
+                                            url: String?,
+                                            favicon: Bitmap?
+                                        ) {
+                                            super.onPageStarted(view, url, favicon)
+                                            if (url != null) rewriteWithGoogleHint(view, url)
+                                        }
+
+                                        /**
+                                         * The hand-off onto accounts.google.com is a
+                                         * server-side redirect, which never passes through
+                                         * shouldOverrideUrlLoading — so the picked account
+                                         * has to be applied here as well, just as the
+                                         * sign-in page starts loading.
+                                         */
+                                        private fun rewriteWithGoogleHint(view: WebView?, url: String) {
+                                            if (view == null) return
+                                            val rewritten =
+                                                GoogleAccountLoginHint.apply(url, googleAccount)
+                                            if (rewritten != null) view.loadUrl(rewritten)
+                                        }
+
                                         override fun onPageFinished(view: WebView?, url: String?) {
                                             super.onPageFinished(view, url)
                                             val currentUrl = url ?: return
@@ -231,6 +319,7 @@ class GoDexLoginActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
             }
         }
     }

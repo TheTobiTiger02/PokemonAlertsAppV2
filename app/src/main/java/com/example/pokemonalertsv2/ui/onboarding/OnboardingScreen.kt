@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appRiseIn
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
@@ -173,7 +174,7 @@ private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onD
     SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Alert filters.")
     Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf("All", "Alsbach", "Darmstadt").forEach { value ->
+        AREA_FILTER_OPTIONS.forEach { value ->
             FilterChip(selected = area == value, onClick = { onArea(value) }, label = { Text(value) })
         }
     }

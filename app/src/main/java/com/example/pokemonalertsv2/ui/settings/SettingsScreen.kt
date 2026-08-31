@@ -119,6 +119,7 @@ import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.NotificationCategoryState
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
@@ -481,7 +482,7 @@ internal fun SettingsScreen(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            listOf("All", "Alsbach", "Darmstadt").forEach { area ->
+                            AREA_FILTER_OPTIONS.forEach { area ->
                                 val isSelected = selectedArea == area
                                 FilterChip(
                                     selected = isSelected,

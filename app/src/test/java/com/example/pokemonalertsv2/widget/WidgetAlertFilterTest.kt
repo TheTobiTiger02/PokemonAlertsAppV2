@@ -105,8 +105,8 @@ class WidgetAlertFilterTest {
 
     @Test
     fun filterAlerts_hidesExpiredAlerts() {
-        val active = sampleAlert("Active", endTime = "2000")
-        val expired = sampleAlert("Expired", endTime = "1000")
+        val active = sampleAlert("Active", endTime = "2000000000000")
+        val expired = sampleAlert("Expired", endTime = "1000000000000")
 
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(active, expired),
@@ -135,11 +135,11 @@ class WidgetAlertFilterTest {
 
     @Test
     fun filterAlerts_hidesAlertAtExactExpirationBoundary() {
-        val expiringNow = sampleAlert("Boundary", endTime = "1000")
+        val expiringNow = sampleAlert("Boundary", endTime = "1000000000000")
 
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(expiringNow),
-            criteria = criteria(nowMillis = 1_000L),
+            criteria = criteria(nowMillis = 1_000_000_000_000L),
             origin = null
         )
 
@@ -161,10 +161,10 @@ class WidgetAlertFilterTest {
 
     @Test
     fun snapshotStore_usesNewestRoomAlertsWhenDistanceLocationIsMissing() {
-        val newAlert = sampleAlert("Needs Location", area = "North", endTime = "2000")
-        val expired = sampleAlert("Expired", area = "North", endTime = "1000")
-        val dismissed = sampleAlert("Dismissed", area = "North", endTime = "2000")
-        val wrongArea = sampleAlert("Wrong Area", area = "South", endTime = "2000")
+        val newAlert = sampleAlert("Needs Location", area = "North", endTime = "2000000000000")
+        val expired = sampleAlert("Expired", area = "North", endTime = "1000000000000")
+        val dismissed = sampleAlert("Dismissed", area = "North", endTime = "2000000000000")
+        val wrongArea = sampleAlert("Wrong Area", area = "South", endTime = "2000000000000")
 
         val result = WidgetAlertSnapshotStore.resolve(
             alerts = listOf(newAlert, expired, dismissed, wrongArea),
@@ -196,14 +196,14 @@ class WidgetAlertFilterTest {
 
     @Test
     fun snapshotStore_tracksCadenceExpirationForDistanceFilteredAlerts() {
-        val outOfRange = sampleAlert("Out Of Range", endTime = "1500")
+        val outOfRange = sampleAlert("Out Of Range", endTime = "1500000000000")
 
         WidgetAlertSnapshotStore.updateCadence(
             appWidgetId = 10,
             alerts = listOf(outOfRange)
         )
 
-        assertEquals(1_500L, WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis = 1_000L))
+        assertEquals(1_500_000_000_000L, WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis = 1_000_000_000_000L))
     }
 
     @Test
@@ -274,17 +274,17 @@ class WidgetAlertFilterTest {
 
     @Test
     fun expirationPublishesEmptySnapshotAfterOneActiveAlert() {
-        val alert = sampleAlert("Expiring", endTime = "2000")
+        val alert = sampleAlert("Expiring", endTime = "2000000000000")
         val active = WidgetAlertSnapshotStore.resolve(
             alerts = listOf(alert),
-            criteria = criteria(nowMillis = 1_999L),
+            criteria = criteria(nowMillis = 1_999_000_000_000L),
             origin = null
         )
         WidgetAlertSnapshotStore.publishRenderSnapshot(8, active.alerts, null)
 
         val expired = WidgetAlertSnapshotStore.resolve(
             alerts = listOf(alert),
-            criteria = criteria(nowMillis = 2_000L),
+            criteria = criteria(nowMillis = 2_000_000_000_000L),
             origin = null
         )
         WidgetAlertSnapshotStore.publishRenderSnapshot(8, expired.alerts, null)
@@ -297,7 +297,7 @@ class WidgetAlertFilterTest {
         selectedArea: String = "All",
         maxDistanceKm: Int = 0,
         widgetFilterTypes: Set<String> = emptySet(),
-        nowMillis: Long = 1_000L
+        nowMillis: Long = 1_000_000_000_000L
     ) = WidgetAlertFilter.Criteria(
         dismissedAlertIds = dismissedAlertIds,
         selectedArea = selectedArea,

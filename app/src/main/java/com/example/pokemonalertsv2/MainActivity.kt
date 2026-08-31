@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.annotation.StringRes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
@@ -129,7 +130,7 @@ import com.example.pokemonalertsv2.util.UpdateState
  * Onboarding is handled separately and is not part of the nav bar.
  */
 private data class NavDestination(
-    val label: String,
+    @StringRes val labelRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 )
@@ -140,10 +141,10 @@ internal fun navigationLayoutModeForWidth(width: Dp): NavigationLayoutMode =
     if (width >= 600.dp) NavigationLayoutMode.RAIL else NavigationLayoutMode.BOTTOM_BAR
 
 private val NAV_DESTINATIONS = listOf(
-    NavDestination("Alerts", Icons.Filled.Notifications, Icons.Outlined.Notifications),
-    NavDestination("History", Icons.Filled.DateRange, Icons.Outlined.DateRange),
-    NavDestination("Map", Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
-    NavDestination("Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    NavDestination(R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    NavDestination(R.string.alerts_section_history, Icons.Filled.DateRange, Icons.Outlined.DateRange),
+    NavDestination(R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
+    NavDestination(R.string.navigation_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
 internal const val ALERTS_TAB_INDEX = 0
@@ -692,14 +693,15 @@ internal fun isSupportedCsvIntent(intent: Intent, uri: Uri): Boolean {
  */
 @Composable
 private fun NavDestinationIcon(destination: NavDestination, selected: Boolean) {
+    val label = stringResource(destination.labelRes)
     AnimatedContent(
         targetState = selected,
         transitionSpec = { appFadeThrough() },
-        label = "${destination.label}_nav_icon"
+        label = "${label}_nav_icon"
     ) { isSelected ->
         Icon(
             imageVector = if (isSelected) destination.selectedIcon else destination.unselectedIcon,
-            contentDescription = destination.label
+            contentDescription = label
         )
     }
 }
@@ -707,7 +709,7 @@ private fun NavDestinationIcon(destination: NavDestination, selected: Boolean) {
 @Composable
 private fun NavDestinationLabel(destination: NavDestination, selected: Boolean) {
     Text(
-        text = destination.label,
+        text = stringResource(destination.labelRes),
         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
     )
 }
@@ -1046,18 +1048,18 @@ private fun BackgroundLocationPermissionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Background Location Access") },
-        text = { 
-            Text(text = "To get accurate distances and enable location-based features even when the app is in the background, please grant 'Allow all the time' location permission in settings.") 
+        title = { Text(text = stringResource(R.string.background_location_title)) },
+        text = {
+            Text(text = stringResource(R.string.background_location_message))
         },
         confirmButton = {
             TextButton(onClick = onOpenSettings) {
-                Text(text = "Open Settings")
+                Text(text = stringResource(R.string.background_location_open_settings))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = "Not Now")
+                Text(text = stringResource(R.string.not_now))
             }
         }
     )

@@ -269,7 +269,7 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
             requestedByUser.downgradesFromBaseline()
         }
 
-        val cached = dao.getCache(key)
+        val cached = dao.getCache(key)?.takeIf { it.hasUsableCounters() }
         val cachedAge = cached?.let { now() - it.fetchedAt }
         if (cached != null && cachedAge != null && cachedAge < CACHE_TTL_MILLIS) {
             return@withContext Result.success(
@@ -281,7 +281,7 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         // into parallel calls against a service that rate-limits.
         requestMutex.withLock {
             // Another caller may have populated the cache while we waited.
-            dao.getCache(key)?.let { fresh ->
+            dao.getCache(key)?.takeIf { it.hasUsableCounters() }?.let { fresh ->
                 if (now() - fresh.fetchedAt < CACHE_TTL_MILLIS) {
                     return@withContext Result.success(
                         fresh.toResult(fromCache = true, isStale = false, degradedOptions = degraded)
@@ -326,7 +326,15 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
                 }
             }
 
-            attempt.getOrNull()?.toPayload(effective.sort, bossMoveset)?.let { payload ->
+            // HTTP said ok but the body is Pokebattler's saturated "moveset summary" with
+            // no rankings; surface it as the rate limit it means so the baseline fallback
+            // can engage, instead of caching an hour of "No counters available".
+            val response = attempt.getOrNull()
+            if (response != null && !response.hasRankingData()) {
+                throw CountersException(CountersError.RateLimited)
+            }
+
+            response?.toPayload(effective.sort, bossMoveset)?.let { payload ->
                 val timestamp = now()
                 dao.saveCache(payload.toEntity(key, boss.raidLevel, timestamp))
                 return@withContext Result.success(
@@ -690,6 +698,11 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
                     }
                 }
         }
+        if (!response.hasRankingData()) {
+            // Same saturated "moveset summary" body the by-level path sees; retrying from
+            // the precomputed baseline beats ranking nobody.
+            throw CountersException(CountersError.RateLimited)
+        }
         synchronized(personalResponseCache) {
             personalResponseCache[key] = TimedPersonalResponse(response, now())
             while (personalResponseCache.size > MAX_PERSONAL_RESPONSE_CACHE) {
@@ -699,97 +712,16 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
         return response
     }
 
-    private fun rankPersonalLevel(
-        level: Double,
-        owned: List<OwnedPokemon>,
-        response: PokebattlerCountersResponse,
-        movesMode: PersonalMovesMode,
-        metric: CounterMetric,
-        bossMoveset: RaidBossMoveset?
-    ): List<PersonalCounter> {
-        val block = response.attackers.firstOrNull() ?: return emptyList()
-        val moveset = selectPersonalBossMoveset(block, bossMoveset) ?: return emptyList()
-        val defenders = moveset.defenders.asReversed()
-        return owned.mapNotNull { mine ->
-            val defender = defenders.firstOrNull { it.matches(mine) } ?: return@mapNotNull null
-            val selected = selectOwnedMoves(defender, mine, movesMode, metric) ?: return@mapNotNull null
-            defender.toPersonalCounter(
-                owned = mine,
-                selectedMove = selected.first,
-                evaluatedLevel = level,
-                movesetAssumed = selected.second
-            )
-        }
-    }
-
-    private fun selectOwnedMoves(
-        defender: PbDefender,
-        mine: OwnedPokemon,
-        mode: PersonalMovesMode,
-        metric: CounterMetric
-    ): Pair<PbByMove, Boolean>? {
-        val moves = defender.byMove.filter { it.result != null }
-        if (moves.isEmpty()) return null
-        val fast = mine.quickMove
-        val charges = listOfNotNull(mine.chargeMove, mine.chargeMove2)
-        if (mode == PersonalMovesMode.CURRENT && (fast.isNullOrBlank() || charges.isEmpty())) return null
-
-        val constrained = moves.filter { candidate ->
-            (fast == null || personalMovesMatch(candidate.move1, fast)) &&
-                (charges.isEmpty() || charges.any { personalMovesMatch(candidate.move2, it) })
-        }
-        val pool = if (mode == PersonalMovesMode.CURRENT) constrained else constrained.ifEmpty { moves }
-        val selected = selectPersonalMove(pool, metric) ?: return null
-        val assumed = mode == PersonalMovesMode.BEST_POTENTIAL &&
-            (fast.isNullOrBlank() || charges.isEmpty() ||
-                !personalMovesMatch(selected.move1, fast) ||
-                charges.none { personalMovesMatch(selected.move2, it) })
-        return selected to assumed
-    }
-
-    private fun selectPersonalMove(moves: List<PbByMove>, metric: CounterMetric): PbByMove? =
-        when (metric) {
-            CounterMetric.ESTIMATOR, CounterMetric.TIME -> moves.minByOrNull {
-                pbMetric(it.result, metric) ?: Double.MAX_VALUE
-            }
-            CounterMetric.OVERALL, CounterMetric.POWER, CounterMetric.TDO -> moves.maxByOrNull {
-                pbMetric(it.result, metric) ?: Double.MIN_VALUE
-            }
-        }
-
-    private fun personalComparator(metric: CounterMetric): Comparator<PersonalCounter> =
-        Comparator { left, right ->
-            val l = left.metrics.valueFor(metric) ?: Double.MAX_VALUE
-            val r = right.metrics.valueFor(metric) ?: Double.MAX_VALUE
-            val primary = when (metric) {
-                CounterMetric.ESTIMATOR, CounterMetric.TIME -> l.compareTo(r)
-                CounterMetric.OVERALL, CounterMetric.POWER, CounterMetric.TDO -> r.compareTo(l)
-            }
-            if (primary != 0) primary else {
-                (right.evaluatedLevel ?: 0.0).compareTo(left.evaluatedLevel ?: 0.0)
-            }
-        }
-
-    private fun PbDefender.matches(mine: OwnedPokemon): Boolean {
-        val pbShadow = pokemonId.contains("SHADOW", ignoreCase = true)
-        if (pbShadow != mine.shadow) return false
-        return mine.matchKeys.any { key ->
-            key.equals(pokemonId, ignoreCase = true) ||
-                PokebattlerNameNormalizer.looseKey(key) == PokebattlerNameNormalizer.looseKey(pokemonId)
-        }
-    }
-
-    private fun selectPersonalBossMoveset(block: PbAttackerBlock, requested: RaidBossMoveset?): PbMoveset? {
-        if (requested == null || requested.isRandom) return block.randomMove ?: block.byMove.firstOrNull()
-        return block.byMove.firstOrNull {
-            personalMovesMatch(it.move1, requested.move1) && personalMovesMatch(it.move2, requested.move2)
-        } ?: block.randomMove ?: block.byMove.firstOrNull()
-    }
-
     private data class TimedPersonalResponse(
         val response: PokebattlerCountersResponse,
         val fetchedAt: Long
     )
+
+    /** A cached row without counters is a leftover degenerate response; ignore it. */
+    private fun RaidCounterCacheEntity.hasUsableCounters(): Boolean =
+        runCatching { json.decodeFromString<List<RaidCounter>>(countersJson) }
+            .getOrDefault(emptyList())
+            .isNotEmpty()
 
     private fun RaidCounterCacheEntity.toResult(
         fromCache: Boolean,

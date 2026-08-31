@@ -33,7 +33,7 @@ class NotificationFallbackImageInstrumentedTest {
             longitude = 8.6512,
             pokemonLocation = "Wilhelminenstraße Darmstadt"
         )
-        val notificationId = alert.uniqueId.hashCode()
+        val notificationId = AlertNotificationIds.forAlert(alert.uniqueId)
 
         val previousNotificationsEnabled = preferences.notificationsEnabled.first()
         val previousVibration = preferences.notificationVibrate.first()

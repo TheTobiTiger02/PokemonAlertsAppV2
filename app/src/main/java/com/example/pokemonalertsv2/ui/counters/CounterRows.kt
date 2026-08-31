@@ -268,6 +268,12 @@ internal fun PersonalRow(
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
+                if (counter.movesetUnlisted) {
+                    RowNote(
+                        text = "Pokébattler doesn't rank your moveset — scored at its floor",
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
                 AnimatedVisibility(
                     visible = expanded,
                     enter = appExpandIn(),
