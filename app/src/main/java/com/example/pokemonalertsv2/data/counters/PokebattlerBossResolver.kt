@@ -30,6 +30,14 @@ sealed interface BossResolution {
     data class Unresolved(val attemptedName: String, val reason: String) : BossResolution
 }
 
+data class AvailableRaidBoss(
+    val pokemonId: String,
+    val displayName: String,
+    val raidLevel: String,
+    val bossCp: Int?,
+    val shiny: Boolean
+)
+
 /** The catalogue's catch-all bucket of every Pokémon; not a queryable raid tier. */
 private const val TIER_UNSET = "RAID_LEVEL_UNSET"
 
@@ -146,6 +154,31 @@ private fun List<RaidBossCatalogEntry>.firstRealTier(): String? = this
 private fun isQueryableTier(tier: String): Boolean {
     val upper = tier.uppercase(Locale.ROOT)
     return upper != TIER_UNSET && !upper.contains("_MAX")
+}
+
+/** True only for the catalogue rows representing the raid rotation available right now. */
+internal fun isCurrentRaidTier(tier: String): Boolean {
+    val upper = tier.uppercase(Locale.ROOT)
+    return isQueryableTier(upper) &&
+        !upper.endsWith("_FUTURE") &&
+        !upper.endsWith("_LEGACY")
+}
+
+internal fun raidLevelSortKey(raidLevel: String): Int = when (normalizeTier(raidLevel)) {
+    "RAID_LEVEL_1" -> 10
+    "RAID_LEVEL_1_SHADOW" -> 11
+    "RAID_LEVEL_2" -> 20
+    "RAID_LEVEL_3" -> 30
+    "RAID_LEVEL_3_SHADOW" -> 31
+    "RAID_LEVEL_4" -> 40
+    "RAID_LEVEL_5" -> 50
+    "RAID_LEVEL_5_SHADOW" -> 51
+    "RAID_LEVEL_6" -> 60
+    "RAID_LEVEL_ULTRA_BEAST" -> 70
+    "RAID_LEVEL_ELITE" -> 80
+    "RAID_LEVEL_MEGA" -> 90
+    "RAID_LEVEL_MEGA_5" -> 100
+    else -> 1_000
 }
 
 private fun tierRank(tier: String): Int {

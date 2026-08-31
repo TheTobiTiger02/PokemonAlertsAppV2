@@ -1,7 +1,9 @@
 package com.example.pokemonalertsv2
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import androidx.core.content.FileProvider
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -16,10 +18,14 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
+import com.example.pokemonalertsv2.data.database.AppDatabase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.AfterClass
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
@@ -184,6 +190,77 @@ class MainNavigationComposeTest {
         }
         composeRule.onNodeWithText("Theme").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
+    }
+
+    @Test
+    fun sharedPokeGenieCsvOpensReviewAndReplacesOnlyAfterConfirmation() {
+        waitForMainNavigation()
+        val activity = composeRule.activity
+        val database = AppDatabase.getDatabase(activity)
+        val preferences = RaidCounterPreferences(activity.alertPreferencesDataStore)
+        val originalRows = runBlocking { database.pokeGenieDao().getAll() }
+        val originalSettings = runBlocking { preferences.settings.first() }
+
+        fun shareIntent(fileName: String): Intent {
+            val file = activity.cacheDir.resolve(fileName).apply {
+                writeText("Name,CP,Fast Move,Charged Move\nMewtwo,2387,Psycho Cut,Psystrike\n")
+            }
+            val uri = FileProvider.getUriForFile(
+                activity,
+                "${activity.packageName}.fileprovider",
+                file
+            )
+            return Intent(Intent.ACTION_SEND)
+                .setType("text/csv")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        try {
+            val cancelIntent = shareIntent("pokegenie-share-cancel.csv")
+            composeRule.runOnIdle {
+                assertTrue(activity.handleExternalCsvIntent(cancelIntent))
+                assertFalse(activity.handleExternalCsvIntent(cancelIntent))
+            }
+            composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+                composeRule.onAllNodesWithText("Review CSV import").fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNodeWithText("Raid counters").assertIsDisplayed()
+            composeRule.onNodeWithText("Review CSV import").assertIsDisplayed()
+            composeRule.onNodeWithText("1 Pokémon rows are ready to import.").assertIsDisplayed()
+            composeRule.onNodeWithText("Cancel").performClick()
+            composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+                composeRule.onAllNodesWithText("Review CSV import").fetchSemanticsNodes().isEmpty()
+            }
+            assertEquals(originalRows.size, runBlocking { database.pokeGenieDao().count() })
+
+            val confirmIntent = shareIntent("pokegenie-share-confirm.csv")
+            composeRule.runOnIdle {
+                assertTrue(activity.handleExternalCsvIntent(confirmIntent))
+            }
+            composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+                composeRule.onAllNodesWithText("Replace roster").fetchSemanticsNodes().isNotEmpty()
+            }
+            composeRule.onNodeWithText("Replace roster").performClick()
+            composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+                runBlocking { database.pokeGenieDao().count() } == 1
+            }
+            assertEquals(1, runBlocking { database.pokeGenieDao().count() })
+        } finally {
+            runBlocking {
+                database.pokeGenieDao().replaceAll(originalRows)
+                if (originalSettings.pokeGenieCount > 0) {
+                    preferences.recordPokeGenieImport(
+                        fileName = originalSettings.pokeGenieFileName,
+                        rowCount = originalSettings.pokeGenieCount,
+                        matchedCount = originalSettings.pokeGenieMatchedCount,
+                        timestamp = originalSettings.pokeGenieImportedAtMillis
+                    )
+                } else {
+                    preferences.clearPokeGenie()
+                }
+            }
+        }
     }
 
     private fun waitForMainNavigation() {

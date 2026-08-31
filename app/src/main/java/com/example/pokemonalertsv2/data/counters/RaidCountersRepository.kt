@@ -65,6 +65,41 @@ class RaidCountersRepository @VisibleForTesting internal constructor(
     private val now: () -> Long = System::currentTimeMillis
 ) {
 
+    /**
+     * The bosses Pokebattler currently exposes in a live, queryable raid tier.
+     *
+     * The catalogue also contains every Pokemon in an UNSET bucket plus FUTURE, LEGACY and
+     * Max Battle rows. Those are useful for resolving old alerts, but they are not choices a
+     * trainer can walk up to and raid now, so the manual Raid Watch picker deliberately omits
+     * them.
+     */
+    suspend fun availableRaidBosses(forceRefresh: Boolean = false): List<AvailableRaidBoss> =
+        withContext(Dispatchers.IO) {
+            syncCatalogueIfStale(force = forceRefresh)
+            dao.getCatalogue()
+                .asSequence()
+                .filter { isCurrentRaidTier(it.tier) }
+                .distinctBy {
+                    it.pokemonId.uppercase(java.util.Locale.ROOT) to normalizeTier(it.tier)
+                }
+                .map {
+                    AvailableRaidBoss(
+                        pokemonId = it.pokemonId,
+                        displayName = it.displayName.ifBlank { prettifyPokemonName(it.pokemonId) },
+                        raidLevel = normalizeTier(it.tier),
+                        bossCp = it.cp,
+                        shiny = it.shiny
+                    )
+                }
+                .sortedWith(
+                    compareBy<AvailableRaidBoss>(
+                        { raidLevelSortKey(it.raidLevel) },
+                        { it.displayName }
+                    )
+                )
+                .toList()
+        }
+
     private val json = Json { ignoreUnknownKeys = true }
     private val catalogueMutex = Mutex()
     private val requestMutex = Mutex()

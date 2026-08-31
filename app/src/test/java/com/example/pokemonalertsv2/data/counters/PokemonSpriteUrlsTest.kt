@@ -16,8 +16,9 @@ class PokemonSpriteUrlsTest {
     @Test
     fun `tries the evolution variant first for a mega`() {
         val urls = PokemonSpriteUrls.candidates(248, "TYRANITAR_MEGA")
-        assertTrue(urls[0].endsWith("/pokemon/248_e1.png"))
-        assertTrue(urls[1].endsWith("/pokemon/248.png"))
+        assertTrue(urls[0], urls[0].endsWith("/pm248.fMEGA.icon.png"))
+        assertTrue(urls[1].endsWith("/pokemon/248_e1.png"))
+        assertTrue(urls[2].endsWith("/pokemon/248.png"))
     }
 
     @Test
@@ -56,9 +57,26 @@ class PokemonSpriteUrlsTest {
     fun `uses the specific mega variant when known`() {
         // Mega Charizard X is _e2, not _e1 - taking the first evolution would show Mega Y.
         val x = PokemonSpriteUrls.candidates(6, "CHARIZARD_MEGA_X", megaEvoId = 2)
-        assertTrue(x[0], x[0].endsWith("/pokemon/6_e2.png"))
+        assertTrue(x[0], x[0].endsWith("/pm6.fMEGA_X.icon.png"))
+        assertTrue(x[1], x[1].endsWith("/pokemon/6_e2.png"))
         val y = PokemonSpriteUrls.candidates(6, "CHARIZARD_MEGA_Y", megaEvoId = 3)
-        assertTrue(y[0], y[0].endsWith("/pokemon/6_e3.png"))
+        assertTrue(y[0], y[0].endsWith("/pm6.fMEGA_Y.icon.png"))
+        assertTrue(y[1], y[1].endsWith("/pokemon/6_e3.png"))
+    }
+
+    @Test
+    fun `uses current PokeMiners art for newly released mega bosses`() {
+        mapOf(
+            "DRAGONITE_MEGA" to 149,
+            "MALAMAR_MEGA" to 687,
+            "VICTREEBEL_MEGA" to 71
+        ).forEach { (id, dex) ->
+            val urls = PokemonSpriteUrls.candidates(dex, id)
+
+            assertTrue(id, urls.first().endsWith("/pm$dex.fMEGA.icon.png"))
+            assertTrue(id, urls[1].endsWith("/pokemon/${dex}_e1.png"))
+            assertTrue(id, urls.last().endsWith("/pokemon/$dex.png"))
+        }
     }
 
     @Test

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.animation.DecelerateInterpolator
@@ -104,6 +105,7 @@ import kotlinx.coroutines.launch
 
 import androidx.lifecycle.lifecycleScope
 import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
+import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportCandidate
 import androidx.compose.runtime.LaunchedEffect
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.UpdateState
@@ -340,11 +342,19 @@ class MainActivity : ComponentActivity() {
 
     internal fun handleNavigationIntent(intent: Intent) {
         requestedTab(intent)?.let { requestedRootTab.value = it }
-        val uri = intent.data ?: return
-        if (handleDeepLink(uri.toString())) return
-        if (intent.action != Intent.ACTION_VIEW || !isSupportedCsvIntent(intent)) return
+        if (intent.action == Intent.ACTION_VIEW) {
+            intent.data?.let { uri ->
+                if (handleDeepLink(uri.toString())) return
+            }
+        }
+        handleExternalCsvIntent(intent)
+    }
+
+    internal fun handleExternalCsvIntent(intent: Intent): Boolean {
+        val uri = externalCsvUri(intent) ?: return false
+        if (!isSupportedCsvIntent(intent, uri)) return false
         val key = uri.toString()
-        if (key == lastExternalCsvUri) return
+        if (key == lastExternalCsvUri) return false
         lastExternalCsvUri = key
         runCatching {
             val read = intent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0
@@ -367,7 +377,11 @@ class MainActivity : ComponentActivity() {
         settingsViewModel.preparePokeGenieImport(uri)
         requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
         requestedSettingsDestination.value = SettingsDestination.RAID_COUNTERS
+        return true
     }
+
+    internal fun pendingExternalCsvImportForTest(): PokeGenieImportCandidate? =
+        settingsViewModel.pendingPokeGenieImport.value
 
     /**
      * Routes a `pokemonalerts://` link onto the same state the tab extras drive.
@@ -410,20 +424,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         return true
-    }
-
-    private fun isSupportedCsvIntent(intent: Intent): Boolean {
-        val mime = intent.type?.lowercase()?.substringBefore(';')
-        val mimeSupported = mime in setOf(
-            "text/csv",
-            "text/comma-separated-values",
-            "application/csv",
-            "application/vnd.ms-excel"
-        )
-        val extensionSupported = intent.data?.lastPathSegment
-            ?.substringBefore('?')
-            ?.endsWith(".csv", ignoreCase = true) == true
-        return mimeSupported || extensionSupported
     }
 
     private fun startPermissionFlow() {
@@ -519,6 +519,39 @@ class MainActivity : ComponentActivity() {
             intent?.getIntExtra(EXTRA_INITIAL_TAB, -1)
                 ?.let(::rootTabIndexOrNull)
     }
+}
+
+private val SUPPORTED_EXTERNAL_CSV_MIME_TYPES = setOf(
+    "text/csv",
+    "text/comma-separated-values",
+    "application/csv",
+    "application/vnd.ms-excel"
+)
+
+/** Returns the one externally supplied CSV URI for supported open/share actions. */
+internal fun externalCsvUri(intent: Intent): Uri? = when (intent.action) {
+    Intent.ACTION_VIEW -> intent.data
+    Intent.ACTION_SEND -> intent.sharedStreamUri() ?: intent.clipData
+        ?.takeIf { it.itemCount > 0 }
+        ?.getItemAt(0)
+        ?.uri
+    else -> null
+}
+
+@Suppress("DEPRECATION")
+private fun Intent.sharedStreamUri(): Uri? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+} else {
+    getParcelableExtra(Intent.EXTRA_STREAM)
+}
+
+internal fun isSupportedCsvIntent(intent: Intent, uri: Uri): Boolean {
+    val mime = intent.type?.lowercase()?.substringBefore(';')
+    val mimeSupported = mime in SUPPORTED_EXTERNAL_CSV_MIME_TYPES
+    val extensionSupported = uri.lastPathSegment
+        ?.substringBefore('?')
+        ?.endsWith(".csv", ignoreCase = true) == true
+    return mimeSupported || extensionSupported
 }
 
 // ── Main Scaffold with Bottom Navigation ─────────────────────────────────
@@ -678,7 +711,15 @@ private fun MainScaffold(
                         0 -> {
                             PokemonAlertsRoute(
                                 viewModel = alertsViewModel,
-                                snackbarHostState = snackbarHostState
+                                snackbarHostState = snackbarHostState,
+                                onStartManualRaid = {
+                                    context.startActivity(
+                                        Intent(
+                                            context,
+                                            com.example.pokemonalertsv2.ui.counters.ManualRaidActivity::class.java
+                                        )
+                                    )
+                                }
                             )
                         }
                         1 -> {

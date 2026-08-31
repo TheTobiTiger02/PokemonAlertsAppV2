@@ -19,6 +19,10 @@ object PokemonSpriteUrls {
         "https://raw.githubusercontent.com/ReuschelCGN/PkmnHomeMod/main/" +
             "UICONS_Full_Shiny_Sparkle_128/pokemon"
 
+    private const val POKE_MINERS_ADDRESSABLE =
+        "https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/Images/" +
+            "Pokemon%20-%20256x256/Addressable%20Assets"
+
     /** Best-first URLs to try, or empty when the dex number is unknown. */
     fun candidates(
         dexNumber: Int?,
@@ -51,6 +55,11 @@ object PokemonSpriteUrls {
             if (shadow) add("_a1")
             add("")
         }
-        return variants.distinct().map { suffix -> "$BASE/$dex$suffix.png" }
+        val uicons = variants.distinct().map { suffix -> "$BASE/$dex$suffix.png" }
+        val megaAsset = id.indexOf("_MEGA").takeIf { it >= 0 }?.let { megaIndex ->
+            val addressableForm = id.substring(megaIndex + 1)
+            "$POKE_MINERS_ADDRESSABLE/pm$dex.f$addressableForm.icon.png"
+        }
+        return listOfNotNull(megaAsset) + uicons
     }
 }

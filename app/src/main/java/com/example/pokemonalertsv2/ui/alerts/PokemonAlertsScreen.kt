@@ -126,6 +126,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -175,7 +176,8 @@ import com.example.pokemonalertsv2.util.TravelTime
 fun PokemonAlertsRoute(
     viewModel: PokemonAlertsViewModel,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
-    showTopBar: Boolean = true
+    showTopBar: Boolean = true,
+    onStartManualRaid: () -> Unit = {}
 ) {
     val alertsUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -244,6 +246,7 @@ fun PokemonAlertsRoute(
                     onSelectedAreaChange = viewModel::updateSelectedArea,
                     onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
+                    onStartManualRaid = onStartManualRaid,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -438,6 +441,7 @@ fun PokemonAlertsPage(
     onSelectedAreaChange: (String) -> Unit,
     onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
+    onStartManualRaid: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -673,6 +677,7 @@ fun PokemonAlertsPage(
         status = uiState.toSyncStatus(),
         onRetry = onRefresh
     )
+    ManualRaidQuickAction(onClick = onStartManualRaid)
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -789,6 +794,52 @@ fun PokemonAlertsPage(
                 onSnoozeAlert(alert, minutes)
             }
         )
+    }
+}
+
+@Composable
+internal fun ManualRaidQuickAction(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .testTag("raid_live_update_action"),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Text(
+                    text = "Raid Live Update",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Choose a raid boss for hundo CP and recommended counters.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Text(
+                text = "Choose boss",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
