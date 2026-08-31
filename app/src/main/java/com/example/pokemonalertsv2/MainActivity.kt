@@ -1,12 +1,17 @@
 package com.example.pokemonalertsv2
 
 import android.Manifest
+import android.app.PictureInPictureParams
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.view.animation.DecelerateInterpolator
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -82,6 +87,12 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.AlertsMapRoute
+import com.example.pokemonalertsv2.ui.alerts.ACTION_MAP_PIP_CONTROL
+import com.example.pokemonalertsv2.ui.alerts.EXTRA_MAP_PIP_COMMAND
+import com.example.pokemonalertsv2.ui.alerts.MapPipCommand
+import com.example.pokemonalertsv2.ui.alerts.MapPipMode
+import com.example.pokemonalertsv2.ui.alerts.MapPresentationMode
+import com.example.pokemonalertsv2.ui.alerts.buildMapPipActions
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
@@ -96,6 +107,8 @@ import com.example.pokemonalertsv2.ui.settings.SettingsViewModel
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -156,6 +169,110 @@ class MainActivity : ComponentActivity() {
      * system dialog is still on screen.
      */
     private val transientMessages = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
+    /**
+     * This activity is the picture-in-picture window itself: `setAutoEnterEnabled` shrinks
+     * whichever activity is on screen, and starting a separate one as the user leaves is
+     * refused as a background activity launch mid-transition. While the window is up the
+     * scaffold steps aside and only the map is composed.
+     */
+    private var inPictureInPicture by mutableStateOf(false)
+    private var pipMode = MapPipMode.FOLLOW
+    private var pipCanStep = false
+    private var pipAutoEnter = false
+    private var pipMapTabVisible = false
+    private var maxPipActions = 0
+    private var canUsePictureInPicture = false
+
+    /**
+     * Buffered so a burst of button presses while the window is redrawing is replayed in
+     * order rather than dropped on the floor.
+     */
+    private val pipCommands = MutableSharedFlow<MapPipCommand>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    private val pipCommandReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_MAP_PIP_CONTROL) return
+            val command = MapPipCommand.fromName(
+                intent.getStringExtra(EXTRA_MAP_PIP_COMMAND)
+            ) ?: return
+            pipCommands.tryEmit(command)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this,
+            pipCommandReceiver,
+            IntentFilter(ACTION_MAP_PIP_CONTROL),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        runCatching { unregisterReceiver(pipCommandReceiver) }
+        super.onStop()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPictureInPicture = isInPictureInPictureMode
+    }
+
+    /** Auto-enter is armed only while the map is the tab the user would be leaving. */
+    private fun updateMapPipAvailability(onMapTab: Boolean, autoEnter: Boolean) {
+        if (onMapTab == pipMapTabVisible && autoEnter == pipAutoEnter) return
+        pipMapTabVisible = onMapTab
+        pipAutoEnter = autoEnter
+        applyPipParams()
+    }
+
+    private fun updateMapPipState(mode: MapPipMode, canStep: Boolean) {
+        if (mode == pipMode && canStep == pipCanStep) return
+        pipMode = mode
+        pipCanStep = canStep
+        applyPipParams()
+    }
+
+    private fun enterMapPictureInPicture() {
+        if (!canUsePictureInPicture || isInPictureInPictureMode) return
+        runCatching { enterPictureInPictureMode(buildPipParams()) }
+    }
+
+    private fun applyPipParams() {
+        if (!canUsePictureInPicture) return
+        runCatching { setPictureInPictureParams(buildPipParams()) }
+    }
+
+    private fun buildPipParams(): PictureInPictureParams {
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+            .setActions(buildMapPipActions(this, pipMode, pipCanStep, maxPipActions))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setSeamlessResizeEnabled(false)
+            builder.setAutoEnterEnabled(pipAutoEnter && pipMapTabVisible)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            builder.setTitle("Pokemon Alerts map")
+            builder.setSubtitle("Live alerts and location")
+        }
+        return builder.build()
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Below Android 12 there is no auto-enter flag, so this callback is all there is.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && pipAutoEnter && pipMapTabVisible) {
+            enterMapPictureInPicture()
+        }
+    }
 
     private fun showMessage(text: String) {
         transientMessages.tryEmit(text)
@@ -223,6 +340,9 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        canUsePictureInPicture =
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        if (canUsePictureInPicture) maxPipActions = maxNumPictureInPictureActions
         // Re-prepare the URI after process recreation; preparation is read-only and the
         // candidate remains uncommitted until the user confirms it.
         lastExternalCsvUri = null
@@ -311,12 +431,21 @@ class MainActivity : ComponentActivity() {
                                 unknownSourcesSettingsLauncher.launch(
                                     InAppUpdateManager.unknownSourcesSettingsIntent(this@MainActivity)
                                 )
+                            },
+                            pictureInPictureMode = inPictureInPicture,
+                            pipCommands = pipCommands,
+                            onPipStateChanged = ::updateMapPipState,
+                            onMapPipAvailabilityChanged = ::updateMapPipAvailability,
+                            onEnterPictureInPicture = if (canUsePictureInPicture) {
+                                ::enterMapPictureInPicture
+                            } else {
+                                null
                             }
                         )
                     }
                 }
 
-                if (showBackgroundLocationDialog) {
+                if (showBackgroundLocationDialog && !inPictureInPicture) {
                     BackgroundLocationPermissionDialog(
                         onDismiss = {
                             backgroundLocationPermissionNeeded.value = false
@@ -594,7 +723,12 @@ private fun MainScaffold(
     requestedSettingsDestination: SettingsDestination?,
     onRequestedSettingsDestinationConsumed: () -> Unit,
     onManageLocationPermissions: () -> Unit,
-    onOpenUnknownSourcesSettings: () -> Unit
+    onOpenUnknownSourcesSettings: () -> Unit,
+    pictureInPictureMode: Boolean = false,
+    pipCommands: Flow<MapPipCommand>? = null,
+    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
+    onMapPipAvailabilityChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
+    onEnterPictureInPicture: (() -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -633,6 +767,27 @@ private fun MainScaffold(
         }
     }
 
+
+    val autoEnterMapPip by alertsViewModel.autoEnterMapPip.collectAsStateWithLifecycle()
+    LaunchedEffect(selectedTab, autoEnterMapPip) {
+        onMapPipAvailabilityChanged(selectedTab == MAP_TAB_INDEX, autoEnterMapPip)
+    }
+
+    if (pictureInPictureMode) {
+        // The window shows the map and nothing else, but composed under the same saveable
+        // key as the tab, so camera, zoom, mode and selection carry both ways.
+        saveableStateHolder.SaveableStateProvider(MAP_TAB_INDEX) {
+            AlertsMapRoute(
+                viewModel = alertsViewModel,
+                onBack = {},
+                showBackButton = false,
+                presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
+                pipCommands = pipCommands,
+                onPipStateChanged = onPipStateChanged
+            )
+        }
+        return
+    }
 
     LinearModernBackground(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints {
@@ -741,20 +896,7 @@ private fun MainScaffold(
                                 viewModel = alertsViewModel,
                                 onBack = { selectedTab = ALERTS_TAB_INDEX },
                                 showBackButton = false,
-                                onEnterPictureInPicture = if (
-                                    context.packageManager.hasSystemFeature(
-                                        PackageManager.FEATURE_PICTURE_IN_PICTURE
-                                    )
-                                ) {
-                                    { zoom ->
-                                        context.startActivity(
-                                            com.example.pokemonalertsv2.ui.alerts.AlertsMapActivity
-                                                .createPictureInPictureIntent(context, zoom)
-                                        )
-                                    }
-                                } else {
-                                    null
-                                }
+                                onEnterPictureInPicture = onEnterPictureInPicture
                             )
                         }
                         3 -> {

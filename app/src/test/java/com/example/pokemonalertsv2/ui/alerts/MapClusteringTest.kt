@@ -40,6 +40,69 @@ class MapClusteringTest {
     }
 
     @Test
+    fun protectedAlertRemainsIndividualWhenNearbyAlertsCluster() {
+        val tracked = alert("tracked", 49.7380, 8.6180)
+        val items = clusterMapAlerts(
+            alerts = listOf(
+                tracked,
+                alert("near-a", 49.73801, 8.61801),
+                alert("near-b", 49.73802, 8.61802)
+            ),
+            zoom = 12.0,
+            protectedAlertIds = setOf(tracked.uniqueId)
+        )
+
+        assertEquals(2, items.size)
+        assertEquals(
+            tracked.uniqueId,
+            (items.single { it is MapMarkerItem.Alert } as MapMarkerItem.Alert).alert.uniqueId
+        )
+        assertEquals(2, (items.single { it is MapMarkerItem.Cluster } as MapMarkerItem.Cluster).alerts.size)
+    }
+
+    @Test
+    fun protectedAlertRemainsIndividualAtExactlyTheSameCoordinates() {
+        val tracked = alert("tracked", 49.7380, 8.6180)
+        val stacked = alert("stacked", 49.7380, 8.6180)
+
+        val items = clusterMapAlerts(
+            alerts = listOf(tracked, stacked),
+            zoom = 20.0,
+            protectedAlertIds = setOf(tracked.uniqueId)
+        )
+
+        assertEquals(2, items.size)
+        assertTrue(items.all { it is MapMarkerItem.Alert })
+        assertEquals(
+            setOf(tracked.uniqueId, stacked.uniqueId),
+            items.mapTo(mutableSetOf()) { (it as MapMarkerItem.Alert).alert.uniqueId }
+        )
+    }
+
+    @Test
+    fun protectedAlertDoesNotChangeUnrelatedDeterministicCluster() {
+        val tracked = alert("tracked", 49.7400, 8.6200)
+        val nearby = listOf(
+            alert("b", 49.73801, 8.61801),
+            alert("a", 49.73800, 8.61800)
+        )
+
+        val first = clusterMapAlerts(
+            alerts = nearby + tracked,
+            zoom = 12.0,
+            protectedAlertIds = setOf(tracked.uniqueId)
+        ).single { it is MapMarkerItem.Cluster } as MapMarkerItem.Cluster
+        val second = clusterMapAlerts(
+            alerts = (nearby + tracked).reversed(),
+            zoom = 12.0,
+            protectedAlertIds = setOf(tracked.uniqueId)
+        ).single { it is MapMarkerItem.Cluster } as MapMarkerItem.Cluster
+
+        assertEquals(first.id, second.id)
+        assertEquals(first.alerts.map(PokemonAlert::uniqueId), second.alerts.map(PokemonAlert::uniqueId))
+    }
+
+    @Test
     fun mixedClusterDoesNotClaimCategory() {
         val items = clusterMapAlerts(
             alerts = listOf(

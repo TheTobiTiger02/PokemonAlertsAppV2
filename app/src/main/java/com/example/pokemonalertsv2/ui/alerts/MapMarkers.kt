@@ -166,7 +166,9 @@ internal fun MapMarker(
     density: androidx.compose.ui.unit.Density,
     showTimeLabel: Boolean,
     goDexMatchResult: GoDexMatchResult,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    markerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
+    emphasized: Boolean = false
 ) {
     val context = LocalContext.current
     val coordinates = remember(alert.latitude, alert.longitude) {
@@ -188,7 +190,9 @@ internal fun MapMarker(
     val timeLabel = remember(now, alert.endTime) {
         mapCountdownLabel(alert.endTime, now)
     }
-    val markerSizePx = remember(density) { with(density) { 68.dp.toPx().toInt() } }
+    val markerSizePx = remember(density, markerSizeDp) {
+        with(density) { markerSizeDp.dp.toPx().toInt() }
+    }
 
     val colors = MaterialTheme.colorScheme
     val basePalette = remember(
@@ -271,6 +275,8 @@ internal fun MapMarker(
         anchor = markerIcon.anchor,
         title = formatAlertTitle(alert, goDexMatchResult.status),
         visible = true,
+        // Keep a tracked/browsed PiP marker clear of count bubbles and ordinary alerts.
+        zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f,
         onClick = {
             onClick()
             true
@@ -737,10 +743,11 @@ internal fun Canvas.drawMarkerLabel(
 internal fun createClusterMarkerBitmap(
     context: android.content.Context,
     count: Int,
-    sharedCategory: AlertFilter?
+    sharedCategory: AlertFilter?,
+    sizeDp: Float = MAP_FULL_CLUSTER_SIZE_DP
 ): Bitmap {
     val density = context.resources.displayMetrics.density
-    val size = (48f * density).toInt().coerceAtLeast(48)
+    val size = (sizeDp * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val fill = sharedCategory
@@ -814,6 +821,26 @@ private fun metersBetween(
         sin(deltaLon / 2).pow(2)
     return 2 * EARTH_RADIUS_METERS * asin(min(1.0, sqrt(a)))
 }
+internal const val MAP_FULL_MARKER_SIZE_DP = 68f
+internal const val MAP_PIP_MARKER_SIZE_DP = 44f
+internal const val MAP_PIP_EMPHASIZED_MARKER_SIZE_DP = 50f
+internal const val MAP_FULL_CLUSTER_SIZE_DP = 48f
+internal const val MAP_PIP_CLUSTER_SIZE_DP = 44f
+internal const val MAP_CLUSTER_MARKER_Z_INDEX = 850f
+internal const val MAP_EMPHASIZED_MARKER_Z_INDEX = 900f
+
+internal fun mapAlertMarkerSizeDp(
+    compactPictureInPicture: Boolean,
+    emphasized: Boolean
+): Float = when {
+    !compactPictureInPicture -> MAP_FULL_MARKER_SIZE_DP
+    emphasized -> MAP_PIP_EMPHASIZED_MARKER_SIZE_DP
+    else -> MAP_PIP_MARKER_SIZE_DP
+}
+
+internal fun mapClusterMarkerSizeDp(compactPictureInPicture: Boolean): Float =
+    if (compactPictureInPicture) MAP_PIP_CLUSTER_SIZE_DP else MAP_FULL_CLUSTER_SIZE_DP
+
 internal const val USER_LOCATION_ZOOM = 16f
 internal const val ALERT_LOCATION_ZOOM = 14f
 internal const val ALSBACH_ZOOM = 13f

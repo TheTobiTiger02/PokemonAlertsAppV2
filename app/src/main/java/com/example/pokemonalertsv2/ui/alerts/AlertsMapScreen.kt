@@ -76,6 +76,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
@@ -90,6 +91,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -146,9 +148,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
@@ -175,6 +179,56 @@ internal fun mapFilterForPresentation(
     selectedFilter
 }
 
+internal fun mapAlertsForPresentation(
+    filteredAlerts: List<PokemonAlert>,
+    trackedAlert: PokemonAlert?,
+    compactPictureInPicture: Boolean,
+    nowMillis: Long
+): List<PokemonAlert> {
+    if (!compactPictureInPicture || trackedAlert == null) return filteredAlerts
+    val trackedIsActiveAndMappable = trackedAlert.mapCoordinatesOrNull() != null &&
+        !trackedAlert.isInvalidated &&
+        (TimeUtils.parseEndTimeToMillis(trackedAlert.endTime) ?: Long.MAX_VALUE) > nowMillis
+    if (!trackedIsActiveAndMappable || filteredAlerts.any { it.uniqueId == trackedAlert.uniqueId }) {
+        return filteredAlerts
+    }
+    return filteredAlerts + trackedAlert
+}
+
+internal fun mapPipProtectedAlertIds(
+    compactPictureInPicture: Boolean,
+    trackedAlertId: String?,
+    renderedAlerts: List<PokemonAlert>
+): Set<String> = if (
+    compactPictureInPicture &&
+    trackedAlertId != null &&
+    renderedAlerts.any { it.uniqueId == trackedAlertId }
+) {
+    setOf(trackedAlertId)
+} else {
+    emptySet()
+}
+
+internal fun mapPipEmphasizedAlertIds(
+    compactPictureInPicture: Boolean,
+    trackedAlertId: String?,
+    browsedAlertId: String?
+): Set<String> = if (compactPictureInPicture) {
+    setOfNotNull(trackedAlertId, browsedAlertId)
+} else {
+    emptySet()
+}
+
+internal fun initialMapPipBrowsedAlertId(
+    selectedAlertId: String?,
+    trackedAlertId: String?,
+    renderedAlerts: List<PokemonAlert>
+): String? {
+    val availableIds = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
+    return selectedAlertId?.takeIf { it in availableIds }
+        ?: trackedAlertId?.takeIf { it in availableIds }
+}
+
 internal fun normalizeMapPictureInPictureZoom(zoom: Double?): Double =
     zoom?.takeIf(Double::isFinite)?.coerceIn(3.0, 20.0) ?: USER_LOCATION_ZOOM.toDouble()
 
@@ -193,7 +247,9 @@ fun AlertsMapRoute(
     showBackButton: Boolean = true,
     presentationMode: MapPresentationMode = MapPresentationMode.FULL,
     initialZoom: Double? = null,
-    onEnterPictureInPicture: ((Double) -> Unit)? = null
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    pipCommands: Flow<MapPipCommand>? = null,
+    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
@@ -216,6 +272,7 @@ fun AlertsMapRoute(
     val goDexEntries by goDexRepository.entries.collectAsStateWithLifecycle()
     val goDexConfig by goDexRepository.config.collectAsStateWithLifecycle()
 
+    val autoEnterMapPip by viewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle()
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
@@ -249,7 +306,13 @@ fun AlertsMapRoute(
         onRestoreAlert = viewModel::undoDismissAlert,
         presentationMode = presentationMode,
         initialZoom = initialZoom,
-        onEnterPictureInPicture = onEnterPictureInPicture
+        onEnterPictureInPicture = onEnterPictureInPicture,
+        autoEnterPictureInPicture = autoEnterMapPip,
+        onToggleAutoEnterPictureInPicture = {
+            viewModel.updateAutoEnterMapPip(!autoEnterMapPip)
+        },
+        pipCommands = pipCommands,
+        onPipStateChanged = onPipStateChanged
     )
 }
 
@@ -277,7 +340,11 @@ fun AlertsMapScreen(
     onRestoreAlert: (String) -> Unit = {},
     presentationMode: MapPresentationMode = MapPresentationMode.FULL,
     initialZoom: Double? = null,
-    onEnterPictureInPicture: ((Double) -> Unit)? = null
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    autoEnterPictureInPicture: Boolean = false,
+    onToggleAutoEnterPictureInPicture: () -> Unit = {},
+    pipCommands: Flow<MapPipCommand>? = null,
+    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
         alerts = alerts,
@@ -303,6 +370,10 @@ fun AlertsMapScreen(
         presentationMode = presentationMode,
         initialZoom = initialZoom,
         onEnterPictureInPicture = onEnterPictureInPicture,
+        autoEnterPictureInPicture = autoEnterPictureInPicture,
+        onToggleAutoEnterPictureInPicture = onToggleAutoEnterPictureInPicture,
+        pipCommands = pipCommands,
+        onPipStateChanged = onPipStateChanged,
         locationTrackerFactory = DefaultMapPoseTrackerFactory
     )
 }
@@ -331,7 +402,11 @@ internal fun AlertsMapScreenContent(
     onRestoreAlert: (String) -> Unit = {},
     presentationMode: MapPresentationMode = MapPresentationMode.FULL,
     initialZoom: Double? = null,
-    onEnterPictureInPicture: ((Double) -> Unit)? = null,
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    autoEnterPictureInPicture: Boolean = false,
+    onToggleAutoEnterPictureInPicture: () -> Unit = {},
+    pipCommands: Flow<MapPipCommand>? = null,
+    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
 ) {
     val context = LocalContext.current
@@ -360,8 +435,10 @@ internal fun AlertsMapScreenContent(
     var expandedClusterOriginZoom by rememberSaveable {
         mutableStateOf<Double?>(null)
     }
-    val selectedAlert = remember(alerts, selectedAlertId) {
+    val selectedAlert = remember(alerts, selectedAlertId, arrivalTracking.activeDestination) {
         alerts.firstOrNull { it.uniqueId == selectedAlertId }
+            ?: arrivalTracking.activeDestination?.alert
+                ?.takeIf { it.uniqueId == selectedAlertId }
     }
     var mapStyle by rememberSaveable(initialMapStyle) { mutableStateOf(initialMapStyle) }
     val mapSource = if (mapStyle == MapStylePreference.OPENSTREETMAP) {
@@ -379,9 +456,11 @@ internal fun AlertsMapScreenContent(
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
-    var retainedZoom by rememberSaveable(presentationMode, startingZoom) {
-        mutableStateOf(startingZoom)
-    }
+    // Not keyed on the presentation mode: the camera has to survive the picture-in-picture
+    // window being expanded back to full screen, which changes that mode.
+    var retainedZoom by rememberSaveable { mutableStateOf(startingZoom) }
+    var pipZoom by rememberSaveable { mutableStateOf(startingZoom) }
+    var pipMode by rememberSaveable { mutableStateOf(MapPipMode.FOLLOW) }
     val openStreetMapController = remember { OpenStreetMapController() }
 
     fun retainedCamera() = MapCameraSnapshot(retainedLatitude, retainedLongitude, retainedZoom)
@@ -399,12 +478,10 @@ internal fun AlertsMapScreenContent(
     var hasLocationPermission by remember { mutableStateOf(hasLocationPermissionNow()) }
     var userLocation by remember { mutableStateOf<android.location.Location?>(null) }
     var userPose by remember { mutableStateOf<MapUserPose?>(null) }
-    var trackingRequested by rememberSaveable(presentationMode) {
-        mutableStateOf(compactPictureInPicture)
-    }
-    var cameraFollowEnabled by rememberSaveable(presentationMode) {
-        mutableStateOf(compactPictureInPicture)
-    }
+    // Seeded from the presentation mode the screen first composed in, then left alone so
+    // expanding out of the window keeps whatever the user had set up in it.
+    var trackingRequested by rememberSaveable { mutableStateOf(compactPictureInPicture) }
+    var cameraFollowEnabled by rememberSaveable { mutableStateOf(compactPictureInPicture) }
     var trackingStatus by remember { mutableStateOf(MapTrackingStatus.INACTIVE) }
     var locationLookupComplete by remember { mutableStateOf(!hasLocationPermission) }
     var lifecycleLocationRefreshJob by remember { mutableStateOf<Job?>(null) }
@@ -547,14 +624,8 @@ internal fun AlertsMapScreenContent(
 
     var pendingPictureInPictureLaunch by rememberSaveable { mutableStateOf(false) }
 
-    fun currentPictureInPictureZoom(): Double = mapPictureInPictureZoom(
-        mapSource = mapSource,
-        googleMapZoom = cameraPositionState.position.zoom.toDouble(),
-        retainedZoom = retainedZoom
-    )
-
     fun launchPictureInPicture() {
-        onEnterPictureInPicture?.invoke(currentPictureInPictureZoom())
+        onEnterPictureInPicture?.invoke()
     }
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -613,8 +684,43 @@ internal fun AlertsMapScreenContent(
             nowMillis = expirationNow
         )
     }
+    val renderedAlerts = remember(
+        filteredAlerts,
+        arrivalTracking.activeDestination,
+        compactPictureInPicture,
+        expirationNow
+    ) {
+        mapAlertsForPresentation(
+            filteredAlerts = filteredAlerts,
+            trackedAlert = arrivalTracking.activeDestination?.alert,
+            compactPictureInPicture = compactPictureInPicture,
+            nowMillis = expirationNow
+        )
+    }
+    val protectedAlertIds = remember(
+        compactPictureInPicture,
+        arrivalTracking.activeDestination?.uniqueId,
+        renderedAlerts
+    ) {
+        mapPipProtectedAlertIds(
+            compactPictureInPicture = compactPictureInPicture,
+            trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
+            renderedAlerts = renderedAlerts
+        )
+    }
+    val emphasizedAlertIds = remember(
+        compactPictureInPicture,
+        arrivalTracking.activeDestination?.uniqueId,
+        selectedAlertId
+    ) {
+        mapPipEmphasizedAlertIds(
+            compactPictureInPicture = compactPictureInPicture,
+            trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
+            browsedAlertId = selectedAlertId
+        )
+    }
     val goDexMatches = rememberGoDexMatchResults(
-        alerts = filteredAlerts,
+        alerts = renderedAlerts,
         entries = goDexEntries,
         configured = goDexConfig.isConnected
     )
@@ -648,10 +754,10 @@ internal fun AlertsMapScreenContent(
         expandedClusterOriginZoom = null
     }
 
-    LaunchedEffect(filteredAlerts) {
+    LaunchedEffect(renderedAlerts) {
         val retainedIds = retainActiveExpandedAlertIds(
             expandedAlertIds = expandedClusterAlertIds,
-            activeAlertIds = filteredAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
+            activeAlertIds = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
         )
         if (retainedIds.size != expandedClusterAlertIds.size) {
             expandedClusterAlertIds = retainedIds.toList()
@@ -659,6 +765,195 @@ internal fun AlertsMapScreenContent(
         if (retainedIds.isEmpty()) {
             expandedClusterOriginZoom = null
         }
+    }
+
+    fun moveMapCamera(latitude: Double, longitude: Double, zoom: Double) {
+        val target = MapCameraSnapshot(latitude, longitude, zoom)
+        updateRetainedCamera(target)
+        if (mapSource == MapDisplaySource.GOOGLE) {
+            scope.launch {
+                runCatching {
+                    cameraPositionState.animate(
+                        CameraUpdateFactory.newLatLngZoom(
+                            LatLng(latitude, longitude),
+                            zoom.toFloat()
+                        ),
+                        400
+                    )
+                }
+            }
+        } else {
+            openStreetMapController.setCamera(target, animate = true)
+        }
+    }
+
+    // The window is barely 400 px tall, so the fit padding the full map uses would leave
+    // nothing to draw in - and newLatLngBounds rejects padding that large outright.
+    // Generous enough that neither marker is drawn flush against an edge or under the chip
+    // - the window is only about 145 dp tall, so there is no room for a subtler margin.
+    val pipFitPaddingPx = with(density) { 40.dp.roundToPx() }
+    var lastFitLatitude by remember { mutableStateOf<Double?>(null) }
+    var lastFitLongitude by remember { mutableStateOf<Double?>(null) }
+
+    /**
+     * Frames the browsed alert together with the live location, so the window answers both
+     * "where is it" and "where am I" at once. Without a fix yet, the alert is all we have.
+     */
+    fun focusBrowsedAlert(alert: PokemonAlert, from: android.location.Location?) {
+        val coordinates = alert.mapCoordinatesOrNull() ?: return
+        if (from == null) {
+            lastFitLatitude = null
+            lastFitLongitude = null
+            moveMapCamera(coordinates.latitude, coordinates.longitude, pipZoom)
+            return
+        }
+        lastFitLatitude = from.latitude
+        lastFitLongitude = from.longitude
+        when (
+            val focus = resolveMapPipFocus(
+                userLatitude = from.latitude,
+                userLongitude = from.longitude,
+                alertLatitude = coordinates.latitude,
+                alertLongitude = coordinates.longitude
+            )
+        ) {
+            is MapPipFocus.Centre ->
+                moveMapCamera(focus.latitude, focus.longitude, focus.zoom)
+            is MapPipFocus.Fit -> {
+                if (mapSource == MapDisplaySource.GOOGLE) {
+                    scope.launch {
+                        runCatching {
+                            cameraPositionState.animate(
+                                CameraUpdateFactory.newLatLngBounds(
+                                    LatLngBounds(
+                                        LatLng(focus.south, focus.west),
+                                        LatLng(focus.north, focus.east)
+                                    ),
+                                    pipFitPaddingPx
+                                ),
+                                500
+                            )
+                        }
+                        val position = cameraPositionState.position
+                        updateRetainedCamera(
+                            MapCameraSnapshot(
+                                position.target.latitude,
+                                position.target.longitude,
+                                position.zoom.toDouble()
+                            )
+                        )
+                    }
+                } else {
+                    openStreetMapController.fitAlerts(
+                        listOf(
+                            AlertMapCoordinates(from.latitude, from.longitude),
+                            AlertMapCoordinates(coordinates.latitude, coordinates.longitude)
+                        ),
+                        pipFitPaddingPx
+                    )
+                }
+            }
+        }
+    }
+
+    fun stepBrowseSelection(forward: Boolean) {
+        val origin = userLocation
+        val ordered = mapPipBrowseOrder(
+            alerts = renderedAlerts,
+            originLatitude = origin?.latitude ?: retainedLatitude,
+            originLongitude = origin?.longitude ?: retainedLongitude
+        )
+        val nextId = stepMapPipSelection(
+            orderedIds = ordered.map(PokemonAlert::uniqueId),
+            currentId = selectedAlertId,
+            forward = forward
+        ) ?: return
+        val next = ordered.firstOrNull { it.uniqueId == nextId } ?: return
+        selectedAlertId = next.uniqueId
+        focusBrowsedAlert(next, userLocation)
+    }
+
+    fun handlePipCommand(command: MapPipCommand) {
+        when (command) {
+            MapPipCommand.TOGGLE_MODE -> {
+                val nextMode = pipMode.toggled()
+                pipMode = nextMode
+                if (nextMode == MapPipMode.BROWSE) {
+                    cameraFollowEnabled = false
+                    // The camera stops following, but the fix stream has to keep running:
+                    // the framing is only live if the location behind it is.
+                    trackingRequested = true
+                    val current = renderedAlerts.firstOrNull { it.uniqueId == selectedAlertId }
+                    if (current != null) {
+                        focusBrowsedAlert(current, userLocation)
+                    } else {
+                        stepBrowseSelection(forward = true)
+                    }
+                } else {
+                    selectedAlertId = null
+                    trackingRequested = true
+                    cameraFollowEnabled = true
+                    userLocation?.let { moveMapCamera(it.latitude, it.longitude, pipZoom) }
+                }
+            }
+            MapPipCommand.PREVIOUS, MapPipCommand.NEXT -> {
+                val forward = command == MapPipCommand.NEXT
+                if (pipMode == MapPipMode.BROWSE) {
+                    stepBrowseSelection(forward)
+                } else {
+                    pipZoom = normalizeMapPictureInPictureZoom(
+                        pipZoom + if (forward) 1.0 else -1.0
+                    )
+                    val following = userLocation?.takeIf { cameraFollowEnabled }
+                    moveMapCamera(
+                        following?.latitude ?: retainedLatitude,
+                        following?.longitude ?: retainedLongitude,
+                        pipZoom
+                    )
+                }
+            }
+        }
+    }
+
+    val currentPipCommandHandler by rememberUpdatedState(
+        newValue = { command: MapPipCommand -> handlePipCommand(command) }
+    )
+    LaunchedEffect(pipCommands) {
+        pipCommands?.collect { command -> currentPipCommandHandler(command) }
+    }
+
+    // Entering the window inherits whatever the full map was showing: an alert that is still
+    // live means the user was already looking at it, so open browsing rather than following.
+    LaunchedEffect(
+        compactPictureInPicture,
+        arrivalTracking.activeDestination?.uniqueId
+    ) {
+        if (!compactPictureInPicture) return@LaunchedEffect
+        pipZoom = mapPictureInPictureZoom(
+            mapSource = mapSource,
+            googleMapZoom = cameraPositionState.position.zoom.toDouble(),
+            retainedZoom = retainedZoom
+        )
+        trackingRequested = true
+        val browsedAlertId = initialMapPipBrowsedAlertId(
+            selectedAlertId = selectedAlertId,
+            trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
+            renderedAlerts = renderedAlerts
+        )
+        val browsing = browsedAlertId != null
+        pipMode = if (browsing) MapPipMode.BROWSE else MapPipMode.FOLLOW
+        cameraFollowEnabled = !browsing
+        selectedAlertId = browsedAlertId
+        if (browsing) {
+            lastFitLatitude = null
+            lastFitLongitude = null
+        }
+    }
+
+    val pipCanStep = renderedAlerts.isNotEmpty()
+    val currentPipStateReporter by rememberUpdatedState(onPipStateChanged)
+    LaunchedEffect(pipMode, pipCanStep) {
+        currentPipStateReporter?.invoke(pipMode, pipCanStep)
     }
 
     val mapUiSettings = remember(hasLocationPermission, compactPictureInPicture) {
@@ -766,7 +1061,7 @@ internal fun AlertsMapScreenContent(
         if (!cameraFollowEnabled || !currentMapLoaded) return@LaunchedEffect
         val location = pose.location
         val currentZoom = if (compactPictureInPicture) {
-            startingZoom
+            pipZoom
         } else if (mapSource == MapDisplaySource.GOOGLE) {
             cameraPositionState.position.zoom.coerceAtLeast(16f).toDouble()
         } else {
@@ -787,15 +1082,49 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    LaunchedEffect(currentMapLoaded, filteredAlerts, locationLookupComplete, userLocation, mapSource) {
+    val currentFocusBrowsedAlert by rememberUpdatedState(
+        newValue = { alert: PokemonAlert, from: android.location.Location? ->
+            focusBrowsedAlert(alert, from)
+        }
+    )
+    // Re-frame as the user walks, but only once they have actually moved: the fix stream is
+    // about 1 Hz and animating the camera every second would be unreadable.
+    LaunchedEffect(compactPictureInPicture, pipMode, selectedAlertId, currentMapLoaded, mapSource) {
+        if (!compactPictureInPicture || pipMode != MapPipMode.BROWSE || !currentMapLoaded) {
+            return@LaunchedEffect
+        }
+        val alert = renderedAlerts.firstOrNull { it.uniqueId == selectedAlertId } ?: return@LaunchedEffect
+        if (mapSource == MapDisplaySource.OPENSTREETMAP) {
+            // MapLibre reports its style loaded while Android is still resizing the map into
+            // PiP. Let that transition settle before calculating bounds from its final size.
+            delay(600)
+        }
+        snapshotFlow { userPose?.location }.collect { location ->
+            if (location == null) return@collect
+            val previousLatitude = lastFitLatitude
+            val previousLongitude = lastFitLongitude
+            val moved = previousLatitude == null || previousLongitude == null ||
+                mapPipDistanceMeters(
+                    previousLatitude,
+                    previousLongitude,
+                    location.latitude,
+                    location.longitude
+                ) >= MAP_PIP_REFIT_METERS
+            if (moved) {
+                currentFocusBrowsedAlert(alert, location)
+            }
+        }
+    }
+
+    LaunchedEffect(currentMapLoaded, renderedAlerts, locationLookupComplete, userLocation, mapSource) {
         if (currentMapLoaded && locationLookupComplete && !initialCameraPositioned) {
             val resolvedViewport = resolveInitialMapViewport(
                 userLatitude = userLocation?.latitude,
                 userLongitude = userLocation?.longitude,
-                alerts = filteredAlerts
+                alerts = renderedAlerts
             )
             val viewport = if (compactPictureInPicture) {
-                resolvedViewport.copy(zoom = startingZoom.toFloat())
+                resolvedViewport.copy(zoom = pipZoom.toFloat())
             } else {
                 resolvedViewport
             }
@@ -854,7 +1183,7 @@ internal fun AlertsMapScreenContent(
                 }
             )
         }
-        val visibleCoordinates = remember(filteredAlerts) { resolveFitAllCoordinates(filteredAlerts) }
+        val visibleCoordinates = remember(renderedAlerts) { resolveFitAllCoordinates(renderedAlerts) }
         val displayZoom = if (mapSource == MapDisplaySource.GOOGLE) {
             cameraPositionState.position.zoom.toDouble()
         } else {
@@ -864,17 +1193,28 @@ internal fun AlertsMapScreenContent(
             expandedClusterAlertIds.toSet()
         }
         val spawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
+        val baseMarkerSizeDp = mapAlertMarkerSizeDp(
+            compactPictureInPicture = compactPictureInPicture,
+            emphasized = false
+        )
+        val emphasizedMarkerSizeDp = mapAlertMarkerSizeDp(
+            compactPictureInPicture = compactPictureInPicture,
+            emphasized = true
+        )
+        val clusterMarkerSizeDp = mapClusterMarkerSizeDp(compactPictureInPicture)
         val markerItems = remember(
-            filteredAlerts,
+            renderedAlerts,
             displayZoom,
             spawnRadiusMeters,
-            expandedAlertIdSet
+            expandedAlertIdSet,
+            protectedAlertIds
         ) {
             clusterMapAlerts(
-                alerts = filteredAlerts,
+                alerts = renderedAlerts,
                 zoom = displayZoom,
                 spawnRadiusMeters = spawnRadiusMeters,
-                expandedAlertIds = expandedAlertIdSet
+                expandedAlertIds = expandedAlertIdSet,
+                protectedAlertIds = protectedAlertIds
             )
         }
 
@@ -960,7 +1300,7 @@ internal fun AlertsMapScreenContent(
                     )
                 }
                 if (spawnRadiusMeters != null) {
-                    filteredAlerts.filter { it.isSpawnAlert }.forEach { alert ->
+                    renderedAlerts.filter { it.isSpawnAlert }.forEach { alert ->
                         val coords = alert.mapCoordinatesOrNull() ?: return@forEach
                         Circle(
                             center = LatLng(coords.latitude, coords.longitude),
@@ -975,6 +1315,7 @@ internal fun AlertsMapScreenContent(
                 markerItems.forEach { item ->
                     when (item) {
                         is MapMarkerItem.Alert -> key(item.alert.uniqueId) {
+                            val emphasized = item.alert.uniqueId in emphasizedAlertIds
                             MapMarker(
                                 alert = item.alert,
                                 countdownClock = markerCountdownClock,
@@ -986,30 +1327,47 @@ internal fun AlertsMapScreenContent(
                                     if (!compactPictureInPicture) {
                                         selectedAlertId = item.alert.uniqueId
                                     }
-                                }
+                                },
+                                markerSizeDp = if (emphasized) {
+                                    emphasizedMarkerSizeDp
+                                } else {
+                                    baseMarkerSizeDp
+                                },
+                                emphasized = emphasized
                             )
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
                             Marker(
                                 state = MarkerState(LatLng(item.latitude, item.longitude)),
                                 icon = BitmapDescriptorFactory.fromBitmap(
-                                    remember(item.id, item.sharedCategory, item.alerts.size) {
+                                    remember(
+                                        item.id,
+                                        item.sharedCategory,
+                                        item.alerts.size,
+                                        clusterMarkerSizeDp
+                                    ) {
                                         createClusterMarkerBitmap(
                                             context = context,
                                             count = item.alerts.size,
-                                            sharedCategory = item.sharedCategory
+                                            sharedCategory = item.sharedCategory,
+                                            sizeDp = clusterMarkerSizeDp
                                         )
                                     }
                                 ),
                                 anchor = Offset(0.5f, 0.5f),
-                                zIndex = 850f,
+                                zIndex = MAP_CLUSTER_MARKER_Z_INDEX,
                                 onClick = {
                                     when (
-                                        val interaction = resolveMapClusterInteraction(
-                                            cluster = item,
-                                            currentZoom = displayZoom
-                                        )
+                                        val interaction = if (compactPictureInPicture) {
+                                            null
+                                        } else {
+                                            resolveMapClusterInteraction(
+                                                cluster = item,
+                                                currentZoom = displayZoom
+                                            )
+                                        }
                                     ) {
+                                        null -> Unit
                                         MapClusterInteraction.ShowMembers -> {
                                             selectedClusterAlerts = item.alerts
                                         }
@@ -1040,7 +1398,7 @@ internal fun AlertsMapScreenContent(
             key(mapLoadAttempt) {
                 OpenStreetMapView(
                     modifier = Modifier.fillMaxSize(),
-                    alerts = filteredAlerts,
+                    alerts = renderedAlerts,
                     userPose = userPose,
                     cameraSnapshot = retainedCamera(),
                     contentInsets = openStreetMapInsets,
@@ -1061,11 +1419,16 @@ internal fun AlertsMapScreenContent(
                     },
                     onClusterClick = { cluster ->
                         when (
-                            val interaction = resolveMapClusterInteraction(
-                                cluster = cluster,
-                                currentZoom = retainedZoom
-                            )
+                            val interaction = if (compactPictureInPicture) {
+                                null
+                            } else {
+                                resolveMapClusterInteraction(
+                                    cluster = cluster,
+                                    currentZoom = retainedZoom
+                                )
+                            }
                         ) {
+                            null -> Unit
                             MapClusterInteraction.ShowMembers -> {
                                 selectedClusterAlerts = cluster.alerts
                             }
@@ -1085,7 +1448,13 @@ internal fun AlertsMapScreenContent(
                     },
                     expandedAlertIds = expandedAlertIdSet,
                     showSpawnRadius = showSpawnRadius,
-                    spacialRendEnabled = spacialRendEnabled
+                    spacialRendEnabled = spacialRendEnabled,
+                    interactive = !compactPictureInPicture,
+                    protectedAlertIds = protectedAlertIds,
+                    emphasizedAlertIds = emphasizedAlertIds,
+                    baseMarkerSizeDp = baseMarkerSizeDp,
+                    emphasizedMarkerSizeDp = emphasizedMarkerSizeDp,
+                    clusterMarkerSizeDp = clusterMarkerSizeDp
                 )
             }
 
@@ -1182,6 +1551,31 @@ internal fun AlertsMapScreenContent(
                         }
                     }
                 }
+            }
+        }
+
+        // The window has no room for a card, so the browse cursor gets a single line.
+        if (compactPictureInPicture && pipMode == MapPipMode.BROWSE) {
+            Surface(
+                modifier = Modifier
+                    // Top, not bottom: the OpenStreetMap attribution owns the bottom
+                    // edge and the two would sit on top of each other in this window.
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .testTag("map_pip_browse_chip"),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = selectedAlert
+                        ?.let { alert -> mapPipBrowseLabel(alert, markerCountdownClock.value) }
+                        ?: stringResource(R.string.map_pip_no_alerts),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
 
@@ -1289,7 +1683,13 @@ internal fun AlertsMapScreenContent(
                 onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
                 onToggleSpawnRadius = onToggleSpawnRadius,
                 onToggleSpacialRend = onToggleSpacialRend,
-                onToggleDismissed = { showDismissed = !showDismissed }
+                onToggleDismissed = { showDismissed = !showDismissed },
+                autoEnterPictureInPicture = autoEnterPictureInPicture,
+                onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
+                    onToggleAutoEnterPictureInPicture
+                } else {
+                    null
+                }
             )
         }
 

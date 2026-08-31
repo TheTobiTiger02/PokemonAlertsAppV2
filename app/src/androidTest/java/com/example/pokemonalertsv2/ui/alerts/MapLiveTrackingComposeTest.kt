@@ -8,9 +8,16 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -128,6 +135,53 @@ class MapLiveTrackingComposeTest {
         composeRule.onNodeWithContentDescription("Following your live location")
             .assertDoesNotExist()
         assertTrue(trackerStarted)
+    }
+
+    @Test
+    fun pictureInPictureBrowseCommandSelectsAnAlertAndShowsItsChip() {
+        val commands = MutableSharedFlow<MapPipCommand>(
+            extraBufferCapacity = 4,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+        )
+        val reportedStates = mutableListOf<Pair<MapPipMode, Boolean>>()
+        // Larvitar sits on the map's default centre and Chespin well outside it, so the
+        // nearest-first cursor has an unambiguous first stop.
+        val alerts = listOf(
+            PokemonAlert(name = "Larvitar", latitude = ALSBACH_LATITUDE, longitude = ALSBACH_LONGITUDE),
+            PokemonAlert(name = "Chespin", latitude = 49.8000, longitude = 8.7000)
+        )
+
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                AlertsMapScreenContent(
+                    alerts = alerts,
+                    onBack = {},
+                    onRefresh = {},
+                    presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
+                    initialZoom = 15.0,
+                    onEnterPictureInPicture = {},
+                    pipCommands = commands,
+                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("map_pip_content").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000L) { reportedStates.isNotEmpty() }
+        assertEquals(MapPipMode.FOLLOW to true, reportedStates.first())
+        composeRule.onNodeWithTag("map_pip_browse_chip").assertDoesNotExist()
+
+        composeRule.runOnIdle { commands.tryEmit(MapPipCommand.TOGGLE_MODE) }
+
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            reportedStates.lastOrNull()?.first == MapPipMode.BROWSE
+        }
+        composeRule.onNodeWithTag("map_pip_browse_chip").assertIsDisplayed()
+        // Scoped to the chip: the map's own marker also carries the species name.
+        composeRule.onNode(
+            hasAnyAncestor(hasTestTag("map_pip_browse_chip")) and
+                hasText("Larvitar", substring = true)
+        ).assertExists()
     }
 
     @Test

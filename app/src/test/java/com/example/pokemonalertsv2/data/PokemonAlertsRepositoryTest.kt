@@ -584,6 +584,7 @@ class PokemonAlertsRepositoryTest {
         private val sortState = MutableStateFlow(SortPreference.TIME_REMAINING)
         private val mapStyleState = MutableStateFlow(MapStylePreference.GOOGLE_STANDARD)
         private val showMapCountdownsState = MutableStateFlow(false)
+        private val autoEnterMapPipState = MutableStateFlow(false)
         private val notificationsEnabledState = MutableStateFlow(true)
         private val raidsState = MutableStateFlow(true)
         private val spawnsState = MutableStateFlow(true)
@@ -637,6 +638,9 @@ class PokemonAlertsRepositoryTest {
 
         override val showMapCountdowns: Flow<Boolean> = showMapCountdownsState.asStateFlow()
         override suspend fun updateShowMapCountdowns(enabled: Boolean) { showMapCountdownsState.value = enabled }
+
+        override val autoEnterMapPip: Flow<Boolean> = autoEnterMapPipState.asStateFlow()
+        override suspend fun updateAutoEnterMapPip(enabled: Boolean) { autoEnterMapPipState.value = enabled }
 
         override val notificationsEnabled: Flow<Boolean> = notificationsEnabledState.asStateFlow()
         override suspend fun updateNotificationsEnabled(enabled: Boolean) { notificationsEnabledState.value = enabled }

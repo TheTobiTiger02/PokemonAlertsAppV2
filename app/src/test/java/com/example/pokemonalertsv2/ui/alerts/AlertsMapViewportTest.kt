@@ -188,6 +188,79 @@ class AlertsMapViewportTest {
         assertEquals(16.0, normalizeMapPictureInPictureZoom(Double.NaN), 0.0)
     }
 
+    @Test
+    fun `picture in picture restores an active tracked alert omitted by filtering`() {
+        val visible = alert("Visible", 49.8, 8.6)
+        val tracked = alert("Tracked", 49.9, 8.7)
+
+        val rendered = mapAlertsForPresentation(
+            filteredAlerts = listOf(visible),
+            trackedAlert = tracked,
+            compactPictureInPicture = true,
+            nowMillis = 0L
+        )
+
+        assertEquals(listOf(visible.uniqueId, tracked.uniqueId), rendered.map(PokemonAlert::uniqueId))
+        assertEquals(
+            setOf(tracked.uniqueId),
+            mapPipProtectedAlertIds(true, tracked.uniqueId, rendered)
+        )
+    }
+
+    @Test
+    fun `tracked alert restoration is PiP only and rejects inactive destinations`() {
+        val visible = alert("Visible", 49.8, 8.6)
+        val tracked = alert("Tracked", 49.9, 8.7)
+        val expired = tracked.copy(endTime = "1970-01-01T00:00:01Z")
+        val unmappable = tracked.copy(latitude = null, longitude = null)
+
+        assertEquals(
+            listOf(visible),
+            mapAlertsForPresentation(listOf(visible), tracked, false, nowMillis = 0L)
+        )
+        assertEquals(
+            listOf(visible),
+            mapAlertsForPresentation(listOf(visible), expired, true, nowMillis = 2_000L)
+        )
+        assertEquals(
+            listOf(visible),
+            mapAlertsForPresentation(listOf(visible), unmappable, true, nowMillis = 0L)
+        )
+    }
+
+    @Test
+    fun `PiP emphasizes tracked and browsed alerts without duplicate identities`() {
+        assertEquals(
+            setOf("tracked", "browsed"),
+            mapPipEmphasizedAlertIds(true, "tracked", "browsed")
+        )
+        assertEquals(
+            setOf("tracked"),
+            mapPipEmphasizedAlertIds(true, "tracked", "tracked")
+        )
+        assertEquals(
+            emptySet<String>(),
+            mapPipEmphasizedAlertIds(false, "tracked", "browsed")
+        )
+    }
+
+    @Test
+    fun `PiP frames an existing selection before the tracked destination`() {
+        val selected = alert("Selected", 49.8, 8.6)
+        val tracked = alert("Tracked", 49.9, 8.7)
+        val rendered = listOf(selected, tracked)
+
+        assertEquals(
+            selected.uniqueId,
+            initialMapPipBrowsedAlertId(selected.uniqueId, tracked.uniqueId, rendered)
+        )
+        assertEquals(
+            tracked.uniqueId,
+            initialMapPipBrowsedAlertId("missing", tracked.uniqueId, rendered)
+        )
+        assertNull(initialMapPipBrowsedAlertId("missing", "also-missing", rendered))
+    }
+
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(
         name = name,
         latitude = latitude,

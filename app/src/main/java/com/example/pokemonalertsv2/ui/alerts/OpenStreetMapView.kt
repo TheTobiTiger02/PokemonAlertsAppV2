@@ -77,7 +77,8 @@ internal data class MapContentInsets(
 
 internal data class OpenStreetMapMarker(
     val item: MapMarkerItem,
-    val icon: MapMarkerIcon
+    val icon: MapMarkerIcon,
+    val zIndex: Float = 0f
 )
 
 internal class OpenStreetMapLifecycleGuard(
@@ -149,6 +150,7 @@ internal class OpenStreetMapController {
     var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
     var onUserGesture: () -> Unit = {}
+    private var pendingGesturesEnabled = true
 
     fun attach(map: MapLibreMap, context: android.content.Context) {
         this.map = map
@@ -185,7 +187,25 @@ internal class OpenStreetMapController {
             }
         }
         applyContentInsets()
+        applyGestureSettings()
         renderMarkers(context)
+    }
+
+    /**
+     * Picture-in-picture windows swallow touch events, so leaving the gestures on there
+     * only lets a stray system interaction drag the camera away from the live position.
+     */
+    fun setGesturesEnabled(enabled: Boolean) {
+        pendingGesturesEnabled = enabled
+        applyGestureSettings()
+    }
+
+    private fun applyGestureSettings() {
+        map?.uiSettings?.apply {
+            isScrollGesturesEnabled = pendingGesturesEnabled
+            isZoomGesturesEnabled = pendingGesturesEnabled
+            isCompassEnabled = pendingGesturesEnabled
+        }
     }
 
     fun attachStyle(style: Style, context: android.content.Context) {
@@ -248,6 +268,9 @@ internal class OpenStreetMapController {
 
     fun fitAlerts(coordinates: List<AlertMapCoordinates>, paddingPx: Int) {
         val currentMap = map ?: return
+        // A live-follow animation can still be finishing as PiP switches into destination
+        // browsing. Cancel it so it cannot overwrite the user + destination fit.
+        currentMap.cancelTransitions()
         when (coordinates.size) {
             0 -> Unit
             1 -> {
@@ -302,7 +325,7 @@ internal class OpenStreetMapController {
         val currentMap = map ?: return
         currentMap.removeAnnotations()
         val iconFactory = IconFactory.getInstance(context)
-        pendingMarkers.forEach { model ->
+        pendingMarkers.sortedBy(OpenStreetMapMarker::zIndex).forEach { model ->
             currentMap.addMarker(
                 MarkerOptions()
                     .position(LatLng(model.item.latitude, model.item.longitude))
@@ -422,7 +445,13 @@ internal fun OpenStreetMapView(
     onUserGesture: () -> Unit,
     expandedAlertIds: Set<String> = emptySet(),
     showSpawnRadius: Boolean = false,
-    spacialRendEnabled: Boolean = false
+    spacialRendEnabled: Boolean = false,
+    interactive: Boolean = true,
+    protectedAlertIds: Set<String> = emptySet(),
+    emphasizedAlertIds: Set<String> = emptySet(),
+    baseMarkerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
+    emphasizedMarkerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
+    clusterMarkerSizeDp: Float = MAP_FULL_CLUSTER_SIZE_DP
 ) {
     val context = LocalContext.current
     val mapLibreReady = remember(context) { MapLibreInitializer.ensureInitialized(context) }
@@ -435,7 +464,15 @@ internal fun OpenStreetMapView(
     val lifecycleOwner = LocalLifecycleOwner.current
     val colors = androidx.compose.material3.MaterialTheme.colorScheme
     val now = countdownClock.value
-    val markerSizePx = remember(density) { with(density) { 68.dp.toPx().toInt() } }
+    val baseMarkerSizePx = remember(density, baseMarkerSizeDp) {
+        with(density) { baseMarkerSizeDp.dp.toPx().toInt() }
+    }
+    val emphasizedMarkerSizePx = remember(density, emphasizedMarkerSizeDp) {
+        with(density) { emphasizedMarkerSizeDp.dp.toPx().toInt() }
+    }
+    val clusterMarkerSizePx = remember(density, clusterMarkerSizeDp) {
+        with(density) { clusterMarkerSizeDp.dp.toPx().toInt() }
+    }
     val basePalette = remember(
         colors.primary,
         colors.onPrimary,
@@ -513,7 +550,6 @@ internal fun OpenStreetMapView(
                     map.uiSettings.apply {
                         isLogoEnabled = false
                         isAttributionEnabled = false
-                        isCompassEnabled = true
                         isRotateGesturesEnabled = false
                     }
                     map.setStyle(Style.Builder().fromJson(openStreetMapStyleJson())) styleLoaded@{
@@ -533,19 +569,21 @@ internal fun OpenStreetMapView(
         alerts,
         cameraSnapshot.zoom,
         clusterSpawnRadiusMeters,
-        expandedAlertIds
+        expandedAlertIds,
+        protectedAlertIds
     ) {
         clusterMapAlerts(
             alerts = alerts,
             zoom = cameraSnapshot.zoom,
             spawnRadiusMeters = clusterSpawnRadiusMeters,
-            expandedAlertIds = expandedAlertIds
+            expandedAlertIds = expandedAlertIds,
+            protectedAlertIds = protectedAlertIds
         )
     }
 
     // Load static artwork independently from the per-second countdown job. Even when a network
     // image is slow, the clock can keep replacing labels with an immediate custom fallback.
-    LaunchedEffect(markerItems, markerSizePx) {
+    LaunchedEffect(markerItems, baseMarkerSizePx) {
         withContext(Dispatchers.IO) {
             markerItems.asSequence()
                 .filterIsInstance<MapMarkerItem.Alert>()
@@ -553,19 +591,32 @@ internal fun OpenStreetMapView(
                 .forEach { alert ->
                     val url = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
                         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
-                    if (url != null) loadMapMarkerArtwork(context, url, markerSizePx)
+                    if (url != null) loadMapMarkerArtwork(context, url, baseMarkerSizePx)
                 }
         }
     }
-    LaunchedEffect(markerItems, mapCountdownRefreshKey(showTimeLabels, now), basePalette, goDexMatches) {
+    LaunchedEffect(
+        markerItems,
+        mapCountdownRefreshKey(showTimeLabels, now),
+        basePalette,
+        goDexMatches,
+        emphasizedAlertIds,
+        baseMarkerSizePx,
+        emphasizedMarkerSizePx,
+        clusterMarkerSizePx
+    ) {
         val immediateMarkers = markerItems.map { item ->
+            val emphasized = item is MapMarkerItem.Alert &&
+                item.alert.uniqueId in emphasizedAlertIds
             createImmediateOpenStreetMapMarker(
                 item = item,
-                markerSizePx = markerSizePx,
+                markerSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx,
+                clusterMarkerSizePx = clusterMarkerSizePx,
                 showTimeLabels = showTimeLabels,
                 nowMillis = now,
                 basePalette = basePalette,
-                goDexMatches = goDexMatches
+                goDexMatches = goDexMatches,
+                emphasized = emphasized
             )
         }
         withContext(Dispatchers.Main.immediate) {
@@ -579,11 +630,14 @@ internal fun OpenStreetMapView(
                         createOpenStreetMapClusterIcon(
                             item.alerts.size,
                             item.sharedCategory,
-                            markerSizePx
-                        )
+                            clusterMarkerSizePx
+                        ),
+                        MAP_CLUSTER_MARKER_Z_INDEX
                     )
                 }
                 val alert = (item as MapMarkerItem.Alert).alert
+                val emphasized = alert.uniqueId in emphasizedAlertIds
+                val itemSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx
                 val visualStyle = resolveAlertVisualStyle(alert)
                 val matchResult = goDexMatches[alert.uniqueId]
                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
@@ -595,7 +649,7 @@ internal fun OpenStreetMapView(
                 val timeLabel = mapCountdownLabel(alert.endTime, now)
                 val icon = createMapMarkerIcon(
                     context = context,
-                    sizePx = markerSizePx,
+                    sizePx = itemSizePx,
                     categoryCode = markerLabel,
                     speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
                     speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
@@ -606,13 +660,21 @@ internal fun OpenStreetMapView(
                     palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
                     goDexStatus = matchResult.status
                 ) ?: return@mapNotNull null
-                OpenStreetMapMarker(item, icon)
+                OpenStreetMapMarker(
+                    item = item,
+                    icon = icon,
+                    zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
+                )
             }
         }
         currentCoroutineContext().ensureActive()
         withContext(Dispatchers.Main.immediate) {
             controller.setMarkers(context, markers, alerts)
         }
+    }
+
+    LaunchedEffect(interactive) {
+        controller.setGesturesEnabled(interactive)
     }
 
     LaunchedEffect(showSpawnRadius, spacialRendEnabled, alerts) {
@@ -631,15 +693,18 @@ internal fun OpenStreetMapView(
 private fun createImmediateOpenStreetMapMarker(
     item: MapMarkerItem,
     markerSizePx: Int,
+    clusterMarkerSizePx: Int,
     showTimeLabels: Boolean,
     nowMillis: Long,
     basePalette: MapMarkerPalette,
-    goDexMatches: Map<String, GoDexMatchResult>
+    goDexMatches: Map<String, GoDexMatchResult>,
+    emphasized: Boolean
 ): OpenStreetMapMarker {
     if (item is MapMarkerItem.Cluster) {
         return OpenStreetMapMarker(
             item,
-            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, markerSizePx)
+            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
+            MAP_CLUSTER_MARKER_Z_INDEX
         )
     }
     val alert = (item as MapMarkerItem.Alert).alert
@@ -661,7 +726,11 @@ private fun createImmediateOpenStreetMapMarker(
         palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
         goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED
     )
-    return OpenStreetMapMarker(item, resolveInitialMapMarkerIcon(request))
+    return OpenStreetMapMarker(
+        item = item,
+        icon = resolveInitialMapMarkerIcon(request),
+        zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
+    )
 }
 
 private fun openStreetMapStyleJson(): String {
@@ -695,9 +764,9 @@ private fun openStreetMapStyleJson(): String {
 private fun createOpenStreetMapClusterIcon(
     count: Int,
     sharedCategory: AlertFilter?,
-    markerSizePx: Int
+    sizePx: Int
 ): MapMarkerIcon {
-    val size = (markerSizePx * 0.78f).toInt().coerceAtLeast(48)
+    val size = sizePx.coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val color = sharedCategory

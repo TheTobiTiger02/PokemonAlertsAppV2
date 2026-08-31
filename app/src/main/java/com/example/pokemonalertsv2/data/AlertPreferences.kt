@@ -21,6 +21,7 @@ private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.boole
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
 private val MAP_STYLE_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("map_style_preference")
 private val SHOW_MAP_COUNTDOWNS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_map_countdowns")
+private val AUTO_ENTER_MAP_PIP_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("auto_enter_map_pip")
 private val NOTIFICATIONS_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notifications_enabled")
 private val RAIDS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("raids_notifications")
 private val SPAWNS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spawns_notifications")
@@ -112,6 +113,9 @@ interface AlertPreferencesStore {
 
     val showMapCountdowns: Flow<Boolean>
     suspend fun updateShowMapCountdowns(enabled: Boolean)
+
+    val autoEnterMapPip: Flow<Boolean>
+    suspend fun updateAutoEnterMapPip(enabled: Boolean)
     
     val notificationsEnabled: Flow<Boolean>
     suspend fun updateNotificationsEnabled(enabled: Boolean)
@@ -321,6 +325,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateShowMapCountdowns(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[SHOW_MAP_COUNTDOWNS_KEY] = enabled
+        }
+    }
+
+    override val autoEnterMapPip: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[AUTO_ENTER_MAP_PIP_KEY] ?: false
+    }
+
+    override suspend fun updateAutoEnterMapPip(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[AUTO_ENTER_MAP_PIP_KEY] = enabled
         }
     }
     

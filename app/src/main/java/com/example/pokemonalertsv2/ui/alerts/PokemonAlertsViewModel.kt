@@ -220,6 +220,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .asPreferenceState(MapStylePreference.fromStoredValue(null))
     val showMapCountdowns = repository.alertPreferences.showMapCountdowns
         .asPreferenceState(false)
+    val autoEnterMapPip = repository.alertPreferences.autoEnterMapPip
+        .asPreferenceState(false)
     val showSpawnRadius = repository.alertPreferences.showSpawnRadius
         .asPreferenceState(false)
     val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
@@ -262,6 +264,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateShowMapCountdowns(enabled: Boolean) {
         viewModelScope.launch {
             repository.alertPreferences.updateShowMapCountdowns(enabled)
+        }
+    }
+
+    fun updateAutoEnterMapPip(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateAutoEnterMapPip(enabled)
         }
     }
 

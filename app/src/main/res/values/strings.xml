@@ -74,6 +74,14 @@
     <string name="map_distance_unavailable">Distance unavailable</string>
     <string name="map_estimated_walk">%1$s</string>
     <string name="map_osm_attribution">© OpenStreetMap contributors</string>
+    <string name="map_pip_action_browse">Browse alerts</string>
+    <string name="map_pip_action_follow">Follow me</string>
+    <string name="map_pip_action_zoom_in">Zoom in</string>
+    <string name="map_pip_action_zoom_out">Zoom out</string>
+    <string name="map_pip_action_previous_alert">Previous alert</string>
+    <string name="map_pip_action_next_alert">Next alert</string>
+    <string name="map_pip_no_alerts">No alerts nearby</string>
+    <string name="map_pip_auto_enter">Auto picture-in-picture</string>
     <string name="back">Back</string>
     <string name="enter_pip_short">PiP</string>
     <string name="open_alert_in_pip">Open alert in picture-in-picture</string>

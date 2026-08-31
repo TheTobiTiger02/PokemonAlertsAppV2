@@ -83,7 +83,8 @@ internal fun clusterMapAlerts(
     zoom: Double,
     cellDp: Float = MAP_CLUSTER_CELL_DP,
     spawnRadiusMeters: Double? = null,
-    expandedAlertIds: Set<String> = emptySet()
+    expandedAlertIds: Set<String> = emptySet(),
+    protectedAlertIds: Set<String> = emptySet()
 ): List<MapMarkerItem> {
     val positioned = alerts.mapNotNull { alert ->
         val latitude = alert.latitude ?: return@mapNotNull null
@@ -93,13 +94,17 @@ internal fun clusterMapAlerts(
     }.sortedBy { it.alert.uniqueId }
     if (positioned.isEmpty()) return emptyList()
 
+    val protectedGroups = positioned
+        .filter { it.alert.uniqueId in protectedAlertIds }
+        .map(::listOf)
+    val clusterable = positioned.filterNot { it.alert.uniqueId in protectedAlertIds }
     val groups = if (zoom < MAP_CLUSTER_MAX_ZOOM) {
         val scale = 256.0 * 2.0.pow(zoom)
         val thresholdDp = max(1.0, cellDp.toDouble())
-        val radiusGuardDp = spawnCircleGuardDp(positioned, zoom, spawnRadiusMeters)
+        val radiusGuardDp = spawnCircleGuardDp(clusterable, zoom, spawnRadiusMeters)
         val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
-        val normalAlerts = positioned.filterNot { it.alert.uniqueId in expandedAlertIds }
-        val expandedGroups = positioned
+        val normalAlerts = clusterable.filterNot { it.alert.uniqueId in expandedAlertIds }
+        val expandedGroups = clusterable
             .filter { it.alert.uniqueId in expandedAlertIds }
             .groupBy(::exactCoordinateKey)
             .values
@@ -113,11 +118,12 @@ internal fun clusterMapAlerts(
         }.map { indices ->
             indices.map(normalAlerts::get)
         }
-        (normalGroups + expandedGroups).sortedBy { members ->
+        (normalGroups + expandedGroups + protectedGroups).sortedBy { members ->
             members.minOf { it.alert.uniqueId }
         }
     } else {
-        positioned.groupBy(::exactCoordinateKey).values.map { it.toList() }
+        (clusterable.groupBy(::exactCoordinateKey).values.map { it.toList() } + protectedGroups)
+            .sortedBy { members -> members.minOf { it.alert.uniqueId } }
     }
 
     return groups.map { members ->

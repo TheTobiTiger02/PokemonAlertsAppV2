@@ -373,7 +373,9 @@ internal fun MapLayersSheet(
     onToggleTimeLabels: () -> Unit,
     onToggleSpawnRadius: () -> Unit,
     onToggleSpacialRend: () -> Unit,
-    onToggleDismissed: () -> Unit
+    onToggleDismissed: () -> Unit,
+    autoEnterPictureInPicture: Boolean = false,
+    onToggleAutoEnterPictureInPicture: (() -> Unit)? = null
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -427,6 +429,17 @@ internal fun MapLayersSheet(
                     { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
                 } else null
             )
+            if (onToggleAutoEnterPictureInPicture != null) {
+                FilterChip(
+                    selected = autoEnterPictureInPicture,
+                    onClick = onToggleAutoEnterPictureInPicture,
+                    label = { Text(stringResource(R.string.map_pip_auto_enter)) },
+                    leadingIcon = if (autoEnterPictureInPicture) {
+                        { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
+                    } else null,
+                    modifier = Modifier.testTag("map_auto_pip")
+                )
+            }
             Text("Alerts", style = MaterialTheme.typography.labelLarge)
             FilterChip(
                 selected = showDismissed,
