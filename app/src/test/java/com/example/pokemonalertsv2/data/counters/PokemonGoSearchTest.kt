@@ -192,7 +192,7 @@ class PokemonGoSearchTest {
         assertEquals(
             "445,646,800,890&CP4370,CP5206,CP4634,CP4436,CP4459,CP4966&" +
                 "@Dragon Tail,@Shadow Claw&" +
-                "@Breaking Swipe,@Freeze Shock,@Moongeist Beam,@Dynamax Cannon",
+                "@Breaking Swipe,@Freeze Shock,@Moongeist Beam,@Dynama",
             PokemonGoSearch.teamQuery(
                 team,
                 mapOf(
@@ -202,6 +202,22 @@ class PokemonGoSearchTest {
                     "ETERNATUS" to 890
                 )
             )
+        )
+    }
+
+    @Test
+    fun `dynamax cannon is searched by a prefix that dodges the game keyword`() {
+        // `@Dynamax` is hijacked by the game's Dynamax-Pokémon keyword, so the move is
+        // searched by the shortest prefix that still matches it. The raw Pokébattler id
+        // must collapse onto the same token.
+        val team = listOf(
+            slot(counter("Eternatus", "ETERNATUS", 4966, "Dragon Tail", "Dynamax Cannon")),
+            slot(counter("Eternatus", "ETERNATUS", 4900, "Dragon Tail", "DYNAMAX_CANNON"))
+        )
+
+        assertEquals(
+            "890&CP4966,CP4900&@Dragon Tail&@Dynama",
+            PokemonGoSearch.teamQuery(team, mapOf("ETERNATUS" to 890))
         )
     }
 

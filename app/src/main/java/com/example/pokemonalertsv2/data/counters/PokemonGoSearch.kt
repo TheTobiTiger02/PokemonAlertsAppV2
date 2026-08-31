@@ -90,5 +90,12 @@ object PokemonGoSearch {
     private fun String?.asMoveToken(): String? = this
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
-        ?.let { "@$it" }
+        ?.let { name ->
+            // `dynamax` is a reserved search keyword that returns Dynamax-capable Pokémon,
+            // so an `@Dynamax ...` move token matches nothing. `@Dynama` is the shortest
+            // prefix that still lands on the move (Dynamax Cannon) only. Underscores are
+            // normalized because Pokébattler box imports feed raw ids like DYNAMAX_CANNON.
+            if (name.replace('_', ' ').startsWith("Dynamax", ignoreCase = true)) "@Dynama"
+            else "@$name"
+        }
 }

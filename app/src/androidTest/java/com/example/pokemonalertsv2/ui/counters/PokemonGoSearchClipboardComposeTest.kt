@@ -150,7 +150,7 @@ class PokemonGoSearchClipboardComposeTest {
         assertEquals(
             "445,646,800,890&CP4370,CP5206,CP4634,CP4436,CP4459,CP4966&" +
                 "@Dragon Tail,@Shadow Claw&" +
-                "@Breaking Swipe,@Freeze Shock,@Moongeist Beam,@Dynamax Cannon",
+                "@Breaking Swipe,@Freeze Shock,@Moongeist Beam,@Dynama",
             checkNotNull(clipboard.getText()).text
         )
     }
