@@ -90,6 +90,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -549,7 +550,10 @@ internal fun MapAlertDetailContent(
     modifier: Modifier = Modifier,
     isDismissed: Boolean = false,
     onDismissAlert: () -> Unit = {},
-    onRestoreAlert: () -> Unit = {}
+    onRestoreAlert: () -> Unit = {},
+    goDexAction: @Composable () -> Unit = {
+        GoDexCaughtAction(alert = alert, matchResult = goDexStatus)
+    }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -576,11 +580,18 @@ internal fun MapAlertDetailContent(
                 modifier = Modifier.size(88.dp),
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop
             )
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("map_alert_title_block"),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
                     text = formattedTitle,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
                 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
                 androidx.compose.foundation.layout.FlowRow(
@@ -596,7 +607,9 @@ internal fun MapAlertDetailContent(
                                 text = visualStyle.label,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = categoryAccent,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -616,31 +629,6 @@ internal fun MapAlertDetailContent(
                     }
                 }
             }
-            GoDexCaughtAction(
-                alert = alert,
-                matchResult = goDexStatus
-            )
-            AlertSecondaryActionsMenu(
-                actions = listOf(
-                    AlertSecondaryAction.SNOOZE,
-                    AlertSecondaryAction.PICTURE_IN_PICTURE,
-                    AlertSecondaryAction.SHARE,
-                    if (isDismissed) AlertSecondaryAction.RESTORE else AlertSecondaryAction.DISMISS
-                ),
-                onAction = { action ->
-                    when (action) {
-                        AlertSecondaryAction.SNOOZE -> showSnoozeDialog = true
-                        AlertSecondaryAction.PICTURE_IN_PICTURE -> {
-                            openAlertInPictureInPicture(context, alert)
-                        }
-                        AlertSecondaryAction.SHARE -> onShare()
-                        AlertSecondaryAction.DISMISS -> onDismissAlert()
-                        AlertSecondaryAction.RESTORE -> onRestoreAlert()
-                    }
-                },
-                contentDescription = "More map alert actions"
-            )
-
             IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = Icons.Default.Close,
@@ -674,14 +662,41 @@ internal fun MapAlertDetailContent(
             }
         }
 
-        FilledTonalButton(
-            onClick = onOpenFullDetail,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
-                .testTag("map_open_details")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Open details")
+            goDexAction()
+            FilledTonalButton(
+                onClick = onOpenFullDetail,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .testTag("map_open_details")
+            ) {
+                Text("Open details", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            AlertSecondaryActionsMenu(
+                actions = listOf(
+                    AlertSecondaryAction.SNOOZE,
+                    AlertSecondaryAction.PICTURE_IN_PICTURE,
+                    AlertSecondaryAction.SHARE,
+                    if (isDismissed) AlertSecondaryAction.RESTORE else AlertSecondaryAction.DISMISS
+                ),
+                onAction = { action ->
+                    when (action) {
+                        AlertSecondaryAction.SNOOZE -> showSnoozeDialog = true
+                        AlertSecondaryAction.PICTURE_IN_PICTURE -> {
+                            openAlertInPictureInPicture(context, alert)
+                        }
+                        AlertSecondaryAction.SHARE -> onShare()
+                        AlertSecondaryAction.DISMISS -> onDismissAlert()
+                        AlertSecondaryAction.RESTORE -> onRestoreAlert()
+                    }
+                },
+                contentDescription = "More map alert actions"
+            )
         }
 
         Column(

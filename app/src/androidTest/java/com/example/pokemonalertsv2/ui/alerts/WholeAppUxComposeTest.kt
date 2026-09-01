@@ -2,11 +2,18 @@ package com.example.pokemonalertsv2.ui.alerts
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -16,6 +23,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import org.junit.Assert.assertEquals
@@ -262,5 +271,72 @@ class WholeAppUxComposeTest {
             .assertIsDisplayed()
             .assertHasClickAction()
         composeRule.onNodeWithText("Share").assertIsDisplayed().assertHasClickAction()
+    }
+
+    @Test
+    fun mapHundoDetailsKeepTitleReadableWithGoDexAndUtilityActions() {
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                Box(
+                    modifier = Modifier
+                        .width(360.dp)
+                        .height(640.dp)
+                ) {
+                    MapAlertDetailContent(
+                        alert = PokemonAlert(
+                            name = "100% Außergewöhnlich langes Hatenna",
+                            pokemon = "Hatenna",
+                            pokemonLocation = "Sehr lange Straßenbezeichnung in Darmstadt",
+                            type = listOf("Hundo"),
+                            iv = "100%",
+                            cp = 664,
+                            endTime = "2099-01-01T00:00:00Z",
+                            latitude = 49.87,
+                            longitude = 8.65
+                        ),
+                        goDexStatus = GoDexMatchResult(GoDexMatchStatus.COLLECTED),
+                        distanceInfo = AlertDistanceInfo(
+                            distanceMeters = 1_200f,
+                            distanceText = "1.2 km",
+                            walkingText = "15 min"
+                        ),
+                        onDismiss = {},
+                        isGoing = false,
+                        onGoing = {},
+                        onOpenMaps = {},
+                        onShare = {},
+                        onOpenFullDetail = {},
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                        goDexAction = {
+                            FilledIconButton(
+                                onClick = {},
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("test_godex_action")
+                            ) {
+                                Text("✓")
+                            }
+                        }
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("map_alert_title_block")
+            .assertIsDisplayed()
+            .assertWidthIsAtLeast(120.dp)
+        composeRule.onNodeWithText("Hundo").assertIsDisplayed()
+        composeRule.onNodeWithText("Already collected").assertIsDisplayed()
+        composeRule.onNodeWithTag("test_godex_action")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        composeRule.onNodeWithTag("map_open_details")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        composeRule.onNodeWithContentDescription("More map alert actions")
+            .assertIsDisplayed()
+            .assertHasClickAction()
+        composeRule.onNodeWithText("I’m going").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Directions").assertIsDisplayed().assertHasClickAction()
     }
 }
