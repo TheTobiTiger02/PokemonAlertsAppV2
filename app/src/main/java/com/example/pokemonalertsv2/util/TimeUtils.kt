@@ -60,7 +60,10 @@ object TimeUtils {
      * Formats a remaining duration (millis) as a short string, e.g. "5m 12s" or "1h 03m".
      */
     fun formatDurationShort(remainingMs: Long): String {
-        val totalSeconds = (remainingMs / 1000).coerceAtLeast(0)
+        // Seconds round *up*, the way a countdown reads: with 400 ms left the label says
+        // "1s" for that last real second instead of sitting on "0s" until the caller's own
+        // `remaining <= 0` check swaps in "EXPIRED".
+        val totalSeconds = if (remainingMs <= 0L) 0L else (remainingMs + 999) / 1000
         val hours = totalSeconds / 3600
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60

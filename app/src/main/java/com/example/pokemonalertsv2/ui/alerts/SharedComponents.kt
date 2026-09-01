@@ -216,15 +216,30 @@ internal enum class AlertSecondaryAction {
     RESTORE
 }
 
+/**
+ * A wall clock that only ever reports whole tick boundaries.
+ *
+ * The loop wakes on absolute boundaries so it cannot drift, but `delay` never fires early
+ * and often fires late - by a few milliseconds when idle, by hundreds while the map is
+ * rebuilding marker bitmaps. Publishing the observed time would leak that jitter into
+ * `end - now`, and since `end` sits at an arbitrary sub-second phase the truncation to
+ * whole seconds would flip back and forth across it: the label repeats a value one tick
+ * and drops two the next. Snapping the published value to the boundary keeps consecutive
+ * emissions exactly [tickMillis] apart, so a countdown steps down by exactly one no matter
+ * how loaded the frame was.
+ */
 @Composable
 fun rememberCountdownClock(tickMillis: Long = 1_000L): State<Long> {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val now = remember(tickMillis) { mutableLongStateOf(System.currentTimeMillis()) }
+    val now = remember(tickMillis) {
+        mutableLongStateOf(countdownTickBoundary(System.currentTimeMillis(), tickMillis))
+    }
     LaunchedEffect(lifecycleOwner, tickMillis) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 val currentTime = System.currentTimeMillis()
-                now.longValue = currentTime
+                now.longValue = countdownTickBoundary(currentTime, tickMillis)
+                // Scheduling stays honest about the real time; only the published value snaps.
                 delay(countdownTickDelay(currentTime, tickMillis))
             }
         }
@@ -236,6 +251,12 @@ internal fun countdownTickDelay(nowMillis: Long, tickMillis: Long): Long {
     require(tickMillis > 0L) { "tickMillis must be positive" }
     val positionInTick = Math.floorMod(nowMillis, tickMillis)
     return (tickMillis - positionInTick).coerceAtLeast(1L)
+}
+
+/** The start of the tick [nowMillis] falls in, i.e. [nowMillis] with its jitter removed. */
+internal fun countdownTickBoundary(nowMillis: Long, tickMillis: Long): Long {
+    require(tickMillis > 0L) { "tickMillis must be positive" }
+    return nowMillis - Math.floorMod(nowMillis, tickMillis)
 }
 
 @Immutable

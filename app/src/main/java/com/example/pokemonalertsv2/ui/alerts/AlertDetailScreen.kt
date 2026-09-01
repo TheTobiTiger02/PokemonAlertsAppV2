@@ -169,7 +169,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -995,15 +994,9 @@ internal fun AlertDetailActionBar(
 @Composable
 internal fun AlertPictureInPictureContent(alert: PokemonAlert) {
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
-    var now by remember(endMillis) { mutableStateOf(System.currentTimeMillis()) }
-
-    LaunchedEffect(endMillis) {
-        if (endMillis == null) return@LaunchedEffect
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
+    // The shared clock, so PiP ticks on the same boundaries as every other countdown and
+    // stops ticking while the window is not visible.
+    val now by rememberCountdownClock()
 
     val remainingMs = endMillis?.minus(now)
     val isExpired = remainingMs != null && remainingMs <= 0
