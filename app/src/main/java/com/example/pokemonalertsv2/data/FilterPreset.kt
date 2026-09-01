@@ -21,7 +21,9 @@ data class FilterPreset(
     val filter: String = "ALL",
     val sort: String = "POSTED_TIME",
     val area: String = "All",
-    val maxDistance: Int = 0
+    val maxDistance: Int = 0,
+    /** [com.example.pokemonalertsv2.ui.alerts.AlertCategory] names. Empty = no type narrowing. */
+    val categories: Set<String> = emptySet()
 )
 
 object FilterPresets {
@@ -68,7 +70,15 @@ object FilterPresets {
 
     fun describe(preset: FilterPreset): String {
         val parts = buildList {
-            add(preset.filter.lowercase().replaceFirstChar { it.uppercase() })
+            if (preset.categories.isNotEmpty()) {
+                add(
+                    preset.categories.joinToString(" + ") { category ->
+                        category.lowercase().replaceFirstChar { it.uppercase() }
+                    }
+                )
+            } else {
+                add(preset.filter.lowercase().replaceFirstChar { it.uppercase() })
+            }
             if (preset.area != "All") add(preset.area)
             if (preset.maxDistance > 0) add("${preset.maxDistance} km")
         }

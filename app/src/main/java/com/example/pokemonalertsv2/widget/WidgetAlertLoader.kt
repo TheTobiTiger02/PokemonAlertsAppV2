@@ -50,6 +50,11 @@ internal object WidgetAlertLoader {
             .getOrElse { com.example.pokemonalertsv2.data.SortPreference.POSTED_TIME }
         val configuration = WidgetConfigurationStore.get(context, appWidgetId)
         val filterTypes = configuration.selectedAlertTypes
+        // A widget pinned to one area keeps its own view; otherwise it follows the app.
+        val effectiveArea = when (val areaMode = configuration.area) {
+            WidgetAreaMode.InheritApp -> selectedArea
+            is WidgetAreaMode.Fixed -> areaMode.area
+        }
         val location = runCatching {
             CachedLocationProvider.get(
                 context = context,
@@ -60,7 +65,7 @@ internal object WidgetAlertLoader {
         }.getOrNull() ?: fallbackLocation
         val criteria = WidgetAlertFilter.Criteria(
             dismissedAlertIds = dismissedIds,
-            selectedArea = selectedArea,
+            selectedArea = effectiveArea,
             maxDistanceKm = when (val mode = configuration.distance) {
                 WidgetDistanceMode.InheritApp -> maxDistance
                 WidgetDistanceMode.Unlimited -> 0

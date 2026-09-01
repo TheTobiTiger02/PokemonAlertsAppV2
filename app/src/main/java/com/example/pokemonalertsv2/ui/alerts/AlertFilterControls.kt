@@ -184,8 +184,8 @@ internal fun AlertListControls(
     onOpenFilters: () -> Unit,
     locationPrecisionInsufficient: Boolean,
     onRequestLocationPermission: () -> Unit,
-    selectedFilter: AlertFilter,
-    onFilterChanged: (AlertFilter) -> Unit,
+    selectedCategories: Set<AlertCategory>,
+    onCategoryEnabled: (AlertCategory) -> Unit,
     showDismissed: Boolean,
     onShowDismissedChanged: (Boolean) -> Unit,
     selectedArea: String,
@@ -296,18 +296,26 @@ internal fun AlertListControls(
                 exit = appCollapseOut()
             ) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (selectedFilter != AlertFilter.ALL) {
-                        item {
-                            FilterChip(
-                                selected = true,
-                                onClick = { onFilterChanged(AlertFilter.ALL) },
-                                label = { Text(selectedFilter.label) },
-                                trailingIcon = {
-                                    Icon(Icons.Filled.Close, "Clear type filter", Modifier.size(16.dp))
-                                }
-                            )
+                    // With everything visible no category chips show — "All" is the natural
+                    // state, not a filter. Each muted category gets a chip that re-enables it.
+                    FILTERABLE_ALERT_CATEGORIES
+                        .filter { it in selectedCategories }
+                        .forEach { mutedCategory ->
+                            item(key = mutedCategory.name) {
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { onCategoryEnabled(mutedCategory) },
+                                    label = { Text("No ${mutedCategory.filterLabel.lowercase()}") },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Filled.Close,
+                                            "Show ${mutedCategory.filterLabel} again",
+                                            Modifier.size(16.dp)
+                                        )
+                                    }
+                                )
+                            }
                         }
-                    }
                     if (showDismissed) {
                         item {
                             FilterChip(
@@ -538,14 +546,19 @@ internal fun HistoryListControls(
 
 internal fun alertEmptyStateMessage(
     searchQuery: String,
-    selectedFilter: AlertFilter,
+    mutedCategories: Set<AlertCategory>,
     selectedArea: String,
     maxDistance: Int,
     showDismissed: Boolean,
     locationAvailable: Boolean
 ): String = when {
     searchQuery.isNotBlank() -> "No alerts match ‘${searchQuery.trim()}’. Try a different search."
-    selectedFilter != AlertFilter.ALL -> "No ${selectedFilter.label.lowercase()} alerts match the current filters."
+    mutedCategories.isNotEmpty() -> {
+        val hidden = FILTERABLE_ALERT_CATEGORIES
+            .filter { it in mutedCategories }
+            .joinToString(", ") { it.filterLabel.lowercase() }
+        "Every ${hidden} alert is hidden by your filters. Tap a “No …” chip above to bring it back."
+    }
     selectedArea != "All" -> "No active alerts are available in $selectedArea right now."
     maxDistance > 0 && !locationAvailable -> "Distance filtering needs location access. Enable location or clear the distance limit."
     maxDistance > 0 -> "No active alerts are within $maxDistance km."
@@ -694,7 +707,7 @@ internal fun SortingButton(
 @Composable
 internal fun FilterPresetsSection(
     controls: FilterPresetControls,
-    currentFilter: AlertFilter,
+    currentCategories: Set<AlertCategory>,
     currentSort: SortPreference,
     currentArea: String,
     currentMaxDistance: Int,
@@ -763,10 +776,10 @@ internal fun FilterPresetsSection(
                         text = FilterPresets.describe(
                             FilterPreset(
                                 name = draftName,
-                                filter = currentFilter.name,
                                 sort = currentSort.name,
                                 area = currentArea,
-                                maxDistance = currentMaxDistance
+                                maxDistance = currentMaxDistance,
+                                categories = currentCategories.toStoredNames()
                             )
                         ),
                         style = MaterialTheme.typography.bodySmall,
@@ -792,44 +805,20 @@ internal fun FilterPresetsSection(
 
 @Composable
 internal fun FilterRow(
-    selectedFilter: AlertFilter,
-    onFilterChanged: (AlertFilter) -> Unit,
+    selectedCategories: Set<AlertCategory>,
+    categoryCounts: Map<AlertCategory, Int>,
+    onCategoryToggled: (AlertCategory, Boolean) -> Unit,
     locationAvailable: Boolean,
     locationPermissionGranted: Boolean,
     locationLookupComplete: Boolean,
-    onRequestLocationPermission: () -> Unit,
-    availableFilters: Set<AlertFilter>
+    onRequestLocationPermission: () -> Unit
 ) {
-    val visibleFilters = remember(availableFilters) {
-        AlertFilter.entries.filter { it in availableFilters }
-    }
-    Column {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures { _, _ ->
-                        // Consume horizontal drag to prevent parent pager from intercepting
-                    }
-                }
-        ) {
-            items(visibleFilters, key = { it.name }) { filter ->
-                val chipAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
-                ElevatedAssistChip(
-                    onClick = { onFilterChanged(filter) },
-                    label = { Text(text = filter.label) },
-                    colors = AssistChipDefaults.elevatedAssistChipColors(
-                        containerColor = if (selectedFilter == filter) chipAccent.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
-                        labelColor = if (selectedFilter == filter) chipAccent else MaterialTheme.colorScheme.onSurface
-                    ),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (selectedFilter == filter) chipAccent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline
-                    )
-                )
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        CategoryFilterGrid(
+            selection = selectedCategories,
+            counts = categoryCounts,
+            onToggle = onCategoryToggled
+        )
 
         AnimatedVisibility(
             visible = locationLookupComplete && !locationAvailable,
@@ -850,6 +839,43 @@ internal fun FilterRow(
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
+        }
+    }
+}
+
+/**
+ * History's type row. History filtering happens server-side and is single-select, so unlike
+ * the live surfaces it keeps one chip active at a time.
+ */
+@Composable
+internal fun HistoryTypeFilterRow(
+    selectedFilter: AlertFilter,
+    onFilterChanged: (AlertFilter) -> Unit
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { _, _ ->
+                    // Consume horizontal drag to prevent parent pager from intercepting
+                }
+            }
+    ) {
+        items(AlertFilter.entries, key = { it.name }) { filter ->
+            val chipAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
+            ElevatedAssistChip(
+                onClick = { onFilterChanged(filter) },
+                label = { Text(text = filter.label) },
+                colors = AssistChipDefaults.elevatedAssistChipColors(
+                    containerColor = if (selectedFilter == filter) chipAccent.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                    labelColor = if (selectedFilter == filter) chipAccent else MaterialTheme.colorScheme.onSurface
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (selectedFilter == filter) chipAccent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outline
+                )
+            )
         }
     }
 }

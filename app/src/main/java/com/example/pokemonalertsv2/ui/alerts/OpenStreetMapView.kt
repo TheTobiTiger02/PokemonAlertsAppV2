@@ -146,11 +146,19 @@ internal class OpenStreetMapController {
     private var pendingSpacialRendEnabled = false
     private var pendingUserPose: MapUserPose? = null
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
+    /** Live camera zoom, tracked only to gate the spawn-radius polygons. */
+    private var pendingZoom: Double = 0.0
     var onAlertClick: (PokemonAlert) -> Unit = {}
     var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
     var onUserGesture: () -> Unit = {}
     private var pendingGesturesEnabled = true
+
+    // Currently-placed annotations by marker id, plus the bitmap each was built from, so a
+    // re-render only touches what actually changed instead of tearing every annotation down.
+    private val placedMarkers = LinkedHashMap<String, org.maplibre.android.annotations.Marker>()
+    private val placedBitmaps = HashMap<String, Bitmap>()
+    private val markerIndex = HashMap<String, MapMarkerItem>()
 
     fun attach(map: MapLibreMap, context: android.content.Context) {
         this.map = map
@@ -158,14 +166,12 @@ internal class OpenStreetMapController {
             if (this.map !== map) {
                 false
             } else {
-                pendingMarkers.firstOrNull { markerId(it.item) == marker.title }
-                    ?.item
-                    ?.let {
-                        when (it) {
-                            is MapMarkerItem.Alert -> onAlertClick(it.alert)
-                            is MapMarkerItem.Cluster -> onClusterClick(it)
-                        }
+                markerIndex[marker.title]?.let {
+                    when (it) {
+                        is MapMarkerItem.Alert -> onAlertClick(it.alert)
+                        is MapMarkerItem.Cluster -> onClusterClick(it)
                     }
+                }
                 true
             }
         }
@@ -173,6 +179,7 @@ internal class OpenStreetMapController {
             if (this.map !== map) return@addOnCameraIdleListener
             val position = map.cameraPosition
             val target = position.target ?: return@addOnCameraIdleListener
+            pendingZoom = position.zoom
             onCameraChanged(
                 MapCameraSnapshot(
                     latitude = target.latitude,
@@ -321,18 +328,50 @@ internal class OpenStreetMapController {
         map?.setPadding(insets.left, insets.top, insets.right, insets.bottom)
     }
 
+    /**
+     * Applies the desired marker set as a diff: stale annotations are removed, survivors keep
+     * their place on the map (updating icon or position only when those actually changed), and
+     * only genuinely new ids are added. The old `removeAnnotations()` + re-add-everything pass
+     * re-created every marker twice per countdown tick, which collapsed under Darmstadt volume.
+     */
     private fun renderMarkers(context: android.content.Context) {
         val currentMap = map ?: return
-        currentMap.removeAnnotations()
         val iconFactory = IconFactory.getInstance(context)
+        val desired = LinkedHashMap<String, OpenStreetMapMarker>()
         pendingMarkers.sortedBy(OpenStreetMapMarker::zIndex).forEach { model ->
-            currentMap.addMarker(
-                MarkerOptions()
-                    .position(LatLng(model.item.latitude, model.item.longitude))
-                    .title(markerId(model.item))
-                    .icon(iconFactory.fromBitmap(model.icon.bitmap))
-            )
+            desired[markerId(model.item)] = model
         }
+
+        placedMarkers.keys.filterNot(desired::containsKey).forEach { id ->
+            placedMarkers.remove(id)?.let(currentMap::removeAnnotation)
+            placedBitmaps.remove(id)
+        }
+
+        desired.forEach { (id, model) ->
+            val existing = placedMarkers[id]
+            val target = LatLng(model.item.latitude, model.item.longitude)
+            val bitmapChanged = placedBitmaps[id] !== model.icon.bitmap
+            if (existing == null) {
+                placedMarkers[id] = currentMap.addMarker(
+                    MarkerOptions()
+                        .position(target)
+                        .title(id)
+                        .icon(iconFactory.fromBitmap(model.icon.bitmap))
+                )
+                placedBitmaps[id] = model.icon.bitmap
+            } else {
+                if (existing.position != target) {
+                    existing.position = target
+                }
+                if (bitmapChanged) {
+                    existing.icon = iconFactory.fromBitmap(model.icon.bitmap)
+                    placedBitmaps[id] = model.icon.bitmap
+                }
+            }
+        }
+
+        markerIndex.clear()
+        desired.forEach { (id, model) -> markerIndex[id] = model.item }
     }
 
     private fun renderUserPose() {
@@ -367,20 +406,25 @@ internal class OpenStreetMapController {
         val currentStyle = style ?: return
         val radiusSource = currentStyle.getSourceAs<GeoJsonSource>(SPAWN_RADIUS_SOURCE) ?: return
         val radiusMeters = spawnRadiusMeters(pendingShowSpawnRadius, pendingSpacialRendEnabled)
-        if (radiusMeters == null) {
+        if (radiusMeters == null || pendingZoom < SPAWN_CIRCLE_MIN_ZOOM) {
+            // Either hidden, or zoomed too far out for circles to be readable — at Darmstadt
+            // density a citywide render is thousands of 48-vertex polygons for visual mush.
             radiusSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
             return
         }
-        val features = pendingAlerts.filter { it.isSpawnAlert }.mapNotNull { alert ->
-            val coords = alert.mapCoordinatesOrNull() ?: return@mapNotNull null
-            Feature.fromGeometry(
-                createAccuracyPolygon(
-                    latitude = coords.latitude,
-                    longitude = coords.longitude,
-                    radiusMeters = radiusMeters
+        val features = pendingAlerts
+            .filter { it.isSpawnAlert }
+            .take(MAX_SPAWN_CIRCLES)
+            .mapNotNull { alert ->
+                val coords = alert.mapCoordinatesOrNull() ?: return@mapNotNull null
+                Feature.fromGeometry(
+                    createAccuracyPolygon(
+                        latitude = coords.latitude,
+                        longitude = coords.longitude,
+                        radiusMeters = radiusMeters
+                    )
                 )
-            )
-        }
+            }
         radiusSource.setGeoJson(FeatureCollection.fromFeatures(features))
     }
 
@@ -430,6 +474,9 @@ internal fun createAccuracyPolygon(
 internal fun OpenStreetMapView(
     modifier: Modifier,
     alerts: List<PokemonAlert>,
+    markerItems: List<MapMarkerItem>,
+    countdownTickMillis: Long,
+    minutePrecisionCountdown: Boolean,
     userPose: MapUserPose?,
     cameraSnapshot: MapCameraSnapshot,
     contentInsets: MapContentInsets,
@@ -565,21 +612,6 @@ internal fun OpenStreetMapView(
     )
 
     val clusterSpawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
-    val markerItems = remember(
-        alerts,
-        cameraSnapshot.zoom,
-        clusterSpawnRadiusMeters,
-        expandedAlertIds,
-        protectedAlertIds
-    ) {
-        clusterMapAlerts(
-            alerts = alerts,
-            zoom = cameraSnapshot.zoom,
-            spawnRadiusMeters = clusterSpawnRadiusMeters,
-            expandedAlertIds = expandedAlertIds,
-            protectedAlertIds = protectedAlertIds
-        )
-    }
 
     // Load static artwork independently from the per-second countdown job. Even when a network
     // image is slow, the clock can keep replacing labels with an immediate custom fallback.
@@ -597,7 +629,7 @@ internal fun OpenStreetMapView(
     }
     LaunchedEffect(
         markerItems,
-        mapCountdownRefreshKey(showTimeLabels, now),
+        mapCountdownRefreshKey(showTimeLabels, now, countdownTickMillis),
         basePalette,
         goDexMatches,
         emphasizedAlertIds,
@@ -614,6 +646,7 @@ internal fun OpenStreetMapView(
                 clusterMarkerSizePx = clusterMarkerSizePx,
                 showTimeLabels = showTimeLabels,
                 nowMillis = now,
+                minutePrecision = minutePrecisionCountdown,
                 basePalette = basePalette,
                 goDexMatches = goDexMatches,
                 emphasized = emphasized
@@ -646,7 +679,7 @@ internal fun OpenStreetMapView(
                     AlertCategory.NUNDO -> "0%"
                     else -> visualStyle.shortCode
                 }
-                val timeLabel = mapCountdownLabel(alert.endTime, now)
+                val timeLabel = mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown)
                 val icon = createMapMarkerIcon(
                     context = context,
                     sizePx = itemSizePx,
@@ -696,6 +729,7 @@ private fun createImmediateOpenStreetMapMarker(
     clusterMarkerSizePx: Int,
     showTimeLabels: Boolean,
     nowMillis: Long,
+    minutePrecision: Boolean,
     basePalette: MapMarkerPalette,
     goDexMatches: Map<String, GoDexMatchResult>,
     emphasized: Boolean
@@ -722,7 +756,7 @@ private fun createImmediateOpenStreetMapMarker(
             ?: alert.imageUrl?.takeIf { it.isNotBlank() },
         endTime = alert.endTime,
         showTimeLabel = showTimeLabels,
-        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis) else null,
+        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis, minutePrecision) else null,
         palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
         goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED
     )
@@ -763,14 +797,13 @@ private fun openStreetMapStyleJson(): String {
 
 private fun createOpenStreetMapClusterIcon(
     count: Int,
-    sharedCategory: AlertFilter?,
+    sharedCategory: AlertCategory?,
     sizePx: Int
 ): MapMarkerIcon {
     val size = sizePx.coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val color = sharedCategory
-        ?.let { resolveAlertVisualStyle(it.label).category.accentArgb.toInt() }
+    val color = sharedCategory?.accentArgb?.toInt()
         ?: AndroidColor.parseColor("#455A64")
     canvas.drawCircle(size / 2f, size / 2f, size * 0.46f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         this.color = AndroidColor.WHITE

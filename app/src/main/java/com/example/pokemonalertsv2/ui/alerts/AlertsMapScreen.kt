@@ -74,6 +74,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -85,6 +86,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -157,13 +159,38 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
 
-internal fun mapCountdownRefreshKey(showTimeLabels: Boolean, nowMillis: Long): Long =
-    nowMillis / if (showTimeLabels) 1_000L else 30_000L
+internal fun mapCountdownRefreshKey(
+    showTimeLabels: Boolean,
+    nowMillis: Long,
+    refreshIntervalMillis: Long = if (showTimeLabels) 1_000L else 30_000L
+): Long = nowMillis / refreshIntervalMillis.coerceAtLeast(1L)
 
-internal fun mapCountdownLabel(endTime: String?, nowMillis: Long): String {
+internal fun mapCountdownLabel(
+    endTime: String?,
+    nowMillis: Long,
+    minutePrecision: Boolean = false
+): String {
     val remaining = (TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) - nowMillis
-    return if (remaining <= 0L) "Expired" else TimeUtils.formatDurationShort(remaining)
+    if (remaining <= 0L) return "Expired"
+    if (minutePrecision) {
+        // Rounds up like the seconds countdown does; the label only changes once a minute,
+        // which is what lets a crowded map skip per-second marker bitmap rebuilds.
+        val minutes = ((remaining + 59_999) / 60_000).toInt().coerceAtLeast(1)
+        return if (minutes >= 60) {
+            String.format("%dh %02dm", minutes / 60, minutes % 60)
+        } else {
+            "${minutes}m"
+        }
+    }
+    return TimeUtils.formatDurationShort(remaining)
 }
+
+/**
+ * Above this marker count, marker countdowns drop to minute precision to stay smooth.
+ * Every second-precision marker re-renders its bitmap once a second, so the ceiling is
+ * deliberately conservative: a dense Darmstadt rocket field crosses it easily.
+ */
+internal const val ADAPTIVE_COUNTDOWN_PRECISION_THRESHOLD = 48
 
 enum class MapPresentationMode {
     FULL,
@@ -171,12 +198,14 @@ enum class MapPresentationMode {
 }
 
 internal fun mapFilterForPresentation(
-    selectedFilter: AlertFilter,
+    selectedCategories: Set<AlertCategory>,
     presentationMode: MapPresentationMode
-): AlertFilter = if (presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE) {
-    AlertFilter.ALL
+): Set<AlertCategory> = if (presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE) {
+    // The floating map always shows everything: it exists to track one alert, and a muted
+    // category silently hiding that alert's neighbours would read as a glitch.
+    emptySet()
 } else {
-    selectedFilter
+    selectedCategories
 }
 
 internal fun mapAlertsForPresentation(
@@ -252,7 +281,9 @@ fun AlertsMapRoute(
     onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
+    val selectedMapCategories by viewModel.selectedMapCategories.collectAsStateWithLifecycle()
+    val mapShowDismissed by viewModel.mapShowDismissed.collectAsStateWithLifecycle()
+    val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
     val savedMapStyle by viewModel.mapStylePreference.collectAsStateWithLifecycle()
     val showMapCountdowns by viewModel.showMapCountdowns.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -277,19 +308,26 @@ fun AlertsMapRoute(
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
-    val effectiveFilter = mapFilterForPresentation(selectedFilter, presentationMode)
+    val effectiveCategories = mapFilterForPresentation(selectedMapCategories, presentationMode)
 
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
         syncStatus = uiState.toSyncStatus(),
-        selectedFilter = effectiveFilter,
-        onSelectedFilterChange = if (presentationMode == MapPresentationMode.FULL) {
-            viewModel::updateSelectedAlertFilter
+        selectedCategories = effectiveCategories,
+        onSelectedCategoriesChange = if (presentationMode == MapPresentationMode.FULL) {
+            viewModel::updateSelectedMapCategories
         } else {
             {}
         },
+        mapShowDismissed = mapShowDismissed,
+        onMapShowDismissedChange = if (presentationMode == MapPresentationMode.FULL) {
+            viewModel::updateMapShowDismissed
+        } else {
+            {}
+        },
+        categoryCounts = categoryCounts,
         initialMapStyle = savedMapStyle,
         onMapStyleChanged = viewModel::updateMapStylePreference,
         showTimeLabels = showMapCountdowns,
@@ -322,8 +360,11 @@ fun AlertsMapScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
-    selectedFilter: AlertFilter = AlertFilter.ALL,
-    onSelectedFilterChange: (AlertFilter) -> Unit = {},
+    selectedCategories: Set<AlertCategory> = emptySet(),
+    onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
+    mapShowDismissed: Boolean = false,
+    onMapShowDismissedChange: (Boolean) -> Unit = {},
+    categoryCounts: Map<AlertCategory, Int> = emptyMap(),
     initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
     showTimeLabels: Boolean = false,
@@ -351,8 +392,11 @@ fun AlertsMapScreen(
         onBack = onBack,
         onRefresh = onRefresh,
         syncStatus = syncStatus,
-        selectedFilter = selectedFilter,
-        onSelectedFilterChange = onSelectedFilterChange,
+        selectedCategories = selectedCategories,
+        onSelectedCategoriesChange = onSelectedCategoriesChange,
+        mapShowDismissed = mapShowDismissed,
+        onMapShowDismissedChange = onMapShowDismissedChange,
+        categoryCounts = categoryCounts,
         initialMapStyle = initialMapStyle,
         onMapStyleChanged = onMapStyleChanged,
         showTimeLabels = showTimeLabels,
@@ -384,8 +428,11 @@ internal fun AlertsMapScreenContent(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
-    selectedFilter: AlertFilter = AlertFilter.ALL,
-    onSelectedFilterChange: (AlertFilter) -> Unit = {},
+    selectedCategories: Set<AlertCategory> = emptySet(),
+    onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
+    mapShowDismissed: Boolean = false,
+    onMapShowDismissedChange: (Boolean) -> Unit = {},
+    categoryCounts: Map<AlertCategory, Int> = emptyMap(),
     initialMapStyle: MapStylePreference = MapStylePreference.GOOGLE_STANDARD,
     onMapStyleChanged: (MapStylePreference) -> Unit = {},
     showTimeLabels: Boolean = false,
@@ -452,7 +499,6 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showLayersSheet by rememberSaveable { mutableStateOf(false) }
-    var showDismissed by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -462,6 +508,31 @@ internal fun AlertsMapScreenContent(
     var pipZoom by rememberSaveable { mutableStateOf(startingZoom) }
     var pipMode by rememberSaveable { mutableStateOf(MapPipMode.FOLLOW) }
     val openStreetMapController = remember { OpenStreetMapController() }
+
+    /**
+     * The Google camera as of the last time it stopped moving. Clustering, culling and the
+     * adaptive countdown all key off this instead of the live camera position: the live value
+     * changes on every gesture frame, which used to rerun the cluster merge thousands of
+     * times during a single pinch. The OpenStreetMap layer only reports camera idle anyway.
+     */
+    val googleCameraAnchor by produceState(
+        initialValue = MapCameraSnapshot(defaultLatLng.latitude, defaultLatLng.longitude, startingZoom),
+        cameraPositionState
+    ) {
+        snapshotFlow { cameraPositionState.isMoving }
+            .collectLatest { moving ->
+                if (!moving) {
+                    val position = cameraPositionState.position
+                    position.target?.let { target ->
+                        value = MapCameraSnapshot(
+                            latitude = target.latitude,
+                            longitude = target.longitude,
+                            zoom = position.zoom.toDouble()
+                        )
+                    }
+                }
+            }
+    }
 
     fun retainedCamera() = MapCameraSnapshot(retainedLatitude, retainedLongitude, retainedZoom)
 
@@ -655,7 +726,10 @@ internal fun AlertsMapScreenContent(
     }
 
     val expirationClock = rememberCountdownClock(30_000L)
-    val markerCountdownClock = rememberCountdownClock(if (showTimeLabels) 1_000L else 30_000L)
+
+    // Marker countdown refresh, decided below once the marker count is known — the clock
+    // itself is created after the marker list so the interval can adapt to map density.
+    // (The old declaration here re-created marker bitmaps every second at any density.)
 
     var selectedWalkingRoute by remember { mutableStateOf<WalkingRouteInfo?>(null) }
     LaunchedEffect(
@@ -675,12 +749,12 @@ internal fun AlertsMapScreenContent(
     }
 
     val expirationNow = expirationClock.value
-    val filteredAlerts = remember(alerts, selectedFilter, expirationNow, dismissedAlertIds, showDismissed) {
+    val filteredAlerts = remember(alerts, selectedCategories, expirationNow, dismissedAlertIds, mapShowDismissed) {
         visibleMapAlerts(
             alerts = alerts,
-            filter = selectedFilter,
+            selectedCategories = selectedCategories,
             dismissedAlertIds = dismissedAlertIds,
-            showDismissed = showDismissed,
+            showDismissed = mapShowDismissed,
             nowMillis = expirationNow
         )
     }
@@ -725,31 +799,7 @@ internal fun AlertsMapScreenContent(
         configured = goDexConfig.isConnected
     )
 
-    val availableFilters = remember(alerts, dismissedAlertIds, showDismissed) {
-        val mappableAlerts = alerts.filter {
-            it.mapCoordinatesOrNull() != null &&
-                !it.isInvalidated &&
-                (showDismissed || it.uniqueId !in dismissedAlertIds)
-        }
-        buildSet {
-            add(AlertFilter.ALL)
-            if (mappableAlerts.any { it.hasType("Raid") }) add(AlertFilter.RAIDS)
-            if (mappableAlerts.any { it.hasType("Quest") }) add(AlertFilter.QUESTS)
-            if (mappableAlerts.any { it.hasType("Rare") || it.hasType("Spawn") }) add(AlertFilter.RARES)
-            if (mappableAlerts.any { it.hasType("Hundo") }) add(AlertFilter.HUNDOS)
-            if (mappableAlerts.any { it.hasType("PvP") }) add(AlertFilter.PVP)
-            if (mappableAlerts.any { it.hasType("Nundo") }) add(AlertFilter.NUNDOS)
-            if (mappableAlerts.any { it.hasType("Kecleon") }) add(AlertFilter.KECLEON)
-            if (mappableAlerts.any { it.hasType("Rocket") }) add(AlertFilter.ROCKET)
-            if (mappableAlerts.any { it.hasType("WeatherChange") }) add(AlertFilter.WEATHER_CHANGE)
-        }
-    }
-
-    LaunchedEffect(availableFilters) {
-        if (selectedFilter !in availableFilters) onSelectedFilterChange(AlertFilter.ALL)
-    }
-
-    LaunchedEffect(selectedFilter, mapSource) {
+    LaunchedEffect(selectedCategories, mapSource) {
         expandedClusterAlertIds = emptyList()
         expandedClusterOriginZoom = null
     }
@@ -1184,10 +1234,39 @@ internal fun AlertsMapScreenContent(
             )
         }
         val visibleCoordinates = remember(renderedAlerts) { resolveFitAllCoordinates(renderedAlerts) }
-        val displayZoom = if (mapSource == MapDisplaySource.GOOGLE) {
-            cameraPositionState.position.zoom.toDouble()
+        val configuration = LocalConfiguration.current
+        val viewportWidthDp = configuration.screenWidthDp.toFloat()
+        val viewportHeightDp = configuration.screenHeightDp.toFloat()
+        val cameraAnchor = if (mapSource == MapDisplaySource.GOOGLE) {
+            googleCameraAnchor
         } else {
-            retainedZoom
+            MapCameraSnapshot(retainedLatitude, retainedLongitude, retainedZoom)
+        }
+        // Half-zoom steps: reclustering twice per zoom step is visually indistinguishable
+        // from reclustering on every frame, and survives a pinch in far fewer passes.
+        val clusterZoom = kotlin.math.floor(cameraAnchor.zoom * 2.0) / 2.0
+        val viewportBounds = remember(cameraAnchor, viewportWidthDp, viewportHeightDp) {
+            mapViewportBounds(
+                centreLatitude = cameraAnchor.latitude,
+                centreLongitude = cameraAnchor.longitude,
+                zoom = cameraAnchor.zoom,
+                viewportWidthDp = viewportWidthDp,
+                viewportHeightDp = viewportHeightDp
+            )
+        }
+        // Cull to the widened viewport before clustering; the tracked PiP alert always
+        // survives so the follow marker can never be culled out from under itself.
+        val clusteredAlerts = remember(renderedAlerts, viewportBounds, protectedAlertIds) {
+            if (viewportBounds == null) {
+                renderedAlerts
+            } else {
+                renderedAlerts.filter { alert ->
+                    alert.uniqueId in protectedAlertIds ||
+                        alert.mapCoordinatesOrNull()?.let { coords ->
+                            viewportBounds.contains(coords.latitude, coords.longitude)
+                        } == true
+                }
+            }
         }
         val expandedAlertIdSet = remember(expandedClusterAlertIds) {
             expandedClusterAlertIds.toSet()
@@ -1203,23 +1282,32 @@ internal fun AlertsMapScreenContent(
         )
         val clusterMarkerSizeDp = mapClusterMarkerSizeDp(compactPictureInPicture)
         val markerItems = remember(
-            renderedAlerts,
-            displayZoom,
+            clusteredAlerts,
+            clusterZoom,
             spawnRadiusMeters,
             expandedAlertIdSet,
             protectedAlertIds
         ) {
             clusterMapAlerts(
-                alerts = renderedAlerts,
-                zoom = displayZoom,
+                alerts = clusteredAlerts,
+                zoom = clusterZoom,
                 spawnRadiusMeters = spawnRadiusMeters,
                 expandedAlertIds = expandedAlertIdSet,
                 protectedAlertIds = protectedAlertIds
             )
         }
+        val renderedMarkerCount = markerItems.count { it is MapMarkerItem.Alert }
+        val minutePrecisionCountdown =
+            showTimeLabels && renderedMarkerCount > ADAPTIVE_COUNTDOWN_PRECISION_THRESHOLD
+        val markerTickMillis = when {
+            !showTimeLabels -> 30_000L
+            minutePrecisionCountdown -> 60_000L
+            else -> 1_000L
+        }
+        val markerCountdownClock = rememberCountdownClock(markerTickMillis)
 
-        LaunchedEffect(displayZoom, expandedClusterOriginZoom) {
-            if (shouldClearExpandedMapCluster(expandedClusterOriginZoom, displayZoom)) {
+        LaunchedEffect(cameraAnchor.zoom, expandedClusterOriginZoom) {
+            if (shouldClearExpandedMapCluster(expandedClusterOriginZoom, cameraAnchor.zoom)) {
                 expandedClusterAlertIds = emptyList()
                 expandedClusterOriginZoom = null
             }
@@ -1299,8 +1387,27 @@ internal fun AlertsMapScreenContent(
                         zIndex = 1_000f
                     )
                 }
-                if (spawnRadiusMeters != null) {
-                    renderedAlerts.filter { it.isSpawnAlert }.forEach { alert ->
+                if (spawnRadiusMeters != null && cameraAnchor.zoom >= SPAWN_CIRCLE_MIN_ZOOM) {
+                    // Zoom-gated and capped: at Darmstadt density, drawing a circle per spawn
+                    // below neighborhood zoom repaints the whole map and drags the frame rate.
+                    val circledAlerts = remember(
+                        renderedAlerts,
+                        cameraAnchor,
+                        spawnRadiusMeters
+                    ) {
+                        renderedAlerts
+                            .filter { it.isSpawnAlert }
+                            .sortedBy { alert ->
+                                val coords = alert.mapCoordinatesOrNull()
+                                val latitudeDelta =
+                                    (coords?.latitude ?: cameraAnchor.latitude) - cameraAnchor.latitude
+                                val longitudeDelta =
+                                    (coords?.longitude ?: cameraAnchor.longitude) - cameraAnchor.longitude
+                                latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta
+                            }
+                            .take(MAX_SPAWN_CIRCLES)
+                    }
+                    circledAlerts.forEach { alert ->
                         val coords = alert.mapCoordinatesOrNull() ?: return@forEach
                         Circle(
                             center = LatLng(coords.latitude, coords.longitude),
@@ -1321,6 +1428,7 @@ internal fun AlertsMapScreenContent(
                                 countdownClock = markerCountdownClock,
                                 density = density,
                                 showTimeLabel = showTimeLabels,
+                                minutePrecisionCountdown = minutePrecisionCountdown,
                                 goDexMatchResult = goDexMatches[item.alert.uniqueId]
                                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                                 onClick = {
@@ -1363,7 +1471,7 @@ internal fun AlertsMapScreenContent(
                                         } else {
                                             resolveMapClusterInteraction(
                                                 cluster = item,
-                                                currentZoom = displayZoom
+                                                currentZoom = cameraAnchor.zoom
                                             )
                                         }
                                     ) {
@@ -1398,7 +1506,10 @@ internal fun AlertsMapScreenContent(
             key(mapLoadAttempt) {
                 OpenStreetMapView(
                     modifier = Modifier.fillMaxSize(),
-                    alerts = renderedAlerts,
+                    alerts = clusteredAlerts,
+                    markerItems = markerItems,
+                    countdownTickMillis = markerTickMillis,
+                    minutePrecisionCountdown = minutePrecisionCountdown,
                     userPose = userPose,
                     cameraSnapshot = retainedCamera(),
                     contentInsets = openStreetMapInsets,
@@ -1620,10 +1731,17 @@ internal fun AlertsMapScreenContent(
                 )
 
                 MapFilterRow(
-                    filters = availableFilters,
-                    selectedFilter = selectedFilter,
+                    selectedCategories = selectedCategories,
+                    categoryCounts = categoryCounts,
                     visibleAlertCount = filteredAlerts.size,
-                    onFilterSelected = onSelectedFilterChange
+                    onCategoryToggled = { category, shownAfter ->
+                        // The selection holds muted categories: shown means remove from it.
+                        onSelectedCategoriesChange(
+                            if (shownAfter) selectedCategories - category
+                            else selectedCategories + category
+                        )
+                    },
+                    onShowAllCategories = { onSelectedCategoriesChange(emptySet()) }
                 )
                 MapSyncStatus(status = syncStatus, onRetry = onRefresh)
 
@@ -1640,7 +1758,7 @@ internal fun AlertsMapScreenContent(
 
         AnimatedVisibility(
             visible = !compactPictureInPicture &&
-                selectedFilter != AlertFilter.ALL && filteredAlerts.isEmpty(),
+                selectedCategories.isNotEmpty() && filteredAlerts.isEmpty(),
             enter = appExpandIn(),
             exit = appCollapseOut(),
             modifier = Modifier.align(Alignment.Center)
@@ -1657,9 +1775,12 @@ internal fun AlertsMapScreenContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("No ${selectedFilter.label.lowercase()} alerts nearby")
-                    TextButton(onClick = { onSelectedFilterChange(AlertFilter.ALL) }) {
-                        Text("Clear filter")
+                    val hidden = FILTERABLE_ALERT_CATEGORIES
+                        .filter { it in selectedCategories }
+                        .joinToString(", ") { it.filterLabel.lowercase() }
+                    Text("Every ${hidden} alert is hidden")
+                    TextButton(onClick = { onSelectedCategoriesChange(emptySet()) }) {
+                        Text("Show all alerts")
                     }
                 }
             }
@@ -1674,7 +1795,7 @@ internal fun AlertsMapScreenContent(
                 showTimeLabels = showTimeLabels,
                 showSpawnRadius = showSpawnRadius,
                 spacialRendEnabled = spacialRendEnabled,
-                showDismissed = showDismissed,
+                showDismissed = mapShowDismissed,
                 onDismiss = { showLayersSheet = false },
                 onMapStyleChanged = {
                     mapStyle = it
@@ -1683,7 +1804,7 @@ internal fun AlertsMapScreenContent(
                 onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
                 onToggleSpawnRadius = onToggleSpawnRadius,
                 onToggleSpacialRend = onToggleSpacialRend,
-                onToggleDismissed = { showDismissed = !showDismissed },
+                onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
                 autoEnterPictureInPicture = autoEnterPictureInPicture,
                 onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
                     onToggleAutoEnterPictureInPicture
@@ -1808,7 +1929,7 @@ internal fun AlertsMapScreenContent(
             val dismissFromMap = {
                 onDismissAlert(alert.uniqueId)
                 // The marker is gone once the card closes, unless dismissed alerts are shown.
-                if (!showDismissed) selectedAlertId = null
+                if (!mapShowDismissed) selectedAlertId = null
                 Toast.makeText(context, "Alert dismissed", Toast.LENGTH_SHORT).show()
             }
             val restoreFromMap = {
@@ -1867,35 +1988,24 @@ internal fun AlertsMapScreenContent(
 }
 
 /**
- * The markers the map should draw: mappable, still valid and unexpired alerts, minus the ones the
- * user dismissed unless [showDismissed] opts them back in, narrowed to the selected [filter].
+ * The markers the map should draw: mappable, still valid and unexpired alerts, minus the ones
+ * the user dismissed unless [showDismissed] opts them back in, narrowed to the map's own
+ * [selectedCategories] (independent of the feed's selection).
  */
 internal fun visibleMapAlerts(
     alerts: List<PokemonAlert>,
-    filter: AlertFilter,
+    selectedCategories: Set<AlertCategory>,
     dismissedAlertIds: Set<String>,
     showDismissed: Boolean,
     nowMillis: Long
-): List<PokemonAlert> {
-    val activeAlerts = alerts.filter {
-        it.mapCoordinatesOrNull() != null &&
-            !it.isInvalidated &&
-            (showDismissed || it.uniqueId !in dismissedAlertIds) &&
-            (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > nowMillis
+): List<PokemonAlert> =
+    alerts.filter { alert ->
+        alert.mapCoordinatesOrNull() != null &&
+            !alert.isInvalidated &&
+            (showDismissed || alert.uniqueId !in dismissedAlertIds) &&
+            (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) > nowMillis &&
+            matchesCategorySelection(alert, selectedCategories)
     }
-    return when (filter) {
-        AlertFilter.ALL -> activeAlerts
-        AlertFilter.RAIDS -> activeAlerts.filter { it.hasType("Raid") }
-        AlertFilter.QUESTS -> activeAlerts.filter { it.hasType("Quest") }
-        AlertFilter.RARES -> activeAlerts.filter { it.hasType("Rare") || it.hasType("Spawn") }
-        AlertFilter.HUNDOS -> activeAlerts.filter { it.hasType("Hundo") }
-        AlertFilter.PVP -> activeAlerts.filter { it.hasType("PvP") }
-        AlertFilter.NUNDOS -> activeAlerts.filter { it.hasType("Nundo") }
-        AlertFilter.KECLEON -> activeAlerts.filter { it.hasType("Kecleon") }
-        AlertFilter.ROCKET -> activeAlerts.filter { it.hasType("Rocket") }
-        AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasType("WeatherChange") }
-    }
-}
 
 internal enum class MapLoadState {
     LOADING,

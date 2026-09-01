@@ -119,6 +119,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
@@ -456,40 +457,80 @@ internal fun MapLayersSheet(
     }
 }
 
+/**
+ * The map's own multi-select category rail. Chip on = category shown (the default); chip off
+ * mutes it. "All" clears every mute in one tap. Counts come from the shared live tally so the
+ * rail doubles as an at-a-glance census of what is around.
+ */
 @Composable
 internal fun MapFilterRow(
-    filters: Collection<AlertFilter>,
-    selectedFilter: AlertFilter,
+    selectedCategories: Set<AlertCategory>,
+    categoryCounts: Map<AlertCategory, Int>,
     @Suppress("UNUSED_PARAMETER") visibleAlertCount: Int,
-    onFilterSelected: (AlertFilter) -> Unit
+    onCategoryToggled: (AlertCategory, Boolean) -> Unit,
+    onShowAllCategories: () -> Unit
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().testTag("map_filter_rail"),
         contentPadding = PaddingValues(horizontal = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(filters.toList(), key = { it.name }) { filter ->
-            val selected = selectedFilter == filter
-            FilterChip(
-                selected = selected,
-                onClick = { onFilterSelected(filter) },
-                label = { Text(filter.label, maxLines = 1) },
-                shape = RoundedCornerShape(50),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = selected,
-                    borderColor = MaterialTheme.colorScheme.outlineVariant,
-                    selectedBorderColor = MaterialTheme.colorScheme.primary
-                ),
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                    labelColor = MaterialTheme.colorScheme.onSurface,
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+        item(key = "ALL") {
+            MapCategoryChip(
+                label = "All",
+                count = categoryCounts.values.sum(),
+                selected = selectedCategories.isEmpty(),
+                accent = Color(0xFF8793A6),
+                onClick = onShowAllCategories
+            )
+        }
+        items(FILTERABLE_ALERT_CATEGORIES, key = { it.name }) { category ->
+            MapCategoryChip(
+                label = category.filterLabel,
+                count = categoryCounts[category] ?: 0,
+                selected = category !in selectedCategories,
+                accent = Color(category.accentArgb),
+                onClick = { onCategoryToggled(category, category in selectedCategories) }
             )
         }
     }
+}
+
+@Composable
+private fun MapCategoryChip(
+    label: String,
+    count: Int,
+    selected: Boolean,
+    accent: Color,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, maxLines = 1) },
+        leadingIcon = {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(color = accent, shape = CircleShape)
+            )
+        },
+        shape = RoundedCornerShape(50),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = if (selected) accent.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outlineVariant,
+            selectedBorderColor = accent.copy(alpha = 0.7f)
+        ),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            iconColor = accent,
+            selectedContainerColor = accent.copy(alpha = 0.18f),
+            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
+            selectedLeadingIconColor = accent
+        )
+    )
 }
 
 @Composable

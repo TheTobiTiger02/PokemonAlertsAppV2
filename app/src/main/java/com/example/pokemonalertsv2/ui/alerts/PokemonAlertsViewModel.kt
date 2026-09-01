@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -45,8 +46,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     private val _uiState = MutableStateFlow(AlertsUiState(isLoading = true))
     val uiState: StateFlow<AlertsUiState> = _uiState
     private var refreshJob: Job? = null
-    private val _selectedAlertFilter = MutableStateFlow(AlertFilter.ALL)
-    val selectedAlertFilter: StateFlow<AlertFilter> = _selectedAlertFilter
 
     init {
         viewModelScope.launch {
@@ -55,11 +54,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 _uiState.update { current ->
                     current.copy(syncMetadata = current.syncMetadata.copy(lastSuccessfulSyncMillis = persisted))
                 }
-            }
-        }
-        viewModelScope.launch {
-            repository.alertPreferences.selectedAlertFilterName.collect { stored ->
-                _selectedAlertFilter.value = AlertFilter.entries.firstOrNull { it.name == stored } ?: AlertFilter.ALL
             }
         }
         refreshAlerts()
@@ -74,6 +68,11 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             }
         }
     }
+
+    /** Live per-category counts over the active alerts; feeds every filter chip badge. */
+    val categoryCounts: StateFlow<Map<AlertCategory, Int>> = _uiState
+        .map { state -> countAlertsByCategory(state.alerts) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun refreshAlerts() {
         startRefresh(showLoading = true)
@@ -149,7 +148,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     /** Captures whatever the feed controls currently say, under [name]. */
     fun saveFilterPreset(
         name: String,
-        filter: AlertFilter,
+        categories: Set<AlertCategory>,
         sort: SortPreference,
         area: String,
         maxDistance: Int
@@ -158,10 +157,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             repository.alertPreferences.saveFilterPreset(
                 FilterPreset(
                     name = name,
-                    filter = filter.name,
                     sort = sort.name,
                     area = area,
-                    maxDistance = maxDistance
+                    maxDistance = maxDistance,
+                    categories = categories.toStoredNames()
                 )
             )
         }
@@ -178,18 +177,43 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
      * an older build must not be able to crash the feed.
      */
     fun applyFilterPreset(preset: FilterPreset) {
-        val filter = AlertFilter.entries.firstOrNull { it.name == preset.filter } ?: AlertFilter.ALL
         val sort = SortPreference.entries.firstOrNull { it.name == preset.sort }
             ?: SortPreference.POSTED_TIME
-        updateSelectedAlertFilter(filter)
+        updateSelectedFeedCategories(preset.categories.toCategorySelection())
         updateSortPreference(sort)
         updateSelectedArea(preset.area)
         updateMaxDistance(preset.maxDistance)
     }
 
-    fun updateSelectedAlertFilter(filter: AlertFilter) {
-        _selectedAlertFilter.value = filter
-        viewModelScope.launch { repository.alertPreferences.updateSelectedAlertFilterName(filter.name) }
+    // Per-surface category selections. Each surface stores its own set so the map keeps
+    // showing raids while the feed is narrowed to quests, and neither disturbs the other.
+    val selectedFeedCategories = repository.alertPreferences.feedCategories
+        .map { stored -> stored.toCategorySelection() }
+        .asPreferenceState(emptySet())
+
+    val selectedMapCategories = repository.alertPreferences.mapCategories
+        .map { stored -> stored.toCategorySelection() }
+        .asPreferenceState(emptySet())
+
+    val mapShowDismissed = repository.alertPreferences.mapShowDismissed
+        .asPreferenceState(false)
+
+    fun updateSelectedFeedCategories(categories: Set<AlertCategory>) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateFeedCategories(categories.toStoredNames())
+        }
+    }
+
+    fun updateSelectedMapCategories(categories: Set<AlertCategory>) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMapCategories(categories.toStoredNames())
+        }
+    }
+
+    fun updateMapShowDismissed(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateMapShowDismissed(enabled)
+        }
     }
 
     fun updateSelectedArea(area: String) {

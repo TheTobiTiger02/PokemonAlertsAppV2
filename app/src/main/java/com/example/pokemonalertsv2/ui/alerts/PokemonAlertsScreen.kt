@@ -184,7 +184,8 @@ fun PokemonAlertsRoute(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
-    val selectedFilter by viewModel.selectedAlertFilter.collectAsStateWithLifecycle()
+    val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
+    val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
@@ -227,7 +228,7 @@ fun PokemonAlertsRoute(
                         onSaveCurrent = { name ->
                             viewModel.saveFilterPreset(
                                 name = name,
-                                filter = selectedFilter,
+                                categories = selectedFeedCategories,
                                 sort = savedSortPreference,
                                 area = selectedArea,
                                 maxDistance = maxDistance
@@ -241,8 +242,9 @@ fun PokemonAlertsRoute(
                     maxDistance = maxDistance,
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
                     sortPreference = savedSortPreference,
-                    selectedFilter = selectedFilter,
-                    onSelectedFilterChange = viewModel::updateSelectedAlertFilter,
+                    selectedCategories = selectedFeedCategories,
+                    categoryCounts = categoryCounts,
+                    onSelectedCategoriesChange = viewModel::updateSelectedFeedCategories,
                     onSelectedAreaChange = viewModel::updateSelectedArea,
                     onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
@@ -436,8 +438,9 @@ fun PokemonAlertsPage(
     maxDistance: Int,
     defaultSnoozeMinutes: Int,
     sortPreference: SortPreference,
-    selectedFilter: AlertFilter,
-    onSelectedFilterChange: (AlertFilter) -> Unit,
+    selectedCategories: Set<AlertCategory>,
+    onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit,
+    categoryCounts: Map<AlertCategory, Int>,
     onSelectedAreaChange: (String) -> Unit,
     onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
@@ -587,59 +590,11 @@ fun PokemonAlertsPage(
         }
     }
 
-    // Determine available filters based on active alerts content
-    val availableFilters = remember(activeAlerts) {
-        val filters = mutableSetOf(AlertFilter.ALL)
-        
-        if (activeAlerts.any { it.hasCachedType("Raid") }) {
-            filters.add(AlertFilter.RAIDS)
-        }
-        if (activeAlerts.any { it.hasCachedType("Quest") }) {
-            filters.add(AlertFilter.QUESTS)
-        }
-        if (activeAlerts.any { it.hasCachedType("Rare") || it.hasCachedType("Spawn") }) {
-            filters.add(AlertFilter.RARES)
-        }
-        if (activeAlerts.any { it.hasCachedType("Hundo") }) {
-            filters.add(AlertFilter.HUNDOS)
-        }
-        if (activeAlerts.any { it.hasCachedType("PvP") }) {
-            filters.add(AlertFilter.PVP)
-        }
-        if (activeAlerts.any { it.hasCachedType("Nundo") }) {
-            filters.add(AlertFilter.NUNDOS)
-        }
-        if (activeAlerts.any { it.hasCachedType("Kecleon") }) {
-            filters.add(AlertFilter.KECLEON)
-        }
-        if (activeAlerts.any { it.hasCachedType("Rocket") }) {
-            filters.add(AlertFilter.ROCKET)
-        }
-        if (activeAlerts.any { it.hasCachedType("WeatherChange") }) {
-            filters.add(AlertFilter.WEATHER_CHANGE)
-        }
-        filters
-    }
-
-    // Auto-reset filter if current selection is invalid
-    LaunchedEffect(availableFilters, selectedFilter) {
-        if (selectedFilter != AlertFilter.ALL && selectedFilter !in availableFilters) {
-            onSelectedFilterChange(AlertFilter.ALL)
-        }
-    }
-
-    val filteredAlerts = remember(activeAlerts, selectedFilter, sortPreference, searchQuery) {
-        var filtered = when (selectedFilter) {
-            AlertFilter.ALL -> activeAlerts
-            AlertFilter.RAIDS -> activeAlerts.filter { it.hasCachedType("Raid") }
-            AlertFilter.QUESTS -> activeAlerts.filter { it.hasCachedType("Quest") }
-            AlertFilter.RARES -> activeAlerts.filter { it.hasCachedType("Rare") || it.hasCachedType("Spawn") }
-            AlertFilter.HUNDOS -> activeAlerts.filter { it.hasCachedType("Hundo") }
-            AlertFilter.PVP -> activeAlerts.filter { it.hasCachedType("PvP") }
-            AlertFilter.NUNDOS -> activeAlerts.filter { it.hasCachedType("Nundo") }
-            AlertFilter.KECLEON -> activeAlerts.filter { it.hasCachedType("Kecleon") }
-            AlertFilter.ROCKET -> activeAlerts.filter { it.hasCachedType("Rocket") }
-            AlertFilter.WEATHER_CHANGE -> activeAlerts.filter { it.hasCachedType("WeatherChange") }
+    val filteredAlerts = remember(activeAlerts, selectedCategories, sortPreference, searchQuery) {
+        var filtered = if (selectedCategories.isEmpty()) {
+            activeAlerts
+        } else {
+            activeAlerts.filter { model -> matchesCategorySelection(model.alert, selectedCategories) }
         }
         
         // Apply text search
@@ -710,13 +665,17 @@ fun PokemonAlertsPage(
                 gridState = feedGridState,
                 filteredAlerts = filteredAlerts,
                 goDexMatches = goDexMatches,
-                selectedFilter = selectedFilter,
+                selectedCategories = selectedCategories,
+                categoryCounts = categoryCounts,
                 sortPreference = sortPreference,
                 showDismissed = showDismissed,
                 dismissedAlertIds = dismissedAlertIds,
-                onFilterChanged = { 
+                onCategoryToggled = { category, shownAfter ->
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onSelectedFilterChange(it)
+                    onSelectedCategoriesChange(
+                        if (shownAfter) selectedCategories - category
+                        else selectedCategories + category
+                    )
                 },
                 onSortChanged = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -761,7 +720,6 @@ fun PokemonAlertsPage(
                 locationPrecisionInsufficient = userLocation?.let {
                     !it.hasAccuracy() || it.accuracy > 100f
                 } == true,
-                availableFilters = availableFilters,
                 searchQuery = searchQuery,
                 onSearchQueryChanged = { searchQuery = it },
                 selectedArea = selectedArea,
@@ -769,7 +727,7 @@ fun PokemonAlertsPage(
                 onClearAreaFilter = { onSelectedAreaChange("All") },
                 onClearDistanceFilter = { onMaxDistanceChange(0) },
                 onClearAllFilters = {
-                    onSelectedFilterChange(AlertFilter.ALL)
+                    onSelectedCategoriesChange(emptySet())
                     showDismissed = false
                     searchQuery = ""
                     onSelectedAreaChange("All")
@@ -883,11 +841,12 @@ internal fun AlertsList(
     gridState: LazyGridState,
     filteredAlerts: List<AlertUiModel>,
     goDexMatches: Map<String, GoDexMatchResult>,
-    selectedFilter: AlertFilter,
+    selectedCategories: Set<AlertCategory>,
+    categoryCounts: Map<AlertCategory, Int>,
     sortPreference: SortPreference,
     showDismissed: Boolean,
     dismissedAlertIds: Set<String>,
-    onFilterChanged: (AlertFilter) -> Unit,
+    onCategoryToggled: (AlertCategory, Boolean) -> Unit,
     onSortChanged: (SortPreference) -> Unit,
     onShowDismissedChanged: (Boolean) -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
@@ -902,7 +861,6 @@ internal fun AlertsList(
     locationPermissionGranted: Boolean,
     locationLookupComplete: Boolean,
     locationPrecisionInsufficient: Boolean,
-    availableFilters: Set<AlertFilter>,
     searchQuery: String = "",
     onSearchQueryChanged: (String) -> Unit = {},
     selectedArea: String = "All",
@@ -919,7 +877,7 @@ internal fun AlertsList(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     val activeFilterCount = remember(
-        selectedFilter,
+        selectedCategories,
         showDismissed,
         searchQuery,
         selectedArea,
@@ -927,7 +885,7 @@ internal fun AlertsList(
         maxWalkingMinutes
     ) {
         listOf(
-            selectedFilter != AlertFilter.ALL,
+            selectedCategories.isNotEmpty(),
             showDismissed,
             searchQuery.isNotBlank(),
             selectedArea != "All",
@@ -949,8 +907,10 @@ internal fun AlertsList(
             onOpenFilters = { showFilterSheet = true },
             locationPrecisionInsufficient = locationPrecisionInsufficient,
             onRequestLocationPermission = onRequestLocationPermission,
-            selectedFilter = selectedFilter,
-            onFilterChanged = onFilterChanged,
+            selectedCategories = selectedCategories,
+            onCategoryEnabled = { category ->
+                onCategoryToggled(category, true)
+            },
             showDismissed = showDismissed,
             onShowDismissedChanged = onShowDismissedChanged,
             selectedArea = selectedArea,
@@ -983,7 +943,7 @@ internal fun AlertsList(
                         Text(
                             text = alertEmptyStateMessage(
                                 searchQuery = searchQuery,
-                                selectedFilter = selectedFilter,
+                                mutedCategories = selectedCategories,
                                 selectedArea = selectedArea,
                                 maxDistance = maxDistance,
                                 showDismissed = showDismissed,
@@ -1163,22 +1123,27 @@ internal fun AlertsList(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text("Filter alerts", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Everything is shown unless you hide it here. These filters apply to the feed only.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 FilterPresetsSection(
                     controls = presetControls,
-                    currentFilter = selectedFilter,
+                    currentCategories = selectedCategories,
                     currentSort = sortPreference,
                     currentArea = selectedArea,
                     currentMaxDistance = maxDistance,
                     onApplied = { showFilterSheet = false }
                 )
                 FilterRow(
-                    selectedFilter = selectedFilter,
-                    onFilterChanged = onFilterChanged,
+                    selectedCategories = selectedCategories,
+                    categoryCounts = categoryCounts,
+                    onCategoryToggled = onCategoryToggled,
                     locationAvailable = locationAvailable,
                     locationPermissionGranted = locationPermissionGranted,
                     locationLookupComplete = locationLookupComplete,
-                    onRequestLocationPermission = onRequestLocationPermission,
-                    availableFilters = availableFilters
+                    onRequestLocationPermission = onRequestLocationPermission
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(

@@ -171,7 +171,7 @@ private fun SetupIntro() = SetupHeader(
 
 @Composable
 private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onDistance: (Int) -> Unit) {
-    SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Alert filters.")
+    SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Filters.")
     Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AREA_FILTER_OPTIONS.forEach { value ->

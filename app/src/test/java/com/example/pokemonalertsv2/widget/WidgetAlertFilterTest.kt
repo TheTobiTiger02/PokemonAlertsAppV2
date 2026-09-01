@@ -207,23 +207,24 @@ class WidgetAlertFilterTest {
     }
 
     @Test
-    fun semanticHundoAndNundoFiltersMatchIvDerivedSpawnAlerts() {
+    fun semanticHundoAndNundoFiltersHideIvDerivedSpawnAlerts() {
         val hundo = sampleAlert("Perfect", type = listOf("Spawn"), iv = "15/15/15")
         val nundo = sampleAlert("Zero", type = listOf("Spawn"), iv = "0/0/0")
 
-        val hundos = WidgetAlertFilter.filterAlerts(
+        // The stored set holds muted categories: muting hundos keeps the nundo visible.
+        val hundosMuted = WidgetAlertFilter.filterAlerts(
             alerts = listOf(hundo, nundo),
-            criteria = criteria(widgetFilterTypes = setOf("Hundo")),
+            criteria = criteria(widgetFilterTypes = setOf("HUNDO")),
             origin = null
         ) as WidgetAlertFilter.Result.Filtered
-        val nundos = WidgetAlertFilter.filterAlerts(
+        val nundosMuted = WidgetAlertFilter.filterAlerts(
             alerts = listOf(hundo, nundo),
-            criteria = criteria(widgetFilterTypes = setOf("Nundo")),
+            criteria = criteria(widgetFilterTypes = setOf("NUNDO")),
             origin = null
         ) as WidgetAlertFilter.Result.Filtered
 
-        assertEquals(listOf(hundo), hundos.alerts)
-        assertEquals(listOf(nundo), nundos.alerts)
+        assertEquals(listOf(nundo), hundosMuted.alerts)
+        assertEquals(listOf(hundo), nundosMuted.alerts)
     }
 
     @Test
@@ -231,19 +232,19 @@ class WidgetAlertFilterTest {
         val rare = sampleAlert("Rare", type = listOf("Rare"))
         val weather = sampleAlert("Weather", type = listOf("Weather Change"))
 
-        val rareResult = WidgetAlertFilter.filterAlerts(
+        val rareMuted = WidgetAlertFilter.filterAlerts(
             alerts = listOf(rare, weather),
-            criteria = criteria(widgetFilterTypes = setOf("Rare")),
+            criteria = criteria(widgetFilterTypes = setOf("RARE")),
             origin = null
         ) as WidgetAlertFilter.Result.Filtered
-        val weatherResult = WidgetAlertFilter.filterAlerts(
+        val weatherMuted = WidgetAlertFilter.filterAlerts(
             alerts = listOf(rare, weather),
-            criteria = criteria(widgetFilterTypes = setOf("Weather")),
+            criteria = criteria(widgetFilterTypes = setOf("WEATHER")),
             origin = null
         ) as WidgetAlertFilter.Result.Filtered
 
-        assertEquals(listOf(rare), rareResult.alerts)
-        assertEquals(listOf(weather), weatherResult.alerts)
+        assertEquals(listOf(weather), rareMuted.alerts)
+        assertEquals(listOf(rare), weatherMuted.alerts)
     }
 
     @Test

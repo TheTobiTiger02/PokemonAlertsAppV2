@@ -11,50 +11,56 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.alerts.AlertCategory
+import com.example.pokemonalertsv2.ui.alerts.CategoryFilterGrid
+import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
+import com.example.pokemonalertsv2.ui.alerts.countAlertsByCategory
+import com.example.pokemonalertsv2.ui.alerts.toCategorySelection
+import com.example.pokemonalertsv2.ui.alerts.toStoredNames
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * Configuration activity shown when a widget is first placed.
- * Lets the user pick which alert types to display in this widget instance.
+ * Lets the user pick which alert categories this widget instance shows, along with its own
+ * priority, distance and area overrides.
  */
 class WidgetConfigActivity : ComponentActivity() {
 
@@ -98,9 +104,21 @@ class WidgetConfigActivity : ComponentActivity() {
             val showExactAlarmPermission by showExactAlarmDialog.collectAsStateWithLifecycle()
             val darkTheme = AppThemeMode.fromStored(themeMode)
                 .resolveDark(isSystemInDarkTheme())
+            // Live counts next to each category switch, mirroring the feed and map sheets.
+            val categoryCounts by remember {
+                repository.alerts.map { alerts ->
+                    val now = System.currentTimeMillis()
+                    countAlertsByCategory(
+                        alerts.filter { alert ->
+                            !alert.isInvalidated && (alert.expiresAfter(now))
+                        }
+                    )
+                }
+            }.collectAsStateWithLifecycle(initialValue = emptyMap())
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 WidgetConfigScreen(
                     initialConfiguration = existing,
+                    categoryCounts = categoryCounts,
                     onConfirm = { configuration ->
                         WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, configuration)
                         if (needsExactAlarmAccess()) {
@@ -166,49 +184,37 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 }
 
-/**
- * All supported alert type filter options.
- */
-data class WidgetTypeFilter(
-    val key: String,
-    val label: String,
-    val enabled: Boolean = true
-)
+private fun com.example.pokemonalertsv2.data.PokemonAlert.expiresAfter(nowMillis: Long): Boolean =
+    (com.example.pokemonalertsv2.util.TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) > nowMillis
 
-val ALL_FILTER_TYPES = listOf(
-    "Hundo" to "Hundos (100% IV)",
-    "Nundo" to "Nundos (0% IV)",
-    "PvP" to "PvP Ranked",
-    "Spawn" to "Wild Spawns",
-    "Raid" to "Raids",
-    "Rocket" to "Team Rocket",
-    "Quest" to "Quests",
-    "Kecleon" to "Kecleon",
-    "Rare" to "Rare spawns",
-    "Weather" to "Weather changes"
-)
+/** Areas a widget can be pinned to, mirroring the app-level area filter options. */
+private val WIDGET_AREA_OPTIONS = listOf("All", "Alsbach", "Darmstadt")
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun WidgetConfigScreen(
     initialConfiguration: WidgetConfiguration,
+    categoryCounts: Map<AlertCategory, Int> = emptyMap(),
     onConfirm: (WidgetConfiguration) -> Unit
 ) {
-    val initialFilters = initialConfiguration.selectedAlertTypes
-    val enabledTypes = remember(initialFilters) {
-        mutableStateMapOf<String, Boolean>().apply {
-            ALL_FILTER_TYPES.forEach { (key, _) ->
-                put(key, initialFilters.isEmpty() || key in initialFilters)
+    // [shownCategories] is the source of truth; the stored configuration holds the muted
+    // complement, matching the feed and map semantics.
+    val muted = initialConfiguration.selectedAlertTypes.toCategorySelection()
+    val shownCategories = remember(muted) {
+        mutableStateMapOf<AlertCategory, Boolean>().apply {
+            FILTERABLE_ALERT_CATEGORIES.forEach { category ->
+                put(category, category !in muted)
             }
         }
     }
-    val selectedCount = enabledTypes.count { it.value }
-    val allSelected = selectedCount == ALL_FILTER_TYPES.size
+    val shownCount = shownCategories.count { it.value }
+    val allShown = shownCount == FILTERABLE_ALERT_CATEGORIES.size
     var priority by remember { mutableStateOf(initialConfiguration.priority) }
     var distanceMode by remember { mutableStateOf(initialConfiguration.distance) }
     var fixedDistance by remember {
         mutableStateOf((initialConfiguration.distance as? WidgetDistanceMode.Fixed)?.kilometers ?: 10)
     }
+    var areaMode by remember { mutableStateOf(initialConfiguration.area) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -240,13 +246,6 @@ internal fun WidgetConfigScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            Text(
-                text = "The widget keeps the latest saved alerts visible and shows when it was updated. Location access improves distance filtering.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -258,10 +257,12 @@ internal fun WidgetConfigScreen(
                         .fillMaxWidth()
                         .heightIn(min = 64.dp)
                         .toggleable(
-                            value = allSelected,
+                            value = allShown,
                             role = Role.Switch,
                             onValueChange = { enabled ->
-                                ALL_FILTER_TYPES.forEach { (key, _) -> enabledTypes[key] = enabled }
+                                FILTERABLE_ALERT_CATEGORIES.forEach { category ->
+                                    shownCategories[category] = enabled
+                                }
                             }
                         )
                         .semantics(mergeDescendants = true) {}
@@ -280,7 +281,7 @@ internal fun WidgetConfigScreen(
                         )
                     }
                     Switch(
-                        checked = allSelected,
+                        checked = allShown,
                         onCheckedChange = null,
                         modifier = Modifier.clearAndSetSemantics {}
                     )
@@ -302,11 +303,11 @@ internal fun WidgetConfigScreen(
                 Text(
                     text = pluralStringResource(
                         R.plurals.widget_config_selected_count,
-                        selectedCount,
-                        selectedCount,
-                        ALL_FILTER_TYPES.size
+                        shownCount,
+                        shownCount,
+                        FILTERABLE_ALERT_CATEGORIES.size
                     ),
-                    color = if (selectedCount == 0) {
+                    color = if (shownCount == 0) {
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -319,44 +320,41 @@ internal fun WidgetConfigScreen(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ALL_FILTER_TYPES.forEach { (key, _) ->
-                    val checked = enabledTypes[key] ?: true
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                CategoryFilterGrid(
+                    selection = FILTERABLE_ALERT_CATEGORIES
+                        .filterNot { shownCategories[it] == true }
+                        .toSet(),
+                    counts = categoryCounts,
+                    onToggle = { category, shownAfter ->
+                        shownCategories[category] = shownAfter
+                    }
+                )
+
+                Text(
+                    text = "Area",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = areaMode is WidgetAreaMode.InheritApp,
+                        onClick = { areaMode = WidgetAreaMode.InheritApp },
+                        label = { Text("Follow app") }
+                    )
+                    WIDGET_AREA_OPTIONS.forEach { area ->
+                        val selected = (areaMode as? WidgetAreaMode.Fixed)?.area == area
+                        FilterChip(
+                            selected = selected,
+                            onClick = { areaMode = WidgetAreaMode.Fixed(area) },
+                            label = { Text(area) }
                         )
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 60.dp)
-                                .toggleable(
-                                    value = checked,
-                                    role = Role.Switch,
-                                    onValueChange = { enabledTypes[key] = it }
-                                )
-                                .semantics(mergeDescendants = true) {}
-                                .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(widgetFilterLabelResource(key)),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Switch(
-                                checked = checked,
-                                onCheckedChange = null,
-                                modifier = Modifier.clearAndSetSemantics {}
-                            )
-                        }
                     }
                 }
+
                 Text(
                     text = "Priority",
                     style = MaterialTheme.typography.titleSmall,
@@ -428,16 +426,20 @@ internal fun WidgetConfigScreen(
             // Confirm button
             Button(
                 onClick = {
-                    val selected = enabledTypes.filter { it.value }.keys
+                    val mutedNames = FILTERABLE_ALERT_CATEGORIES
+                        .filter { shownCategories[it] != true }
+                        .map { it.name }
+                        .toSet()
                     onConfirm(
                         WidgetConfiguration(
-                            selectedAlertTypes = selected,
+                            selectedAlertTypes = mutedNames,
                             priority = priority,
-                            distance = distanceMode
+                            distance = distanceMode,
+                            area = areaMode
                         )
                     )
                 },
-                enabled = selectedCount > 0,
+                enabled = shownCount > 0,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 52.dp),
@@ -452,28 +454,17 @@ internal fun WidgetConfigScreen(
     }
 }
 
-private fun widgetFilterLabelResource(key: String): Int = when (key) {
-    "Hundo" -> R.string.widget_filter_hundo
-    "Nundo" -> R.string.widget_filter_nundo
-    "PvP" -> R.string.widget_filter_pvp
-    "Spawn" -> R.string.widget_filter_spawn
-    "Raid" -> R.string.widget_filter_raid
-    "Rocket" -> R.string.widget_filter_rocket
-    "Quest" -> R.string.widget_filter_quest
-    "Kecleon" -> R.string.widget_filter_kecleon
-    else -> R.string.widget_filter_other
-}
-
 /**
- * Utility to read/write per-widget type filter preferences.
+ * Reads and writes the raw per-widget filter set. Unlike older builds the set holds muted
+ * category names (empty = show all); values are persisted as given, no migration applied.
  */
 object WidgetFilterPrefs {
-    fun saveFilters(context: Context, appWidgetId: Int, enabledTypes: Set<String>) {
+    fun saveFilters(context: Context, appWidgetId: Int, mutedTypes: Set<String>) {
         val existing = WidgetConfigurationStore.get(context, appWidgetId)
         WidgetConfigurationStore.save(
             context,
             appWidgetId,
-            existing.copy(selectedAlertTypes = enabledTypes)
+            existing.copy(selectedAlertTypes = mutedTypes)
         )
     }
 
@@ -483,15 +474,4 @@ object WidgetFilterPrefs {
     fun removeFilters(context: Context, appWidgetId: Int) {
         WidgetConfigurationStore.remove(context, appWidgetId)
     }
-}
-
-@Composable
-fun WidgetConfigScreen(
-    initialFilters: Set<String>,
-    onConfirm: (Set<String>) -> Unit
-) {
-    WidgetConfigScreen(
-        initialConfiguration = WidgetConfiguration(selectedAlertTypes = initialFilters),
-        onConfirm = { onConfirm(it.selectedAlertTypes) }
-    )
 }

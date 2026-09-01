@@ -202,10 +202,11 @@ class WholeAppUxComposeTest {
             PokemonAlertsV2Theme(darkTheme = true) {
                 Box(modifier = androidx.compose.ui.Modifier.width(360.dp)) {
                     MapFilterRow(
-                        filters = AlertFilter.values().toList(),
-                        selectedFilter = AlertFilter.ALL,
+                        selectedCategories = emptySet(),
+                        categoryCounts = emptyMap(),
                         visibleAlertCount = 4,
-                        onFilterSelected = {}
+                        onCategoryToggled = { _, _ -> },
+                        onShowAllCategories = {}
                     )
                 }
             }

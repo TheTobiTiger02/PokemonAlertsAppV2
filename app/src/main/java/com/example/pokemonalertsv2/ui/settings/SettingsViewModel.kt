@@ -19,11 +19,19 @@ import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportCandidate
 import com.example.pokemonalertsv2.data.pokegenie.PokeGeniePrepareResult
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportUiState
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.ui.alerts.AlertCategory
+import com.example.pokemonalertsv2.ui.alerts.countAlertsByCategory
+import com.example.pokemonalertsv2.ui.alerts.toCategorySelection
+import com.example.pokemonalertsv2.ui.alerts.toStoredNames
 import com.example.pokemonalertsv2.ui.godex.GoDexWebSessionCookies
+import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -36,6 +44,9 @@ class SettingsViewModel(
 ) : AndroidViewModel(application) {
 
     private val preferences = AlertPreferences(application.alertPreferencesDataStore)
+    private val alertRepository by lazy(LazyThreadSafetyMode.NONE) {
+        PokemonAlertsRepository.create(application)
+    }
     private val goDexRepository by lazy(LazyThreadSafetyMode.NONE) {
         GoDexRepository.getInstance(application)
     }
@@ -377,12 +388,93 @@ class SettingsViewModel(
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
-    
+
     fun updateSnoozeDuration(minutes: Int) {
         viewModelScope.launch {
             preferences.updateSnoozeDuration(minutes)
         }
     }
+
+    //region Filters hub — per-surface category selections with a shared live tally.
+
+    val feedFilterCategories: StateFlow<Set<AlertCategory>> = preferences.feedCategories
+        .map { stored -> stored.toCategorySelection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val mapFilterCategories: StateFlow<Set<AlertCategory>> = preferences.mapCategories
+        .map { stored -> stored.toCategorySelection() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val mapShowDismissed: StateFlow<Boolean> = preferences.mapShowDismissed
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val maxWalkingMinutes: StateFlow<Int> = preferences.maxWalkingMinutes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TravelTime.NO_LIMIT)
+
+    val showMapCountdowns: StateFlow<Boolean> = preferences.showMapCountdowns
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val showSpawnRadius: StateFlow<Boolean> = preferences.showSpawnRadius
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val spacialRendEnabled: StateFlow<Boolean> = preferences.spacialRendEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val filterCategoryCounts: StateFlow<Map<AlertCategory, Int>> = alertRepository.alerts
+        .map { alerts ->
+            val now = System.currentTimeMillis()
+            countAlertsByCategory(
+                alerts.filter { alert ->
+                    (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) > now
+                }
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** [categories] holds the muted categories; empty = show everything. */
+    fun updateFeedFilterCategories(categories: Set<AlertCategory>) {
+        viewModelScope.launch {
+            preferences.updateFeedCategories(categories.toStoredNames())
+        }
+    }
+
+    fun updateMapFilterCategories(categories: Set<AlertCategory>) {
+        viewModelScope.launch {
+            preferences.updateMapCategories(categories.toStoredNames())
+        }
+    }
+
+    fun updateMapShowDismissed(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateMapShowDismissed(enabled)
+        }
+    }
+
+    fun updateMaxWalkingMinutes(minutes: Int) {
+        viewModelScope.launch {
+            preferences.updateMaxWalkingMinutes(minutes)
+        }
+    }
+
+    fun updateShowMapCountdowns(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateShowMapCountdowns(enabled)
+        }
+    }
+
+    fun updateShowSpawnRadius(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateShowSpawnRadius(enabled)
+        }
+    }
+
+    fun updateSpacialRendEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateSpacialRendEnabled(enabled)
+        }
+    }
+
+    //endregion
 
     fun connectGoDex(url: String) {
         viewModelScope.launch {

@@ -2,7 +2,7 @@ package com.example.pokemonalertsv2.widget
 
 import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
-import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
+import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.TimeUtils
 
 internal object WidgetAlertFilter {
@@ -92,22 +92,15 @@ internal object WidgetAlertFilter {
         return true
     }
 
+    /**
+     * [filterTypes] holds [com.example.pokemonalertsv2.ui.alerts.AlertCategory] names
+     * (muted categories are absent — same "empty means everything" rule as the feed and map).
+     */
     private fun matchesWidgetTypes(alert: PokemonAlert, filterTypes: Set<String>): Boolean {
         if (filterTypes.isEmpty()) return true
-        val semanticTypes = buildSet {
-            addAll(alert.type.orEmpty())
-            add(resolveAlertVisualStyle(alert).label)
-            if (alert.isPerfect) add("Hundo")
-            if (alert.isNundo) add("Nundo")
-            if (alert.isWeatherChange) add("Weather")
-        }
-        if (semanticTypes.isEmpty()) return true
-        return semanticTypes.any { type ->
-            filterTypes.any { filter ->
-                type.contains(filter, ignoreCase = true) ||
-                    filter.contains(type, ignoreCase = true)
-            }
-        }
+        val categories = alert.alertCategories()
+        if (categories.isEmpty()) return true
+        return categories.none { it.name in filterTypes }
     }
 
     fun directDistanceMeters(origin: Origin, alert: PokemonAlert): Float? {

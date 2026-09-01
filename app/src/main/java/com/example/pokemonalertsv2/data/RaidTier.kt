@@ -48,11 +48,8 @@ enum class RaidTier(val displayLabel: String, val pokebattlerRaidLevel: String) 
  * The feed encodes the tier as a bare string inside [PokemonAlert.type] — e.g.
  * `["Raid", "5"]` or `["Raid", "Mega"]`. There is no dedicated field.
  *
- * Note: [com.example.pokemonalertsv2.notifications.AlertNotifier] has its own
- * `RAID_TIER_REGEX` (`\d+|mega`) which never matches "Elite" or "Primal", so those
- * exclusions are silently dead there. That is a pre-existing notification-filtering
- * bug and is deliberately left alone; adopting this parser there would change which
- * notifications users receive and belongs in its own change.
+ * The notification filter also uses this parser for its excluded-raid-tiers check, so
+ * "Elite"/"Primal" exclusions behave the same there as everywhere else.
  */
 object RaidTierParser {
 

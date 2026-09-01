@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.widget
 
 import android.content.Context
+import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
+import com.example.pokemonalertsv2.ui.alerts.legacyWidgetTokenToCategory
 
 internal enum class WidgetPriority {
     APP_DEFAULT,
@@ -19,6 +21,11 @@ internal sealed interface WidgetDistanceMode {
     }
 }
 
+internal sealed interface WidgetAreaMode {
+    data object InheritApp : WidgetAreaMode
+    data class Fixed(val area: String) : WidgetAreaMode
+}
+
 internal enum class WidgetLoadState {
     LOADING,
     CONTENT,
@@ -27,10 +34,12 @@ internal enum class WidgetLoadState {
     ERROR
 }
 
+/** @param selectedAlertTypes muted [com.example.pokemonalertsv2.ui.alerts.AlertCategory] names; empty = show all. */
 internal data class WidgetConfiguration(
     val selectedAlertTypes: Set<String> = emptySet(),
     val priority: WidgetPriority = WidgetPriority.APP_DEFAULT,
-    val distance: WidgetDistanceMode = WidgetDistanceMode.InheritApp
+    val distance: WidgetDistanceMode = WidgetDistanceMode.InheritApp,
+    val area: WidgetAreaMode = WidgetAreaMode.InheritApp
 )
 
 internal object WidgetConfigurationStore {
@@ -38,15 +47,12 @@ internal object WidgetConfigurationStore {
     private const val FILTER_PREFIX = "widget_filters_"
     private const val PRIORITY_PREFIX = "widget_priority_"
     private const val DISTANCE_PREFIX = "widget_distance_"
+    private const val AREA_PREFIX = "widget_area_"
 
     fun get(context: Context, appWidgetId: Int): WidgetConfiguration {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val filters = prefs.getStringSet("$FILTER_PREFIX$appWidgetId", emptySet())?.toSet().orEmpty()
-        val migratedFilters = if (filters.containsAll(LEGACY_ALL_FILTER_TYPES)) {
-            filters + NEW_DEFAULT_FILTER_TYPES
-        } else {
-            filters
-        }
+        val rawFilters = prefs.getStringSet("$FILTER_PREFIX$appWidgetId", emptySet())?.toSet().orEmpty()
+        val filters = migrateLegacyFilterTokens(rawFilters)
         val priority = prefs.getString("$PRIORITY_PREFIX$appWidgetId", null)
             ?.let { runCatching { WidgetPriority.valueOf(it) }.getOrNull() }
             ?: WidgetPriority.APP_DEFAULT
@@ -60,7 +66,37 @@ internal object WidgetConfigurationStore {
                 ?: WidgetDistanceMode.InheritApp
             else -> WidgetDistanceMode.InheritApp
         }
-        return WidgetConfiguration(migratedFilters, priority, distance)
+        val rawArea = prefs.getString("$AREA_PREFIX$appWidgetId", null)
+        val area = when {
+            rawArea == null || rawArea == "INHERIT" -> WidgetAreaMode.InheritApp
+            rawArea.startsWith("FIXED:") -> WidgetAreaMode.Fixed(rawArea.substringAfter(':'))
+            else -> WidgetAreaMode.InheritApp
+        }
+        return WidgetConfiguration(filters, priority, distance, area)
+    }
+
+    /**
+     * Older builds stored display-label tokens ("Hundo", "PvP", …) as an ALLOW list — the
+     * widget showed only those types. The new model stores muted categories, so the migration
+     * maps the tokens onto categories and stores the complement: a widget that showed only
+     * raids keeps showing only raids, now expressed as "everything except raids muted". An
+     * empty stored set already meant "show all" and stays empty.
+     *
+     * Already-migrated sets are detected by case: enum names are upper-snake ("RAID"), legacy
+     * tokens were display labels ("Raid"), so a round-trip through [save] never re-migrates.
+     */
+    private fun migrateLegacyFilterTokens(rawFilters: Set<String>): Set<String> {
+        if (rawFilters.isEmpty()) return emptySet()
+        val alreadyMigrated = rawFilters.all { token ->
+            runCatching { com.example.pokemonalertsv2.ui.alerts.AlertCategory.valueOf(token) }
+                .getOrNull() in FILTERABLE_ALERT_CATEGORIES
+        }
+        if (alreadyMigrated) return rawFilters
+        val allowed = rawFilters.mapNotNull { token -> legacyWidgetTokenToCategory(token) }.toSet()
+        return FILTERABLE_ALERT_CATEGORIES
+            .filterNot { it in allowed }
+            .map { it.name }
+            .toSet()
     }
 
     fun save(context: Context, appWidgetId: Int, configuration: WidgetConfiguration) {
@@ -69,10 +105,15 @@ internal object WidgetConfigurationStore {
             WidgetDistanceMode.Unlimited -> "UNLIMITED"
             is WidgetDistanceMode.Fixed -> "FIXED:${mode.kilometers.coerceIn(1, 50)}"
         }
+        val area = when (val mode = configuration.area) {
+            WidgetAreaMode.InheritApp -> "INHERIT"
+            is WidgetAreaMode.Fixed -> "FIXED:${mode.area}"
+        }
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putStringSet("$FILTER_PREFIX$appWidgetId", configuration.selectedAlertTypes)
             .putString("$PRIORITY_PREFIX$appWidgetId", configuration.priority.name)
             .putString("$DISTANCE_PREFIX$appWidgetId", distance)
+            .putString("$AREA_PREFIX$appWidgetId", area)
             .apply()
     }
 
@@ -81,11 +122,7 @@ internal object WidgetConfigurationStore {
             .remove("$FILTER_PREFIX$appWidgetId")
             .remove("$PRIORITY_PREFIX$appWidgetId")
             .remove("$DISTANCE_PREFIX$appWidgetId")
+            .remove("$AREA_PREFIX$appWidgetId")
             .apply()
     }
-
-    private val LEGACY_ALL_FILTER_TYPES = setOf(
-        "Hundo", "Nundo", "PvP", "Spawn", "Raid", "Rocket", "Quest", "Kecleon"
-    )
-    private val NEW_DEFAULT_FILTER_TYPES = setOf("Rare", "Weather")
 }

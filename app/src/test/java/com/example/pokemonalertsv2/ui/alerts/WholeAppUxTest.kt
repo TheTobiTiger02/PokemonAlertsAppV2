@@ -36,9 +36,18 @@ class WholeAppUxTest {
 
     @Test
     fun emptyStateExplainsTheStrongestConstraint() {
-        assertTrue(alertEmptyStateMessage("pika", AlertFilter.HUNDOS, "Alsbach", 10, false, true).contains("pika"))
-        assertTrue(alertEmptyStateMessage("", AlertFilter.HUNDOS, "All", 0, false, true).contains("hundos"))
-        assertTrue(alertEmptyStateMessage("", AlertFilter.ALL, "All", 10, false, false).contains("location"))
+        assertTrue(
+            alertEmptyStateMessage("pika", setOf(AlertCategory.HUNDO), "Alsbach", 10, false, true)
+                .contains("pika")
+        )
+        assertTrue(
+            alertEmptyStateMessage("", setOf(AlertCategory.HUNDO), "All", 0, false, true)
+                .contains("hundos")
+        )
+        assertTrue(
+            alertEmptyStateMessage("", emptySet(), "All", 10, false, false)
+                .contains("location")
+        )
     }
 
     @Test

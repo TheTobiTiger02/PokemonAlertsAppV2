@@ -52,6 +52,29 @@ private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.boole
 private val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
 private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_alert_filter")
 
+// Per-surface category selections. An empty set means "no narrowing" — every category shows.
+private val FEED_CATEGORIES_KEY = stringSetPreferencesKey("feed_filter_categories")
+private val MAP_CATEGORIES_KEY = stringSetPreferencesKey("map_filter_categories")
+private val MAP_SHOW_DISMISSED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("map_show_dismissed")
+
+/**
+ * One-time read migration from the old single-select feed tab ([SELECTED_ALERT_FILTER_KEY])
+ * to the multi-select feed category set. Kept as a plain string table so the data layer does
+ * not depend on the UI enum; the names match [com.example.pokemonalertsv2.ui.alerts.AlertCategory].
+ * RARES historically matched both the Rare and the plain Spawn tokens, so it widens to both.
+ */
+private val LEGACY_FEED_FILTER_TO_CATEGORIES: Map<String, Set<String>> = mapOf(
+    "RAIDS" to setOf("RAID"),
+    "QUESTS" to setOf("QUEST"),
+    "RARES" to setOf("RARE", "SPAWN"),
+    "HUNDOS" to setOf("HUNDO"),
+    "PVP" to setOf("PVP"),
+    "NUNDOS" to setOf("NUNDO"),
+    "ROCKET" to setOf("ROCKET"),
+    "KECLEON" to setOf("KECLEON"),
+    "WEATHER_CHANGE" to setOf("WEATHER")
+)
+
 // Sub-type filtering keys - Sets of excluded types (if a type is in the set, it's filtered out)
 private val EXCLUDED_HUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_hundo_types")
 private val EXCLUDED_NUNDO_TYPES_KEY = stringSetPreferencesKey("excluded_nundo_types")
@@ -193,6 +216,18 @@ interface AlertPreferencesStore {
 
     val selectedAlertFilterName: Flow<String>
     suspend fun updateSelectedAlertFilterName(filterName: String)
+
+    /** Multi-select feed category filter, stored as [com.example.pokemonalertsv2.ui.alerts.AlertCategory] names. Empty = show all. */
+    val feedCategories: Flow<Set<String>>
+    suspend fun updateFeedCategories(categories: Set<String>)
+
+    /** Multi-select map category filter, independent from the feed. Empty = show all. */
+    val mapCategories: Flow<Set<String>>
+    suspend fun updateMapCategories(categories: Set<String>)
+
+    /** Whether the map shows dismissed alerts again; independent from the feed's toggle. */
+    val mapShowDismissed: Flow<Boolean>
+    suspend fun updateMapShowDismissed(enabled: Boolean)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -587,6 +622,32 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 
     override suspend fun updateSelectedAlertFilterName(filterName: String) {
         dataStore.edit { prefs -> prefs[SELECTED_ALERT_FILTER_KEY] = filterName }
+    }
+
+    override val feedCategories: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[FEED_CATEGORIES_KEY]
+            ?: LEGACY_FEED_FILTER_TO_CATEGORIES[preferences[SELECTED_ALERT_FILTER_KEY]]
+            ?: emptySet()
+    }
+
+    override suspend fun updateFeedCategories(categories: Set<String>) {
+        dataStore.edit { prefs -> prefs[FEED_CATEGORIES_KEY] = categories }
+    }
+
+    override val mapCategories: Flow<Set<String>> = dataStore.data.map { preferences ->
+        preferences[MAP_CATEGORIES_KEY] ?: emptySet()
+    }
+
+    override suspend fun updateMapCategories(categories: Set<String>) {
+        dataStore.edit { prefs -> prefs[MAP_CATEGORIES_KEY] = categories }
+    }
+
+    override val mapShowDismissed: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MAP_SHOW_DISMISSED_KEY] ?: false
+    }
+
+    override suspend fun updateMapShowDismissed(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[MAP_SHOW_DISMISSED_KEY] = enabled }
     }
     
     // Sub-type filtering implementations

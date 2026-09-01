@@ -744,26 +744,9 @@ internal fun AlertHistoryPage(
             ) {
                 Text("Filter history", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("Alert type", style = MaterialTheme.typography.titleSmall)
-                FilterRow(
+                HistoryTypeFilterRow(
                     selectedFilter = selectedTypeFilter,
-                    onFilterChanged = applyHistoryTypeFilter,
-                    locationAvailable = hasLocationPermission && userLocation != null,
-                    locationPermissionGranted = hasLocationPermission,
-                    locationLookupComplete = locationLookupComplete,
-                    onRequestLocationPermission = {
-                        if (hasForegroundLocationPermission(context)) {
-                            locationLookupComplete = false
-                            scope.launch { refreshUserLocation() }
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    },
-                    availableFilters = availableFilters
+                    onFilterChanged = applyHistoryTypeFilter
                 )
                 Text("Area", style = MaterialTheme.typography.titleSmall)
                 HistoryAreaFilterRow(

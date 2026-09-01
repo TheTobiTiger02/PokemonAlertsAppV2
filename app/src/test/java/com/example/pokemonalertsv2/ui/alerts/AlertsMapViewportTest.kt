@@ -122,7 +122,7 @@ class AlertsMapViewportTest {
 
         val hidden = visibleMapAlerts(
             alerts = alerts,
-            filter = AlertFilter.ALL,
+            selectedCategories = emptySet(),
             dismissedAlertIds = setOf(dismissed.uniqueId),
             showDismissed = false,
             nowMillis = 0L
@@ -131,7 +131,7 @@ class AlertsMapViewportTest {
 
         val shown = visibleMapAlerts(
             alerts = alerts,
-            filter = AlertFilter.ALL,
+            selectedCategories = emptySet(),
             dismissedAlertIds = setOf(dismissed.uniqueId),
             showDismissed = true,
             nowMillis = 0L
@@ -148,27 +148,28 @@ class AlertsMapViewportTest {
 
         val visible = visibleMapAlerts(
             alerts = listOf(raid, dismissedRaid, quest, unmappable),
-            filter = AlertFilter.RAIDS,
+            selectedCategories = setOf(AlertCategory.QUEST),
             dismissedAlertIds = setOf(dismissedRaid.uniqueId),
             showDismissed = false,
             nowMillis = 0L
         )
 
+        // Quests muted: only the undismissed raid survives the wave.
         assertEquals(listOf(raid.uniqueId), visible.map { it.uniqueId })
     }
 
     @Test
-    fun `compact picture in picture forces all without changing full map filter`() {
+    fun `compact picture in picture forces everything visible without changing the full map`() {
         assertEquals(
-            AlertFilter.ALL,
+            emptySet<AlertCategory>(),
             mapFilterForPresentation(
-                AlertFilter.RAIDS,
+                setOf(AlertCategory.RAID),
                 MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
             )
         )
         assertEquals(
-            AlertFilter.RAIDS,
-            mapFilterForPresentation(AlertFilter.RAIDS, MapPresentationMode.FULL)
+            setOf(AlertCategory.RAID),
+            mapFilterForPresentation(setOf(AlertCategory.RAID), MapPresentationMode.FULL)
         )
     }
 

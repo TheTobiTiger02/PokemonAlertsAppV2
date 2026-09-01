@@ -789,6 +789,17 @@ class PokemonAlertsRepositoryTest {
         override suspend fun applyNotificationPreset(preset: NotificationPreset) = Unit
         override val selectedAlertFilterName: Flow<String> = selectedAlertFilterState.asStateFlow()
         override suspend fun updateSelectedAlertFilterName(filterName: String) { selectedAlertFilterState.value = filterName }
+
+        private val feedCategoriesState = MutableStateFlow(emptySet<String>())
+        private val mapCategoriesState = MutableStateFlow(emptySet<String>())
+        private val mapShowDismissedState = MutableStateFlow(false)
+
+        override val feedCategories: Flow<Set<String>> = feedCategoriesState.asStateFlow()
+        override suspend fun updateFeedCategories(categories: Set<String>) { feedCategoriesState.value = categories }
+        override val mapCategories: Flow<Set<String>> = mapCategoriesState.asStateFlow()
+        override suspend fun updateMapCategories(categories: Set<String>) { mapCategoriesState.value = categories }
+        override val mapShowDismissed: Flow<Boolean> = mapShowDismissedState.asStateFlow()
+        override suspend fun updateMapShowDismissed(enabled: Boolean) { mapShowDismissedState.value = enabled }
     }
 
     private class FakeAlertDao : AlertDao() {

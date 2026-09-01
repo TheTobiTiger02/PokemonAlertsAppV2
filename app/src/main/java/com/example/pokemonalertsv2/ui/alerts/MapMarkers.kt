@@ -165,6 +165,7 @@ internal fun MapMarker(
     countdownClock: State<Long>,
     density: androidx.compose.ui.unit.Density,
     showTimeLabel: Boolean,
+    minutePrecisionCountdown: Boolean,
     goDexMatchResult: GoDexMatchResult,
     onClick: () -> Unit,
     markerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
@@ -187,8 +188,8 @@ internal fun MapMarker(
     val speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
     val now = countdownClock.value
-    val timeLabel = remember(now, alert.endTime) {
-        mapCountdownLabel(alert.endTime, now)
+    val timeLabel = remember(now, alert.endTime, minutePrecisionCountdown) {
+        mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown)
     }
     val markerSizePx = remember(density, markerSizeDp) {
         with(density) { markerSizeDp.dp.toPx().toInt() }
@@ -313,8 +314,20 @@ internal data class MapMarkerIconRequest(
     val goDexStatus: GoDexMatchStatus
 )
 
-internal val markerIconCache = LruCache<String, MapMarkerIcon>(256)
-internal val markerArtworkCache = LruCache<String, Bitmap>(128)
+/**
+ * Byte-sized caps instead of entry counts: a single ARGB pin runs ~200 KB, so a 256-entry
+ * cache could quietly hold 50 MB. Sizing by bytes keeps the same hit-rate within a budget.
+ */
+private const val MARKER_ICON_CACHE_BYTES = 32 * 1024 * 1024
+private const val MARKER_ARTWORK_CACHE_BYTES = 16 * 1024 * 1024
+private const val CLUSTER_BITMAP_CACHE_BYTES = 8 * 1024 * 1024
+
+internal val markerIconCache = object : LruCache<String, MapMarkerIcon>(MARKER_ICON_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
+}
+internal val markerArtworkCache = object : LruCache<String, Bitmap>(MARKER_ARTWORK_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+}
 
 internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$sizePx|$url"
 
@@ -740,19 +753,27 @@ internal fun Canvas.drawMarkerLabel(
     drawText(text, centerX, textY, textPaint)
 }
 
+/**
+ * Cluster bubbles differ only by category, count and size, so a membership change that keeps
+ * those three stable reuses the same bitmap instead of redrawing one per cluster per update.
+ */
+private val clusterBitmapCache = object : LruCache<String, Bitmap>(CLUSTER_BITMAP_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+}
+
 internal fun createClusterMarkerBitmap(
     context: android.content.Context,
     count: Int,
-    sharedCategory: AlertFilter?,
+    sharedCategory: AlertCategory?,
     sizeDp: Float = MAP_FULL_CLUSTER_SIZE_DP
 ): Bitmap {
+    val cacheKey = listOf(sharedCategory?.name.orEmpty(), count, sizeDp).joinToString("|")
+    clusterBitmapCache.get(cacheKey)?.let { return it }
     val density = context.resources.displayMetrics.density
     val size = (sizeDp * density).toInt().coerceAtLeast(1)
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val fill = sharedCategory
-        ?.let { resolveAlertVisualStyle(it.label).category.accentArgb.toInt() }
-        ?: 0xFF455A64.toInt()
+    val fill = sharedCategory?.accentArgb?.toInt() ?: 0xFF455A64.toInt()
     canvas.drawCircle(size / 2f, size / 2f, size * 0.44f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
     })
@@ -771,6 +792,7 @@ internal fun createClusterMarkerBitmap(
         size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f,
         textPaint
     )
+    clusterBitmapCache.put(cacheKey, bitmap)
     return bitmap
 }
 

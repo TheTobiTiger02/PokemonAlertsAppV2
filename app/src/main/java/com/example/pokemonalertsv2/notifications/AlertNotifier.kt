@@ -25,12 +25,14 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
+import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +50,13 @@ object AlertNotifier {
 
     /** Beyond this the inbox style truncates anyway; the rest becomes a "+N more". */
     private const val MAX_SUMMARY_LINES = 5
+
+    /**
+     * Individual notifications posted per wave, soonest-ending first. Everything past this
+     * folds into the channel summaries as a "+N more" line — with the Darmstadt sources a
+     * single wave can carry dozens of alerts and the shade would otherwise drown.
+     */
+    private const val MAX_NOTIFICATIONS_PER_BURST = 25
 
     internal fun buildNotificationContentText(
         alert: PokemonAlert,
@@ -141,53 +150,82 @@ object AlertNotifier {
 
         val postedByChannel = linkedMapOf<String, MutableList<PokemonAlert>>()
 
-        alerts.forEachIndexed { index, alert ->
-            // Area Filter
-            if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEachIndexed
+        // Pass 1 decides *which* alerts earn a notification; pass 2 pays for the expensive
+        // parts (images, bitmaps) only for those. With the Darmstadt sources a single push
+        // wave can carry dozens of alerts — posting one notification per alert would flood
+        // the shade, so everything past the cap folds into the channel summaries instead.
+        data class Candidate(
+            val alert: PokemonAlert,
+            val routeDisplayInfo: com.example.pokemonalertsv2.util.RouteDisplayInfo,
+            val goDexStatus: GoDexMatchResult
+        )
 
-            val straightLineDistanceMeters = userLocation?.let { loc ->
-                val latitude = alert.latitude ?: return@let null
-                val longitude = alert.longitude ?: return@let null
-                WalkingRouteUtils.straightLineDistanceMeters(
-                    loc.latitude,
-                    loc.longitude,
-                    latitude,
-                    longitude
+        val candidates = buildList {
+            alerts.forEach { alert ->
+                // Area Filter
+                if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEach
+
+                val straightLineDistanceMeters = userLocation?.let { loc ->
+                    val latitude = alert.latitude ?: return@let null
+                    val longitude = alert.longitude ?: return@let null
+                    WalkingRouteUtils.straightLineDistanceMeters(
+                        loc.latitude,
+                        loc.longitude,
+                        latitude,
+                        longitude
+                    )
+                }
+                val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+                    straightLineDistanceMeters = straightLineDistanceMeters,
+                    routeInfo = walkingRoutes[alert.uniqueId]
                 )
-            }
-            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
-                straightLineDistanceMeters = straightLineDistanceMeters,
-                routeInfo = walkingRoutes[alert.uniqueId]
-            )
 
-            // A routed distance is preferred. Direct distance is a safe exclusion
-            // fallback because a walkable route cannot be shorter than the geodesic.
-            if (
-                settings.maxDistance > 0 &&
-                routeDisplayInfo.effectiveDistanceMeters?.let {
-                    it > settings.maxDistance * 1000
-                } == true
-            ) {
-                return@forEachIndexed
-            }
+                // A routed distance is preferred. Direct distance is a safe exclusion
+                // fallback because a walkable route cannot be shorter than the geodesic.
+                if (
+                    settings.maxDistance > 0 &&
+                    routeDisplayInfo.effectiveDistanceMeters?.let {
+                        it > settings.maxDistance * 1000
+                    } == true
+                ) {
+                    return@forEach
+                }
 
-            // Reachability, where a routed duration is available. A missing duration keeps
-            // the alert: a routing outage must not look like a quiet evening.
-            if (
-                !TravelTime.isReachableWithin(
-                    walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
-                    maxMinutes = settings.maxWalkingMinutes
-                )
-            ) {
-                return@forEachIndexed
-            }
+                // Reachability, where a routed duration is available. A missing duration keeps
+                // the alert: a routing outage must not look like a quiet evening.
+                if (
+                    !TravelTime.isReachableWithin(
+                        walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
+                        maxMinutes = settings.maxWalkingMinutes
+                    )
+                ) {
+                    return@forEach
+                }
 
-            val goDexStatus = if (alert.hasType("hundo")) {
-                goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
-            } else {
-                GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+                val goDexStatus = if (alert.hasType("hundo")) {
+                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+                } else {
+                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+                }
+                if (!settings.shouldNotify(alert, goDexStatus.status)) return@forEach
+                add(Candidate(alert, routeDisplayInfo, goDexStatus))
             }
-            if (!settings.shouldNotify(alert, goDexStatus.status)) return@forEachIndexed
+        }
+
+        // Soonest-ending first: the alerts about to vanish are the ones worth the buzz.
+        // Alerts without an end time sort last and never win the cap race.
+        val selected = candidates
+            .sortedBy { candidate ->
+                TimeUtils.parseEndTimeToMillis(candidate.alert.endTime) ?: Long.MAX_VALUE
+            }
+            .take(MAX_NOTIFICATIONS_PER_BURST)
+        val overflowByChannel = candidates
+            .drop(MAX_NOTIFICATIONS_PER_BURST)
+            .groupingBy { candidate -> notificationChannelFor(candidate.alert) }
+            .eachCount()
+
+        selected.forEach { candidate ->
+            val alert = candidate.alert
             val notificationIntent = AlertDetailActivity.createIntent(
                 context = context,
                 alert = alert,
@@ -209,8 +247,8 @@ object AlertNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
             )
 
-            val distanceText = routeDisplayInfo.distanceText
-            val walkingText = routeDisplayInfo.walkingText
+            val distanceText = candidate.routeDisplayInfo.distanceText
+            val walkingText = candidate.routeDisplayInfo.walkingText
 
             val baseText = alert.type?.joinToString(", ")
                 ?: context.getString(R.string.notification_default_body)
@@ -218,7 +256,7 @@ object AlertNotifier {
                 alert = alert,
                 distanceText = distanceText,
                 walkingText = walkingText
-            ) + goDexNotificationSuffix(alert, goDexStatus)
+            ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
             val expandedText = buildString {
                 append(contentText)
                 if (alert.description.isNotBlank() && alert.description != baseText) {
@@ -244,17 +282,11 @@ object AlertNotifier {
                 }
             )
 
-            // Select Channel ID based on type
-            val channelId = when {
-                alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
-                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
-                alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
-                else -> CHANNEL_ID
-            }
+            val channelId = notificationChannelFor(alert)
 
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
-                .setContentTitle(formatAlertTitle(alert, goDexStatus.status))
+                .setContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
                 .setContentText(contentText)
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(expandedText)
@@ -293,7 +325,7 @@ object AlertNotifier {
                     NotificationCompat.BigPictureStyle()
                         .bigPicture(it)
                         .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
-                        .setBigContentTitle(formatAlertTitle(alert, goDexStatus.status))
+                        .setBigContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
                         .setSummaryText(contentText)
                 )
             }
@@ -305,8 +337,22 @@ object AlertNotifier {
         }
 
         postedByChannel.forEach { (channelId, posted) ->
-            postGroupSummary(context, notificationManager, channelId, posted)
+            postGroupSummary(
+                context = context,
+                notificationManager = notificationManager,
+                channelId = channelId,
+                posted = posted,
+                overflowCount = overflowByChannel[channelId] ?: 0
+            )
         }
+    }
+
+    /** Channel grouping, shared by the posting loop and the burst-cap overflow tally. */
+    private fun notificationChannelFor(alert: PokemonAlert): String = when {
+        alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
+        alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
+        alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
+        else -> CHANNEL_ID
     }
 
     /**
@@ -315,14 +361,18 @@ object AlertNotifier {
      *
      * Posted even for a single alert: without a summary the group is inconsistent, and
      * Android collapses a one-child group into just that child anyway.
+     *
+     * [overflowCount] counts alerts that passed every filter but lost the burst-cap race;
+     * they surface here so the summary still tells the whole story.
      */
     private fun postGroupSummary(
         context: Context,
         notificationManager: NotificationManagerCompat,
         channelId: String,
-        posted: List<PokemonAlert>
+        posted: List<PokemonAlert>,
+        overflowCount: Int = 0
     ) {
-        if (posted.isEmpty()) return
+        if (posted.isEmpty() && overflowCount <= 0) return
         if (ContextCompat.checkSelfPermission(
                 context,
                 android.Manifest.permission.POST_NOTIFICATIONS
@@ -330,13 +380,16 @@ object AlertNotifier {
         ) return
 
         val summaryId = AlertNotificationIds.forSummary(channelId)
-        val label = groupLabel(channelId, posted.size)
+        // The headline counts everything the wave delivered for this channel, including the
+        // burst-cap overflow, so "32 raids nearby" stays honest even when only 25 got cards.
+        val label = groupLabel(channelId, posted.size + overflowCount)
         val inbox = NotificationCompat.InboxStyle().setBigContentTitle(label)
         posted.take(MAX_SUMMARY_LINES).forEach { alert ->
             inbox.addLine(summaryLine(alert))
         }
-        if (posted.size > MAX_SUMMARY_LINES) {
-            inbox.setSummaryText("+${posted.size - MAX_SUMMARY_LINES} more")
+        val unlisted = (posted.size - MAX_SUMMARY_LINES).coerceAtLeast(0) + overflowCount
+        if (unlisted > 0) {
+            inbox.setSummaryText("+${unlisted} more")
         }
 
         val dismissAll = PendingIntent.getBroadcast(
@@ -500,8 +553,12 @@ object AlertNotifier {
         }
 
         private fun raidTierAllowed(alert: PokemonAlert): Boolean {
-            val raidTier = alert.type?.find { it.matches(RAID_TIER_REGEX) }
-            return raidTier == null || raidTier.lowercase(Locale.ROOT) !in excludedRaidTiersLower
+            val excluded = excludedRaidTiersLower
+            if (excluded.isEmpty()) return true
+            // RaidTierParser resolves "Elite", "Primal", "Ultra Beast" and shadow tiers that
+            // the old `\d+|mega` regex never matched, which had left those exclusions dead.
+            val tier = RaidTierParser.parse(alert) ?: return true
+            return tier.displayLabel.lowercase(Locale.ROOT) !in excluded
         }
 
         private fun isPokemonTypeExcluded(alert: PokemonAlert, excludedSet: Set<String>): Boolean {
@@ -515,8 +572,6 @@ object AlertNotifier {
         }
 
         companion object {
-            private val RAID_TIER_REGEX = Regex("\\d+|mega", RegexOption.IGNORE_CASE)
-
             suspend fun load(preferences: AlertPreferencesStore): NotificationSettings {
                 return NotificationSettings(
                     notificationsEnabled = preferences.notificationsEnabled.first(),

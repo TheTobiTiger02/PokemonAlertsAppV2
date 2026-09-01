@@ -378,8 +378,8 @@ internal fun SettingsOverview(
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
         SettingsOverviewRow(
             icon = Icons.Default.DateRange,
-            title = "Alert filters",
-            summary = "$selectedArea - $distanceLabel",
+            title = "Filters",
+            summary = "Feed, map, widgets and notifications",
             onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
@@ -629,7 +629,8 @@ fun SwitchSetting(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -640,7 +641,11 @@ fun SwitchSetting(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                }
             )
             if (subtitle != null) {
                 Text(
@@ -652,7 +657,8 @@ fun SwitchSetting(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            enabled = enabled
         )
     }
 }
