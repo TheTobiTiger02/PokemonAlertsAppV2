@@ -45,7 +45,12 @@ class FilterStudioComposeTest {
     @Test fun questExactPairsAndTaskRewardFacetsRemainIndependent() {
         var saved: QuestFilterRules? = null
         rule.setContent { PokemonAlertsV2Theme {
-            QuestRulesDialog(QuestFilterRules(), quests, {}, { saved = it })
+            QuestRulesDialog(
+                current = QuestFilterRules(),
+                catalog = quests,
+                onDismiss = {},
+                onSave = { saved = it }
+            )
         } }
         rule.onNodeWithText("Catch 5 → Pikachu").performClick()
         rule.onNodeWithText("Tasks").performClick()
@@ -147,7 +152,12 @@ class FilterStudioComposeTest {
                 val density = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
                     key(title, dark, fontScale) {
-                        if (title == "Quest rules") QuestRulesDialog(QuestFilterRules(), quests, {}, {})
+                        if (title == "Quest rules") QuestRulesDialog(
+                            current = QuestFilterRules(),
+                            catalog = quests,
+                            onDismiss = {},
+                            onSave = {}
+                        )
                         else SelectionDialog(title,
                             if (title == "Raid tiers") RaidTier.entries.map { it.displayLabel }
                             else if (title == "Rocket types") DEFAULT_ROCKET_FILTER_TYPES
