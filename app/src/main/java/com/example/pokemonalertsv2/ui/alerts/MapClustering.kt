@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.ln
@@ -8,17 +9,14 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 
-/** Neighborhood/default view and closer show individual markers; only exact stacks stay grouped. */
+/** Neighborhood/street view and closer show individual markers; only coincident markers group into stacks. */
 internal const val MAP_CLUSTER_MAX_ZOOM = 12.0
 
 /** Hard ceiling on individual pins plus cluster bubbles, including protected tracking pins. */
 internal const val MAX_RENDERED_MAP_MARKERS = 350
 
 /**
- * Ceiling for [MAP_CLUSTER_MAX_ZOOM] and closer. Coarsening a dense view down to
- * [MAX_RENDERED_MAP_MARKERS] spends that budget on the whole prefetched region, which is several
- * times the visible screen, so it merges markers that are nowhere near overlapping. Zoomed in the
- * grid therefore keeps its natural cell size until this much larger ceiling is reached.
+ * Ceiling for [MAP_CLUSTER_MAX_ZOOM] and closer.
  */
 internal const val MAX_RENDERED_MAP_MARKERS_ZOOMED_IN = 900
 
@@ -29,19 +27,12 @@ internal const val SPAWN_CIRCLE_MIN_ZOOM = 14.0
 internal const val MAX_SPAWN_CIRCLES = 60
 
 /**
- * Cluster distance in *map dp*. [projectMapAlertToScreen] projects with 256 units per tile, which is
- * the density-independent unit both map backends use for a given zoom, so this must never be scaled
- * by the display density. 48 dp matches the rendered cluster icon, i.e. markers are only merged once
- * they would actually overlap.
+ * Cluster distance in *map dp* for overview zoom (< [MAP_CLUSTER_MAX_ZOOM]).
  */
-internal const val MAP_CLUSTER_CELL_DP = 48f
+internal const val MAP_CLUSTER_CELL_DP = 40f
 
 /**
- * Grid cell for dense inputs at [MAP_CLUSTER_MAX_ZOOM] and closer. A cell the size of the rendered
- * marker merges everything within a marker width, which zoomed in swallows whole streets; two
- * thirds of that keeps neighbouring pins apart while still merging the ones that sit on top of each
- * other. The doubling loop below still coarsens it when a view is dense enough to exceed the
- * rendering ceiling.
+ * Grid cell for dense inputs at [MAP_CLUSTER_MAX_ZOOM] and closer.
  */
 internal const val MAP_CLUSTER_ZOOMED_IN_CELL_DP = 32f
 
@@ -80,7 +71,9 @@ internal sealed interface MapMarkerItem {
         override val latitude: Double,
         override val longitude: Double,
         val bounds: MapGeoBounds,
-        val sharedCategory: AlertCategory?
+        val sharedCategory: AlertCategory?,
+        val topAlert: PokemonAlert = alerts.first(),
+        val isOverviewCluster: Boolean = false
     ) : MapMarkerItem
 }
 
@@ -99,10 +92,43 @@ internal fun spawnRadiusMeters(showSpawnRadius: Boolean, spacialRendEnabled: Boo
     }
 
 /**
- * Small inputs retain overlap clustering and exact stacks at neighborhood zoom. Dense inputs
- * use bounded grid cells instead of transitive components: a chain of nearby alerts must not
- * join an entire city or require comparing every pair in a crowded bucket.
- * [checkActive] lets background callers cancel obsolete work between preprocessing/grouping steps.
+ * Compares two alerts by player value priority:
+ * Hundo/Nundo/PvP > Raids > Rares > Rocket/Quest > highest IV/CP > soonest despawn.
+ */
+internal fun compareAlertPriority(a: PokemonAlert, b: PokemonAlert): Int {
+    fun categoryRank(alert: PokemonAlert): Int {
+        val cats = alert.alertCategories()
+        return when {
+            AlertCategory.HUNDO in cats || AlertCategory.NUNDO in cats || AlertCategory.PVP in cats -> 0
+            AlertCategory.RAID in cats -> 1
+            AlertCategory.RARE in cats -> 2
+            AlertCategory.ROCKET in cats || AlertCategory.QUEST in cats -> 3
+            else -> 4
+        }
+    }
+    val rankA = categoryRank(a)
+    val rankB = categoryRank(b)
+    if (rankA != rankB) return rankA.compareTo(rankB)
+
+    val ivA = a.ivPercentage ?: -1
+    val ivB = b.ivPercentage ?: -1
+    if (ivA != ivB) return ivB.compareTo(ivA)
+
+    val cpA = a.cp ?: -1
+    val cpB = b.cp ?: -1
+    if (cpA != cpB) return cpB.compareTo(cpA)
+
+    val endA = TimeUtils.parseEndTimeToMillis(a.endTime) ?: Long.MAX_VALUE
+    val endB = TimeUtils.parseEndTimeToMillis(b.endTime) ?: Long.MAX_VALUE
+    if (endA != endB) return endA.compareTo(endB)
+
+    return a.uniqueId.compareTo(b.uniqueId)
+}
+
+/**
+ * At neighborhood/street zoom (zoom >= [MAP_CLUSTER_MAX_ZOOM]), markers with distinct coordinates remain
+ * individual. Only coincident / stacked markers are grouped into stacks showing the top Pokémon sprite.
+ * At overview zoom (zoom < [MAP_CLUSTER_MAX_ZOOM]), density-based clustering groups markers into overview bubbles.
  */
 internal fun clusterMapAlerts(
     alerts: List<PokemonAlert>,
@@ -130,22 +156,41 @@ internal fun clusterMapAlerts(
     require(budget >= 0 && (clusterable.isEmpty() || budget > 0)) {
         "Protected alerts must leave room for the clustered alerts"
     }
-    // Zoomed in, keep a fine grid and treat coarsening as a last resort rather than the norm.
-    val denseCellDp = if (zoom >= MAP_CLUSTER_MAX_ZOOM) {
-        min(cellDp, MAP_CLUSTER_ZOOMED_IN_CELL_DP)
-    } else {
-        cellDp
-    }
     val densePathBudget = if (zoom >= MAP_CLUSTER_MAX_ZOOM) {
         (MAX_RENDERED_MAP_MARKERS_ZOOMED_IN - protectedGroups.size).coerceAtLeast(budget)
     } else {
         budget
     }
     val scale = 256.0 * 2.0.pow(zoom.coerceIn(0.0, 24.0))
+
     val normalGroups = when {
+        zoom >= MAP_CLUSTER_MAX_ZOOM -> {
+            val exactGroups = clusterable.groupBy(::exactCoordinateKey).values.toList()
+            if (exactGroups.size > densePathBudget) {
+                val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
+                var cellSize = max(1.0, MAP_CLUSTER_ZOOMED_IN_CELL_DP.toDouble())
+                var cells: Collection<List<PositionedAlert>>
+                do {
+                    checkActive()
+                    val buckets = linkedMapOf<Long, MutableList<PositionedAlert>>()
+                    points.forEachIndexed { index, point ->
+                        checkActive()
+                        buckets.getOrPut(packCellKey(point.cellX(cellSize), point.cellY(cellSize))) {
+                            mutableListOf()
+                        }.add(clusterable[index])
+                    }
+                    cells = buckets.values
+                    cellSize *= 2.0
+                } while (cells.size > densePathBudget)
+                cells.toList()
+            } else {
+                exactGroups
+            }
+        }
         positioned.size > MAX_RENDERED_MAP_MARKERS -> {
+            // Overview zoom with dense dataset: grid-based clustering
             val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
-            var cellSize = max(1.0, denseCellDp.toDouble())
+            var cellSize = max(1.0, cellDp.toDouble())
             var cells: Collection<List<PositionedAlert>>
             do {
                 checkActive()
@@ -161,7 +206,8 @@ internal fun clusterMapAlerts(
             } while (cells.size > densePathBudget)
             cells.toList()
         }
-        zoom < MAP_CLUSTER_MAX_ZOOM -> {
+        else -> {
+            // Overview zoom with standard dataset: distance-based clustering
             val thresholdDp = max(1.0, cellDp.toDouble())
             val radiusGuardDp = spawnCircleGuardDp(clusterable, zoom, spawnRadiusMeters)
             val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
@@ -178,9 +224,9 @@ internal fun clusterMapAlerts(
                 cellSize = thresholdDp
             ).map { indices -> indices.map(clusterable::get) }
         }
-        else -> clusterable.groupBy(::exactCoordinateKey).values.toList()
     }
     val groups = (normalGroups + protectedGroups).sortedBy { it.first().alert.uniqueId }
+    val isOverview = zoom < MAP_CLUSTER_MAX_ZOOM
 
     return groups.map { members ->
         checkActive()
@@ -196,13 +242,16 @@ internal fun clusterMapAlerts(
                 .map { checkActive(); it.alert.alertCategories() }
                 .reduce { common, categories -> common intersect categories }
                 .singleOrNull()
+            val topAlert = members.map { it.alert }.minWith(::compareAlertPriority)
             MapMarkerItem.Cluster(
                 id = members.joinToString("|") { it.alert.uniqueId }.hashCode().toString(),
                 alerts = members.map { it.alert },
-                latitude = (south + north) / 2.0,
-                longitude = (west + east) / 2.0,
+                latitude = if (isOverview) (south + north) / 2.0 else (topAlert.latitude ?: ((south + north) / 2.0)),
+                longitude = if (isOverview) (west + east) / 2.0 else (topAlert.longitude ?: ((west + east) / 2.0)),
                 bounds = MapGeoBounds(south, west, north, east),
-                sharedCategory = sharedCategory
+                sharedCategory = sharedCategory,
+                topAlert = topAlert,
+                isOverviewCluster = isOverview
             )
         }
     }
@@ -345,7 +394,8 @@ internal fun resolveMapClusterInteraction(
     currentZoom: Double,
     maximumZoom: Double
 ): MapClusterInteraction =
-    if (currentZoom >= maximumZoom - 0.05 ||
+    if (currentZoom >= MAP_CLUSTER_MAX_ZOOM ||
+        currentZoom >= maximumZoom - 0.05 ||
         // Bounds make coincidence checking constant-time even for a 10,000-member cluster.
         exactCoordinateKey(cluster.bounds.south, cluster.bounds.west) ==
         exactCoordinateKey(cluster.bounds.north, cluster.bounds.east)

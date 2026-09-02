@@ -680,14 +680,45 @@ internal fun OpenStreetMapView(
             markerItems.mapNotNull { item ->
                 currentCoroutineContext().ensureActive()
                 if (item is MapMarkerItem.Cluster) {
+                    if (item.isOverviewCluster) {
+                        return@mapNotNull OpenStreetMapMarker(
+                            item,
+                            createOpenStreetMapClusterIcon(
+                                item.alerts.size,
+                                item.sharedCategory,
+                                clusterMarkerSizePx
+                            ),
+                            MAP_CLUSTER_MARKER_Z_INDEX
+                        )
+                    }
+                    val topAlert = item.topAlert
+                    val visualStyle = resolveAlertVisualStyle(topAlert)
+                    val matchResult = goDexMatches[topAlert.uniqueId]
+                        ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+                    val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
+                        AlertCategory.HUNDO -> "100%"
+                        AlertCategory.NUNDO -> "0%"
+                        else -> visualStyle.shortCode
+                    }
+                    val timeLabel = mapCountdownLabel(topAlert.endTime, now, minutePrecisionCountdown)
+                    val icon = createMapMarkerIcon(
+                        context = context,
+                        sizePx = baseMarkerSizePx,
+                        categoryCode = markerLabel,
+                        speciesName = topAlert.pokemon?.takeIf { it.isNotBlank() } ?: topAlert.cleanPokemonName,
+                        speciesImageUrl = topAlert.thumbnailUrl?.takeIf { it.isNotBlank() }
+                            ?: topAlert.imageUrl?.takeIf { it.isNotBlank() },
+                        endTime = topAlert.endTime,
+                        showTimeLabel = showTimeLabels,
+                        timeLabel = if (showTimeLabels) timeLabel else null,
+                        palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
+                        goDexStatus = matchResult.status,
+                        stackCount = item.alerts.size
+                    ) ?: return@mapNotNull null
                     return@mapNotNull OpenStreetMapMarker(
-                        item,
-                        createOpenStreetMapClusterIcon(
-                            item.alerts.size,
-                            item.sharedCategory,
-                            clusterMarkerSizePx
-                        ),
-                        MAP_CLUSTER_MARKER_Z_INDEX
+                        item = item,
+                        icon = icon,
+                        zIndex = MAP_CLUSTER_MARKER_Z_INDEX
                     )
                 }
                 val alert = (item as MapMarkerItem.Alert).alert
@@ -757,10 +788,37 @@ private fun createImmediateOpenStreetMapMarker(
     emphasized: Boolean
 ): OpenStreetMapMarker {
     if (item is MapMarkerItem.Cluster) {
+        if (item.isOverviewCluster) {
+            return OpenStreetMapMarker(
+                item,
+                createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
+                MAP_CLUSTER_MARKER_Z_INDEX
+            )
+        }
+        val topAlert = item.topAlert
+        val visualStyle = resolveAlertVisualStyle(topAlert)
+        val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
+            AlertCategory.HUNDO -> "100%"
+            AlertCategory.NUNDO -> "0%"
+            else -> visualStyle.shortCode
+        }
+        val request = MapMarkerIconRequest(
+            sizePx = markerSizePx,
+            categoryCode = markerLabel,
+            speciesName = topAlert.pokemon?.takeIf { it.isNotBlank() } ?: topAlert.cleanPokemonName,
+            speciesImageUrl = topAlert.thumbnailUrl?.takeIf { it.isNotBlank() }
+                ?: topAlert.imageUrl?.takeIf { it.isNotBlank() },
+            endTime = topAlert.endTime,
+            showTimeLabel = showTimeLabels,
+            timeLabel = if (showTimeLabels) mapCountdownLabel(topAlert.endTime, nowMillis, minutePrecision) else null,
+            palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
+            goDexStatus = goDexMatches[topAlert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
+            stackCount = item.alerts.size
+        )
         return OpenStreetMapMarker(
-            item,
-            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
-            MAP_CLUSTER_MARKER_Z_INDEX
+            item = item,
+            icon = resolveInitialMapMarkerIcon(request),
+            zIndex = MAP_CLUSTER_MARKER_Z_INDEX
         )
     }
     val alert = (item as MapMarkerItem.Alert).alert

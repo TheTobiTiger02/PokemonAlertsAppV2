@@ -22,7 +22,7 @@ class MapClusteringTest {
     @Test
     fun separateAlertsRemainIndividualAtMaximumZoom() {
         val items = clusterMapAlerts(
-            alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73801, 8.61801)),
+            alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.7480, 8.6280)),
             zoom = MAP_CLUSTER_MAX_ZOOM
         )
 
@@ -37,6 +37,50 @@ class MapClusteringTest {
         )
 
         assertTrue(items.single() is MapMarkerItem.Cluster)
+    }
+
+    @Test
+    fun priorityRankingChoosesBestAlertForStack() {
+        val normalSpawn = PokemonAlert(
+            id = 1, name = "Pidgey", latitude = 49.738, longitude = 8.618,
+            endTime = "2099-01-01T00:00:00Z", type = listOf("Spawn"),
+            ivAttack = 5, ivDefense = 5, ivStamina = 5
+        )
+        val hundoSpawn = PokemonAlert(
+            id = 2, name = "Dragonite", latitude = 49.7380001, longitude = 8.6180001,
+            endTime = "2099-01-01T00:00:00Z", type = listOf("Spawn"),
+            ivAttack = 15, ivDefense = 15, ivStamina = 15
+        )
+        val raidAlert = PokemonAlert(
+            id = 3, name = "Mewtwo", latitude = 49.7380002, longitude = 8.6180002,
+            endTime = "2099-01-01T00:00:00Z", type = listOf("Raid")
+        )
+
+        val items = clusterMapAlerts(
+            alerts = listOf(normalSpawn, hundoSpawn, raidAlert),
+            zoom = 15.0
+        )
+        assertEquals(1, items.size)
+        val cluster = items.single() as MapMarkerItem.Cluster
+        assertEquals("Dragonite", cluster.topAlert.name)
+        assertFalse(cluster.isOverviewCluster)
+    }
+
+    @Test
+    fun distantAlertsRemainIndividualAtNeighborhoodZoomEvenWithLargeDataset() {
+        val alerts = List(400) { index ->
+            PokemonAlert(
+                id = index,
+                name = "Alert $index",
+                latitude = 49.0 + (index % 20) * 0.01,
+                longitude = 8.0 + (index / 20) * 0.01,
+                endTime = "2099-01-01T00:00:00Z",
+                type = listOf("Spawn")
+            )
+        }
+        val items = clusterMapAlerts(alerts, zoom = 15.0)
+        assertEquals(400, items.size)
+        assertTrue(items.all { it is MapMarkerItem.Alert })
     }
 
     @Test
@@ -118,16 +162,16 @@ class MapClusteringTest {
     @Test
     fun clusterTapZoomsTwoLevelsWithoutExpandingMembers() {
         val alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73801, 8.61801))
-        val cluster = clusterMapAlerts(alerts, zoom = MAP_CLUSTER_MAX_ZOOM - 1.0).single() as MapMarkerItem.Cluster
-        val interaction = resolveMapClusterInteraction(cluster, currentZoom = 12.0, maximumZoom = 20.0)
+        val cluster = clusterMapAlerts(alerts, zoom = 10.0).single() as MapMarkerItem.Cluster
+        val interaction = resolveMapClusterInteraction(cluster, currentZoom = 10.0, maximumZoom = 20.0)
         assertEquals(
-            MapClusterInteraction.ZoomTo(MapCameraSnapshot(cluster.latitude, cluster.longitude, 14.0)),
+            MapClusterInteraction.ZoomTo(MapCameraSnapshot(cluster.latitude, cluster.longitude, 12.0)),
             interaction
         )
-        assertEquals(cluster, clusterMapAlerts(alerts, zoom = MAP_CLUSTER_MAX_ZOOM - 1.0).single())
+        assertEquals(cluster, clusterMapAlerts(alerts, zoom = 10.0).single())
         assertEquals(
-            MapClusterInteraction.ZoomTo(MapCameraSnapshot(cluster.latitude, cluster.longitude, 20.0)),
-            resolveMapClusterInteraction(cluster, 19.0, 20.0)
+            MapClusterInteraction.ShowMembers,
+            resolveMapClusterInteraction(cluster, 12.0, 20.0)
         )
         assertEquals(MapClusterInteraction.ShowMembers, resolveMapClusterInteraction(cluster, 20.0, 20.0))
     }

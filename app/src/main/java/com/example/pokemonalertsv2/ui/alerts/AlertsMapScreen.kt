@@ -128,7 +128,10 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
@@ -1447,57 +1450,77 @@ internal fun AlertsMapScreenContent(
                             )
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
-                            Marker(
-                                contentDescription = "${item.alerts.size} alerts",
-                                state = MarkerState(LatLng(item.latitude, item.longitude)),
-                                icon = BitmapDescriptorFactory.fromBitmap(
-                                    remember(
-                                        item.id,
-                                        item.sharedCategory,
-                                        item.alerts.size,
-                                        clusterMarkerSizeDp
-                                    ) {
-                                        createClusterMarkerBitmap(
-                                            context = context,
-                                            count = item.alerts.size,
-                                            sharedCategory = item.sharedCategory,
-                                            sizeDp = clusterMarkerSizeDp
-                                        )
-                                    }
-                                ),
-                                anchor = Offset(0.5f, 0.5f),
-                                zIndex = MAP_CLUSTER_MARKER_Z_INDEX,
-                                onClick = {
-                                    when (
-                                        val interaction = if (compactPictureInPicture) {
-                                            null
-                                        } else {
-                                            resolveMapClusterInteraction(
-                                                cluster = item,
-                                                currentZoom = cameraAnchor.zoom,
-                                                maximumZoom = mapProperties.maxZoomPreference.toDouble()
-                                            )
-                                        }
-                                    ) {
-                                        null -> Unit
-                                        MapClusterInteraction.ShowMembers -> {
+                            if (!item.isOverviewCluster) {
+                                MapMarker(
+                                    alert = item.topAlert,
+                                    countdownClock = expirationClock,
+                                    density = density,
+                                    showTimeLabel = showTimeLabels,
+                                    minutePrecisionCountdown = minutePrecisionCountdown,
+                                    goDexMatchResult = goDexMatches[item.topAlert.uniqueId]
+                                        ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
+                                    onClick = {
+                                        if (!compactPictureInPicture) {
                                             selectedClusterAlerts = item.alerts
                                         }
-                                        is MapClusterInteraction.ZoomTo -> {
-                                            scope.launch {
-                                                cameraPositionState.animate(
-                                                    CameraUpdateFactory.newLatLngZoom(
-                                                        LatLng(interaction.target.latitude, interaction.target.longitude),
-                                                        interaction.target.zoom.toFloat()
-                                                    ),
-                                                    600
+                                    },
+                                    markerSizeDp = baseMarkerSizeDp,
+                                    emphasized = false,
+                                    stackCount = item.alerts.size
+                                )
+                            } else {
+                                Marker(
+                                    contentDescription = "${item.alerts.size} alerts",
+                                    state = MarkerState(LatLng(item.latitude, item.longitude)),
+                                    icon = BitmapDescriptorFactory.fromBitmap(
+                                        remember(
+                                            item.id,
+                                            item.sharedCategory,
+                                            item.alerts.size,
+                                            clusterMarkerSizeDp
+                                        ) {
+                                            createClusterMarkerBitmap(
+                                                context = context,
+                                                count = item.alerts.size,
+                                                sharedCategory = item.sharedCategory,
+                                                sizeDp = clusterMarkerSizeDp
+                                            )
+                                        }
+                                    ),
+                                    anchor = Offset(0.5f, 0.5f),
+                                    zIndex = MAP_CLUSTER_MARKER_Z_INDEX,
+                                    onClick = {
+                                        when (
+                                            val interaction = if (compactPictureInPicture) {
+                                                null
+                                            } else {
+                                                resolveMapClusterInteraction(
+                                                    cluster = item,
+                                                    currentZoom = cameraAnchor.zoom,
+                                                    maximumZoom = mapProperties.maxZoomPreference.toDouble()
                                                 )
                                             }
+                                        ) {
+                                            null -> Unit
+                                            MapClusterInteraction.ShowMembers -> {
+                                                selectedClusterAlerts = item.alerts
+                                            }
+                                            is MapClusterInteraction.ZoomTo -> {
+                                                scope.launch {
+                                                    cameraPositionState.animate(
+                                                        CameraUpdateFactory.newLatLngZoom(
+                                                            LatLng(interaction.target.latitude, interaction.target.longitude),
+                                                            interaction.target.zoom.toFloat()
+                                                        ),
+                                                        600
+                                                    )
+                                                }
+                                            }
                                         }
+                                        true
                                     }
-                                    true
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -1726,10 +1749,60 @@ internal fun AlertsMapScreenContent(
                     onOpenLayers = { showLayersSheet = true }
                 )
 
-                androidx.compose.material3.OutlinedButton(
-                    onClick = { showFilterSheet = true },
-                    modifier = Modifier.padding(horizontal = 16.dp).testTag("map_open_filters")
-                ) { Text("Filters • ${filteredAlerts.size} visible") }
+                val allCategories = remember { AlertCategory.entries.toSet() }
+                val isOnlyCategoryActive: (AlertCategory) -> Boolean = remember(selectedCategories, allCategories) {
+                    { cat -> selectedCategories.size == allCategories.size - 1 && cat !in selectedCategories }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = selectedCategories.isEmpty(),
+                        onClick = { onSelectedCategoriesChange(emptySet()) },
+                        label = { Text("All (${filteredAlerts.size})") },
+                        modifier = Modifier.testTag("map_filter_all")
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        val quickCategories = listOf(
+                            AlertCategory.HUNDO to "100%",
+                            AlertCategory.PVP to "PvP",
+                            AlertCategory.RAID to "Raids",
+                            AlertCategory.RARE to "Rares",
+                            AlertCategory.ROCKET to "Rockets",
+                            AlertCategory.QUEST to "Quests"
+                        )
+                        items(quickCategories, key = { it.first.name }) { (category, label) ->
+                            val isSelected = isOnlyCategoryActive(category)
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    val updated = if (isSelected) {
+                                        emptySet()
+                                    } else {
+                                        allCategories - category
+                                    }
+                                    onSelectedCategoriesChange(updated)
+                                },
+                                label = { Text(label) }
+                            )
+                        }
+                        item(key = "more_filters") {
+                            androidx.compose.material3.SuggestionChip(
+                                onClick = { showFilterSheet = true },
+                                label = { Text("More...") },
+                                modifier = Modifier.testTag("map_open_filters")
+                            )
+                        }
+                    }
+                }
                 MapSyncStatus(status = syncStatus, onRetry = onRefresh)
 
                 // Weather for the area the user is actually standing in, mirroring the game's own
@@ -2058,29 +2131,121 @@ internal fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
     }
 }
 
-/** A virtualized list keeps every member selectable without composing thousands of rows. */
+/** A virtualized list displaying rich rows for every member of an overlapping cluster or stack. */
 @Composable
 internal fun MapClusterMemberList(
     alerts: List<PokemonAlert>,
     countdownClock: State<Long>,
     onSelect: (PokemonAlert) -> Unit
 ) {
+    val sortedAlerts = remember(alerts) {
+        alerts.sortedWith(::compareAlertPriority)
+    }
     LazyColumn(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).testTag("map_cluster_members"),
-        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 560.dp)
+            .testTag("map_cluster_members"),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         item(key = "heading") {
             Text(
-                "${alerts.size} alerts here",
+                "${sortedAlerts.size} alerts at this location",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 4.dp)
             )
         }
-        items(alerts, key = { it.uniqueId }) { alert ->
-            TextButton(modifier = Modifier.fillMaxWidth(), onClick = { onSelect(alert) }) {
-                Text(alert.name, modifier = Modifier.weight(1f))
-                MapCountdownText(alert.endTime, countdownClock)
+        items(sortedAlerts, key = { it.uniqueId }) { alert ->
+            val visualStyle = resolveAlertVisualStyle(alert)
+            Surface(
+                onClick = { onSelect(alert) },
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth().testTag("map_cluster_member_${alert.uniqueId}")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
+                    if (imageUrl != null) {
+                        AsyncImage(
+                            model = imageUrl,
+                            contentDescription = alert.name,
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(
+                                    1.5.dp,
+                                    Color(visualStyle.category.accentArgb.toInt()),
+                                    CircleShape
+                                )
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(visualStyle.category.accentArgb.toInt())),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = alert.name.take(2).uppercase(),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(
+                            text = alert.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            alert.displayCp?.let { cp ->
+                                Text(
+                                    text = "CP $cp",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            alert.ivPercentage?.let { iv ->
+                                Text(
+                                    text = "$iv%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (iv == 100) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (iv == 100) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Text(
+                                text = visualStyle.shortCode,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(visualStyle.category.accentArgb.toInt()),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    MapCountdownText(alert.endTime, countdownClock)
+                }
             }
         }
     }

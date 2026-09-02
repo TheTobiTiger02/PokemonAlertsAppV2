@@ -169,7 +169,8 @@ internal fun MapMarker(
     goDexMatchResult: GoDexMatchResult,
     onClick: () -> Unit,
     markerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
-    emphasized: Boolean = false
+    emphasized: Boolean = false,
+    stackCount: Int = 1
 ) {
     val context = LocalContext.current
     val coordinates = remember(alert.latitude, alert.longitude) {
@@ -227,7 +228,8 @@ internal fun MapMarker(
         showTimeLabel,
         timeLabel,
         palette,
-        goDexMatchResult.status
+        goDexMatchResult.status,
+        stackCount
     ) {
         MapMarkerIconRequest(
             sizePx = markerSizePx,
@@ -238,7 +240,8 @@ internal fun MapMarker(
             showTimeLabel = showTimeLabel,
             timeLabel = if (showTimeLabel) timeLabel else null,
             palette = palette,
-            goDexStatus = goDexMatchResult.status
+            goDexStatus = goDexMatchResult.status,
+            stackCount = stackCount
         )
     }
     val markerCacheKey = remember(markerIconRequest) {
@@ -260,7 +263,8 @@ internal fun MapMarker(
                 showTimeLabel = markerIconRequest.showTimeLabel,
                 timeLabel = markerIconRequest.timeLabel,
                 palette = markerIconRequest.palette,
-                goDexStatus = markerIconRequest.goDexStatus
+                goDexStatus = markerIconRequest.goDexStatus,
+                stackCount = markerIconRequest.stackCount
             )
         }
         currentCoroutineContext().ensureActive()
@@ -274,7 +278,11 @@ internal fun MapMarker(
         state = remember(position) { MarkerState(position = position) },
         icon = googleMarkerDescriptor,
         anchor = markerIcon.anchor,
-        title = formatAlertTitle(alert, goDexMatchResult.status),
+        title = if (stackCount > 1) {
+            "${formatAlertTitle(alert, goDexMatchResult.status)} (+${stackCount - 1} more)"
+        } else {
+            formatAlertTitle(alert, goDexMatchResult.status)
+        },
         visible = true,
         // Keep a tracked/browsed PiP marker clear of count bubbles and ordinary alerts.
         zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f,
@@ -311,7 +319,8 @@ internal data class MapMarkerIconRequest(
     val showTimeLabel: Boolean,
     val timeLabel: String?,
     val palette: MapMarkerPalette,
-    val goDexStatus: GoDexMatchStatus
+    val goDexStatus: GoDexMatchStatus,
+    val stackCount: Int = 1
 )
 
 /**
@@ -379,7 +388,8 @@ internal fun mapMarkerIconCacheKey(
     request.timeLabel.orEmpty(),
     isMapMarkerUrgent(request.endTime, nowMillis),
     request.palette,
-    request.goDexStatus
+    request.goDexStatus,
+    request.stackCount
 ).joinToString("|")
 
 internal fun resolveInitialMapMarkerIcon(
@@ -481,6 +491,40 @@ internal fun createFallbackMapMarkerIcon(
         outline = request.palette.primary,
         maxWidth = pinRadius * 1.55f
     )
+    if (request.stackCount > 1) {
+        val badgeText = if (request.stackCount > 99) "+99" else "+${request.stackCount - 1}"
+        val badgeRadius = sizePx * 0.16f
+        val badgeX = centerX + pinRadius * 0.72f
+        val badgeY = centerY - pinRadius * 0.68f
+
+        val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = request.palette.primary
+        }
+        val badgeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = request.palette.surface
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.03f
+        }
+        val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = request.palette.surface
+            textSize = badgeRadius * 1.05f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        val textWidth = badgeTextPaint.measureText(badgeText)
+        val badgeHalfWidth = kotlin.math.max(badgeRadius, textWidth / 2f + sizePx * 0.05f)
+        val badgeRect = android.graphics.RectF(
+            badgeX - badgeHalfWidth,
+            badgeY - badgeRadius,
+            badgeX + badgeHalfWidth,
+            badgeY + badgeRadius
+        )
+        canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeBgPaint)
+        canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeOutlinePaint)
+        val textCenterY = badgeY - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
+        canvas.drawText(badgeText, badgeX, textCenterY, badgeTextPaint)
+    }
+
     if (timeHeight > 0 && request.timeLabel != null) {
         val urgent = isMapMarkerUrgent(request.endTime, nowMillis)
         canvas.drawMarkerLabel(
@@ -517,7 +561,8 @@ internal suspend fun createMapMarkerIcon(
     showTimeLabel: Boolean,
     timeLabel: String?,
     palette: MapMarkerPalette,
-    goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED
+    goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED,
+    stackCount: Int = 1
 ): MapMarkerIcon? {
     try {
         val request = MapMarkerIconRequest(
@@ -529,7 +574,8 @@ internal suspend fun createMapMarkerIcon(
             showTimeLabel = showTimeLabel,
             timeLabel = timeLabel,
             palette = palette,
-            goDexStatus = goDexStatus
+            goDexStatus = goDexStatus,
+            stackCount = stackCount
         )
         val isUrgent = isMapMarkerUrgent(endTime, System.currentTimeMillis())
         val cacheKey = mapMarkerIconCacheKey(request)
@@ -629,7 +675,39 @@ internal suspend fun createMapMarkerIcon(
             canvas.drawText(fallback, centerX, textY, fallbackPaint)
         }
 
-        if (isUrgent) {
+        if (request.stackCount > 1) {
+            val badgeText = if (request.stackCount > 99) "+99" else "+${request.stackCount - 1}"
+            val badgeRadius = sizePx * 0.16f
+            val badgeX = centerX + pinRadius * 0.72f
+            val badgeY = centerY - pinRadius * 0.68f
+
+            val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (isUrgent) palette.error else palette.primary
+            }
+            val badgeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = palette.surface
+                style = Paint.Style.STROKE
+                strokeWidth = sizePx * 0.03f
+            }
+            val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = if (isUrgent) palette.onError else palette.surface
+                textSize = badgeRadius * 1.05f
+                textAlign = Paint.Align.CENTER
+                isFakeBoldText = true
+            }
+            val textWidth = badgeTextPaint.measureText(badgeText)
+            val badgeHalfWidth = kotlin.math.max(badgeRadius, textWidth / 2f + sizePx * 0.05f)
+            val badgeRect = android.graphics.RectF(
+                badgeX - badgeHalfWidth,
+                badgeY - badgeRadius,
+                badgeX + badgeHalfWidth,
+                badgeY + badgeRadius
+            )
+            canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeBgPaint)
+            canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeOutlinePaint)
+            val textCenterY = badgeY - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
+            canvas.drawText(badgeText, badgeX, textCenterY, badgeTextPaint)
+        } else if (isUrgent) {
             val dotRadius = sizePx * 0.075f
             val dotX = centerX + pinRadius * 0.70f
             val dotY = centerY - pinRadius * 0.66f
@@ -862,11 +940,11 @@ private fun metersBetween(
         sin(deltaLon / 2).pow(2)
     return 2 * EARTH_RADIUS_METERS * asin(min(1.0, sqrt(a)))
 }
-internal const val MAP_FULL_MARKER_SIZE_DP = 68f
-internal const val MAP_PIP_MARKER_SIZE_DP = 44f
-internal const val MAP_PIP_EMPHASIZED_MARKER_SIZE_DP = 50f
-internal const val MAP_FULL_CLUSTER_SIZE_DP = 48f
-internal const val MAP_PIP_CLUSTER_SIZE_DP = 44f
+internal const val MAP_FULL_MARKER_SIZE_DP = 48f
+internal const val MAP_PIP_MARKER_SIZE_DP = 36f
+internal const val MAP_PIP_EMPHASIZED_MARKER_SIZE_DP = 44f
+internal const val MAP_FULL_CLUSTER_SIZE_DP = 40f
+internal const val MAP_PIP_CLUSTER_SIZE_DP = 34f
 internal const val MAP_CLUSTER_MARKER_Z_INDEX = 850f
 internal const val MAP_EMPHASIZED_MARKER_Z_INDEX = 900f
 
