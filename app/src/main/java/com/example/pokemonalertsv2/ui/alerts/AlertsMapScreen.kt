@@ -110,6 +110,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
@@ -290,6 +291,9 @@ fun AlertsMapRoute(
     val mapFilterDefinition by viewModel.mapFilterDefinition.collectAsStateWithLifecycle()
     val mapShowDismissed by viewModel.mapShowDismissed.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
+    val filterCatalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
+    val filterArtwork by viewModel.filterArtwork.collectAsStateWithLifecycle()
+    val questRewardThumbnails by viewModel.questRewardThumbnails.collectAsStateWithLifecycle()
     val savedMapStyle by viewModel.mapStylePreference.collectAsStateWithLifecycle()
     val showMapCountdowns by viewModel.showMapCountdowns.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -323,6 +327,14 @@ fun AlertsMapRoute(
         syncStatus = uiState.toSyncStatus(),
         selectedCategories = effectiveCategories,
         filterDefinition = if (presentationMode == MapPresentationMode.FULL) mapFilterDefinition else FilterDefinition(),
+        filterCatalog = filterCatalog,
+        filterArtwork = filterArtwork,
+        questRewardThumbnails = questRewardThumbnails,
+        onFilterDefinitionChange = if (presentationMode == MapPresentationMode.FULL) {
+            viewModel::updateMapFilterDefinition
+        } else {
+            {}
+        },
         onOpenFilterStudio = onOpenFilterStudio,
         onSelectedCategoriesChange = if (presentationMode == MapPresentationMode.FULL) {
             viewModel::updateSelectedMapCategories
@@ -370,6 +382,10 @@ fun AlertsMapScreen(
     syncStatus: SyncStatus = SyncStatus.Live(null),
     selectedCategories: Set<AlertCategory> = emptySet(),
     filterDefinition: FilterDefinition = FilterDefinition(),
+    filterCatalog: FilterCatalog = FilterCatalog(),
+    filterArtwork: Map<String, String> = emptyMap(),
+    questRewardThumbnails: Map<String, String> = emptyMap(),
+    onFilterDefinitionChange: (FilterDefinition) -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
     mapShowDismissed: Boolean = false,
@@ -404,6 +420,10 @@ fun AlertsMapScreen(
         syncStatus = syncStatus,
         selectedCategories = selectedCategories,
         filterDefinition = filterDefinition,
+        filterCatalog = filterCatalog,
+        filterArtwork = filterArtwork,
+        questRewardThumbnails = questRewardThumbnails,
+        onFilterDefinitionChange = onFilterDefinitionChange,
         onOpenFilterStudio = onOpenFilterStudio,
         onSelectedCategoriesChange = onSelectedCategoriesChange,
         mapShowDismissed = mapShowDismissed,
@@ -442,6 +462,10 @@ internal fun AlertsMapScreenContent(
     syncStatus: SyncStatus = SyncStatus.Live(null),
     selectedCategories: Set<AlertCategory> = emptySet(),
     filterDefinition: FilterDefinition = FilterDefinition(),
+    filterCatalog: FilterCatalog = FilterCatalog(),
+    filterArtwork: Map<String, String> = emptyMap(),
+    questRewardThumbnails: Map<String, String> = emptyMap(),
+    onFilterDefinitionChange: (FilterDefinition) -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
     mapShowDismissed: Boolean = false,
@@ -513,6 +537,7 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showLayersSheet by rememberSaveable { mutableStateOf(false) }
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -763,9 +788,9 @@ internal fun AlertsMapScreenContent(
     }
 
     var filterWalkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
-    LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude, filterDefinition.maxDistanceKm, filterDefinition.maxWalkingMinutes) {
+    LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude, filterDefinition.usesDistanceRules) {
         val location = userLocation
-        filterWalkingRoutes = if (location != null && (filterDefinition.maxDistanceKm > 0 || filterDefinition.maxWalkingMinutes > 0)) {
+        filterWalkingRoutes = if (location != null && filterDefinition.usesDistanceRules) {
             WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
         } else emptyMap()
     }
@@ -1766,8 +1791,8 @@ internal fun AlertsMapScreenContent(
                 )
 
                 androidx.compose.material3.OutlinedButton(
-                    onClick = onOpenFilterStudio,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    onClick = { showFilterSheet = true },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("map_open_filters")
                 ) { Text("Filters • ${filteredAlerts.size} visible") }
                 MapSyncStatus(status = syncStatus, onRetry = onRefresh)
 
@@ -1810,6 +1835,24 @@ internal fun AlertsMapScreenContent(
                     }
                 }
             }
+        }
+
+        // Filters live on the map so a quick narrowing never costs a trip to Settings.
+        // Only one of the filter sheet and the alert detail sheet is ever open.
+        if (!compactPictureInPicture && showFilterSheet && selectedAlert == null) {
+            MapFilterSheet(
+                definition = filterDefinition,
+                catalog = filterCatalog,
+                artwork = filterArtwork,
+                rewardThumbnails = questRewardThumbnails,
+                visibleCount = filteredAlerts.size,
+                totalCount = alerts.size,
+                onDefinitionChange = onFilterDefinitionChange,
+                onOpenFilterStudio = { showFilterSheet = false; onOpenFilterStudio() },
+                onDismiss = { showFilterSheet = false },
+                useSidePanel = useSidePanel,
+                modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier
+            )
         }
 
         if (!compactPictureInPicture && showLayersSheet) {

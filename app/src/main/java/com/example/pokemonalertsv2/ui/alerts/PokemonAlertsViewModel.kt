@@ -1,6 +1,11 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import android.app.Application
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.WalkingRouteRepository
+import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.CachedLocationProvider
+import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -8,6 +13,11 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.data.FilterCatalog
+import com.example.pokemonalertsv2.data.FilterCatalogRepository
+import com.example.pokemonalertsv2.data.FilterSelectionMode
+import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
+import com.example.pokemonalertsv2.data.normalizeFilterToken
 import com.example.pokemonalertsv2.data.FilterAssignment
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
@@ -17,16 +27,21 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.pokemonalertsv2.util.TravelTime
 import androidx.compose.runtime.Immutable
 
@@ -66,14 +81,91 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             repository.alerts.collect { alerts ->
                 val now = System.currentTimeMillis()
-                val activeAlerts = alerts.filter {
-                    val end = TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE
-                    end > now && !it.isInvalidated
-                }.sortedByDescending { it.endTime }
+                // Parse once per alert and sort on the parsed value: endTime is an ISO string,
+                // so sorting it directly ordered lexicographically, not chronologically.
+                val activeAlerts = withContext(Dispatchers.Default) {
+                    alerts.asSequence()
+                        .filter { !it.isInvalidated }
+                        .map { it to (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) }
+                        .filter { (_, end) -> end > now }
+                        .sortedByDescending { (_, end) -> end }
+                        .map { (alert, _) -> alert }
+                        .toList()
+                }
                 _uiState.update { it.copy(alerts = activeAlerts) }
             }
         }
     }
+
+    // ── Location and distance pipeline ────────────────────────────────────
+    // These used to live in PokemonAlertsScreen as `remember` blocks, which meant every entry
+    // to the Alerts tab recomputed a Location.distanceBetween, a route lookup and an endTime
+    // parse for every alert on the main thread, because AnimatedContent disposes the outgoing
+    // screen. Holding them here computes once and survives navigation.
+
+    private val _userLocation = MutableStateFlow<Location?>(null)
+    val userLocation: StateFlow<Location?> = _userLocation
+
+    private val _locationLookupComplete = MutableStateFlow(false)
+    val locationLookupComplete: StateFlow<Boolean> = _locationLookupComplete
+
+    /** [granted] comes from the screen, which owns the permission prompt. */
+    fun refreshUserLocation(granted: Boolean) {
+        viewModelScope.launch {
+            _userLocation.value = if (granted) {
+                CachedLocationProvider.get(getApplication(), timeoutMs = 5_000, highAccuracy = true)
+                    ?.takeIf { validMapCoordinates(it.latitude, it.longitude) != null }
+            } else {
+                null
+            }
+            _locationLookupComplete.value = true
+        }
+    }
+
+    fun markLocationLookupPending() {
+        _locationLookupComplete.value = false
+    }
+
+    private val walkingRoutes: StateFlow<Map<String, WalkingRouteInfo>> =
+        combine(_uiState.map { it.alerts }.distinctUntilChanged(), _userLocation) { alerts, location ->
+            alerts to location
+        }.map { (alerts, location) ->
+            if (location == null) emptyMap() else WalkingRouteRepository.getInstance()
+                .getWalkingRoutes(location, alerts.filter { it.mapCoordinatesOrNull() != null })
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** Alerts decorated with distance/route/expiry, ready for the feed to filter and sort. */
+    val alertsWithDistance: StateFlow<List<AlertUiModel>> = combine(
+        _uiState.map { it.alerts }.distinctUntilChanged(),
+        _userLocation,
+        walkingRoutes
+    ) { alerts, location, routes ->
+        alerts.map { alert ->
+            val straightLine = location?.let { origin ->
+                alert.mapCoordinatesOrNull()?.let { coordinates ->
+                    val results = FloatArray(1)
+                    Location.distanceBetween(origin.latitude, origin.longitude, coordinates.latitude, coordinates.longitude, results)
+                    results.getOrNull(0)?.takeUnless(Float::isNaN)
+                }
+            }
+            val display = WalkingRouteUtils.buildRouteDisplayInfo(straightLine, routes[alert.uniqueId])
+            AlertUiModel(
+                alert = alert,
+                distanceInfo = AlertDistanceInfo(
+                    distanceMeters = display.effectiveDistanceMeters,
+                    distanceText = display.distanceText,
+                    walkingText = display.walkingText,
+                    straightLineDistanceMeters = display.straightLineDistanceMeters,
+                    routedWalkingDistanceMeters = display.routedDistanceMeters,
+                    walkingDurationSeconds = display.walkingDurationSeconds,
+                    source = display.source
+                ),
+                endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
+                typeKeys = alert.typeKeys()
+            )
+        }
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Live per-category counts over the active alerts; feeds every filter chip badge. */
     val categoryCounts: StateFlow<Map<AlertCategory, Int>> = _uiState
@@ -243,6 +335,59 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 )
             }
         }
+    }
+
+    // Catalog and artwork for the on-map filter sheet. Both are cheap to hold and are what the
+    // pickers need; loading happens off the main thread so opening the map never blocks on it.
+    private val filterCatalogRepository = FilterCatalogRepository.getInstance(application)
+    private val _filterCatalog = MutableStateFlow(FilterCatalog())
+    val filterCatalog: StateFlow<FilterCatalog> = _filterCatalog
+
+    /** Reward artwork lifted from live quest alerts, so pickers match what the map shows. */
+    val questRewardThumbnails: StateFlow<Map<String, String>> = _uiState
+        .map { it.alerts }
+        .distinctUntilChanged()
+        .map { alerts -> com.example.pokemonalertsv2.data.questRewardThumbnails(alerts) }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val filterArtwork: StateFlow<Map<String, String>> =
+        PokemonSpeciesRepository.getInstance(application).searchSpecies("")
+            .map { species -> species.associate { normalizeFilterToken(it.name) to it.imageUrl } }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            _filterCatalog.value = filterCatalogRepository.cached() ?: FilterCatalog()
+            runCatching { filterCatalogRepository.refresh() }.onSuccess { _filterCatalog.value = it }
+        }
+    }
+
+    /**
+     * Applies a whole map [FilterDefinition] from the on-map sheet. This writes the same
+     * assignment the Filter Studio edits, so the two surfaces never diverge. Linked profiles
+     * are intentionally demoted to a local copy: quick edits on the map must not silently
+     * rewrite a profile that the feed or notifications also use.
+     */
+    fun updateMapFilterDefinition(definition: FilterDefinition) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                document.withAssignment(FilterSurface.MAP, FilterAssignment.local(definition))
+            }
+            // Keep the legacy muted-category mirror in step so widgets and older code paths agree.
+            repository.alertPreferences.updateMapCategories(mutedFromSelection(definition.alertTypes))
+        }
+    }
+
+    /** Inverse of [selectionFromMuted]; stored names are [AlertCategory] names, not filter-type names. */
+    private fun mutedFromSelection(selection: FilterSelection): Set<String> = when (selection.mode) {
+        FilterSelectionMode.ALL -> emptySet()
+        FilterSelectionMode.NONE -> FILTERABLE_ALERT_CATEGORIES.toSet().toStoredNames()
+        FilterSelectionMode.ONLY -> FILTERABLE_ALERT_CATEGORIES
+            .filterNot { category -> selection.contains(category.name) }
+            .toSet()
+            .toStoredNames()
     }
 
     private fun selectionFromMuted(categories: Set<AlertCategory>): FilterSelection {

@@ -329,6 +329,17 @@ internal val markerArtworkCache = object : LruCache<String, Bitmap>(MARKER_ARTWO
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
 }
 
+/**
+ * Fallback pins are drawn during composition, so a cold entry with a full screen of markers
+ * used to run up to [MAX_RENDERED_MAP_MARKERS] Canvas rasterizations on the main thread.
+ * They are deterministic for a given cache key, so caching them separately from the finished
+ * icons makes every re-entry a lookup while still letting the IO renderer replace them.
+ */
+private const val MARKER_FALLBACK_CACHE_BYTES = 8 * 1024 * 1024
+internal val markerFallbackCache = object : LruCache<String, MapMarkerIcon>(MARKER_FALLBACK_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
+}
+
 internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$sizePx|$url"
 
 internal suspend fun loadMapMarkerArtwork(
@@ -374,7 +385,9 @@ internal fun mapMarkerIconCacheKey(
 internal fun resolveInitialMapMarkerIcon(
     request: MapMarkerIconRequest,
     cacheKey: String = mapMarkerIconCacheKey(request)
-): MapMarkerIcon = markerIconCache.get(cacheKey) ?: createFallbackMapMarkerIcon(request)
+): MapMarkerIcon = markerIconCache.get(cacheKey)
+    ?: markerFallbackCache.get(cacheKey)
+    ?: createFallbackMapMarkerIcon(request).also { markerFallbackCache.put(cacheKey, it) }
 
 internal fun createFallbackMapMarkerIcon(
     request: MapMarkerIconRequest,

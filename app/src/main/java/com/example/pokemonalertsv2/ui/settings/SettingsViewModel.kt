@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_START
@@ -81,11 +82,17 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _filterPreviewContexts = MutableStateFlow<Map<String, FilterMatchContext>>(emptyMap())
     val filterPreviewContexts: StateFlow<Map<String, FilterMatchContext>> = _filterPreviewContexts
-    private val _filterCatalog = MutableStateFlow(filterCatalogRepository.cached() ?: FilterCatalog())
+    // Seeded empty and filled from IO: decoding the cached catalog is a full JSON parse of every
+    // species, quest pair and area, and it used to run in this constructor on the main thread.
+    private val _filterCatalog = MutableStateFlow(FilterCatalog())
     val filterCatalog: StateFlow<FilterCatalog> = _filterCatalog
     val filterSpecies = com.example.pokemonalertsv2.data.PokemonSpeciesRepository.getInstance(application)
         .searchSpecies("")
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    /** Reward artwork lifted from live quest alerts, so pickers match what the feed shows. */
+    val questRewardThumbnails: StateFlow<Map<String, String>> = filterableAlerts
+        .map { alerts -> com.example.pokemonalertsv2.data.questRewardThumbnails(alerts) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val _requestedFilterEditor = MutableStateFlow<FilterSurface?>(null)
     val requestedFilterEditor: StateFlow<FilterSurface?> = _requestedFilterEditor
 
@@ -132,6 +139,9 @@ class SettingsViewModel(
     private var preparingUri: String? = null
 
     init {
+        viewModelScope.launch(Dispatchers.IO) {
+            filterCatalogRepository.cached()?.let { cached -> _filterCatalog.value = cached }
+        }
         viewModelScope.launch {
             filterableAlerts.collect { alerts ->
                 val location = CachedLocationProvider.get(application)

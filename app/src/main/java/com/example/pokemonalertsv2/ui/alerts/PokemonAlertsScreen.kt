@@ -157,10 +157,8 @@ import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.coroutines.delay
@@ -227,6 +225,11 @@ fun PokemonAlertsRoute(
                 PokemonAlertsPage(
                     uiState = alertsUiState,
                     dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle().value,
+                    alertsWithDistance = viewModel.alertsWithDistance.collectAsStateWithLifecycle().value,
+                    userLocation = viewModel.userLocation.collectAsStateWithLifecycle().value,
+                    locationLookupComplete = viewModel.locationLookupComplete.collectAsStateWithLifecycle().value,
+                    onRefreshLocation = viewModel::refreshUserLocation,
+                    onLocationLookupPending = viewModel::markLocationLookupPending,
                     presetControls = FilterPresetControls(
                         presets = savedPresets,
                         onApply = viewModel::applyFilterPreset,
@@ -432,6 +435,12 @@ data class FilterPresetControls(
 fun PokemonAlertsPage(
     uiState: AlertsUiState,
     dismissedAlertIds: Set<String>,
+    /** Distance-decorated alerts, computed off the main thread and retained across navigation. */
+    alertsWithDistance: List<AlertUiModel> = emptyList(),
+    userLocation: Location? = null,
+    locationLookupComplete: Boolean = false,
+    onRefreshLocation: (Boolean) -> Unit = {},
+    onLocationLookupPending: () -> Unit = {},
     presetControls: FilterPresetControls = FilterPresetControls(),
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
     onMaxWalkingMinutesChange: (Int) -> Unit = {},
@@ -458,35 +467,19 @@ fun PokemonAlertsPage(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val locationScope = rememberCoroutineScope()
-    val walkingRouteRepository = remember { WalkingRouteRepository.getInstance() }
-    var userLocation by remember { mutableStateOf<Location?>(null) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
     }
-    var locationLookupComplete by remember { mutableStateOf(false) }
-    var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var alertPendingSnooze by remember { mutableStateOf<PokemonAlert?>(null) }
     val haptic = LocalHapticFeedback.current
     val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
 
-    suspend fun refreshUserLocation() {
+    fun refreshUserLocation() {
         val permissionGranted = hasForegroundLocationPermission(context)
         hasLocationPermission = permissionGranted
-        userLocation = if (permissionGranted) {
-            CachedLocationProvider.get(
-                context = context,
-                timeoutMs = 5_000,
-                highAccuracy = true
-            )?.takeIf { location ->
-                validMapCoordinates(location.latitude, location.longitude) != null
-            }
-        } else {
-            null
-        }
-        locationLookupComplete = true
+        onRefreshLocation(permissionGranted)
     }
 
     // Expiration filtering only needs a coarse lifecycle-aware tick; visible countdown rows
@@ -501,69 +494,18 @@ fun PokemonAlertsPage(
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
                 hasForegroundLocationPermission(context)
         hasLocationPermission = permissionGranted
-        if (permissionGranted) {
-            locationLookupComplete = false
-            locationScope.launch { refreshUserLocation() }
-        } else {
-            userLocation = null
-            locationLookupComplete = true
-        }
+        onLocationLookupPending()
+        onRefreshLocation(permissionGranted)
     }
 
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            locationLookupComplete = false
+            onLocationLookupPending()
             refreshUserLocation()
         }
     }
 
-    LaunchedEffect(userLocation, uiState.alerts) {
-        val location = userLocation
-        walkingRoutes = if (location == null) {
-            emptyMap()
-        } else {
-            walkingRouteRepository.getWalkingRoutes(
-                location,
-                uiState.alerts.filter { it.mapCoordinatesOrNull() != null }
-            )
-        }
-    }
-
-    val alertsWithDistance = remember(uiState.alerts, userLocation, walkingRoutes) {
-        uiState.alerts.map { alert ->
-            val distanceMeters: Float? = userLocation?.let { loc ->
-                alert.mapCoordinatesOrNull()?.let { coordinates ->
-                    val results = FloatArray(1)
-                    Location.distanceBetween(
-                        loc.latitude,
-                        loc.longitude,
-                        coordinates.latitude,
-                        coordinates.longitude,
-                        results
-                    )
-                    results.getOrNull(0)?.takeUnless { it.isNaN() }
-                }
-            }
-            val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
-                straightLineDistanceMeters = distanceMeters,
-                routeInfo = walkingRoutes[alert.uniqueId]
-            )
-            AlertUiModel(
-                alert = alert, 
-                distanceInfo = AlertDistanceInfo(
-                    distanceMeters = routeDisplayInfo.effectiveDistanceMeters,
-                    distanceText = routeDisplayInfo.distanceText,
-                    walkingText = routeDisplayInfo.walkingText,
-                    straightLineDistanceMeters = routeDisplayInfo.straightLineDistanceMeters,
-                    routedWalkingDistanceMeters = routeDisplayInfo.routedDistanceMeters,
-                    walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
-                    source = routeDisplayInfo.source
-                ),
-                endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
-                typeKeys = alert.typeKeys()
-            )
-        }
-    }
+    // Computed in the ViewModel on Dispatchers.Default and retained across tab switches.
 
     // Filter out expired and optionally dismissed alerts
     val activeAlerts = remember(
@@ -702,8 +644,8 @@ fun PokemonAlertsPage(
                 },
                 onRequestLocationPermission = {
                     if (hasForegroundLocationPermission(context)) {
-                        locationLookupComplete = false
-                        locationScope.launch { refreshUserLocation() }
+                        onLocationLookupPending()
+                        refreshUserLocation()
                     } else {
                         locationPermissionLauncher.launch(
                             arrayOf(

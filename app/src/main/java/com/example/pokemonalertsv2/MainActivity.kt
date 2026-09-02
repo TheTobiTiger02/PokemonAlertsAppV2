@@ -887,6 +887,7 @@ private fun MainScaffold(
                         }
                         1 -> {
                             val historyViewModel = historyViewModelProvider()
+                            LaunchedEffect(historyViewModel) { historyViewModel.ensureInitialLoad() }
                             val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
                             com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
                                 uiState = historyUiState,

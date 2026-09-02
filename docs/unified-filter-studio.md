@@ -17,13 +17,25 @@ exact quests explicitly accepts every quest, while an empty Selected set accepts
 none. Area restrictions reject missing areas. Unavailable distances/routes do
 not reject alerts. Unknown alert categories are exposed as Other.
 
+Distance limits resolve most-specific-first: a per-species limit beats a
+per-alert-type limit, which beats the surface default `maxDistanceKm`. `0` means
+unlimited at every level, so an override can widen as well as narrow. Because an
+alert can belong to several branches at once (a 100% spawn is both SPAWN and
+HUNDO), the limit is resolved per matched branch rather than once per alert: the
+alert survives if any enabled branch matches within its own limit. A species
+limit keys on whatever that branch matches on, so it also covers a species that
+only ever appears as a quest reward. Walking time stays a single per-surface
+rule.
+
 Notification delivery, quiet hours, silence and GoDex checks remain outside the
 matcher. Map display options, dismissal visibility, arrival tracking and widget
 sorting are also independent of the filter definition.
 
 ## Persistence and migration
 
-- DataStore key: `filter_state_v1` (JSON).
+- DataStore key: `filter_state_v1` (JSON), document schema 2. Schema 2 added
+  per-type and per-species distance overrides; the field is defaulted and the
+  codec ignores unknown keys, so schema 1 documents load unchanged.
 - Widget assignments: each widget ID in the existing widget preference store,
   using the same JSON assignment codec.
 - Catalog cache: SharedPreferences `filter_catalog_cache`, key `catalog_v1`.
@@ -34,7 +46,12 @@ sorting are also independent of the filter definition.
   presets become profiles and retain their feed-only sorting metadata.
 - Cached quests, the local species database, built-in tiers/Rocket types and
   current alerts populate offline selectors. Unavailable selected values stay
-  visible and continue matching.
+  visible and continue matching. Raid species are the catalog rotation plus
+  species observed in live raid alerts only: the local Pokedex is deliberately
+  not folded in there the way it is for spawns.
+- Quest reward icons come from the `thumbnailUrl` the alert itself carries, so a
+  reward looks the same in the pickers as it does in the feed and on the map.
+  Rewards with no live alert fall back to a classified generic icon.
 
 ## UI and validation
 

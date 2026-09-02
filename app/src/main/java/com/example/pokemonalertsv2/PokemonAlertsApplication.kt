@@ -20,6 +20,9 @@ import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
 import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.widget.WidgetUpdateCoordinator
+import android.os.Looper
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.MapsInitializer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,8 +41,51 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             AlertNotifier.ensureChannel(this)
             FcmTopicSubscriber.subscribe(this)
             WidgetUpdateCoordinator.start(this)
+            warmGoogleMaps()
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)
+        }
+    }
+
+    /**
+     * Loads the Play Services Maps Dynamite module off the main thread.
+     *
+     * A Perfetto trace of the first Map tab entry showed a ~1s frame inside `draw-VRI`, almost
+     * entirely `OpenDexFilesFromOat(.../dl-MapsCoreDynamite...)` plus `VerifyClass
+     * com.google.maps.api.android.lib6.*` and `CreatorImpl` — the SDK loading and verifying its
+     * classes synchronously the first time a GoogleMap is composed. The work is per-process, so
+     * doing it here means the map tab no longer pays for it inside a frame.
+     */
+    private fun warmGoogleMaps() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching { MapsInitializer.initialize(applicationContext, MapsInitializer.Renderer.LATEST, null) }
+                .onFailure { Log.w("PokemonAlertsApp", "Maps pre-warm skipped", it) }
+        }
+        warmMapRendererClasses()
+    }
+
+    /**
+     * Builds and immediately destroys a throwaway [MapView] while the main thread is idle.
+     *
+     * [MapsInitializer.initialize] loads the Dynamite module but leaves the renderer classes
+     * untouched, so a trace still showed them being verified (`VerifyClass
+     * com.google.maps.api.android.lib6.*`) inside the first map frame — roughly a second of
+     * jank on the first Map tab entry. The SDK refuses `onCreate` off the main thread, so the
+     * work cannot simply be moved to a background thread; instead it runs from an idle handler,
+     * where it costs a frame nobody is waiting on rather than one in the middle of a tap.
+     *
+     * Class loading is per-process, so the real map then finds everything already verified.
+     * The view is never attached, and any failure is non-fatal because this is only a warm-up.
+     */
+    private fun warmMapRendererClasses() {
+        Looper.getMainLooper().queue.addIdleHandler {
+            runCatching {
+                MapView(this).apply {
+                    onCreate(null)
+                    onDestroy()
+                }
+            }.onFailure { Log.w("PokemonAlertsApp", "Map renderer warm-up skipped", it) }
+            false // one shot
         }
     }
 

@@ -75,7 +75,18 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
                 _uiState.update { it.copy(alerts = cached) }
             }
         }
-        // Kick off a network refresh + stats fetch in parallel.
+    }
+
+    private var startedInitialLoad = false
+
+    /**
+     * Deferred to first use: this ViewModel is constructed with the Activity, so refreshing in
+     * `init` put a network call and a stats fetch on the cold-start path even when the History
+     * tab was never opened. Idempotent, so repeated screen entries do not refetch.
+     */
+    fun ensureInitialLoad() {
+        if (startedInitialLoad) return
+        startedInitialLoad = true
         refreshHistory()
         fetchTotalStats()
     }

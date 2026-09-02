@@ -134,6 +134,95 @@ class AlertFilterMatcherTest {
         assertTrue(document.notifications.resolve(document).alertTypes.contains("RAID"))
     }
 
+    @Test
+    fun distanceOverridesResolveMostSpecificFirst() {
+        val definition = FilterDefinition(
+            maxDistanceKm = 10,
+            distanceOverrides = DistanceOverrides(
+                perType = mapOf(FilterAlertType.QUEST.name to 5),
+                perSpecies = mapOf("spinda" to 20)
+            )
+        )
+        val spindaQuest = alert(type = listOf("Quest"), task = "Catch 5 Pokémon", reward = "Spinda")
+        val otherQuest = alert(type = listOf("Quest"), task = "Catch 5 Pokémon", reward = "500 Stardust")
+        val spawn = alert(type = listOf("Spawn"), pokemon = "Pikachu")
+        val at15km = FilterMatchContext(effectiveDistanceMeters = 15_000f)
+
+        // Species override (20 km) beats the quest type override (5 km).
+        assertTrue(AlertFilterMatcher.matches(spindaQuest, definition, at15km))
+        // Type override (5 km) beats the 10 km default.
+        assertFalse(AlertFilterMatcher.matches(otherQuest, definition, at15km))
+        // No override, so the 10 km default applies.
+        assertFalse(AlertFilterMatcher.matches(spawn, definition, at15km))
+        assertTrue(
+            AlertFilterMatcher.matches(spawn, definition, FilterMatchContext(effectiveDistanceMeters = 9_000f))
+        )
+    }
+
+    @Test
+    fun distanceOverrideOfZeroMeansUnlimitedAtEveryLevel() {
+        val unlimitedQuests = FilterDefinition(
+            maxDistanceKm = 5,
+            distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.QUEST.name to 0))
+        )
+        val quest = alert(type = listOf("Quest"), task = "Catch 5 Pokémon", reward = "Dust")
+        assertTrue(
+            AlertFilterMatcher.matches(quest, unlimitedQuests, FilterMatchContext(effectiveDistanceMeters = 40_000f))
+        )
+        assertFalse(
+            AlertFilterMatcher.matches(
+                alert(type = listOf("Spawn")), unlimitedQuests,
+                FilterMatchContext(effectiveDistanceMeters = 40_000f)
+            )
+        )
+    }
+
+    @Test
+    fun multiTypeAlertPassesWhenAnyBranchIsWithinItsOwnLimit() {
+        val hundoSpawn = alert(type = listOf("Spawn", "Hundo"), pokemon = "Pikachu", ivs = 15)
+        val definition = FilterDefinition(
+            alertTypes = FilterSelection.only(listOf("SPAWN", "HUNDO")),
+            maxDistanceKm = 2,
+            distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.HUNDO.name to 30))
+        )
+        // SPAWN is out of range at 2 km, but HUNDO allows 30 km, so the alert survives.
+        assertTrue(
+            AlertFilterMatcher.matches(hundoSpawn, definition, FilterMatchContext(effectiveDistanceMeters = 20_000f))
+        )
+    }
+
+    @Test
+    fun unknownDistanceNeverHidesAnAlertEvenWithOverrides() {
+        val definition = FilterDefinition(
+            maxDistanceKm = 1,
+            distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.SPAWN.name to 1))
+        )
+        assertTrue(AlertFilterMatcher.matches(alert(), definition, FilterMatchContext()))
+        assertTrue(
+            AlertFilterMatcher.matches(alert(), definition, FilterMatchContext(effectiveDistanceMeters = Float.NaN))
+        )
+    }
+
+    @Test
+    fun withoutOverridesDistanceBehaviorIsUnchanged() {
+        val definition = FilterDefinition(maxDistanceKm = 3)
+        assertTrue(
+            AlertFilterMatcher.matches(alert(), definition, FilterMatchContext(effectiveDistanceMeters = 3_000f))
+        )
+        assertFalse(
+            AlertFilterMatcher.matches(alert(), definition, FilterMatchContext(effectiveDistanceMeters = 3_001f))
+        )
+    }
+
+    @Test
+    fun schemaVersionTwoDocumentsStillDecodeVersionOnePayloads() {
+        val legacy = """{"schemaVersion":1,"feed":{"mode":"LOCAL","definition":{"maxDistanceKm":7}}}"""
+        val decoded = FilterStateCodec.decode(legacy)
+        assertTrue(decoded != null)
+        assertTrue(decoded!!.feed.resolve(decoded).maxDistanceKm == 7)
+        assertTrue(decoded.feed.resolve(decoded).distanceOverrides.ruleCount == 0)
+    }
+
     private fun alert(
         type: List<String> = listOf("Spawn"),
         pokemon: String? = "Pikachu",

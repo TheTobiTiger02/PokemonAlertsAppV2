@@ -83,12 +83,44 @@ data class QuestFilterRules(
         else if (facetEnabled) FilterSelectionMode.NONE else FilterSelectionMode.ALL
 )
 
+/**
+ * Distance limits that are narrower (or wider) than the surface default.
+ *
+ * Resolution is most-specific-wins: species beats alert type beats [FilterDefinition.maxDistanceKm].
+ * `0` means unlimited at every level, so an override can widen as well as narrow.
+ */
+@Serializable
+data class DistanceOverrides(
+    /** [FilterAlertType.name] -> km. */
+    val perType: Map<String, Int> = emptyMap(),
+    /** Normalized species/reward token -> km. */
+    val perSpecies: Map<String, Int> = emptyMap()
+) {
+    val ruleCount: Int get() = perType.size + perSpecies.size
+
+    fun withType(type: FilterAlertType, km: Int?): DistanceOverrides = copy(
+        perType = if (km == null) perType - type.name else perType + (type.name to km.coerceIn(0, MAX_FILTER_DISTANCE_KM))
+    )
+
+    fun withSpecies(species: String, km: Int?): DistanceOverrides {
+        val token = normalizeFilterTokenOrNull(species) ?: return this
+        return copy(
+            perSpecies = if (km == null) perSpecies - token else perSpecies + (token to km.coerceIn(0, MAX_FILTER_DISTANCE_KM))
+        )
+    }
+
+    companion object {
+        val None = DistanceOverrides()
+    }
+}
+
 @Serializable
 data class FilterDefinition(
     val alertTypes: FilterSelection = FilterSelection.All,
     val areas: FilterSelection = FilterSelection.All,
     val maxDistanceKm: Int = 0,
     val maxWalkingMinutes: Int = 0,
+    val distanceOverrides: DistanceOverrides = DistanceOverrides.None,
     val spawnSpecies: FilterSelection = FilterSelection.All,
     val rareSpecies: FilterSelection = FilterSelection.All,
     val hundoSpecies: FilterSelection = FilterSelection.All,
@@ -107,7 +139,12 @@ data class FilterDefinition(
             spawnSpecies, rareSpecies, hundoSpecies, nundoSpecies, pvpSpecies,
             raidSpecies, raidTiers, rocketTypes
         ).count { it.mode != FilterSelectionMode.ALL } +
-            if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0
+            (if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0) +
+            distanceOverrides.ruleCount
+
+    /** True when any distance limit is in play, so callers know whether to prefetch walking routes. */
+    val usesDistanceRules: Boolean
+        get() = maxDistanceKm > 0 || maxWalkingMinutes > 0 || distanceOverrides.ruleCount > 0
 }
 
 @Serializable
@@ -185,8 +222,10 @@ enum class FilterSurface(val label: String) {
     FEED("Feed"), MAP("Map"), NOTIFICATIONS("Notifications")
 }
 
-const val CURRENT_FILTER_SCHEMA_VERSION = 1
+/** 2 added [FilterDefinition.distanceOverrides]; v1 documents still decode because the field is defaulted. */
+const val CURRENT_FILTER_SCHEMA_VERSION = 2
 const val MAX_FILTER_PROFILE_NAME = 40
+const val MAX_FILTER_DISTANCE_KM = 50
 
 object FilterStateCodec {
     private val json = Json {
@@ -242,18 +281,50 @@ object AlertFilterMatcher {
         context: FilterMatchContext = FilterMatchContext()
     ): Boolean {
         if (!definition.areas.contains(alert.area)) return false
-        if (definition.maxDistanceKm > 0) {
-            val distance = context.effectiveDistanceMeters
-            if (distance != null && distance.isFinite() && distance > definition.maxDistanceKm * 1000f) return false
-        }
         if (definition.maxWalkingMinutes > 0) {
             val walkingSeconds = context.walkingDurationSeconds
             if (walkingSeconds != null && walkingSeconds > definition.maxWalkingMinutes * 60L) return false
         }
 
+        // The distance limit is resolved per matched type: one alert can be several types at once
+        // (a 100% spawn is both SPAWN and HUNDO) and each may carry a different override.
         return alert.filterAlertTypes().any { type ->
-            definition.alertTypes.contains(type.name) && matchesAdvanced(type, alert, definition)
+            definition.alertTypes.contains(type.name) &&
+                matchesAdvanced(type, alert, definition) &&
+                withinDistance(type, alert, definition, context)
         }
+    }
+
+    /**
+     * Most specific wins: a species override beats a type override beats the surface default.
+     * Returns km, where 0 means unlimited.
+     */
+    internal fun distanceLimitKmFor(
+        type: FilterAlertType,
+        alert: PokemonAlert,
+        definition: FilterDefinition
+    ): Int {
+        val overrides = definition.distanceOverrides
+        if (overrides.ruleCount > 0) {
+            val token = normalizeFilterTokenOrNull(type.matchTokenFor(alert))
+            if (token != null) overrides.perSpecies[token]?.let { return it }
+            overrides.perType[type.name]?.let { return it }
+        }
+        return definition.maxDistanceKm
+    }
+
+    /** A missing or non-finite distance never hides an alert, matching the walking-time rule. */
+    private fun withinDistance(
+        type: FilterAlertType,
+        alert: PokemonAlert,
+        definition: FilterDefinition,
+        context: FilterMatchContext
+    ): Boolean {
+        val limitKm = distanceLimitKmFor(type, alert, definition)
+        if (limitKm <= 0) return true
+        val distance = context.effectiveDistanceMeters ?: return true
+        if (!distance.isFinite()) return true
+        return distance <= limitKm * 1000f
     }
 
     private fun matchesAdvanced(type: FilterAlertType, alert: PokemonAlert, definition: FilterDefinition): Boolean = when (type) {
@@ -301,6 +372,16 @@ fun PokemonAlert.filterAlertTypes(): Set<FilterAlertType> {
     }
     if (mapped.isEmpty()) mapped += FilterAlertType.OTHER
     return mapped
+}
+
+/**
+ * The value a species-scoped rule keys on for this type, mirroring what [AlertFilterMatcher]
+ * already matches against: quests key on their reward, Rocket on the grunt type.
+ */
+fun FilterAlertType.matchTokenFor(alert: PokemonAlert): String? = when (this) {
+    FilterAlertType.QUEST -> alert.questReward
+    FilterAlertType.ROCKET -> alert.gruntType
+    else -> alert.filterSpecies()
 }
 
 fun PokemonAlert.filterSpecies(): String = pokemon
