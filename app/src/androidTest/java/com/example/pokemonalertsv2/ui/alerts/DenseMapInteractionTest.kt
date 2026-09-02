@@ -160,7 +160,7 @@ class DenseMapInteractionTest {
                 val zoom = google?.cameraPosition?.zoom?.toDouble() ?: osm!!.cameraPosition.zoom
                 Log.i("DenseMapQA", "$style zoom=$zoom osmMarkers=${osm?.markers?.size}")
                 assertEquals("Cluster tap should zoom progressively", 14.0, zoom, 0.05)
-                osm?.let { assertTrue("Markers must stay capped", it.markers.size in 1..MAX_RENDERED_MAP_MARKERS) }
+                osm?.let { assertTrue("Markers must stay capped", it.markers.size in 1..MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
             }
         } finally {
             heartbeat.removeCallbacks(pulse)
@@ -209,7 +209,7 @@ class DenseMapInteractionTest {
             instrumentation.runOnMainSync {
                 val zoom = google?.cameraPosition?.zoom?.toDouble() ?: osm!!.cameraPosition.zoom
                 assertEquals(zoomBefore + 2.0, zoom, 0.05)
-                osm?.let { assertTrue(it.markers.size <= MAX_RENDERED_MAP_MARKERS) }
+                osm?.let { assertTrue(it.markers.size <= MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
             }
         }
         instrumentation.runOnMainSync {
@@ -234,7 +234,7 @@ class DenseMapInteractionTest {
         ).performClick()
         settle(2_000)
         instrumentation.runOnMainSync {
-            osm?.let { assertTrue(it.markers.size in 1..MAX_RENDERED_MAP_MARKERS) }
+            osm?.let { assertTrue(it.markers.size in 1..MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
         }
         capture("${style.name}-fit-all")
 

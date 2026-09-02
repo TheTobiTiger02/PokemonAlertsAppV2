@@ -9,10 +9,18 @@ import kotlin.math.min
 import kotlin.math.pow
 
 /** Neighborhood/default view and closer show individual markers; only exact stacks stay grouped. */
-internal const val MAP_CLUSTER_MAX_ZOOM = 13.0
+internal const val MAP_CLUSTER_MAX_ZOOM = 12.0
 
 /** Hard ceiling on individual pins plus cluster bubbles, including protected tracking pins. */
 internal const val MAX_RENDERED_MAP_MARKERS = 350
+
+/**
+ * Ceiling for [MAP_CLUSTER_MAX_ZOOM] and closer. Coarsening a dense view down to
+ * [MAX_RENDERED_MAP_MARKERS] spends that budget on the whole prefetched region, which is several
+ * times the visible screen, so it merges markers that are nowhere near overlapping. Zoomed in the
+ * grid therefore keeps its natural cell size until this much larger ceiling is reached.
+ */
+internal const val MAX_RENDERED_MAP_MARKERS_ZOOMED_IN = 900
 
 /**
  * Spawn circles are shown only at this zoom and closer, with a separate rendering cap.
@@ -27,6 +35,15 @@ internal const val MAX_SPAWN_CIRCLES = 60
  * they would actually overlap.
  */
 internal const val MAP_CLUSTER_CELL_DP = 48f
+
+/**
+ * Grid cell for dense inputs at [MAP_CLUSTER_MAX_ZOOM] and closer. A cell the size of the rendered
+ * marker merges everything within a marker width, which zoomed in swallows whole streets; two
+ * thirds of that keeps neighbouring pins apart while still merging the ones that sit on top of each
+ * other. The doubling loop below still coarsens it when a view is dense enough to exceed the
+ * rendering ceiling.
+ */
+internal const val MAP_CLUSTER_ZOOMED_IN_CELL_DP = 32f
 
 private const val MIN_VISIBLE_RADIUS_DP = 8.0
 private const val METERS_PER_MAP_DP_AT_ZOOM_ZERO = 156_543.03392
@@ -113,11 +130,22 @@ internal fun clusterMapAlerts(
     require(budget >= 0 && (clusterable.isEmpty() || budget > 0)) {
         "Protected alerts must leave room for the clustered alerts"
     }
+    // Zoomed in, keep a fine grid and treat coarsening as a last resort rather than the norm.
+    val denseCellDp = if (zoom >= MAP_CLUSTER_MAX_ZOOM) {
+        min(cellDp, MAP_CLUSTER_ZOOMED_IN_CELL_DP)
+    } else {
+        cellDp
+    }
+    val densePathBudget = if (zoom >= MAP_CLUSTER_MAX_ZOOM) {
+        (MAX_RENDERED_MAP_MARKERS_ZOOMED_IN - protectedGroups.size).coerceAtLeast(budget)
+    } else {
+        budget
+    }
     val scale = 256.0 * 2.0.pow(zoom.coerceIn(0.0, 24.0))
     val normalGroups = when {
         positioned.size > MAX_RENDERED_MAP_MARKERS -> {
             val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
-            var cellSize = max(1.0, cellDp.toDouble())
+            var cellSize = max(1.0, denseCellDp.toDouble())
             var cells: Collection<List<PositionedAlert>>
             do {
                 checkActive()
@@ -130,7 +158,7 @@ internal fun clusterMapAlerts(
                 }
                 cells = buckets.values
                 cellSize *= 2.0
-            } while (cells.size > budget)
+            } while (cells.size > densePathBudget)
             cells.toList()
         }
         zoom < MAP_CLUSTER_MAX_ZOOM -> {

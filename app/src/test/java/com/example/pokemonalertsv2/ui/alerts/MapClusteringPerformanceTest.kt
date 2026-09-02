@@ -25,7 +25,7 @@ class MapClusteringPerformanceTest {
             for (zoom in listOf(3.0, 12.0, 14.0, 20.0, 24.0)) {
                 for (radius in listOf(null, 40.0, 80.0)) {
                     val items = clusterMapAlerts(alerts, zoom, spawnRadiusMeters = radius, protectedAlertIds = protected)
-                    assertTrue("$count alerts at $zoom / $radius produced ${items.size} markers", items.size <= MAX_RENDERED_MAP_MARKERS)
+                    assertTrue("$count alerts at $zoom / $radius produced ${items.size} markers", items.size <= capFor(zoom))
                     val members = items.flatMap {
                         when (it) {
                             is MapMarkerItem.Alert -> listOf(it.alert)
@@ -114,8 +114,45 @@ class MapClusteringPerformanceTest {
 
         val items = clusterMapAlerts(alerts = alerts, zoom = 20.0)
 
-        assertTrue(items.size <= MAX_RENDERED_MAP_MARKERS)
+        assertTrue(items.size <= capFor(20.0))
     }
+
+    @Test
+    fun neighbourhoodZoomKeepsDetailInsteadOfCoarseningToTheZoomedOutBudget() {
+        // A dense feed used to take the grid path at every zoom, doubling the cell size until only
+        // MAX_RENDERED_MAP_MARKERS bubbles were left - a handful of bubbles across the screen even
+        // when fully zoomed in. Zoomed in the grid must stay at its natural cell size instead.
+        val random = Random(7)
+        val alerts = List(1_200) { index ->
+            PokemonAlert(
+                id = index + 1, name = "a$index",
+                latitude = 49.87 + random.nextDouble(-0.015, 0.015),
+                longitude = 8.65 + random.nextDouble(-0.03, 0.03),
+                type = listOf("Spawn")
+            )
+        }
+
+        val items = clusterMapAlerts(alerts = alerts, zoom = 15.0)
+
+        assertTrue(
+            "Zoomed in, a dense view must keep more detail than the zoomed-out budget allows",
+            items.size > MAX_RENDERED_MAP_MARKERS
+        )
+        assertTrue(items.size <= capFor(15.0))
+        assertEquals(
+            alerts.map { it.uniqueId }.toSet(),
+            items.flatMap {
+                when (it) {
+                    is MapMarkerItem.Alert -> listOf(it.alert)
+                    is MapMarkerItem.Cluster -> it.alerts
+                }
+            }.map { it.uniqueId }.toSet()
+        )
+    }
+
+    /** Coarsening only starts at the larger ceiling once individual markers are expected. */
+    private fun capFor(zoom: Double): Int =
+        if (zoom >= MAP_CLUSTER_MAX_ZOOM) MAX_RENDERED_MAP_MARKERS_ZOOMED_IN else MAX_RENDERED_MAP_MARKERS
 
     @Test
     fun viewportBoundsCoversTheScreenPlusMarginAndRejectsDegenerateSizes() {
