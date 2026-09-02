@@ -49,12 +49,14 @@ import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_START
 import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_END
 
@@ -79,6 +81,7 @@ class SettingsViewModel(
 
     val filterableAlerts: StateFlow<List<PokemonAlert>> = alertRepository.alerts
         .map { alerts -> alerts.filter { !it.isInvalidated && (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > System.currentTimeMillis() } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _filterPreviewContexts = MutableStateFlow<Map<String, FilterMatchContext>>(emptyMap())
     val filterPreviewContexts: StateFlow<Map<String, FilterMatchContext>> = _filterPreviewContexts
@@ -92,6 +95,7 @@ class SettingsViewModel(
     /** Reward artwork lifted from live quest alerts, so pickers match what the feed shows. */
     val questRewardThumbnails: StateFlow<Map<String, String>> = filterableAlerts
         .map { alerts -> com.example.pokemonalertsv2.data.questRewardThumbnails(alerts) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
     private val _requestedFilterEditor = MutableStateFlow<FilterSurface?>(null)
     val requestedFilterEditor: StateFlow<FilterSurface?> = _requestedFilterEditor
@@ -114,6 +118,9 @@ class SettingsViewModel(
         .map { it.notifications.resolve(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterDefinition())
 
+    // The three-surface tally re-evaluates the matcher against every live alert whenever the
+    // document, the alerts or the preview contexts change; without flowOn all of that ran on
+    // the main thread and stalled every keystroke in the Filter Studio.
     val filterPreviewCounts: StateFlow<Map<FilterSurface, Int>> = combine(
         filterableAlerts,
         filterStateDocument,
@@ -123,7 +130,8 @@ class SettingsViewModel(
             val definition = document.assignment(surface).resolve(document)
             alerts.count { AlertFilterMatcher.matches(it, definition, contexts[it.uniqueId] ?: FilterMatchContext()) }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val raidCounterSettings: StateFlow<RaidCounterSettings> = raidCounterPreferences.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RaidCounterSettings())
@@ -144,18 +152,27 @@ class SettingsViewModel(
         }
         viewModelScope.launch {
             filterableAlerts.collect { alerts ->
-                val location = CachedLocationProvider.get(application)
-                val routes = location?.let { WalkingRouteRepository.getInstance().getWalkingRoutes(it, alerts) }.orEmpty()
-                _filterPreviewContexts.value = alerts.associate { alert ->
-                    val direct = location?.let { origin ->
-                        val lat = alert.latitude ?: return@let null
-                        val lon = alert.longitude ?: return@let null
-                        WalkingRouteUtils.straightLineDistanceMeters(origin.latitude, origin.longitude, lat, lon)
+                // Distance contexts for 1000+ alerts are derived off the main thread: the
+                // per-alert route join and straight-line math used to run here on Main and
+                // stalled every screen that collected this flow while alerts were arriving.
+                _filterPreviewContexts.value = withContext(Dispatchers.Default) {
+                    val location = CachedLocationProvider.get(application)
+                    val routes = location
+                        ?.let { WalkingRouteRepository.getInstance().getWalkingRoutes(it, alerts) }
+                        .orEmpty()
+                    alerts.associate { alert ->
+                        val direct = location?.let { origin ->
+                            val lat = alert.latitude ?: return@let null
+                            val lon = alert.longitude ?: return@let null
+                            WalkingRouteUtils.straightLineDistanceMeters(origin.latitude, origin.longitude, lat, lon)
+                        }
+                        val info = WalkingRouteUtils.buildRouteDisplayInfo(direct, routes[alert.uniqueId])
+                        alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds)
                     }
-                    val info = WalkingRouteUtils.buildRouteDisplayInfo(direct, routes[alert.uniqueId])
-                    alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds)
                 }
-                _filterCatalog.value = filterCatalogRepository.offlineCatalog(alerts)
+                _filterCatalog.value = withContext(Dispatchers.Default) {
+                    filterCatalogRepository.offlineCatalog(alerts)
+                }
             }
         }
         viewModelScope.launch {
@@ -683,6 +700,7 @@ class SettingsViewModel(
                 }
             )
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     /** [categories] holds the muted categories; empty = show everything. */

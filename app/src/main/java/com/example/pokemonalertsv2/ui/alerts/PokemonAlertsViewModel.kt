@@ -92,7 +92,11 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                         .map { (alert, _) -> alert }
                         .toList()
                 }
-                _uiState.update { it.copy(alerts = activeAlerts) }
+                // Room re-emits on every table write; skipping content-equal lists keeps the
+                // distance/filter/sort pipelines (and the grid diff) from re-running for nothing.
+                _uiState.update { current ->
+                    if (current.alerts == activeAlerts) current else current.copy(alerts = activeAlerts)
+                }
             }
         }
     }
@@ -170,6 +174,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     /** Live per-category counts over the active alerts; feeds every filter chip badge. */
     val categoryCounts: StateFlow<Map<AlertCategory, Int>> = _uiState
         .map { state -> countAlertsByCategory(state.alerts) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     fun refreshAlerts() {

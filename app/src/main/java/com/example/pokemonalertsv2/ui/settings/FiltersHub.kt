@@ -305,8 +305,20 @@ private fun FilterAlertType.category(): AlertCategory = when (this) { FilterAler
 @Composable
 internal fun SelectionDialog(title: String, candidates: List<String>, current: FilterSelection, onDismiss: () -> Unit, artwork: Map<String, String> = emptyMap(), initialQuery: String = "", onQueryChanged: (String) -> Unit = {}, onSave: (FilterSelection) -> Unit) {
     var mode by remember { mutableStateOf(current.mode) }; var selected by remember { mutableStateOf(current.normalizedValues) }; var query by rememberSaveable { mutableStateOf(initialQuery) }
-    val availableKeys = remember(candidates) { candidates.map(::normalizeFilterToken).toSet() }
-    val display = remember(candidates, current.values, query) { candidates.associateBy(::normalizeFilterToken).toMutableMap().apply { current.values.forEach { putIfAbsent(normalizeFilterToken(it), it) } }.values.filter { normalizeFilterToken(it).contains(normalizeFilterToken(query)) }.sortedWith(compareByDescending<String> { normalizeFilterToken(it) in current.normalizedValues }.thenBy { it }) }
+    // Normalized keys are computed once per candidate list; filtering and sorting for the
+    // search query then reuse them instead of re-normalizing hundreds of species per keystroke.
+    val normalizedCandidates = remember(candidates, current.values) {
+        candidates.associateBy(::normalizeFilterToken).toMutableMap().apply {
+            current.values.forEach { key -> putIfAbsent(normalizeFilterToken(key), key) }
+        }.map { (key, value) -> key to value }
+    }
+    val availableKeys = remember(normalizedCandidates) { normalizedCandidates.mapTo(mutableSetOf()) { it.first } }
+    val queryKey = remember(query) { normalizeFilterToken(query) }
+    val display = remember(normalizedCandidates, current.normalizedValues, queryKey) {
+        normalizedCandidates
+            .filter { (key, _) -> key.contains(queryKey) }
+            .sortedWith(compareByDescending<Pair<String, String>> { (key, _) -> key in current.normalizedValues }.thenBy { (_, value) -> value })
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth().fillMaxHeight(.9f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -324,8 +336,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                 // Compact cells fit roughly twice as many species per screen. Selection reads from
                 // the border plus a corner badge instead of a full-size checkbox.
                 LazyVerticalGrid(columns = GridCells.Adaptive(76.dp), modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    gridItems(display, key = { normalizeFilterToken(it) }) { value ->
-                        val key = normalizeFilterToken(value)
+                    gridItems(display, key = { it.first }) { (key, value) ->
                         val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected)
                         val unavailable = key !in availableKeys
                         OutlinedCard(onClick = { selected = if (key in selected) selected - key else selected + key }, enabled = mode == FilterSelectionMode.ONLY, colors = CardDefaults.outlinedCardColors(disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant), border = BorderStroke(if (checked) 2.dp else 1.dp, if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.semantics { contentDescription = if (checked) "$value, selected" else value }) {
@@ -341,7 +352,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                     }
                 }
             } else {
-                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp)) { items(display, key = { normalizeFilterToken(it) }) { value -> val key = normalizeFilterToken(value); val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected); Row(Modifier.fillMaxWidth().clickable(enabled = mode == FilterSelectionMode.ONLY) { selected = if (key in selected) selected - key else selected + key }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, null); Text(value, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis) } } }
+                LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp)) { items(display, key = { it.first }) { (key, value) -> val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected); Row(Modifier.fillMaxWidth().clickable(enabled = mode == FilterSelectionMode.ONLY) { selected = if (key in selected) selected - key else selected + key }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, null); Text(value, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis) } } }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { onSave(when (mode) { FilterSelectionMode.ALL -> FilterSelection.All; FilterSelectionMode.NONE -> FilterSelection.None; FilterSelectionMode.ONLY -> FilterSelection.only(selected) }) }) { Text("Done") } }
         } }

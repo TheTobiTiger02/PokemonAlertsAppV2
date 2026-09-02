@@ -135,17 +135,23 @@ object RaidTierParser {
         Regex("""\blevel\s*(\d)\b""")
     )
 
+    // Precompiled once; the filter matcher parses raid tiers on every pass over the alerts,
+    // and compiling these patterns per call dominated that pass with 1000+ live alerts.
+    private val COMBINING_MARKS = Regex("""\p{M}+""")
+    private val NON_TOKEN_CHARS = Regex("""[^a-z0-9]+""")
+    private val WHITESPACE_RUNS = Regex("""\s+""")
+
     private fun normalizedTokens(types: List<String>?): List<String> =
         types.orEmpty().mapNotNull { normalizedToken(it) }
 
     /** Mirrors `GoDexMatcher.normalizedToken()` so both matchers agree on spelling. */
     private fun normalizedToken(value: String?): String? = value
         ?.let { Normalizer.normalize(it, Normalizer.Form.NFD) }
-        ?.replace(Regex("""\p{M}+"""), "")
+        ?.replace(COMBINING_MARKS, "")
         ?.lowercase(Locale.ROOT)
         ?.replace("'", "")
-        ?.replace(Regex("""[^a-z0-9]+"""), " ")
+        ?.replace(NON_TOKEN_CHARS, " ")
         ?.trim()
-        ?.replace(Regex("""\s+"""), " ")
+        ?.replace(WHITESPACE_RUNS, " ")
         ?.takeIf { it.isNotEmpty() }
 }

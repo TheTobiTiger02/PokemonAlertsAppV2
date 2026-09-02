@@ -391,13 +391,27 @@ fun PokemonAlert.filterSpecies(): String = pokemon
 
 fun normalizeFilterToken(value: String): String = normalizeFilterTokenOrNull(value).orEmpty()
 
-fun normalizeFilterTokenOrNull(value: String?): String? = value
-    ?.let { Normalizer.normalize(it, Normalizer.Form.NFD) }
-    ?.replace(Regex("""\p{M}+"""), "")
-    ?.lowercase(Locale.ROOT)
-    ?.replace("'", "")
-    ?.replace("’", "")
-    ?.replace(Regex("""[^a-z0-9]+"""), " ")
-    ?.trim()
-    ?.replace(Regex("""\s+"""), " ")
-    ?.takeIf(String::isNotEmpty)
+// Precompiled once: the filter matcher normalizes a handful of strings per alert, so with
+// 1000+ live alerts these patterns were being compiled tens of thousands of times per
+// filter pass and dominated the main thread.
+private val COMBINING_MARKS = Regex("""\p{M}+""")
+private val NON_TOKEN_CHARS = Regex("""[^a-z0-9]+""")
+private val WHITESPACE_RUNS = Regex("""\s+""")
+
+/** Tokens that are already in their normalized spelling need no Normalizer or regex passes. */
+private val PLAIN_TOKEN = Regex("""[a-z0-9]+(?: [a-z0-9]+)*""")
+
+fun normalizeFilterTokenOrNull(value: String?): String? {
+    val raw = value?.takeIf(String::isNotBlank) ?: return null
+    if (PLAIN_TOKEN.matches(raw)) return raw
+    return raw
+        .let { Normalizer.normalize(it, Normalizer.Form.NFD) }
+        .replace(COMBINING_MARKS, "")
+        .lowercase(Locale.ROOT)
+        .replace("'", "")
+        .replace("’", "")
+        .replace(NON_TOKEN_CHARS, " ")
+        .trim()
+        .replace(WHITESPACE_RUNS, " ")
+        .takeIf(String::isNotEmpty)
+}

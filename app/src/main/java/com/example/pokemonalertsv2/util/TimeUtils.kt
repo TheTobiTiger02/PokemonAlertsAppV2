@@ -45,16 +45,44 @@ object TimeUtils {
 
     /**
      * Parses an endTime string into epoch millis. Returns null if unknown/invalid.
+     *
+     * Results are memoized per raw string: the same timestamps are re-parsed by every
+     * pipeline pass (feed filter, distance decoration, category counts, map filter) on
+     * each sync, which with 1000+ live alerts turned repeated parsing into real jank.
      */
     fun parseEndTimeToMillis(endTime: String?): Long? {
         val trimmed = endTime?.trim().orEmpty()
         if (trimmed.isEmpty()) return null
+        synchronized(endTimeParseCache) {
+            endTimeParseCache[trimmed]?.let { return it }
+        }
+        val parsed = parseEndTimeUncached(trimmed)
+        synchronized(endTimeParseCache) {
+            if (endTimeParseCache.size >= END_TIME_CACHE_LIMIT) {
+                val iter = endTimeParseCache.entries.iterator()
+                repeat(END_TIME_CACHE_LIMIT / 4) {
+                    if (iter.hasNext()) {
+                        iter.next()
+                        iter.remove()
+                    }
+                }
+            }
+            endTimeParseCache[trimmed] = parsed
+        }
+        return parsed
+    }
+
+    private fun parseEndTimeUncached(trimmed: String): Long? {
         for (p in parsers) {
             val v = runCatching { p(trimmed) }.getOrNull()
             if (v != null && v > 0) return v
         }
         return null
     }
+
+    /** LinkedHashMap in insertion order doubles as a simple FIFO-bounded memo. */
+    private val endTimeParseCache = LinkedHashMap<String, Long?>()
+    private const val END_TIME_CACHE_LIMIT = 4_096
 
     /**
      * Formats a remaining duration (millis) as a short string, e.g. "5m 12s" or "1h 03m".

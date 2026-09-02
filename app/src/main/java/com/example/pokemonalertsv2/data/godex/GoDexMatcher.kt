@@ -209,10 +209,10 @@ object GoDexMatcher {
     internal fun normalizedAlertForm(value: String?): String? {
         val normalized = value.normalizedToken() ?: return null
         FORM_ALIASES[normalized]?.let { return it }
-        Regex("(?:spinda )?(\\d{1,2})").matchEntire(normalized)?.let {
+        SPINDA_PATTERN.matchEntire(normalized)?.let {
             return it.groupValues[1].padStart(2, '0')
         }
-        Regex("(?:unown )?([a-z])").matchEntire(normalized)?.let { return it.groupValues[1] }
+        UNOWN_PATTERN.matchEntire(normalized)?.let { return it.groupValues[1] }
         return normalized.replace(" ", "_")
     }
 
@@ -329,14 +329,21 @@ object GoDexMatcher {
         }
     }
 
+    // Precompiled once; matching runs per hundo alert on every feed refresh.
+    private val COMBINING_MARKS = Regex("""\p{M}+""")
+    private val NON_TOKEN_CHARS = Regex("[^a-z0-9]+")
+    private val WHITESPACE_RUNS = Regex("""\s+""")
+    private val SPINDA_PATTERN = Regex("""(?:spinda )?(\d{1,2})""")
+    private val UNOWN_PATTERN = Regex("""(?:unown )?([a-z])""")
+
     private fun String?.normalizedToken(): String? = this
         ?.let { Normalizer.normalize(it, Normalizer.Form.NFD) }
-        ?.replace(Regex("\\p{M}+"), "")
+        ?.replace(COMBINING_MARKS, "")
         ?.lowercase(Locale.ROOT)
         ?.replace("'", "")
-        ?.replace(Regex("[^a-z0-9]+"), " ")
+        ?.replace(NON_TOKEN_CHARS, " ")
         ?.trim()
-        ?.replace(Regex("\\s+"), " ")
+        ?.replace(WHITESPACE_RUNS, " ")
         ?.takeIf { it.isNotEmpty() }
 
     private val DESCRIPTIVE_SUFFIXES = setOf(

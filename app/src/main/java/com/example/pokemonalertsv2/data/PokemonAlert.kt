@@ -101,10 +101,14 @@ internal fun AffectedAlert.matches(candidate: PokemonAlert): Boolean {
         candidate.type.normalizedAlertTypes() == affectedTypes
 }
 
+private val WHITESPACE_RUNS = Regex("\\s+")
+
+private val LEADING_NON_LETTERS = Regex("^[^a-zA-Z]+")
+
 private fun String?.normalizedAlertIdentity(): String? =
     this
         ?.trim()
-        ?.replace(Regex("\\s+"), " ")
+        ?.replace(WHITESPACE_RUNS, " ")
         ?.lowercase(Locale.ROOT)
         ?.takeIf { it.isNotEmpty() }
 
@@ -199,9 +203,12 @@ data class PokemonAlert(
      * so alerts that share a dashboard-entered name and endTime (e.g. manual
      * quest alerts) don't collide and overwrite each other; alerts without a
      * server id fall back to the legacy name|endTime key.
+     *
+     * Cached: this value is read as a sort key, map key and grid key across every
+     * pipeline pass, thousands of times per sync with 1000+ live alerts.
      */
-    val uniqueId: String get() = id?.let { "server-$it" } ?: "${name.trim()}|${endTime.trim()}"
-    
+    val uniqueId: String by lazy { id?.let { "server-$it" } ?: "${name.trim()}|${endTime.trim()}" }
+
     /** Returns true if this is a weather-change alert */
     val isWeatherChange: Boolean get() = hasType("WeatherChange")
     
@@ -239,9 +246,11 @@ data class PokemonAlert(
     val isNundo: Boolean
         get() = ivAttack == 0 && ivDefense == 0 && ivStamina == 0
     
-    /** Clean Pokemon name without emoji prefixes */
-    val cleanPokemonName: String
-        get() = pokemon ?: name.replace(Regex("^[^a-zA-Z]+"), "").trim()
+    /** Clean Pokemon name without emoji prefixes.
+     * Cached: the filter matcher derives the species token from this on every pass. */
+    val cleanPokemonName: String by lazy {
+        pokemon ?: name.replace(LEADING_NON_LETTERS, "").trim()
+    }
     
     /** Returns Gym or PokéStop name if present */
     val venueName: String?
@@ -261,17 +270,18 @@ data class PokemonAlert(
             ?: gym?.takeIf { it.isNotBlank() }
             ?: pokestop?.takeIf { it.isNotBlank() }
 
-    /** Check if alert is a Pokémon spawn (and not a Raid, Rocket, Quest, Kecleon, or WeatherChange) */
-    val isSpawnAlert: Boolean
-        get() {
-            if (hasType("Raid") || hasType("Rocket") || hasType("Quest") ||
-                hasType("Kecleon") || hasType("WeatherChange")
-            ) {
-                return false
-            }
-            return hasType("Spawn") || hasType("Hundo") || hasType("Nundo") ||
+    /** Check if alert is a Pokémon spawn (and not a Raid, Rocket, Quest, Kecleon, or WeatherChange).
+     * Cached: the filter matcher consults this for every alert on every pass. */
+    val isSpawnAlert: Boolean by lazy {
+        if (hasType("Raid") || hasType("Rocket") || hasType("Quest") ||
+            hasType("Kecleon") || hasType("WeatherChange")
+        ) {
+            false
+        } else {
+            hasType("Spawn") || hasType("Hundo") || hasType("Nundo") ||
                 hasType("PvP") || hasType("Rare") || pokemon != null
         }
+    }
 
     /** Check if alert has a specific type (case-insensitive) */
     fun hasType(typeName: String): Boolean =
