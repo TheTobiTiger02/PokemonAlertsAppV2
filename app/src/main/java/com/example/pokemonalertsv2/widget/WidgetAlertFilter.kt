@@ -2,6 +2,9 @@ package com.example.pokemonalertsv2.widget
 
 import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.TimeUtils
 
@@ -16,6 +19,7 @@ internal object WidgetAlertFilter {
         val selectedArea: String,
         val maxDistanceKm: Int,
         val widgetFilterTypes: Set<String>,
+        val filterDefinition: FilterDefinition? = null,
         val nowMillis: Long = System.currentTimeMillis()
     )
 
@@ -30,7 +34,8 @@ internal object WidgetAlertFilter {
         alerts: List<PokemonAlert>,
         criteria: Criteria,
         origin: Origin?,
-        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::directDistanceMeters
+        distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::directDistanceMeters,
+        walkingDurationSeconds: (alert: PokemonAlert) -> Long? = { null }
     ): Result {
         val distanceFilterApplied = criteria.maxDistanceKm <= 0 || origin != null
 
@@ -41,6 +46,7 @@ internal object WidgetAlertFilter {
                     criteria = criteria,
                     origin = origin,
                     distanceMeters = distanceMeters,
+                    walkingDurationSeconds = walkingDurationSeconds,
                     applyDistance = distanceFilterApplied
                 )
             },
@@ -58,6 +64,7 @@ internal object WidgetAlertFilter {
                 criteria = criteria,
                 origin = null,
                 distanceMeters = { _, _ -> null },
+                walkingDurationSeconds = { null },
                 applyDistance = false
             )
         }
@@ -73,6 +80,7 @@ internal object WidgetAlertFilter {
         criteria: Criteria,
         origin: Origin?,
         distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float?,
+        walkingDurationSeconds: (alert: PokemonAlert) -> Long?,
         applyDistance: Boolean = true
     ): Boolean {
         val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
@@ -80,11 +88,27 @@ internal object WidgetAlertFilter {
         if (alert.isInvalidated) return false
         if (alert.uniqueId in criteria.dismissedAlertIds) return false
         if (criteria.selectedArea != "All" && alert.area != criteria.selectedArea) return false
-        if (!matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
+        if (criteria.filterDefinition == null && !matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
 
+        var effectiveDistance: Float? = null
         if (applyDistance && criteria.maxDistanceKm > 0 && origin != null) {
             val meters = distanceMeters(origin, alert)
+            effectiveDistance = meters
             if (meters != null && !meters.isNaN() && meters > criteria.maxDistanceKm * 1000) {
+                return false
+            }
+        }
+
+        criteria.filterDefinition?.let { definition ->
+            if (effectiveDistance == null && applyDistance && origin != null) {
+                effectiveDistance = distanceMeters(origin, alert)
+            }
+            if (!AlertFilterMatcher.matches(
+                    alert,
+                    definition,
+                    FilterMatchContext(effectiveDistance, walkingDurationSeconds(alert))
+                )
+            ) {
                 return false
             }
         }

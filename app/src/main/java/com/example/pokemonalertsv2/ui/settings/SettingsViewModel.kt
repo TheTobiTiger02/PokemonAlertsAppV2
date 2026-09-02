@@ -7,6 +7,23 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.BuiltInFilterProfiles
+import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.data.FilterCatalog
+import com.example.pokemonalertsv2.data.FilterCatalogRepository
+import com.example.pokemonalertsv2.data.FilterAssignment
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterMatchContext
+import com.example.pokemonalertsv2.util.WalkingRouteRepository
+import com.example.pokemonalertsv2.util.CachedLocationProvider
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.data.FilterProfile
+import com.example.pokemonalertsv2.data.FilterSelection
+import com.example.pokemonalertsv2.data.FilterSelectionMode
+import com.example.pokemonalertsv2.data.FilterStateDocument
+import com.example.pokemonalertsv2.data.FilterSurface
+import com.example.pokemonalertsv2.data.MAX_FILTER_PROFILE_NAME
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -20,6 +37,7 @@ import com.example.pokemonalertsv2.data.pokegenie.PokeGeniePrepareResult
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieRepository
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportUiState
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.countAlertsByCategory
 import com.example.pokemonalertsv2.ui.alerts.toCategorySelection
@@ -32,6 +50,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -55,6 +74,49 @@ class SettingsViewModel(
     private val pokeGenieRepository by lazy(LazyThreadSafetyMode.NONE) {
         PokeGenieRepository.getInstance(application)
     }
+    private val filterCatalogRepository = FilterCatalogRepository.getInstance(application)
+
+    val filterableAlerts: StateFlow<List<PokemonAlert>> = alertRepository.alerts
+        .map { alerts -> alerts.filter { !it.isInvalidated && (TimeUtils.parseEndTimeToMillis(it.endTime) ?: Long.MAX_VALUE) > System.currentTimeMillis() } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _filterPreviewContexts = MutableStateFlow<Map<String, FilterMatchContext>>(emptyMap())
+    val filterPreviewContexts: StateFlow<Map<String, FilterMatchContext>> = _filterPreviewContexts
+    private val _filterCatalog = MutableStateFlow(filterCatalogRepository.cached() ?: FilterCatalog())
+    val filterCatalog: StateFlow<FilterCatalog> = _filterCatalog
+    val filterSpecies = com.example.pokemonalertsv2.data.PokemonSpeciesRepository.getInstance(application)
+        .searchSpecies("")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _requestedFilterEditor = MutableStateFlow<FilterSurface?>(null)
+    val requestedFilterEditor: StateFlow<FilterSurface?> = _requestedFilterEditor
+
+    fun requestFilterEditor(surface: FilterSurface) { _requestedFilterEditor.value = surface }
+    fun consumeRequestedFilterEditor() { _requestedFilterEditor.value = null }
+
+    val filterStateDocument: StateFlow<FilterStateDocument> = preferences.filterStateDocument
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterStateDocument())
+
+    val feedFilterDefinition: StateFlow<FilterDefinition> = filterStateDocument
+        .map { it.feed.resolve(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterDefinition())
+
+    val mapFilterDefinition: StateFlow<FilterDefinition> = filterStateDocument
+        .map { it.map.resolve(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterDefinition())
+
+    val notificationFilterDefinition: StateFlow<FilterDefinition> = filterStateDocument
+        .map { it.notifications.resolve(it) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FilterDefinition())
+
+    val filterPreviewCounts: StateFlow<Map<FilterSurface, Int>> = combine(
+        filterableAlerts,
+        filterStateDocument,
+        filterPreviewContexts
+    ) { alerts, document, contexts ->
+        FilterSurface.entries.associateWith { surface ->
+            val definition = document.assignment(surface).resolve(document)
+            alerts.count { AlertFilterMatcher.matches(it, definition, contexts[it.uniqueId] ?: FilterMatchContext()) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val raidCounterSettings: StateFlow<RaidCounterSettings> = raidCounterPreferences.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), RaidCounterSettings())
@@ -70,6 +132,33 @@ class SettingsViewModel(
     private var preparingUri: String? = null
 
     init {
+        viewModelScope.launch {
+            filterableAlerts.collect { alerts ->
+                val location = CachedLocationProvider.get(application)
+                val routes = location?.let { WalkingRouteRepository.getInstance().getWalkingRoutes(it, alerts) }.orEmpty()
+                _filterPreviewContexts.value = alerts.associate { alert ->
+                    val direct = location?.let { origin ->
+                        val lat = alert.latitude ?: return@let null
+                        val lon = alert.longitude ?: return@let null
+                        WalkingRouteUtils.straightLineDistanceMeters(origin.latitude, origin.longitude, lat, lon)
+                    }
+                    val info = WalkingRouteUtils.buildRouteDisplayInfo(direct, routes[alert.uniqueId])
+                    alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds)
+                }
+                _filterCatalog.value = filterCatalogRepository.offlineCatalog(alerts)
+            }
+        }
+        viewModelScope.launch {
+            runCatching { com.example.pokemonalertsv2.data.PokemonSpeciesRepository.getInstance(application).syncIfNeeded() }
+            val alerts = runCatching { alertRepository.getLocalAlerts() }.getOrElse { emptyList() }
+            _filterCatalog.value = runCatching { filterCatalogRepository.refresh() }
+                .getOrElse { filterCatalogRepository.offlineCatalog(alerts) }
+                .let { remote ->
+                    // A successful response is still augmented with local species and currently
+                    // observed values, so the selectors remain useful on a quiet scanner.
+                    runCatching { filterCatalogRepository.offlineCatalog(alerts) }.getOrDefault(remote)
+                }
+        }
         savedStateHandle.get<String>(PENDING_IMPORT_URI_KEY)
             ?.let(Uri::parse)
             ?.let(::preparePokeGenieImport)
@@ -304,48 +393,76 @@ class SettingsViewModel(
     fun updateRaidsNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateRaidsNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.RAID, enabled)
         }
     }
     
     fun updateSpawnsNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateSpawnsNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.SPAWN, enabled)
+            updateUnifiedNotificationType(FilterAlertType.RARE, enabled)
         }
     }
     
     fun updateQuestsNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateQuestsNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.QUEST, enabled)
         }
     }
     
     fun updateHundosNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateHundosNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.HUNDO, enabled)
         }
     }
     
     fun updatePvpNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updatePvpNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.PVP, enabled)
         }
     }
     
     fun updateNundosNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateNundosNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.NUNDO, enabled)
         }
     }
     
     fun updateKecleonNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateKecleonNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.KECLEON, enabled)
         }
     }
     
     fun updateRocketNotifications(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateRocketNotifications(enabled)
+            updateUnifiedNotificationType(FilterAlertType.ROCKET, enabled)
+        }
+    }
+
+    private suspend fun updateUnifiedNotificationType(type: FilterAlertType, enabled: Boolean) {
+        preferences.updateFilterStateDocument { document ->
+            val current = document.notifications.resolve(document)
+            val enabledTypes = FilterAlertType.entries
+                .filter { current.alertTypes.contains(it.name) }
+                .mapTo(linkedSetOf()) { it.name }
+            if (enabled) enabledTypes += type.name else enabledTypes -= type.name
+            val selection = when (enabledTypes.size) {
+                0 -> FilterSelection.None
+                FilterAlertType.entries.size -> FilterSelection.All
+                else -> FilterSelection.only(enabledTypes)
+            }
+            document.withAssignment(
+                FilterSurface.NOTIFICATIONS,
+                FilterAssignment.local(current.copy(alertTypes = selection))
+            )
         }
     }
     
@@ -371,6 +488,15 @@ class SettingsViewModel(
     fun updateSelectedArea(area: String) {
         viewModelScope.launch {
             preferences.updateSelectedArea(area)
+            val selection = if (area.equals("All", ignoreCase = true)) FilterSelection.All
+            else FilterSelection.only(listOf(area))
+            preferences.updateFilterStateDocument { document ->
+                val feed = document.feed.resolve(document).copy(areas = selection)
+                val notifications = document.notifications.resolve(document).copy(areas = selection)
+                document
+                    .withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+                    .withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(notifications))
+            }
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
@@ -385,6 +511,13 @@ class SettingsViewModel(
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
             preferences.updateMaxDistance(distance)
+            preferences.updateFilterStateDocument { document ->
+                val feed = document.feed.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
+                val notifications = document.notifications.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
+                document
+                    .withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+                    .withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(notifications))
+            }
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
@@ -396,6 +529,117 @@ class SettingsViewModel(
     }
 
     //region Filters hub — per-surface category selections with a shared live tally.
+
+    fun applySurfaceFilter(surface: FilterSurface, definition: FilterDefinition) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document ->
+                document.withAssignment(surface, FilterAssignment.local(definition))
+            }
+            applyLegacyProfileSort(surface, definition)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun applyProfile(surface: FilterSurface, profile: FilterProfile, linked: Boolean) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document ->
+                val assignment = if (linked) FilterAssignment.linked(profile)
+                else FilterAssignment.local(profile.definition)
+                document.withAssignment(surface, assignment)
+            }
+            applyLegacyProfileSort(surface, profile.definition)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun applyLinkedFilter(surface: FilterSurface, profile: FilterProfile, definition: FilterDefinition) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document ->
+                val updated = profile.copy(definition = definition, updatedAtMillis = System.currentTimeMillis())
+                document.copy(profiles = document.profiles.filterNot { it.id == updated.id } + updated)
+                    .withAssignment(surface, FilterAssignment.linked(updated))
+            }
+            applyLegacyProfileSort(surface, definition)
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    private suspend fun applyLegacyProfileSort(surface: FilterSurface, definition: FilterDefinition) {
+        if (surface != FilterSurface.FEED) return
+        val sort = definition.feedSort?.let { name -> SortPreference.entries.firstOrNull { it.name == name } } ?: return
+        preferences.updateSortPreference(sort)
+    }
+
+    fun saveFilterProfile(name: String, definition: FilterDefinition, existingId: String? = null) {
+        val cleanName = name.trim().take(MAX_FILTER_PROFILE_NAME)
+        if (cleanName.isBlank()) return
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document ->
+                val id = existingId ?: java.util.UUID.randomUUID().toString()
+                val uniqueName = uniqueProfileName(cleanName, document.profiles, id)
+                val profile = FilterProfile(
+                    id = id,
+                    name = uniqueName,
+                    definition = definition,
+                    updatedAtMillis = System.currentTimeMillis()
+                )
+                document.copy(profiles = document.profiles.filterNot { it.id == id } + profile)
+            }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun deleteFilterProfile(profileId: String) {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            val document = filterStateDocument.value
+            val manager = android.appwidget.AppWidgetManager.getInstance(context)
+            val widgetIds = manager.getAppWidgetIds(android.content.ComponentName(context, AlertsWidgetProvider::class.java)).toList() +
+                manager.getAppWidgetIds(android.content.ComponentName(context, com.example.pokemonalertsv2.widget.NearbyRadarWidgetProvider::class.java)).toList()
+            widgetIds.forEach { id ->
+                val configuration = com.example.pokemonalertsv2.widget.WidgetConfigurationStore.get(context, id)
+                configuration.filterAssignment?.takeIf { it.profileId == profileId }?.let { assignment ->
+                    com.example.pokemonalertsv2.widget.WidgetConfigurationStore.save(context, id, configuration.copy(filterAssignment = FilterAssignment.local(assignment.resolve(document))))
+                }
+            }
+            preferences.updateFilterStateDocument { it.deleteProfilePreservingConsumers(profileId) }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun linkedWidgetConsumers(profileId: String): List<String> {
+        val context = getApplication<Application>()
+        val manager = android.appwidget.AppWidgetManager.getInstance(context)
+        return listOf(AlertsWidgetProvider::class.java, com.example.pokemonalertsv2.widget.NearbyRadarWidgetProvider::class.java)
+            .flatMap { provider -> manager.getAppWidgetIds(android.content.ComponentName(context, provider)).toList() }
+            .filter { id -> com.example.pokemonalertsv2.widget.WidgetConfigurationStore.get(context, id).filterAssignment?.profileId == profileId }
+            .map { "Widget #$it" }
+    }
+
+    private fun uniqueProfileName(
+        requested: String,
+        profiles: List<FilterProfile>,
+        replacingId: String
+    ): String {
+        val names = (profiles.filterNot { it.id == replacingId } + BuiltInFilterProfiles.all).map { it.name.lowercase() }.toSet()
+        if (requested.lowercase() !in names) return requested
+        var suffix = 2
+        while (true) {
+            val ending = " ($suffix)"
+            val candidate = requested.take((MAX_FILTER_PROFILE_NAME - ending.length).coerceAtLeast(1)) + ending
+            if (candidate.lowercase() !in names) return candidate
+            suffix++
+        }
+    }
+
+    private fun selectionFromMuted(categories: Set<AlertCategory>): FilterSelection {
+        if (categories.isEmpty()) return FilterSelection.All
+        val mutedNames = categories.map { it.name }.toSet()
+        val enabled = FilterAlertType.entries.filterNot { type -> type.name in mutedNames }.map { it.name }
+        return if (enabled.isEmpty()) FilterSelection.None else FilterSelection.only(enabled)
+    }
+
+    fun allAvailableProfiles(): List<FilterProfile> = BuiltInFilterProfiles.all + filterStateDocument.value.profiles
 
     val feedFilterCategories: StateFlow<Set<AlertCategory>> = preferences.feedCategories
         .map { stored -> stored.toCategorySelection() }
@@ -435,12 +679,26 @@ class SettingsViewModel(
     fun updateFeedFilterCategories(categories: Set<AlertCategory>) {
         viewModelScope.launch {
             preferences.updateFeedCategories(categories.toStoredNames())
+            preferences.updateFilterStateDocument { document ->
+                val current = document.feed.resolve(document)
+                document.withAssignment(
+                    FilterSurface.FEED,
+                    FilterAssignment.local(current.copy(alertTypes = selectionFromMuted(categories)))
+                )
+            }
         }
     }
 
     fun updateMapFilterCategories(categories: Set<AlertCategory>) {
         viewModelScope.launch {
             preferences.updateMapCategories(categories.toStoredNames())
+            preferences.updateFilterStateDocument { document ->
+                val current = document.map.resolve(document)
+                document.withAssignment(
+                    FilterSurface.MAP,
+                    FilterAssignment.local(current.copy(alertTypes = selectionFromMuted(categories)))
+                )
+            }
         }
     }
 
@@ -453,6 +711,13 @@ class SettingsViewModel(
     fun updateMaxWalkingMinutes(minutes: Int) {
         viewModelScope.launch {
             preferences.updateMaxWalkingMinutes(minutes)
+            preferences.updateFilterStateDocument { document ->
+                val feed = document.feed.resolve(document).copy(maxWalkingMinutes = minutes.coerceIn(0, 240))
+                val notifications = document.notifications.resolve(document).copy(maxWalkingMinutes = minutes.coerceIn(0, 240))
+                document
+                    .withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+                    .withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(notifications))
+            }
         }
     }
 

@@ -170,6 +170,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.InputChip
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
+import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
 
 @Composable
@@ -177,7 +180,8 @@ fun PokemonAlertsRoute(
     viewModel: PokemonAlertsViewModel,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     showTopBar: Boolean = true,
-    onStartManualRaid: () -> Unit = {}
+    onStartManualRaid: () -> Unit = {},
+    onOpenFilterStudio: () -> Unit = {}
 ) {
     val alertsUiState by viewModel.uiState.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -185,6 +189,7 @@ fun PokemonAlertsRoute(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
+    val feedFilterDefinition by viewModel.feedFilterDefinition.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
@@ -243,12 +248,14 @@ fun PokemonAlertsRoute(
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
                     sortPreference = savedSortPreference,
                     selectedCategories = selectedFeedCategories,
+                    filterDefinition = feedFilterDefinition,
                     categoryCounts = categoryCounts,
                     onSelectedCategoriesChange = viewModel::updateSelectedFeedCategories,
                     onSelectedAreaChange = viewModel::updateSelectedArea,
                     onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
                     onStartManualRaid = onStartManualRaid,
+                    onOpenFilterStudio = onOpenFilterStudio,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -439,12 +446,14 @@ fun PokemonAlertsPage(
     defaultSnoozeMinutes: Int,
     sortPreference: SortPreference,
     selectedCategories: Set<AlertCategory>,
+    filterDefinition: FilterDefinition = FilterDefinition(),
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit,
     categoryCounts: Map<AlertCategory, Int>,
     onSelectedAreaChange: (String) -> Unit,
     onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
     onStartManualRaid: () -> Unit = {},
+    onOpenFilterStudio: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -562,9 +571,7 @@ fun PokemonAlertsPage(
         dismissedAlertIds,
         showDismissed,
         filterNow,
-        selectedArea,
-        maxDistance,
-        maxWalkingMinutes
+        filterDefinition
     ) {
         alertsWithDistance.filter { model ->
             val end = model.endMillis ?: Long.MAX_VALUE
@@ -573,29 +580,21 @@ fun PokemonAlertsPage(
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
             val notInvalidated = !model.alert.isInvalidated
             
-            // Area Filter
-            val areaMatch = selectedArea == "All" || model.alert.area == selectedArea
-            
-            // Distance Filter (allow if maxDistance is 0 or if location is unknown)
-            val distanceMatch = maxDistance == 0 || model.distanceInfo.distanceMeters == null || model.distanceInfo.distanceMeters <= maxDistance * 1000
-            
-            // Reachability on foot. Falls back to keeping the alert when no route is
-            // available, so a routing outage cannot silently empty the feed.
-            val reachable = TravelTime.isReachableWithin(
-                walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds,
-                maxMinutes = maxWalkingMinutes
+            val matchesFilter = AlertFilterMatcher.matches(
+                alert = model.alert,
+                definition = filterDefinition,
+                context = FilterMatchContext(
+                    effectiveDistanceMeters = model.distanceInfo.distanceMeters,
+                    walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds
+                )
             )
 
-            notExpired && notDismissed && notInvalidated && areaMatch && distanceMatch && reachable
+            notExpired && notDismissed && notInvalidated && matchesFilter
         }
     }
 
-    val filteredAlerts = remember(activeAlerts, selectedCategories, sortPreference, searchQuery) {
-        var filtered = if (selectedCategories.isEmpty()) {
-            activeAlerts
-        } else {
-            activeAlerts.filter { model -> matchesCategorySelection(model.alert, selectedCategories) }
-        }
+    val filteredAlerts = remember(activeAlerts, sortPreference, searchQuery) {
+        var filtered = activeAlerts
         
         // Apply text search
         if (searchQuery.isNotBlank()) {
@@ -736,7 +735,9 @@ fun PokemonAlertsPage(
                 },
                 presetControls = presetControls,
                 maxWalkingMinutes = maxWalkingMinutes,
-                onMaxWalkingMinutesChange = onMaxWalkingMinutesChange
+                onMaxWalkingMinutesChange = onMaxWalkingMinutesChange,
+                onOpenFilterStudio = onOpenFilterStudio,
+                unifiedDefinition = filterDefinition
             )
         }
         }
@@ -870,13 +871,16 @@ internal fun AlertsList(
     onClearAllFilters: () -> Unit = {},
     presetControls: FilterPresetControls = FilterPresetControls(),
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
-    onMaxWalkingMinutesChange: (Int) -> Unit = {}
+    onMaxWalkingMinutesChange: (Int) -> Unit = {},
+    onOpenFilterStudio: () -> Unit = {},
+    unifiedDefinition: FilterDefinition? = null
 ) {
     val arrivalTracking = rememberArrivalTrackingUiController()
     val countdownClock = rememberCountdownClock()
-    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
-    val activeFilterCount = remember(
+    val activeFilterCount = if (unifiedDefinition != null) {
+        listOf(unifiedDefinition != FilterDefinition(), showDismissed, searchQuery.isNotBlank()).count { it }
+    } else remember(
         selectedCategories,
         showDismissed,
         searchQuery,
@@ -904,20 +908,20 @@ internal fun AlertsList(
             onSearchQueryChanged = onSearchQueryChanged,
             sortPreference = sortPreference,
             onSortChanged = onSortChanged,
-            onOpenFilters = { showFilterSheet = true },
+            onOpenFilters = onOpenFilterStudio,
             locationPrecisionInsufficient = locationPrecisionInsufficient,
             onRequestLocationPermission = onRequestLocationPermission,
-            selectedCategories = selectedCategories,
+            selectedCategories = if (unifiedDefinition == null) selectedCategories else emptySet(),
             onCategoryEnabled = { category ->
                 onCategoryToggled(category, true)
             },
             showDismissed = showDismissed,
             onShowDismissedChanged = onShowDismissedChanged,
-            selectedArea = selectedArea,
+            selectedArea = if (unifiedDefinition == null) selectedArea else "All",
             onClearAreaFilter = onClearAreaFilter,
-            maxDistance = maxDistance,
+            maxDistance = if (unifiedDefinition == null) maxDistance else 0,
             onClearDistanceFilter = onClearDistanceFilter,
-            maxWalkingMinutes = maxWalkingMinutes,
+            maxWalkingMinutes = if (unifiedDefinition == null) maxWalkingMinutes else 0,
             onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) }
         )
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
@@ -954,7 +958,7 @@ internal fun AlertsList(
                             textAlign = TextAlign.Center
                         )
                         if (activeFilterCount > 0) {
-                            OutlinedButton(onClick = onClearAllFilters) { Text("Clear all filters") }
+                            OutlinedButton(onClick = if (unifiedDefinition == null) onClearAllFilters else onOpenFilterStudio) { Text(if (unifiedDefinition == null) "Clear all filters" else "Edit filters") }
                         }
                     }
                 }
@@ -1114,77 +1118,4 @@ internal fun AlertsList(
     }
     }
 
-    if (showFilterSheet) {
-        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text("Filter alerts", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(
-                    text = "Everything is shown unless you hide it here. These filters apply to the feed only.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                FilterPresetsSection(
-                    controls = presetControls,
-                    currentCategories = selectedCategories,
-                    currentSort = sortPreference,
-                    currentArea = selectedArea,
-                    currentMaxDistance = maxDistance,
-                    onApplied = { showFilterSheet = false }
-                )
-                FilterRow(
-                    selectedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    onCategoryToggled = onCategoryToggled,
-                    locationAvailable = locationAvailable,
-                    locationPermissionGranted = locationPermissionGranted,
-                    locationLookupComplete = locationLookupComplete,
-                    onRequestLocationPermission = onRequestLocationPermission
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Reachable on foot",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Uses real walking routes, not straight-line distance. " +
-                            "Alerts with no route available are always shown.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(TravelTime.PRESET_MINUTES, key = { it }) { minutes ->
-                            FilterChip(
-                                selected = maxWalkingMinutes == minutes,
-                                onClick = { onMaxWalkingMinutesChange(minutes) },
-                                label = { Text(TravelTime.label(minutes)) }
-                            )
-                        }
-                    }
-                }
-                FilterChip(
-                    selected = showDismissed,
-                    onClick = { onShowDismissedChanged(!showDismissed) },
-                    label = { Text("Show dismissed alerts") }
-                )
-                if (activeFilterCount > 0) {
-                    TextButton(onClick = {
-                        onClearAllFilters()
-                        showFilterSheet = false
-                    }) { Text("Clear all") }
-                }
-                Button(
-                    onClick = { showFilterSheet = false },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Done")
-                }
-            }
-        }
-    }
 }

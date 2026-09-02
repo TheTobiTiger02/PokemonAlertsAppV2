@@ -4,7 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -46,7 +46,8 @@ class WidgetFilterPrefsTest {
 
             // A second read must be stable — migration must not run twice.
             assertEquals(mutedCategories, WidgetFilterPrefs.getFilters(context, widgetId))
-            assertTrue("QUEST" in WidgetFilterPrefs.getFilters(context, widgetId))
+            // Quest was explicitly excluded from the muted set above, so it stays enabled.
+            assertFalse("QUEST" in WidgetFilterPrefs.getFilters(context, widgetId))
         } finally {
             WidgetFilterPrefs.removeFilters(context, widgetId)
         }

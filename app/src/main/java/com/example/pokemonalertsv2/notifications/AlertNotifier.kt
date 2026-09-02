@@ -26,6 +26,9 @@ import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.RaidTierParser
+import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
@@ -162,9 +165,7 @@ object AlertNotifier {
 
         val candidates = buildList {
             alerts.forEach { alert ->
-                // Area Filter
-                if (settings.selectedArea != "All" && alert.area != settings.selectedArea) return@forEach
-
+                if (alert.isInvalidated || (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) <= System.currentTimeMillis()) return@forEach
                 val straightLineDistanceMeters = userLocation?.let { loc ->
                     val latitude = alert.latitude ?: return@let null
                     val longitude = alert.longitude ?: return@let null
@@ -180,34 +181,21 @@ object AlertNotifier {
                     routeInfo = walkingRoutes[alert.uniqueId]
                 )
 
-                // A routed distance is preferred. Direct distance is a safe exclusion
-                // fallback because a walkable route cannot be shorter than the geodesic.
-                if (
-                    settings.maxDistance > 0 &&
-                    routeDisplayInfo.effectiveDistanceMeters?.let {
-                        it > settings.maxDistance * 1000
-                    } == true
-                ) {
-                    return@forEach
-                }
-
-                // Reachability, where a routed duration is available. A missing duration keeps
-                // the alert: a routing outage must not look like a quiet evening.
-                if (
-                    !TravelTime.isReachableWithin(
-                        walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
-                        maxMinutes = settings.maxWalkingMinutes
-                    )
-                ) {
-                    return@forEach
-                }
-
                 val goDexStatus = if (alert.hasType("hundo")) {
                     goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
                 } else {
                     GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
                 }
-                if (!settings.shouldNotify(alert, goDexStatus.status)) return@forEach
+                if (
+                    !settings.shouldNotify(
+                        alert,
+                        goDexStatus.status,
+                        FilterMatchContext(
+                            effectiveDistanceMeters = routeDisplayInfo.effectiveDistanceMeters,
+                            walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds
+                        )
+                    )
+                ) return@forEach
                 add(Candidate(alert, routeDisplayInfo, goDexStatus))
             }
         }
@@ -481,7 +469,8 @@ object AlertNotifier {
         val allowedPvpSpecies: Set<String>,
         val allowedSpawnSpecies: Set<String>,
         val goDexFilterEnabled: Boolean = false,
-        val nowMillis: Long = System.currentTimeMillis()
+        val nowMillis: Long = System.currentTimeMillis(),
+        val filterDefinition: FilterDefinition? = null
     ) {
         /**
          * Silenced by either mechanism: the one-off "quiet for N hours" timestamp, or the
@@ -512,9 +501,19 @@ object AlertNotifier {
 
         fun shouldNotify(
             alert: PokemonAlert,
-            goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED
+            goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED,
+            matchContext: FilterMatchContext = FilterMatchContext()
         ): Boolean {
             if (!notificationsEnabled || isSilenced) return false
+            filterDefinition?.let { definition ->
+                if (!AlertFilterMatcher.matches(alert, definition, matchContext)) return false
+                if (
+                    goDexFilterEnabled &&
+                    alert.hasType("hundo") &&
+                    goDexStatus == GoDexMatchStatus.COLLECTED
+                ) return false
+                return true
+            }
             return when {
                 alert.hasTypeContaining("raid") -> {
                     raidsEnabled && raidTierAllowed(alert)
@@ -573,6 +572,7 @@ object AlertNotifier {
 
         companion object {
             suspend fun load(preferences: AlertPreferencesStore): NotificationSettings {
+                val filterDocument = preferences.filterStateDocument.first()
                 return NotificationSettings(
                     notificationsEnabled = preferences.notificationsEnabled.first(),
                     raidsEnabled = preferences.raidsNotifications.first(),
@@ -600,7 +600,8 @@ object AlertNotifier {
                     allowedHundoSpecies = preferences.allowedHundoSpecies.first(),
                     allowedNundoSpecies = preferences.allowedNundoSpecies.first(),
                     allowedPvpSpecies = preferences.allowedPvpSpecies.first(),
-                    allowedSpawnSpecies = preferences.allowedSpawnSpecies.first()
+                    allowedSpawnSpecies = preferences.allowedSpawnSpecies.first(),
+                    filterDefinition = filterDocument.notifications.resolve(filterDocument)
                 )
             }
         }

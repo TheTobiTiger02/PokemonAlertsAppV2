@@ -470,9 +470,12 @@ internal fun SettingsScreen(
                 if (animatedDestination == SettingsDestination.ALERT_FILTERS) {
                 FiltersHubContent(
                     viewModel = viewModel,
-                    onOpenFullNotificationSettings = { navigateTo(SettingsDestination.NOTIFICATIONS) },
-                    arrivalTrackingSection = {
-                        SettingsSection(title = "Arrival tracking") {
+                    onOpenFullNotificationSettings = { navigateTo(SettingsDestination.NOTIFICATIONS) }
+                )
+                }
+
+                if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
+                    SettingsSection(title = "Arrival tracking") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -522,8 +525,6 @@ internal fun SettingsScreen(
                         Text("200 m", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                    }
-                )
                 }
 
                 if (animatedDestination == SettingsDestination.GODEX) {
@@ -803,34 +804,10 @@ internal fun SettingsScreen(
                     )
                 }
                 SettingsSection(title = "Notification preferences") {
-                    val notificationState = NotificationCategoryState(
-                        raidsNotifications, spawnsNotifications, questsNotifications, hundosNotifications,
-                        pvpNotifications, nundosNotifications, kecleonNotifications, rocketNotifications
-                    )
-                    val detectedPreset = NotificationPreset.detect(notificationState)
-                    Text("Preset: ${detectedPreset.label}", style = MaterialTheme.typography.titleSmall)
-                    androidx.compose.foundation.layout.FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf(
-                            NotificationPreset.EVERYTHING,
-                            NotificationPreset.HIGH_VALUE,
-                            NotificationPreset.QUIET_ESSENTIALS
-                        ).forEach { preset ->
-                            FilterChip(
-                                selected = detectedPreset == preset,
-                                onClick = { viewModel.applyNotificationPreset(preset) },
-                                label = { Text(preset.label) }
-                            )
-                        }
-                    }
-                    Text(
-                        "Presets change categories only; species and raid-tier filters are preserved.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    HorizontalDivider()
+                    OutlinedButton(onClick = {
+                        viewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.NOTIFICATIONS)
+                        navigateTo(SettingsDestination.ALERT_FILTERS)
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Choose eligible alerts in Filter Studio") }
                     SwitchSetting(
                         title = "Enable Notifications",
                         subtitle = "Receive alerts for new Pokemon nearby",
@@ -844,74 +821,6 @@ internal fun SettingsScreen(
                         exit = appCollapseOut()
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        SwitchSetting(
-                            title = "Raids",
-                            subtitle = "Notifications for raid battles",
-                            checked = raidsNotifications,
-                            onCheckedChange = { viewModel.updateRaidsNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Spawns",
-                            subtitle = "Notifications for wild spawns",
-                            checked = spawnsNotifications,
-                            onCheckedChange = { viewModel.updateSpawnsNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Quests",
-                            subtitle = "Notifications for field research",
-                            checked = questsNotifications,
-                            onCheckedChange = { viewModel.updateQuestsNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Hundos",
-                            subtitle = "Notifications for 100% IV Pok\u00E9mon",
-                            checked = hundosNotifications,
-                            onCheckedChange = { viewModel.updateHundosNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "PvP",
-                            subtitle = "Notifications for PvP ranked Pok\u00E9mon",
-                            checked = pvpNotifications,
-                            onCheckedChange = { viewModel.updatePvpNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Nundos",
-                            subtitle = "Notifications for 0% IV Pok\u00E9mon",
-                            checked = nundosNotifications,
-                            onCheckedChange = { viewModel.updateNundosNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Kecleon",
-                            subtitle = "Notifications for Kecleon sightings",
-                            checked = kecleonNotifications,
-                            onCheckedChange = { viewModel.updateKecleonNotifications(it) }
-                        )
-                        
-                        SwitchSetting(
-                            title = "Rocket",
-                            subtitle = "Notifications for Team GO Rocket",
-                            checked = rocketNotifications,
-                            onCheckedChange = { viewModel.updateRocketNotifications(it) }
-                        )
-                        AdvancedNotificationFilters(
-                            raidsEnabled = raidsNotifications,
-                            spawnsEnabled = spawnsNotifications,
-                            hundosEnabled = hundosNotifications,
-                            pvpEnabled = pvpNotifications,
-                            nundosEnabled = nundosNotifications,
-                            rocketEnabled = rocketNotifications,
-                            excludedRaidTiers = excludedRaidTiers,
-                            excludedRocketTypes = excludedRocketTypes,
-                            onToggleRaidTier = viewModel::toggleExcludedRaidTier,
-                            onToggleRocketType = viewModel::toggleExcludedRocketType
-                        )
-                        
                         SwitchSetting(
                             title = "Vibration",
                             subtitle = "Vibrate when receiving notifications",

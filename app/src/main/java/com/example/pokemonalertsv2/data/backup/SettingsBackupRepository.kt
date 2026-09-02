@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.datastore.preferences.core.edit
 import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.AlertPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -49,6 +50,9 @@ class SettingsBackupRepository(private val context: Context) {
             runCatching {
                 var applied = 0
                 dataStore.edit { prefs -> applied = SettingsBackup.apply(backup, prefs) }
+                // Persist a unified filter document when an older backup contains only
+                // the legacy per-setting keys. A newer document wins automatically.
+                AlertPreferences(dataStore).updateFilterStateDocument { it }
                 applied
             }
         }

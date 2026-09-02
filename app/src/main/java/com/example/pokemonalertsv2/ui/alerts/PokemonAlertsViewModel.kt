@@ -7,6 +7,12 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.FilterPreset
+import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.data.FilterAssignment
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterSelection
+import com.example.pokemonalertsv2.data.FilterStateDocument
+import com.example.pokemonalertsv2.data.FilterSurface
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -139,6 +145,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateMaxWalkingMinutes(minutes: Int) {
         viewModelScope.launch {
             repository.alertPreferences.updateMaxWalkingMinutes(minutes)
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                val feed = document.feed.resolve(document).copy(maxWalkingMinutes = minutes.coerceIn(0, 240))
+                document.withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+            }
         }
     }
 
@@ -195,19 +205,50 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .map { stored -> stored.toCategorySelection() }
         .asPreferenceState(emptySet())
 
+    val filterStateDocument = repository.alertPreferences.filterStateDocument
+        .asPreferenceState(FilterStateDocument())
+
+    val feedFilterDefinition = filterStateDocument
+        .map { document -> document.feed.resolve(document) }
+        .asPreferenceState(FilterDefinition())
+
+    val mapFilterDefinition = filterStateDocument
+        .map { document -> document.map.resolve(document) }
+        .asPreferenceState(FilterDefinition())
+
     val mapShowDismissed = repository.alertPreferences.mapShowDismissed
         .asPreferenceState(false)
 
     fun updateSelectedFeedCategories(categories: Set<AlertCategory>) {
         viewModelScope.launch {
             repository.alertPreferences.updateFeedCategories(categories.toStoredNames())
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                val current = document.feed.resolve(document)
+                document.withAssignment(
+                    FilterSurface.FEED,
+                    FilterAssignment.local(current.copy(alertTypes = selectionFromMuted(categories)))
+                )
+            }
         }
     }
 
     fun updateSelectedMapCategories(categories: Set<AlertCategory>) {
         viewModelScope.launch {
             repository.alertPreferences.updateMapCategories(categories.toStoredNames())
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                val current = document.map.resolve(document)
+                document.withAssignment(
+                    FilterSurface.MAP,
+                    FilterAssignment.local(current.copy(alertTypes = selectionFromMuted(categories)))
+                )
+            }
         }
+    }
+
+    private fun selectionFromMuted(categories: Set<AlertCategory>): FilterSelection {
+        if (categories.isEmpty()) return FilterSelection.All
+        val muted = categories.map { it.name }.toSet()
+        return FilterSelection.only(FilterAlertType.entries.filterNot { it.name in muted }.map { it.name })
     }
 
     fun updateMapShowDismissed(enabled: Boolean) {
@@ -219,6 +260,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateSelectedArea(area: String) {
         viewModelScope.launch {
             repository.alertPreferences.updateSelectedArea(area)
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                val selection = if (area.equals("All", ignoreCase = true)) FilterSelection.All
+                else FilterSelection.only(listOf(area))
+                val feed = document.feed.resolve(document).copy(areas = selection)
+                document.withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+            }
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }
@@ -226,6 +273,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
             repository.alertPreferences.updateMaxDistance(distance.coerceIn(0, 50))
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                val feed = document.feed.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
+                document.withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
+            }
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
     }

@@ -99,17 +99,20 @@ class ArrivalTrackingServiceInstrumentedTest {
         }
         assertNull(repository.currentDestination())
 
-        val notifications = context.getSystemService(NotificationManager::class.java)
-            ?.activeNotifications
-            .orEmpty()
-        assertTrue(
-            notifications.any { status ->
+        val manager = context.getSystemService(NotificationManager::class.java)
+        fun arrivalWasPosted() = manager?.activeNotifications.orEmpty().any { status ->
                 status.id != ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID &&
                     status.notification.extras
                         .getCharSequence(android.app.Notification.EXTRA_TITLE)
                         ?.contains("in range") == true
-            }
-        )
+        }
+        // Clearing the trip precedes posting, and NotificationManager processes
+        // notify() asynchronously. Wait for the actual observable contract.
+        val notificationDeadline = SystemClock.elapsedRealtime() + 5_000L
+        while (!arrivalWasPosted() && SystemClock.elapsedRealtime() < notificationDeadline) {
+            SystemClock.sleep(50L)
+        }
+        assertTrue("Arrival notification was not posted within five seconds", arrivalWasPosted())
     }
 
     @Test

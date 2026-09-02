@@ -230,6 +230,11 @@ internal fun AlertListControls(
                             contentDescription = if (searchExpanded) "Close search" else "Search alerts"
                         )
                     }
+                    IconButton(onClick = { onShowDismissedChanged(!showDismissed) }) {
+                        Icon(Icons.Filled.Refresh,
+                            tint = if (showDismissed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            contentDescription = if (showDismissed) "Hide dismissed alerts" else "Show dismissed alerts")
+                    }
                     SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
                     Box {
                         IconButton(onClick = onOpenFilters) {

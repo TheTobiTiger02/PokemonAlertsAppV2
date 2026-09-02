@@ -733,6 +733,7 @@ private fun MainScaffold(
     onEnterPictureInPicture: (() -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var localSettingsDestination by remember { mutableStateOf<SettingsDestination?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val saveableStateHolder = rememberSaveableStateHolder()
@@ -869,6 +870,11 @@ private fun MainScaffold(
                             PokemonAlertsRoute(
                                 viewModel = alertsViewModel,
                                 snackbarHostState = snackbarHostState,
+                                onOpenFilterStudio = {
+                                    settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.FEED)
+                                    localSettingsDestination = SettingsDestination.ALERT_FILTERS
+                                    selectedTab = 3
+                                },
                                 onStartManualRaid = {
                                     context.startActivity(
                                         Intent(
@@ -897,6 +903,11 @@ private fun MainScaffold(
                             AlertsMapRoute(
                                 viewModel = alertsViewModel,
                                 onBack = { selectedTab = ALERTS_TAB_INDEX },
+                                onOpenFilterStudio = {
+                                    settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.MAP)
+                                    localSettingsDestination = SettingsDestination.ALERT_FILTERS
+                                    selectedTab = 3
+                                },
                                 showBackButton = false,
                                 onEnterPictureInPicture = onEnterPictureInPicture
                             )
@@ -905,8 +916,11 @@ private fun MainScaffold(
                             SettingsScreen(
                                 viewModel = settingsViewModel,
                                 onManageLocationPermissions = onManageLocationPermissions,
-                                requestedDestination = requestedSettingsDestination,
-                                onRequestedDestinationConsumed = onRequestedSettingsDestinationConsumed
+                                requestedDestination = localSettingsDestination ?: requestedSettingsDestination,
+                                onRequestedDestinationConsumed = {
+                                    if (localSettingsDestination != null) localSettingsDestination = null
+                                    else onRequestedSettingsDestinationConsumed()
+                                }
                             )
                         }
                     }

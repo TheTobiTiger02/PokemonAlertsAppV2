@@ -98,6 +98,43 @@ data class WalkingRoutesResponse(
     val routes: List<WalkingRouteResult> = emptyList()
 )
 
+@Serializable
+data class FilterCatalogObservationWindow(
+    val days: Int = 0,
+    val start: String = "",
+    val end: String = "",
+    val historyRowLimit: Int = 0
+)
+
+@Serializable
+data class FilterCatalogQuest(
+    val key: String,
+    val taskKey: String,
+    val rewardKey: String,
+    val task: String,
+    val reward: String,
+    val active: Boolean = false,
+    val lastSeenAt: String? = null
+)
+
+@Serializable
+data class FilterCatalog(
+    val schemaVersion: Int = 1,
+    val generatedAt: String = "",
+    val observationWindow: FilterCatalogObservationWindow = FilterCatalogObservationWindow(),
+    val areas: List<String> = emptyList(),
+    val spawnSpecies: List<String> = emptyList(),
+    val raidSpecies: List<String> = emptyList(),
+    val raidTiers: List<String> = emptyList(),
+    val rocketTypes: List<String> = emptyList(),
+    val quests: List<FilterCatalogQuest> = emptyList()
+)
+
+interface FilterCatalogService {
+    @GET("api/filter-catalog")
+    suspend fun getFilterCatalog(): FilterCatalog
+}
+
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
@@ -160,6 +197,15 @@ object PokemonAlertsApi {
     }
 
     val service: PokemonAlertsService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .client(client)
+            .build()
+            .create()
+    }
+
+    val catalogService: FilterCatalogService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))

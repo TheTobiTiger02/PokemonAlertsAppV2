@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.viewModels
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -66,6 +67,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
     private var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private val repository by lazy { PokemonAlertsRepository.create(applicationContext) }
+    private val filterViewModel: com.example.pokemonalertsv2.ui.settings.SettingsViewModel by viewModels()
     private val showExactAlarmDialog = MutableStateFlow(false)
     private val exactAlarmSettingsLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -116,17 +118,26 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
             }.collectAsStateWithLifecycle(initialValue = emptyMap())
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
-                WidgetConfigScreen(
+                var showFilterEditor by remember { mutableStateOf(false) }
+                WidgetStudioConfiguration(
                     initialConfiguration = existing,
-                    categoryCounts = categoryCounts,
+                    onOpenEditor = { showFilterEditor = true },
                     onConfirm = { configuration ->
-                        WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, configuration)
+                        val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
+                        WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, latest.copy(priority = configuration.priority))
                         if (needsExactAlarmAccess()) {
                             showExactAlarmDialog.value = true
                         } else {
                             completeWidgetConfiguration()
                         }
                     }
+                )
+
+                if (showFilterEditor) com.example.pokemonalertsv2.ui.settings.FilterStudioDialog(
+                    surface = com.example.pokemonalertsv2.data.FilterSurface.FEED,
+                    viewModel = filterViewModel,
+                    widgetId = appWidgetId,
+                    onDismiss = { showFilterEditor = false }
                 )
 
                 if (showExactAlarmPermission) {
@@ -189,6 +200,35 @@ private fun com.example.pokemonalertsv2.data.PokemonAlert.expiresAfter(nowMillis
 
 /** Areas a widget can be pinned to, mirroring the app-level area filter options. */
 private val WIDGET_AREA_OPTIONS = listOf("All", "Alsbach", "Darmstadt")
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun WidgetStudioConfiguration(
+    initialConfiguration: WidgetConfiguration,
+    onOpenEditor: () -> Unit,
+    onConfirm: (WidgetConfiguration) -> Unit
+) {
+    var priority by remember { mutableStateOf(initialConfiguration.priority) }
+    Scaffold(
+        topBar = { CenterAlignedTopAppBar(title = { Text("Widget configuration") }) },
+        bottomBar = {
+            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).heightIn(min = 52.dp)) { Text("Save widget") }
+        }
+    ) { padding ->
+        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("A view of your own", style = MaterialTheme.typography.headlineSmall)
+            Text("This widget has independent alert rules. Link a reusable profile or keep a local copy.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Open Filter Studio") }
+            Text("Display priority", style = MaterialTheme.typography.titleMedium)
+            Text("Sorting only changes the order, never which alerts qualify.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WidgetPriority.entries.forEach { option ->
+                    FilterChip(selected = priority == option, onClick = { priority = option }, label = { Text(when (option) { WidgetPriority.APP_DEFAULT -> "App default"; WidgetPriority.NEAREST -> "Nearest"; WidgetPriority.ENDING_SOON -> "Ending soon"; WidgetPriority.NEWEST -> "Newest" }) })
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable

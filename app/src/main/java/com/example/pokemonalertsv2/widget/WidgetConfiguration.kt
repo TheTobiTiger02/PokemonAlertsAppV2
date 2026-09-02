@@ -3,6 +3,11 @@ package com.example.pokemonalertsv2.widget
 import android.content.Context
 import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
 import com.example.pokemonalertsv2.ui.alerts.legacyWidgetTokenToCategory
+import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.data.FilterAssignment
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterSelection
+import com.example.pokemonalertsv2.data.FilterStateCodec
 
 internal enum class WidgetPriority {
     APP_DEFAULT,
@@ -39,8 +44,19 @@ internal data class WidgetConfiguration(
     val selectedAlertTypes: Set<String> = emptySet(),
     val priority: WidgetPriority = WidgetPriority.APP_DEFAULT,
     val distance: WidgetDistanceMode = WidgetDistanceMode.InheritApp,
-    val area: WidgetAreaMode = WidgetAreaMode.InheritApp
+    val area: WidgetAreaMode = WidgetAreaMode.InheritApp,
+    val filterAssignment: FilterAssignment? = null
 )
+
+internal fun WidgetConfiguration.legacyFilterDefinition(appArea: String, appDistanceKm: Int): FilterDefinition {
+    val effectiveArea = when (val mode = area) { WidgetAreaMode.InheritApp -> appArea; is WidgetAreaMode.Fixed -> mode.area }
+    val effectiveDistance = when (val mode = distance) { WidgetDistanceMode.InheritApp -> appDistanceKm; WidgetDistanceMode.Unlimited -> 0; is WidgetDistanceMode.Fixed -> mode.kilometers }
+    return FilterDefinition(
+        alertTypes = if (selectedAlertTypes.isEmpty()) FilterSelection.All else FilterSelection.only(FilterAlertType.entries.filterNot { it.name in selectedAlertTypes }.map { it.name }),
+        areas = if (effectiveArea == "All") FilterSelection.All else FilterSelection.only(listOf(effectiveArea)),
+        maxDistanceKm = effectiveDistance
+    )
+}
 
 internal object WidgetConfigurationStore {
     private const val PREFS_NAME = "widget_filter_prefs"
@@ -48,6 +64,7 @@ internal object WidgetConfigurationStore {
     private const val PRIORITY_PREFIX = "widget_priority_"
     private const val DISTANCE_PREFIX = "widget_distance_"
     private const val AREA_PREFIX = "widget_area_"
+    private const val ASSIGNMENT_PREFIX = "widget_filter_assignment_"
 
     fun get(context: Context, appWidgetId: Int): WidgetConfiguration {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -72,7 +89,10 @@ internal object WidgetConfigurationStore {
             rawArea.startsWith("FIXED:") -> WidgetAreaMode.Fixed(rawArea.substringAfter(':'))
             else -> WidgetAreaMode.InheritApp
         }
-        return WidgetConfiguration(filters, priority, distance, area)
+        val assignment = FilterStateCodec.decodeAssignment(
+            prefs.getString("$ASSIGNMENT_PREFIX$appWidgetId", null)
+        )
+        return WidgetConfiguration(filters, priority, distance, area, assignment)
     }
 
     /**
@@ -109,12 +129,18 @@ internal object WidgetConfigurationStore {
             WidgetAreaMode.InheritApp -> "INHERIT"
             is WidgetAreaMode.Fixed -> "FIXED:${mode.area}"
         }
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+        val editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putStringSet("$FILTER_PREFIX$appWidgetId", configuration.selectedAlertTypes)
             .putString("$PRIORITY_PREFIX$appWidgetId", configuration.priority.name)
             .putString("$DISTANCE_PREFIX$appWidgetId", distance)
             .putString("$AREA_PREFIX$appWidgetId", area)
-            .apply()
+        configuration.filterAssignment?.let { assignment ->
+            editor.putString(
+                "$ASSIGNMENT_PREFIX$appWidgetId",
+                FilterStateCodec.encodeAssignment(assignment)
+            )
+        }
+        editor.apply()
     }
 
     fun remove(context: Context, appWidgetId: Int) {
@@ -123,6 +149,8 @@ internal object WidgetConfigurationStore {
             .remove("$PRIORITY_PREFIX$appWidgetId")
             .remove("$DISTANCE_PREFIX$appWidgetId")
             .remove("$AREA_PREFIX$appWidgetId")
+            .remove("$ASSIGNMENT_PREFIX$appWidgetId")
             .apply()
     }
+
 }

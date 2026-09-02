@@ -30,11 +30,13 @@ internal object WidgetAlertSnapshotStore {
         WidgetAlertFilter.filterAlerts(
             alerts,
             criteria,
-            origin
-        ) { routeOrigin, alert ->
-            walkingRoutes[alert.uniqueId]?.distanceMeters?.toFloat()
-                ?: WidgetAlertFilter.directDistanceMeters(routeOrigin, alert)
-        } as WidgetAlertFilter.Result.Filtered
+            origin,
+            distanceMeters = { routeOrigin, alert ->
+                walkingRoutes[alert.uniqueId]?.distanceMeters?.toFloat()
+                    ?: WidgetAlertFilter.directDistanceMeters(routeOrigin, alert)
+            },
+            walkingDurationSeconds = { alert -> walkingRoutes[alert.uniqueId]?.durationSeconds }
+        ) as WidgetAlertFilter.Result.Filtered
 
     fun remove(appWidgetId: Int) {
         cadenceSnapshots.remove(appWidgetId)

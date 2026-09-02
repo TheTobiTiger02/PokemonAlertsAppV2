@@ -124,18 +124,22 @@ class MainNavigationComposeTest {
         composeRule.onNodeWithText("Settings").performClick()
         listOf(
             "Appearance & behavior",
-            "Alert filters",
+            "Filters",
             "GoDex checklist",
             "Notifications",
             "About & updates"
         ).forEach { label ->
-            composeRule.onNodeWithText(label).assertIsDisplayed().assertHasClickAction()
+            composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed().assertHasClickAction()
         }
         composeRule.onNodeWithText("Theme").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
 
-        composeRule.onNodeWithText("Alert filters").performClick()
-        composeRule.onNodeWithText("Maximum Distance").assertIsDisplayed()
+        composeRule.onNodeWithText("Filters").performScrollTo().performClick()
+        composeRule.onNodeWithText("Filter Studio").assertIsDisplayed()
+        composeRule.onNodeWithText("Feed").assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Basic rules").assertIsDisplayed()
+        composeRule.onNodeWithText("Apply").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Cancel").performClick()
         composeRule.onNodeWithText("GoDex Hundo checklist").assertDoesNotExist()
         composeRule.activity.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()

@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.location.Location
 import android.util.LruCache
 import android.net.Uri
 import android.widget.Toast
@@ -108,6 +109,9 @@ import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.util.CachedLocationProvider
@@ -274,6 +278,7 @@ fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
+    onOpenFilterStudio: () -> Unit = {},
     presentationMode: MapPresentationMode = MapPresentationMode.FULL,
     initialZoom: Double? = null,
     onEnterPictureInPicture: (() -> Unit)? = null,
@@ -282,6 +287,7 @@ fun AlertsMapRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedMapCategories by viewModel.selectedMapCategories.collectAsStateWithLifecycle()
+    val mapFilterDefinition by viewModel.mapFilterDefinition.collectAsStateWithLifecycle()
     val mapShowDismissed by viewModel.mapShowDismissed.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
     val savedMapStyle by viewModel.mapStylePreference.collectAsStateWithLifecycle()
@@ -316,6 +322,8 @@ fun AlertsMapRoute(
         onRefresh = viewModel::refreshAlerts,
         syncStatus = uiState.toSyncStatus(),
         selectedCategories = effectiveCategories,
+        filterDefinition = if (presentationMode == MapPresentationMode.FULL) mapFilterDefinition else FilterDefinition(),
+        onOpenFilterStudio = onOpenFilterStudio,
         onSelectedCategoriesChange = if (presentationMode == MapPresentationMode.FULL) {
             viewModel::updateSelectedMapCategories
         } else {
@@ -361,6 +369,8 @@ fun AlertsMapScreen(
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
     selectedCategories: Set<AlertCategory> = emptySet(),
+    filterDefinition: FilterDefinition = FilterDefinition(),
+    onOpenFilterStudio: () -> Unit = {},
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
     mapShowDismissed: Boolean = false,
     onMapShowDismissedChange: (Boolean) -> Unit = {},
@@ -393,6 +403,8 @@ fun AlertsMapScreen(
         onRefresh = onRefresh,
         syncStatus = syncStatus,
         selectedCategories = selectedCategories,
+        filterDefinition = filterDefinition,
+        onOpenFilterStudio = onOpenFilterStudio,
         onSelectedCategoriesChange = onSelectedCategoriesChange,
         mapShowDismissed = mapShowDismissed,
         onMapShowDismissedChange = onMapShowDismissedChange,
@@ -429,6 +441,8 @@ internal fun AlertsMapScreenContent(
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
     selectedCategories: Set<AlertCategory> = emptySet(),
+    filterDefinition: FilterDefinition = FilterDefinition(),
+    onOpenFilterStudio: () -> Unit = {},
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
     mapShowDismissed: Boolean = false,
     onMapShowDismissedChange: (Boolean) -> Unit = {},
@@ -748,14 +762,35 @@ internal fun AlertsMapScreenContent(
         }
     }
 
+    var filterWalkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
+    LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude, filterDefinition.maxDistanceKm, filterDefinition.maxWalkingMinutes) {
+        val location = userLocation
+        filterWalkingRoutes = if (location != null && (filterDefinition.maxDistanceKm > 0 || filterDefinition.maxWalkingMinutes > 0)) {
+            WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
+        } else emptyMap()
+    }
+
     val expirationNow = expirationClock.value
-    val filteredAlerts = remember(alerts, selectedCategories, expirationNow, dismissedAlertIds, mapShowDismissed) {
+    val filteredAlerts = remember(
+        alerts,
+        filterDefinition,
+        expirationNow,
+        dismissedAlertIds,
+        mapShowDismissed,
+        filterWalkingRoutes,
+        userLocation?.latitude,
+        userLocation?.longitude
+    ) {
         visibleMapAlerts(
             alerts = alerts,
             selectedCategories = selectedCategories,
+            filterDefinition = filterDefinition,
             dismissedAlertIds = dismissedAlertIds,
             showDismissed = mapShowDismissed,
-            nowMillis = expirationNow
+            nowMillis = expirationNow,
+            userLatitude = userLocation?.latitude,
+            userLongitude = userLocation?.longitude,
+            walkingRoutes = filterWalkingRoutes
         )
     }
     val renderedAlerts = remember(
@@ -1730,19 +1765,10 @@ internal fun AlertsMapScreenContent(
                     onOpenLayers = { showLayersSheet = true }
                 )
 
-                MapFilterRow(
-                    selectedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    visibleAlertCount = filteredAlerts.size,
-                    onCategoryToggled = { category, shownAfter ->
-                        // The selection holds muted categories: shown means remove from it.
-                        onSelectedCategoriesChange(
-                            if (shownAfter) selectedCategories - category
-                            else selectedCategories + category
-                        )
-                    },
-                    onShowAllCategories = { onSelectedCategoriesChange(emptySet()) }
-                )
+                androidx.compose.material3.OutlinedButton(
+                    onClick = onOpenFilterStudio,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) { Text("Filters • ${filteredAlerts.size} visible") }
                 MapSyncStatus(status = syncStatus, onRetry = onRefresh)
 
                 // Weather for the area the user is actually standing in, mirroring the game's own
@@ -1995,16 +2021,38 @@ internal fun AlertsMapScreenContent(
 internal fun visibleMapAlerts(
     alerts: List<PokemonAlert>,
     selectedCategories: Set<AlertCategory>,
+    filterDefinition: FilterDefinition? = null,
     dismissedAlertIds: Set<String>,
     showDismissed: Boolean,
-    nowMillis: Long
+    nowMillis: Long,
+    userLatitude: Double? = null,
+    userLongitude: Double? = null,
+    walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 ): List<PokemonAlert> =
     alerts.filter { alert ->
+        val distance = if (userLatitude != null && userLongitude != null) {
+            alert.mapCoordinatesOrNull()?.let { coordinates ->
+                val result = FloatArray(1)
+                Location.distanceBetween(
+                    userLatitude,
+                    userLongitude,
+                    coordinates.latitude,
+                    coordinates.longitude,
+                    result
+                )
+                result.firstOrNull()?.takeUnless(Float::isNaN)
+            }
+        } else null
         alert.mapCoordinatesOrNull() != null &&
             !alert.isInvalidated &&
             (showDismissed || alert.uniqueId !in dismissedAlertIds) &&
             (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) > nowMillis &&
-            matchesCategorySelection(alert, selectedCategories)
+            if (filterDefinition != null) {
+                val route = walkingRoutes[alert.uniqueId]
+                AlertFilterMatcher.matches(alert, filterDefinition, FilterMatchContext(route?.distanceMeters?.toFloat() ?: distance, route?.durationSeconds))
+            } else {
+                matchesCategorySelection(alert, selectedCategories)
+            }
     }
 
 internal enum class MapLoadState {

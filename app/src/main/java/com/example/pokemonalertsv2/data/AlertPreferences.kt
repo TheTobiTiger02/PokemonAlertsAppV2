@@ -9,6 +9,9 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import com.example.pokemonalertsv2.notifications.QuietHours
 import com.example.pokemonalertsv2.util.TravelTime
 
@@ -41,6 +44,7 @@ const val DEFAULT_QUIET_HOURS_END = 7 * 60
 
 private val MAX_WALKING_MINUTES_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_walking_minutes")
 private val FILTER_PRESETS_KEY = androidx.datastore.preferences.core.stringPreferencesKey("filter_presets")
+private val FILTER_STATE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("filter_state_v1")
 private val QUIET_HOURS_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("quiet_hours_enabled")
 private val QUIET_HOURS_START_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_start_minute")
 private val QUIET_HOURS_END_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_end_minute")
@@ -111,6 +115,12 @@ enum class MapStylePreference {
 }
 
 interface AlertPreferencesStore {
+    /** Unified, versioned eligibility rules. Default bodies keep lightweight test stores source-compatible. */
+    val filterStateDocument: Flow<FilterStateDocument>
+        get() = flowOf(FilterStateDocument())
+
+    suspend fun updateFilterStateDocument(transform: (FilterStateDocument) -> FilterStateDocument) = Unit
+
     val seenAlertIds: Flow<Set<String>>
     suspend fun getSeenAlertIds(): Set<String>
     suspend fun updateSeenAlertIds(alertIds: Set<String>)
@@ -268,6 +278,29 @@ interface AlertPreferencesStore {
 }
 
 class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPreferencesStore {
+
+    override val filterStateDocument: Flow<FilterStateDocument> = flow {
+        dataStore.edit { preferences ->
+            if (FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) == null) {
+                preferences[FILTER_STATE_KEY] = FilterStateCodec.encode(migrateLegacyFilterState(preferences))
+            }
+        }
+        emitAll(dataStore.data.map { preferences ->
+            FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) ?: migrateLegacyFilterState(preferences)
+        })
+    }
+
+    override suspend fun updateFilterStateDocument(
+        transform: (FilterStateDocument) -> FilterStateDocument
+    ) {
+        dataStore.edit { preferences ->
+            val current = FilterStateCodec.decode(preferences[FILTER_STATE_KEY])
+                ?: migrateLegacyFilterState(preferences)
+            preferences[FILTER_STATE_KEY] = FilterStateCodec.encode(
+                transform(current).copy(schemaVersion = maxOf(current.schemaVersion, CURRENT_FILTER_SCHEMA_VERSION))
+            )
+        }
+    }
 
     override val seenAlertIds: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[SEEN_ALERTS_KEY] ?: emptySet()
@@ -613,6 +646,30 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             prefs[NUNDOS_NOTIFICATIONS_KEY] = categories.nundos
             prefs[KECLEON_NOTIFICATIONS_KEY] = categories.kecleon
             prefs[ROCKET_NOTIFICATIONS_KEY] = categories.rocket
+
+            val current = FilterStateCodec.decode(prefs[FILTER_STATE_KEY])
+                ?: migrateLegacyFilterState(prefs)
+            val enabled = buildSet {
+                if (categories.spawns) addAll(listOf(FilterAlertType.SPAWN.name, FilterAlertType.RARE.name))
+                if (categories.raids) add(FilterAlertType.RAID.name)
+                if (categories.quests) add(FilterAlertType.QUEST.name)
+                if (categories.hundos) add(FilterAlertType.HUNDO.name)
+                if (categories.nundos) add(FilterAlertType.NUNDO.name)
+                if (categories.pvp) add(FilterAlertType.PVP.name)
+                if (categories.kecleon) add(FilterAlertType.KECLEON.name)
+                if (categories.rocket) add(FilterAlertType.ROCKET.name)
+                add(FilterAlertType.WEATHER.name)
+                add(FilterAlertType.OTHER.name)
+            }
+            val selection = if (enabled.size == FilterAlertType.entries.size) {
+                FilterSelection.All
+            } else {
+                FilterSelection.only(enabled)
+            }
+            val resolved = current.notifications.resolve(current).copy(alertTypes = selection)
+            prefs[FILTER_STATE_KEY] = FilterStateCodec.encode(
+                current.withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(resolved))
+            )
         }
     }
 
@@ -779,3 +836,112 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     }
 }
 
+internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocument {
+    val allTypes = FilterAlertType.entries.map(FilterAlertType::name).toSet()
+    fun typesFromMuted(muted: Set<String>): FilterSelection {
+        if (muted.isEmpty()) return FilterSelection.All
+        val allowed = allTypes.filterNot { name -> muted.any { it.equals(name, ignoreCase = true) } }
+        return if (allowed.isEmpty()) FilterSelection.None else FilterSelection.only(allowed)
+    }
+
+    fun legacyLocation(): Triple<FilterSelection, Int, Int> {
+        val area = preferences[SELECTED_AREA_KEY].orEmpty()
+        return Triple(
+            if (area.isBlank() || area.equals("All", ignoreCase = true)) FilterSelection.All
+            else FilterSelection.only(listOf(area)),
+            (preferences[MAX_DISTANCE_KEY] ?: 0).coerceIn(0, 50),
+            (preferences[MAX_WALKING_MINUTES_KEY] ?: TravelTime.NO_LIMIT).coerceIn(0, 240)
+        )
+    }
+
+    fun allowedAfterExclusions(all: Collection<String>, excluded: Set<String>): FilterSelection {
+        if (excluded.isEmpty()) return FilterSelection.All
+        val remaining = all.filterNot { candidate -> excluded.any { it.equals(candidate, ignoreCase = true) } }
+        return if (remaining.isEmpty()) FilterSelection.None else FilterSelection.only(remaining)
+    }
+
+    val feedSelection = preferences[FEED_CATEGORIES_KEY]?.let(::typesFromMuted)
+        ?: LEGACY_FEED_FILTER_TO_CATEGORIES[preferences[SELECTED_ALERT_FILTER_KEY]]?.let(FilterSelection::only)
+        ?: FilterSelection.All
+    val mutedMap = preferences[MAP_CATEGORIES_KEY].orEmpty()
+    val (areas, maxDistance, maxWalking) = legacyLocation()
+
+    val feedDefinition = FilterDefinition(
+        alertTypes = feedSelection,
+        areas = areas,
+        maxDistanceKm = maxDistance,
+        maxWalkingMinutes = maxWalking
+    )
+    val mapDefinition = FilterDefinition(alertTypes = typesFromMuted(mutedMap))
+
+    val notificationTypes = buildSet {
+        if (preferences[SPAWNS_NOTIFICATIONS_KEY] ?: true) {
+            add(FilterAlertType.SPAWN.name)
+            add(FilterAlertType.RARE.name)
+        }
+        if (preferences[RAIDS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.RAID.name)
+        if (preferences[QUESTS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.QUEST.name)
+        if (preferences[ROCKET_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.ROCKET.name)
+        if (preferences[KECLEON_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.KECLEON.name)
+        if (preferences[HUNDOS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.HUNDO.name)
+        if (preferences[NUNDOS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.NUNDO.name)
+        if (preferences[PVP_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.PVP.name)
+        // Legacy notification matching allowed these through its generic fallback.
+        add(FilterAlertType.WEATHER.name)
+        add(FilterAlertType.OTHER.name)
+    }
+    val notificationTypeSelection = when (notificationTypes.size) {
+        0 -> FilterSelection.None
+        allTypes.size -> FilterSelection.All
+        else -> FilterSelection.only(notificationTypes)
+    }
+    val notificationDefinition = FilterDefinition(
+        alertTypes = notificationTypeSelection,
+        areas = areas,
+        maxDistanceKm = maxDistance,
+        maxWalkingMinutes = maxWalking,
+        spawnSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
+        rareSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
+        hundoSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_HUNDO_SPECIES_KEY].orEmpty()),
+        nundoSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_NUNDO_SPECIES_KEY].orEmpty()),
+        pvpSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_PVP_SPECIES_KEY].orEmpty()),
+        raidTiers = allowedAfterExclusions(
+            RaidTier.entries.map(RaidTier::displayLabel),
+            preferences[EXCLUDED_RAID_TIERS_KEY].orEmpty()
+        ),
+        rocketTypes = allowedAfterExclusions(
+            DEFAULT_ROCKET_FILTER_TYPES,
+            preferences[EXCLUDED_ROCKET_TYPES_KEY].orEmpty()
+        )
+    )
+
+    val migratedProfiles = FilterPresets.decode(preferences[FILTER_PRESETS_KEY])
+        .mapIndexed { index, preset ->
+            val presetSelection = if (preset.categories.isNotEmpty()) typesFromMuted(preset.categories)
+                else LEGACY_FEED_FILTER_TO_CATEGORIES[preset.filter]?.let(FilterSelection::only) ?: FilterSelection.All
+            FilterProfile(
+                id = "legacy-${index}-${preset.name.hashCode().toUInt().toString(16)}",
+                name = FilterPresets.normalizeName(preset.name).take(MAX_FILTER_PROFILE_NAME),
+                definition = FilterDefinition(
+                    alertTypes = presetSelection,
+                    areas = if (preset.area.equals("All", ignoreCase = true)) FilterSelection.All
+                    else FilterSelection.only(listOf(preset.area)),
+                    maxDistanceKm = preset.maxDistance.coerceIn(0, 50),
+                    feedSort = preset.sort
+                )
+            )
+        }
+
+    return FilterStateDocument(
+        profiles = migratedProfiles,
+        feed = FilterAssignment.local(feedDefinition),
+        map = FilterAssignment.local(mapDefinition),
+        notifications = FilterAssignment.local(notificationDefinition)
+    )
+}
+
+val DEFAULT_ROCKET_FILTER_TYPES: List<String> = listOf(
+    "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
+    "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
+    "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy", "Mixed"
+)
