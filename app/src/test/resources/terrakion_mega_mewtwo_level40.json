@@ -1,0 +1,492 @@
+{
+  "attackers": [
+    {
+      "randomMove": {
+        "defenders": [
+          {
+            "pokemonId": "MEWTWO_MEGA_X",
+            "stats": {
+              "attack": 15,
+              "defense": 15,
+              "stamina": 15,
+              "level": "40"
+            },
+            "byMove": [
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "FOCUS_BLAST",
+                "result": {
+                  "totalCombatTime": 140971,
+                  "power": 1.467658683428041,
+                  "effectiveCombatTime": 444948,
+                  "potions": 42.8445,
+                  "overallRating": 0.368992363318753,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.91,
+                  "tdo": 191.96148993166975,
+                  "estimator": 1.5511308,
+                  "tdi": 1172.8639394801478,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 31.967155,
+                  "shieldRating": 0.9873171216626282,
+                  "attackerSurvivalFraction": 0.9873171216626282,
+                  "survivalWindowMs": 140971.0
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 137581,
+                  "power": 1.3666561915668498,
+                  "effectiveCombatTime": 413862,
+                  "potions": 41.89650000000002,
+                  "overallRating": 0.34363490756927273,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.84,
+                  "tdo": 191.9562488173371,
+                  "estimator": 1.4443021,
+                  "tdi": 1249.319621223634,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 34.340878,
+                  "shieldRating": 0.9895734176487596,
+                  "attackerSurvivalFraction": 0.9895734176487596,
+                  "survivalWindowMs": 137581.0
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 137591,
+                  "power": 1.3492410729372686,
+                  "effectiveCombatTime": 409020,
+                  "potions": 42.23750000000001,
+                  "overallRating": 0.3393984192560706,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.9,
+                  "tdo": 191.94444439008177,
+                  "estimator": 1.42798,
+                  "tdi": 1262.3128505647467,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 34.72977,
+                  "shieldRating": 0.987805533224087,
+                  "attackerSurvivalFraction": 0.987805533224087,
+                  "survivalWindowMs": 137591.0
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 136771,
+                  "power": 1.3381736289375752,
+                  "effectiveCombatTime": 405218,
+                  "potions": 42.09449999999999,
+                  "overallRating": 0.3364382651279864,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.85,
+                  "tdo": 191.95689709066565,
+                  "estimator": 1.4165341,
+                  "tdi": 1264.5306640249703,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 35.054993,
+                  "shieldRating": 0.9877982219920398,
+                  "attackerSurvivalFraction": 0.9877982219920398,
+                  "survivalWindowMs": 136771.0
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 133351,
+                  "power": 1.2431381987270527,
+                  "effectiveCombatTime": 376717,
+                  "potions": 41.08000000000002,
+                  "overallRating": 0.31266016229181365,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.74,
+                  "tdo": 191.9626381684186,
+                  "estimator": 1.3180187,
+                  "tdi": 1369.6000806642228,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 37.751358,
+                  "shieldRating": 0.990186892142345,
+                  "attackerSurvivalFraction": 0.990186892142345,
+                  "survivalWindowMs": 133351.0
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 133626,
+                  "power": 1.2425310056387489,
+                  "effectiveCombatTime": 376351,
+                  "potions": 41.271,
+                  "overallRating": 0.3124429992137152,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.76,
+                  "tdo": 191.9562594308771,
+                  "estimator": 1.315971,
+                  "tdi": 1365.4439363510758,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 37.730595,
+                  "shieldRating": 0.9916566695821986,
+                  "attackerSurvivalFraction": 0.9916566695821986,
+                  "survivalWindowMs": 133626.0
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 133306,
+                  "power": 1.241098050181918,
+                  "effectiveCombatTime": 376126,
+                  "potions": 40.81350000000001,
+                  "overallRating": 0.31219483282492155,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.75,
+                  "tdo": 191.93167100792255,
+                  "estimator": 1.3139676,
+                  "tdi": 1372.0001942650017,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 37.772976,
+                  "shieldRating": 0.9909844136053704,
+                  "attackerSurvivalFraction": 0.9909844136053704,
+                  "survivalWindowMs": 133306.0
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "DYNAMIC_PUNCH_PLUS",
+                "result": {
+                  "totalCombatTime": 129776,
+                  "power": 1.1449940594791368,
+                  "effectiveCombatTime": 347935,
+                  "potions": 39.914500000000004,
+                  "overallRating": 0.2884527217086238,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.64,
+                  "tdo": 191.94288282351368,
+                  "estimator": 1.2172847,
+                  "tdi": 1485.0784020566841,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 40.86875,
+                  "shieldRating": 0.99384648899551,
+                  "attackerSurvivalFraction": 0.99384648899551,
+                  "survivalWindowMs": 129776.32
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "DYNAMIC_PUNCH_PLUS",
+                "result": {
+                  "totalCombatTime": 129131,
+                  "power": 1.13109152803756,
+                  "effectiveCombatTime": 343256,
+                  "potions": 40.06400000000001,
+                  "overallRating": 0.28469665759534135,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.65,
+                  "tdo": 191.95402576993598,
+                  "estimator": 1.2019066,
+                  "tdi": 1493.0596919731047,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 41.386696,
+                  "shieldRating": 0.9950152727304246,
+                  "attackerSurvivalFraction": 0.9950152727304246,
+                  "survivalWindowMs": 129131.4
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "DYNAMIC_PUNCH_PLUS",
+                "result": {
+                  "totalCombatTime": 127406,
+                  "power": 1.0931570501223695,
+                  "effectiveCombatTime": 331969,
+                  "potions": 38.9825,
+                  "overallRating": 0.2753173474930125,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.57,
+                  "tdo": 191.9754062570417,
+                  "estimator": 1.1604935,
+                  "tdi": 1566.8217152236653,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 42.83322,
+                  "shieldRating": 0.9948347464006989,
+                  "attackerSurvivalFraction": 0.9948347464006989,
+                  "survivalWindowMs": 127406.56
+                }
+              }
+            ]
+          },
+          {
+            "pokemonId": "MEWTWO_MEGA_Y",
+            "stats": {
+              "attack": 15,
+              "defense": 15,
+              "stamina": 15,
+              "level": "40"
+            },
+            "byMove": [
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "FOCUS_BLAST",
+                "result": {
+                  "totalCombatTime": 148481,
+                  "power": 1.6578067581717384,
+                  "effectiveCombatTime": 501558,
+                  "potions": 48.40400000000002,
+                  "overallRating": 0.41626707061640017,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.52,
+                  "tdo": 191.93133544939744,
+                  "estimator": 1.7507309,
+                  "tdi": 960.3254631189509,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 28.187187,
+                  "shieldRating": 0.979340162917966,
+                  "attackerSurvivalFraction": 0.979340162917966,
+                  "survivalWindowMs": 148481.0
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 140166,
+                  "power": 1.380947519602781,
+                  "effectiveCombatTime": 417319,
+                  "potions": 46.227000000000004,
+                  "overallRating": 0.34671194532515326,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.28,
+                  "tdo": 191.96200050863004,
+                  "estimator": 1.4594826,
+                  "tdi": 1135.5225627112582,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 33.812218,
+                  "shieldRating": 0.9872767267423117,
+                  "attackerSurvivalFraction": 0.9872767267423117,
+                  "survivalWindowMs": 140166.0
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 139216,
+                  "power": 1.3460448714709392,
+                  "effectiveCombatTime": 407045,
+                  "potions": 45.817,
+                  "overallRating": 0.3380762683677666,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.17,
+                  "tdo": 191.9754062570417,
+                  "estimator": 1.4238132,
+                  "tdi": 1176.7003347318307,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 34.713234,
+                  "shieldRating": 0.987979488815864,
+                  "attackerSurvivalFraction": 0.987979488815864,
+                  "survivalWindowMs": 139216.0
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "PSYCHIC",
+                "result": {
+                  "totalCombatTime": 137961,
+                  "power": 1.316547260340473,
+                  "effectiveCombatTime": 398062,
+                  "potions": 45.44100000000001,
+                  "overallRating": 0.3306596165843149,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.17,
+                  "tdo": 191.95498411129992,
+                  "estimator": 1.3933225,
+                  "tdi": 1195.4630475029624,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 35.47694,
+                  "shieldRating": 0.9874791362545855,
+                  "attackerSurvivalFraction": 0.9874791362545855,
+                  "survivalWindowMs": 137961.0
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 136271,
+                  "power": 1.2702198728222183,
+                  "effectiveCombatTime": 384048,
+                  "potions": 44.944500000000005,
+                  "overallRating": 0.3190375593769176,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.14,
+                  "tdo": 191.96104481403418,
+                  "estimator": 1.3452408,
+                  "tdi": 1236.4465667155957,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 36.771942,
+                  "shieldRating": 0.9890357152473951,
+                  "attackerSurvivalFraction": 0.9890357152473951,
+                  "survivalWindowMs": 136271.0
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 134031,
+                  "power": 1.2077419491025563,
+                  "effectiveCombatTime": 365287,
+                  "potions": 44.246500000000026,
+                  "overallRating": 0.3034369691501178,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.12,
+                  "tdo": 191.94761624836846,
+                  "estimator": 1.2804828,
+                  "tdi": 1296.6805219712896,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 38.6528,
+                  "shieldRating": 0.9890734090778348,
+                  "attackerSurvivalFraction": 0.9890734090778348,
+                  "survivalWindowMs": 134031.0
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "PSYSTRIKE",
+                "result": {
+                  "totalCombatTime": 133891,
+                  "power": 1.2066812435750123,
+                  "effectiveCombatTime": 365104,
+                  "potions": 44.313500000000005,
+                  "overallRating": 0.30319326331661933,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.09,
+                  "tdo": 191.9623079298973,
+                  "estimator": 1.2794027,
+                  "tdi": 1300.3946957830592,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 38.66699,
+                  "shieldRating": 0.9903519780209343,
+                  "attackerSurvivalFraction": 0.9903519780209343,
+                  "survivalWindowMs": 133891.0
+                }
+              },
+              {
+                "move1": "COUNTER_FAST",
+                "move2": "FUTURE_SIGHT_PLUS",
+                "result": {
+                  "totalCombatTime": 131579,
+                  "power": 1.1489521046077584,
+                  "effectiveCombatTime": 348095,
+                  "potions": 43.3825,
+                  "overallRating": 0.2888077739767877,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 4.08,
+                  "tdo": 191.92340575882778,
+                  "estimator": 1.219515,
+                  "tdi": 1375.478572505553,
+                  "summary": {},
+                  "kills": 4,
+                  "edps": 40.72436,
+                  "shieldRating": 0.9901632086213629,
+                  "attackerSurvivalFraction": 0.9901632086213629,
+                  "survivalWindowMs": 131579.28
+                }
+              },
+              {
+                "move1": "CONFUSION_FAST",
+                "move2": "FUTURE_SIGHT_PLUS",
+                "result": {
+                  "totalCombatTime": 128635,
+                  "power": 1.0814404119764933,
+                  "effectiveCombatTime": 327949,
+                  "potions": 42.442,
+                  "overallRating": 0.27199410215920006,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.93,
+                  "tdo": 191.95149257522817,
+                  "estimator": 1.1485614,
+                  "tdi": 1451.0729644067646,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 43.231842,
+                  "shieldRating": 0.9933352656306704,
+                  "attackerSurvivalFraction": 0.9933352656306704,
+                  "survivalWindowMs": 128635.44
+                }
+              },
+              {
+                "move1": "PSYCHO_CUT_FAST",
+                "move2": "FUTURE_SIGHT_PLUS",
+                "result": {
+                  "totalCombatTime": 125970,
+                  "power": 1.020522960790602,
+                  "effectiveCombatTime": 309336,
+                  "potions": 41.78250000000002,
+                  "overallRating": 0.2566817335461334,
+                  "numSims": 100,
+                  "deaths": 1,
+                  "effectiveDeaths": 3.84,
+                  "tdo": 191.96488776290352,
+                  "estimator": 1.0839467,
+                  "tdi": 1532.6403750378233,
+                  "summary": {},
+                  "kills": 3,
+                  "edps": 45.77935,
+                  "shieldRating": 0.9955931252982474,
+                  "attackerSurvivalFraction": 0.9955931252982474,
+                  "survivalWindowMs": 125970.64
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

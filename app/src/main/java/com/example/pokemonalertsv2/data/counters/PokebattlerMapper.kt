@@ -227,6 +227,10 @@ internal fun selectBestByMove(defender: PbDefender, sort: PokebattlerSort): PbBy
 /** `SHADOW_CLAW_FAST` -> "Shadow Claw". Saves fetching the 196 KB move list. */
 fun prettifyMoveName(raw: String?): String? {
     val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    parsePlusMove(value)?.let {
+        val baseId = it.baseName.replace(' ', '_').uppercase(Locale.ROOT)
+        return prettifyMoveName(baseId) + "+".repeat(it.count)
+    }
     val stripped = value.removeSuffix("_FAST")
     MOVE_NAME_OVERRIDES[stripped]?.let { return it }
     // Some ids are species-qualified, e.g. HYDRO_PUMP_BLASTOISE.

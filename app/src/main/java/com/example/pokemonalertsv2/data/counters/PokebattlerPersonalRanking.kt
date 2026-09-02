@@ -62,11 +62,16 @@ internal fun PbResult?.toNormalizedMetrics(): CounterMetrics = CounterMetrics(
 internal fun pbMetric(result: PbResult?, metric: CounterMetric): Double? =
     result?.toNormalizedMetrics()?.valueFor(metric)
 
-internal fun personalMoveKey(value: String?): String? = value
-    ?.uppercase(Locale.ROOT)
-    ?.removeSuffix("_FAST")
-    ?.filter { it.isLetterOrDigit() }
-    ?.takeIf { it.isNotEmpty() }
+internal fun personalMoveKey(value: String?): String? {
+    val plus = parsePlusMove(value)
+    val base = (plus?.baseName ?: value)?.trim()
+        ?.uppercase(Locale.ROOT)
+        ?.removeSuffix("_FAST")
+        ?.filter { it.isLetterOrDigit() }
+        ?.takeIf { it.isNotEmpty() } ?: return null
+    // Keep the special variant distinct from both the ordinary move and other + levels.
+    return if (plus == null) base else "$base+${plus.count}"
+}
 
 internal fun personalMovesMatch(left: String?, right: String?): Boolean =
     personalMoveKey(left) != null && personalMoveKey(left) == personalMoveKey(right)
@@ -209,12 +214,21 @@ internal fun selectOwnedMoves(
     val moves = defender.byMove.filter { it.result != null }
     if (moves.isEmpty()) return null
     val fast = mine.quickMove
-    val charges = listOfNotNull(mine.chargeMove, mine.chargeMove2)
-    if (mode == PersonalMovesMode.CURRENT && (fast.isNullOrBlank() || charges.isEmpty())) return null
+    val charges = listOfNotNull(mine.chargeMove, mine.chargeMove2).filter { it.isNotBlank() }
+    // A returned + move is an extra available charge for this Mega only. Keep the
+    // imported moves intact and learn availability from this response, not a catalogue.
+    val matchingMega = !mine.shadow && defender.matches(mine) &&
+        defender.pokemonId.uppercase(Locale.ROOT).split('_').contains("MEGA")
+    fun availableCharge(candidate: PbByMove): Boolean =
+        charges.any { personalMovesMatch(candidate.move2, it) } ||
+            (matchingMega && parsePlusMove(candidate.move2) != null)
+    val hasSpecialCharge = matchingMega && moves.any { parsePlusMove(it.move2) != null }
+    if (mode == PersonalMovesMode.CURRENT &&
+        (fast.isNullOrBlank() || (charges.isEmpty() && !hasSpecialCharge))) return null
 
     val constrained = moves.filter { candidate ->
         (fast == null || personalMovesMatch(candidate.move1, fast)) &&
-            (charges.isEmpty() || charges.any { personalMovesMatch(candidate.move2, it) })
+            ((charges.isEmpty() && !hasSpecialCharge) || availableCharge(candidate))
     }
     // A response lists only the ten best movesets per attacker, so a recorded set can be
     // missing from it entirely. Scoring such a copy at the worst listed moveset understates
@@ -227,9 +241,9 @@ internal fun selectOwnedMoves(
     val pool = if (mode == PersonalMovesMode.CURRENT) constrained else constrained.ifEmpty { moves }
     val selected = selectPersonalMove(pool, metric) ?: return null
     val assumed = mode == PersonalMovesMode.BEST_POTENTIAL &&
-        (fast.isNullOrBlank() || charges.isEmpty() ||
+        (fast.isNullOrBlank() ||
             !personalMovesMatch(selected.move1, fast) ||
-            charges.none { personalMovesMatch(selected.move2, it) })
+            !availableCharge(selected))
     return OwnedMoveChoice(move = selected, assumed = assumed)
 }
 
