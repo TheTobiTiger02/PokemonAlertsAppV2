@@ -116,100 +116,27 @@ class MapClusteringTest {
     }
 
     @Test
-    fun expandedNonCoincidentMembersRenderIndividuallyBelowThreshold() {
-        val first = alert("a", 49.7380, 8.6180)
-        val second = alert("b", 49.73801, 8.61801)
-
-        val items = clusterMapAlerts(
-            alerts = listOf(first, second),
-            zoom = 12.0,
-            expandedAlertIds = setOf(first.uniqueId, second.uniqueId)
+    fun clusterTapZoomsTwoLevelsWithoutExpandingMembers() {
+        val alerts = listOf(alert("a", 49.7380, 8.6180), alert("b", 49.73801, 8.61801))
+        val cluster = clusterMapAlerts(alerts, zoom = 12.0).single() as MapMarkerItem.Cluster
+        val interaction = resolveMapClusterInteraction(cluster, currentZoom = 12.0, maximumZoom = 20.0)
+        assertEquals(
+            MapClusterInteraction.ZoomTo(MapCameraSnapshot(cluster.latitude, cluster.longitude, 14.0)),
+            interaction
         )
-
-        assertEquals(2, items.size)
-        assertTrue(items.all { it is MapMarkerItem.Alert })
+        assertEquals(cluster, clusterMapAlerts(alerts, zoom = 12.0).single())
+        assertEquals(
+            MapClusterInteraction.ZoomTo(MapCameraSnapshot(cluster.latitude, cluster.longitude, 20.0)),
+            resolveMapClusterInteraction(cluster, 19.0, 20.0)
+        )
+        assertEquals(MapClusterInteraction.ShowMembers, resolveMapClusterInteraction(cluster, 20.0, 20.0))
     }
 
     @Test
-    fun expandedCoincidentMembersRemainASelectableCountCluster() {
-        val first = alert("a", 49.7380, 8.6180)
-        val second = alert("b", 49.7380, 8.6180)
-
-        val items = clusterMapAlerts(
-            alerts = listOf(first, second),
-            zoom = 12.0,
-            expandedAlertIds = setOf(first.uniqueId, second.uniqueId)
-        )
-
-        assertTrue(items.single() is MapMarkerItem.Cluster)
-        assertTrue(areMapAlertsCoincident(listOf(first, second)))
-    }
-
-    @Test
-    fun unrelatedAlertsContinueClusteringWhileExpandedMembersStayIndividual() {
-        val expandedFirst = alert("expanded-a", 49.7380, 8.6180)
-        val expandedSecond = alert("expanded-b", 49.73801, 8.61801)
-        val normalFirst = alert("normal-a", 49.7390, 8.6190)
-        val normalSecond = alert("normal-b", 49.73901, 8.61901)
-
-        val items = clusterMapAlerts(
-            alerts = listOf(expandedFirst, expandedSecond, normalFirst, normalSecond),
-            zoom = 12.0,
-            expandedAlertIds = setOf(expandedFirst.uniqueId, expandedSecond.uniqueId)
-        )
-
-        assertEquals(2, items.count { it is MapMarkerItem.Alert })
-        assertEquals(1, items.count { it is MapMarkerItem.Cluster })
-        assertEquals(
-            setOf(normalFirst.uniqueId, normalSecond.uniqueId),
-            (items.single { it is MapMarkerItem.Cluster } as MapMarkerItem.Cluster)
-                .alerts
-                .mapTo(mutableSetOf(), PokemonAlert::uniqueId)
-        )
-    }
-
-    @Test
-    fun expansionStateClearsOnlyAfterZoomingOutAndDropsInactiveMembers() {
-        val original = listOf("expired", "active")
-        assertFalse(shouldClearExpandedMapCluster(15.0, 15.0))
-        assertFalse(shouldClearExpandedMapCluster(15.0, 16.0))
-        assertTrue(shouldClearExpandedMapCluster(15.0, 14.8))
-        assertEquals(
-            listOf("active"),
-            retainActiveExpandedAlertIds(
-                expandedAlertIds = original,
-                activeAlertIds = setOf("active", "other")
-            )
-        )
-        assertEquals(listOf("expired", "active"), original)
-    }
-
-    @Test
-    fun clusterInteractionExpandsDistinctMembersButListsCoordinateStacks() {
-        val first = alert("a", 49.7380, 8.6180)
-        val second = alert("b", 49.73801, 8.61801)
-        val distinctCluster = clusterMapAlerts(
-            alerts = listOf(first, second),
-            zoom = 12.0
-        ).single() as MapMarkerItem.Cluster
-        val stackedCluster = clusterMapAlerts(
-            alerts = listOf(first, second.copy(latitude = first.latitude, longitude = first.longitude)),
-            zoom = 20.0
-        ).single() as MapMarkerItem.Cluster
-
-        val expansion = resolveMapClusterInteraction(distinctCluster, currentZoom = 12.0)
-
-        assertTrue(expansion is MapClusterInteraction.Expand)
-        expansion as MapClusterInteraction.Expand
-        assertEquals(12.0, expansion.originZoom, 0.001)
-        assertEquals(
-            setOf(first.uniqueId, second.uniqueId),
-            expansion.alertIds.toSet()
-        )
-        assertEquals(
-            MapClusterInteraction.ShowMembers,
-            resolveMapClusterInteraction(stackedCluster, currentZoom = 20.0)
-        )
+    fun coincidentMembersOpenListAtAnyZoom() {
+        val alerts = listOf(alert("a", 49.738, 8.618), alert("b", 49.738, 8.618))
+        val cluster = clusterMapAlerts(alerts, zoom = 12.0).single() as MapMarkerItem.Cluster
+        assertEquals(MapClusterInteraction.ShowMembers, resolveMapClusterInteraction(cluster, 12.0, 20.0))
     }
 
     @Test

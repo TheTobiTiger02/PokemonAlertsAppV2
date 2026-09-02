@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -514,12 +515,6 @@ internal fun AlertsMapScreenContent(
     var mapLoadAttempt by rememberSaveable { mutableIntStateOf(0) }
     var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedClusterAlerts by remember { mutableStateOf<List<PokemonAlert>>(emptyList()) }
-    var expandedClusterAlertIds by rememberSaveable {
-        mutableStateOf<List<String>>(emptyList())
-    }
-    var expandedClusterOriginZoom by rememberSaveable {
-        mutableStateOf<Double?>(null)
-    }
     val selectedAlert = remember(alerts, selectedAlertId, arrivalTracking.activeDestination) {
         alerts.firstOrNull { it.uniqueId == selectedAlertId }
             ?: arrivalTracking.activeDestination?.alert
@@ -859,21 +854,11 @@ internal fun AlertsMapScreenContent(
         configured = goDexConfig.isConnected
     )
 
-    LaunchedEffect(selectedCategories, mapSource) {
-        expandedClusterAlertIds = emptyList()
-        expandedClusterOriginZoom = null
-    }
-
+    // Keep an open stack list aligned with filters, updates, and expiration.
     LaunchedEffect(renderedAlerts) {
-        val retainedIds = retainActiveExpandedAlertIds(
-            expandedAlertIds = expandedClusterAlertIds,
-            activeAlertIds = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
-        )
-        if (retainedIds.size != expandedClusterAlertIds.size) {
-            expandedClusterAlertIds = retainedIds.toList()
-        }
-        if (retainedIds.isEmpty()) {
-            expandedClusterOriginZoom = null
+        if (selectedClusterAlerts.isNotEmpty()) {
+            val memberIds = selectedClusterAlerts.mapTo(hashSetOf()) { it.uniqueId }
+            selectedClusterAlerts = renderedAlerts.filter { it.uniqueId in memberIds }
         }
     }
 
@@ -1314,23 +1299,6 @@ internal fun AlertsMapScreenContent(
                 viewportHeightDp = viewportHeightDp
             )
         }
-        // Cull to the widened viewport before clustering; the tracked PiP alert always
-        // survives so the follow marker can never be culled out from under itself.
-        val clusteredAlerts = remember(renderedAlerts, viewportBounds, protectedAlertIds) {
-            if (viewportBounds == null) {
-                renderedAlerts
-            } else {
-                renderedAlerts.filter { alert ->
-                    alert.uniqueId in protectedAlertIds ||
-                        alert.mapCoordinatesOrNull()?.let { coords ->
-                            viewportBounds.contains(coords.latitude, coords.longitude)
-                        } == true
-                }
-            }
-        }
-        val expandedAlertIdSet = remember(expandedClusterAlertIds) {
-            expandedClusterAlertIds.toSet()
-        }
         val spawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
         val baseMarkerSizeDp = mapAlertMarkerSizeDp(
             compactPictureInPicture = compactPictureInPicture,
@@ -1341,22 +1309,22 @@ internal fun AlertsMapScreenContent(
             emphasized = true
         )
         val clusterMarkerSizeDp = mapClusterMarkerSizeDp(compactPictureInPicture)
-        val markerItems = remember(
-            clusteredAlerts,
-            clusterZoom,
-            spawnRadiusMeters,
-            expandedAlertIdSet,
-            protectedAlertIds
-        ) {
-            clusterMapAlerts(
-                alerts = clusteredAlerts,
-                zoom = clusterZoom,
-                spawnRadiusMeters = spawnRadiusMeters,
-                expandedAlertIds = expandedAlertIdSet,
-                protectedAlertIds = protectedAlertIds
-            )
+        val preparedMarkers by rememberPreparedMapMarkers(
+            alerts = renderedAlerts,
+            bounds = viewportBounds,
+            zoom = clusterZoom,
+            spawnRadius = spawnRadiusMeters,
+            protectedIds = protectedAlertIds
+        )
+        val markerItems by rememberBatchedMapItems(preparedMarkers.items) { item ->
+            when (item) {
+                is MapMarkerItem.Alert -> item.alert.uniqueId
+                is MapMarkerItem.Cluster -> "cluster-${item.id}"
+            }
         }
-        val renderedMarkerCount = markerItems.count { it is MapMarkerItem.Alert }
+        val circledAlerts by rememberBatchedMapItems(preparedMarkers.spawnAlerts, batchSize = 2) { it.uniqueId }
+        // Use the complete target so countdown precision does not switch halfway through a batch.
+        val renderedMarkerCount = preparedMarkers.items.count { it is MapMarkerItem.Alert }
         val minutePrecisionCountdown =
             showTimeLabels && renderedMarkerCount > ADAPTIVE_COUNTDOWN_PRECISION_THRESHOLD
         val markerTickMillis = when {
@@ -1366,16 +1334,7 @@ internal fun AlertsMapScreenContent(
         }
         val markerCountdownClock = rememberCountdownClock(markerTickMillis)
 
-        LaunchedEffect(cameraAnchor.zoom, expandedClusterOriginZoom) {
-            if (shouldClearExpandedMapCluster(expandedClusterOriginZoom, cameraAnchor.zoom)) {
-                expandedClusterAlertIds = emptyList()
-                expandedClusterOriginZoom = null
-            }
-        }
-
         fun fitVisibleAlerts() {
-            expandedClusterAlertIds = emptyList()
-            expandedClusterOriginZoom = null
             applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
             if (visibleCoordinates.isEmpty()) {
                 Toast.makeText(context, R.string.map_no_alerts_to_show, Toast.LENGTH_SHORT).show()
@@ -1448,35 +1407,18 @@ internal fun AlertsMapScreenContent(
                     )
                 }
                 if (spawnRadiusMeters != null && cameraAnchor.zoom >= SPAWN_CIRCLE_MIN_ZOOM) {
-                    // Zoom-gated and capped: at Darmstadt density, drawing a circle per spawn
-                    // below neighborhood zoom repaints the whole map and drags the frame rate.
-                    val circledAlerts = remember(
-                        renderedAlerts,
-                        cameraAnchor,
-                        spawnRadiusMeters
-                    ) {
-                        renderedAlerts
-                            .filter { it.isSpawnAlert }
-                            .sortedBy { alert ->
-                                val coords = alert.mapCoordinatesOrNull()
-                                val latitudeDelta =
-                                    (coords?.latitude ?: cameraAnchor.latitude) - cameraAnchor.latitude
-                                val longitudeDelta =
-                                    (coords?.longitude ?: cameraAnchor.longitude) - cameraAnchor.longitude
-                                latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta
-                            }
-                            .take(MAX_SPAWN_CIRCLES)
-                    }
                     circledAlerts.forEach { alert ->
                         val coords = alert.mapCoordinatesOrNull() ?: return@forEach
-                        Circle(
-                            center = LatLng(coords.latitude, coords.longitude),
-                            radius = spawnRadiusMeters,
-                            fillColor = Color(0x471A73E8),
-                            strokeColor = Color(0xFF1A73E8),
-                            strokeWidth = 2.5f * density.density,
-                            zIndex = 800f
-                        )
+                        key("radius-${alert.uniqueId}") {
+                            Circle(
+                                center = LatLng(coords.latitude, coords.longitude),
+                                radius = spawnRadiusMeters,
+                                fillColor = Color(0x471A73E8),
+                                strokeColor = Color(0xFF1A73E8),
+                                strokeWidth = 2.5f * density.density,
+                                zIndex = 800f
+                            )
+                        }
                     }
                 }
                 markerItems.forEach { item ->
@@ -1506,6 +1448,7 @@ internal fun AlertsMapScreenContent(
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
                             Marker(
+                                contentDescription = "${item.alerts.size} alerts",
                                 state = MarkerState(LatLng(item.latitude, item.longitude)),
                                 icon = BitmapDescriptorFactory.fromBitmap(
                                     remember(
@@ -1531,7 +1474,8 @@ internal fun AlertsMapScreenContent(
                                         } else {
                                             resolveMapClusterInteraction(
                                                 cluster = item,
-                                                currentZoom = cameraAnchor.zoom
+                                                currentZoom = cameraAnchor.zoom,
+                                                maximumZoom = mapProperties.maxZoomPreference.toDouble()
                                             )
                                         }
                                     ) {
@@ -1539,16 +1483,13 @@ internal fun AlertsMapScreenContent(
                                         MapClusterInteraction.ShowMembers -> {
                                             selectedClusterAlerts = item.alerts
                                         }
-                                        is MapClusterInteraction.Expand -> {
-                                            expandedClusterAlertIds = interaction.alertIds.toList()
-                                            expandedClusterOriginZoom = interaction.originZoom
+                                        is MapClusterInteraction.ZoomTo -> {
                                             scope.launch {
-                                                val bounds = LatLngBounds(
-                                                    LatLng(item.bounds.south, item.bounds.west),
-                                                    LatLng(item.bounds.north, item.bounds.east)
-                                                )
                                                 cameraPositionState.animate(
-                                                    CameraUpdateFactory.newLatLngBounds(bounds, fitPaddingPx),
+                                                    CameraUpdateFactory.newLatLngZoom(
+                                                        LatLng(interaction.target.latitude, interaction.target.longitude),
+                                                        interaction.target.zoom.toFloat()
+                                                    ),
                                                     600
                                                 )
                                             }
@@ -1566,7 +1507,7 @@ internal fun AlertsMapScreenContent(
             key(mapLoadAttempt) {
                 OpenStreetMapView(
                     modifier = Modifier.fillMaxSize(),
-                    alerts = clusteredAlerts,
+                    alerts = circledAlerts,
                     markerItems = markerItems,
                     countdownTickMillis = markerTickMillis,
                     minutePrecisionCountdown = minutePrecisionCountdown,
@@ -1595,7 +1536,8 @@ internal fun AlertsMapScreenContent(
                             } else {
                                 resolveMapClusterInteraction(
                                     cluster = cluster,
-                                    currentZoom = retainedZoom
+                                    currentZoom = retainedZoom,
+                                    maximumZoom = openStreetMapController.maximumZoom
                                 )
                             }
                         ) {
@@ -1603,13 +1545,8 @@ internal fun AlertsMapScreenContent(
                             MapClusterInteraction.ShowMembers -> {
                                 selectedClusterAlerts = cluster.alerts
                             }
-                            is MapClusterInteraction.Expand -> {
-                                expandedClusterAlertIds = interaction.alertIds.toList()
-                                expandedClusterOriginZoom = interaction.originZoom
-                                openStreetMapController.fitAlerts(
-                                    cluster.alerts.mapNotNull(PokemonAlert::mapCoordinatesOrNull),
-                                    fitPaddingPx
-                                )
+                            is MapClusterInteraction.ZoomTo -> {
+                                openStreetMapController.setCamera(interaction.target, animate = true)
                             }
                         }
                     },
@@ -1617,7 +1554,6 @@ internal fun AlertsMapScreenContent(
                     onUserGesture = {
                         applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
                     },
-                    expandedAlertIds = expandedAlertIdSet,
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
                     interactive = !compactPictureInPicture,
@@ -1885,29 +1821,14 @@ internal fun AlertsMapScreenContent(
 
         if (!compactPictureInPicture && selectedClusterAlerts.isNotEmpty()) {
             ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        "${selectedClusterAlerts.size} alerts here",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    selectedClusterAlerts.take(12).forEach { alert ->
-                        TextButton(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                selectedClusterAlerts = emptyList()
-                                selectedAlertId = alert.uniqueId
-                            }
-                        ) {
-                            Text(alert.name, modifier = Modifier.weight(1f))
-                            MapCountdownText(alert.endTime, markerCountdownClock)
-                        }
+                MapClusterMemberList(
+                    alerts = selectedClusterAlerts,
+                    countdownClock = markerCountdownClock,
+                    onSelect = { alert ->
+                        selectedClusterAlerts = emptyList()
+                        selectedAlertId = alert.uniqueId
                     }
-                    Spacer(Modifier.height(12.dp))
-                }
+                )
             }
         }
 
@@ -2132,6 +2053,34 @@ internal fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
                     Text(animatedText, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                     if (animatedProblem) TextButton(onClick = onRetry) { Text("Retry") }
                 }
+            }
+        }
+    }
+}
+
+/** A virtualized list keeps every member selectable without composing thousands of rows. */
+@Composable
+internal fun MapClusterMemberList(
+    alerts: List<PokemonAlert>,
+    countdownClock: State<Long>,
+    onSelect: (PokemonAlert) -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).testTag("map_cluster_members"),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        item(key = "heading") {
+            Text(
+                "${alerts.size} alerts here",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        items(alerts, key = { it.uniqueId }) { alert ->
+            TextButton(modifier = Modifier.fillMaxWidth(), onClick = { onSelect(alert) }) {
+                Text(alert.name, modifier = Modifier.weight(1f))
+                MapCountdownText(alert.endTime, countdownClock)
             }
         }
     }

@@ -148,6 +148,8 @@ internal class OpenStreetMapController {
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     /** Live camera zoom, tracked only to gate the spawn-radius polygons. */
     private var pendingZoom: Double = 0.0
+    private var radiusLayersOrdered = false
+    val maximumZoom: Double get() = map?.maxZoomLevel ?: 20.0
     var onAlertClick: (PokemonAlert) -> Unit = {}
     var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
@@ -217,6 +219,7 @@ internal class OpenStreetMapController {
 
     fun attachStyle(style: Style, context: android.content.Context) {
         this.style = style
+        radiusLayersOrdered = false
         style.addImage(USER_DOT_IMAGE, createMapUserMarkerBitmap(context, directional = false))
         style.addImage(USER_ARROW_IMAGE, createMapUserMarkerBitmap(context, directional = true))
         style.addSource(GeoJsonSource(SPAWN_RADIUS_SOURCE))
@@ -252,6 +255,7 @@ internal class OpenStreetMapController {
                 iconIgnorePlacement(true)
             )
         )
+        orderRadiusLayersBelowMarkers()
         renderUserPose()
         renderSpawnRadii()
     }
@@ -372,6 +376,18 @@ internal class OpenStreetMapController {
 
         markerIndex.clear()
         desired.forEach { (id, model) -> markerIndex[id] = model.item }
+        orderRadiusLayersBelowMarkers()
+    }
+
+    /** Legacy annotations can be created before or after style load; circles must stay below them. */
+    private fun orderRadiusLayersBelowMarkers() {
+        val currentStyle = style ?: return
+        if (radiusLayersOrdered || currentStyle.getLayer(ANNOTATION_POINTS_LAYER) == null) return
+        listOf(SPAWN_RADIUS_LAYER, SPAWN_RADIUS_LINE_LAYER, USER_ACCURACY_LAYER).forEach { id ->
+            val layer = currentStyle.getLayer(id) ?: return@forEach
+            if (currentStyle.removeLayer(layer)) currentStyle.addLayerBelow(layer, ANNOTATION_POINTS_LAYER)
+        }
+        radiusLayersOrdered = true
     }
 
     private fun renderUserPose() {
@@ -429,6 +445,8 @@ internal class OpenStreetMapController {
     }
 
     private companion object {
+        // Native annotation layer ID in the bundled MapLibre SDK.
+        const val ANNOTATION_POINTS_LAYER = "org.maplibre.annotations.points"
         const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
         const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
         const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
@@ -490,7 +508,6 @@ internal fun OpenStreetMapView(
     onClusterClick: (MapMarkerItem.Cluster) -> Unit = {},
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
-    expandedAlertIds: Set<String> = emptySet(),
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
     interactive: Boolean = true,
@@ -637,26 +654,31 @@ internal fun OpenStreetMapView(
         emphasizedMarkerSizePx,
         clusterMarkerSizePx
     ) {
-        val immediateMarkers = markerItems.map { item ->
-            val emphasized = item is MapMarkerItem.Alert &&
-                item.alert.uniqueId in emphasizedAlertIds
-            createImmediateOpenStreetMapMarker(
-                item = item,
-                markerSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx,
-                clusterMarkerSizePx = clusterMarkerSizePx,
-                showTimeLabels = showTimeLabels,
-                nowMillis = now,
-                minutePrecision = minutePrecisionCountdown,
-                basePalette = basePalette,
-                goDexMatches = goDexMatches,
-                emphasized = emphasized
-            )
+        val immediateMarkers = withContext(Dispatchers.Default) {
+            markerItems.map { item ->
+                currentCoroutineContext().ensureActive()
+                val emphasized = item is MapMarkerItem.Alert &&
+                    item.alert.uniqueId in emphasizedAlertIds
+                createImmediateOpenStreetMapMarker(
+                    item = item,
+                    markerSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx,
+                    clusterMarkerSizePx = clusterMarkerSizePx,
+                    showTimeLabels = showTimeLabels,
+                    nowMillis = now,
+                    minutePrecision = minutePrecisionCountdown,
+                    basePalette = basePalette,
+                    goDexMatches = goDexMatches,
+                    emphasized = emphasized
+                )
+            }
         }
+        currentCoroutineContext().ensureActive()
         withContext(Dispatchers.Main.immediate) {
             controller.setMarkers(context, immediateMarkers, alerts)
         }
         val markers = withContext(Dispatchers.IO) {
             markerItems.mapNotNull { item ->
+                currentCoroutineContext().ensureActive()
                 if (item is MapMarkerItem.Cluster) {
                     return@mapNotNull OpenStreetMapMarker(
                         item,
@@ -795,12 +817,18 @@ private fun openStreetMapStyleJson(): String {
     """.trimIndent()
 }
 
+private val openStreetMapClusterIconCache = object : android.util.LruCache<String, MapMarkerIcon>(4 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.allocationByteCount
+}
+
 private fun createOpenStreetMapClusterIcon(
     count: Int,
     sharedCategory: AlertCategory?,
     sizePx: Int
 ): MapMarkerIcon {
     val size = sizePx.coerceAtLeast(1)
+    val cacheKey = "$count:$sharedCategory:$size"
+    openStreetMapClusterIconCache.get(cacheKey)?.let { return it }
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     val color = sharedCategory?.accentArgb?.toInt()
@@ -823,5 +851,7 @@ private fun createOpenStreetMapClusterIcon(
         size / 2f - (textPaint.ascent() + textPaint.descent()) / 2f,
         textPaint
     )
-    return MapMarkerIcon(bitmap, androidx.compose.ui.geometry.Offset(0.5f, 0.5f))
+    return MapMarkerIcon(bitmap, androidx.compose.ui.geometry.Offset(0.5f, 0.5f)).also {
+        openStreetMapClusterIconCache.put(cacheKey, it)
+    }
 }

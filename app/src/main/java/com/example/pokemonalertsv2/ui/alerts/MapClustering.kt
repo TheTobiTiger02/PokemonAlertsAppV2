@@ -11,21 +11,11 @@ import kotlin.math.pow
 /** Neighborhood/default view and closer show individual markers; only exact stacks stay grouped. */
 internal const val MAP_CLUSTER_MAX_ZOOM = 13.0
 
-/**
- * Hard ceiling on rendered markers (single pins + cluster bubbles). Once clustering at the
- * normal cell cannot get under it — the Darmstadt sources can put thousands of alerts on the
- * map at once — the cluster cell widens in steps until the marker list is small enough for
- * the map to stay smooth. The widening ceiling only exists as a loop bound: at high zoom a
- * dp cell covers a few metres, so the cell must be able to grow to kilometres.
- */
+/** Hard ceiling on individual pins plus cluster bubbles, including protected tracking pins. */
 internal const val MAX_RENDERED_MAP_MARKERS = 350
 
-/** Cluster cell widening stops here — about 12 doublings past the visual cluster size. */
-internal const val MAX_CLUSTER_CELL_DP = 48f * 4_096f
-
 /**
- * Below this zoom the map keeps drawing individual spawn-radius circles; above it the circles
- * are capped: at Darmstadt density they otherwise repaint the whole map blue.
+ * Spawn circles are shown only at this zoom and closer, with a separate rendering cap.
  */
 internal const val SPAWN_CIRCLE_MIN_ZOOM = 14.0
 internal const val MAX_SPAWN_CIRCLES = 60
@@ -80,10 +70,7 @@ internal sealed interface MapMarkerItem {
 internal sealed interface MapClusterInteraction {
     data object ShowMembers : MapClusterInteraction
 
-    data class Expand(
-        val alertIds: List<String>,
-        val originZoom: Double
-    ) : MapClusterInteraction
+    data class ZoomTo(val target: MapCameraSnapshot) : MapClusterInteraction
 }
 
 /** Radius of the drawn spawn circle, or null when spawn radii are hidden. */
@@ -95,60 +82,21 @@ internal fun spawnRadiusMeters(showSpawnRadius: Boolean, spacialRendEnabled: Boo
     }
 
 /**
- * Provider-independent screen-space clustering. At maximum zoom only coincident
- * coordinates are grouped, so stacked alerts remain selectable.
- *
- * When spawn radii are drawn ([spawnRadiusMeters] non-null) two spawn alerts are only merged while
- * their circles still overlap, so visibly separate circles never hide behind a count bubble.
- *
- * If the result exceeds [MAX_RENDERED_MAP_MARKERS], clustering is redone with progressively
- * wider cells — at Darmstadt density this is what keeps the map rendering at all.
+ * Small inputs retain overlap clustering and exact stacks at neighborhood zoom. Dense inputs
+ * use bounded grid cells instead of transitive components: a chain of nearby alerts must not
+ * join an entire city or require comparing every pair in a crowded bucket.
+ * [checkActive] lets background callers cancel obsolete work between preprocessing/grouping steps.
  */
 internal fun clusterMapAlerts(
     alerts: List<PokemonAlert>,
     zoom: Double,
     cellDp: Float = MAP_CLUSTER_CELL_DP,
     spawnRadiusMeters: Double? = null,
-    expandedAlertIds: Set<String> = emptySet(),
-    protectedAlertIds: Set<String> = emptySet()
-): List<MapMarkerItem> {
-    var effectiveCellDp = cellDp
-    var forceGrid = zoom >= MAP_CLUSTER_MAX_ZOOM && alerts.size > MAX_RENDERED_MAP_MARKERS
-    var items = clusterMapAlertsOnce(
-        alerts = alerts,
-        zoom = zoom,
-        cellDp = effectiveCellDp,
-        forceGrid = forceGrid,
-        spawnRadiusMeters = spawnRadiusMeters,
-        expandedAlertIds = expandedAlertIds,
-        protectedAlertIds = protectedAlertIds
-    )
-    while (items.size > MAX_RENDERED_MAP_MARKERS && effectiveCellDp < MAX_CLUSTER_CELL_DP) {
-        forceGrid = true
-        effectiveCellDp = (effectiveCellDp * 4f).coerceAtMost(MAX_CLUSTER_CELL_DP)
-        items = clusterMapAlertsOnce(
-            alerts = alerts,
-            zoom = zoom,
-            cellDp = effectiveCellDp,
-            forceGrid = forceGrid,
-            spawnRadiusMeters = spawnRadiusMeters,
-            expandedAlertIds = expandedAlertIds,
-            protectedAlertIds = protectedAlertIds
-        )
-    }
-    return items
-}
-
-private fun clusterMapAlertsOnce(
-    alerts: List<PokemonAlert>,
-    zoom: Double,
-    cellDp: Float,
-    forceGrid: Boolean,
-    spawnRadiusMeters: Double?,
-    expandedAlertIds: Set<String>,
-    protectedAlertIds: Set<String>
+    protectedAlertIds: Set<String> = emptySet(),
+    checkActive: () -> Unit = {}
 ): List<MapMarkerItem> {
     val positioned = alerts.mapNotNull { alert ->
+        checkActive()
         val latitude = alert.latitude ?: return@mapNotNull null
         val longitude = alert.longitude ?: return@mapNotNull null
         if (latitude !in -85.0..85.0 || longitude !in -180.0..180.0) return@mapNotNull null
@@ -160,41 +108,54 @@ private fun clusterMapAlertsOnce(
         .filter { it.alert.uniqueId in protectedAlertIds }
         .map(::listOf)
     val clusterable = positioned.filterNot { it.alert.uniqueId in protectedAlertIds }
-    val groups = if (zoom < MAP_CLUSTER_MAX_ZOOM || forceGrid) {
-        val scale = 256.0 * 2.0.pow(zoom)
-        val thresholdDp = max(1.0, cellDp.toDouble())
-        val radiusGuardDp = spawnCircleGuardDp(clusterable, zoom, spawnRadiusMeters)
-        val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
-        val normalAlerts = clusterable.filterNot { it.alert.uniqueId in expandedAlertIds }
-        val expandedGroups = clusterable
-            .filter { it.alert.uniqueId in expandedAlertIds }
-            .groupBy(::exactCoordinateKey)
-            .values
-            .map { it.toList() }
-        val normalPoints = normalAlerts.map { projectMapAlertToScreen(it, scale) }
-        val guarded = BooleanArray(normalAlerts.size) { index ->
-            radiusGuardDp != null && normalAlerts[index].alert.isSpawnAlert
-        }
-        val normalGroups = connectedMapScreenComponents(
-            points = normalPoints,
-            thresholdFor = { first, second ->
-                if (guarded[first] && guarded[second]) guardedThresholdDp else thresholdDp
-            },
-            // The widest threshold any pair can ask for; the grid cells must be at least
-            // this size or pairs spanning a cell boundary would be missed.
-            cellSize = thresholdDp
-        ).map { indices ->
-            indices.map(normalAlerts::get)
-        }
-        (normalGroups + expandedGroups + protectedGroups).sortedBy { members ->
-            members.minOf { it.alert.uniqueId }
-        }
-    } else {
-        (clusterable.groupBy(::exactCoordinateKey).values.map { it.toList() } + protectedGroups)
-            .sortedBy { members -> members.minOf { it.alert.uniqueId } }
+    // The UI protects at most the active tracked alert. Reserve its slot before grouping.
+    val budget = MAX_RENDERED_MAP_MARKERS - protectedGroups.size
+    require(budget >= 0 && (clusterable.isEmpty() || budget > 0)) {
+        "Protected alerts must leave room for the clustered alerts"
     }
+    val scale = 256.0 * 2.0.pow(zoom.coerceIn(0.0, 24.0))
+    val normalGroups = when {
+        positioned.size > MAX_RENDERED_MAP_MARKERS -> {
+            val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
+            var cellSize = max(1.0, cellDp.toDouble())
+            var cells: Collection<List<PositionedAlert>>
+            do {
+                checkActive()
+                val buckets = linkedMapOf<Long, MutableList<PositionedAlert>>()
+                points.forEachIndexed { index, point ->
+                    checkActive()
+                    buckets.getOrPut(packCellKey(point.cellX(cellSize), point.cellY(cellSize))) {
+                        mutableListOf()
+                    }.add(clusterable[index])
+                }
+                cells = buckets.values
+                cellSize *= 2.0
+            } while (cells.size > budget)
+            cells.toList()
+        }
+        zoom < MAP_CLUSTER_MAX_ZOOM -> {
+            val thresholdDp = max(1.0, cellDp.toDouble())
+            val radiusGuardDp = spawnCircleGuardDp(clusterable, zoom, spawnRadiusMeters)
+            val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
+            val points = clusterable.map { projectMapAlertToScreen(it, scale) }
+            val guarded = BooleanArray(clusterable.size) { index ->
+                radiusGuardDp != null && clusterable[index].alert.isSpawnAlert
+            }
+            connectedMapScreenComponents(
+                points = points,
+                thresholdFor = { first, second ->
+                    checkActive()
+                    if (guarded[first] && guarded[second]) guardedThresholdDp else thresholdDp
+                },
+                cellSize = thresholdDp
+            ).map { indices -> indices.map(clusterable::get) }
+        }
+        else -> clusterable.groupBy(::exactCoordinateKey).values.toList()
+    }
+    val groups = (normalGroups + protectedGroups).sortedBy { it.first().alert.uniqueId }
 
     return groups.map { members ->
+        checkActive()
         if (members.size == 1) {
             val item = members.first()
             MapMarkerItem.Alert(item.alert, item.latitude, item.longitude)
@@ -204,11 +165,11 @@ private fun clusterMapAlertsOnce(
             val north = members.maxOf { it.latitude }
             val east = members.maxOf { it.longitude }
             val sharedCategory = members
-                .map { it.alert.alertCategories() }
+                .map { checkActive(); it.alert.alertCategories() }
                 .reduce { common, categories -> common intersect categories }
                 .singleOrNull()
             MapMarkerItem.Cluster(
-                id = members.map { it.alert.uniqueId }.sorted().joinToString("|").hashCode().toString(),
+                id = members.joinToString("|") { it.alert.uniqueId }.hashCode().toString(),
                 alerts = members.map { it.alert },
                 latitude = (south + north) / 2.0,
                 longitude = (west + east) / 2.0,
@@ -234,8 +195,8 @@ internal fun connectedMapScreenComponents(
  * Pairs are found through a spatial hash grid with [cellSize] cells instead of comparing
  * every point with every other point: any pair within threshold distance necessarily sits in
  * the same or an adjacent cell, so scanning each point's 3x3 neighbourhood finds exactly the
- * same merges as the old all-pairs loop — in O(n) instead of O(n²), which matters when a
- * zoom tick reclusters thousands of Darmstadt alerts.
+ * same merges as the all-pairs loop. Crowded buckets still have quadratic worst-case cost;
+ * this routine is therefore used only for inputs within the rendering budget.
  *
  * [cellSize] must be at least the maximum threshold [thresholdFor] can return.
  */
@@ -351,37 +312,20 @@ private const val METERS_PER_DEGREE_LATITUDE = 111_320.0
 internal fun MapGeoBounds.contains(latitude: Double, longitude: Double): Boolean =
     latitude in south..north && longitude in west..east
 
-internal fun shouldClearExpandedMapCluster(
-    expansionOriginZoom: Double?,
-    currentZoom: Double,
-    tolerance: Double = 0.05
-): Boolean =
-    expansionOriginZoom != null && currentZoom < expansionOriginZoom - tolerance
-
-internal fun retainActiveExpandedAlertIds(
-    expandedAlertIds: Collection<String>,
-    activeAlertIds: Set<String>
-): List<String> = expandedAlertIds.filter(activeAlertIds::contains)
-
-internal fun areMapAlertsCoincident(alerts: List<PokemonAlert>): Boolean {
-    val coordinateKeys = alerts.mapNotNull { alert ->
-        val latitude = alert.latitude ?: return@mapNotNull null
-        val longitude = alert.longitude ?: return@mapNotNull null
-        exactCoordinateKey(latitude, longitude)
-    }.distinct()
-    return coordinateKeys.size == 1 && coordinateKeys.isNotEmpty()
-}
-
 internal fun resolveMapClusterInteraction(
     cluster: MapMarkerItem.Cluster,
-    currentZoom: Double
+    currentZoom: Double,
+    maximumZoom: Double
 ): MapClusterInteraction =
-    if (areMapAlertsCoincident(cluster.alerts)) {
+    if (currentZoom >= maximumZoom - 0.05 ||
+        // Bounds make coincidence checking constant-time even for a 10,000-member cluster.
+        exactCoordinateKey(cluster.bounds.south, cluster.bounds.west) ==
+        exactCoordinateKey(cluster.bounds.north, cluster.bounds.east)
+    ) {
         MapClusterInteraction.ShowMembers
     } else {
-        MapClusterInteraction.Expand(
-            alertIds = cluster.alerts.map(PokemonAlert::uniqueId),
-            originZoom = currentZoom
+        MapClusterInteraction.ZoomTo(
+            MapCameraSnapshot(cluster.latitude, cluster.longitude, min(currentZoom + 2.0, maximumZoom))
         )
     }
 

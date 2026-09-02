@@ -12,6 +12,60 @@ import kotlin.random.Random
 class MapClusteringPerformanceTest {
 
     @Test
+    fun denseGridsRespectBudgetAndPreserveEveryMemberAcrossZoomsAndRadii() {
+        for (count in listOf(999, 3_000, 10_000)) {
+            val alerts = List(count) { index ->
+                PokemonAlert(
+                    id = index + 1, name = "alert $index", type = listOf("Spawn"),
+                    latitude = 49.85 + (index % 100) * 0.0003,
+                    longitude = 8.60 + (index / 100) * 0.0003
+                )
+            }
+            val protected = setOf(alerts.first().uniqueId)
+            for (zoom in listOf(3.0, 12.0, 14.0, 20.0, 24.0)) {
+                for (radius in listOf(null, 40.0, 80.0)) {
+                    val items = clusterMapAlerts(alerts, zoom, spawnRadiusMeters = radius, protectedAlertIds = protected)
+                    assertTrue("$count alerts at $zoom / $radius produced ${items.size} markers", items.size <= MAX_RENDERED_MAP_MARKERS)
+                    val members = items.flatMap {
+                        when (it) {
+                            is MapMarkerItem.Alert -> listOf(it.alert)
+                            is MapMarkerItem.Cluster -> it.alerts
+                        }
+                    }
+                    assertEquals(count, members.size)
+                    assertEquals(alerts.map { it.uniqueId }.toSet(), members.map { it.uniqueId }.toSet())
+                    assertTrue(items.any { it is MapMarkerItem.Alert && it.alert.uniqueId in protected })
+                }
+            }
+            assertEquals(clusterMapAlerts(alerts, 12.0), clusterMapAlerts(alerts.reversed(), 12.0))
+        }
+    }
+
+    @Test
+    fun coincidentDenseStackDoesLinearWorkAndRetainsTrackingPin() {
+        val alerts = List(10_000) { PokemonAlert(id = it + 1, name = "stack $it", latitude = 49.87, longitude = 8.65) }
+        var checkpoints = 0
+        val items = clusterMapAlerts(alerts, 20.0, protectedAlertIds = setOf(alerts.first().uniqueId)) { checkpoints++ }
+        assertEquals(2, items.size)
+        assertEquals(9_999, (items.single { it is MapMarkerItem.Cluster } as MapMarkerItem.Cluster).alerts.size)
+        assertTrue("Dense stack should never compare every pair", checkpoints < alerts.size * 10)
+    }
+
+    @Test
+    fun obsoleteClusteringCanBeCancelledInsideDensePass() {
+        val alerts = List(10_000) { PokemonAlert(id = it + 1, name = "a", latitude = 49.87, longitude = 8.65) }
+        var checkpoints = 0
+        try {
+            clusterMapAlerts(alerts, 12.0, checkActive = {
+                if (++checkpoints == 12_000) throw kotlinx.coroutines.CancellationException("obsolete camera")
+            })
+            org.junit.Assert.fail("Cancelled work must not return markers")
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            assertEquals(12_000, checkpoints)
+        }
+    }
+
+    @Test
     fun gridClusteringMatchesAnAllPairsReference() {
         val random = Random(1234)
         val points = List(600) {
