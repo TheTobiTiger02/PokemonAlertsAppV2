@@ -304,7 +304,18 @@ private fun FilterAlertType.category(): AlertCategory = when (this) { FilterAler
 
 @Composable
 internal fun SelectionDialog(title: String, candidates: List<String>, current: FilterSelection, onDismiss: () -> Unit, artwork: Map<String, String> = emptyMap(), initialQuery: String = "", onQueryChanged: (String) -> Unit = {}, onSave: (FilterSelection) -> Unit) {
-    var mode by remember { mutableStateOf(current.mode) }; var selected by remember { mutableStateOf(current.normalizedValues) }; var query by rememberSaveable { mutableStateOf(initialQuery) }
+    var mode by remember { mutableStateOf(current.mode) }
+    var selected by remember { mutableStateOf(current.normalizedValues) }
+    var query by rememberSaveable { mutableStateOf(initialQuery) }
+    val isSpecies = remember(title) { title.contains("species", ignoreCase = true) }
+    var sortOrder by rememberSaveable { mutableStateOf(SpeciesSortOrder.DEX_NUMBER) }
+
+    fun extractDex(key: String): Int {
+        val url = artwork[key] ?: return Int.MAX_VALUE
+        val match = Regex("""/(\d+)\.png""").find(url) ?: return Int.MAX_VALUE
+        return match.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
+    }
+
     // Normalized keys are computed once per candidate list; filtering and sorting for the
     // search query then reuse them instead of re-normalizing hundreds of species per keystroke.
     val normalizedCandidates = remember(candidates, current.values) {
@@ -314,14 +325,37 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
     }
     val availableKeys = remember(normalizedCandidates) { normalizedCandidates.mapTo(mutableSetOf()) { it.first } }
     val queryKey = remember(query) { normalizeFilterToken(query) }
-    val display = remember(normalizedCandidates, current.normalizedValues, queryKey) {
+    val display = remember(normalizedCandidates, current.normalizedValues, queryKey, isSpecies, sortOrder, artwork) {
         normalizedCandidates
-            .filter { (key, _) -> key.contains(queryKey) }
-            .sortedWith(compareByDescending<Pair<String, String>> { (key, _) -> key in current.normalizedValues }.thenBy { (_, value) -> value })
+            .filter { (key, _) ->
+                key.contains(queryKey) || (isSpecies && extractDex(key).toString().contains(queryKey))
+            }
+            .sortedWith(
+                compareByDescending<Pair<String, String>> { (key, _) -> key in current.normalizedValues }
+                    .thenComparing { (key, _) ->
+                        if (isSpecies && sortOrder == SpeciesSortOrder.DEX_NUMBER) {
+                            extractDex(key)
+                        } else {
+                            Int.MAX_VALUE
+                        }
+                    }
+                    .thenBy { (_, value) -> value.lowercase() }
+            )
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxWidth().fillMaxHeight(.9f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                if (isSpecies) {
+                    FilterChip(
+                        selected = true,
+                        onClick = {
+                            sortOrder = if (sortOrder == SpeciesSortOrder.DEX_NUMBER) SpeciesSortOrder.NAME_AZ else SpeciesSortOrder.DEX_NUMBER
+                        },
+                        label = { Text("Sort: ${sortOrder.label}") }
+                    )
+                }
+            }
             FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterSelectionMode.entries.forEach { candidate ->
                     FilterChip(selected = mode == candidate, onClick = { mode = candidate }, label = {
@@ -329,21 +363,32 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                     })
                 }
             }
-            OutlinedTextField(query, { query = it; onQueryChanged(it) }, Modifier.fillMaxWidth(), label = { Text("Search") }, leadingIcon = { Icon(Icons.Default.Search, null) }, singleLine = true)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it; onQueryChanged(it) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(if (isSpecies) "Search name or Dex #" else "Search") },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                singleLine = true
+            )
             Text(if (mode == FilterSelectionMode.ONLY) "${selected.size} selected • selected entries first" else if (mode == FilterSelectionMode.NONE) "Nothing in this selector will match" else "Every value, including newly discovered entries", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (current.mode == FilterSelectionMode.ONLY && current.values.any { key -> candidates.none { normalizeFilterToken(it) == normalizeFilterToken(key) } }) Text("Unavailable selections are preserved", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top = 8.dp))
-            if (title.endsWith("species")) {
+            if (isSpecies) {
                 // Compact cells fit roughly twice as many species per screen. Selection reads from
                 // the border plus a corner badge instead of a full-size checkbox.
-                LazyVerticalGrid(columns = GridCells.Adaptive(76.dp), modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(80.dp), modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     gridItems(display, key = { it.first }) { (key, value) ->
                         val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected)
                         val unavailable = key !in availableKeys
+                        val dexNum = extractDex(key)
                         OutlinedCard(onClick = { selected = if (key in selected) selected - key else selected + key }, enabled = mode == FilterSelectionMode.ONLY, colors = CardDefaults.outlinedCardColors(disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant), border = BorderStroke(if (checked) 2.dp else 1.dp, if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.semantics { contentDescription = if (checked) "$value, selected" else value }) {
-                            Column(Modifier.fillMaxWidth().heightIn(min = 76.dp).padding(horizontal = 4.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 4.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Box(contentAlignment = Alignment.TopEnd) {
                                     AsyncImage(artwork[key], contentDescription = null, modifier = Modifier.size(40.dp))
                                     if (checked) Icon(Icons.Default.CheckCircle, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                                if (dexNum != Int.MAX_VALUE) {
+                                    Text("#${dexNum.toString().padStart(3, '0')}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Text(value, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 if (unavailable) Text("Unavailable", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1)

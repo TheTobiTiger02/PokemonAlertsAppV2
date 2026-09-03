@@ -60,6 +60,20 @@ class PokemonSpeciesRepository private constructor(context: Context) {
         }
     }
 
+    suspend fun getAllSpeciesList(): List<PokemonSpeciesEntity> {
+        return withContext(Dispatchers.IO) {
+            speciesDao.getAllSpeciesList()
+        }
+    }
+
+    suspend fun getSpeciesDexMap(): Map<String, Int> {
+        return withContext(Dispatchers.IO) {
+            speciesDao.getAllSpeciesList().associate { 
+                normalizeFilterToken(it.name) to it.id 
+            }
+        }
+    }
+
     companion object {
         @Volatile
         private var INSTANCE: PokemonSpeciesRepository? = null

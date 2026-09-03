@@ -17,6 +17,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -1751,28 +1753,47 @@ internal fun AlertsMapScreenContent(
                     onOpenLayers = { showLayersSheet = true }
                 )
 
-                val allCategories = remember { AlertCategory.entries.toSet() }
-                val isOnlyCategoryActive: (AlertCategory) -> Boolean = remember(selectedCategories, allCategories) {
-                    { cat -> selectedCategories.size == allCategories.size - 1 && cat !in selectedCategories }
+                val quickCategorySet = remember {
+                    setOf(
+                        AlertCategory.HUNDO,
+                        AlertCategory.PVP,
+                        AlertCategory.RAID,
+                        AlertCategory.RARE,
+                        AlertCategory.ROCKET,
+                        AlertCategory.QUEST
+                    )
                 }
 
-                Row(
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                    tonalElevation = 4.dp,
+                    shadowElevation = 6.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 ) {
-                    FilterChip(
-                        selected = selectedCategories.isEmpty(),
-                        onClick = { onSelectedCategoriesChange(emptySet()) },
-                        label = { Text("All (${filteredAlerts.size})") },
-                        modifier = Modifier.testTag("map_filter_all")
-                    )
                     LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(end = 8.dp)
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        item(key = "all") {
+                            FilterChip(
+                                selected = selectedCategories.isEmpty(),
+                                onClick = { onSelectedCategoriesChange(emptySet()) },
+                                label = { Text("All (${filteredAlerts.size})") },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.testTag("map_filter_all")
+                            )
+                        }
                         val quickCategories = listOf(
                             AlertCategory.HUNDO to "100%",
                             AlertCategory.PVP to "PvP",
@@ -1782,24 +1803,59 @@ internal fun AlertsMapScreenContent(
                             AlertCategory.QUEST to "Quests"
                         )
                         items(quickCategories, key = { it.first.name }) { (category, label) ->
-                            val isSelected = isOnlyCategoryActive(category)
+                            val isSelected = selectedCategories.isNotEmpty() && category !in selectedCategories
+                            val count = categoryCounts[category] ?: 0
+                            val accentArgb = resolveAlertVisualStyle(category.filterLabel).category.accentArgb
                             FilterChip(
                                 selected = isSelected,
                                 onClick = {
-                                    val updated = if (isSelected) {
+                                    val currentActive = if (selectedCategories.isEmpty()) {
                                         emptySet()
                                     } else {
-                                        allCategories - category
+                                        quickCategorySet - selectedCategories
                                     }
-                                    onSelectedCategoriesChange(updated)
+                                    val newActive = if (isSelected) {
+                                        currentActive - category
+                                    } else {
+                                        currentActive + category
+                                    }
+                                    val updatedMuted = if (newActive.isEmpty() || newActive == quickCategorySet) {
+                                        emptySet()
+                                    } else {
+                                        quickCategorySet - newActive
+                                    }
+                                    onSelectedCategoriesChange(updatedMuted)
                                 },
-                                label = { Text(label) }
+                                label = {
+                                    Text(if (isSelected && count > 0) "$label ($count)" else label)
+                                },
+                                leadingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(accentArgb))
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                shape = RoundedCornerShape(16.dp)
                             )
                         }
                         item(key = "more_filters") {
-                            androidx.compose.material3.SuggestionChip(
+                            AssistChip(
                                 onClick = { showFilterSheet = true },
-                                label = { Text("More...") },
+                                label = { Text("Filters") },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_filter),
+                                        contentDescription = "Advanced filters",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                shape = RoundedCornerShape(16.dp),
                                 modifier = Modifier.testTag("map_open_filters")
                             )
                         }
@@ -1837,12 +1893,12 @@ internal fun AlertsMapScreenContent(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val hidden = FILTERABLE_ALERT_CATEGORIES
+                    val active = FILTERABLE_ALERT_CATEGORIES
                         .filter { it in selectedCategories }
-                        .joinToString(", ") { it.filterLabel.lowercase() }
-                    Text("Every ${hidden} alert is hidden")
+                        .joinToString(", ") { it.filterLabel }
+                    Text("No active $active alerts match your filters")
                     TextButton(onClick = { onSelectedCategoriesChange(emptySet()) }) {
-                        Text("Show all alerts")
+                        Text("Show all categories")
                     }
                 }
             }
@@ -2086,11 +2142,12 @@ internal fun visibleMapAlerts(
             !alert.isInvalidated &&
             (showDismissed || alert.uniqueId !in dismissedAlertIds) &&
             (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) > nowMillis &&
+            matchesCategorySelection(alert, selectedCategories) &&
             if (filterDefinition != null) {
                 val route = walkingRoutes[alert.uniqueId]
                 AlertFilterMatcher.matches(alert, filterDefinition, FilterMatchContext(route?.distanceMeters?.toFloat() ?: distance, route?.durationSeconds))
             } else {
-                matchesCategorySelection(alert, selectedCategories)
+                true
             }
     }
 

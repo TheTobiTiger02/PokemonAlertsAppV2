@@ -14,6 +14,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class SpeciesSortOrder(val label: String) {
+    DEX_NUMBER("Dex #"),
+    NAME_AZ("A–Z")
+}
+
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SpeciesSelectionViewModel(application: Application) : AndroidViewModel(application) {
 
     private val speciesRepository = PokemonSpeciesRepository.getInstance(application)
@@ -22,12 +28,21 @@ class SpeciesSelectionViewModel(application: Application) : AndroidViewModel(app
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
     
+    private val _sortOrder = MutableStateFlow(SpeciesSortOrder.DEX_NUMBER)
+    val sortOrder: StateFlow<SpeciesSortOrder> = _sortOrder
+
     // Configured via intent or initialization
     private val _alertType = MutableStateFlow("hundo")
     
-    val speciesList: StateFlow<List<PokemonSpeciesEntity>> = _searchQuery
-        .flatMapLatest { query -> speciesRepository.searchSpecies(query) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val speciesList: StateFlow<List<PokemonSpeciesEntity>> = combine(
+        _searchQuery.flatMapLatest { query -> speciesRepository.searchSpecies(query) },
+        _sortOrder
+    ) { list, order ->
+        when (order) {
+            SpeciesSortOrder.DEX_NUMBER -> list.sortedBy { it.id }
+            SpeciesSortOrder.NAME_AZ -> list.sortedBy { it.name.lowercase() }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val allowedSpecies: StateFlow<Set<String>> = _alertType
         .flatMapLatest { type ->
@@ -47,6 +62,18 @@ class SpeciesSelectionViewModel(application: Application) : AndroidViewModel(app
         
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
+    }
+
+    fun toggleSortOrder() {
+        _sortOrder.value = if (_sortOrder.value == SpeciesSortOrder.DEX_NUMBER) {
+            SpeciesSortOrder.NAME_AZ
+        } else {
+            SpeciesSortOrder.DEX_NUMBER
+        }
+    }
+
+    fun setSortOrder(order: SpeciesSortOrder) {
+        _sortOrder.value = order
     }
     
     fun toggleSpecies(speciesName: String) {

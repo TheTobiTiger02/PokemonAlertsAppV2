@@ -14,11 +14,14 @@ interface PokemonSpeciesDao {
     @Query("SELECT * FROM pokemon_species ORDER BY id ASC")
     fun getAllSpecies(): Flow<List<PokemonSpeciesEntity>>
 
-    @Query("SELECT * FROM pokemon_species WHERE name LIKE '%' || :query || '%' ORDER BY id ASC")
+    @Query("SELECT * FROM pokemon_species WHERE name LIKE '%' || :query || '%' OR CAST(id AS TEXT) LIKE '%' || :query || '%' ORDER BY id ASC")
     fun searchSpecies(query: String): Flow<List<PokemonSpeciesEntity>>
     
     @Query("SELECT name FROM pokemon_species")
     suspend fun getAllSpeciesNames(): List<String>
+
+    @Query("SELECT * FROM pokemon_species ORDER BY id ASC")
+    suspend fun getAllSpeciesList(): List<PokemonSpeciesEntity>
     
     @Query("SELECT COUNT(*) FROM pokemon_species")
     suspend fun getCount(): Int

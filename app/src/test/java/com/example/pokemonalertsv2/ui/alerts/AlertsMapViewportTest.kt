@@ -262,6 +262,38 @@ class AlertsMapViewportTest {
         assertNull(initialMapPipBrowsedAlertId("missing", "also-missing", rendered))
     }
 
+    @Test
+    fun `multiple quick categories active simultaneously shows alerts for both categories`() {
+        val raid = alert("Raid boss", 49.8, 8.6).copy(type = listOf("Raid"))
+        val hundo = alert("Hundo spawn", 49.9, 8.7).copy(type = listOf("Hundo"))
+        val quest = alert("Field research", 49.7, 8.5).copy(type = listOf("Quest"))
+        val rocket = alert("Grunt", 49.6, 8.4).copy(type = listOf("Rocket"))
+
+        val quickCategories = setOf(
+            AlertCategory.HUNDO,
+            AlertCategory.PVP,
+            AlertCategory.RAID,
+            AlertCategory.RARE,
+            AlertCategory.ROCKET,
+            AlertCategory.QUEST
+        )
+        // Active: RAID and HUNDO. So unselected quick categories are muted:
+        val mutedCategories = quickCategories - setOf(AlertCategory.RAID, AlertCategory.HUNDO)
+
+        val visible = visibleMapAlerts(
+            alerts = listOf(raid, hundo, quest, rocket),
+            selectedCategories = mutedCategories,
+            dismissedAlertIds = emptySet(),
+            showDismissed = false,
+            nowMillis = 0L
+        )
+
+        assertEquals(
+            setOf(raid.uniqueId, hundo.uniqueId),
+            visible.map { it.uniqueId }.toSet()
+        )
+    }
+
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(
         name = name,
         latitude = latitude,

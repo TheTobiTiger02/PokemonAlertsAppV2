@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -93,6 +94,7 @@ class SpeciesSelectionActivity : ComponentActivity() {
                 val speciesList by viewModel.speciesList.collectAsStateWithLifecycle()
                 val allowedSpecies by viewModel.allowedSpecies.collectAsStateWithLifecycle()
                 val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+                val sortOrder by viewModel.sortOrder.collectAsStateWithLifecycle()
 
                 Scaffold(
                     topBar = {
@@ -116,32 +118,43 @@ class SpeciesSelectionActivity : ComponentActivity() {
                                     containerColor = MaterialTheme.colorScheme.background
                                 )
                             )
-                            // Search Bar
-                            OutlinedTextField(
-                                value = searchQuery,
-                                onValueChange = viewModel::updateSearchQuery,
+                            // Search Bar & Sort Toggle
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                placeholder = { Text("Search Pokémon...") },
-                                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                trailingIcon = {
-                                    AnimatedContent(
-                                        targetState = searchQuery.isNotEmpty(),
-                                        transitionSpec = { appFadeThrough() },
-                                        label = "species_search_clear"
-                                    ) { showClear ->
-                                        if (showClear) {
-                                            IconButton(onClick = { viewModel.updateSearchQuery("") }) {
-                                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = viewModel::updateSearchQuery,
+                                    modifier = Modifier.weight(1f),
+                                    placeholder = { Text("Search name or Dex #...") },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                    trailingIcon = {
+                                        AnimatedContent(
+                                            targetState = searchQuery.isNotEmpty(),
+                                            transitionSpec = { appFadeThrough() },
+                                            label = "species_search_clear"
+                                        ) { showClear ->
+                                            if (showClear) {
+                                                IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Clear")
+                                                }
                                             }
                                         }
-                                    }
-                                },
-                                singleLine = true,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors()
-                            )
+                                    },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors()
+                                )
+                                FilterChip(
+                                    selected = true,
+                                    onClick = { viewModel.toggleSortOrder() },
+                                    label = { Text("Sort: ${sortOrder.label}") }
+                                )
+                            }
                         }
                     }
                 ) { innerPadding ->
@@ -231,7 +244,13 @@ fun SpeciesCard(
                     modifier = Modifier.size(56.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "#${species.id.toString().padStart(3, '0')}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
             Text(
                 text = species.name,
                 style = MaterialTheme.typography.bodyMedium,
