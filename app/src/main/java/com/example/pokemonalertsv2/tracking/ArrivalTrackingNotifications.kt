@@ -153,7 +153,8 @@ internal object ArrivalTrackingNotifications {
     ): String {
         val routeDisplay = WalkingRouteUtils.buildRouteDisplayInfo(
             straightLineDistanceMeters = distanceMeters,
-            routeInfo = walkingRoute
+            routeInfo = walkingRoute,
+            fallbackToEstimate = false
         )
         val movement = if (walkingRoute != null && routeDisplay.distanceText != null) {
             listOfNotNull(

@@ -27,6 +27,18 @@ class WalkingRouteUtilsTest {
     }
 
     @Test
+    fun estimateWalkingRouteInfo_appliesDetourFactorAndWalkingSpeed() {
+        val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(800f)
+        assertEquals(1000, routeInfo?.distanceMeters)
+        assertEquals(770L, routeInfo?.durationSeconds)
+
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(null))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(-1f))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(Float.NaN))
+        assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(Float.POSITIVE_INFINITY))
+    }
+
+    @Test
     fun buildRouteDisplayInfo_prefersRouteDistanceAndDuration() {
         val displayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
             straightLineDistanceMeters = 1_000f,
@@ -42,10 +54,27 @@ class WalkingRouteUtilsTest {
     }
 
     @Test
-    fun buildRouteDisplayInfo_labelsDirectDistanceAndHidesWalkingTextWithoutRoute() {
+    fun buildRouteDisplayInfo_fallsBackToEstimateWhenRouteInfoIsNull() {
         val displayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
             straightLineDistanceMeters = 1_000f,
-            routeInfo = null
+            routeInfo = null,
+            fallbackToEstimate = true
+        )
+
+        assertEquals(1_000f, displayInfo.straightLineDistanceMeters)
+        assertNull(displayInfo.routedDistanceMeters)
+        assertEquals(1_250f, displayInfo.effectiveDistanceMeters)
+        assertEquals(DistanceSource.ESTIMATED, displayInfo.source)
+        assertEquals("~1.3 km", displayInfo.distanceText)
+        assertEquals("~17 min walk", displayInfo.walkingText)
+    }
+
+    @Test
+    fun buildRouteDisplayInfo_labelsDirectDistanceWhenFallbackDisabled() {
+        val displayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
+            straightLineDistanceMeters = 1_000f,
+            routeInfo = null,
+            fallbackToEstimate = false
         )
 
         assertEquals(1_000f, displayInfo.straightLineDistanceMeters)

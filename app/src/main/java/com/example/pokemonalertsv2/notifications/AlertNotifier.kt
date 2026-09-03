@@ -143,10 +143,65 @@ object AlertNotifier {
         // Shared app-wide source so notifications and widgets compute distances from the
         // same fix during the same refresh instead of disagreeing.
         val userLocation = CachedLocationProvider.get(context, timeoutMs = 4000)
+
+        // Pre-filter: Only alerts that match basic criteria and are physically reachable
+        // earn a walking route request. This cuts 90%+ of provider calls during push storms.
+        data class PreCandidate(
+            val alert: PokemonAlert,
+            val straightLineDistanceMeters: Float?,
+            val goDexStatus: GoDexMatchResult
+        )
+
+        val preCandidates = buildList {
+            alerts.forEach { alert ->
+                if (alert.isInvalidated || (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) <= System.currentTimeMillis()) return@forEach
+                val straightLineDistanceMeters = userLocation?.let { loc ->
+                    val latitude = alert.latitude ?: return@let null
+                    val longitude = alert.longitude ?: return@let null
+                    WalkingRouteUtils.straightLineDistanceMeters(
+                        loc.latitude,
+                        loc.longitude,
+                        latitude,
+                        longitude
+                    )
+                }
+
+                val goDexStatus = if (alert.hasType("hundo")) {
+                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+                } else {
+                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+                }
+
+                // Check non-routing filters (area, species, raid tier, etc.) using straight-line distance
+                if (!settings.shouldNotify(
+                        alert,
+                        goDexStatus.status,
+                        FilterMatchContext(effectiveDistanceMeters = straightLineDistanceMeters)
+                    )
+                ) return@forEach
+
+                // Pre-check walking duration upper bound: even at a fast 6.5 km/h (1.8 m/s),
+                // if straightLine > maxWalkingSeconds * 1.8m, it is impossible to walk in time.
+                val maxWalkingMinutes = settings.filterDefinition?.maxWalkingMinutes ?: 0
+                if (maxWalkingMinutes > 0 && straightLineDistanceMeters != null) {
+                    if (straightLineDistanceMeters > maxWalkingMinutes * 60L * 1.8f) return@forEach
+                }
+
+                add(PreCandidate(alert, straightLineDistanceMeters, goDexStatus))
+            }
+        }
+
+        if (preCandidates.isEmpty()) return
+
+        // Take up to 15 closest candidate alerts for walking route resolution
+        val topCandidates = preCandidates
+            .sortedBy { it.straightLineDistanceMeters ?: Float.MAX_VALUE }
+            .take(15)
+
         val walkingRoutes = userLocation?.let { location ->
             WalkingRouteRepository.getInstance().getWalkingRoutes(
                 origin = location,
-                alerts = alerts,
+                alerts = topCandidates.map { it.alert },
                 timeoutMillis = WalkingRouteRepository.BACKGROUND_TIMEOUT_MILLIS
             )
         } ?: emptyMap()
@@ -164,39 +219,24 @@ object AlertNotifier {
         )
 
         val candidates = buildList {
-            alerts.forEach { alert ->
-                if (alert.isInvalidated || (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) <= System.currentTimeMillis()) return@forEach
-                val straightLineDistanceMeters = userLocation?.let { loc ->
-                    val latitude = alert.latitude ?: return@let null
-                    val longitude = alert.longitude ?: return@let null
-                    WalkingRouteUtils.straightLineDistanceMeters(
-                        loc.latitude,
-                        loc.longitude,
-                        latitude,
-                        longitude
-                    )
-                }
+            preCandidates.forEach { preCandidate ->
+                val alert = preCandidate.alert
                 val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
-                    straightLineDistanceMeters = straightLineDistanceMeters,
+                    straightLineDistanceMeters = preCandidate.straightLineDistanceMeters,
                     routeInfo = walkingRoutes[alert.uniqueId]
                 )
 
-                val goDexStatus = if (alert.hasType("hundo")) {
-                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
-                } else {
-                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-                }
                 if (
                     !settings.shouldNotify(
                         alert,
-                        goDexStatus.status,
+                        preCandidate.goDexStatus.status,
                         FilterMatchContext(
                             effectiveDistanceMeters = routeDisplayInfo.effectiveDistanceMeters,
                             walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds
                         )
                     )
                 ) return@forEach
-                add(Candidate(alert, routeDisplayInfo, goDexStatus))
+                add(Candidate(alert, routeDisplayInfo, preCandidate.goDexStatus))
             }
         }
 

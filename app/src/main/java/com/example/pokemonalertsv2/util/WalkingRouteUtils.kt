@@ -11,6 +11,7 @@ data class WalkingRouteInfo(
 
 enum class DistanceSource {
     ROUTED,
+    ESTIMATED,
     DIRECT,
     UNAVAILABLE
 }
@@ -26,6 +27,21 @@ data class RouteDisplayInfo(
 )
 
 object WalkingRouteUtils {
+    const val DETOUR_FACTOR = 1.25f
+    const val AVERAGE_WALKING_SPEED_MPS = 1.3f
+
+    fun estimateWalkingRouteInfo(straightLineDistanceMeters: Float?): WalkingRouteInfo? {
+        val distance = straightLineDistanceMeters
+            ?.takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
+            ?: return null
+        val estimatedDistance = Math.round(distance * DETOUR_FACTOR)
+        val estimatedDuration = ceil(estimatedDistance / AVERAGE_WALKING_SPEED_MPS.toDouble()).toLong().coerceAtLeast(60L)
+        return WalkingRouteInfo(
+            distanceMeters = estimatedDistance,
+            durationSeconds = estimatedDuration
+        )
+    }
+
     fun straightLineDistanceMeters(
         originLatitude: Double,
         originLongitude: Double,
@@ -47,32 +63,47 @@ object WalkingRouteUtils {
 
     fun buildRouteDisplayInfo(
         straightLineDistanceMeters: Float?,
-        routeInfo: WalkingRouteInfo?
+        routeInfo: WalkingRouteInfo?,
+        fallbackToEstimate: Boolean = true
     ): RouteDisplayInfo {
         val directDistance = straightLineDistanceMeters
             ?.takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
         val validRoute = routeInfo?.takeIf {
             it.distanceMeters >= 0 && it.durationSeconds >= 0
         }
+        val estimatedRoute = if (validRoute == null && fallbackToEstimate && directDistance != null) {
+            estimateWalkingRouteInfo(directDistance)
+        } else null
+
         val source = when {
             validRoute != null -> DistanceSource.ROUTED
+            estimatedRoute != null -> DistanceSource.ESTIMATED
             directDistance != null -> DistanceSource.DIRECT
             else -> DistanceSource.UNAVAILABLE
         }
         val routedDistance = validRoute?.distanceMeters?.toFloat()
-        val effectiveDistance = routedDistance ?: directDistance
+        val effectiveDistance = routedDistance
+            ?: estimatedRoute?.distanceMeters?.toFloat()
+            ?: directDistance
+        val walkingDuration = validRoute?.durationSeconds ?: estimatedRoute?.durationSeconds
+
         return RouteDisplayInfo(
             straightLineDistanceMeters = directDistance,
             routedDistanceMeters = routedDistance,
             effectiveDistanceMeters = effectiveDistance,
-            walkingDurationSeconds = validRoute?.durationSeconds,
+            walkingDurationSeconds = walkingDuration,
             source = source,
             distanceText = when (source) {
                 DistanceSource.ROUTED -> routedDistance?.let(::formatDistanceMeters)
+                DistanceSource.ESTIMATED -> effectiveDistance?.let { "~${formatDistanceMeters(it)}" }
                 DistanceSource.DIRECT -> directDistance?.let { "${formatDistanceMeters(it)} direct" }
                 DistanceSource.UNAVAILABLE -> null
             },
-            walkingText = validRoute?.let { formatWalkingDurationSeconds(it.durationSeconds) }
+            walkingText = when (source) {
+                DistanceSource.ROUTED -> validRoute?.let { formatWalkingDurationSeconds(it.durationSeconds) }
+                DistanceSource.ESTIMATED -> estimatedRoute?.let { "~${formatWalkingDurationSeconds(it.durationSeconds)}" }
+                else -> null
+            }
         )
     }
 

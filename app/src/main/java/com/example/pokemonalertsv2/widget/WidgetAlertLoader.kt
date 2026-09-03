@@ -85,10 +85,30 @@ internal object WidgetAlertLoader {
         )
 
         val origin = location?.let { WidgetAlertFilter.originFrom(it) }
+
+        // Pre-filter candidate alerts before requesting walking routes to avoid quota exhaustion.
+        val candidateAlerts = WidgetAlertFilter.filterWithoutDistance(alerts, criteria).filter { alert ->
+            val direct = origin?.let { WidgetAlertFilter.directDistanceMeters(it, alert) }
+            if (criteria.maxDistanceKm > 0 && direct != null && direct > criteria.maxDistanceKm * 1000f) {
+                return@filter false
+            }
+            val definition = criteria.filterDefinition
+            if (definition != null && direct != null) {
+                if (definition.maxDistanceKm > 0 && direct > definition.maxDistanceKm * 1000f) return@filter false
+                if (definition.maxWalkingMinutes > 0 && direct > definition.maxWalkingMinutes * 60L * 1.8f) return@filter false
+            }
+            true
+        }
+        val topCandidates = if (origin != null) {
+            candidateAlerts.sortedBy { WidgetAlertFilter.directDistanceMeters(origin, it) ?: Float.MAX_VALUE }.take(15)
+        } else {
+            candidateAlerts.take(15)
+        }
+
         val walkingRoutes = location?.let {
             WalkingRouteRepository.getInstance().getWalkingRoutes(
                 origin = it,
-                alerts = alerts,
+                alerts = topCandidates,
                 timeoutMillis = WalkingRouteRepository.BACKGROUND_TIMEOUT_MILLIS
             )
         }.orEmpty()
