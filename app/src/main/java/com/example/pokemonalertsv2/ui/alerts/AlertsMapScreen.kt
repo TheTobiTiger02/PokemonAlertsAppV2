@@ -48,17 +48,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -134,7 +132,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
+import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
+import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
@@ -1254,6 +1254,13 @@ internal fun AlertsMapScreenContent(
     ) {
         val useSidePanel = !compactPictureInPicture && maxWidth >= 840.dp
         val controlsEndPadding = if (useSidePanel) 392.dp else 16.dp
+        // Everything the rail cannot express, so the "Filters" chip can say how much is hidden
+        // behind it. Alert types are deliberately excluded: the rail already shows those.
+        val advancedFilterRuleCount = remember(filterDefinition) {
+            filterDefinition.advancedRuleCount +
+                (if (filterDefinition.maxDistanceKm > 0) 1 else 0) +
+                (if (filterDefinition.maxWalkingMinutes > 0) 1 else 0)
+        }
         val mapContentPadding = if (compactPictureInPicture) {
             PaddingValues(0.dp)
         } else {
@@ -1714,14 +1721,17 @@ internal fun AlertsMapScreenContent(
         }
 
         if (!compactPictureInPicture) {
+            // The rail is the only child that runs to the screen edge: chips have to scroll
+            // out from under it rather than stop short at a padded boundary.
+            val chromeInset = Modifier.padding(start = Spacing.lg, end = controlsEndPadding)
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .padding(top = 8.dp, start = 16.dp, end = controlsEndPadding),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .padding(top = Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                MapTopAppBar(
+                MapHeaderBar(
                     visibleAlertCount = filteredAlerts.size,
                     showBackButton = showBackButton,
                     refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
@@ -1750,158 +1760,61 @@ internal fun AlertsMapScreenContent(
                             }
                         }
                     },
-                    onOpenLayers = { showLayersSheet = true }
+                    onOpenLayers = { showLayersSheet = true },
+                    modifier = chromeInset
                 )
 
-                val quickCategorySet = remember {
-                    setOf(
-                        AlertCategory.HUNDO,
-                        AlertCategory.PVP,
-                        AlertCategory.RAID,
-                        AlertCategory.RARE,
-                        AlertCategory.ROCKET,
-                        AlertCategory.QUEST
+                MapCategoryRail(
+                    mutedCategories = selectedCategories,
+                    categoryCounts = categoryCounts,
+                    advancedRuleCount = advancedFilterRuleCount,
+                    onMutedCategoriesChange = onSelectedCategoriesChange,
+                    onOpenFilters = { showFilterSheet = true },
+                    contentPadding = PaddingValues(
+                        start = Spacing.lg,
+                        end = controlsEndPadding,
+                        top = 2.dp,
+                        bottom = Spacing.xxs
                     )
-                }
+                )
 
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                    tonalElevation = 4.dp,
-                    shadowElevation = 6.dp,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                Column(
+                    modifier = chromeInset.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
-                    LazyRow(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+
+                    // Weather for the area the user is actually standing in, mirroring the game's
+                    // own corner badge. Nothing renders when they are outside every scanned area.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        item(key = "all") {
-                            FilterChip(
-                                selected = selectedCategories.isEmpty(),
-                                onClick = { onSelectedCategoriesChange(emptySet()) },
-                                label = { Text("All (${filteredAlerts.size})") },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.testTag("map_filter_all")
-                            )
-                        }
-                        val quickCategories = listOf(
-                            AlertCategory.HUNDO to "100%",
-                            AlertCategory.PVP to "PvP",
-                            AlertCategory.RAID to "Raids",
-                            AlertCategory.RARE to "Rares",
-                            AlertCategory.ROCKET to "Rockets",
-                            AlertCategory.QUEST to "Quests"
-                        )
-                        items(quickCategories, key = { it.first.name }) { (category, label) ->
-                            val isSelected = selectedCategories.isNotEmpty() && category !in selectedCategories
-                            val count = categoryCounts[category] ?: 0
-                            val accentArgb = resolveAlertVisualStyle(category.filterLabel).category.accentArgb
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    val currentActive = if (selectedCategories.isEmpty()) {
-                                        emptySet()
-                                    } else {
-                                        quickCategorySet - selectedCategories
-                                    }
-                                    val newActive = if (isSelected) {
-                                        currentActive - category
-                                    } else {
-                                        currentActive + category
-                                    }
-                                    val updatedMuted = if (newActive.isEmpty() || newActive == quickCategorySet) {
-                                        emptySet()
-                                    } else {
-                                        quickCategorySet - newActive
-                                    }
-                                    onSelectedCategoriesChange(updatedMuted)
-                                },
-                                label = {
-                                    Text(if (isSelected && count > 0) "$label ($count)" else label)
-                                },
-                                leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(8.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(accentArgb))
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-                        }
-                        item(key = "more_filters") {
-                            AssistChip(
-                                onClick = { showFilterSheet = true },
-                                label = { Text("Filters") },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_filter),
-                                        contentDescription = "Advanced filters",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.testTag("map_open_filters")
-                            )
-                        }
+                        MapWeatherBadge(userLocation = userLocation)
                     }
-                }
-                MapSyncStatus(status = syncStatus, onRetry = onRefresh)
-
-                // Weather for the area the user is actually standing in, mirroring the game's own
-                // corner badge. Nothing renders when they are outside every scanned area.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    MapWeatherBadge(userLocation = userLocation)
                 }
             }
         }
 
+        // Any active narrowing can empty the map, not just a muted category, so the recovery
+        // action clears both stores at once rather than only the rail.
         AnimatedVisibility(
-            visible = !compactPictureInPicture &&
-                selectedCategories.isNotEmpty() && filteredAlerts.isEmpty(),
+            visible = !compactPictureInPicture && alerts.isNotEmpty() && filteredAlerts.isEmpty() &&
+                (selectedCategories.isNotEmpty() || advancedFilterRuleCount > 0),
             enter = appExpandIn(),
             exit = appCollapseOut(),
             modifier = Modifier.align(Alignment.Center)
         ) {
-            Surface(
-                modifier = Modifier
-                    .padding(24.dp),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                shadowElevation = 4.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val active = FILTERABLE_ALERT_CATEGORIES
-                        .filter { it in selectedCategories }
-                        .joinToString(", ") { it.filterLabel }
-                    Text("No active $active alerts match your filters")
-                    TextButton(onClick = { onSelectedCategoriesChange(emptySet()) }) {
-                        Text("Show all categories")
-                    }
-                }
-            }
+            AnimatedEmptyState(
+                title = stringResource(R.string.map_no_matches_title),
+                message = stringResource(R.string.map_no_matches_message),
+                ctaText = stringResource(R.string.map_no_matches_cta),
+                onAction = {
+                    onSelectedCategoriesChange(emptySet())
+                    onFilterDefinitionChange(FilterDefinition())
+                },
+                modifier = Modifier.padding(Spacing.xxl)
+            )
         }
 
         // Filters live on the map so a quick narrowing never costs a trip to Settings.
@@ -1972,22 +1885,19 @@ internal fun AlertsMapScreenContent(
         ) {
             Column(
                 modifier = Modifier
-                    .then(
-                        if (showBackButton) {
-                            Modifier.windowInsetsPadding(WindowInsets.navigationBars)
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .padding(end = if (useSidePanel) 392.dp else 16.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    // The gesture bar sits under this column whether or not the screen owns a
+                    // back button, so the inset is unconditional.
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(end = if (useSidePanel) 392.dp else Spacing.lg, bottom = Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 horizontalAlignment = Alignment.End
             ) {
-                FloatingActionButton(
+                // Secondary: framing the alerts is occasional, finding yourself is constant.
+                SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_fit_map),
@@ -2173,16 +2083,32 @@ internal fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
         label = "map_sync_status"
     ) { (animatedText, animatedProblem) ->
         if (animatedText != null) {
+            // A pill that hugs its text, not a third full-width bar under the header.
             Surface(
-                color = if (animatedProblem) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                contentColor = if (animatedProblem) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                shape = MaterialTheme.shapes.medium
+                color = if (animatedProblem) {
+                    MaterialTheme.colorScheme.errorContainer
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+                contentColor = if (animatedProblem) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                shape = RoundedCornerShape(50),
+                shadowElevation = 3.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    Modifier.padding(
+                        start = Spacing.md,
+                        end = if (animatedProblem) Spacing.xxs else Spacing.md,
+                        top = Spacing.xxs,
+                        bottom = Spacing.xxs
+                    ),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(animatedText, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                    Text(animatedText, style = MaterialTheme.typography.labelMedium)
                     if (animatedProblem) TextButton(onClick = onRetry) { Text("Retry") }
                 }
             }

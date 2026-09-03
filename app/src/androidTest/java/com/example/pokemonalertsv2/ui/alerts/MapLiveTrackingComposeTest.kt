@@ -189,15 +189,15 @@ class MapLiveTrackingComposeTest {
         var selected = false
         composeRule.setContent {
             PokemonAlertsV2Theme {
-                MapTopAppBar(
+                MapHeaderBar(
                     visibleAlertCount = 3,
                     showBackButton = false,
                     refreshing = false,
                     activeLayerCount = 0,
                     onBack = {},
                     onRefresh = {},
-                    onEnterPictureInPicture = { selected = true },
-                    onOpenLayers = {}
+                    onOpenLayers = {},
+                    onEnterPictureInPicture = { selected = true }
                 )
             }
         }

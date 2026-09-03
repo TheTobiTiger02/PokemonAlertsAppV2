@@ -201,12 +201,12 @@ class WholeAppUxComposeTest {
         composeRule.setContent {
             PokemonAlertsV2Theme(darkTheme = true) {
                 Box(modifier = androidx.compose.ui.Modifier.width(360.dp)) {
-                    MapFilterRow(
-                        selectedCategories = emptySet(),
-                        categoryCounts = emptyMap(),
-                        visibleAlertCount = 4,
-                        onCategoryToggled = { _, _ -> },
-                        onShowAllCategories = {}
+                    MapCategoryRail(
+                        mutedCategories = emptySet(),
+                        categoryCounts = mapOf(AlertCategory.RAID to 7),
+                        advancedRuleCount = 0,
+                        onMutedCategoriesChange = {},
+                        onOpenFilters = {}
                     )
                 }
             }
@@ -215,7 +215,10 @@ class WholeAppUxComposeTest {
         composeRule.onNodeWithTag("map_filter_rail").assertIsDisplayed()
         composeRule.onNodeWithText("All").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Raids").assertExists()
-        composeRule.onNodeWithText("4 alerts").assertDoesNotExist()
+        // Every filterable category is reachable now, not just the six that used to fit.
+        composeRule.onNodeWithText("Spawns").assertExists()
+        // Live counts ride on the chip they belong to.
+        composeRule.onNodeWithText("7").assertExists()
     }
 
     @Test

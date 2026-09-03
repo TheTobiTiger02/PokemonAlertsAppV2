@@ -78,6 +78,23 @@
     <string name="map_pip_action_next_alert">Next alert</string>
     <string name="map_pip_no_alerts">No alerts nearby</string>
     <string name="map_pip_auto_enter">Auto picture-in-picture</string>
+
+    <!-- Map chrome: the header, the category rail and the filter sheet. -->
+    <plurals name="map_alerts_visible">
+        <item quantity="one">%1$d alert</item>
+        <item quantity="other">%1$d alerts</item>
+    </plurals>
+    <string name="map_layers_title">Map layers</string>
+    <string name="map_filters_title">Filters</string>
+    <string name="map_filter_all">All</string>
+    <string name="map_category_solo">Show only this category</string>
+    <string name="map_legend_title">What the colours mean</string>
+    <string name="map_filter_show_count">Show %1$d alerts</string>
+    <string name="map_filter_reset">Reset</string>
+    <string name="map_filter_studio">Filter Studio</string>
+    <string name="map_no_matches_title">Nothing matches</string>
+    <string name="map_no_matches_message">No active alerts match the filters you have set.</string>
+    <string name="map_no_matches_cta">Clear filters</string>
     <string name="back">Back</string>
     <string name="enter_pip_short">PiP</string>
     <string name="open_alert_in_pip">Open alert in picture-in-picture</string>

@@ -14,7 +14,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,10 +38,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
@@ -50,8 +46,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -65,8 +59,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -119,16 +111,17 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
-import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
+import com.example.pokemonalertsv2.ui.theme.Spacing
+import com.example.pokemonalertsv2.ui.settings.SwitchSetting
 import com.example.pokemonalertsv2.ui.components.RollingNumberText
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeIn
 import com.example.pokemonalertsv2.ui.motion.appFadeOut
-import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -155,125 +148,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
-
-@Composable
-internal fun MapTopAppBar(
-    visibleAlertCount: Int,
-    showBackButton: Boolean,
-    refreshing: Boolean,
-    activeLayerCount: Int,
-    onBack: () -> Unit,
-    onRefresh: () -> Unit,
-    onEnterPictureInPicture: (() -> Unit)? = null,
-    onOpenLayers: () -> Unit
-) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp,
-        shadowElevation = 2.dp,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showBackButton) {
-                IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.weight(1f).padding(start = if (showBackButton) 2.dp else 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.map_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
-                )
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    AnimatedContent(
-                        targetState = visibleAlertCount,
-                        transitionSpec = { appFadeThrough() },
-                        label = "map_alert_count"
-                    ) { count ->
-                        Text(
-                            text = "$count",
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-            IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
-                AnimatedRefreshIcon(
-                    refreshing = refreshing,
-                    contentDescription = stringResource(R.string.refresh_alerts)
-                )
-            }
-            if (onEnterPictureInPicture != null) {
-                IconButton(
-                    onClick = onEnterPictureInPicture,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_pip),
-                        contentDescription = "Open map in picture-in-picture",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-            Box {
-                IconButton(onClick = onOpenLayers, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_layers),
-                        contentDescription = "Map layers",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                AnimatedContent(
-                    targetState = activeLayerCount,
-                    transitionSpec = { appFadeThrough() },
-                    modifier = Modifier.align(Alignment.TopEnd),
-                    label = "map_layer_count"
-                ) { count ->
-                    if (count > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ) {
-                            Text(
-                                text = "$count",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 /**
  * Offline tile controls for the OpenStreetMap layer.
@@ -381,156 +255,173 @@ internal fun MapLayersSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.xxl, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xl)
         ) {
-            Text("Map layers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Provider and style", style = MaterialTheme.typography.labelLarge)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(MapStylePreference.entries, key = { it.name }) { style ->
-                    FilterChip(
-                        selected = mapStyle == style,
-                        onClick = { onMapStyleChanged(style) },
-                        label = {
-                            Text(
-                                when (style) {
-                                    MapStylePreference.GOOGLE_STANDARD -> "Google standard"
-                                    MapStylePreference.GOOGLE_SATELLITE -> "Google satellite"
-                                    MapStylePreference.OPENSTREETMAP -> "OpenStreetMap"
-                                }
-                            )
-                        }
-                    )
+            Text(
+                text = stringResource(R.string.map_layers_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text(
+                    text = "Provider and style",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    MapStylePreference.entries.forEach { style ->
+                        MapStyleTile(
+                            style = style,
+                            selected = mapStyle == style,
+                            onClick = { onMapStyleChanged(style) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                if (mapStyle == MapStylePreference.OPENSTREETMAP) {
+                    OfflineTilesSection(centre = mapCentre)
                 }
             }
-            if (mapStyle == MapStylePreference.OPENSTREETMAP) {
-                OfflineTilesSection(centre = mapCentre)
-            }
-            FilterChip(
-                selected = showTimeLabels,
-                onClick = onToggleTimeLabels,
-                label = { Text("Countdown labels") },
-                leadingIcon = if (showTimeLabels) {
-                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
-                } else null
-            )
-            FilterChip(
-                selected = showSpawnRadius,
-                onClick = onToggleSpawnRadius,
-                label = { Text("Spawn radius") },
-                leadingIcon = if (showSpawnRadius) {
-                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
-                } else null
-            )
-            FilterChip(
-                selected = spacialRendEnabled,
-                enabled = showSpawnRadius,
-                onClick = onToggleSpacialRend,
-                label = { Text("Spacial Rend") },
-                leadingIcon = if (spacialRendEnabled) {
-                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
-                } else null
-            )
-            if (onToggleAutoEnterPictureInPicture != null) {
-                FilterChip(
-                    selected = autoEnterPictureInPicture,
-                    onClick = onToggleAutoEnterPictureInPicture,
-                    label = { Text(stringResource(R.string.map_pip_auto_enter)) },
-                    leadingIcon = if (autoEnterPictureInPicture) {
-                        { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
-                    } else null,
-                    modifier = Modifier.testTag("map_auto_pip")
+
+            // Switches, not chips. Every one of these is a boolean the map obeys, and a chip
+            // rail next to a filter rail read as more filters.
+            MapLayersGroup(title = "Overlays") {
+                SwitchSetting(
+                    title = "Countdown labels",
+                    subtitle = "Print the time left onto every marker",
+                    checked = showTimeLabels,
+                    onCheckedChange = { onToggleTimeLabels() }
+                )
+                SwitchSetting(
+                    title = "Spawn radius",
+                    subtitle = "Draw the 40m circle a spawn can sit anywhere inside",
+                    checked = showSpawnRadius,
+                    onCheckedChange = { onToggleSpawnRadius() }
+                )
+                SwitchSetting(
+                    title = "Spacial Rend",
+                    subtitle = "Widen that circle to 80m",
+                    checked = spacialRendEnabled,
+                    onCheckedChange = { onToggleSpacialRend() },
+                    enabled = showSpawnRadius
                 )
             }
-            Text("Alerts", style = MaterialTheme.typography.labelLarge)
-            FilterChip(
-                selected = showDismissed,
-                onClick = onToggleDismissed,
-                label = { Text("Show dismissed alerts") },
-                leadingIcon = if (showDismissed) {
-                    { Icon(Icons.Filled.CheckCircle, contentDescription = null) }
-                } else null,
-                modifier = Modifier.testTag("map_show_dismissed")
-            )
-            Spacer(Modifier.height(12.dp))
+
+            MapLayersGroup(title = "Alerts") {
+                Box(modifier = Modifier.testTag("map_show_dismissed")) {
+                    SwitchSetting(
+                        title = "Show dismissed alerts",
+                        subtitle = "Keep alerts on the map after you dismiss them",
+                        checked = showDismissed,
+                        onCheckedChange = { onToggleDismissed() }
+                    )
+                }
+                if (onToggleAutoEnterPictureInPicture != null) {
+                    Box(modifier = Modifier.testTag("map_auto_pip")) {
+                        SwitchSetting(
+                            title = stringResource(R.string.map_pip_auto_enter),
+                            subtitle = "Shrink the map into a floating window when you leave the app",
+                            checked = autoEnterPictureInPicture,
+                            onCheckedChange = { onToggleAutoEnterPictureInPicture() }
+                        )
+                    }
+                }
+            }
+
+            MapCategoryLegend()
+
+            Spacer(Modifier.height(Spacing.xxl))
         }
     }
 }
 
-/**
- * The map's own multi-select category rail. Chip on = category shown (the default); chip off
- * mutes it. "All" clears every mute in one tap. Counts come from the shared live tally so the
- * rail doubles as an at-a-glance census of what is around.
- */
+/** One grouped block of switches, matching the grouped rows Settings uses. */
 @Composable
-internal fun MapFilterRow(
-    selectedCategories: Set<AlertCategory>,
-    categoryCounts: Map<AlertCategory, Int>,
-    @Suppress("UNUSED_PARAMETER") visibleAlertCount: Int,
-    onCategoryToggled: (AlertCategory, Boolean) -> Unit,
-    onShowAllCategories: () -> Unit
-) {
-    LazyRow(
-        modifier = Modifier.fillMaxWidth().testTag("map_filter_rail"),
-        contentPadding = PaddingValues(horizontal = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item(key = "ALL") {
-            MapCategoryChip(
-                label = "All",
-                count = categoryCounts.values.sum(),
-                selected = selectedCategories.isEmpty(),
-                accent = Color(0xFF8793A6),
-                onClick = onShowAllCategories
-            )
-        }
-        items(FILTERABLE_ALERT_CATEGORIES, key = { it.name }) { category ->
-            MapCategoryChip(
-                label = category.filterLabel,
-                count = categoryCounts[category] ?: 0,
-                selected = category !in selectedCategories,
-                accent = Color(category.accentArgb),
-                onClick = { onCategoryToggled(category, category in selectedCategories) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun MapCategoryChip(
-    label: String,
-    count: Int,
-    selected: Boolean,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label, maxLines = 1) },
-        leadingIcon = {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .background(color = accent, shape = CircleShape)
-            )
-        },
-        shape = RoundedCornerShape(50),
-        border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = if (selected) accent.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outlineVariant,
-            selectedBorderColor = accent.copy(alpha = 0.7f)
-        ),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            labelColor = MaterialTheme.colorScheme.onSurface,
-            iconColor = accent,
-            selectedContainerColor = accent.copy(alpha = 0.18f),
-            selectedLabelColor = MaterialTheme.colorScheme.onSurface,
-            selectedLeadingIconColor = accent
+private fun MapLayersGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold
         )
-    )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Column(
+                modifier = Modifier.padding(Spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(Spacing.lg)
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+/** A provider choice, sized and shaped like the thing it turns on rather than a text chip. */
+@Composable
+private fun MapStyleTile(
+    style: MapStylePreference,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    val label = when (style) {
+        MapStylePreference.GOOGLE_STANDARD -> "Standard"
+        MapStylePreference.GOOGLE_SATELLITE -> "Satellite"
+        MapStylePreference.OPENSTREETMAP -> "OpenStreetMap"
+    }
+    val caption = when (style) {
+        MapStylePreference.GOOGLE_STANDARD -> "Google"
+        MapStylePreference.GOOGLE_SATELLITE -> "Google"
+        MapStylePreference.OPENSTREETMAP -> "Offline capable"
+    }
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) scheme.primaryContainer else scheme.surfaceContainer,
+        contentColor = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) scheme.primary else scheme.outlineVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(vertical = Spacing.md, horizontal = Spacing.sm),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_map),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
 
 @Composable
