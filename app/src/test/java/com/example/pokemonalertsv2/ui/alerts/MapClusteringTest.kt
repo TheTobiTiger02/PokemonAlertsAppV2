@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.alerts
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -174,6 +175,32 @@ class MapClusteringTest {
             resolveMapClusterInteraction(cluster, 12.0, 20.0)
         )
         assertEquals(MapClusterInteraction.ShowMembers, resolveMapClusterInteraction(cluster, 20.0, 20.0))
+    }
+
+    /**
+     * The dense path grid-clusters at and above [MAP_CLUSTER_MAX_ZOOM] once the exact-coordinate
+     * groups blow the render budget, and those clusters cover real ground. A tap on one used to
+     * open a list of every member; one zoom step pulls them apart instead.
+     */
+    @Test
+    fun spreadClusterStillZoomsAtTheClusteringZoom() {
+        val spread = List(1_200) { index ->
+            alert(
+                name = "dense $index",
+                latitude = 49.87 + (index % 40 - 20) * 0.00015,
+                longitude = 8.65 + (index / 40 - 15) * 0.00015
+            )
+        }
+        val cluster = clusterMapAlerts(spread, zoom = MAP_CLUSTER_MAX_ZOOM)
+            .filterIsInstance<MapMarkerItem.Cluster>()
+            .maxByOrNull { it.alerts.size }
+        assertNotNull("dense fixture should still produce a cluster", cluster)
+        assertEquals(
+            MapClusterInteraction.ZoomTo(
+                MapCameraSnapshot(cluster!!.latitude, cluster.longitude, MAP_CLUSTER_MAX_ZOOM + 2.0)
+            ),
+            resolveMapClusterInteraction(cluster, MAP_CLUSTER_MAX_ZOOM, 20.0)
+        )
     }
 
     @Test

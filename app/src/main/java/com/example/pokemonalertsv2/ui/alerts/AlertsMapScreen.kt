@@ -1513,6 +1513,44 @@ internal fun AlertsMapScreenContent(
                             )
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
+                            // Both cluster renderings answer a tap the same way. They used to
+                            // differ: the stack marker opened the member list unconditionally,
+                            // on the assumption that every non-overview cluster is a pile on one
+                            // exact coordinate. The dense path breaks that - when the render
+                            // budget forces grid clustering at this zoom the members cover real
+                            // ground - and a tap there deserves a zoom, not several hundred rows.
+                            val onClusterTap: () -> Unit = {
+                                when (
+                                    val interaction = if (compactPictureInPicture) {
+                                        null
+                                    } else {
+                                        resolveMapClusterInteraction(
+                                            cluster = item,
+                                            currentZoom = cameraAnchor.zoom,
+                                            maximumZoom = mapProperties.maxZoomPreference.toDouble()
+                                        )
+                                    }
+                                ) {
+                                    null -> Unit
+                                    MapClusterInteraction.ShowMembers -> {
+                                        selectedClusterAlerts = item.alerts
+                                    }
+                                    is MapClusterInteraction.ZoomTo -> {
+                                        scope.launch {
+                                            cameraPositionState.animate(
+                                                CameraUpdateFactory.newLatLngZoom(
+                                                    LatLng(
+                                                        interaction.target.latitude,
+                                                        interaction.target.longitude
+                                                    ),
+                                                    interaction.target.zoom.toFloat()
+                                                ),
+                                                600
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             if (!item.isOverviewCluster) {
                                 MapMarker(
                                     alert = item.topAlert,
@@ -1522,11 +1560,7 @@ internal fun AlertsMapScreenContent(
                                     minutePrecisionCountdown = minutePrecisionCountdown,
                                     goDexMatchResult = goDexMatches[item.topAlert.uniqueId]
                                         ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
-                                    onClick = {
-                                        if (!compactPictureInPicture) {
-                                            selectedClusterAlerts = item.alerts
-                                        }
-                                    },
+                                    onClick = onClusterTap,
                                     markerSizeDp = baseMarkerSizeDp,
                                     emphasized = false,
                                     stackCount = item.alerts.size
@@ -1553,33 +1587,7 @@ internal fun AlertsMapScreenContent(
                                     anchor = Offset(0.5f, 0.5f),
                                     zIndex = MAP_CLUSTER_MARKER_Z_INDEX,
                                     onClick = {
-                                        when (
-                                            val interaction = if (compactPictureInPicture) {
-                                                null
-                                            } else {
-                                                resolveMapClusterInteraction(
-                                                    cluster = item,
-                                                    currentZoom = cameraAnchor.zoom,
-                                                    maximumZoom = mapProperties.maxZoomPreference.toDouble()
-                                                )
-                                            }
-                                        ) {
-                                            null -> Unit
-                                            MapClusterInteraction.ShowMembers -> {
-                                                selectedClusterAlerts = item.alerts
-                                            }
-                                            is MapClusterInteraction.ZoomTo -> {
-                                                scope.launch {
-                                                    cameraPositionState.animate(
-                                                        CameraUpdateFactory.newLatLngZoom(
-                                                            LatLng(interaction.target.latitude, interaction.target.longitude),
-                                                            interaction.target.zoom.toFloat()
-                                                        ),
-                                                        600
-                                                    )
-                                                }
-                                            }
-                                        }
+                                        onClusterTap()
                                         true
                                     }
                                 )

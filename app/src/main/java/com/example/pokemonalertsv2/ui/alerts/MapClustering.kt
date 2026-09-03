@@ -8,6 +8,7 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 /** Neighborhood/street view and closer show individual markers; only coincident markers group into stacks. */
 internal const val MAP_CLUSTER_MAX_ZOOM = 12.0
@@ -30,6 +31,13 @@ internal const val MAX_SPAWN_CIRCLES = 60
  * Cluster distance in *map dp* for overview zoom (< [MAP_CLUSTER_MAX_ZOOM]).
  */
 internal const val MAP_CLUSTER_CELL_DP = 40f
+
+/**
+ * How far apart a cluster's members must land, in map dp, before zooming into it beats opening
+ * the member list. Comfortably above the sub-pixel spread of a coincident-in-practice stack and
+ * far below the tens of dp a budget-forced cluster covers.
+ */
+internal const val MAP_CLUSTER_SPLIT_MIN_DP = 8.0
 
 /**
  * Grid cell for dense inputs at [MAP_CLUSTER_MAX_ZOOM] and closer.
@@ -393,19 +401,42 @@ internal fun resolveMapClusterInteraction(
     cluster: MapMarkerItem.Cluster,
     currentZoom: Double,
     maximumZoom: Double
-): MapClusterInteraction =
-    if (currentZoom >= MAP_CLUSTER_MAX_ZOOM ||
-        currentZoom >= maximumZoom - 0.05 ||
-        // Bounds make coincidence checking constant-time even for a 10,000-member cluster.
-        exactCoordinateKey(cluster.bounds.south, cluster.bounds.west) ==
+): MapClusterInteraction {
+    val targetZoom = min(currentZoom + 2.0, maximumZoom)
+    // Already as close as this map goes.
+    if (targetZoom <= currentZoom + 0.05) return MapClusterInteraction.ShowMembers
+    // Bounds make coincidence checking constant-time even for a 10,000-member cluster, and
+    // members on one exact coordinate never come apart however far you zoom.
+    if (exactCoordinateKey(cluster.bounds.south, cluster.bounds.west) ==
         exactCoordinateKey(cluster.bounds.north, cluster.bounds.east)
     ) {
-        MapClusterInteraction.ShowMembers
-    } else {
-        MapClusterInteraction.ZoomTo(
-            MapCameraSnapshot(cluster.latitude, cluster.longitude, min(currentZoom + 2.0, maximumZoom))
-        )
+        return MapClusterInteraction.ShowMembers
     }
+    // At [MAP_CLUSTER_MAX_ZOOM] and closer the map is meant to be drawing individual markers,
+    // so a cluster here is either a coincident stack - handled above - or one the render budget
+    // forced on a dense area. Those *do* come apart, and dumping several hundred rows into a
+    // list is a poor answer to a tap that one zoom step would resolve. Zoom when the members
+    // would actually land apart, and only fall back to the list when they would not.
+    if (currentZoom >= MAP_CLUSTER_MAX_ZOOM &&
+        clusterSpreadDp(cluster.bounds, targetZoom) < MAP_CLUSTER_SPLIT_MIN_DP
+    ) {
+        return MapClusterInteraction.ShowMembers
+    }
+    return MapClusterInteraction.ZoomTo(
+        MapCameraSnapshot(cluster.latitude, cluster.longitude, targetZoom)
+    )
+}
+
+/** The cluster's diagonal in map dp at [zoom] — how far apart zooming would place its members. */
+private fun clusterSpreadDp(bounds: MapGeoBounds, zoom: Double): Double {
+    val meanLatitudeRadians = (bounds.south + bounds.north) / 2.0 * PI / 180.0
+    val metersPerDp = METERS_PER_MAP_DP_AT_ZOOM_ZERO * cos(meanLatitudeRadians) / 2.0.pow(zoom)
+    if (metersPerDp <= 0.0) return 0.0
+    val heightMeters = (bounds.north - bounds.south) * METERS_PER_DEGREE_LATITUDE
+    val widthMeters = (bounds.east - bounds.west) *
+        METERS_PER_DEGREE_LATITUDE * cos(meanLatitudeRadians)
+    return sqrt(heightMeters * heightMeters + widthMeters * widthMeters) / metersPerDp
+}
 
 /**
  * Cluster bubbles take their colour from the one category every member shares. Priority

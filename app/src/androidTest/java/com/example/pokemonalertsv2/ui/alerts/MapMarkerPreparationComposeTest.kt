@@ -87,9 +87,14 @@ class MapMarkerPreparationComposeTest {
                 MapClusterMemberList(alerts, remember { mutableStateOf(System.currentTimeMillis()) }) { selected = it }
             }
         }
-        composeRule.onNodeWithText("Stack member 9999").assertDoesNotExist()
-        composeRule.onNodeWithTag("map_cluster_members").performScrollToIndex(10_000)
-        composeRule.onNodeWithText("Stack member 9999").assertIsDisplayed().performClick()
-        composeRule.runOnIdle { assertEquals(alerts.last(), selected) }
+        // The list is ordered by priority, whose final tie-break compares uniqueId as a string,
+        // so "server-10000" sorts among the first rows rather than the last. Ask the list for
+        // its own last row instead of assuming the input order survives.
+        val ordered = alerts.sortedWith(::compareAlertPriority)
+        val lastRow = ordered.last()
+        composeRule.onNodeWithText(lastRow.name!!).assertDoesNotExist()
+        composeRule.onNodeWithTag("map_cluster_members").performScrollToIndex(ordered.lastIndex)
+        composeRule.onNodeWithText(lastRow.name!!).assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertEquals(lastRow, selected) }
     }
 }

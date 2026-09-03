@@ -138,8 +138,14 @@ class DenseMapInteractionTest {
                     x = point.x.toFloat() + screen[0]
                     y = point.y.toFloat() + screen[1]
                 } else {
-                    val point = osm!!.projection.toScreenLocation(
-                        org.maplibre.android.geometry.LatLng(49.87, 8.65))
+                    // Tap the marker the map actually drew rather than the middle of the
+                    // fixture. A stack marker is anchored on its *top* alert - the winner of
+                    // compareAlertPriority, which for uniform fixtures is the lexicographically
+                    // first id - so it sits at a corner of the cluster, far enough from the
+                    // centre at this zoom for a centre tap to miss the icon.
+                    val target = osm!!.markers.firstOrNull()?.position
+                        ?: org.maplibre.android.geometry.LatLng(49.87, 8.65)
+                    val point = osm!!.projection.toScreenLocation(target)
                     x = point.x + screen[0]
                     y = point.y + screen[1] - 12f
                 }

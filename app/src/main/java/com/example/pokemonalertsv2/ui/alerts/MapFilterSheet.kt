@@ -288,8 +288,11 @@ private fun MapFilterSheetContent(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                // "Map", not "Filters": the panel absorbed the layers sheet and the header
+                // bar's actions, so filters are one of the two groups inside it rather than
+                // the whole of it.
                 Text(
-                    text = stringResource(R.string.map_filters_title),
+                    text = stringResource(R.string.map_panel_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )

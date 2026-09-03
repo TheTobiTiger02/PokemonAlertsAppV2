@@ -85,6 +85,7 @@
     </plurals>
     <string name="map_layers_title">Map layers</string>
     <string name="map_filters_title">Filters</string>
+    <string name="map_panel_title">Map</string>
     <string name="map_filter_all">All</string>
     <string name="map_category_solo">Show only this category</string>
     <string name="map_legend_title">What the colours mean</string>
