@@ -204,6 +204,7 @@ class WholeAppUxComposeTest {
                     MapCategoryRail(
                         mutedCategories = emptySet(),
                         categoryCounts = mapOf(AlertCategory.RAID to 7),
+                        visibleAlertCount = 4,
                         advancedRuleCount = 0,
                         onMutedCategoriesChange = {},
                         onOpenFilters = {}
@@ -217,8 +218,10 @@ class WholeAppUxComposeTest {
         composeRule.onNodeWithText("Raids").assertExists()
         // Every filterable category is reachable now, not just the six that used to fit.
         composeRule.onNodeWithText("Spawns").assertExists()
-        // Live counts ride on the chip they belong to.
+        // Live counts ride on the chip they belong to, including the total on "All" - which
+        // is the rail's job again now that the header bar that used to carry it is gone.
         composeRule.onNodeWithText("7").assertExists()
+        composeRule.onNodeWithText("4").assertExists()
     }
 
     @Test

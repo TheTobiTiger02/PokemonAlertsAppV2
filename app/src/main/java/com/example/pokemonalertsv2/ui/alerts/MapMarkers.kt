@@ -400,6 +400,9 @@ private const val MARKER_ICON_CACHE_BYTES = 32 * 1024 * 1024
 private const val MARKER_ARTWORK_CACHE_BYTES = 16 * 1024 * 1024
 private const val CLUSTER_BITMAP_CACHE_BYTES = 8 * 1024 * 1024
 
+// One bitmap per weather condition, so a handful of small circles at most.
+private const val WEATHER_BITMAP_CACHE_BYTES = 1 * 1024 * 1024
+
 internal val markerIconCache = object : LruCache<String, MapMarkerIcon>(MARKER_ICON_CACHE_BYTES) {
     override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
 }
@@ -1085,6 +1088,59 @@ internal fun createClusterMarkerBitmap(
     return bitmap
 }
 
+/**
+ * The weather glyph that sits in the middle of a weather cell.
+ *
+ * Emoji drawn onto a canvas rather than a vector asset: the app already speaks weather in
+ * emoji everywhere else (see CurrentWeatherPresentation), and eight new drawables that must
+ * stay in step with that mapping is a worse trade than one drawText.
+ */
+private val weatherCellBitmapCache = object : LruCache<String, Bitmap>(WEATHER_BITMAP_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+}
+
+internal fun createWeatherCellBitmap(
+    context: android.content.Context,
+    glyph: String,
+    confirmed: Boolean,
+    sizeDp: Float = MAP_WEATHER_CELL_SIZE_DP
+): Bitmap {
+    val cacheKey = listOf(glyph, confirmed, sizeDp).joinToString("|")
+    weatherCellBitmapCache.get(cacheKey)?.let { return it }
+    val density = context.resources.displayMetrics.density
+    val size = (sizeDp * density).toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val accent = AlertCategory.WEATHER.accentArgb.toInt()
+    // Unconfirmed weather is still the best reading available, so it is shown rather than
+    // hidden - just faded, exactly as the corner badge used to fade it.
+    val alpha = if (confirmed) 255 else 150
+
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.46f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        this.alpha = alpha
+    })
+    canvas.drawCircle(size / 2f, size / 2f, size * 0.44f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = size * 0.07f
+        color = accent
+        this.alpha = alpha
+    })
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = size * 0.46f
+        textAlign = Paint.Align.CENTER
+        this.alpha = alpha
+    }
+    canvas.drawText(
+        glyph,
+        size / 2f,
+        size / 2f - (textPaint.descent() + textPaint.ascent()) / 2f,
+        textPaint
+    )
+    weatherCellBitmapCache.put(cacheKey, bitmap)
+    return bitmap
+}
+
 internal const val ALSBACH_LATITUDE = 49.74677
 internal const val ALSBACH_LONGITUDE = 8.62492
 internal const val DARMSTADT_LATITUDE = 49.87275
@@ -1141,6 +1197,7 @@ private fun metersBetween(
 internal const val MAP_FULL_MARKER_SIZE_DP = 48f
 internal const val MAP_PIP_MARKER_SIZE_DP = 36f
 internal const val MAP_PIP_EMPHASIZED_MARKER_SIZE_DP = 44f
+internal const val MAP_WEATHER_CELL_SIZE_DP = 34f
 internal const val MAP_FULL_CLUSTER_SIZE_DP = 40f
 internal const val MAP_PIP_CLUSTER_SIZE_DP = 34f
 internal const val MAP_CLUSTER_MARKER_Z_INDEX = 850f

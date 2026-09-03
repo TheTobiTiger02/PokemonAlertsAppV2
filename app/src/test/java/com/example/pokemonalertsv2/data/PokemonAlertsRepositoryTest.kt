@@ -800,6 +800,9 @@ class PokemonAlertsRepositoryTest {
         override suspend fun updateMapCategories(categories: Set<String>) { mapCategoriesState.value = categories }
         override val mapShowDismissed: Flow<Boolean> = mapShowDismissedState.asStateFlow()
         override suspend fun updateMapShowDismissed(enabled: Boolean) { mapShowDismissedState.value = enabled }
+        private val showWeatherCellsState = MutableStateFlow(true)
+        override val showWeatherCells: Flow<Boolean> = showWeatherCellsState.asStateFlow()
+        override suspend fun updateShowWeatherCells(enabled: Boolean) { showWeatherCellsState.value = enabled }
     }
 
     private class FakeAlertDao : AlertDao() {

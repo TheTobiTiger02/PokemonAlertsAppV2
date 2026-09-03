@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -39,13 +40,16 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.*
+import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.settings.DistanceOverridesDialog
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
+import com.example.pokemonalertsv2.ui.settings.SwitchSetting
 import com.example.pokemonalertsv2.ui.settings.distanceLabel
 import com.example.pokemonalertsv2.ui.theme.Spacing
+import com.example.pokemonalertsv2.util.s2CellAt
 import com.example.pokemonalertsv2.util.TravelTime
 
 private enum class MapSelectorTarget(val title: String, val shortLabel: String) {
@@ -77,10 +81,18 @@ private const val SECTION_DISTANCE = 1
 private const val SECTION_SPECIES = 2
 private const val SECTION_RAIDS = 3
 private const val SECTION_ROCKET = 4
+private const val SECTION_STYLE = 5
+private const val SECTION_OVERLAYS = 6
+private const val SECTION_MAP_ALERTS = 7
+private const val SECTION_LEGEND = 8
 
 /**
- * Map-local filter editor. Edits the same MAP assignment the Filter Studio owns, so the two
- * never diverge; changes are applied immediately because the map behind the sheet is the preview.
+ * Everything the map can do, behind the rail's trailing chip.
+ *
+ * This started as the filter sheet and absorbed the layers sheet and the header bar's actions,
+ * because a permanent bar carrying one number and three icons was not worth the strip of map it
+ * cost. Filters stay first - they are the frequent use - with the map's own settings below them
+ * under their own heading. Changes apply immediately: the map behind the sheet is the preview.
  */
 @Composable
 internal fun MapFilterSheet(
@@ -93,18 +105,72 @@ internal fun MapFilterSheet(
     onDefinitionChange: (FilterDefinition) -> Unit,
     onOpenFilterStudio: () -> Unit,
     onDismiss: () -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    userLocation: android.location.Location?,
+    weatherCells: List<MapWeatherCell>,
+    mapCentre: MapCameraSnapshot,
+    mapStyle: MapStylePreference,
+    onMapStyleChanged: (MapStylePreference) -> Unit,
+    showTimeLabels: Boolean,
+    onToggleTimeLabels: () -> Unit,
+    showSpawnRadius: Boolean,
+    onToggleSpawnRadius: () -> Unit,
+    spacialRendEnabled: Boolean,
+    onToggleSpacialRend: () -> Unit,
+    showWeatherCells: Boolean,
+    onToggleWeatherCells: () -> Unit,
+    showDismissed: Boolean,
+    onToggleDismissed: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    autoEnterPictureInPicture: Boolean = false,
+    onToggleAutoEnterPictureInPicture: (() -> Unit)? = null,
     useSidePanel: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (useSidePanel) {
         Surface(
-            modifier = modifier.width(360.dp).padding(top = 72.dp, end = 16.dp, bottom = 24.dp),
+            modifier = modifier
+                .width(360.dp)
+                .windowInsetsPadding(WindowInsets.statusBars)
+                .padding(top = MAP_TOP_CHROME_HEIGHT, end = 16.dp, bottom = 24.dp),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = .95f),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             shadowElevation = 4.dp
         ) {
-            MapFilterSheetContent(definition, catalog, artwork, rewardThumbnails, visibleCount, totalCount, onDefinitionChange, onOpenFilterStudio, onDismiss, Modifier.padding(20.dp))
+            MapFilterSheetContent(
+                definition = definition,
+                catalog = catalog,
+                artwork = artwork,
+                rewardThumbnails = rewardThumbnails,
+                visibleCount = visibleCount,
+                totalCount = totalCount,
+                onDefinitionChange = onDefinitionChange,
+                onOpenFilterStudio = onOpenFilterStudio,
+                onDismiss = onDismiss,
+                refreshing = refreshing,
+                onRefresh = onRefresh,
+                userLocation = userLocation,
+                weatherCells = weatherCells,
+                mapCentre = mapCentre,
+                mapStyle = mapStyle,
+                onMapStyleChanged = onMapStyleChanged,
+                showTimeLabels = showTimeLabels,
+                onToggleTimeLabels = onToggleTimeLabels,
+                showSpawnRadius = showSpawnRadius,
+                onToggleSpawnRadius = onToggleSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled,
+                onToggleSpacialRend = onToggleSpacialRend,
+                showWeatherCells = showWeatherCells,
+                onToggleWeatherCells = onToggleWeatherCells,
+                showDismissed = showDismissed,
+                onToggleDismissed = onToggleDismissed,
+                onEnterPictureInPicture = onEnterPictureInPicture,
+                autoEnterPictureInPicture = autoEnterPictureInPicture,
+                onToggleAutoEnterPictureInPicture = onToggleAutoEnterPictureInPicture,
+                modifier = Modifier.padding(20.dp)
+            )
         }
     } else {
         ModalBottomSheet(
@@ -114,7 +180,38 @@ internal fun MapFilterSheet(
             contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.testTag("map_filter_sheet")
         ) {
-            MapFilterSheetContent(definition, catalog, artwork, rewardThumbnails, visibleCount, totalCount, onDefinitionChange, onOpenFilterStudio, onDismiss, Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+            MapFilterSheetContent(
+                definition = definition,
+                catalog = catalog,
+                artwork = artwork,
+                rewardThumbnails = rewardThumbnails,
+                visibleCount = visibleCount,
+                totalCount = totalCount,
+                onDefinitionChange = onDefinitionChange,
+                onOpenFilterStudio = onOpenFilterStudio,
+                onDismiss = onDismiss,
+                refreshing = refreshing,
+                onRefresh = onRefresh,
+                userLocation = userLocation,
+                weatherCells = weatherCells,
+                mapCentre = mapCentre,
+                mapStyle = mapStyle,
+                onMapStyleChanged = onMapStyleChanged,
+                showTimeLabels = showTimeLabels,
+                onToggleTimeLabels = onToggleTimeLabels,
+                showSpawnRadius = showSpawnRadius,
+                onToggleSpawnRadius = onToggleSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled,
+                onToggleSpacialRend = onToggleSpacialRend,
+                showWeatherCells = showWeatherCells,
+                onToggleWeatherCells = onToggleWeatherCells,
+                showDismissed = showDismissed,
+                onToggleDismissed = onToggleDismissed,
+                onEnterPictureInPicture = onEnterPictureInPicture,
+                autoEnterPictureInPicture = autoEnterPictureInPicture,
+                onToggleAutoEnterPictureInPicture = onToggleAutoEnterPictureInPicture,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+            )
         }
     }
 }
@@ -138,6 +235,26 @@ private fun MapFilterSheetContent(
     onDefinitionChange: (FilterDefinition) -> Unit,
     onOpenFilterStudio: () -> Unit,
     onDismiss: () -> Unit,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    userLocation: android.location.Location?,
+    weatherCells: List<MapWeatherCell>,
+    mapCentre: MapCameraSnapshot,
+    mapStyle: MapStylePreference,
+    onMapStyleChanged: (MapStylePreference) -> Unit,
+    showTimeLabels: Boolean,
+    onToggleTimeLabels: () -> Unit,
+    showSpawnRadius: Boolean,
+    onToggleSpawnRadius: () -> Unit,
+    spacialRendEnabled: Boolean,
+    onToggleSpacialRend: () -> Unit,
+    showWeatherCells: Boolean,
+    onToggleWeatherCells: () -> Unit,
+    showDismissed: Boolean,
+    onToggleDismissed: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)? = null,
+    autoEnterPictureInPicture: Boolean = false,
+    onToggleAutoEnterPictureInPicture: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var expandedSection by rememberSaveable { mutableIntStateOf(SECTION_TYPES) }
@@ -190,6 +307,14 @@ private fun MapFilterSheetContent(
             }
         }
 
+        MapPanelWeatherLine(userLocation = userLocation, weatherCells = weatherCells)
+
+        MapQuickActions(
+            refreshing = refreshing,
+            onRefresh = onRefresh,
+            onEnterPictureInPicture = onEnterPictureInPicture
+        )
+
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -197,6 +322,8 @@ private fun MapFilterSheetContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
+            MapGroupHeading("Filters")
+
             MapFilterSection(
                 title = "Alert types",
                 summary = definition.alertTypes.typeSummary(),
@@ -295,6 +422,112 @@ private fun MapFilterSheetContent(
                 active = definition.distanceOverrides.ruleCount > 0,
                 onClick = { showDistanceOverrides = true }
             )
+
+            MapGroupHeading("Map")
+
+            MapFilterSection(
+                title = "Style",
+                summary = mapStyle.panelLabel(),
+                active = mapStyle != MapStylePreference.GOOGLE_STANDARD,
+                expanded = expandedSection == SECTION_STYLE,
+                onToggle = { toggle(SECTION_STYLE) }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        MapStylePreference.entries.forEach { style ->
+                            MapStyleTile(
+                                style = style,
+                                selected = mapStyle == style,
+                                onClick = { onMapStyleChanged(style) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    if (mapStyle == MapStylePreference.OPENSTREETMAP) {
+                        OfflineTilesSection(centre = mapCentre)
+                    }
+                }
+            }
+
+            MapFilterSection(
+                title = "Overlays",
+                summary = overlaySummary(
+                    showTimeLabels = showTimeLabels,
+                    showSpawnRadius = showSpawnRadius,
+                    spacialRendEnabled = spacialRendEnabled,
+                    showWeatherCells = showWeatherCells
+                ),
+                active = showTimeLabels || showSpawnRadius || spacialRendEnabled,
+                expanded = expandedSection == SECTION_OVERLAYS,
+                onToggle = { toggle(SECTION_OVERLAYS) }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                    SwitchSetting(
+                        title = "Countdown labels",
+                        subtitle = "Print the time left onto every marker",
+                        checked = showTimeLabels,
+                        onCheckedChange = { onToggleTimeLabels() }
+                    )
+                    SwitchSetting(
+                        title = "Weather cells",
+                        subtitle = "Outline the game's weather cell over each scanned area",
+                        checked = showWeatherCells,
+                        onCheckedChange = { onToggleWeatherCells() }
+                    )
+                    SwitchSetting(
+                        title = "Spawn radius",
+                        subtitle = "Draw the 40m circle a spawn can sit anywhere inside",
+                        checked = showSpawnRadius,
+                        onCheckedChange = { onToggleSpawnRadius() }
+                    )
+                    SwitchSetting(
+                        title = "Spacial Rend",
+                        subtitle = "Widen that circle to 80m",
+                        checked = spacialRendEnabled,
+                        onCheckedChange = { onToggleSpacialRend() },
+                        enabled = showSpawnRadius
+                    )
+                }
+            }
+
+            MapFilterSection(
+                title = "Alerts",
+                summary = if (showDismissed) "Dismissed alerts shown" else "Dismissed alerts hidden",
+                active = showDismissed,
+                expanded = expandedSection == SECTION_MAP_ALERTS,
+                onToggle = { toggle(SECTION_MAP_ALERTS) }
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                    Box(modifier = Modifier.testTag("map_show_dismissed")) {
+                        SwitchSetting(
+                            title = "Show dismissed alerts",
+                            subtitle = "Keep alerts on the map after you dismiss them",
+                            checked = showDismissed,
+                            onCheckedChange = { onToggleDismissed() }
+                        )
+                    }
+                    if (onToggleAutoEnterPictureInPicture != null) {
+                        Box(modifier = Modifier.testTag("map_auto_pip")) {
+                            SwitchSetting(
+                                title = stringResource(R.string.map_pip_auto_enter),
+                                subtitle = "Shrink the map into a floating window when you leave the app",
+                                checked = autoEnterPictureInPicture,
+                                onCheckedChange = { onToggleAutoEnterPictureInPicture() }
+                            )
+                        }
+                    }
+                }
+            }
+
+            MapFilterSection(
+                title = stringResource(R.string.map_legend_title),
+                summary = "${FILTERABLE_ALERT_CATEGORIES.size} marker colours",
+                active = false,
+                expanded = expandedSection == SECTION_LEGEND,
+                onToggle = { toggle(SECTION_LEGEND) }
+            ) {
+                MapCategoryLegend()
+            }
         }
 
         Row(
@@ -467,6 +700,164 @@ private fun MapFilterLauncherRow(
             )
         }
     }
+}
+
+/** Divides the panel's one scroll into the two things it holds. */
+@Composable
+private fun MapGroupHeading(title: String) {
+    Text(
+        text = title.uppercase(),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = Spacing.xxs, top = Spacing.sm, bottom = Spacing.xxs)
+    )
+}
+
+/**
+ * The two actions the header bar used to hold.
+ *
+ * Neither earns permanent space on the map: the feed already polls every 30s, so refresh is a
+ * "now, please" rather than the only way to get data, and picture-in-picture is a once-a-session
+ * gesture.
+ */
+@Composable
+internal fun MapQuickActions(
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    onEnterPictureInPicture: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        FilledTonalButton(
+            onClick = onRefresh,
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            AnimatedRefreshIcon(
+                refreshing = refreshing,
+                contentDescription = stringResource(R.string.refresh_alerts)
+            )
+            Spacer(Modifier.width(Spacing.sm))
+            Text("Refresh", maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (onEnterPictureInPicture != null) {
+            FilledTonalButton(
+                onClick = onEnterPictureInPicture,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_pip),
+                    contentDescription = "Open map in picture-in-picture",
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(Spacing.sm))
+                Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/**
+ * The weather where the user is standing.
+ *
+ * The map draws weather as a cell, which is located but can sit off-screen at street zoom.
+ * This is the always-reachable copy, and the reason the floating corner badge could go.
+ */
+@Composable
+private fun MapPanelWeatherLine(
+    userLocation: android.location.Location?,
+    weatherCells: List<MapWeatherCell>
+) {
+    // Matched by S2 cell rather than by the old centre-and-radius area lookup. That lookup
+    // keys off a hardcoded name table which the backend has already outgrown - it still says
+    // "Darmstadt" where the feed now reports "Darmstadt-North" and "Darmstadt-South" - so it
+    // resolves to an area nothing has weather for. Containment in the cell that is drawn on
+    // the map cannot drift, because it is derived from the same data.
+    val here = remember(userLocation?.latitude, userLocation?.longitude, weatherCells) {
+        val location = userLocation ?: return@remember null
+        val cell = s2CellAt(location.latitude, location.longitude)
+        weatherCells.firstOrNull { it.cell == cell }
+    } ?: return
+
+    Text(
+        text = "${here.area} · ${here.display.compactLabel}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/** A provider choice, sized and shaped like the thing it turns on rather than a text chip. */
+@Composable
+private fun MapStyleTile(
+    style: MapStylePreference,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scheme = MaterialTheme.colorScheme
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) scheme.primaryContainer else scheme.surfaceContainer,
+        contentColor = if (selected) scheme.onPrimaryContainer else scheme.onSurface,
+        border = BorderStroke(
+            if (selected) 2.dp else 1.dp,
+            if (selected) scheme.primary else scheme.outlineVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(vertical = Spacing.md, horizontal = Spacing.sm),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_map),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = style.panelLabel(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (style == MapStylePreference.OPENSTREETMAP) "Offline capable" else "Google",
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) scheme.onPrimaryContainer else scheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+private fun MapStylePreference.panelLabel(): String = when (this) {
+    MapStylePreference.GOOGLE_STANDARD -> "Standard"
+    MapStylePreference.GOOGLE_SATELLITE -> "Satellite"
+    MapStylePreference.OPENSTREETMAP -> "OpenStreetMap"
+}
+
+private fun overlaySummary(
+    showTimeLabels: Boolean,
+    showSpawnRadius: Boolean,
+    spacialRendEnabled: Boolean,
+    showWeatherCells: Boolean
+): String {
+    val on = buildList {
+        if (showTimeLabels) add("Countdowns")
+        if (showWeatherCells) add("Weather cells")
+        if (showSpawnRadius) add(if (spacialRendEnabled) "Spawn radius 80m" else "Spawn radius")
+    }
+    return if (on.isEmpty()) "None" else on.joinToString(", ")
 }
 
 @Composable

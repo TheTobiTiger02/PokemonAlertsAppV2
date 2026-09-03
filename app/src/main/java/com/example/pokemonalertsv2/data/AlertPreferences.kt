@@ -60,6 +60,7 @@ private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stri
 private val FEED_CATEGORIES_KEY = stringSetPreferencesKey("feed_filter_categories")
 private val MAP_CATEGORIES_KEY = stringSetPreferencesKey("map_filter_categories")
 private val MAP_SHOW_DISMISSED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("map_show_dismissed")
+private val SHOW_WEATHER_CELLS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_weather_cells")
 
 /**
  * One-time read migration from the old single-select feed tab ([SELECTED_ALERT_FILTER_KEY])
@@ -238,6 +239,10 @@ interface AlertPreferencesStore {
     /** Whether the map shows dismissed alerts again; independent from the feed's toggle. */
     val mapShowDismissed: Flow<Boolean>
     suspend fun updateMapShowDismissed(enabled: Boolean)
+
+    /** Draws the Pokemon GO weather cell over each scanned area. On by default. */
+    val showWeatherCells: Flow<Boolean>
+    suspend fun updateShowWeatherCells(enabled: Boolean)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -701,6 +706,14 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 
     override val mapShowDismissed: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[MAP_SHOW_DISMISSED_KEY] ?: false
+    }
+
+    override val showWeatherCells: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_WEATHER_CELLS_KEY] ?: true
+    }
+
+    override suspend fun updateShowWeatherCells(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[SHOW_WEATHER_CELLS_KEY] = enabled }
     }
 
     override suspend fun updateMapShowDismissed(enabled: Boolean) {

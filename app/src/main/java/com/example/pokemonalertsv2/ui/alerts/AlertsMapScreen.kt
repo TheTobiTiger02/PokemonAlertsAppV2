@@ -153,6 +153,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Polygon
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
@@ -322,6 +323,7 @@ fun AlertsMapRoute(
     val autoEnterMapPip by viewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle()
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
+    val showWeatherCells by viewModel.showWeatherCells.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     val effectiveCategories = mapFilterForPresentation(selectedMapCategories, presentationMode)
@@ -365,6 +367,8 @@ fun AlertsMapRoute(
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = { viewModel.updateShowSpawnRadius(!showSpawnRadius) },
         onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) },
+        showWeatherCells = showWeatherCells,
+        onToggleWeatherCells = { viewModel.updateShowWeatherCells(!showWeatherCells) },
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = viewModel::dismissAlert,
         onRestoreAlert = viewModel::undoDismissAlert,
@@ -408,6 +412,8 @@ fun AlertsMapScreen(
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
     onToggleSpacialRend: () -> Unit = {},
+    showWeatherCells: Boolean = true,
+    onToggleWeatherCells: () -> Unit = {},
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
     onRestoreAlert: (String) -> Unit = {},
@@ -446,6 +452,8 @@ fun AlertsMapScreen(
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = onToggleSpawnRadius,
         onToggleSpacialRend = onToggleSpacialRend,
+        showWeatherCells = showWeatherCells,
+        onToggleWeatherCells = onToggleWeatherCells,
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = onDismissAlert,
         onRestoreAlert = onRestoreAlert,
@@ -488,6 +496,8 @@ internal fun AlertsMapScreenContent(
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
     onToggleSpacialRend: () -> Unit = {},
+    showWeatherCells: Boolean = true,
+    onToggleWeatherCells: () -> Unit = {},
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
     onRestoreAlert: (String) -> Unit = {},
@@ -536,7 +546,6 @@ internal fun AlertsMapScreenContent(
     } else {
         MapType.NORMAL
     }
-    var showLayersSheet by rememberSaveable { mutableStateOf(false) }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -1261,12 +1270,24 @@ internal fun AlertsMapScreenContent(
                 (if (filterDefinition.maxDistanceKm > 0) 1 else 0) +
                 (if (filterDefinition.maxWalkingMinutes > 0) 1 else 0)
         }
+        // One outlined weather cell per scanned area. Suppressed in picture-in-picture,
+        // where a 10km outline covers the whole window.
+        val weatherCells = rememberMapWeatherCells(
+            alerts = alerts,
+            enabled = showWeatherCells && !compactPictureInPicture
+        )
+
+        // Measured rather than assumed: the chrome above the map is now the chip rail alone,
+        // and the old hardcoded 72dp both overshot it and ignored the status bar, which pushed
+        // the Google logo and the OpenStreetMap attribution further down than they needed.
+        val topChromeInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
+            MAP_TOP_CHROME_HEIGHT
         val mapContentPadding = if (compactPictureInPicture) {
             PaddingValues(0.dp)
         } else {
             PaddingValues(
                 start = 16.dp,
-                top = 72.dp,
+                top = topChromeInset,
                 end = if (useSidePanel) 392.dp else 16.dp,
                 bottom = if (useSidePanel) 24.dp else 96.dp
             )
@@ -1277,7 +1298,7 @@ internal fun AlertsMapScreenContent(
         val openStreetMapInsets = with(density) {
             MapContentInsets(
                 left = if (compactPictureInPicture) 0 else 16.dp.roundToPx(),
-                top = if (compactPictureInPicture) 0 else 72.dp.roundToPx(),
+                top = if (compactPictureInPicture) 0 else topChromeInset.roundToPx(),
                 right = if (compactPictureInPicture) {
                     0
                 } else {
@@ -1419,6 +1440,37 @@ internal fun AlertsMapScreenContent(
                         rotation = pose.headingDegrees ?: 0f,
                         zIndex = 1_000f
                     )
+                }
+                if (cameraAnchor.zoom >= WEATHER_CELL_MIN_ZOOM) {
+                    weatherCells.forEach { cell ->
+                        key("weather-${cell.area}") {
+                            Polygon(
+                                points = cell.boundary.map { LatLng(it.latitude, it.longitude) },
+                                fillColor = Color(AlertCategory.WEATHER.accentArgb).copy(alpha = 0.07f),
+                                strokeColor = Color(AlertCategory.WEATHER.accentArgb).copy(alpha = 0.85f),
+                                strokeWidth = 1.6f * density.density,
+                                // Under everything: the cell spans kilometres, so anything it
+                                // covered would read as tinted rather than as sitting on top.
+                                zIndex = 100f
+                            )
+                            Marker(
+                                state = MarkerState(
+                                    LatLng(cell.centre.latitude, cell.centre.longitude)
+                                ),
+                                icon = BitmapDescriptorFactory.fromBitmap(
+                                    createWeatherCellBitmap(
+                                        context = context,
+                                        glyph = cell.display.glyph,
+                                        confirmed = cell.display.confirmed
+                                    )
+                                ),
+                                anchor = Offset(0.5f, 0.5f),
+                                title = cell.area,
+                                snippet = cell.display.compactLabel,
+                                zIndex = 110f
+                            )
+                        }
+                    }
                 }
                 if (spawnRadiusMeters != null && cameraAnchor.zoom >= SPAWN_CIRCLE_MIN_ZOOM) {
                     circledAlerts.forEach { alert ->
@@ -1590,6 +1642,7 @@ internal fun AlertsMapScreenContent(
                     },
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
+                    weatherCells = weatherCells,
                     interactive = !compactPictureInPicture,
                     protectedAlertIds = protectedAlertIds,
                     emphasizedAlertIds = emphasizedAlertIds,
@@ -1720,56 +1773,30 @@ internal fun AlertsMapScreenContent(
             }
         }
 
+        // The whole of the map's chrome: a chip rail, and a status pill when something is
+        // wrong. The bar that used to sit above this held one number and three icons, none of
+        // which needed to be visible at all times - they live in the panel behind the rail's
+        // trailing chip now, and the map got the space back.
         if (!compactPictureInPicture) {
-            // The rail is the only child that runs to the screen edge: chips have to scroll
-            // out from under it rather than stop short at a padded boundary.
-            val chromeInset = Modifier.padding(start = Spacing.lg, end = controlsEndPadding)
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .padding(top = Spacing.sm),
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                MapHeaderBar(
-                    visibleAlertCount = filteredAlerts.size,
-                    showBackButton = showBackButton,
-                    refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
-                    activeLayerCount = listOf(
-                        mapStyle != MapStylePreference.GOOGLE_STANDARD,
-                        showTimeLabels,
-                        showSpawnRadius,
-                        spacialRendEnabled
-                    ).count { it },
-                    onBack = onBack,
-                    onRefresh = onRefresh,
-                    onEnterPictureInPicture = onEnterPictureInPicture?.let {
-                        {
-                            if (hasLocationPermissionNow()) {
-                                hasLocationPermission = true
-                                showPreciseLocationGuidanceIfNeeded()
-                                launchPictureInPicture()
-                            } else {
-                                pendingPictureInPictureLaunch = true
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
-                        }
-                    },
-                    onOpenLayers = { showLayersSheet = true },
-                    modifier = chromeInset
-                )
-
                 MapCategoryRail(
                     mutedCategories = selectedCategories,
                     categoryCounts = categoryCounts,
+                    visibleAlertCount = filteredAlerts.size,
                     advancedRuleCount = advancedFilterRuleCount,
+                    showBackButton = showBackButton,
+                    onBack = onBack,
                     onMutedCategoriesChange = onSelectedCategoriesChange,
                     onOpenFilters = { showFilterSheet = true },
+                    // The rail runs to the screen edge so chips scroll out from under it
+                    // rather than stopping short at a padded boundary.
                     contentPadding = PaddingValues(
                         start = Spacing.lg,
                         end = controlsEndPadding,
@@ -1778,20 +1805,8 @@ internal fun AlertsMapScreenContent(
                     )
                 )
 
-                Column(
-                    modifier = chromeInset.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
+                Row(modifier = Modifier.padding(start = Spacing.lg, end = controlsEndPadding)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
-
-                    // Weather for the area the user is actually standing in, mirroring the game's
-                    // own corner badge. Nothing renders when they are outside every scanned area.
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        MapWeatherBadge(userLocation = userLocation)
-                    }
                 }
             }
         }
@@ -1831,28 +1846,45 @@ internal fun AlertsMapScreenContent(
                 onOpenFilterStudio = { showFilterSheet = false; onOpenFilterStudio() },
                 onDismiss = { showFilterSheet = false },
                 useSidePanel = useSidePanel,
-                modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier
-            )
-        }
-
-        if (!compactPictureInPicture && showLayersSheet) {
-            MapLayersSheet(
+                modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier,
+                refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
+                onRefresh = onRefresh,
+                onEnterPictureInPicture = onEnterPictureInPicture?.let {
+                    {
+                        if (hasLocationPermissionNow()) {
+                            hasLocationPermission = true
+                            showPreciseLocationGuidanceIfNeeded()
+                            launchPictureInPicture()
+                        } else {
+                            pendingPictureInPictureLaunch = true
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                )
+                            )
+                        }
+                    }
+                },
+                userLocation = userLocation,
+                weatherCells = weatherCells,
                 // The retained camera, not the Google camera state: that one is not driven
                 // while the OpenStreetMap layer is the visible one.
                 mapCentre = retainedCamera(),
                 mapStyle = mapStyle,
-                showTimeLabels = showTimeLabels,
-                showSpawnRadius = showSpawnRadius,
-                spacialRendEnabled = spacialRendEnabled,
-                showDismissed = mapShowDismissed,
-                onDismiss = { showLayersSheet = false },
                 onMapStyleChanged = {
                     mapStyle = it
                     onMapStyleChanged(it)
                 },
+                showTimeLabels = showTimeLabels,
                 onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
+                showSpawnRadius = showSpawnRadius,
                 onToggleSpawnRadius = onToggleSpawnRadius,
+                spacialRendEnabled = spacialRendEnabled,
                 onToggleSpacialRend = onToggleSpacialRend,
+                showWeatherCells = showWeatherCells,
+                onToggleWeatherCells = onToggleWeatherCells,
+                showDismissed = mapShowDismissed,
                 onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
                 autoEnterPictureInPicture = autoEnterPictureInPicture,
                 onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
@@ -1862,6 +1894,7 @@ internal fun AlertsMapScreenContent(
                 }
             )
         }
+
 
         if (!compactPictureInPicture && selectedClusterAlerts.isNotEmpty()) {
             ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {

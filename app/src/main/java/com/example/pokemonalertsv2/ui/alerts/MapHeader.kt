@@ -5,23 +5,17 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -29,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -42,155 +35,51 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
-import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.theme.Alphas
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
 /**
- * The map's single floating header.
+ * How much room the rail takes at the top of the map, for the map engines' content insets.
  *
- * There is deliberately no title: the bottom navigation already says "Map", so the words
- * "Alerts Map" only cost map. What is left is the one number that changes — how many alerts
- * survive the current filters — and the three view actions.
- *
- * Unlike the bar it replaces, this one is inset-aware: it pads itself clear of the status bar
- * rather than starting 8dp from the top edge of the screen.
+ * The chrome above the map used to be a 56dp bar with the rail on top of it, and the insets
+ * hardcoded 72dp to clear that while ignoring the status bar entirely. There is only the rail
+ * now, and callers add the real status bar height to this.
  */
-@Composable
-internal fun MapHeaderBar(
-    visibleAlertCount: Int,
-    showBackButton: Boolean,
-    refreshing: Boolean,
-    activeLayerCount: Int,
-    onBack: () -> Unit,
-    onRefresh: () -> Unit,
-    onOpenLayers: () -> Unit,
-    modifier: Modifier = Modifier,
-    onEnterPictureInPicture: (() -> Unit)? = null
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        tonalElevation = 0.dp,
-        shadowElevation = 3.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .padding(horizontal = Spacing.xxs),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (showBackButton) {
-                IconButton(onClick = onBack, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.back),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-            AnimatedContent(
-                targetState = visibleAlertCount,
-                transitionSpec = { appFadeThrough() },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = if (showBackButton) Spacing.xxs else Spacing.lg),
-                label = "map_alert_count"
-            ) { count ->
-                Text(
-                    text = pluralStringResource(R.plurals.map_alerts_visible, count, count),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1
-                )
-            }
-            IconButton(onClick = onRefresh, modifier = Modifier.size(44.dp)) {
-                AnimatedRefreshIcon(
-                    refreshing = refreshing,
-                    contentDescription = stringResource(R.string.refresh_alerts)
-                )
-            }
-            if (onEnterPictureInPicture != null) {
-                IconButton(onClick = onEnterPictureInPicture, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_pip),
-                        contentDescription = "Open map in picture-in-picture",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-            Box {
-                IconButton(onClick = onOpenLayers, modifier = Modifier.size(44.dp)) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_layers),
-                        contentDescription = stringResource(R.string.map_layers_title),
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                AnimatedContent(
-                    targetState = activeLayerCount,
-                    transitionSpec = { appFadeThrough() },
-                    modifier = Modifier.align(Alignment.TopEnd),
-                    label = "map_layer_count"
-                ) { count ->
-                    if (count > 0) {
-                        Surface(
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ) {
-                            Text(
-                                text = "$count",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+internal val MAP_TOP_CHROME_HEIGHT = 52.dp
 
 /**
- * The map's category rail.
+ * The map's category rail — and, since the header bar was removed, its entire top chrome.
  *
- * Chips read positively — a lit chip means "this is on the map" — even though the stored value
- * is still the *muted* set every other surface persists. The old rail inverted that and showed
- * nothing selected in the default state, where in fact everything was showing.
+ * Chips read positively: a lit chip means "this is on the map", even though the stored value is
+ * the *muted* set every other surface persists. Every filterable category gets one, so the rail
+ * doubles as the legend for the marker colours, and the trailing chip opens everything else the
+ * map can do.
  *
- * Every filterable category gets a chip, not the six that used to fit, so the rail doubles as
- * the legend for the marker colours. Order is the declared one rather than by count: counts
- * change on every poll, and chips that shuffle under your thumb are worse than chips that are
- * always in the same place. Only the empty categories move, to the end.
+ * Order is the declared one rather than by count: counts change on every poll, and chips that
+ * shuffle under your thumb are worse than chips that are always in the same place. Only the
+ * empty categories move, to the end.
  */
 @Composable
 internal fun MapCategoryRail(
     mutedCategories: Set<AlertCategory>,
     categoryCounts: Map<AlertCategory, Int>,
+    visibleAlertCount: Int,
     advancedRuleCount: Int,
     onMutedCategoriesChange: (Set<AlertCategory>) -> Unit,
     onOpenFilters: () -> Unit,
     modifier: Modifier = Modifier,
+    showBackButton: Boolean = false,
+    onBack: () -> Unit = {},
     contentPadding: PaddingValues = PaddingValues(horizontal = Spacing.xxs)
 ) {
     val haptics = LocalHapticFeedback.current
@@ -209,13 +98,17 @@ internal fun MapCategoryRail(
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Root destinations never show one, but the parameter is still wired, and with the bar
+        // gone the rail is the only chrome left that could host it.
+        if (showBackButton) {
+            item(key = "BACK") {
+                MapRailBackButton(onClick = onBack)
+            }
+        }
         item(key = "ALL") {
-            // No count: the header bar directly above already states how many alerts are
-            // showing, and repeating it here made the rail read as though the per-category
-            // counts ought to sum to it. They overlap, so they never will.
             MapFilterPill(
                 label = stringResource(R.string.map_filter_all),
-                count = 0,
+                count = visibleAlertCount,
                 selected = mutedCategories.isEmpty(),
                 accent = MaterialTheme.colorScheme.primary,
                 onClick = { onMutedCategoriesChange(emptySet()) },
@@ -327,7 +220,14 @@ private fun MapFilterPill(
     }
 }
 
-/** The rail's trailing chip: everything the six categories cannot express. */
+/**
+ * The rail's trailing chip, and the map's only remaining entry point to everything the ten
+ * category chips cannot express: advanced filters, map style, overlays, refresh and
+ * picture-in-picture.
+ *
+ * The badge counts active filter rules only. Layer state is legible from the map itself, so
+ * counting it here would make one badge mean two things at once.
+ */
 @Composable
 private fun MapFiltersPill(activeRuleCount: Int, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
@@ -353,7 +253,7 @@ private fun MapFiltersPill(activeRuleCount: Int, onClick: () -> Unit) {
                 .clip(RoundedCornerShape(50))
                 .combinedClickable(onClick = onClick)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
-                .semantics { contentDescription = "Advanced filters" },
+                .semantics { contentDescription = "Filters and map settings" },
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
@@ -382,44 +282,61 @@ private fun MapFiltersPill(activeRuleCount: Int, onClick: () -> Unit) {
     }
 }
 
+/** A round rail chip carrying the back arrow instead of a label. */
+@Composable
+private fun MapRailBackButton(onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 3.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(CircleShape)
+                .combinedClickable(onClick = onClick)
+                .padding(7.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
 /**
- * The key to the marker colours, shown in the layers sheet.
+ * The key to the marker colours, shown in the map panel.
  *
  * The map has always been colour-coded and has never said so anywhere. The rail is the live
  * version of this; this is the version you can read without narrowing anything.
  */
 @Composable
 internal fun MapCategoryLegend(modifier: Modifier = Modifier) {
-    Column(
+    FlowRow(
         modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {
-        Text(
-            text = stringResource(R.string.map_legend_title),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-        ) {
-            FILTERABLE_ALERT_CATEGORIES.forEach { category ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(Color(category.accentArgb))
-                    )
-                    Text(
-                        text = category.filterLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+        FILTERABLE_ALERT_CATEGORIES.forEach { category ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Color(category.accentArgb))
+                )
+                Text(
+                    text = category.filterLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

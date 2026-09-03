@@ -451,6 +451,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .asPreferenceState(false)
     val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
         .asPreferenceState(false)
+    val showWeatherCells = repository.alertPreferences.showWeatherCells
+        .asPreferenceState(true)
 
     val selectedArea = repository.alertPreferences.selectedArea
         .asPreferenceState("All")
@@ -495,6 +497,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateAutoEnterMapPip(enabled: Boolean) {
         viewModelScope.launch {
             repository.alertPreferences.updateAutoEnterMapPip(enabled)
+        }
+    }
+
+    fun updateShowWeatherCells(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateShowWeatherCells(enabled)
         }
     }
 

@@ -48,7 +48,6 @@
     <string name="widget_distance_unavailable">Distance unavailable</string>
     <string name="widget_logo_cd">Pok&#x00E9;mon Alerts logo</string>
     <string name="alert_image">Alert image</string>
-    <string name="map_title">Alerts Map</string>
     <string name="map_filter_alerts">Filter map alerts</string>
     <string name="map_more_options">More map options</string>
     <string name="map_show_countdowns">Show countdown labels</string>

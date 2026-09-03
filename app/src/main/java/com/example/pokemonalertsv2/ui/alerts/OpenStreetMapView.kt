@@ -51,6 +51,7 @@ import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
 import org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment
+import org.maplibre.android.style.layers.PropertyFactory.iconOpacity
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
@@ -145,6 +146,10 @@ internal class OpenStreetMapController {
     private var pendingShowSpawnRadius = false
     private var pendingSpacialRendEnabled = false
     private var pendingUserPose: MapUserPose? = null
+    private var pendingWeatherCells: List<MapWeatherCell> = emptyList()
+    /** Held so weather glyphs can be rasterised whenever the cell set changes, not just on attach. */
+    private var imageContext: android.content.Context? = null
+    private val registeredWeatherImages = HashSet<String>()
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     /** Live camera zoom, tracked only to gate the spawn-radius polygons. */
     private var pendingZoom: Double = 0.0
@@ -182,6 +187,9 @@ internal class OpenStreetMapController {
             val position = map.cameraPosition
             val target = position.target ?: return@addOnCameraIdleListener
             pendingZoom = position.zoom
+            // Spawn circles re-render through the marker pass on every camera change; the
+            // weather cells have no such pass, so their zoom gate is evaluated here.
+            renderWeatherCells()
             onCameraChanged(
                 MapCameraSnapshot(
                     latitude = target.latitude,
@@ -219,12 +227,31 @@ internal class OpenStreetMapController {
 
     fun attachStyle(style: Style, context: android.content.Context) {
         this.style = style
+        this.imageContext = context.applicationContext
         radiusLayersOrdered = false
+        registeredWeatherImages.clear()
         style.addImage(USER_DOT_IMAGE, createMapUserMarkerBitmap(context, directional = false))
         style.addImage(USER_ARROW_IMAGE, createMapUserMarkerBitmap(context, directional = true))
+        style.addSource(GeoJsonSource(WEATHER_CELL_SOURCE))
+        style.addSource(GeoJsonSource(WEATHER_GLYPH_SOURCE))
         style.addSource(GeoJsonSource(SPAWN_RADIUS_SOURCE))
         style.addSource(GeoJsonSource(USER_ACCURACY_SOURCE))
         style.addSource(GeoJsonSource(USER_POSE_SOURCE))
+        // Weather cells sit at the very bottom: they are ~10km across, so anything drawn
+        // over them would otherwise be tinted by a fill that covers most of the screen.
+        style.addLayer(
+            FillLayer(WEATHER_CELL_LAYER, WEATHER_CELL_SOURCE).withProperties(
+                fillColor(AlertCategory.WEATHER.accentArgb.toInt()),
+                fillOpacity(0.07f)
+            )
+        )
+        style.addLayer(
+            LineLayer(WEATHER_CELL_LINE_LAYER, WEATHER_CELL_SOURCE).withProperties(
+                lineColor(AlertCategory.WEATHER.accentArgb.toInt()),
+                lineWidth(1.6f),
+                lineOpacity(0.85f)
+            )
+        )
         style.addLayer(
             FillLayer(SPAWN_RADIUS_LAYER, SPAWN_RADIUS_SOURCE).withProperties(
                 fillColor(AndroidColor.parseColor("#1A73E8")),
@@ -255,9 +282,18 @@ internal class OpenStreetMapController {
                 iconIgnorePlacement(true)
             )
         )
+        style.addLayer(
+            SymbolLayer(WEATHER_GLYPH_LAYER, WEATHER_GLYPH_SOURCE).withProperties(
+                iconImage(Expression.get("icon")),
+                iconOpacity(Expression.get("opacity")),
+                iconAllowOverlap(true),
+                iconIgnorePlacement(true)
+            )
+        )
         orderRadiusLayersBelowMarkers()
         renderUserPose()
         renderSpawnRadii()
+        renderWeatherCells()
     }
 
     fun detach() {
@@ -309,6 +345,12 @@ internal class OpenStreetMapController {
         pendingAlerts = rawAlerts
         renderMarkers(context)
         renderSpawnRadii()
+    }
+
+    fun setWeatherCells(context: android.content.Context, cells: List<MapWeatherCell>) {
+        imageContext = context.applicationContext
+        pendingWeatherCells = cells
+        renderWeatherCells()
     }
 
     fun setSpawnRadiusOptions(showRadius: Boolean, spacialRend: Boolean) {
@@ -383,7 +425,14 @@ internal class OpenStreetMapController {
     private fun orderRadiusLayersBelowMarkers() {
         val currentStyle = style ?: return
         if (radiusLayersOrdered || currentStyle.getLayer(ANNOTATION_POINTS_LAYER) == null) return
-        listOf(SPAWN_RADIUS_LAYER, SPAWN_RADIUS_LINE_LAYER, USER_ACCURACY_LAYER).forEach { id ->
+        listOf(
+            WEATHER_CELL_LAYER,
+            WEATHER_CELL_LINE_LAYER,
+            WEATHER_GLYPH_LAYER,
+            SPAWN_RADIUS_LAYER,
+            SPAWN_RADIUS_LINE_LAYER,
+            USER_ACCURACY_LAYER
+        ).forEach { id ->
             val layer = currentStyle.getLayer(id) ?: return@forEach
             if (currentStyle.removeLayer(layer)) currentStyle.addLayerBelow(layer, ANNOTATION_POINTS_LAYER)
         }
@@ -418,6 +467,55 @@ internal class OpenStreetMapController {
         )
     }
 
+    /**
+     * Draws one outlined cell per scanned area, with the condition glyph at its centre.
+     *
+     * Glyph bitmaps are registered with the style lazily and keyed by condition, so switching
+     * from rain to clear adds one image rather than rebuilding the layer.
+     */
+    private fun renderWeatherCells() {
+        val currentStyle = style ?: return
+        val cellSource = currentStyle.getSourceAs<GeoJsonSource>(WEATHER_CELL_SOURCE) ?: return
+        val glyphSource = currentStyle.getSourceAs<GeoJsonSource>(WEATHER_GLYPH_SOURCE) ?: return
+        val context = imageContext
+        val cells = pendingWeatherCells
+
+        if (cells.isEmpty() || context == null || pendingZoom < WEATHER_CELL_MIN_ZOOM) {
+            cellSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            glyphSource.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
+            return
+        }
+
+        val outlines = cells.map { cell ->
+            Feature.fromGeometry(
+                Polygon.fromLngLats(
+                    listOf(cell.boundary.map { Point.fromLngLat(it.longitude, it.latitude) })
+                )
+            )
+        }
+        cellSource.setGeoJson(FeatureCollection.fromFeatures(outlines))
+
+        val glyphs = cells.map { cell ->
+            val imageId = weatherImageId(cell)
+            if (registeredWeatherImages.add(imageId)) {
+                currentStyle.addImage(
+                    imageId,
+                    createWeatherCellBitmap(context, cell.display.glyph, cell.display.confirmed)
+                )
+            }
+            Feature.fromGeometry(
+                Point.fromLngLat(cell.centre.longitude, cell.centre.latitude)
+            ).apply {
+                addStringProperty("icon", imageId)
+                addNumberProperty("opacity", if (cell.display.confirmed) 1f else 0.65f)
+            }
+        }
+        glyphSource.setGeoJson(FeatureCollection.fromFeatures(glyphs))
+    }
+
+    private fun weatherImageId(cell: MapWeatherCell): String =
+        "weather-${cell.display.glyph}-${cell.display.confirmed}"
+
     private fun renderSpawnRadii() {
         val currentStyle = style ?: return
         val radiusSource = currentStyle.getSourceAs<GeoJsonSource>(SPAWN_RADIUS_SOURCE) ?: return
@@ -447,6 +545,11 @@ internal class OpenStreetMapController {
     private companion object {
         // Native annotation layer ID in the bundled MapLibre SDK.
         const val ANNOTATION_POINTS_LAYER = "org.maplibre.annotations.points"
+        const val WEATHER_CELL_SOURCE = "weather-cell-source"
+        const val WEATHER_CELL_LAYER = "weather-cell-layer"
+        const val WEATHER_CELL_LINE_LAYER = "weather-cell-line-layer"
+        const val WEATHER_GLYPH_SOURCE = "weather-glyph-source"
+        const val WEATHER_GLYPH_LAYER = "weather-glyph-layer"
         const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
         const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
         const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
@@ -510,6 +613,7 @@ internal fun OpenStreetMapView(
     onUserGesture: () -> Unit,
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
+    weatherCells: List<MapWeatherCell> = emptyList(),
     interactive: Boolean = true,
     protectedAlertIds: Set<String> = emptySet(),
     emphasizedAlertIds: Set<String> = emptySet(),
@@ -806,6 +910,12 @@ internal fun OpenStreetMapView(
     LaunchedEffect(userPose) {
         withContext(Dispatchers.Main.immediate) {
             controller.setUserPose(userPose)
+        }
+    }
+
+    LaunchedEffect(weatherCells) {
+        withContext(Dispatchers.Main.immediate) {
+            controller.setWeatherCells(context, weatherCells)
         }
     }
 }

@@ -185,18 +185,13 @@ class MapLiveTrackingComposeTest {
     }
 
     @Test
-    fun mapToolbarExposesPictureInPictureAction() {
+    fun mapPanelQuickActionsExposePictureInPicture() {
         var selected = false
         composeRule.setContent {
             PokemonAlertsV2Theme {
-                MapHeaderBar(
-                    visibleAlertCount = 3,
-                    showBackButton = false,
+                MapQuickActions(
                     refreshing = false,
-                    activeLayerCount = 0,
-                    onBack = {},
                     onRefresh = {},
-                    onOpenLayers = {},
                     onEnterPictureInPicture = { selected = true }
                 )
             }

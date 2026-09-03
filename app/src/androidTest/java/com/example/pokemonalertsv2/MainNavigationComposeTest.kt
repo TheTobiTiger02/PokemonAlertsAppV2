@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -62,7 +63,7 @@ class MainNavigationComposeTest {
         waitForMainNavigation()
 
         composeRule.onNodeWithText("Map").performClick()
-        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
 
         composeRule.runOnIdle {
             composeRule.activity.handleNavigationIntent(
@@ -80,7 +81,7 @@ class MainNavigationComposeTest {
     fun mapIntentOpensRootMapWithoutToolbarBack() {
         openMapFromIntent()
 
-        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
         composeRule.onNodeWithText("Map").assertIsSelected()
     }
@@ -281,9 +282,9 @@ class MainNavigationComposeTest {
             MainActivity.createMapIntent(composeRule.activity)
         )
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            runCatching { composeRule.onNodeWithText("Alerts Map").fetchSemanticsNode() }.isSuccess
+            runCatching { composeRule.onNodeWithTag("map_full_content").fetchSemanticsNode() }.isSuccess
         }
-        composeRule.onNodeWithText("Alerts Map").assertIsDisplayed()
+        composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
     }
 
     private fun waitForAlertsScreen() {
