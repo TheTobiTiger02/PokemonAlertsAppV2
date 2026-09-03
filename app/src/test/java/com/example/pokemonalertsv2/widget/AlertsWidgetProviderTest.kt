@@ -99,14 +99,22 @@ class AlertsWidgetProviderTest {
         )
     }
 
+    /**
+     * This used to assert the opposite - that the URI changes with every snapshot generation -
+     * which is exactly what leaked. A differing intent makes the framework build another
+     * RemoteViewsService connection and another factory, each holding its own copy of the alert
+     * list, and they accumulated until the process ran out of memory. Refreshes go through
+     * notifyAppWidgetViewDataChanged now, so this must stay stable.
+     */
     @Test
-    fun adapterDataUriChangesWithSnapshotGeneration() {
-        val first = widgetAdapterDataKey("com.example.test", appWidgetId = 7, generation = 10L)
-        val second = widgetAdapterDataKey("com.example.test", appWidgetId = 7, generation = 11L)
+    fun adapterDataUriIsStablePerWidgetSoOneFactoryIsReused() {
+        val first = widgetAdapterDataKey("com.example.test", appWidgetId = 7)
+        val second = widgetAdapterDataKey("com.example.test", appWidgetId = 7)
+        val other = widgetAdapterDataKey("com.example.test", appWidgetId = 8)
 
-        assertTrue(first != second)
-        assertTrue(first.endsWith("generation=10"))
-        assertTrue(second.endsWith("generation=11"))
+        assertEquals(first, second)
+        assertTrue(first != other)
+        assertTrue(first.endsWith("/7"))
     }
 
     @Test

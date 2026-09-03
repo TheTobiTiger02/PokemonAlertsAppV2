@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +58,9 @@ import com.example.pokemonalertsv2.ui.theme.Spacing
  */
 internal val MAP_TOP_CHROME_HEIGHT = 52.dp
 
+/** Footprint the pinned settings button reserves at the end of the rail. */
+internal val MAP_SETTINGS_BUTTON_SIZE = 40.dp
+
 /**
  * The map's category rail — and, since the header bar was removed, its entire top chrome.
  *
@@ -74,9 +78,7 @@ internal fun MapCategoryRail(
     mutedCategories: Set<AlertCategory>,
     categoryCounts: Map<AlertCategory, Int>,
     visibleAlertCount: Int,
-    advancedRuleCount: Int,
     onMutedCategoriesChange: (Set<AlertCategory>) -> Unit,
-    onOpenFilters: () -> Unit,
     modifier: Modifier = Modifier,
     showBackButton: Boolean = false,
     onBack: () -> Unit = {},
@@ -141,9 +143,6 @@ internal fun MapCategoryRail(
                 },
                 longClickLabel = soloDescription
             )
-        }
-        item(key = "MORE") {
-            MapFiltersPill(activeRuleCount = advancedRuleCount, onClick = onOpenFilters)
         }
     }
 }
@@ -221,62 +220,67 @@ private fun MapFilterPill(
 }
 
 /**
- * The rail's trailing chip, and the map's only remaining entry point to everything the ten
- * category chips cannot express: advanced filters, map style, overlays, refresh and
+ * The map's settings button: one pinned, round control for everything the ten category chips
+ * cannot express - the advanced filters, the map style, the overlays, refresh and
  * picture-in-picture.
  *
- * The badge counts active filter rules only. Layer state is legible from the map itself, so
- * counting it here would make one badge mean two things at once.
+ * Pinned rather than carried by the rail. As the rail's last chip it scrolled away with the
+ * categories, so reaching the panel meant swiping to the end of a twelve-chip row first, and
+ * "Filters" undersold a panel that also holds the map's own settings.
+ *
+ * The badge counts active filter rules. Layer state is legible from the map itself, so counting
+ * it here would make one badge mean two things at once.
  */
 @Composable
-private fun MapFiltersPill(activeRuleCount: Int, onClick: () -> Unit) {
+internal fun MapSettingsButton(
+    activeRuleCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val scheme = MaterialTheme.colorScheme
     val active = activeRuleCount > 0
-    val container = if (active) {
-        scheme.primary.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
-    } else {
-        scheme.surface
-    }
-    Surface(
-        modifier = Modifier.testTag("map_open_filters"),
-        shape = RoundedCornerShape(50),
-        color = container,
-        contentColor = if (active) scheme.onSurface else scheme.onSurfaceVariant,
-        shadowElevation = 3.dp,
-        border = BorderStroke(
-            1.dp,
-            if (active) scheme.primary.copy(alpha = 0.7f) else scheme.outlineVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .combinedClickable(onClick = onClick)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .semantics { contentDescription = "Filters and map settings" },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier.size(MAP_SETTINGS_BUTTON_SIZE).testTag("map_open_filters"),
+            shape = CircleShape,
+            color = if (active) {
+                scheme.primary.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
+            } else {
+                scheme.surface
+            },
+            contentColor = if (active) scheme.primary else scheme.onSurfaceVariant,
+            shadowElevation = 3.dp,
+            border = BorderStroke(
+                1.dp,
+                if (active) scheme.primary.copy(alpha = 0.7f) else scheme.outlineVariant
+            )
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_filter),
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (active) scheme.primary else LocalContentColor.current
-            )
-            Text(
-                text = stringResource(R.string.map_filters_title),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1
-            )
-            if (active) {
-                Surface(shape = CircleShape, color = scheme.primary, contentColor = scheme.onPrimary) {
-                    Text(
-                        text = "$activeRuleCount",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                    )
-                }
+            Box(
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .combinedClickable(onClick = onClick)
+                    .semantics { contentDescription = "Map settings and filters" },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        if (active) {
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd),
+                shape = CircleShape,
+                color = scheme.primary,
+                contentColor = scheme.onPrimary
+            ) {
+                Text(
+                    text = "$activeRuleCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
             }
         }
     }

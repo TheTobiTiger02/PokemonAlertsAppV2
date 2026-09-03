@@ -547,6 +547,7 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -1454,20 +1455,28 @@ internal fun AlertsMapScreenContent(
                                 zIndex = 100f
                             )
                             Marker(
-                                state = MarkerState(
-                                    LatLng(cell.centre.latitude, cell.centre.longitude)
-                                ),
-                                icon = BitmapDescriptorFactory.fromBitmap(
-                                    createWeatherCellBitmap(
-                                        context = context,
-                                        glyph = cell.display.glyph,
-                                        confirmed = cell.display.confirmed
+                                state = remember(cell.centre) {
+                                    MarkerState(
+                                        LatLng(cell.centre.latitude, cell.centre.longitude)
                                     )
-                                ),
+                                },
+                                // No title or snippet: those produced Google's own info bubble,
+                                // which is the wrong shape for this and had nothing useful in it.
+                                icon = remember(cell.display.glyph, cell.display.confirmed) {
+                                    BitmapDescriptorFactory.fromBitmap(
+                                        createWeatherCellBitmap(
+                                            context = context,
+                                            glyph = cell.display.glyph,
+                                            confirmed = cell.display.confirmed
+                                        )
+                                    )
+                                },
                                 anchor = Offset(0.5f, 0.5f),
-                                title = cell.area,
-                                snippet = cell.display.compactLabel,
-                                zIndex = 110f
+                                zIndex = 110f,
+                                onClick = {
+                                    if (!compactPictureInPicture) selectedWeatherArea = cell.area
+                                    true
+                                }
                             )
                         }
                     }
@@ -1551,21 +1560,7 @@ internal fun AlertsMapScreenContent(
                                     }
                                 }
                             }
-                            if (!item.isOverviewCluster) {
-                                MapMarker(
-                                    alert = item.topAlert,
-                                    countdownClock = expirationClock,
-                                    density = density,
-                                    showTimeLabel = showTimeLabels,
-                                    minutePrecisionCountdown = minutePrecisionCountdown,
-                                    goDexMatchResult = goDexMatches[item.topAlert.uniqueId]
-                                        ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
-                                    onClick = onClusterTap,
-                                    markerSizeDp = baseMarkerSizeDp,
-                                    emphasized = false,
-                                    stackCount = item.alerts.size
-                                )
-                            } else {
+                            run {
                                 Marker(
                                     contentDescription = "${item.alerts.size} alerts",
                                     state = MarkerState(LatLng(item.latitude, item.longitude)),
@@ -1647,6 +1642,9 @@ internal fun AlertsMapScreenContent(
                     onCameraChanged = ::updateRetainedCamera,
                     onUserGesture = {
                         applyTrackingInteraction(trackingInteraction().onUserCameraGesture())
+                    },
+                    onWeatherCellClick = { area ->
+                        if (!compactPictureInPicture) selectedWeatherArea = area
                     },
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
@@ -1798,25 +1796,40 @@ internal fun AlertsMapScreenContent(
                     mutedCategories = selectedCategories,
                     categoryCounts = categoryCounts,
                     visibleAlertCount = filteredAlerts.size,
-                    advancedRuleCount = advancedFilterRuleCount,
                     showBackButton = showBackButton,
                     onBack = onBack,
                     onMutedCategoriesChange = onSelectedCategoriesChange,
-                    onOpenFilters = { showFilterSheet = true },
                     // The rail runs to the screen edge so chips scroll out from under it
-                    // rather than stopping short at a padded boundary.
+                    // rather than stopping short at a padded boundary, but it stops clear of
+                    // the pinned settings button so the last chip is never trapped beneath it.
                     contentPadding = PaddingValues(
                         start = Spacing.lg,
-                        end = controlsEndPadding,
+                        end = controlsEndPadding + MAP_SETTINGS_BUTTON_SIZE + Spacing.sm,
                         top = 2.dp,
                         bottom = Spacing.xxs
                     )
                 )
 
-                Row(modifier = Modifier.padding(start = Spacing.lg, end = controlsEndPadding)) {
+                Row(
+                    modifier = Modifier.padding(
+                        start = Spacing.lg,
+                        end = controlsEndPadding + MAP_SETTINGS_BUTTON_SIZE + Spacing.sm
+                    )
+                ) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
                 }
             }
+
+            // Pinned, not part of the rail: it must stay reachable however far the categories
+            // are scrolled.
+            MapSettingsButton(
+                activeRuleCount = advancedFilterRuleCount,
+                onClick = { showFilterSheet = true },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = Spacing.xs, end = controlsEndPadding)
+            )
         }
 
         // Any active narrowing can empty the map, not just a muted category, so the recovery
@@ -1903,6 +1916,23 @@ internal fun AlertsMapScreenContent(
             )
         }
 
+
+        // One sheet at a time: the weather sheet yields to an alert or a cluster the way
+        // those two already yield to each other.
+        if (!compactPictureInPicture && selectedAlert == null && selectedClusterAlerts.isEmpty()) {
+            selectedWeatherArea
+                ?.let { area -> weatherCells.firstOrNull { it.area == area } }
+                ?.let { cell ->
+                    MapWeatherSheet(
+                        cell = cell,
+                        onDismiss = { selectedWeatherArea = null },
+                        onHideWeather = {
+                            selectedWeatherArea = null
+                            onToggleWeatherCells()
+                        }
+                    )
+                }
+        }
 
         if (!compactPictureInPicture && selectedClusterAlerts.isNotEmpty()) {
             ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {

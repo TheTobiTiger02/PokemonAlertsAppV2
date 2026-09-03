@@ -99,6 +99,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                     }
                     val builtWidget = buildViews(context, appWidgetId, appWidgetManager, nowMillis)
                     appWidgetManager.updateAppWidget(appWidgetId, builtWidget.views)
+                    appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.list_alerts)
                 }
             } catch (t: Throwable) {
                 Log.w(TAG, "Widget resize update failed", t)
@@ -213,6 +214,8 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             ids.forEach { id ->
                 val builtWidget = buildViews(context, id, appWidgetManager, nowMillis)
                 appWidgetManager.updateAppWidget(id, builtWidget.views)
+                // Refreshes the list inside the existing factory instead of creating another.
+                appWidgetManager.notifyAppWidgetViewDataChanged(id, R.id.list_alerts)
             }
         } catch (t: Throwable) {
             Log.w(TAG, "Widget update failed", t)
@@ -448,11 +451,21 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             views.setViewVisibility(R.id.list_alerts, View.VISIBLE)
         }
 
-        // Remote adapter with unique data per widget id
+        // One adapter per widget, and the same one for the life of that widget.
+        //
+        // This intent used to carry the snapshot generation in both an extra and its data URI,
+        // so it differed on every refresh. The framework identifies a RemoteViewsService
+        // connection by its intent, so a changing URI meant a brand new connection and a brand
+        // new AlertsFactory every 30 seconds, each holding its own copy of the alert list. The
+        // platform only tears the old ones down on a timeout it could not keep up with, so they
+        // piled up - 98 live factories in the heap dump, ~88,000 retained alerts between them,
+        // which is what was running the process out of memory and killing the map.
+        //
+        // Keeping the URI stable keeps one factory alive; notifyAppWidgetViewDataChanged below
+        // is what tells it to reload.
         val svcIntent = Intent(context, AlertsWidgetService::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            putExtra(EXTRA_WIDGET_SNAPSHOT_GENERATION, generation)
-            data = Uri.parse(widgetAdapterDataKey(context.packageName, appWidgetId, generation))
+            data = Uri.parse(widgetAdapterDataKey(context.packageName, appWidgetId))
         }
         views.setRemoteAdapter(R.id.list_alerts, svcIntent)
 
@@ -585,7 +598,6 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         const val EXTRA_DISMISS_ALERT_ID = "extra_dismiss_alert_id"
         const val EXTRA_NAV_LAT = "extra_nav_lat"
         const val EXTRA_NAV_LNG = "extra_nav_lng"
-        internal const val EXTRA_WIDGET_SNAPSHOT_GENERATION = "extra_widget_snapshot_generation"
         private const val REQUEST_CODE = 2025
         private const val MIN_UPDATE_DELAY_MS = 1L
         private val UPDATE_INTERVAL_MS = TimeUnit.MINUTES.toMillis(1)
@@ -630,11 +642,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 }
 
 @VisibleForTesting
+/**
+ * Stable per widget. Anything varying here mints a new RemoteViewsService connection, and with
+ * it a new factory holding a new copy of the alert list.
+ */
 internal fun widgetAdapterDataKey(
     packageName: String,
-    appWidgetId: Int,
-    generation: Long
-): String = "pokemon-alerts-widget://$packageName/$appWidgetId?generation=$generation"
+    appWidgetId: Int
+): String = "pokemon-alerts-widget://$packageName/$appWidgetId"
 
 @VisibleForTesting
 internal fun shouldScheduleExactWidgetAlarm(

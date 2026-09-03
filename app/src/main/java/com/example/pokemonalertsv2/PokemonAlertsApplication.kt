@@ -16,6 +16,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
+import com.example.pokemonalertsv2.ui.alerts.trimMapBitmapCaches
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
 import com.example.pokemonalertsv2.util.UpdateCheckSource
@@ -33,6 +34,16 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
     DefaultLifecycleObserver {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /**
+     * The map's bitmap caches are process-wide and used to hold their full budget for the life
+     * of the process, whether or not the map was on screen. Giving them back on request is the
+     * difference between the system reclaiming from us and the system killing us.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        trimMapBitmapCaches(level)
+    }
 
     override fun onCreate() {
         super<Application>.onCreate()
@@ -121,7 +132,9 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
                 sharedImageLoader ?: ImageLoader.Builder(context.applicationContext)
                     .memoryCache {
                         MemoryCache.Builder(context.applicationContext)
-                            .maxSizePercent(0.25)
+                            // The map's own pin caches sit beside this one; a quarter of the
+                            // heap each is how the two of them ran the process out of room.
+                            .maxSizePercent(0.12)
                             .build()
                     }
                     .diskCache {

@@ -1,5 +1,17 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,12 +19,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.data.CurrentWeatherRepository
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.util.S2CellRef
 import com.example.pokemonalertsv2.util.S2LatLng
 import com.example.pokemonalertsv2.util.boundary
@@ -127,5 +144,66 @@ private fun rememberAreaCentres(alerts: List<PokemonAlert>): Map<String, Pair<Do
             area to (latitudes[latitudes.size / 2] to longitudes[longitudes.size / 2])
         }
         AREA_CENTRES + derived
+    }
+}
+
+/**
+ * What one weather cell is showing, and the fastest way to stop showing it.
+ *
+ * The glyph used to be inert - a Google info bubble at best, and nothing at all on the
+ * OpenStreetMap layer, where it is drawn as a style layer rather than an annotation. Tapping it
+ * now explains the cell it belongs to and offers the off-switch that otherwise lives three
+ * levels into the map panel.
+ */
+@Composable
+internal fun MapWeatherSheet(
+    cell: MapWeatherCell,
+    onDismiss: () -> Unit,
+    onHideWeather: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.xxl, vertical = Spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            Text(
+                text = cell.area,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                Text(text = cell.display.glyph, style = MaterialTheme.typography.headlineMedium)
+                Text(text = cell.display.label, style = MaterialTheme.typography.titleMedium)
+            }
+            if (!cell.display.confirmed) {
+                Text(
+                    text = UNCONFIRMED_WEATHER_NOTE,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "The game reads weather per cell. The outline is the cell covering this area.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = Spacing.lg),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onHideWeather) { Text("Hide weather") }
+                Button(onClick = onDismiss) { Text("Done") }
+            }
+        }
     }
 }

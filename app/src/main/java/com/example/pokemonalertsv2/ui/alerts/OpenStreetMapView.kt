@@ -159,6 +159,7 @@ internal class OpenStreetMapController {
     var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
     var onUserGesture: () -> Unit = {}
+    var onWeatherCellClick: (String) -> Unit = {}
     private var pendingGesturesEnabled = true
 
     // Currently-placed annotations by marker id, plus the bitmap each was built from, so a
@@ -180,6 +181,22 @@ internal class OpenStreetMapController {
                     }
                 }
                 true
+            }
+        }
+        // The weather glyphs are a SymbolLayer, and setOnMarkerClickListener only ever fires
+        // for legacy annotations - which is why they were completely dead to touch here. Hit
+        // testing the rendered features is the equivalent for a style layer.
+        map.addOnMapClickListener { point ->
+            if (this.map !== map) return@addOnMapClickListener false
+            val screenPoint = map.projection.toScreenLocation(point)
+            val hit = map.queryRenderedFeatures(screenPoint, WEATHER_GLYPH_LAYER)
+                .firstOrNull { it.hasProperty(WEATHER_AREA_PROPERTY) }
+                ?.getStringProperty(WEATHER_AREA_PROPERTY)
+            if (hit != null) {
+                onWeatherCellClick(hit)
+                true
+            } else {
+                false
             }
         }
         map.addOnCameraIdleListener {
@@ -507,6 +524,7 @@ internal class OpenStreetMapController {
                 Point.fromLngLat(cell.centre.longitude, cell.centre.latitude)
             ).apply {
                 addStringProperty("icon", imageId)
+                addStringProperty(WEATHER_AREA_PROPERTY, cell.area)
                 addNumberProperty("opacity", if (cell.display.confirmed) 1f else 0.65f)
             }
         }
@@ -550,6 +568,7 @@ internal class OpenStreetMapController {
         const val WEATHER_CELL_LINE_LAYER = "weather-cell-line-layer"
         const val WEATHER_GLYPH_SOURCE = "weather-glyph-source"
         const val WEATHER_GLYPH_LAYER = "weather-glyph-layer"
+        const val WEATHER_AREA_PROPERTY = "area"
         const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
         const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
         const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
@@ -611,6 +630,7 @@ internal fun OpenStreetMapView(
     onClusterClick: (MapMarkerItem.Cluster) -> Unit = {},
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
+    onWeatherCellClick: (String) -> Unit = {},
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
     weatherCells: List<MapWeatherCell> = emptyList(),
@@ -783,63 +803,18 @@ internal fun OpenStreetMapView(
         val markers = withContext(Dispatchers.IO) {
             markerItems.mapNotNull { item ->
                 currentCoroutineContext().ensureActive()
+                // Any group of alerts is a count bubble. It used to borrow the top alert's
+                // species pin and wear a "+N" badge, which reads as one alert that happens to
+                // carry a number rather than as the several it stands for.
                 if (item is MapMarkerItem.Cluster) {
-                    if (item.isOverviewCluster) {
-                        return@mapNotNull OpenStreetMapMarker(
-                            item,
-                            createOpenStreetMapClusterIcon(
-                                item.alerts.size,
-                                item.sharedCategory,
-                                clusterMarkerSizePx
-                            ),
-                            MAP_CLUSTER_MARKER_Z_INDEX
-                        )
-                    }
-                    val topAlert = item.topAlert
-                    val visualStyle = resolveAlertVisualStyle(topAlert)
-                    val isHundo = visualStyle.category == AlertCategory.HUNDO || topAlert.formattedIv == "100%" || topAlert.iv == "100"
-                    val isNundo = visualStyle.category == AlertCategory.NUNDO || topAlert.formattedIv == "0%"
-                    val isPvp = visualStyle.category == AlertCategory.PVP || !topAlert.pvpRankings.isNullOrEmpty()
-                    val isRare = visualStyle.category == AlertCategory.RARE
-                    val questQuantity = extractQuestQuantity(topAlert.questReward)
-                    val isRocket = visualStyle.category == AlertCategory.ROCKET || topAlert.gruntType != null || topAlert.type?.contains("Rocket") == true
-                    val isKecleon = topAlert.pokemon?.contains("Kecleon", ignoreCase = true) == true
-                    val raidTier = resolveRaidTier(topAlert, visualStyle.category)
-                    val matchResult = goDexMatches[topAlert.uniqueId]
-                        ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-                    val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
-                        AlertCategory.HUNDO -> "100%"
-                        AlertCategory.NUNDO -> "0%"
-                        else -> visualStyle.shortCode
-                    }
-                    val timeLabel = mapCountdownLabel(topAlert.endTime, now, minutePrecisionCountdown)
-                    val icon = createMapMarkerIcon(
-                        context = context,
-                        sizePx = baseMarkerSizePx,
-                        categoryCode = markerLabel,
-                        speciesName = topAlert.pokemon?.takeIf { it.isNotBlank() } ?: topAlert.cleanPokemonName,
-                        speciesImageUrl = topAlert.thumbnailUrl?.takeIf { it.isNotBlank() }
-                            ?: topAlert.imageUrl?.takeIf { it.isNotBlank() },
-                        endTime = topAlert.endTime,
-                        showTimeLabel = showTimeLabels,
-                        timeLabel = if (showTimeLabels) timeLabel else null,
-                        palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-                        goDexStatus = matchResult.status,
-                        stackCount = item.alerts.size,
-                        category = visualStyle.category,
-                        isHundo = isHundo,
-                        isNundo = isNundo,
-                        isPvp = isPvp,
-                        isRare = isRare,
-                        questQuantity = questQuantity,
-                        raidTier = raidTier,
-                        isRocket = isRocket,
-                        isKecleon = isKecleon
-                    ) ?: return@mapNotNull null
                     return@mapNotNull OpenStreetMapMarker(
-                        item = item,
-                        icon = icon,
-                        zIndex = MAP_CLUSTER_MARKER_Z_INDEX
+                        item,
+                        createOpenStreetMapClusterIcon(
+                            item.alerts.size,
+                            item.sharedCategory,
+                            clusterMarkerSizePx
+                        ),
+                        MAP_CLUSTER_MARKER_Z_INDEX
                     )
                 }
                 val alert = (item as MapMarkerItem.Alert).alert
@@ -918,6 +893,10 @@ internal fun OpenStreetMapView(
             controller.setWeatherCells(context, weatherCells)
         }
     }
+
+    LaunchedEffect(onWeatherCellClick) {
+        controller.onWeatherCellClick = onWeatherCellClick
+    }
 }
 
 private fun createImmediateOpenStreetMapMarker(
@@ -932,54 +911,10 @@ private fun createImmediateOpenStreetMapMarker(
     emphasized: Boolean
 ): OpenStreetMapMarker {
     if (item is MapMarkerItem.Cluster) {
-        if (item.isOverviewCluster) {
-            return OpenStreetMapMarker(
-                item,
-                createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
-                MAP_CLUSTER_MARKER_Z_INDEX
-            )
-        }
-        val topAlert = item.topAlert
-        val visualStyle = resolveAlertVisualStyle(topAlert)
-        val isHundo = visualStyle.category == AlertCategory.HUNDO || topAlert.formattedIv == "100%" || topAlert.iv == "100"
-        val isNundo = visualStyle.category == AlertCategory.NUNDO || topAlert.formattedIv == "0%"
-        val isPvp = visualStyle.category == AlertCategory.PVP || !topAlert.pvpRankings.isNullOrEmpty()
-        val isRare = visualStyle.category == AlertCategory.RARE
-        val questQuantity = extractQuestQuantity(topAlert.questReward)
-        val isRocket = visualStyle.category == AlertCategory.ROCKET || topAlert.gruntType != null || topAlert.type?.contains("Rocket") == true
-        val isKecleon = topAlert.pokemon?.contains("Kecleon", ignoreCase = true) == true
-        val raidTier = resolveRaidTier(topAlert, visualStyle.category)
-        val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
-            AlertCategory.HUNDO -> "100%"
-            AlertCategory.NUNDO -> "0%"
-            else -> visualStyle.shortCode
-        }
-        val request = MapMarkerIconRequest(
-            sizePx = markerSizePx,
-            categoryCode = markerLabel,
-            speciesName = topAlert.pokemon?.takeIf { it.isNotBlank() } ?: topAlert.cleanPokemonName,
-            speciesImageUrl = topAlert.thumbnailUrl?.takeIf { it.isNotBlank() }
-                ?: topAlert.imageUrl?.takeIf { it.isNotBlank() },
-            endTime = topAlert.endTime,
-            showTimeLabel = showTimeLabels,
-            timeLabel = if (showTimeLabels) mapCountdownLabel(topAlert.endTime, nowMillis, minutePrecision) else null,
-            palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-            goDexStatus = goDexMatches[topAlert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
-            stackCount = item.alerts.size,
-            category = visualStyle.category,
-            isHundo = isHundo,
-            isNundo = isNundo,
-            isPvp = isPvp,
-            isRare = isRare,
-            questQuantity = questQuantity,
-            raidTier = raidTier,
-            isRocket = isRocket,
-            isKecleon = isKecleon
-        )
         return OpenStreetMapMarker(
-            item = item,
-            icon = resolveInitialMapMarkerIcon(request),
-            zIndex = MAP_CLUSTER_MARKER_Z_INDEX
+            item,
+            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
+            MAP_CLUSTER_MARKER_Z_INDEX
         )
     }
     val alert = (item as MapMarkerItem.Alert).alert

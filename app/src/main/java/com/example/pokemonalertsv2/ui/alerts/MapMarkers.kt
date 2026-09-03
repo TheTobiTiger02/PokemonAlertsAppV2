@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
 import android.graphics.Paint
+import android.content.ComponentCallbacks2
 import android.util.LruCache
 import android.net.Uri
 import android.widget.Toast
@@ -133,6 +134,7 @@ import com.example.pokemonalertsv2.ui.motion.appFadeIn
 import com.example.pokemonalertsv2.ui.motion.appFadeOut
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -170,7 +172,6 @@ internal fun MapMarker(
     onClick: () -> Unit,
     markerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
     emphasized: Boolean = false,
-    stackCount: Int = 1
 ) {
     val context = LocalContext.current
     val coordinates = remember(alert.latitude, alert.longitude) {
@@ -240,7 +241,6 @@ internal fun MapMarker(
         timeLabel,
         palette,
         goDexMatchResult.status,
-        stackCount,
         visualStyle.category,
         isHundo,
         isNundo,
@@ -261,7 +261,6 @@ internal fun MapMarker(
             timeLabel = if (showTimeLabel) timeLabel else null,
             palette = palette,
             goDexStatus = goDexMatchResult.status,
-            stackCount = stackCount,
             category = visualStyle.category,
             isHundo = isHundo,
             isNundo = isNundo,
@@ -293,7 +292,6 @@ internal fun MapMarker(
                 timeLabel = markerIconRequest.timeLabel,
                 palette = markerIconRequest.palette,
                 goDexStatus = markerIconRequest.goDexStatus,
-                stackCount = markerIconRequest.stackCount,
                 category = markerIconRequest.category,
                 isHundo = markerIconRequest.isHundo,
                 isNundo = markerIconRequest.isNundo,
@@ -308,19 +306,13 @@ internal fun MapMarker(
         currentCoroutineContext().ensureActive()
         if (renderedIcon != null) markerIcon = renderedIcon
     }
-    val googleMarkerDescriptor = remember(markerIcon) {
-        BitmapDescriptorFactory.fromBitmap(markerIcon.bitmap)
-    }
+    val googleMarkerDescriptor = markerIcon.descriptor
 
     MarkerInfoWindowContent(
         state = remember(position) { MarkerState(position = position) },
         icon = googleMarkerDescriptor,
         anchor = markerIcon.anchor,
-        title = if (stackCount > 1) {
-            "${formatAlertTitle(alert, goDexMatchResult.status)} (+${stackCount - 1} more)"
-        } else {
-            formatAlertTitle(alert, goDexMatchResult.status)
-        },
+        title = formatAlertTitle(alert, goDexMatchResult.status),
         visible = true,
         // Keep a tracked/browsed PiP marker clear of count bubbles and ordinary alerts.
         zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f,
@@ -346,7 +338,21 @@ internal data class MapMarkerPalette(
 internal data class MapMarkerIcon(
     val bitmap: Bitmap,
     val anchor: Offset
-)
+) {
+    /**
+     * The Google descriptor for this icon, built once and shared by every marker drawing it.
+     *
+     * [BitmapDescriptorFactory.fromBitmap] copies the bitmap, and the call used to sit in a
+     * `remember(markerIcon)` inside each marker. With countdown labels on, the label is part of
+     * the icon's cache key, so every visible marker rebuilt its descriptor on every countdown
+     * tick - up to 900 copies of a ~200 KB bitmap, repeatedly, which is what filled the heap.
+     * Hanging it off the icon means it lives and dies with the icon the caches already share,
+     * and identical markers cost one copy between them.
+     */
+    val descriptor: BitmapDescriptor by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        BitmapDescriptorFactory.fromBitmap(bitmap)
+    }
+}
 
 internal data class MapMarkerIconRequest(
     val sizePx: Int,
@@ -358,7 +364,6 @@ internal data class MapMarkerIconRequest(
     val timeLabel: String?,
     val palette: MapMarkerPalette,
     val goDexStatus: GoDexMatchStatus,
-    val stackCount: Int = 1,
     val category: AlertCategory = AlertCategory.SPAWN,
     val isHundo: Boolean = false,
     val isNundo: Boolean = false,
@@ -395,13 +400,25 @@ internal fun resolveRaidTier(alert: PokemonAlert, category: AlertCategory): Stri
 /**
  * Byte-sized caps instead of entry counts: a single ARGB pin runs ~200 KB, so a 256-entry
  * cache could quietly hold 50 MB. Sizing by bytes keeps the same hit-rate within a budget.
+ *
+ * Those budgets are a *share of the heap the device actually gave us*, not fixed megabytes.
+ * They used to be 32/16/8/8/1 MB - 65 MB of pins on a 192 MB heap, before Room, the alert
+ * list, Compose or either map SDK had asked for anything. Bitmap pixels live in the native
+ * heap, but from Android 14 the runtime counts native allocations towards the same target
+ * footprint the Java heap is measured against, so a full marker cache really can be what
+ * pushes a 16-byte allocation over the edge - which is exactly how this crashed.
  */
-private const val MARKER_ICON_CACHE_BYTES = 32 * 1024 * 1024
-private const val MARKER_ARTWORK_CACHE_BYTES = 16 * 1024 * 1024
-private const val CLUSTER_BITMAP_CACHE_BYTES = 8 * 1024 * 1024
+private fun heapFraction(fraction: Double, floorBytes: Long = 2L * 1024 * 1024): Int {
+    val budget = (Runtime.getRuntime().maxMemory() * fraction).toLong()
+    return budget.coerceAtLeast(floorBytes).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+}
+
+private val MARKER_ICON_CACHE_BYTES = heapFraction(0.08)
+private val MARKER_ARTWORK_CACHE_BYTES = heapFraction(0.04)
+private val CLUSTER_BITMAP_CACHE_BYTES = heapFraction(0.02)
 
 // One bitmap per weather condition, so a handful of small circles at most.
-private const val WEATHER_BITMAP_CACHE_BYTES = 1 * 1024 * 1024
+private val WEATHER_BITMAP_CACHE_BYTES = heapFraction(0.005, floorBytes = 512 * 1024)
 
 internal val markerIconCache = object : LruCache<String, MapMarkerIcon>(MARKER_ICON_CACHE_BYTES) {
     override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
@@ -416,9 +433,35 @@ internal val markerArtworkCache = object : LruCache<String, Bitmap>(MARKER_ARTWO
  * They are deterministic for a given cache key, so caching them separately from the finished
  * icons makes every re-entry a lookup while still letting the IO renderer replace them.
  */
-private const val MARKER_FALLBACK_CACHE_BYTES = 8 * 1024 * 1024
+private val MARKER_FALLBACK_CACHE_BYTES = heapFraction(0.02)
 internal val markerFallbackCache = object : LruCache<String, MapMarkerIcon>(MARKER_FALLBACK_CACHE_BYTES) {
     override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
+}
+
+/**
+ * Hands the map's bitmaps back when the system asks for memory.
+ *
+ * The caches are process-wide and never shrank on their own, so a map the user left three
+ * screens ago still held its full budget while something else was being starved. Levels follow
+ * [android.content.ComponentCallbacks2]: a moderate warning halves them, a severe one empties
+ * them. Everything here is reproducible from the alert data, so dropping it costs a redraw.
+ */
+internal fun trimMapBitmapCaches(level: Int) {
+    val caches = listOf(
+        markerIconCache,
+        markerArtworkCache,
+        markerFallbackCache,
+        clusterBitmapCache,
+        weatherCellBitmapCache
+    )
+    // Compared numerically, not by name: the constants ascend 5, 10, 15, 20, 40, 60, 80, so
+    // RUNNING_CRITICAL and everything above it - including the backgrounded levels, where the
+    // map is not even on screen - drops the lot, and the two gentler running levels halve.
+    if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) {
+        caches.forEach { it.evictAll() }
+    } else {
+        caches.forEach { it.trimToSize(it.maxSize() / 2) }
+    }
 }
 
 internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$sizePx|$url"
@@ -461,7 +504,6 @@ internal fun mapMarkerIconCacheKey(
     isMapMarkerUrgent(request.endTime, nowMillis),
     request.palette,
     request.goDexStatus,
-    request.stackCount,
     request.category.name,
     request.isHundo,
     request.isNundo,
@@ -781,37 +823,6 @@ internal fun renderMapMarkerToCanvas(
         canvas.drawText(tierText, tierX, tCenterY, tierTextPaint)
     }
 
-    // 7. STACK COUNT BADGE ("+N")
-    if (request.stackCount > 1) {
-        val badgeText = if (request.stackCount > 99) "+99" else "+${request.stackCount - 1}"
-        val badgeRadius = sizePx * 0.14f
-        val badgeX = centerX + sizePx * 0.28f
-        val badgeY = groundY - spriteAreaSize * 0.88f
-        val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isUrgent) request.palette.error else AndroidColor.rgb(211, 47, 47)
-        }
-        val badgeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
-            style = Paint.Style.STROKE
-            strokeWidth = sizePx * 0.025f
-        }
-        val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
-            textSize = badgeRadius * 1.15f
-            textAlign = Paint.Align.CENTER
-            isFakeBoldText = true
-        }
-        val textWidth = badgeTextPaint.measureText(badgeText)
-        val badgeHalfWidth = kotlin.math.max(badgeRadius, textWidth / 2f + sizePx * 0.05f)
-        val badgeRect = android.graphics.RectF(
-            badgeX - badgeHalfWidth, badgeY - badgeRadius,
-            badgeX + badgeHalfWidth, badgeY + badgeRadius
-        )
-        canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeBgPaint)
-        canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeOutlinePaint)
-        val textCenterY = badgeY - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
-        canvas.drawText(badgeText, badgeX, textCenterY, badgeTextPaint)
-    }
 
     // 8. GODEX NEEDED BADGE
     if (request.goDexStatus == GoDexMatchStatus.NEEDED ||
@@ -919,7 +930,6 @@ internal suspend fun createMapMarkerIcon(
     timeLabel: String?,
     palette: MapMarkerPalette,
     goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED,
-    stackCount: Int = 1,
     category: AlertCategory = AlertCategory.SPAWN,
     isHundo: Boolean = false,
     isNundo: Boolean = false,
@@ -941,7 +951,6 @@ internal suspend fun createMapMarkerIcon(
             timeLabel = timeLabel,
             palette = palette,
             goDexStatus = goDexStatus,
-            stackCount = stackCount,
             category = category,
             isHundo = isHundo,
             isNundo = isNundo,
@@ -1049,7 +1058,7 @@ internal fun Canvas.drawMarkerLabel(
  * Cluster bubbles differ only by category, count and size, so a membership change that keeps
  * those three stable reuses the same bitmap instead of redrawing one per cluster per update.
  */
-private val clusterBitmapCache = object : LruCache<String, Bitmap>(CLUSTER_BITMAP_CACHE_BYTES) {
+internal val clusterBitmapCache = object : LruCache<String, Bitmap>(CLUSTER_BITMAP_CACHE_BYTES) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
 }
 
@@ -1095,7 +1104,7 @@ internal fun createClusterMarkerBitmap(
  * emoji everywhere else (see CurrentWeatherPresentation), and eight new drawables that must
  * stay in step with that mapping is a worse trade than one drawText.
  */
-private val weatherCellBitmapCache = object : LruCache<String, Bitmap>(WEATHER_BITMAP_CACHE_BYTES) {
+internal val weatherCellBitmapCache = object : LruCache<String, Bitmap>(WEATHER_BITMAP_CACHE_BYTES) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
 }
 

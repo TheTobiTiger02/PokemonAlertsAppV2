@@ -33,22 +33,15 @@ import kotlinx.coroutines.runBlocking
 class AlertsWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory {
         val widgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-        val generation = intent.getLongExtra(
-            AlertsWidgetProvider.EXTRA_WIDGET_SNAPSHOT_GENERATION,
-            INVALID_GENERATION
-        )
-        return AlertsFactory(applicationContext, widgetId, generation)
-    }
-
-    private companion object {
-        const val INVALID_GENERATION = -1L
+        // No generation: one factory now lives for the life of the widget and reads whatever
+        // snapshot is current each time onDataSetChanged runs.
+        return AlertsFactory(applicationContext, widgetId)
     }
 }
 
 private class AlertsFactory(
     private val context: Context,
-    private val appWidgetId: Int,
-    private val expectedGeneration: Long
+    private val appWidgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
     private var currentLocation: Location? = null
@@ -63,7 +56,7 @@ private class AlertsFactory(
             palette = resolveWidgetThemePalette(context)
             val renderSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(
                 appWidgetId = appWidgetId,
-                expectedGeneration = expectedGeneration.takeIf { it >= 0L }
+                expectedGeneration = null
             )
                 ?: WidgetAlertLoader.load(
                     context = context,

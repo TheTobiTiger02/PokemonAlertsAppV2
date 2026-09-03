@@ -28,6 +28,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.ui.onboarding.OnboardingScreen
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -205,9 +206,7 @@ class WholeAppUxComposeTest {
                         mutedCategories = emptySet(),
                         categoryCounts = mapOf(AlertCategory.RAID to 7),
                         visibleAlertCount = 4,
-                        advancedRuleCount = 0,
-                        onMutedCategoriesChange = {},
-                        onOpenFilters = {}
+                        onMutedCategoriesChange = {}
                     )
                 }
             }
@@ -222,6 +221,24 @@ class WholeAppUxComposeTest {
         // is the rail's job again now that the header bar that used to carry it is gone.
         composeRule.onNodeWithText("7").assertExists()
         composeRule.onNodeWithText("4").assertExists()
+    }
+
+    /**
+     * The settings entry point used to be the rail's last chip, which meant swiping past every
+     * category to reach it. It is pinned now, so it must not be part of the rail at all.
+     */
+    @Test
+    fun mapSettingsButtonIsPinnedOutsideTheCategoryRail() {
+        var opened = false
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                MapSettingsButton(activeRuleCount = 3, onClick = { opened = true })
+            }
+        }
+
+        composeRule.onNodeWithTag("map_open_filters").assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertTrue(opened) }
+        composeRule.onNodeWithText("3").assertExists()
     }
 
     @Test
