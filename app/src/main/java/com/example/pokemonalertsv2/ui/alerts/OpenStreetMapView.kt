@@ -693,6 +693,14 @@ internal fun OpenStreetMapView(
                     }
                     val topAlert = item.topAlert
                     val visualStyle = resolveAlertVisualStyle(topAlert)
+                    val isHundo = visualStyle.category == AlertCategory.HUNDO || topAlert.formattedIv == "100%" || topAlert.iv == "100"
+                    val isNundo = visualStyle.category == AlertCategory.NUNDO || topAlert.formattedIv == "0%"
+                    val isPvp = visualStyle.category == AlertCategory.PVP || !topAlert.pvpRankings.isNullOrEmpty()
+                    val isRare = visualStyle.category == AlertCategory.RARE
+                    val questQuantity = extractQuestQuantity(topAlert.questReward)
+                    val isRocket = visualStyle.category == AlertCategory.ROCKET || topAlert.gruntType != null || topAlert.type?.contains("Rocket") == true
+                    val isKecleon = topAlert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+                    val raidTier = resolveRaidTier(topAlert, visualStyle.category)
                     val matchResult = goDexMatches[topAlert.uniqueId]
                         ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
                     val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
@@ -713,7 +721,16 @@ internal fun OpenStreetMapView(
                         timeLabel = if (showTimeLabels) timeLabel else null,
                         palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
                         goDexStatus = matchResult.status,
-                        stackCount = item.alerts.size
+                        stackCount = item.alerts.size,
+                        category = visualStyle.category,
+                        isHundo = isHundo,
+                        isNundo = isNundo,
+                        isPvp = isPvp,
+                        isRare = isRare,
+                        questQuantity = questQuantity,
+                        raidTier = raidTier,
+                        isRocket = isRocket,
+                        isKecleon = isKecleon
                     ) ?: return@mapNotNull null
                     return@mapNotNull OpenStreetMapMarker(
                         item = item,
@@ -725,6 +742,14 @@ internal fun OpenStreetMapView(
                 val emphasized = alert.uniqueId in emphasizedAlertIds
                 val itemSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx
                 val visualStyle = resolveAlertVisualStyle(alert)
+                val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
+                val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
+                val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
+                val isRare = visualStyle.category == AlertCategory.RARE
+                val questQuantity = extractQuestQuantity(alert.questReward)
+                val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
+                val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+                val raidTier = resolveRaidTier(alert, visualStyle.category)
                 val matchResult = goDexMatches[alert.uniqueId]
                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
                 val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
@@ -744,7 +769,16 @@ internal fun OpenStreetMapView(
                     showTimeLabel = showTimeLabels,
                     timeLabel = if (showTimeLabels) timeLabel else null,
                     palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-                    goDexStatus = matchResult.status
+                    goDexStatus = matchResult.status,
+                    category = visualStyle.category,
+                    isHundo = isHundo,
+                    isNundo = isNundo,
+                    isPvp = isPvp,
+                    isRare = isRare,
+                    questQuantity = questQuantity,
+                    raidTier = raidTier,
+                    isRocket = isRocket,
+                    isKecleon = isKecleon
                 ) ?: return@mapNotNull null
                 OpenStreetMapMarker(
                     item = item,
@@ -797,6 +831,14 @@ private fun createImmediateOpenStreetMapMarker(
         }
         val topAlert = item.topAlert
         val visualStyle = resolveAlertVisualStyle(topAlert)
+        val isHundo = visualStyle.category == AlertCategory.HUNDO || topAlert.formattedIv == "100%" || topAlert.iv == "100"
+        val isNundo = visualStyle.category == AlertCategory.NUNDO || topAlert.formattedIv == "0%"
+        val isPvp = visualStyle.category == AlertCategory.PVP || !topAlert.pvpRankings.isNullOrEmpty()
+        val isRare = visualStyle.category == AlertCategory.RARE
+        val questQuantity = extractQuestQuantity(topAlert.questReward)
+        val isRocket = visualStyle.category == AlertCategory.ROCKET || topAlert.gruntType != null || topAlert.type?.contains("Rocket") == true
+        val isKecleon = topAlert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+        val raidTier = resolveRaidTier(topAlert, visualStyle.category)
         val markerLabel = topAlert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
             AlertCategory.HUNDO -> "100%"
             AlertCategory.NUNDO -> "0%"
@@ -813,7 +855,16 @@ private fun createImmediateOpenStreetMapMarker(
             timeLabel = if (showTimeLabels) mapCountdownLabel(topAlert.endTime, nowMillis, minutePrecision) else null,
             palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
             goDexStatus = goDexMatches[topAlert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
-            stackCount = item.alerts.size
+            stackCount = item.alerts.size,
+            category = visualStyle.category,
+            isHundo = isHundo,
+            isNundo = isNundo,
+            isPvp = isPvp,
+            isRare = isRare,
+            questQuantity = questQuantity,
+            raidTier = raidTier,
+            isRocket = isRocket,
+            isKecleon = isKecleon
         )
         return OpenStreetMapMarker(
             item = item,
@@ -823,6 +874,14 @@ private fun createImmediateOpenStreetMapMarker(
     }
     val alert = (item as MapMarkerItem.Alert).alert
     val visualStyle = resolveAlertVisualStyle(alert)
+    val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
+    val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
+    val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
+    val isRare = visualStyle.category == AlertCategory.RARE
+    val questQuantity = extractQuestQuantity(alert.questReward)
+    val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
+    val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+    val raidTier = resolveRaidTier(alert, visualStyle.category)
     val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
         AlertCategory.HUNDO -> "100%"
         AlertCategory.NUNDO -> "0%"
@@ -838,7 +897,16 @@ private fun createImmediateOpenStreetMapMarker(
         showTimeLabel = showTimeLabels,
         timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis, minutePrecision) else null,
         palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-        goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED
+        goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
+        category = visualStyle.category,
+        isHundo = isHundo,
+        isNundo = isNundo,
+        isPvp = isPvp,
+        isRare = isRare,
+        questQuantity = questQuantity,
+        raidTier = raidTier,
+        isRocket = isRocket,
+        isKecleon = isKecleon
     )
     return OpenStreetMapMarker(
         item = item,

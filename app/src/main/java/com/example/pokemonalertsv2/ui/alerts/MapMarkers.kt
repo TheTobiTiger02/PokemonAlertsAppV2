@@ -219,6 +219,17 @@ internal fun MapMarker(
     val palette = remember(basePalette, visualStyle.category) {
         basePalette.copy(primary = visualStyle.category.accentArgb.toInt())
     }
+    val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
+    val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
+    val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
+    val isRare = visualStyle.category == AlertCategory.RARE
+    val questQuantity = remember(alert.questReward) { extractQuestQuantity(alert.questReward) }
+    val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
+    val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+    val raidTier = remember(visualStyle.category, alert.pokemonForm, alert.type) {
+        resolveRaidTier(alert, visualStyle.category)
+    }
+
     val markerIconRequest = remember(
         markerSizePx,
         markerLabel,
@@ -229,7 +240,16 @@ internal fun MapMarker(
         timeLabel,
         palette,
         goDexMatchResult.status,
-        stackCount
+        stackCount,
+        visualStyle.category,
+        isHundo,
+        isNundo,
+        isPvp,
+        isRare,
+        questQuantity,
+        raidTier,
+        isRocket,
+        isKecleon
     ) {
         MapMarkerIconRequest(
             sizePx = markerSizePx,
@@ -241,7 +261,16 @@ internal fun MapMarker(
             timeLabel = if (showTimeLabel) timeLabel else null,
             palette = palette,
             goDexStatus = goDexMatchResult.status,
-            stackCount = stackCount
+            stackCount = stackCount,
+            category = visualStyle.category,
+            isHundo = isHundo,
+            isNundo = isNundo,
+            isPvp = isPvp,
+            isRare = isRare,
+            questQuantity = questQuantity,
+            raidTier = raidTier,
+            isRocket = isRocket,
+            isKecleon = isKecleon
         )
     }
     val markerCacheKey = remember(markerIconRequest) {
@@ -264,7 +293,16 @@ internal fun MapMarker(
                 timeLabel = markerIconRequest.timeLabel,
                 palette = markerIconRequest.palette,
                 goDexStatus = markerIconRequest.goDexStatus,
-                stackCount = markerIconRequest.stackCount
+                stackCount = markerIconRequest.stackCount,
+                category = markerIconRequest.category,
+                isHundo = markerIconRequest.isHundo,
+                isNundo = markerIconRequest.isNundo,
+                isPvp = markerIconRequest.isPvp,
+                isRare = markerIconRequest.isRare,
+                questQuantity = markerIconRequest.questQuantity,
+                raidTier = markerIconRequest.raidTier,
+                isRocket = markerIconRequest.isRocket,
+                isKecleon = markerIconRequest.isKecleon
             )
         }
         currentCoroutineContext().ensureActive()
@@ -320,8 +358,39 @@ internal data class MapMarkerIconRequest(
     val timeLabel: String?,
     val palette: MapMarkerPalette,
     val goDexStatus: GoDexMatchStatus,
-    val stackCount: Int = 1
+    val stackCount: Int = 1,
+    val category: AlertCategory = AlertCategory.SPAWN,
+    val isHundo: Boolean = false,
+    val isNundo: Boolean = false,
+    val isPvp: Boolean = false,
+    val isRare: Boolean = false,
+    val questQuantity: String? = null,
+    val raidTier: String? = null,
+    val isRocket: Boolean = false,
+    val isKecleon: Boolean = false
 )
+
+internal fun extractQuestQuantity(questReward: String?): String? {
+    if (questReward.isNullOrBlank()) return null
+    val trimmed = questReward.trim()
+    val match = Regex("""^(?:x\s*)?(\d+)\s*(.*)""", RegexOption.IGNORE_CASE).find(trimmed) ?: return null
+    val amount = match.groupValues[1]
+    val item = match.groupValues[2].lowercase()
+    return if (item.contains("stardust") || item.contains("xp") || item.contains("dust")) {
+        amount
+    } else {
+        "x$amount"
+    }
+}
+
+internal fun resolveRaidTier(alert: PokemonAlert, category: AlertCategory): String? {
+    if (category != AlertCategory.RAID) return null
+    if (alert.pokemonForm?.contains("Mega", ignoreCase = true) == true) return "Mega"
+    val tierMatch = alert.type?.firstNotNullOfOrNull { typeStr ->
+        Regex("""(?:t|tier\s*)(\d+)""", RegexOption.IGNORE_CASE).find(typeStr)?.groupValues?.get(1)
+    }
+    return if (tierMatch != null) "T$tierMatch" else "Raid"
+}
 
 /**
  * Byte-sized caps instead of entry counts: a single ARGB pin runs ~200 KB, so a 256-entry
@@ -379,7 +448,7 @@ internal fun mapMarkerIconCacheKey(
     request: MapMarkerIconRequest,
     nowMillis: Long = System.currentTimeMillis()
 ): String = listOf(
-    "material3-marker-compact",
+    "wingullmap-marker-v1",
     request.sizePx,
     request.categoryCode,
     request.speciesName,
@@ -389,7 +458,16 @@ internal fun mapMarkerIconCacheKey(
     isMapMarkerUrgent(request.endTime, nowMillis),
     request.palette,
     request.goDexStatus,
-    request.stackCount
+    request.stackCount,
+    request.category.name,
+    request.isHundo,
+    request.isNundo,
+    request.isPvp,
+    request.isRare,
+    request.questQuantity.orEmpty(),
+    request.raidTier.orEmpty(),
+    request.isRocket,
+    request.isKecleon
 ).joinToString("|")
 
 internal fun resolveInitialMapMarkerIcon(
@@ -399,75 +477,212 @@ internal fun resolveInitialMapMarkerIcon(
     ?: markerFallbackCache.get(cacheKey)
     ?: createFallbackMapMarkerIcon(request).also { markerFallbackCache.put(cacheKey, it) }
 
-internal fun createFallbackMapMarkerIcon(
+internal fun renderMapMarkerToCanvas(
+    canvas: Canvas,
     request: MapMarkerIconRequest,
-    nowMillis: Long = System.currentTimeMillis()
-): MapMarkerIcon {
+    speciesBitmap: Bitmap?,
+    totalWidth: Int,
+    totalHeight: Int,
+    groundY: Float,
+    isUrgent: Boolean
+) {
     val sizePx = request.sizePx
-    val padding = (sizePx * 0.14f).toInt()
-    val pinRadius = sizePx * 0.33f
-    val tailHeight = sizePx * 0.20f
-    val labelGap = (sizePx * 0.07f).toInt()
-    val timeHeight = if (request.showTimeLabel && request.timeLabel != null) {
-        (sizePx * 0.26f).toInt().coerceAtLeast(16)
-    } else {
-        0
-    }
-    val totalWidth = sizePx + padding * 2
-    val totalHeight = (
-        padding + pinRadius * 2 + tailHeight +
-            (if (timeHeight > 0) labelGap + timeHeight else 0) + padding
-        ).toInt()
-    val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
     val centerX = totalWidth / 2f
-    val centerY = padding + pinRadius
-    val pinTipY = centerY + pinRadius + tailHeight
-    val tailHalfWidth = pinRadius * 0.46f
-    val tailPath = android.graphics.Path().apply {
-        moveTo(centerX - tailHalfWidth, centerY + pinRadius * 0.56f)
-        lineTo(centerX + tailHalfWidth, centerY + pinRadius * 0.56f)
-        lineTo(centerX, pinTipY)
-        close()
-    }
-    val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = request.palette.primary
-    }
-    canvas.drawPath(tailPath, primaryPaint)
-    canvas.drawCircle(centerX, centerY, pinRadius, primaryPaint)
-    val innerRadius = pinRadius * 0.71f
-    canvas.drawCircle(
-        centerX,
-        centerY,
-        innerRadius,
-        Paint(Paint.ANTI_ALIAS_FLAG).apply { color = request.palette.surface }
-    )
-    val cachedArtwork = request.speciesImageUrl?.let { url ->
-        markerArtworkCache.get(mapMarkerArtworkCacheKey(url, sizePx))
-    }
-    if (cachedArtwork != null) {
-        val artworkPath = android.graphics.Path().apply {
-            addCircle(centerX, centerY, innerRadius, android.graphics.Path.Direction.CW)
+    val spriteAreaSize = sizePx * 0.85f
+    val spriteCenterY = groundY - spriteAreaSize / 2f
+
+    // 1. BASE AT GROUND (PokéStop disc, Gym base, or perspective ground shadow)
+    when {
+        request.category == AlertCategory.QUEST -> {
+            // PokéStop Base Disc (Wingullmap Quest style)
+            val discRadiusX = sizePx * 0.22f
+            val discRadiusY = sizePx * 0.08f
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.BLACK
+                alpha = 50
+            }
+            canvas.drawOval(
+                centerX - discRadiusX * 1.1f, groundY - discRadiusY * 0.4f,
+                centerX + discRadiusX * 1.1f, groundY + discRadiusY * 1.6f,
+                shadowPaint
+            )
+            val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.rgb(30, 136, 229)
+            }
+            canvas.drawOval(
+                centerX - discRadiusX, groundY - discRadiusY,
+                centerX + discRadiusX, groundY + discRadiusY,
+                discPaint
+            )
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.WHITE
+                style = Paint.Style.STROKE
+                strokeWidth = sizePx * 0.024f
+            }
+            canvas.drawOval(
+                centerX - discRadiusX, groundY - discRadiusY,
+                centerX + discRadiusX, groundY + discRadiusY,
+                rimPaint
+            )
+            val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.rgb(187, 222, 251)
+            }
+            canvas.drawOval(
+                centerX - discRadiusX * 0.55f, groundY - discRadiusY * 0.55f,
+                centerX + discRadiusX * 0.55f, groundY + discRadiusY * 0.55f,
+                corePaint
+            )
         }
-        val checkpoint = canvas.save()
-        canvas.clipPath(artworkPath)
-        val availableSize = innerRadius * 2.45f
+        request.isRocket || request.category == AlertCategory.ROCKET -> {
+            // Dark Rocket PokéStop Base Disc
+            val discRadiusX = sizePx * 0.22f
+            val discRadiusY = sizePx * 0.08f
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.BLACK
+                alpha = 60
+            }
+            canvas.drawOval(
+                centerX - discRadiusX * 1.1f, groundY - discRadiusY * 0.4f,
+                centerX + discRadiusX * 1.1f, groundY + discRadiusY * 1.6f,
+                shadowPaint
+            )
+            val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.rgb(33, 33, 33)
+            }
+            canvas.drawOval(
+                centerX - discRadiusX, groundY - discRadiusY,
+                centerX + discRadiusX, groundY + discRadiusY,
+                discPaint
+            )
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.rgb(211, 47, 47)
+                style = Paint.Style.STROKE
+                strokeWidth = sizePx * 0.025f
+            }
+            canvas.drawOval(
+                centerX - discRadiusX, groundY - discRadiusY,
+                centerX + discRadiusX, groundY + discRadiusY,
+                rimPaint
+            )
+            val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.rgb(136, 14, 79)
+            }
+            canvas.drawOval(
+                centerX - discRadiusX * 0.55f, groundY - discRadiusY * 0.55f,
+                centerX + discRadiusX * 0.55f, groundY + discRadiusY * 0.55f,
+                corePaint
+            )
+        }
+        request.isKecleon || request.category == AlertCategory.KECLEON -> {
+            val discRadiusX = sizePx * 0.20f
+            val discRadiusY = sizePx * 0.08f
+            val discPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(30, 136, 229) }
+            canvas.drawOval(centerX - discRadiusX, groundY - discRadiusY, centerX + discRadiusX, groundY + discRadiusY, discPaint)
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = sizePx * 0.02f }
+            canvas.drawOval(centerX - discRadiusX, groundY - discRadiusY, centerX + discRadiusX, groundY + discRadiusY, rimPaint)
+        }
+        request.category == AlertCategory.RAID || request.raidTier != null -> {
+            val gymRadiusX = sizePx * 0.26f
+            val gymRadiusY = sizePx * 0.09f
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.BLACK; alpha = 50 }
+            canvas.drawOval(centerX - gymRadiusX * 1.1f, groundY - gymRadiusY * 0.3f, centerX + gymRadiusX * 1.1f, groundY + gymRadiusY * 1.6f, shadowPaint)
+            val gymPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(158, 158, 158) }
+            canvas.drawOval(centerX - gymRadiusX, groundY - gymRadiusY, centerX + gymRadiusX, groundY + gymRadiusY, gymPaint)
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(255, 179, 0); style = Paint.Style.STROKE; strokeWidth = sizePx * 0.025f }
+            canvas.drawOval(centerX - gymRadiusX, groundY - gymRadiusY, centerX + gymRadiusX, groundY + gymRadiusY, rimPaint)
+            val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(238, 238, 238) }
+            canvas.drawOval(centerX - gymRadiusX * 0.6f, groundY - gymRadiusY * 0.6f, centerX + gymRadiusX * 0.6f, groundY + gymRadiusY * 0.6f, corePaint)
+        }
+        else -> {
+            // Ground Drop Shadow for standard/rare/pvp/hundo Pokémon spawns
+            val shadowRadiusX = sizePx * 0.24f
+            val shadowRadiusY = sizePx * 0.08f
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = AndroidColor.BLACK
+                alpha = 50
+            }
+            canvas.drawOval(
+                centerX - shadowRadiusX, groundY - shadowRadiusY * 0.5f,
+                centerX + shadowRadiusX, groundY + shadowRadiusY * 1.5f,
+                shadowPaint
+            )
+        }
+    }
+
+    // 2. GLOWING HALOS BEHIND SPRITE
+    // Decision: Hundo/Nundo gets Red glow, PvP gets Blue glow, Rare spawns get NO glow!
+    val isHundoOrNundo = request.isHundo || request.isNundo ||
+        request.category == AlertCategory.HUNDO || request.category == AlertCategory.NUNDO
+    val isPvp = request.isPvp || request.category == AlertCategory.PVP
+
+    if (isHundoOrNundo) {
+        val glowRadius = spriteAreaSize * 0.62f
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.RadialGradient(
+                centerX,
+                spriteCenterY,
+                glowRadius,
+                intArrayOf(
+                    AndroidColor.argb(165, 255, 59, 48),
+                    AndroidColor.argb(80, 255, 59, 48),
+                    AndroidColor.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.55f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawCircle(centerX, spriteCenterY, glowRadius, glowPaint)
+    } else if (isPvp) {
+        val glowRadius = spriteAreaSize * 0.62f
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.RadialGradient(
+                centerX,
+                spriteCenterY,
+                glowRadius,
+                intArrayOf(
+                    AndroidColor.argb(165, 47, 128, 237),
+                    AndroidColor.argb(80, 47, 128, 237),
+                    AndroidColor.TRANSPARENT
+                ),
+                floatArrayOf(0f, 0.55f, 1f),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawCircle(centerX, spriteCenterY, glowRadius, glowPaint)
+    }
+
+    // 3. SPRITE DRAWING (Borderless cutout, natural silhouette)
+    if (speciesBitmap != null) {
+        val bmpWidth = speciesBitmap.width.toFloat()
+        val bmpHeight = speciesBitmap.height.toFloat()
+        val scale = kotlin.math.min(spriteAreaSize / bmpWidth, spriteAreaSize / bmpHeight)
+        val drawWidth = bmpWidth * scale
+        val drawHeight = bmpHeight * scale
+        val left = centerX - drawWidth / 2f
+        val top = groundY - drawHeight
+        val destRect = android.graphics.RectF(left, top, left + drawWidth, top + drawHeight)
         canvas.drawBitmap(
-            cachedArtwork,
+            speciesBitmap,
             null,
-            android.graphics.RectF(
-                centerX - availableSize / 2f,
-                centerY - availableSize / 2f,
-                centerX + availableSize / 2f,
-                centerY + availableSize / 2f
-            ),
-            Paint(Paint.ANTI_ALIAS_FLAG)
+            destRect,
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         )
-        canvas.restoreToCount(checkpoint)
     } else {
+        val fallbackRadius = spriteAreaSize * 0.38f
+        val fallbackBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = request.palette.surface
+            alpha = 230
+        }
+        canvas.drawCircle(centerX, spriteCenterY, fallbackRadius, fallbackBgPaint)
+        val fallbackStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = request.palette.primary
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.03f
+        }
+        canvas.drawCircle(centerX, spriteCenterY, fallbackRadius, fallbackStroke)
         val initialsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = request.palette.onSurface
-            textSize = innerRadius * 0.68f
+            textSize = fallbackRadius * 0.85f
             textAlign = Paint.Align.CENTER
             isFakeBoldText = true
         }
@@ -478,46 +693,116 @@ internal fun createFallbackMapMarkerIcon(
             .take(2)
             .joinToString("")
             .ifBlank { request.categoryCode }
-        val initialsY = centerY - (initialsPaint.descent() + initialsPaint.ascent()) / 2f
+        val initialsY = spriteCenterY - (initialsPaint.descent() + initialsPaint.ascent()) / 2f
         canvas.drawText(initials, centerX, initialsY, initialsPaint)
     }
-    canvas.drawMarkerLabel(
-        centerX = centerX,
-        top = centerY + innerRadius * 0.34f,
-        height = sizePx * 0.18f,
-        text = request.categoryCode,
-        background = request.palette.surface,
-        foreground = request.palette.primary,
-        outline = request.palette.primary,
-        maxWidth = pinRadius * 1.55f
-    )
+
+    // 4. QUEST QUANTITY LABEL (e.g. "x3", "500")
+    if (!request.questQuantity.isNullOrBlank()) {
+        val qty = request.questQuantity
+        val qtyOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.BLACK
+            textSize = sizePx * 0.22f
+            textAlign = Paint.Align.CENTER
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.045f
+            isFakeBoldText = true
+        }
+        val qtyFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = sizePx * 0.22f
+            textAlign = Paint.Align.CENTER
+            style = Paint.Style.FILL
+            isFakeBoldText = true
+        }
+        val qtyX = centerX + sizePx * 0.16f
+        val qtyY = groundY - sizePx * 0.06f
+        canvas.drawText(qty, qtyX, qtyY, qtyOutlinePaint)
+        canvas.drawText(qty, qtyX, qtyY, qtyFillPaint)
+    }
+
+    // 5. ROCKET 'R' BADGE
+    if (request.isRocket || request.category == AlertCategory.ROCKET) {
+        val rBadgeRadius = sizePx * 0.12f
+        val rBadgeX = centerX + sizePx * 0.26f
+        val rBadgeY = groundY - sizePx * 0.16f
+        val rBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(211, 47, 47)
+        }
+        val rStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.025f
+        }
+        val rTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = rBadgeRadius * 1.35f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        canvas.drawCircle(rBadgeX, rBadgeY, rBadgeRadius, rBgPaint)
+        canvas.drawCircle(rBadgeX, rBadgeY, rBadgeRadius, rStrokePaint)
+        val rTextY = rBadgeY - (rTextPaint.descent() + rTextPaint.ascent()) / 2f
+        canvas.drawText("R", rBadgeX, rTextY, rTextPaint)
+    }
+
+    // 6. RAID TIER BADGE
+    if (!request.raidTier.isNullOrBlank()) {
+        val tierText = request.raidTier
+        val tierRadius = sizePx * 0.11f
+        val tierX = centerX - sizePx * 0.26f
+        val tierY = groundY - spriteAreaSize * 0.88f
+        val tierTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = tierRadius * 1.15f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        val tierWidth = tierTextPaint.measureText(tierText)
+        val tierHalfWidth = kotlin.math.max(tierRadius, tierWidth / 2f + sizePx * 0.04f)
+        val tierRect = android.graphics.RectF(
+            tierX - tierHalfWidth, tierY - tierRadius,
+            tierX + tierHalfWidth, tierY + tierRadius
+        )
+        val tierBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(255, 179, 0)
+        }
+        val tierStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.02f
+        }
+        canvas.drawRoundRect(tierRect, tierRadius, tierRadius, tierBgPaint)
+        canvas.drawRoundRect(tierRect, tierRadius, tierRadius, tierStrokePaint)
+        val tCenterY = tierY - (tierTextPaint.descent() + tierTextPaint.ascent()) / 2f
+        canvas.drawText(tierText, tierX, tCenterY, tierTextPaint)
+    }
+
+    // 7. STACK COUNT BADGE ("+N")
     if (request.stackCount > 1) {
         val badgeText = if (request.stackCount > 99) "+99" else "+${request.stackCount - 1}"
-        val badgeRadius = sizePx * 0.16f
-        val badgeX = centerX + pinRadius * 0.72f
-        val badgeY = centerY - pinRadius * 0.68f
-
+        val badgeRadius = sizePx * 0.14f
+        val badgeX = centerX + sizePx * 0.28f
+        val badgeY = groundY - spriteAreaSize * 0.88f
         val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = request.palette.primary
+            color = if (isUrgent) request.palette.error else AndroidColor.rgb(211, 47, 47)
         }
         val badgeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = request.palette.surface
+            color = AndroidColor.WHITE
             style = Paint.Style.STROKE
-            strokeWidth = sizePx * 0.03f
+            strokeWidth = sizePx * 0.025f
         }
         val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = request.palette.surface
-            textSize = badgeRadius * 1.05f
+            color = AndroidColor.WHITE
+            textSize = badgeRadius * 1.15f
             textAlign = Paint.Align.CENTER
             isFakeBoldText = true
         }
         val textWidth = badgeTextPaint.measureText(badgeText)
         val badgeHalfWidth = kotlin.math.max(badgeRadius, textWidth / 2f + sizePx * 0.05f)
         val badgeRect = android.graphics.RectF(
-            badgeX - badgeHalfWidth,
-            badgeY - badgeRadius,
-            badgeX + badgeHalfWidth,
-            badgeY + badgeRadius
+            badgeX - badgeHalfWidth, badgeY - badgeRadius,
+            badgeX + badgeHalfWidth, badgeY + badgeRadius
         )
         canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeBgPaint)
         canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeOutlinePaint)
@@ -525,22 +810,91 @@ internal fun createFallbackMapMarkerIcon(
         canvas.drawText(badgeText, badgeX, textCenterY, badgeTextPaint)
     }
 
-    if (timeHeight > 0 && request.timeLabel != null) {
-        val urgent = isMapMarkerUrgent(request.endTime, nowMillis)
+    // 8. GODEX NEEDED BADGE
+    if (request.goDexStatus == GoDexMatchStatus.NEEDED ||
+        request.goDexStatus == GoDexMatchStatus.EVOLUTION_NEEDED ||
+        request.goDexStatus == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
+        request.goDexStatus == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
+    ) {
+        val badgeRadius = sizePx * 0.11f
+        val badgeX = centerX - sizePx * 0.28f
+        val badgeY = groundY - spriteAreaSize * 0.88f
+        canvas.drawCircle(
+            badgeX, badgeY, badgeRadius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { color = request.palette.surface }
+        )
+        canvas.drawCircle(
+            badgeX, badgeY, badgeRadius,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = request.palette.outline
+                style = Paint.Style.STROKE
+                strokeWidth = sizePx * 0.02f
+            }
+        )
+        val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = badgeRadius * 1.3f
+            textAlign = Paint.Align.CENTER
+        }
+        val emojiStr = if (request.goDexStatus == GoDexMatchStatus.NEEDED) "🎯" else "🧬"
+        val textY = badgeY - (emojiPaint.descent() + emojiPaint.ascent()) / 2f
+        canvas.drawText(emojiStr, badgeX, textY, emojiPaint)
+    }
+
+    // 9. COUNTDOWN TIMER LABEL
+    if (request.showTimeLabel && !request.timeLabel.isNullOrBlank()) {
+        val timeHeight = (sizePx * 0.22f).coerceAtLeast(16f)
+        val labelGap = sizePx * 0.05f
         canvas.drawMarkerLabel(
             centerX = centerX,
-            top = pinTipY + labelGap,
-            height = timeHeight.toFloat(),
+            top = groundY + labelGap,
+            height = timeHeight,
             text = request.timeLabel,
-            background = if (urgent) request.palette.error else request.palette.surface,
-            foreground = if (urgent) request.palette.onError else request.palette.onSurface,
-            outline = if (urgent) request.palette.error else request.palette.outline,
-            maxWidth = totalWidth - padding * 2f
+            background = if (isUrgent) request.palette.error else AndroidColor.argb(200, 26, 26, 26),
+            foreground = AndroidColor.WHITE,
+            outline = if (isUrgent) AndroidColor.WHITE else AndroidColor.TRANSPARENT,
+            maxWidth = totalWidth.toFloat()
         )
     }
+}
+
+internal fun createFallbackMapMarkerIcon(
+    request: MapMarkerIconRequest,
+    nowMillis: Long = System.currentTimeMillis()
+): MapMarkerIcon {
+    val sizePx = request.sizePx
+    val isUrgent = isMapMarkerUrgent(request.endTime, nowMillis)
+    val cachedArtwork = request.speciesImageUrl?.let { url ->
+        markerArtworkCache.get(mapMarkerArtworkCacheKey(url, sizePx))
+    }
+
+    val padding = (sizePx * 0.12f).toInt()
+    val labelGap = (sizePx * 0.05f).toInt()
+    val timeHeight = if (request.showTimeLabel && request.timeLabel != null) {
+        (sizePx * 0.22f).toInt().coerceAtLeast(16)
+    } else {
+        0
+    }
+    val spriteAreaSize = sizePx * 0.85f
+    val groundY = padding + spriteAreaSize
+    val totalHeight = (groundY + (if (timeHeight > 0) labelGap + timeHeight else 0) + padding).toInt()
+    val totalWidth = (sizePx * 1.25f).toInt()
+
+    val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    renderMapMarkerToCanvas(
+        canvas = canvas,
+        request = request,
+        speciesBitmap = cachedArtwork,
+        totalWidth = totalWidth,
+        totalHeight = totalHeight,
+        groundY = groundY,
+        isUrgent = isUrgent
+    )
+
     return MapMarkerIcon(
         bitmap = bitmap,
-        anchor = Offset(0.5f, (pinTipY / totalHeight).coerceIn(0f, 1f))
+        anchor = Offset(0.5f, (groundY / totalHeight).coerceIn(0f, 1f))
     )
 }
 
@@ -562,7 +916,16 @@ internal suspend fun createMapMarkerIcon(
     timeLabel: String?,
     palette: MapMarkerPalette,
     goDexStatus: GoDexMatchStatus = GoDexMatchStatus.NOT_CONFIGURED,
-    stackCount: Int = 1
+    stackCount: Int = 1,
+    category: AlertCategory = AlertCategory.SPAWN,
+    isHundo: Boolean = false,
+    isNundo: Boolean = false,
+    isPvp: Boolean = false,
+    isRare: Boolean = false,
+    questQuantity: String? = null,
+    raidTier: String? = null,
+    isRocket: Boolean = false,
+    isKecleon: Boolean = false
 ): MapMarkerIcon? {
     try {
         val request = MapMarkerIconRequest(
@@ -575,218 +938,53 @@ internal suspend fun createMapMarkerIcon(
             timeLabel = timeLabel,
             palette = palette,
             goDexStatus = goDexStatus,
-            stackCount = stackCount
+            stackCount = stackCount,
+            category = category,
+            isHundo = isHundo,
+            isNundo = isNundo,
+            isPvp = isPvp,
+            isRare = isRare,
+            questQuantity = questQuantity,
+            raidTier = raidTier,
+            isRocket = isRocket,
+            isKecleon = isKecleon
         )
         val isUrgent = isMapMarkerUrgent(endTime, System.currentTimeMillis())
         val cacheKey = mapMarkerIconCacheKey(request)
         markerIconCache.get(cacheKey)?.let { return it }
 
-        // Artwork is static. Keep it out of the once-per-second countdown path so a slow
-        // image request can never hold back the next visible second.
         val speciesBitmap = speciesImageUrl?.let { url ->
             loadMapMarkerArtwork(context, url, sizePx)
         }
 
-        val padding = (sizePx * 0.14f).toInt()
-        val pinRadius = sizePx * 0.33f
-        val tailHeight = sizePx * 0.20f
-        val labelGap = (sizePx * 0.07f).toInt()
+        val padding = (sizePx * 0.12f).toInt()
+        val labelGap = (sizePx * 0.05f).toInt()
         val timeHeight = if (showTimeLabel && timeLabel != null) {
-            (sizePx * 0.26f).toInt().coerceAtLeast(16)
+            (sizePx * 0.22f).toInt().coerceAtLeast(16)
         } else {
             0
         }
-        val totalWidth = sizePx + padding * 2
-        val totalHeight = (
-            padding + pinRadius * 2 + tailHeight +
-                (if (timeHeight > 0) labelGap + timeHeight else 0) + padding
-            ).toInt()
+        val spriteAreaSize = sizePx * 0.85f
+        val groundY = padding + spriteAreaSize
+        val totalHeight = (groundY + (if (timeHeight > 0) labelGap + timeHeight else 0) + padding).toInt()
+        val totalWidth = (sizePx * 1.25f).toInt()
+
         val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        val centerX = totalWidth / 2f
-        val centerY = padding + pinRadius
-        val pinTipY = centerY + pinRadius + tailHeight
-        val tailHalfWidth = pinRadius * 0.46f
-        val tailPath = android.graphics.Path().apply {
-            moveTo(centerX - tailHalfWidth, centerY + pinRadius * 0.56f)
-            lineTo(centerX + tailHalfWidth, centerY + pinRadius * 0.56f)
-            lineTo(centerX, pinTipY)
-            close()
-        }
-
-        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.BLACK
-            alpha = 48
-        }
-        canvas.save()
-        canvas.translate(0f, sizePx * 0.035f)
-        canvas.drawPath(tailPath, shadowPaint)
-        canvas.drawCircle(centerX, centerY, pinRadius, shadowPaint)
-        canvas.restore()
-
-        val primaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.primary
-        }
-        canvas.drawPath(tailPath, primaryPaint)
-        canvas.drawCircle(centerX, centerY, pinRadius, primaryPaint)
-
-        val keylinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.surface
-            style = Paint.Style.STROKE
-            strokeWidth = sizePx * 0.035f
-        }
-        canvas.drawCircle(centerX, centerY, pinRadius - sizePx * 0.018f, keylinePaint)
-
-        val innerRadius = pinRadius * 0.71f
-        val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.surface }
-        canvas.drawCircle(centerX, centerY, innerRadius, innerPaint)
-
-        if (speciesBitmap != null) {
-            val spritePath = android.graphics.Path().apply {
-                addCircle(centerX, centerY, innerRadius, android.graphics.Path.Direction.CW)
-            }
-            val checkpoint = canvas.save()
-            canvas.clipPath(spritePath)
-            val availableSize = innerRadius * 2.45f
-            val destination = android.graphics.RectF(
-                centerX - availableSize / 2f,
-                centerY - availableSize / 2f,
-                centerX + availableSize / 2f,
-                centerY + availableSize / 2f
-            )
-            canvas.drawBitmap(speciesBitmap, null, destination, Paint(Paint.ANTI_ALIAS_FLAG))
-            canvas.restoreToCount(checkpoint)
-        } else {
-            val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = palette.onSurface
-                textSize = innerRadius * 0.68f
-                textAlign = Paint.Align.CENTER
-                isFakeBoldText = true
-            }
-            val fallback = speciesName
-                .trim()
-                .split(Regex("\\s+"))
-                .mapNotNull { it.firstOrNull()?.uppercaseChar() }
-                .take(2)
-                .joinToString("")
-                .ifBlank { categoryCode }
-            val textY = centerY - (fallbackPaint.descent() + fallbackPaint.ascent()) / 2f
-            canvas.drawText(fallback, centerX, textY, fallbackPaint)
-        }
-
-        if (request.stackCount > 1) {
-            val badgeText = if (request.stackCount > 99) "+99" else "+${request.stackCount - 1}"
-            val badgeRadius = sizePx * 0.16f
-            val badgeX = centerX + pinRadius * 0.72f
-            val badgeY = centerY - pinRadius * 0.68f
-
-            val badgeBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = if (isUrgent) palette.error else palette.primary
-            }
-            val badgeOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = palette.surface
-                style = Paint.Style.STROKE
-                strokeWidth = sizePx * 0.03f
-            }
-            val badgeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = if (isUrgent) palette.onError else palette.surface
-                textSize = badgeRadius * 1.05f
-                textAlign = Paint.Align.CENTER
-                isFakeBoldText = true
-            }
-            val textWidth = badgeTextPaint.measureText(badgeText)
-            val badgeHalfWidth = kotlin.math.max(badgeRadius, textWidth / 2f + sizePx * 0.05f)
-            val badgeRect = android.graphics.RectF(
-                badgeX - badgeHalfWidth,
-                badgeY - badgeRadius,
-                badgeX + badgeHalfWidth,
-                badgeY + badgeRadius
-            )
-            canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeBgPaint)
-            canvas.drawRoundRect(badgeRect, badgeRadius, badgeRadius, badgeOutlinePaint)
-            val textCenterY = badgeY - (badgeTextPaint.descent() + badgeTextPaint.ascent()) / 2f
-            canvas.drawText(badgeText, badgeX, textCenterY, badgeTextPaint)
-        } else if (isUrgent) {
-            val dotRadius = sizePx * 0.075f
-            val dotX = centerX + pinRadius * 0.70f
-            val dotY = centerY - pinRadius * 0.66f
-            canvas.drawCircle(dotX, dotY, dotRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.error })
-            canvas.drawCircle(
-                dotX,
-                dotY,
-                dotRadius,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = palette.surface
-                    style = Paint.Style.STROKE
-                    strokeWidth = sizePx * 0.022f
-                }
-            )
-        }
-
-        if (goDexStatus == GoDexMatchStatus.NEEDED ||
-            goDexStatus == GoDexMatchStatus.EVOLUTION_NEEDED ||
-            goDexStatus == GoDexMatchStatus.FORM_CHANGE_NEEDED ||
-            goDexStatus == GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED
-        ) {
-            val badgeRadius = sizePx * 0.16f
-            val badgeX = centerX - pinRadius * 0.70f
-            val badgeY = centerY - pinRadius * 0.66f
-
-            canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = palette.surface
-            })
-            canvas.drawCircle(
-                badgeX,
-                badgeY,
-                badgeRadius,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = palette.outline
-                    style = Paint.Style.STROKE
-                    strokeWidth = sizePx * 0.022f
-                }
-            )
-
-            val emojiPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                textSize = badgeRadius * 1.3f
-                textAlign = Paint.Align.CENTER
-            }
-            val emojiStr = if (goDexStatus == GoDexMatchStatus.NEEDED) "🎯" else "🧬"
-            val textY = badgeY - (emojiPaint.descent() + emojiPaint.ascent()) / 2f
-            canvas.drawText(emojiStr, badgeX, textY, emojiPaint)
-        }
-
-        // Keep the category identity on the pin itself. A permanent label below every
-        // marker quickly overlaps at real alert density; the optional countdown remains
-        // user-controlled and the selected sheet carries the full label and details.
-        val categoryHeight = sizePx * 0.18f
-        canvas.drawMarkerLabel(
-            centerX = centerX,
-            top = centerY + innerRadius * 0.34f,
-            height = categoryHeight,
-            text = categoryCode,
-            background = palette.surface,
-            foreground = palette.primary,
-            outline = palette.primary,
-            maxWidth = pinRadius * 1.55f
+        renderMapMarkerToCanvas(
+            canvas = canvas,
+            request = request,
+            speciesBitmap = speciesBitmap,
+            totalWidth = totalWidth,
+            totalHeight = totalHeight,
+            groundY = groundY,
+            isUrgent = isUrgent
         )
-
-        if (timeHeight > 0 && timeLabel != null) {
-            canvas.drawMarkerLabel(
-                centerX = centerX,
-                top = pinTipY + labelGap,
-                height = timeHeight.toFloat(),
-                text = timeLabel,
-                background = if (isUrgent) palette.error else palette.surface,
-                foreground = if (isUrgent) palette.onError else palette.onSurface,
-                outline = if (isUrgent) palette.error else palette.outline,
-                maxWidth = totalWidth - padding * 2f
-            )
-        }
 
         val icon = MapMarkerIcon(
             bitmap = bitmap,
-            anchor = Offset(0.5f, (pinTipY / totalHeight).coerceIn(0f, 1f))
+            anchor = Offset(0.5f, (groundY / totalHeight).coerceIn(0f, 1f))
         )
         markerIconCache.put(cacheKey, icon)
         return icon
@@ -950,11 +1148,17 @@ internal const val MAP_EMPHASIZED_MARKER_Z_INDEX = 900f
 
 internal fun mapAlertMarkerSizeDp(
     compactPictureInPicture: Boolean,
-    emphasized: Boolean
+    emphasized: Boolean,
+    zoom: Float? = null
 ): Float = when {
-    !compactPictureInPicture -> MAP_FULL_MARKER_SIZE_DP
-    emphasized -> MAP_PIP_EMPHASIZED_MARKER_SIZE_DP
-    else -> MAP_PIP_MARKER_SIZE_DP
+    compactPictureInPicture && emphasized -> MAP_PIP_EMPHASIZED_MARKER_SIZE_DP
+    compactPictureInPicture -> MAP_PIP_MARKER_SIZE_DP
+    zoom != null -> when {
+        zoom < 13f -> 36f
+        zoom < 15.5f -> 44f
+        else -> 50f
+    }
+    else -> MAP_FULL_MARKER_SIZE_DP
 }
 
 internal fun mapClusterMarkerSizeDp(compactPictureInPicture: Boolean): Float =

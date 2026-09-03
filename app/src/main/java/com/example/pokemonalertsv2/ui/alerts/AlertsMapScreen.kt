@@ -1305,11 +1305,13 @@ internal fun AlertsMapScreenContent(
         val spawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
         val baseMarkerSizeDp = mapAlertMarkerSizeDp(
             compactPictureInPicture = compactPictureInPicture,
-            emphasized = false
+            emphasized = false,
+            zoom = cameraAnchor.zoom.toFloat()
         )
         val emphasizedMarkerSizeDp = mapAlertMarkerSizeDp(
             compactPictureInPicture = compactPictureInPicture,
-            emphasized = true
+            emphasized = true,
+            zoom = cameraAnchor.zoom.toFloat()
         )
         val clusterMarkerSizeDp = mapClusterMarkerSizeDp(compactPictureInPicture)
         val preparedMarkers by rememberPreparedMapMarkers(
