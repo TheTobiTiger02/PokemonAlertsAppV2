@@ -9,8 +9,16 @@ import com.example.pokemonalertsv2.data.WalkingRouteCoordinates
 import com.example.pokemonalertsv2.data.WalkingRouteDestination
 import com.example.pokemonalertsv2.data.WalkingRouteRequest
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 @VisibleForTesting
@@ -27,7 +35,10 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
     private val maxOriginMovementMeters: Float = MAX_ORIGIN_MOVEMENT_METERS,
     private val maxLocationAccuracyMeters: Float = MAX_LOCATION_ACCURACY_METERS,
     private val distanceBetween: (Double, Double, Double, Double) -> Float? =
-        WalkingRouteUtils::straightLineDistanceMeters
+        WalkingRouteUtils::straightLineDistanceMeters,
+    // Requests run here rather than in the caller's scope so one caller's timeout
+    // cannot cancel a batch other callers are already waiting on.
+    private val requestScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
     private data class CacheEntry(
         val originLatitude: Double,
@@ -38,8 +49,17 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
         val expiresAtMillis: Long
     )
 
-    private val requestMutex = Mutex()
+    // Guards `cache` and `inFlight` only -- never held across a network call, so a
+    // one-marker lookup no longer queues behind a 500-destination prefetch.
+    private val cacheMutex = Mutex()
     private val cache = mutableMapOf<String, CacheEntry>()
+    private val inFlight = mutableMapOf<String, CompletableDeferred<WalkingRouteInfo?>>()
+
+    // A failed request caches nothing, so without this the next refresh finds an empty
+    // cache and asks again immediately -- one 429 turns into a request storm. Both
+    // fields are only read and written under `cacheMutex`.
+    private var backoffUntilMillis = 0L
+    private var consecutiveFailures = 0
 
     suspend fun getWalkingRoutes(
         origin: Location,
@@ -79,66 +99,129 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
             .take(MAX_DESTINATIONS)
 
         if (candidates.isEmpty()) return emptyMap()
-        return withTimeoutOrNull(timeoutMillis) {
-            requestMutex.withLock {
-                val current = nowMillis()
-                val routes = mutableMapOf<String, WalkingRouteInfo>()
-                val missing = mutableListOf<Candidate>()
-                candidates.forEach { candidate ->
-                    val cached = cache[candidate.id]
-                    if (cached != null && cached.isReusable(origin, candidate, current)) {
-                        routes[candidate.id] = cached.route
-                    } else {
-                        cache.remove(candidate.id)
-                        missing += candidate
-                    }
+
+        val routes = mutableMapOf<String, WalkingRouteInfo>()
+        val owned = mutableListOf<Candidate>()
+        val ownedDeferreds = mutableMapOf<String, CompletableDeferred<WalkingRouteInfo?>>()
+        val pending = mutableMapOf<String, Deferred<WalkingRouteInfo?>>()
+
+        cacheMutex.withLock {
+            val current = nowMillis()
+            // While backing off, serve whatever is cached and start nothing new. Callers
+            // fall back to the straight-line estimate exactly as they do on any miss.
+            val backingOff = current < backoffUntilMillis
+            candidates.forEach { candidate ->
+                val cached = cache[candidate.id]
+                if (cached != null && cached.isReusable(origin, candidate, current)) {
+                    routes[candidate.id] = cached.route
+                    return@forEach
                 }
+                cache.remove(candidate.id)
+                val alreadyRequested = inFlight[candidate.id]
+                if (alreadyRequested != null) {
+                    // Another caller is already asking for this destination; wait on
+                    // its answer instead of issuing a duplicate request.
+                    pending[candidate.id] = alreadyRequested
+                } else if (!backingOff) {
+                    val deferred = CompletableDeferred<WalkingRouteInfo?>()
+                    inFlight[candidate.id] = deferred
+                    ownedDeferreds[candidate.id] = deferred
+                    owned += candidate
+                }
+            }
+        }
 
-                if (missing.isNotEmpty()) {
-                    val response = try {
-                        service.getWalkingRoutes(
-                            WalkingRouteRequest(
-                                origin = WalkingRouteCoordinates(origin.latitude, origin.longitude),
-                                destinations = missing.map { candidate ->
-                                    WalkingRouteDestination(
-                                        id = candidate.id,
-                                        latitude = candidate.latitude,
-                                        longitude = candidate.longitude
-                                    )
-                                }
-                            )
-                        )
-                    } catch (exception: CancellationException) {
-                        throw exception
-                    } catch (_: Throwable) {
-                        null
-                    }
+        if (owned.isNotEmpty()) {
+            requestScope.launch { fetchAndPublish(origin, owned, ownedDeferreds) }
+        }
 
-                    response?.routes.orEmpty().forEach { result ->
-                        val candidate = missing.firstOrNull { it.id == result.id } ?: return@forEach
-                        val distance = result.distanceMeters
-                        val duration = result.durationSeconds
-                        if (
-                            result.status == STATUS_OK &&
-                            distance != null && distance >= 0 &&
-                            duration != null && duration >= 0
-                        ) {
-                            val route = WalkingRouteInfo(distance, duration)
-                            routes[candidate.id] = route
-                            cache[candidate.id] = CacheEntry(
-                                originLatitude = origin.latitude,
-                                originLongitude = origin.longitude,
-                                destinationLatitude = candidate.latitude,
-                                destinationLongitude = candidate.longitude,
-                                route = route,
-                                expiresAtMillis = current + cacheTtlMillis
+        pending += ownedDeferreds
+        if (pending.isEmpty()) return routes
+
+        // The timeout now bounds only the wait for an answer, not lock contention.
+        val fetched = withTimeoutOrNull(timeoutMillis) {
+            pending.mapValues { (_, deferred) -> deferred.await() }
+        }.orEmpty()
+        fetched.forEach { (id, route) -> if (route != null) routes[id] = route }
+        return routes
+    }
+
+    private suspend fun fetchAndPublish(
+        origin: WalkingRouteOrigin,
+        owned: List<Candidate>,
+        deferreds: Map<String, CompletableDeferred<WalkingRouteInfo?>>
+    ) {
+        val resolved = mutableMapOf<String, WalkingRouteInfo>()
+        try {
+            val response = try {
+                service.getWalkingRoutes(
+                    WalkingRouteRequest(
+                        origin = WalkingRouteCoordinates(origin.latitude, origin.longitude),
+                        destinations = owned.map { candidate ->
+                            WalkingRouteDestination(
+                                id = candidate.id,
+                                latitude = candidate.latitude,
+                                longitude = candidate.longitude
                             )
                         }
+                    )
+                )
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Throwable) {
+                null
+            }
+
+            val current = nowMillis()
+            // Indexed once: a linear scan per result is 125k string compares at 500.
+            val ownedById = owned.associateBy(Candidate::id)
+            response?.routes.orEmpty().forEach { result ->
+                val candidate = ownedById[result.id] ?: return@forEach
+                val distance = result.distanceMeters
+                val duration = result.durationSeconds
+                if (
+                    result.status == STATUS_OK &&
+                    distance != null && distance >= 0 &&
+                    duration != null && duration >= 0
+                ) {
+                    resolved[candidate.id] = WalkingRouteInfo(distance, duration)
+                }
+            }
+
+            // One lock acquisition for the whole batch rather than one per result.
+            cacheMutex.withLock {
+                resolved.forEach { (id, route) ->
+                    val candidate = ownedById.getValue(id)
+                    cache[id] = CacheEntry(
+                        originLatitude = origin.latitude,
+                        originLongitude = origin.longitude,
+                        destinationLatitude = candidate.latitude,
+                        destinationLongitude = candidate.longitude,
+                        route = route,
+                        expiresAtMillis = current + cacheTtlMillis
+                    )
+                }
+                if (response == null) {
+                    consecutiveFailures++
+                    val delay = BASE_BACKOFF_MILLIS shl (consecutiveFailures - 1).coerceAtMost(BACKOFF_SHIFT_CAP)
+                    backoffUntilMillis = current + delay.coerceAtMost(MAX_BACKOFF_MILLIS)
+                } else {
+                    consecutiveFailures = 0
+                    backoffUntilMillis = 0L
+                }
+            }
+        } finally {
+            // Every owned destination must be answered -- with null if the request
+            // failed or was cancelled -- or its waiters hang until their timeout.
+            withContext(NonCancellable) {
+                cacheMutex.withLock {
+                    deferreds.forEach { (id, deferred) ->
+                        if (inFlight[id] === deferred) inFlight.remove(id)
                     }
                 }
-                routes
             }
-        } ?: emptyMap()
+            deferreds.forEach { (id, deferred) -> deferred.complete(resolved[id]) }
+        }
     }
 
     private fun CacheEntry.isReusable(
@@ -160,6 +243,9 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
     @VisibleForTesting
     internal fun clearCache() {
         cache.clear()
+        inFlight.clear()
+        backoffUntilMillis = 0L
+        consecutiveFailures = 0
     }
 
     private data class Candidate(
@@ -175,8 +261,27 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
         private const val CACHE_TTL_MILLIS = 10 * 60 * 1000L
         private const val MAX_ORIGIN_MOVEMENT_METERS = 75f
         private const val MAX_LOCATION_ACCURACY_METERS = 100f
-        private const val MAX_DESTINATIONS = 50
+
+        // Alerts past this rank never get a real route and fall back to the
+        // straight-line estimate, which the UI marks with a leading "~". At 50
+        // that was almost every Darmstadt alert, since they sort last.
+        //
+        // 500 is the server's ceiling in both senses: routingMaxDestinations
+        // caps a request at 500, and the endpoint parses at most a 64 KB body,
+        // which 500 destinations fill to roughly 40 KB. Measured server-side,
+        // 500 costs ~305 ms cold and ~10 ms once cached, against ~154 ms for
+        // 50 -- ten times the destinations for twice the time.
+        private const val MAX_DESTINATIONS = 500
         private const val STATUS_OK = "OK"
+
+        // Doubling from 2 s to a 60 s ceiling. Cloudflare sits in front of the routing
+        // endpoint and answers 429 on a burst, so a failure has to suppress the next
+        // attempt rather than let every refresh retry into the limit.
+        @VisibleForTesting
+        internal const val BASE_BACKOFF_MILLIS = 2_000L
+        @VisibleForTesting
+        internal const val MAX_BACKOFF_MILLIS = 60_000L
+        private const val BACKOFF_SHIFT_CAP = 5
 
         @Volatile
         private var instance: WalkingRouteRepository? = null

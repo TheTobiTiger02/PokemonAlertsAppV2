@@ -28,9 +28,11 @@ class WalkingRouteUtilsTest {
 
     @Test
     fun estimateWalkingRouteInfo_appliesDetourFactorAndWalkingSpeed() {
+        // 800 m straight line -> 880 m at the measured 1.10 detour factor,
+        // walked at 1.36 m/s -> 647.1 s, rounded up.
         val routeInfo = WalkingRouteUtils.estimateWalkingRouteInfo(800f)
-        assertEquals(1000, routeInfo?.distanceMeters)
-        assertEquals(770L, routeInfo?.durationSeconds)
+        assertEquals(880, routeInfo?.distanceMeters)
+        assertEquals(648L, routeInfo?.durationSeconds)
 
         assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(null))
         assertNull(WalkingRouteUtils.estimateWalkingRouteInfo(-1f))
@@ -63,10 +65,12 @@ class WalkingRouteUtilsTest {
 
         assertEquals(1_000f, displayInfo.straightLineDistanceMeters)
         assertNull(displayInfo.routedDistanceMeters)
-        assertEquals(1_250f, displayInfo.effectiveDistanceMeters)
+        // 1000 m straight line -> 1100 m at the 1.10 detour factor, walked at
+        // 1.36 m/s -> 808.8 s, rounded up to 809 and displayed as 14 minutes.
+        assertEquals(1_100f, displayInfo.effectiveDistanceMeters)
         assertEquals(DistanceSource.ESTIMATED, displayInfo.source)
-        assertEquals("~1.3 km", displayInfo.distanceText)
-        assertEquals("~17 min walk", displayInfo.walkingText)
+        assertEquals("~1.1 km", displayInfo.distanceText)
+        assertEquals("~14 min walk", displayInfo.walkingText)
     }
 
     @Test

@@ -136,7 +136,11 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }.map { (alerts, location) ->
             if (location == null) emptyMap() else WalkingRouteRepository.getInstance()
                 .getWalkingRoutes(location, alerts.filter { it.mapCoordinatesOrNull() != null })
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+        }
+            // Ranking candidates means a straight-line distance for every alert plus a
+            // sort -- over 1000 alerts that has no business running on the main thread.
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** Alerts decorated with distance/route/expiry, ready for the feed to filter and sort. */
     val alertsWithDistance: StateFlow<List<AlertUiModel>> = combine(

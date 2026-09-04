@@ -797,11 +797,17 @@ internal fun AlertsMapScreenContent(
         }
     }
 
-    var filterWalkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
-    LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude, filterDefinition.usesDistanceRules) {
+    // Routed whenever we know where the user is, not only when a filter needs it --
+    // otherwise every marker sheet fell back to the tilde-prefixed straight-line estimate.
+    var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
+    LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude) {
         val location = userLocation
-        filterWalkingRoutes = if (location != null && filterDefinition.usesDistanceRules) {
-            WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
+        walkingRoutes = if (location != null) {
+            // Off Main: this ranks every alert by straight-line distance before it can
+            // tell whether the cache already covers them, and it now runs every refresh.
+            withContext(Dispatchers.Default) {
+                WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
+            }
         } else emptyMap()
     }
 
@@ -812,7 +818,7 @@ internal fun AlertsMapScreenContent(
         expirationNow,
         dismissedAlertIds,
         mapShowDismissed,
-        filterWalkingRoutes,
+        walkingRoutes,
         userLocation?.latitude,
         userLocation?.longitude
     ) {
@@ -825,7 +831,7 @@ internal fun AlertsMapScreenContent(
             nowMillis = expirationNow,
             userLatitude = userLocation?.latitude,
             userLongitude = userLocation?.longitude,
-            walkingRoutes = filterWalkingRoutes
+            walkingRoutes = walkingRoutes
         )
     }
     val renderedAlerts = remember(

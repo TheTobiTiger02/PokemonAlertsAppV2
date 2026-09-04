@@ -27,8 +27,23 @@ data class RouteDisplayInfo(
 )
 
 object WalkingRouteUtils {
-    const val DETOUR_FACTOR = 1.25f
-    const val AVERAGE_WALKING_SPEED_MPS = 1.3f
+    // Measured against 400 routed alerts from the Valhalla backend, taking the
+    // median ratio of routed distance to straight-line distance:
+    //
+    //   500 m - 2 km   1.26
+    //   over 8 km      1.09
+    //   overall        1.12
+    //
+    // The estimate now only applies to alerts ranked past MAX_DESTINATIONS,
+    // which are the farthest ones, so this is tuned toward the long end. The
+    // old 1.25 overstated a 14.3 km walk by 2.4 km and 39 minutes. Note the
+    // ratio is much higher under ~500 m -- a 25 m straight line can route 250 m
+    // around a building -- but those alerts sort first and are always routed.
+    const val DETOUR_FACTOR = 1.10f
+
+    // Median observed speed was 1.36 m/s across every distance band, against
+    // the 1.3 assumed here before.
+    const val AVERAGE_WALKING_SPEED_MPS = 1.36f
 
     fun estimateWalkingRouteInfo(straightLineDistanceMeters: Float?): WalkingRouteInfo? {
         val distance = straightLineDistanceMeters

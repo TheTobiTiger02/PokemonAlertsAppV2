@@ -193,10 +193,10 @@ object AlertNotifier {
 
         if (preCandidates.isEmpty()) return
 
-        // Take up to 15 closest candidate alerts for walking route resolution
+        // Every surviving candidate gets a real route. The repository caps the batch
+        // at the server ceiling, so the sort keeps the nearest ones if that ever binds.
         val topCandidates = preCandidates
             .sortedBy { it.straightLineDistanceMeters ?: Float.MAX_VALUE }
-            .take(15)
 
         val walkingRoutes = userLocation?.let { location ->
             WalkingRouteRepository.getInstance().getWalkingRoutes(

@@ -10,7 +10,9 @@ import com.example.pokemonalertsv2.data.WalkingRouteResult
 import com.example.pokemonalertsv2.data.WalkingRoutesResponse
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,6 +20,7 @@ import org.junit.Test
 import kotlin.math.cos
 import kotlin.math.sqrt
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WalkingRouteRepositoryTest {
     private val origin = WalkingRouteOrigin(49.738, 8.603, accuracyMeters = 10f)
     private val alert = PokemonAlert(
@@ -106,8 +109,8 @@ class WalkingRouteRepositoryTest {
     }
 
     @Test
-    fun getWalkingRoutes_coalescesConcurrentRequestsAndCapsBatchAtFifty() = runTest {
-        val alerts = (0 until 60).map { index ->
+    fun getWalkingRoutes_coalescesConcurrentRequestsAndCapsBatchAtFiveHundred() = runTest {
+        val alerts = (0 until 520).map { index ->
             alert.copy(
                 name = "Alert $index",
                 latitude = origin.latitude + (index + 1) * 0.00001,
@@ -131,7 +134,95 @@ class WalkingRouteRepositoryTest {
         ).awaitAll()
 
         assertEquals(1, service.requests.size)
-        assertEquals(50, service.requests.single().destinations.size)
+        assertEquals(500, service.requests.single().destinations.size)
+    }
+
+    @Test
+    fun getWalkingRoutes_doesNotSerialiseUnrelatedBatches() = runTest {
+        val other = alert.copy(name = "Bulbasaur", latitude = 49.744, endTime = "later")
+        val service = FakeService { request ->
+            delay(1_000)
+            response(*request.destinations.map { WalkingRouteResult(it.id, "OK", 1_000, 800) }.toTypedArray())
+        }
+        val repository = repository(service)
+
+        val startedAt = testScheduler.currentTime
+        val results = listOf(
+            async { repository.getWalkingRoutes(origin, listOf(alert)) },
+            async { repository.getWalkingRoutes(origin, listOf(other)) }
+        ).awaitAll()
+
+        assertEquals(2, service.requests.size)
+        assertEquals(WalkingRouteInfo(1_000, 800), results[0][alert.uniqueId])
+        assertEquals(WalkingRouteInfo(1_000, 800), results[1][other.uniqueId])
+        // Both requests were in flight at once; the old global mutex made this 2_000.
+        assertEquals(1_000L, testScheduler.currentTime - startedAt)
+    }
+
+    @Test
+    fun getWalkingRoutes_failedRequestAnswersWaitersImmediately() = runTest {
+        val service = FakeService { error("backend down") }
+        val repository = repository(service)
+
+        val startedAt = testScheduler.currentTime
+        val result = repository.getWalkingRoutes(origin, listOf(alert), timeoutMillis = 6_000)
+
+        assertTrue(result.isEmpty())
+        assertEquals(1, service.requests.size)
+        // Waiters are completed with null rather than left hanging until the timeout.
+        assertEquals(0L, testScheduler.currentTime - startedAt)
+    }
+
+    @Test
+    fun getWalkingRoutes_suppressesRetriesAfterAFailureThenRecovers() = runTest {
+        var now = 1_000L
+        var fail = true
+        val service = FakeService {
+            if (fail) error("429") else response(WalkingRouteResult(alert.uniqueId, "OK", 1_000, 800))
+        }
+        val repository = repository(service, nowMillis = { now })
+
+        // First failure arms the backoff.
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(1, service.requests.size)
+
+        // Every refresh inside the window is served from cache only -- this is the
+        // storm that hammered the backend before the backoff existed.
+        repeat(5) { assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty()) }
+        assertEquals(1, service.requests.size)
+
+        // Once it elapses, exactly one retry goes out, and it fails again -> 4 s.
+        now += WalkingRouteRepository.BASE_BACKOFF_MILLIS
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(2, service.requests.size)
+        repeat(3) { repository.getWalkingRoutes(origin, listOf(alert)) }
+        assertEquals(2, service.requests.size)
+
+        // A success clears the backoff and caches normally again.
+        fail = false
+        now += 2 * WalkingRouteRepository.BASE_BACKOFF_MILLIS
+        assertEquals(
+            WalkingRouteInfo(1_000, 800),
+            repository.getWalkingRoutes(origin, listOf(alert))[alert.uniqueId]
+        )
+        assertEquals(3, service.requests.size)
+        repository.getWalkingRoutes(origin, listOf(alert))
+        assertEquals(3, service.requests.size)
+    }
+
+    @Test
+    fun getWalkingRoutes_backoffNeverExceedsTheCeiling() = runTest {
+        var now = 1_000L
+        val service = FakeService { error("429") }
+        val repository = repository(service, nowMillis = { now })
+
+        repeat(12) {
+            repository.getWalkingRoutes(origin, listOf(alert))
+            now += WalkingRouteRepository.MAX_BACKOFF_MILLIS
+        }
+
+        // Capped, so a long outage still retries once per minute rather than stalling.
+        assertEquals(12, service.requests.size)
     }
 
     @Test
@@ -158,7 +249,7 @@ class WalkingRouteRepositoryTest {
         routes = routes.toList()
     )
 
-    private fun repository(
+    private fun TestScope.repository(
         service: PokemonAlertsService,
         nowMillis: () -> Long = System::currentTimeMillis,
         cacheTtlMillis: Long = 10 * 60 * 1000L,
@@ -168,6 +259,8 @@ class WalkingRouteRepositoryTest {
         nowMillis = nowMillis,
         cacheTtlMillis = cacheTtlMillis,
         maxOriginMovementMeters = maxOriginMovementMeters,
+        // Virtual time: requests must run on the test scheduler, not Dispatchers.IO.
+        requestScope = backgroundScope,
         distanceBetween = { fromLatitude, fromLongitude, toLatitude, toLongitude ->
             val latitudeMeters = (toLatitude - fromLatitude) * 111_320.0
             val longitudeMeters =
