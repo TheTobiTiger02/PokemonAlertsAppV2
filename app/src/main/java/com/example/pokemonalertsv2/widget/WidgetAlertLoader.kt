@@ -10,6 +10,26 @@ import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.flow.first
 
 internal object WidgetAlertLoader {
+    /**
+     * Both widgets tick every minute, but the GPS fix and the walking-route batch behind
+     * each tick are the expensive part -- and while walking, the repository's 75 m origin
+     * rule turns every tick into a real request. A young snapshot whose alert set still
+     * matches reuses its location and routes, so cheap ticks only re-render the view.
+     * Push waves and list changes bypass the gate via the id comparison.
+     */
+    internal const val ROUTE_DATA_MAX_AGE_MILLIS = 2 * 60 * 1000L
+
+    /** Pure so the gate is unit-testable without an Android fixture. */
+    internal fun shouldReuseRouteData(
+        snapshotRouteDataAtMillis: Long,
+        snapshotAlertIds: Set<String>,
+        currentAlertIds: Set<String>,
+        nowMillis: Long,
+        maxAgeMillis: Long = ROUTE_DATA_MAX_AGE_MILLIS
+    ): Boolean =
+        nowMillis - snapshotRouteDataAtMillis < maxAgeMillis &&
+            snapshotAlertIds == currentAlertIds
+
     data class LoadedAlerts(
         val alerts: List<PokemonAlert>,
         val cadenceAlerts: List<PokemonAlert>,
@@ -63,7 +83,18 @@ internal object WidgetAlertLoader {
             WidgetAreaMode.InheritApp -> selectedArea
             is WidgetAreaMode.Fixed -> areaMode.area
         }
-        val location = runCatching {
+        // A tick inside the freshness window re-uses the previous fix and routes so the
+        // per-minute countdown redraw costs no GPS and no backend call.
+        val previousSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(appWidgetId)
+        val reuseRouteData = shouldReuseRouteData(
+            snapshotRouteDataAtMillis = previousSnapshot?.routeDataAtMillis ?: 0L,
+            snapshotAlertIds = previousSnapshot?.alerts?.mapTo(HashSet()) { it.uniqueId } ?: emptySet(),
+            currentAlertIds = alerts.mapTo(HashSet()) { it.uniqueId },
+            nowMillis = nowMillis
+        )
+        val location = if (reuseRouteData) {
+            previousSnapshot?.location
+        } else runCatching {
             CachedLocationProvider.get(
                 context = context,
                 timeoutMs = if (highAccuracyLocation) 6_000 else 4_000,
@@ -106,13 +137,15 @@ internal object WidgetAlertLoader {
             candidateAlerts
         }
 
-        val walkingRoutes = location?.let {
-            WalkingRouteRepository.getInstance().getWalkingRoutes(
-                origin = it,
+        val walkingRoutes = when {
+            reuseRouteData -> previousSnapshot?.walkingRoutes.orEmpty()
+            location != null -> WalkingRouteRepository.getInstance().getWalkingRoutes(
+                origin = location,
                 alerts = topCandidates,
                 timeoutMillis = WalkingRouteRepository.BACKGROUND_TIMEOUT_MILLIS
             )
-        }.orEmpty()
+            else -> emptyMap()
+        }
         val resolvedAlerts = WidgetAlertSnapshotStore.resolve(
             alerts = alerts,
             criteria = criteria,
@@ -146,7 +179,13 @@ internal object WidgetAlertLoader {
             alerts = visibleAlerts,
             location = location,
             distanceUnavailable = !resolvedAlerts.distanceFilterApplied,
-            walkingRoutes = walkingRoutes
+            walkingRoutes = walkingRoutes,
+            // Reuse republishes with the original stamp, or the window would never close.
+            routeDataAtMillis = if (reuseRouteData) {
+                previousSnapshot?.routeDataAtMillis ?: nowMillis
+            } else {
+                nowMillis
+            }
         )
 
         return LoadedAlerts(

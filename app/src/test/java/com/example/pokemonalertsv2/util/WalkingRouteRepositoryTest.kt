@@ -243,6 +243,99 @@ class WalkingRouteRepositoryTest {
         assertEquals(1, service.requests.size)
     }
 
+    @Test
+    fun getWalkingRoutes_negativeCacheSuppressesPerFixRetriesForUnroutableDestinations() = runTest {
+        var now = 1_000L
+        val service = FakeService {
+            response(WalkingRouteResult(alert.uniqueId, "UNREACHABLE"))
+        }
+        val repository = repository(service, nowMillis = { now })
+
+        // The arrival tracker asks on every GPS fix; the answer is always "no route".
+        repeat(3) { assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty()) }
+        assertEquals(1, service.requests.size)
+
+        // Inside the negative window nothing goes out -- without this, one unroutable
+        // marker costs a request per fix for the whole walk.
+        now += 60_000L
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(1, service.requests.size)
+
+        // Past the window a walker who kept approaching gets a fresh answer.
+        now += 31_000L
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(2, service.requests.size)
+    }
+
+    @Test
+    fun getWalkingRoutes_aLaterRouteReplacesTheNegativeEntry() = runTest {
+        var now = 1_000L
+        var routable = false
+        val service = FakeService {
+            if (routable) {
+                response(WalkingRouteResult(alert.uniqueId, "OK", 1_000, 800))
+            } else {
+                response(WalkingRouteResult(alert.uniqueId, "UNREACHABLE"))
+            }
+        }
+        val repository = repository(service, nowMillis = { now })
+
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(1, service.requests.size)
+        assertTrue(repository.getWalkingRoutes(origin, listOf(alert)).isEmpty())
+        assertEquals(1, service.requests.size)
+
+        // The destination became routable; after the negative window one fresh request
+        // resolves it and the positive cache takes over.
+        routable = true
+        now += 91_000L
+        assertEquals(
+            WalkingRouteInfo(1_000, 800),
+            repository.getWalkingRoutes(origin, listOf(alert))[alert.uniqueId]
+        )
+        assertEquals(2, service.requests.size)
+        assertEquals(
+            WalkingRouteInfo(1_000, 800),
+            repository.getWalkingRoutes(origin, listOf(alert))[alert.uniqueId]
+        )
+        assertEquals(2, service.requests.size)
+    }
+
+    @Test
+    fun getWalkingRoutes_sendsOnlyDestinationsWithinWalkingRange() = runTest {
+        // ~970 m away (flat-earth, including the longitude offset): inside an
+        // average-paced hour's walk, so it stays in the batch.
+        val near = alert.copy(name = "Near", latitude = origin.latitude + 0.004)
+        // ~5.6 km away: no one walks that for an alert, so it must not ride along.
+        val far = alert.copy(name = "Far", latitude = origin.latitude + 0.05)
+        val service = FakeService { request ->
+            response(*request.destinations.map { WalkingRouteResult(it.id, "OK", 900, 700) }.toTypedArray())
+        }
+        val repository = repository(service)
+
+        val routes = repository.getWalkingRoutes(origin, listOf(near, far))
+
+        assertEquals(listOf(near.uniqueId), service.requests.single().destinations.map { it.id })
+        assertEquals(setOf(near.uniqueId), routes.keys)
+    }
+
+    @Test
+    fun getWalkingRoutes_cutoffIsInclusiveAtTheBoundary() = runTest {
+        // Flat-earth helper: with longitude pinned to the origin, 0.008 degrees of
+        // latitude is ~891 m and 0.01 is ~1113 m.
+        val inside = alert.copy(name = "Inside", latitude = origin.latitude + 0.008, longitude = origin.longitude)
+        val outside = alert.copy(name = "Outside", latitude = origin.latitude + 0.01, longitude = origin.longitude)
+        val service = FakeService { request ->
+            response(*request.destinations.map { WalkingRouteResult(it.id, "OK", 900, 700) }.toTypedArray())
+        }
+        val repository = repository(service, maxRoutedStraightLineMeters = 1_000f)
+
+        val routes = repository.getWalkingRoutes(origin, listOf(inside, outside))
+
+        assertEquals(listOf(inside.uniqueId), service.requests.single().destinations.map { it.id })
+        assertEquals(setOf(inside.uniqueId), routes.keys)
+    }
+
     private fun response(vararg routes: WalkingRouteResult) = WalkingRoutesResponse(
         provider = "test",
         calculatedAt = "2026-07-24T12:00:00Z",
@@ -253,20 +346,25 @@ class WalkingRouteRepositoryTest {
         service: PokemonAlertsService,
         nowMillis: () -> Long = System::currentTimeMillis,
         cacheTtlMillis: Long = 10 * 60 * 1000L,
-        maxOriginMovementMeters: Float = 75f
-    ) = WalkingRouteRepository(
-        service = service,
-        nowMillis = nowMillis,
-        cacheTtlMillis = cacheTtlMillis,
-        maxOriginMovementMeters = maxOriginMovementMeters,
-        // Virtual time: requests must run on the test scheduler, not Dispatchers.IO.
-        requestScope = backgroundScope,
-        distanceBetween = { fromLatitude, fromLongitude, toLatitude, toLongitude ->
+        negativeCacheTtlMillis: Long = 90 * 1000L,
+        maxOriginMovementMeters: Float = 75f,
+        maxRoutedStraightLineMeters: Float = 60f * 60f * 1.36f / 1.10f,
+        distanceBetween: (Double, Double, Double, Double) -> Float? = { fromLatitude, fromLongitude, toLatitude, toLongitude ->
             val latitudeMeters = (toLatitude - fromLatitude) * 111_320.0
             val longitudeMeters =
                 (toLongitude - fromLongitude) * 111_320.0 * cos(Math.toRadians(fromLatitude))
             sqrt(latitudeMeters * latitudeMeters + longitudeMeters * longitudeMeters).toFloat()
         }
+    ) = WalkingRouteRepository(
+        service = service,
+        nowMillis = nowMillis,
+        cacheTtlMillis = cacheTtlMillis,
+        negativeCacheTtlMillis = negativeCacheTtlMillis,
+        maxOriginMovementMeters = maxOriginMovementMeters,
+        maxRoutedStraightLineMeters = maxRoutedStraightLineMeters,
+        // Virtual time: requests must run on the test scheduler, not Dispatchers.IO.
+        requestScope = backgroundScope,
+        distanceBetween = distanceBetween
     )
 
     private class FakeService(

@@ -14,7 +14,9 @@ internal object WidgetAlertSnapshotStore {
         val alerts: List<PokemonAlert>,
         val location: Location?,
         val distanceUnavailable: Boolean,
-        val walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
+        val walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap(),
+        /** When `location`/`walkingRoutes` were actually fetched, not when published -- reuse republishes with the original stamp. */
+        val routeDataAtMillis: Long = 0L
     )
 
     private val cadenceSnapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
@@ -53,14 +55,16 @@ internal object WidgetAlertSnapshotStore {
         alerts: List<PokemonAlert>,
         location: Location?,
         distanceUnavailable: Boolean = false,
-        walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
+        walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap(),
+        routeDataAtMillis: Long = System.currentTimeMillis()
     ): RenderSnapshot {
         return RenderSnapshot(
             generation = nextGeneration.incrementAndGet(),
             alerts = alerts.toList(),
             location = location?.let(::Location),
             distanceUnavailable = distanceUnavailable,
-            walkingRoutes = walkingRoutes.toMap()
+            walkingRoutes = walkingRoutes.toMap(),
+            routeDataAtMillis = routeDataAtMillis
         ).also { renderSnapshots[appWidgetId] = it }
     }
 

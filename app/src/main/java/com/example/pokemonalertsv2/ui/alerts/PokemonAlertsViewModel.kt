@@ -126,6 +126,21 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /**
+     * Periodic companion to [refreshUserLocation] for the feed's 30 s poll: a
+     * balanced-power fix keeps walking distances honest while the user walks with the
+     * screen open. Deliberately quiet -- no high-accuracy GNSS and no lookup-state
+     * transition; a failed fix just leaves the previous location standing.
+     */
+    fun refreshUserLocationQuietly(granted: Boolean) {
+        if (!granted) return
+        viewModelScope.launch {
+            CachedLocationProvider.get(getApplication(), timeoutMs = 4_000, highAccuracy = false)
+                ?.takeIf { validMapCoordinates(it.latitude, it.longitude) != null }
+                ?.let { _userLocation.value = it }
+        }
+    }
+
     fun markLocationLookupPending() {
         _locationLookupComplete.value = false
     }

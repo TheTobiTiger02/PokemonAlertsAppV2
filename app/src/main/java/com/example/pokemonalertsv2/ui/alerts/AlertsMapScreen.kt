@@ -171,6 +171,10 @@ import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
 
+// The pose tracker fires up to 2 Hz; the route repository would answer unchanged for
+// movement under 75 m anyway, so re-ranking every alert per fix is pure waste.
+private const val MAP_ROUTE_REFRESH_METERS = 50f
+
 internal fun mapCountdownRefreshKey(
     showTimeLabels: Boolean,
     nowMillis: Long,
@@ -800,15 +804,33 @@ internal fun AlertsMapScreenContent(
     // Routed whenever we know where the user is, not only when a filter needs it --
     // otherwise every marker sheet fell back to the tilde-prefixed straight-line estimate.
     var walkingRoutes by remember { mutableStateOf<Map<String, WalkingRouteInfo>>(emptyMap()) }
+    var routedFromLocation by remember { mutableStateOf<Location?>(null) }
     LaunchedEffect(alerts, userLocation?.latitude, userLocation?.longitude) {
         val location = userLocation
-        walkingRoutes = if (location != null) {
-            // Off Main: this ranks every alert by straight-line distance before it can
-            // tell whether the cache already covers them, and it now runs every refresh.
-            withContext(Dispatchers.Default) {
-                WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
-            }
-        } else emptyMap()
+        if (location == null) {
+            routedFromLocation = null
+            walkingRoutes = emptyMap()
+            return@LaunchedEffect
+        }
+        // Re-route only on real movement; new alerts re-route via the `alerts` key.
+        val anchor = routedFromLocation
+        val movedMeters = anchor?.let {
+            WalkingRouteUtils.straightLineDistanceMeters(
+                it.latitude,
+                it.longitude,
+                location.latitude,
+                location.longitude
+            )
+        }
+        if (anchor != null && movedMeters != null && movedMeters < MAP_ROUTE_REFRESH_METERS) {
+            return@LaunchedEffect
+        }
+        routedFromLocation = location
+        // Off Main: this ranks every alert by straight-line distance before it can
+        // tell whether the cache already covers them, and it now runs every refresh.
+        walkingRoutes = withContext(Dispatchers.Default) {
+            WalkingRouteRepository.getInstance().getWalkingRoutes(location, alerts)
+        }
     }
 
     val expirationNow = expirationClock.value

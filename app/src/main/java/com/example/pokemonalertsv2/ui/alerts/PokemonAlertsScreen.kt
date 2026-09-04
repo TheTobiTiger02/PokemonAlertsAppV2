@@ -311,6 +311,9 @@ fun PokemonAlertsRoute(
             while (true) {
                 delay(30_000)
                 viewModel.refreshAlertsInBackground()
+                // Balanced-power only; without it the walking times on screen go stale
+                // until the user happens to leave and re-enter the tab.
+                viewModel.refreshUserLocationQuietly(hasForegroundLocationPermission(context))
             }
         }
     }

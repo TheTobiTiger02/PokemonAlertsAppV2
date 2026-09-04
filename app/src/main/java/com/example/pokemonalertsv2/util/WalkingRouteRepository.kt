@@ -32,7 +32,9 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val cacheTtlMillis: Long = CACHE_TTL_MILLIS,
+    private val negativeCacheTtlMillis: Long = NEGATIVE_TTL_MILLIS,
     private val maxOriginMovementMeters: Float = MAX_ORIGIN_MOVEMENT_METERS,
+    private val maxRoutedStraightLineMeters: Float = MAX_ROUTED_STRAIGHT_LINE_METERS,
     private val maxLocationAccuracyMeters: Float = MAX_LOCATION_ACCURACY_METERS,
     private val distanceBetween: (Double, Double, Double, Double) -> Float? =
         WalkingRouteUtils::straightLineDistanceMeters,
@@ -49,10 +51,16 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
         val expiresAtMillis: Long
     )
 
-    // Guards `cache` and `inFlight` only -- never held across a network call, so a
-    // one-marker lookup no longer queues behind a 500-destination prefetch.
+    // Guards `cache`, `negativeCache` and `inFlight` only -- never held across a network
+    // call, so a one-marker lookup no longer queues behind a 500-destination prefetch.
     private val cacheMutex = Mutex()
     private val cache = mutableMapOf<String, CacheEntry>()
+
+    // Destination id -> expiry. The server can answer OK while saying a specific
+    // destination has no pedestrian route; nothing lands in `cache` then, and without
+    // this the arrival tracker re-asks on every GPS fix for the whole walk.
+    private val negativeCache = mutableMapOf<String, Long>()
+
     private val inFlight = mutableMapOf<String, CompletableDeferred<WalkingRouteInfo?>>()
 
     // A failed request caches nothing, so without this the next refresh finds an empty
@@ -93,6 +101,7 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
                     latitude,
                     longitude
                 ) ?: return@mapNotNull null
+                if (directDistance > maxRoutedStraightLineMeters) return@mapNotNull null
                 Candidate(alert.uniqueId, latitude, longitude, directDistance)
             }
             .sortedBy(Candidate::directDistanceMeters)
@@ -117,6 +126,11 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
                     return@forEach
                 }
                 cache.remove(candidate.id)
+                val negativeUntil = negativeCache[candidate.id]
+                if (negativeUntil != null) {
+                    if (negativeUntil > current) return@forEach
+                    negativeCache.remove(candidate.id)
+                }
                 val alreadyRequested = inFlight[candidate.id]
                 if (alreadyRequested != null) {
                     // Another caller is already asking for this destination; wait on
@@ -200,6 +214,15 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
                         route = route,
                         expiresAtMillis = current + cacheTtlMillis
                     )
+                    negativeCache.remove(id)
+                }
+                // A successful response that still lacks a destination means unroutable,
+                // not offline -- remember it briefly so the next fix does not re-ask.
+                if (response != null) {
+                    val negativeUntil = current + negativeCacheTtlMillis
+                    ownedById.keys.forEach { id ->
+                        if (id !in resolved) negativeCache[id] = negativeUntil
+                    }
                 }
                 if (response == null) {
                     consecutiveFailures++
@@ -243,6 +266,7 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
     @VisibleForTesting
     internal fun clearCache() {
         cache.clear()
+        negativeCache.clear()
         inFlight.clear()
         backoffUntilMillis = 0L
         consecutiveFailures = 0
@@ -259,7 +283,21 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
         const val FOREGROUND_TIMEOUT_MILLIS = 6_000L
         const val BACKGROUND_TIMEOUT_MILLIS = 2_500L
         private const val CACHE_TTL_MILLIS = 10 * 60 * 1000L
+
+        // Short by design: unroutability is often positional ("across the river"), so a
+        // walker who keeps approaching deserves periodic re-answers, just slower than
+        // one per GPS fix.
+        private const val NEGATIVE_TTL_MILLIS = 90 * 1000L
         private const val MAX_ORIGIN_MOVEMENT_METERS = 75f
+
+        // Farthest straight-line distance still worth a real route: the largest travel-time
+        // preset is a 60-minute walk -- 60*60*AVERAGE_WALKING_SPEED_MPS of routed distance,
+        // over DETOUR_FACTOR as the crow flies (~4.5 km). Farther alerts can never produce
+        // a walking time worth acting on, so they keep the "~" straight-line estimate
+        // instead of riding along in every batch and re-downloading every 75 m of movement.
+        private val MAX_ROUTED_STRAIGHT_LINE_METERS: Float =
+            60f * 60f * WalkingRouteUtils.AVERAGE_WALKING_SPEED_MPS / WalkingRouteUtils.DETOUR_FACTOR
+
         private const val MAX_LOCATION_ACCURACY_METERS = 100f
 
         // Alerts past this rank never get a real route and fall back to the
