@@ -60,6 +60,7 @@ import com.example.pokemonalertsv2.data.counters.RaidCountersRepository
 import com.example.pokemonalertsv2.data.gamemaster.GameMasterRepository
 import com.example.pokemonalertsv2.raidwatch.ManualRaidBoss
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
+import com.example.pokemonalertsv2.raidwatch.catchSpeciesId
 import com.example.pokemonalertsv2.raidwatch.createManualRaidAlert
 import com.example.pokemonalertsv2.raidwatch.manualRaidTierLabel
 import com.example.pokemonalertsv2.raidwatch.perfectCatchCp
@@ -96,12 +97,13 @@ class ManualRaidViewModel(application: Application) : AndroidViewModel(applicati
                 gameMaster.syncIfNeeded()
                 val ids = catalogue.map { it.pokemonId }
                 val baseIds = ids.map(PokebattlerNameNormalizer::baseSpeciesId)
-                val species = gameMaster.simSpecies((ids + baseIds).distinct())
+                val catchIds = ids.map(::catchSpeciesId)
+                val species = gameMaster.simSpecies((ids + baseIds + catchIds).distinct())
                 val sprites = gameMaster.spriteUrls(ids)
                 val dexNumbers = gameMaster.dexNumbersFor(ids)
                 catalogue.map { entry ->
-                    val stats = species[entry.pokemonId]
-                        ?: species[PokebattlerNameNormalizer.baseSpeciesId(entry.pokemonId)]
+                    val stats = species[catchSpeciesId(entry.pokemonId)]
+                        ?: species[entry.pokemonId]
                     ManualRaidBoss(
                         catalogue = entry,
                         tierLabel = manualRaidTierLabel(entry),

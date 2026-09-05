@@ -57,6 +57,15 @@ class ManualRaidSessionTest {
     }
 
     @Test
+    fun `catch species id collapses mega and primal bosses onto the base form`() {
+        assertEquals("CHARIZARD", catchSpeciesId("CHARIZARD_MEGA_X"))
+        assertEquals("CHARIZARD", catchSpeciesId("CHARIZARD_MEGA_Y"))
+        assertEquals("KYOGRE", catchSpeciesId("KYOGRE_PRIMAL"))
+        assertEquals("MEWTWO", catchSpeciesId("MEWTWO"))
+        assertEquals("GENGAR", catchSpeciesId("GENGAR_MEGA"))
+    }
+
+    @Test
     fun `primal catalogue ids get a primal label`() {
         val boss = AvailableRaidBoss(
             pokemonId = "GROUDON_PRIMAL",

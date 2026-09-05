@@ -4,6 +4,8 @@ import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.RaidTier
 import com.example.pokemonalertsv2.data.counters.AvailableRaidBoss
+import com.example.pokemonalertsv2.data.counters.PokebattlerNameNormalizer
+import com.example.pokemonalertsv2.data.counters.megaBaseSpeciesId
 import com.example.pokemonalertsv2.data.sim.CpmTable
 import com.example.pokemonalertsv2.data.sim.SimSpecies
 import kotlin.math.floor
@@ -24,6 +26,15 @@ internal fun perfectCatchCp(species: SimSpecies): HundoCP = HundoCP(
     level20 = perfectCpAtLevel(species, 20.0),
     level25 = perfectCpAtLevel(species, 25.0)
 )
+
+/**
+ * The species the trainer actually catches for a boss id.
+ *
+ * A mega or primal raid awards the base form, so its catch CP comes from the base species'
+ * stats — `CHARIZARD_MEGA_X` catches Charizard, not the mega.
+ */
+internal fun catchSpeciesId(pokemonId: String): String =
+    PokebattlerNameNormalizer.baseSpeciesId(pokemonId).megaBaseSpeciesId()
 
 private fun perfectCpAtLevel(species: SimSpecies, level: Double): Int {
     val cpm = CpmTable.forLevel(level)
