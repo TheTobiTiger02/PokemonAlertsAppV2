@@ -159,7 +159,8 @@ internal fun clusterMapAlerts(
         .filter { it.alert.uniqueId in protectedAlertIds }
         .map(::listOf)
     val clusterable = positioned.filterNot { it.alert.uniqueId in protectedAlertIds }
-    // The UI protects at most the active tracked alert. Reserve its slot before grouping.
+    // The UI protects at most the tracked destination and the browsed alert. Reserve their
+    // slots before grouping.
     val budget = MAX_RENDERED_MAP_MARKERS - protectedGroups.size
     require(budget >= 0 && (clusterable.isEmpty() || budget > 0)) {
         "Protected alerts must leave room for the clustered alerts"

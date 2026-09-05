@@ -189,7 +189,34 @@ class AlertsMapViewportTest {
         assertEquals(listOf(visible.uniqueId, tracked.uniqueId), rendered.map(PokemonAlert::uniqueId))
         assertEquals(
             setOf(tracked.uniqueId),
-            mapPipProtectedAlertIds(true, tracked.uniqueId, rendered)
+            mapPipProtectedAlertIds(true, tracked.uniqueId, null, rendered)
+        )
+    }
+
+    @Test
+    fun `picture in picture keeps the browsed alert out of its cluster`() {
+        // Emphasis only lands on individual markers, so an alert the browse cursor steps onto
+        // has to be drawn as its own pin or the window highlights nothing.
+        val browsed = alert("Browsed", 49.8, 8.6)
+        val tracked = alert("Tracked", 49.9, 8.7)
+        val rendered = listOf(browsed, tracked)
+
+        assertEquals(
+            setOf(browsed.uniqueId, tracked.uniqueId),
+            mapPipProtectedAlertIds(true, tracked.uniqueId, browsed.uniqueId, rendered)
+        )
+        assertEquals(
+            setOf(browsed.uniqueId),
+            mapPipProtectedAlertIds(true, null, browsed.uniqueId, rendered)
+        )
+        // An id that expired or was filtered away reserves nothing.
+        assertEquals(
+            emptySet<String>(),
+            mapPipProtectedAlertIds(true, "gone", "also-gone", rendered)
+        )
+        assertEquals(
+            emptySet<String>(),
+            mapPipProtectedAlertIds(false, tracked.uniqueId, browsed.uniqueId, rendered)
         )
     }
 

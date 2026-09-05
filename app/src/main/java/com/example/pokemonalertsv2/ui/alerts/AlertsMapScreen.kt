@@ -229,18 +229,27 @@ internal fun mapAlertsForPresentation(
     return filteredAlerts + trackedAlert
 }
 
+/**
+ * The alerts the floating window keeps out of clustering, so each is drawn as its own marker:
+ * the destination being walked to, and the one the browse cursor is on. Emphasis only lands on
+ * individual markers, so without this, stepping onto an alert that shares a spot with its
+ * neighbours would leave the window showing a numbered bubble and nothing highlighted.
+ *
+ * Both are matched against [renderedAlerts]: an id that has expired or been filtered away
+ * reserves nothing.
+ */
 internal fun mapPipProtectedAlertIds(
     compactPictureInPicture: Boolean,
     trackedAlertId: String?,
+    browsedAlertId: String?,
     renderedAlerts: List<PokemonAlert>
-): Set<String> = if (
-    compactPictureInPicture &&
-    trackedAlertId != null &&
-    renderedAlerts.any { it.uniqueId == trackedAlertId }
-) {
-    setOf(trackedAlertId)
-} else {
-    emptySet()
+): Set<String> {
+    if (!compactPictureInPicture) return emptySet()
+    val available = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
+    return setOfNotNull(
+        trackedAlertId?.takeIf { it in available },
+        browsedAlertId?.takeIf { it in available }
+    )
 }
 
 internal fun mapPipEmphasizedAlertIds(
@@ -861,11 +870,13 @@ internal fun AlertsMapScreenContent(
     val protectedAlertIds = remember(
         compactPictureInPicture,
         arrivalTracking.activeDestination?.uniqueId,
+        selectedAlertId,
         renderedAlerts
     ) {
         mapPipProtectedAlertIds(
             compactPictureInPicture = compactPictureInPicture,
             trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
+            browsedAlertId = selectedAlertId,
             renderedAlerts = renderedAlerts
         )
     }
