@@ -213,17 +213,6 @@ enum class MapPresentationMode {
     COMPACT_PICTURE_IN_PICTURE
 }
 
-internal fun mapFilterForPresentation(
-    selectedCategories: Set<AlertCategory>,
-    presentationMode: MapPresentationMode
-): Set<AlertCategory> = if (presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE) {
-    // The floating map always shows everything: it exists to track one alert, and a muted
-    // category silently hiding that alert's neighbours would read as a glitch.
-    emptySet()
-} else {
-    selectedCategories
-}
-
 internal fun mapAlertsForPresentation(
     filteredAlerts: List<PokemonAlert>,
     trackedAlert: PokemonAlert?,
@@ -330,15 +319,15 @@ fun AlertsMapRoute(
     val showWeatherCells by viewModel.showWeatherCells.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
-    val effectiveCategories = mapFilterForPresentation(selectedMapCategories, presentationMode)
-
     AlertsMapScreen(
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
         syncStatus = uiState.toSyncStatus(),
-        selectedCategories = effectiveCategories,
-        filterDefinition = if (presentationMode == MapPresentationMode.FULL) mapFilterDefinition else FilterDefinition(),
+        // The floating map honours the same category mutes and filter rules as the full map;
+        // mapAlertsForPresentation puts the tracked alert back if a filter would have hidden it.
+        selectedCategories = selectedMapCategories,
+        filterDefinition = mapFilterDefinition,
         filterCatalog = filterCatalog,
         filterArtwork = filterArtwork,
         questRewardThumbnails = questRewardThumbnails,

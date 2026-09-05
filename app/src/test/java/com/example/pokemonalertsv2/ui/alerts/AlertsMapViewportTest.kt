@@ -159,21 +159,6 @@ class AlertsMapViewportTest {
     }
 
     @Test
-    fun `compact picture in picture forces everything visible without changing the full map`() {
-        assertEquals(
-            emptySet<AlertCategory>(),
-            mapFilterForPresentation(
-                setOf(AlertCategory.RAID),
-                MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
-            )
-        )
-        assertEquals(
-            setOf(AlertCategory.RAID),
-            mapFilterForPresentation(setOf(AlertCategory.RAID), MapPresentationMode.FULL)
-        )
-    }
-
-    @Test
     fun `picture in picture zoom uses the visible provider and clamps invalid values`() {
         assertEquals(
             12.5,
