@@ -220,16 +220,34 @@ internal object ArrivalTrackingNotifications {
     private fun liveBuilder(context: Context, alert: PokemonAlert): Notification.Builder {
         val builder = Notification.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_poke_notification)
-            .setCategory(Notification.CATEGORY_SERVICE)
+            // Navigation, not service. CATEGORY_SERVICE marks a notification as plumbing for
+            // a running service, which is exactly what the status bar chip filters out, so the
+            // journey stayed in the shade. The raid Live Update, which does reach the chip, is
+            // categorised as an event for the same reason.
+            .setCategory(Notification.CATEGORY_NAVIGATION)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
-        val extras = Bundle().apply {
-            putBoolean("android.requestPromotedOngoing", true)
+        return builder.requestPromotedOngoing()
+    }
+
+    /**
+     * Ask for the status bar chip. Android 16.1 added Notification.Builder.setRequestPromotedOngoing
+     * for this; the app compiles against 36, where only the read-only FLAG_PROMOTED_ONGOING
+     * exists, so call it reflectively and keep the extra that 16.0 builds read. A device
+     * without either simply carries on showing the notification in the shade.
+     */
+    @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
+    private fun Notification.Builder.requestPromotedOngoing(): Notification.Builder {
+        addExtras(Bundle().apply { putBoolean("android.requestPromotedOngoing", true) })
+        runCatching {
+            Notification.Builder::class.java
+                .getMethod("setRequestPromotedOngoing", Boolean::class.javaPrimitiveType)
+                .invoke(this, true)
         }
-        return builder.addExtras(extras)
+        return this
     }
 
     fun postArrival(context: Context, destination: TrackedDestination) {
