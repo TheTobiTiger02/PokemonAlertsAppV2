@@ -45,6 +45,13 @@ class ArrivalTrackingService : Service() {
     private var walkingRoute: WalkingRouteInfo? = null
     private var walkingRouteUpdatedAtMillis = 0L
     private var lastDirectDistanceMeters: Float? = null
+
+    /**
+     * The last fix good enough to measure from. Kept so that switching destination can price the
+     * new one straight away: the fused request only calls back once the user has moved, so a
+     * standing trainer would otherwise leave the Live Update with no distance at all.
+     */
+    private var lastAcceptedLocation: Location? = null
     private var lastWaitingForPreciseLocation = false
     private var lastInRange = false
 
@@ -96,7 +103,14 @@ class ArrivalTrackingService : Service() {
             walkingRouteJob = null
             walkingRoute = null
             walkingRouteUpdatedAtMillis = 0L
-            lastDirectDistanceMeters = null
+            // Measure the new destination from the last fix rather than starting blank. Without
+            // a distance the notification is built with indeterminate progress and no short
+            // critical text, so the system has nothing to promote and the Live Update drops
+            // out of the status bar into the shade until the user moves far enough for a new
+            // callback. Display only: arrival is still decided by fixes the evaluator sees.
+            lastDirectDistanceMeters = lastAcceptedLocation?.let { location ->
+                directDistanceMeters(location, destination)
+            }
             lastWaitingForPreciseLocation = false
             lastInRange = false
         } else if (previousDestination.radiusMeters != destination.radiusMeters) {
@@ -188,14 +202,8 @@ class ArrivalTrackingService : Service() {
             }
             return
         }
-        val distance = FloatArray(1)
-        Location.distanceBetween(
-            location.latitude,
-            location.longitude,
-            destination.latitude,
-            destination.longitude,
-            distance
-        )
+        lastAcceptedLocation = location
+        val distance = floatArrayOf(directDistanceMeters(location, destination))
         val result = evaluator.evaluate(
                 distanceMeters = distance[0],
                 accuracyMeters = location.accuracy,
@@ -357,6 +365,21 @@ class ArrivalTrackingService : Service() {
         android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
+
+    private fun directDistanceMeters(
+        location: Location,
+        destination: TrackedDestination
+    ): Float {
+        val results = FloatArray(1)
+        Location.distanceBetween(
+            location.latitude,
+            location.longitude,
+            destination.latitude,
+            destination.longitude,
+            results
+        )
+        return results[0]
+    }
 
     private fun isFreshValidLocation(location: Location): Boolean {
         if (!location.latitude.isFinite() || !location.longitude.isFinite()) return false
