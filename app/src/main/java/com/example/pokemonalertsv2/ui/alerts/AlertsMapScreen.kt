@@ -114,7 +114,9 @@ import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
+import com.example.pokemonalertsv2.tracking.MapPipArrivalTracker
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
+import com.example.pokemonalertsv2.tracking.rememberMapPipArrivalTracker
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -161,6 +163,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -168,6 +171,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
 
@@ -510,10 +514,13 @@ internal fun AlertsMapScreenContent(
     onToggleAutoEnterPictureInPicture: () -> Unit = {},
     pipCommands: Flow<MapPipCommand>? = null,
     onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
-    locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory
+    locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory,
+    pipArrivalTracker: MapPipArrivalTracker? = null
 ) {
     val context = LocalContext.current
     val arrivalTracking = rememberArrivalTrackingUiController()
+    val defaultPipArrivalTracker = rememberMapPipArrivalTracker()
+    val browseArrivalTracker = pipArrivalTracker ?: defaultPipArrivalTracker
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -1086,6 +1093,55 @@ internal fun AlertsMapScreenContent(
             lastFitLatitude = null
             lastFitLongitude = null
         }
+    }
+
+    // Browsing to an alert in the floating window is the same commitment as tapping "I'm going"
+    // on it, so the alert the cursor settles on becomes the arrival destination. Its notification
+    // then carries the name, CP, distance and walking time, which is what lets the window drop its
+    // own label chip and give that space back to the map.
+    var lastPipStartedId by remember { mutableStateOf<String?>(null) }
+    val currentCompactPictureInPicture by rememberUpdatedState(compactPictureInPicture)
+    val currentRenderedAlerts by rememberUpdatedState(renderedAlerts)
+    val currentActiveDestinationId by rememberUpdatedState(
+        arrivalTracking.activeDestination?.uniqueId
+    )
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = currentCompactPictureInPicture,
+                pipMode = pipMode,
+                browsedAlert = currentRenderedAlerts.firstOrNull {
+                    it.uniqueId == selectedAlertId
+                },
+                activeDestinationId = currentActiveDestinationId,
+                lastPipStartedId = lastPipStartedId,
+                nowMillis = System.currentTimeMillis()
+            )
+        }
+            // By target, never by value: the feed hands back rebuilt alerts on every poll, and
+            // structural equality would ask for the same journey again several times a minute.
+            .distinctUntilChanged { previous, next -> previous.sameTargetAs(next) }
+            .collectLatest { intent ->
+                when (intent) {
+                    MapPipTrackingIntent.None -> Unit
+                    MapPipTrackingIntent.Stop -> {
+                        withContext(NonCancellable) { browseArrivalTracker.stop() }
+                        lastPipStartedId = null
+                    }
+                    is MapPipTrackingIntent.Start -> {
+                        // collectLatest cancels this block when the cursor moves on, so a run of
+                        // steps writes the destination once, for the alert the user stops on.
+                        delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
+                        // NonCancellable so a cursor move mid-write cannot half-apply it;
+                        // collectLatest joins the block before starting the next one.
+                        withContext(NonCancellable) {
+                            if (browseArrivalTracker.start(intent.alert)) {
+                                lastPipStartedId = intent.alert.uniqueId
+                            }
+                        }
+                    }
+                }
+            }
     }
 
     val pipCanStep = renderedAlerts.isNotEmpty()
@@ -1782,8 +1838,18 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        // The window has no room for a card, so the browse cursor gets a single line.
-        if (compactPictureInPicture && pipMode == MapPipMode.BROWSE) {
+        // A fallback, not the primary readout: while the arrival notification is up it already
+        // names the alert, so the window keeps this line off and gives the space to the map. It
+        // comes back when nothing is tracking to name it -- an alert that expired, or a preflight
+        // the window could not answer from here, such as a missing permission.
+        if (
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = compactPictureInPicture,
+                pipMode = pipMode,
+                browsedAlertId = selectedAlertId,
+                trackedAlertId = arrivalTracking.activeDestination?.uniqueId
+            )
+        ) {
             Surface(
                 modifier = Modifier
                     // Top, not bottom: the OpenStreetMap attribution owns the bottom

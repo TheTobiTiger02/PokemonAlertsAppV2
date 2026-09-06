@@ -14,6 +14,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.tracking.MapPipArrivalTracker
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -138,30 +139,60 @@ class MapLiveTrackingComposeTest {
     }
 
     @Test
-    fun pictureInPictureBrowseCommandSelectsAnAlertAndShowsItsChip() {
-        val commands = MutableSharedFlow<MapPipCommand>(
-            extraBufferCapacity = 4,
-            onBufferOverflow = BufferOverflow.DROP_OLDEST
-        )
+    fun pictureInPictureBrowseCommandTracksTheAlertItLandsOn() {
+        val commands = browseCommands()
         val reportedStates = mutableListOf<Pair<MapPipMode, Boolean>>()
-        // Larvitar sits on the map's default centre and Chespin well outside it, so the
-        // nearest-first cursor has an unambiguous first stop.
-        val alerts = listOf(
-            PokemonAlert(name = "Larvitar", latitude = ALSBACH_LATITUDE, longitude = ALSBACH_LONGITUDE),
-            PokemonAlert(name = "Chespin", latitude = 49.8000, longitude = 8.7000)
-        )
+        val tracker = RecordingArrivalTracker(succeeds = true)
 
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 AlertsMapScreenContent(
-                    alerts = alerts,
+                    alerts = browseAlerts(),
                     onBack = {},
                     onRefresh = {},
                     presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
                     initialZoom = 15.0,
                     onEnterPictureInPicture = {},
                     pipCommands = commands,
-                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep }
+                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep },
+                    pipArrivalTracker = tracker,
+                    locationTrackerFactory = browseLocationTracker()
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("map_pip_content").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000L) { reportedStates.isNotEmpty() }
+        assertEquals(MapPipMode.FOLLOW to true, reportedStates.first())
+
+        composeRule.runOnIdle { commands.tryEmit(MapPipCommand.TOGGLE_MODE) }
+
+        // Browsing to an alert is the same commitment as tapping "I'm going" on it.
+        composeRule.waitUntil(timeoutMillis = 5_000L) { tracker.started.isNotEmpty() }
+        assertEquals("Larvitar", tracker.started.first().name)
+    }
+
+    @Test
+    fun pictureInPictureBrowseKeepsTheChipWhenTrackingCannotStart() {
+        val commands = browseCommands()
+        val reportedStates = mutableListOf<Pair<MapPipMode, Boolean>>()
+        // A refused preflight - no location permission, say - is reported only by the chip
+        // staying up, because the window has no way to raise a prompt the user could answer.
+        val tracker = RecordingArrivalTracker(succeeds = false)
+
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                AlertsMapScreenContent(
+                    alerts = browseAlerts(),
+                    onBack = {},
+                    onRefresh = {},
+                    presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
+                    initialZoom = 15.0,
+                    onEnterPictureInPicture = {},
+                    pipCommands = commands,
+                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep },
+                    pipArrivalTracker = tracker,
+                    locationTrackerFactory = browseLocationTracker()
                 )
             }
         }
@@ -182,6 +213,65 @@ class MapLiveTrackingComposeTest {
             hasAnyAncestor(hasTestTag("map_pip_browse_chip")) and
                 hasText("Larvitar", substring = true)
         ).assertExists()
+    }
+
+    /**
+     * Pins the user on Alsbach. Nearest-first ordering is taken from the user's position, so
+     * without this the cursor's first stop follows whatever fix the emulator happens to hold.
+     */
+    private fun browseLocationTracker(): MapPoseTrackerFactory {
+        val pose = MapUserPose(
+            location = Location("test").apply {
+                latitude = ALSBACH_LATITUDE
+                longitude = ALSBACH_LONGITUDE
+                accuracy = 3f
+                elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
+            },
+            headingDegrees = 0f,
+            headingFromSensor = true
+        )
+        return { _, onPose, onStatus ->
+            object : MapPoseTracker {
+                override fun start() {
+                    onPose(pose)
+                    onStatus(MapTrackingStatus.ACTIVE)
+                }
+
+                override fun stop() = Unit
+            }
+        }
+    }
+
+    private fun browseCommands() = MutableSharedFlow<MapPipCommand>(
+        extraBufferCapacity = 4,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+
+    // Larvitar sits on the map's default centre and Chespin well outside it, so the
+    // nearest-first cursor has an unambiguous first stop.
+    private fun browseAlerts() = listOf(
+        PokemonAlert(name = "Larvitar", latitude = ALSBACH_LATITUDE, longitude = ALSBACH_LONGITUDE),
+        PokemonAlert(name = "Chespin", latitude = 49.8000, longitude = 8.7000)
+    )
+
+    /**
+     * Stands in for the real tracker so these tests do not depend on the device's permission
+     * state: the setup grants fine location, but notification permission and whether location
+     * services are on vary between emulator images.
+     */
+    private class RecordingArrivalTracker(private val succeeds: Boolean) : MapPipArrivalTracker {
+        val started: MutableList<PokemonAlert> = mutableListOf()
+        var stopped: Int = 0
+            private set
+
+        override suspend fun start(alert: PokemonAlert): Boolean {
+            started += alert
+            return succeeds
+        }
+
+        override suspend fun stop() {
+            stopped++
+        }
     }
 
     @Test

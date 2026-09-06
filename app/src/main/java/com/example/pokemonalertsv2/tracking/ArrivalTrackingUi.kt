@@ -227,16 +227,16 @@ fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
     )
 }
 
-private fun hasFineLocationPermission(context: Context): Boolean =
+internal fun hasFineLocationPermission(context: Context): Boolean =
     ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
 
-private fun hasNotificationPermission(context: Context): Boolean =
+internal fun hasNotificationPermission(context: Context): Boolean =
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
 
-private fun areLocationServicesEnabled(context: Context): Boolean {
+internal fun areLocationServicesEnabled(context: Context): Boolean {
     val manager = context.getSystemService(LocationManager::class.java) ?: return false
     return manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
         manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)

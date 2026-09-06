@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.alerts
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,6 +108,206 @@ class MapPipActionsTest {
         assertEquals(49.75005, centre.latitude, 1e-6)
         assertEquals(8.6200, centre.longitude, 1e-6)
         assertEquals(MAP_PIP_CLOSE_ZOOM, centre.zoom, 0.0)
+    }
+
+    // --- Browsing an alert takes it on as the arrival destination ------------------------
+
+    @Test
+    fun `browsing an eligible alert makes it the destination`() {
+        val browsed = alert("Larvitar", 49.75, 8.62)
+
+        val intent = resolveMapPipTrackingIntent(
+            compactPictureInPicture = true,
+            pipMode = MapPipMode.BROWSE,
+            browsedAlert = browsed,
+            activeDestinationId = null,
+            lastPipStartedId = null,
+            nowMillis = 0L
+        )
+
+        assertEquals(MapPipTrackingIntent.Start(browsed), intent)
+    }
+
+    @Test
+    fun `the alert already being tracked is left alone`() {
+        // Rewriting it would restart the service and its notification for no reason.
+        val browsed = alert("Larvitar", 49.75, 8.62)
+
+        assertEquals(
+            MapPipTrackingIntent.None,
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlert = browsed,
+                activeDestinationId = browsed.uniqueId,
+                lastPipStartedId = null,
+                nowMillis = 0L
+            )
+        )
+    }
+
+    @Test
+    fun `alerts that cannot be walked to are not tracked`() {
+        val unmappable = alert("No fix", null, null)
+        val expired = PokemonAlert(
+            name = "Gone",
+            latitude = 49.75,
+            longitude = 8.62,
+            endTime = "1970-01-01T00:00:01Z"
+        )
+
+        for (candidate in listOf(unmappable, expired)) {
+            assertEquals(
+                candidate.name + " should not become a destination",
+                MapPipTrackingIntent.None,
+                resolveMapPipTrackingIntent(
+                    compactPictureInPicture = true,
+                    pipMode = MapPipMode.BROWSE,
+                    browsedAlert = candidate,
+                    activeDestinationId = null,
+                    lastPipStartedId = null,
+                    nowMillis = 2_000L
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `arriving does not re-arm the alert just arrived at`() {
+        // Arrival clears the destination while the cursor is still parked on that alert. Re-arming
+        // would loop, and for a raid it would raise the arrival service back over the Raid Watch
+        // handoff that just replaced it.
+        val browsed = alert("Larvitar", 49.75, 8.62)
+
+        assertEquals(
+            MapPipTrackingIntent.None,
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlert = browsed,
+                activeDestinationId = null,
+                lastPipStartedId = browsed.uniqueId,
+                nowMillis = 0L
+            )
+        )
+    }
+
+    @Test
+    fun `following the user again ends the journey the window started`() {
+        val browsed = alert("Larvitar", 49.75, 8.62)
+
+        assertEquals(
+            MapPipTrackingIntent.Stop,
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.FOLLOW,
+                browsedAlert = null,
+                activeDestinationId = browsed.uniqueId,
+                lastPipStartedId = browsed.uniqueId,
+                nowMillis = 0L
+            )
+        )
+    }
+
+    @Test
+    fun `following the user leaves a journey started elsewhere running`() {
+        // Set from a card or the detail screen: the window never started it, so it may not end it.
+        val elsewhere = alert("Larvitar", 49.75, 8.62)
+
+        assertEquals(
+            MapPipTrackingIntent.None,
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.FOLLOW,
+                browsedAlert = null,
+                activeDestinationId = elsewhere.uniqueId,
+                lastPipStartedId = null,
+                nowMillis = 0L
+            )
+        )
+    }
+
+    @Test
+    fun `leaving the window keeps the journey running`() {
+        val browsed = alert("Larvitar", 49.75, 8.62)
+
+        assertEquals(
+            MapPipTrackingIntent.None,
+            resolveMapPipTrackingIntent(
+                compactPictureInPicture = false,
+                pipMode = MapPipMode.FOLLOW,
+                browsedAlert = browsed,
+                activeDestinationId = browsed.uniqueId,
+                lastPipStartedId = browsed.uniqueId,
+                nowMillis = 0L
+            )
+        )
+    }
+
+    @Test
+    fun `a refreshed copy of the same alert is not a new journey`() {
+        // The feed rebuilds alerts on every poll, restamping the fields that move.
+        val browsed = alert("Larvitar", 49.75, 8.62)
+        val refreshed = browsed.copy(currentWeather = "Partly cloudy")
+
+        assertTrue(
+            MapPipTrackingIntent.Start(browsed)
+                .sameTargetAs(MapPipTrackingIntent.Start(refreshed))
+        )
+        assertFalse(
+            MapPipTrackingIntent.Start(browsed)
+                .sameTargetAs(MapPipTrackingIntent.Start(alert("Other", 49.76, 8.63)))
+        )
+        assertFalse(MapPipTrackingIntent.Stop.sameTargetAs(MapPipTrackingIntent.None))
+    }
+
+    // --- The label chip yields to the notification ----------------------------------------
+
+    @Test
+    fun `the chip yields to the notification and returns when nothing is tracking`() {
+        assertFalse(
+            "the notification already names the tracked alert",
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlertId = "a",
+                trackedAlertId = "a"
+            )
+        )
+        assertTrue(
+            "tracking refused, so the window still has to name the alert",
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlertId = "a",
+                trackedAlertId = null
+            )
+        )
+        assertTrue(
+            "nothing browsed and nothing tracked still needs the empty line",
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlertId = null,
+                trackedAlertId = null
+            )
+        )
+        assertFalse(
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = true,
+                pipMode = MapPipMode.FOLLOW,
+                browsedAlertId = "a",
+                trackedAlertId = null
+            )
+        )
+        assertFalse(
+            shouldShowMapPipBrowseChip(
+                compactPictureInPicture = false,
+                pipMode = MapPipMode.BROWSE,
+                browsedAlertId = "a",
+                trackedAlertId = null
+            )
+        )
     }
 
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(

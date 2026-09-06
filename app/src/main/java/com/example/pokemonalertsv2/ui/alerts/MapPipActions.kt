@@ -11,6 +11,7 @@ import androidx.annotation.StringRes
 import android.os.Build
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.max
@@ -268,3 +269,82 @@ internal fun resolveMapPipFocus(
 
 /** How far the user has to move before the browse framing is redrawn. */
 internal const val MAP_PIP_REFIT_METERS = 15.0
+
+/**
+ * What the floating window wants the arrival tracker to do. Browsing to an alert is the same
+ * commitment as tapping "I'm going" on it, so the window hands the destination to the existing
+ * tracker and lets its notification carry the name, CP and walking distance.
+ */
+internal sealed interface MapPipTrackingIntent {
+    data object None : MapPipTrackingIntent
+
+    data class Start(val alert: PokemonAlert) : MapPipTrackingIntent
+
+    data object Stop : MapPipTrackingIntent
+}
+
+/**
+ * Whether two intents aim at the same thing. The alert feed hands back rebuilt [PokemonAlert]
+ * objects on every poll, with distance and route fields stamped on afresh, so comparing intents
+ * by value would call for a restart of the same journey several times a minute.
+ */
+internal fun MapPipTrackingIntent.sameTargetAs(other: MapPipTrackingIntent): Boolean = when {
+    this is MapPipTrackingIntent.Start && other is MapPipTrackingIntent.Start ->
+        alert.uniqueId == other.alert.uniqueId
+    else -> this::class == other::class
+}
+
+/**
+ * @param lastPipStartedId the alert this window last successfully started tracking, which is what
+ *   separates a journey the window owns from one the user began on a card or the detail screen.
+ */
+internal fun resolveMapPipTrackingIntent(
+    compactPictureInPicture: Boolean,
+    pipMode: MapPipMode,
+    browsedAlert: PokemonAlert?,
+    activeDestinationId: String?,
+    lastPipStartedId: String?,
+    nowMillis: Long
+): MapPipTrackingIntent {
+    // Expanding back to full screen is not abandoning the trip.
+    if (!compactPictureInPicture) return MapPipTrackingIntent.None
+    if (pipMode == MapPipMode.FOLLOW) {
+        // Only ever cancel what this window started; a journey begun from a card outlives the
+        // window switching back to following the user.
+        return if (lastPipStartedId != null && activeDestinationId == lastPipStartedId) {
+            MapPipTrackingIntent.Stop
+        } else {
+            MapPipTrackingIntent.None
+        }
+    }
+    if (browsedAlert == null) return MapPipTrackingIntent.None
+    // Already the destination: rewriting it would restart the service and its notification.
+    if (browsedAlert.uniqueId == activeDestinationId) return MapPipTrackingIntent.None
+    // Arriving clears the destination while the cursor is still parked on that alert. Without
+    // this the window would immediately re-arm the journey it just completed, and for a raid it
+    // would raise the arrival service back on top of the Raid Watch handoff.
+    if (browsedAlert.uniqueId == lastPipStartedId) return MapPipTrackingIntent.None
+    // Expired, invalidated or unmappable. Also what keeps startTracking's require() from throwing.
+    if (!browsedAlert.isEligibleArrivalDestination(nowMillis)) return MapPipTrackingIntent.None
+    return MapPipTrackingIntent.Start(browsedAlert)
+}
+
+/**
+ * The one-line label at the top of the window is a fallback, not the primary readout: while the
+ * arrival notification is up it already names the alert, so the window gives the space back to the
+ * map. It returns when there is nothing tracking to name it.
+ */
+internal fun shouldShowMapPipBrowseChip(
+    compactPictureInPicture: Boolean,
+    pipMode: MapPipMode,
+    browsedAlertId: String?,
+    trackedAlertId: String?
+): Boolean = compactPictureInPicture &&
+    pipMode == MapPipMode.BROWSE &&
+    (browsedAlertId == null || browsedAlertId != trackedAlertId)
+
+/**
+ * How long the browse cursor has to settle before the destination is rewritten. Stepping through
+ * a run of alerts should commit to the one the user stops on, not to every alert passed over.
+ */
+internal const val MAP_PIP_TRACKING_DEBOUNCE_MILLIS = 600L
