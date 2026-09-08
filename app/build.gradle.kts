@@ -81,8 +81,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 57
-        versionName = "1.9.11"
+        versionCode = 58
+        versionName = "1.9.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -146,6 +146,17 @@ tasks.matching {
         check(hasReleaseSigningConfig) {
             "Release signing is not configured. Fill keystore.properties. Missing values: " +
                 releaseSigningMissingProperties.joinToString()
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("benchmarkRelease")) { variant ->
+        // Preserve fixtures without disconnecting wireless ADB; never changes production builds.
+        providers.gradleProperty("benchmarkAlertsApiBaseUrl").orNull?.let { url ->
+            require(url == "https://127.0.0.1:1/") { "Only the local offline benchmark endpoint is supported" }
+            variant.buildConfigFields.put("ALERTS_API_BASE_URL",
+                com.android.build.api.variant.BuildConfigField("String", "\"$url\"", "Offline fixture benchmark"))
         }
     }
 }
