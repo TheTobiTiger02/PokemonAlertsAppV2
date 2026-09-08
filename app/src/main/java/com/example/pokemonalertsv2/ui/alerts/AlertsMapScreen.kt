@@ -185,14 +185,23 @@ internal fun mapCountdownRefreshKey(
     refreshIntervalMillis: Long = if (showTimeLabels) 1_000L else 30_000L
 ): Long = nowMillis / refreshIntervalMillis.coerceAtLeast(1L)
 
+/**
+ * [coarsenBeyondWindow] is for labels drawn into marker bitmaps, where a ticking seconds figure
+ * costs a rasterization per marker per second. Single chips pass false and keep their seconds.
+ */
 internal fun mapCountdownLabel(
     endTime: String?,
     nowMillis: Long,
-    minutePrecision: Boolean = false
+    minutePrecision: Boolean = false,
+    coarsenBeyondWindow: Boolean = false
 ): String {
     val remaining = (TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) - nowMillis
     if (remaining <= 0L) return "Expired"
-    if (minutePrecision) {
+    // A ticking seconds figure earns its cost near the despawn and nowhere else. Beyond the
+    // window, minute precision holds the label - and therefore the marker's icon cache key -
+    // steady for a minute at a time, so a screen of pins no longer re-rasterizes every second
+    // to advance digits nobody is watching.
+    if (minutePrecision || (coarsenBeyondWindow && remaining > MAP_SECOND_PRECISION_WINDOW_MS)) {
         // Rounds up like the seconds countdown does; the label only changes once a minute,
         // which is what lets a crowded map skip per-second marker bitmap rebuilds.
         val minutes = ((remaining + 59_999) / 60_000).toInt().coerceAtLeast(1)
@@ -211,6 +220,15 @@ internal fun mapCountdownLabel(
  * deliberately conservative: a dense Darmstadt rocket field crosses it easily.
  */
 internal const val ADAPTIVE_COUNTDOWN_PRECISION_THRESHOLD = 48
+
+/**
+ * How close to despawn a marker must be to show a seconds countdown.
+ *
+ * The count threshold above is all-or-nothing: one marker too many and every countdown on the
+ * map coarsens. This bounds the cost by remaining time instead, so the pins that are actually
+ * about to expire keep their seconds however busy the map is.
+ */
+internal const val MAP_SECOND_PRECISION_WINDOW_MS = 15 * 60 * 1000L
 
 enum class MapPresentationMode {
     FULL,
@@ -515,6 +533,7 @@ internal fun AlertsMapScreenContent(
     pipCommands: Flow<MapPipCommand>? = null,
     onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory,
+    clusteringConfigOverride: com.example.pokemonalertsv2.data.MapClusteringConfig? = null,
     pipArrivalTracker: MapPipArrivalTracker? = null
 ) {
     val context = LocalContext.current
@@ -906,6 +925,7 @@ internal fun AlertsMapScreenContent(
 
     // Keep an open stack list aligned with filters, updates, and expiration.
     LaunchedEffect(renderedAlerts) {
+        if (selectedAlertId != null && renderedAlerts.none { it.uniqueId == selectedAlertId }) selectedAlertId = null
         if (selectedClusterAlerts.isNotEmpty()) {
             val memberIds = selectedClusterAlerts.mapTo(hashSetOf()) { it.uniqueId }
             selectedClusterAlerts = renderedAlerts.filter { it.uniqueId in memberIds }
@@ -1408,13 +1428,37 @@ internal fun AlertsMapScreenContent(
         // Half-zoom steps: reclustering twice per zoom step is visually indistinguishable
         // from reclustering on every frame, and survives a pinch in far fewer passes.
         val clusterZoom = kotlin.math.floor(cameraAnchor.zoom * 2.0) / 2.0
-        val viewportBounds = remember(cameraAnchor, viewportWidthDp, viewportHeightDp) {
-            mapViewportBounds(
-                centreLatitude = cameraAnchor.latitude,
-                centreLongitude = cameraAnchor.longitude,
-                zoom = cameraAnchor.zoom,
+        // Both boxes derive from one retained anchor that survives small pans, so an ordinary
+        // scroll no longer re-culls, re-clusters and rebuilds every marker at every idle.
+        val retainedAnchor = remember { mutableStateOf<MapCameraSnapshot?>(null) }
+        val clusterAnchor = remember(cameraAnchor, clusterZoom, viewportWidthDp, viewportHeightDp) {
+            retainedMapAnchor(
+                previous = retainedAnchor.value,
+                latitude = cameraAnchor.latitude,
+                longitude = cameraAnchor.longitude,
+                zoom = clusterZoom,
                 viewportWidthDp = viewportWidthDp,
                 viewportHeightDp = viewportHeightDp
+            ).also { retainedAnchor.value = it }
+        }
+        val viewportBounds = remember(clusterAnchor, viewportWidthDp, viewportHeightDp) {
+            mapViewportBounds(
+                centreLatitude = clusterAnchor.latitude,
+                centreLongitude = clusterAnchor.longitude,
+                zoom = clusterAnchor.zoom,
+                viewportWidthDp = viewportWidthDp,
+                viewportHeightDp = viewportHeightDp
+            )
+        }
+        // The unpadded viewport: what the marker limit is actually counted against.
+        val screenBounds = remember(clusterAnchor, viewportWidthDp, viewportHeightDp) {
+            mapViewportBounds(
+                centreLatitude = clusterAnchor.latitude,
+                centreLongitude = clusterAnchor.longitude,
+                zoom = clusterAnchor.zoom,
+                viewportWidthDp = viewportWidthDp,
+                viewportHeightDp = viewportHeightDp,
+                marginFactor = 0.0
             )
         }
         val spawnRadiusMeters = spawnRadiusMeters(showSpawnRadius, spacialRendEnabled)
@@ -1429,12 +1473,16 @@ internal fun AlertsMapScreenContent(
             zoom = cameraAnchor.zoom.toFloat()
         )
         val clusterMarkerSizeDp = mapClusterMarkerSizeDp(compactPictureInPicture)
+        val clusteringPreferences = rememberMapClusteringPreferences()
+        val clusteringSettings by clusteringPreferences.settings.collectAsStateWithLifecycle(com.example.pokemonalertsv2.data.MapClusteringSettings())
         val preparedMarkers by rememberPreparedMapMarkers(
             alerts = renderedAlerts,
             bounds = viewportBounds,
             zoom = clusterZoom,
             spawnRadius = spawnRadiusMeters,
-            protectedIds = protectedAlertIds
+            protectedIds = protectedAlertIds,
+            config = clusteringConfigOverride ?: clusteringSettings.config,
+            screenBounds = screenBounds
         )
         val markerItems by rememberBatchedMapItems(preparedMarkers.items) { item ->
             when (item) {
@@ -1619,6 +1667,7 @@ internal fun AlertsMapScreenContent(
                                     } else {
                                         resolveMapClusterInteraction(
                                             cluster = item,
+                                            clusteringCutoff = (clusteringConfigOverride ?: clusteringSettings.config).zoomCutoff.toDouble(),
                                             currentZoom = cameraAnchor.zoom,
                                             maximumZoom = mapProperties.maxZoomPreference.toDouble()
                                         )
@@ -1647,22 +1696,28 @@ internal fun AlertsMapScreenContent(
                             run {
                                 Marker(
                                     contentDescription = "${item.alerts.size} alerts",
-                                    state = MarkerState(LatLng(item.latitude, item.longitude)),
-                                    icon = BitmapDescriptorFactory.fromBitmap(
-                                        remember(
-                                            item.id,
-                                            item.sharedCategory,
-                                            item.alerts.size,
-                                            clusterMarkerSizeDp
-                                        ) {
+                                    state = remember(item.latitude, item.longitude) {
+                                        MarkerState(LatLng(item.latitude, item.longitude))
+                                    },
+                                    // fromBitmap copies the bitmap into a native descriptor, so
+                                    // leaving it outside the remember paid for a copy of every
+                                    // count bubble on every recomposition. Alert pins already
+                                    // share one descriptor per icon; clusters do now too.
+                                    icon = remember(
+                                        item.id,
+                                        item.sharedCategory,
+                                        item.alerts.size,
+                                        clusterMarkerSizeDp
+                                    ) {
+                                        BitmapDescriptorFactory.fromBitmap(
                                             createClusterMarkerBitmap(
                                                 context = context,
                                                 count = item.alerts.size,
                                                 sharedCategory = item.sharedCategory,
                                                 sizeDp = clusterMarkerSizeDp
                                             )
-                                        }
-                                    ),
+                                        )
+                                    },
                                     anchor = Offset(0.5f, 0.5f),
                                     zIndex = MAP_CLUSTER_MARKER_Z_INDEX,
                                     onClick = {
@@ -1709,6 +1764,7 @@ internal fun AlertsMapScreenContent(
                             } else {
                                 resolveMapClusterInteraction(
                                     cluster = cluster,
+                                    clusteringCutoff = (clusteringConfigOverride ?: clusteringSettings.config).zoomCutoff.toDouble(),
                                     currentZoom = retainedZoom,
                                     maximumZoom = openStreetMapController.maximumZoom
                                 )
@@ -1947,6 +2003,12 @@ internal fun AlertsMapScreenContent(
             )
         }
 
+        if (!compactPictureInPicture && preparedMarkers.markerLimitActive) {
+            Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+                shape = MaterialTheme.shapes.small) {
+                Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+            }
+        }
         // Filters live on the map so a quick narrowing never costs a trip to Settings.
         // Only one of the filter sheet and the alert detail sheet is ever open.
         if (!compactPictureInPicture && showFilterSheet && selectedAlert == null) {
@@ -2113,6 +2175,7 @@ internal fun AlertsMapScreenContent(
         }
 
         if (!compactPictureInPicture) selectedAlert?.let { alert ->
+            val companions = remember(alert, renderedAlerts) { sameStopCompanions(alert, renderedAlerts) }
             val distanceInfo = remember(
                 alert.uniqueId,
                 userLocation?.latitude,
@@ -2149,7 +2212,9 @@ internal fun AlertsMapScreenContent(
                     modifier = Modifier.align(Alignment.TopEnd),
                     isDismissed = isDismissed,
                     onDismissAlert = dismissFromMap,
-                    onRestoreAlert = restoreFromMap
+                    onRestoreAlert = restoreFromMap,
+                    companions = companions,
+                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) }
                 )
             } else {
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
@@ -2175,7 +2240,9 @@ internal fun AlertsMapScreenContent(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                         isDismissed = isDismissed,
                         onDismissAlert = dismissFromMap,
-                        onRestoreAlert = restoreFromMap
+                        onRestoreAlert = restoreFromMap,
+                    companions = companions,
+                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) }
                     )
                 }
             }

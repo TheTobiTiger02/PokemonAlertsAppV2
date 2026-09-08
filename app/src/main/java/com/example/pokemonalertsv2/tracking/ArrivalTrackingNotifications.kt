@@ -68,11 +68,24 @@ internal object ArrivalTrackingNotifications {
         )
     }
 
-    fun restoring(context: Context): Notification =
-        ongoingBuilder(context)
+    fun restoring(context: Context): Notification {
+        if (Build.VERSION.SDK_INT < LIVE_NOTIFICATION_MIN_SDK) {
+            return ongoingBuilder(context)
+                .setContentTitle("Restoring alert journey")
+                .setContentText("Waiting for the active destination")
+                .build()
+        }
+        // Even this brief placeholder has to ask for promotion: it is what the shade shows
+        // while the service waits for the destination flow, and an unpromoted notification
+        // never reaches the status bar chip. BigTextStyle is the one promotion-eligible style
+        // that renders without an alert to decorate.
+        return liveBuilder(context, alert = null)
             .setContentTitle("Restoring alert journey")
             .setContentText("Waiting for the active destination")
+            .setStyle(Notification.BigTextStyle().bigText("Waiting for the active destination"))
+            .apply { setShortCriticalText("Waiting") }
             .build()
+    }
 
     fun ongoing(
         context: Context,
@@ -217,7 +230,7 @@ internal object ArrivalTrackingNotifications {
     }
 
     @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
-    private fun liveBuilder(context: Context, alert: PokemonAlert): Notification.Builder {
+    private fun liveBuilder(context: Context, alert: PokemonAlert?): Notification.Builder {
         val builder = Notification.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_poke_notification)
             // Navigation, not service. CATEGORY_SERVICE marks a notification as plumbing for
@@ -229,7 +242,9 @@ internal object ArrivalTrackingNotifications {
             .setOnlyAlertOnce(true)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
-            .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+        if (alert != null) {
+            builder.setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+        }
         return builder.requestPromotedOngoing()
     }
 

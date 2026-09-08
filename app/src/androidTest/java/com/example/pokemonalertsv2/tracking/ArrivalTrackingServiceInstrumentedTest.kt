@@ -165,6 +165,78 @@ class ArrivalTrackingServiceInstrumentedTest {
     }
 
     @Test
+    fun restoringPlaceholderAsksForPromotionOnAndroid16() {
+        assumeTrue(Build.VERSION.SDK_INT >= 36)
+        val notification = ArrivalTrackingNotifications.restoring(context)
+        assertEquals(Notification.CATEGORY_NAVIGATION, notification.category)
+        assertTrue(notification.extras.getBoolean("android.requestPromotedOngoing"))
+    }
+
+    @Test
+    fun secondStartWhileTrackingKeepsTheLiveJourneyNotification() = runBlocking {
+        repository.startTracking(
+            PokemonAlert(
+                name = "First Browsed",
+                pokemon = "Drilbur",
+                cp = 248,
+                latitude = 49.86,
+                longitude = 8.65
+            )
+        )
+        ArrivalTrackingService.start(context)
+        assertTrue(fakeLocationSource.started.await(5, TimeUnit.SECONDS))
+
+        // Roughly 220 m north: close enough for a displayed distance, far enough that no
+        // arrival can end the journey mid-test.
+        fakeLocationSource.emit(location(49.862, 8.65))
+        val promotedDeadline = SystemClock.elapsedRealtime() + 5_000L
+        while (
+            activeOngoingNotification()?.extras
+                ?.getCharSequence(Notification.EXTRA_TITLE)?.startsWith("Going to") != true &&
+            SystemClock.elapsedRealtime() < promotedDeadline
+        ) {
+            SystemClock.sleep(50L)
+        }
+        assertTrue(
+            activeOngoingNotification()?.extras
+                ?.getCharSequence(Notification.EXTRA_TITLE)?.startsWith("Going to") == true
+        )
+
+        // What a map PiP browse switch does: write the new destination, then re-start the
+        // service. The start lands after the collector has already activated the new
+        // destination and the flow will not re-emit, so re-promoting with the restoring
+        // placeholder would leave the unpromoted notification in the shade until the next
+        // location callback — the status bar chip would vanish.
+        repository.startTracking(
+            PokemonAlert(
+                name = "Second Browsed",
+                pokemon = "Sprigatito",
+                latitude = 49.87,
+                longitude = 8.66
+            )
+        )
+        val switchedDeadline = SystemClock.elapsedRealtime() + 5_000L
+        while (
+            activeOngoingNotification()?.extras
+                ?.getCharSequence(Notification.EXTRA_TITLE)?.contains("Sprigatito") != true &&
+            SystemClock.elapsedRealtime() < switchedDeadline
+        ) {
+            SystemClock.sleep(50L)
+        }
+
+        ArrivalTrackingService.start(context)
+        SystemClock.sleep(600L)
+
+        val notification = activeOngoingNotification()
+        val title = notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        assertTrue("Notification demoted to the placeholder: $title", title.startsWith("Going to"))
+        if (Build.VERSION.SDK_INT >= 36) {
+            assertEquals(Notification.CATEGORY_NAVIGATION, notification?.category)
+            assertTrue(notification?.extras?.getBoolean("android.requestPromotedOngoing") == true)
+        }
+    }
+
+    @Test
     fun transientLocationAvailabilityKeepsLastKnownRangeState() = runBlocking {
         repository.startTracking(
             PokemonAlert(
@@ -288,6 +360,12 @@ class ArrivalTrackingServiceInstrumentedTest {
             .orEmpty()
         assertEquals("Mewtwo", title)
     }
+
+    private fun activeOngoingNotification(): Notification? =
+        context.getSystemService(NotificationManager::class.java)
+            ?.activeNotifications
+            ?.firstOrNull { it.id == ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID }
+            ?.notification
 
     private fun location(
         latitude: Double,

@@ -37,6 +37,26 @@ class MapCountdownTest {
     }
 
     @Test
+    fun secondsAreOnlySpentInsideTheWindowForMarkerLabels() {
+        // A ticking seconds figure changes the marker's icon cache key every second, which
+        // costs a bitmap per marker per second. It is worth that near the despawn and not
+        // hours out, so labels drawn into markers coarsen past the window.
+        val now = 1_756_000_000_000L
+        val insideWindow = (now + MAP_SECOND_PRECISION_WINDOW_MS - 60_000L).toString()
+        val outsideWindow = (now + MAP_SECOND_PRECISION_WINDOW_MS + 60_000L).toString()
+
+        assertEquals("14m 00s", mapCountdownLabel(insideWindow, now, coarsenBeyondWindow = true))
+        assertEquals("16m", mapCountdownLabel(outsideWindow, now, coarsenBeyondWindow = true))
+        // Still one string per minute out there, so the icon cache holds between ticks.
+        assertEquals(
+            mapCountdownLabel(outsideWindow, now, coarsenBeyondWindow = true),
+            mapCountdownLabel(outsideWindow, now + 1_000L, coarsenBeyondWindow = true)
+        )
+        // Single chips are one element, not hundreds, so they keep their seconds.
+        assertEquals("16m 00s", mapCountdownLabel(outsideWindow, now))
+    }
+
+    @Test
     fun countdownAboveOneHourKeepsCompactFormat() {
         val now = 1_756_000_000_000L
         assertEquals("1h 03m", mapCountdownLabel((now + 3_805_000L).toString(), now))

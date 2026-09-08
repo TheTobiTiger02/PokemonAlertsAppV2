@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "baseTopic": "alerts",
+  "legacyTopic": "alerts",
+  "fanoutEnabled": true,
+  "maxTopicsPerCondition": 5,
+  "dedupeKey": "pushKey",
+  "rules": {
+    "legacy": {
+      "pattern": "{base}",
+      "example": "alerts"
+    },
+    "type": {
+      "pattern": "{base}-t-{typeSlug}",
+      "example": "alerts-t-hundo"
+    },
+    "area": {
+      "pattern": "{base}-a-{areaSlug}",
+      "example": "alerts-a-darmstadt-north"
+    },
+    "areaType": {
+      "pattern": "{base}-a-{areaSlug}-t-{typeSlug}",
+      "example": "alerts-a-darmstadt-north-t-hundo"
+    },
+    "species": {
+      "pattern": "{base}-p-{pokedexId}",
+      "example": "alerts-p-25"
+    },
+    "slug": "lowercase, diacritics stripped, runs of non-alphanumerics collapsed to '-'",
+    "subscribe": "Subscribe to the derived topics or to the legacy topic, never both. Deduplicate on data.pushKey."
+  },
+  "types": [
+    {
+      "value": "Hundo",
+      "topic": "alerts-t-hundo"
+    },
+    {
+      "value": "Nundo",
+      "topic": "alerts-t-nundo"
+    },
+    {
+      "value": "PvP",
+      "topic": "alerts-t-pvp"
+    },
+    {
+      "value": "Raid",
+      "topic": "alerts-t-raid"
+    },
+    {
+      "value": "Rocket",
+      "topic": "alerts-t-rocket"
+    },
+    {
+      "value": "Quest",
+      "topic": "alerts-t-quest"
+    },
+    {
+      "value": "Kecleon",
+      "topic": "alerts-t-kecleon"
+    },
+    {
+      "value": "Rare",
+      "topic": "alerts-t-rare"
+    },
+    {
+      "value": "WeatherChange",
+      "topic": "alerts-t-weatherchange"
+    }
+  ],
+  "areas": [
+    {
+      "value": "Alsbach",
+      "group": "Alsbach",
+      "topic": "alerts-a-alsbach"
+    },
+    {
+      "value": "Darmstadt",
+      "group": "Darmstadt",
+      "topic": "alerts-a-darmstadt"
+    },
+    {
+      "value": "Darmstadt-North",
+      "group": "Darmstadt",
+      "topic": "alerts-a-darmstadt-north",
+      "groupTopic": "alerts-a-darmstadt"
+    },
+    {
+      "value": "Darmstadt-South",
+      "group": "Darmstadt",
+      "topic": "alerts-a-darmstadt-south",
+      "groupTopic": "alerts-a-darmstadt"
+    },
+    {
+      "value": "Unknown",
+      "group": null,
+      "topic": "alerts-a-unknown"
+    }
+  ],
+  "areaTypes": [
+    {
+      "area": "Alsbach",
+      "type": "Hundo",
+      "topic": "alerts-a-alsbach-t-hundo"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Nundo",
+      "topic": "alerts-a-alsbach-t-nundo"
+    },
+    {
+      "area": "Alsbach",
+      "type": "PvP",
+      "topic": "alerts-a-alsbach-t-pvp"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Raid",
+      "topic": "alerts-a-alsbach-t-raid"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Rocket",
+      "topic": "alerts-a-alsbach-t-rocket"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Quest",
+      "topic": "alerts-a-alsbach-t-quest"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Kecleon",
+      "topic": "alerts-a-alsbach-t-kecleon"
+    },
+    {
+      "area": "Alsbach",
+      "type": "Rare",
+      "topic": "alerts-a-alsbach-t-rare"
+    },
+    {
+      "area": "Alsbach",
+      "type": "WeatherChange",
+      "topic": "alerts-a-alsbach-t-weatherchange"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Hundo",
+      "topic": "alerts-a-darmstadt-t-hundo"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Nundo",
+      "topic": "alerts-a-darmstadt-t-nundo"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "PvP",
+      "topic": "alerts-a-darmstadt-t-pvp"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Raid",
+      "topic": "alerts-a-darmstadt-t-raid"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Rocket",
+      "topic": "alerts-a-darmstadt-t-rocket"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Quest",
+      "topic": "alerts-a-darmstadt-t-quest"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Kecleon",
+      "topic": "alerts-a-darmstadt-t-kecleon"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Rare",
+      "topic": "alerts-a-darmstadt-t-rare"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "WeatherChange",
+      "topic": "alerts-a-darmstadt-t-weatherchange"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Hundo",
+      "topic": "alerts-a-darmstadt-north-t-hundo"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Nundo",
+      "topic": "alerts-a-darmstadt-north-t-nundo"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "PvP",
+      "topic": "alerts-a-darmstadt-north-t-pvp"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Raid",
+      "topic": "alerts-a-darmstadt-north-t-raid"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Rocket",
+      "topic": "alerts-a-darmstadt-north-t-rocket"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Quest",
+      "topic": "alerts-a-darmstadt-north-t-quest"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Kecleon",
+      "topic": "alerts-a-darmstadt-north-t-kecleon"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "Rare",
+      "topic": "alerts-a-darmstadt-north-t-rare"
+    },
+    {
+      "area": "Darmstadt-North",
+      "type": "WeatherChange",
+      "topic": "alerts-a-darmstadt-north-t-weatherchange"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Hundo",
+      "topic": "alerts-a-darmstadt-south-t-hundo"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Nundo",
+      "topic": "alerts-a-darmstadt-south-t-nundo"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "PvP",
+      "topic": "alerts-a-darmstadt-south-t-pvp"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Raid",
+      "topic": "alerts-a-darmstadt-south-t-raid"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Rocket",
+      "topic": "alerts-a-darmstadt-south-t-rocket"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Quest",
+      "topic": "alerts-a-darmstadt-south-t-quest"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Kecleon",
+      "topic": "alerts-a-darmstadt-south-t-kecleon"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "Rare",
+      "topic": "alerts-a-darmstadt-south-t-rare"
+    },
+    {
+      "area": "Darmstadt-South",
+      "type": "WeatherChange",
+      "topic": "alerts-a-darmstadt-south-t-weatherchange"
+    },
+    {
+      "area": "Unknown",
+      "type": "Hundo",
+      "topic": "alerts-a-unknown-t-hundo"
+    },
+    {
+      "area": "Unknown",
+      "type": "Nundo",
+      "topic": "alerts-a-unknown-t-nundo"
+    },
+    {
+      "area": "Unknown",
+      "type": "PvP",
+      "topic": "alerts-a-unknown-t-pvp"
+    },
+    {
+      "area": "Unknown",
+      "type": "Raid",
+      "topic": "alerts-a-unknown-t-raid"
+    },
+    {
+      "area": "Unknown",
+      "type": "Rocket",
+      "topic": "alerts-a-unknown-t-rocket"
+    },
+    {
+      "area": "Unknown",
+      "type": "Quest",
+      "topic": "alerts-a-unknown-t-quest"
+    },
+    {
+      "area": "Unknown",
+      "type": "Kecleon",
+      "topic": "alerts-a-unknown-t-kecleon"
+    },
+    {
+      "area": "Unknown",
+      "type": "Rare",
+      "topic": "alerts-a-unknown-t-rare"
+    },
+    {
+      "area": "Unknown",
+      "type": "WeatherChange",
+      "topic": "alerts-a-unknown-t-weatherchange"
+    }
+  ],
+  "species": [
+    {
+      "pokedexId": 1,
+      "name": "Bulbasaur",
+      "topic": "alerts-p-1"
+    },
+    {
+      "pokedexId": 2,
+      "name": "Ivysaur",
+      "topic": "alerts-p-2"
+    },
+    {
+      "pokedexId": 3,
+      "name": "Venusaur",
+      "topic": "alerts-p-3"
+    }
+  ]
+}

@@ -26,8 +26,28 @@ internal fun UiDevice.completeOnboardingIfNeeded() {
     }
     clickIfPresent(By.text("Enable & finish"), timeoutMillis = 1_000)
     clickIfPresent(By.text("Not Now"), timeoutMillis = 500)
-    wait(Until.hasObject(By.text("Alerts")), 5_000)
+    check(wait(Until.hasObject(By.text("Alerts")), 10_000)) { "Onboarding did not reach Alerts" }
     waitForIdle()
+}
+
+internal fun UiDevice.requireClick(selector: BySelector) {
+    val clicked = clickIfPresent(selector, 10_000)
+    if (!clicked) {
+        val directory = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.getExternalFilesDir(null)
+        dumpWindowHierarchy(java.io.File(directory, "benchmark-click-failure.xml"))
+        takeScreenshot(java.io.File(directory, "benchmark-click-failure.png"))
+    }
+    check(clicked) { "Required benchmark control missing: $selector" }
+}
+
+internal fun UiDevice.requireVisible(selector: BySelector) {
+    val ready = wait(Until.hasObject(selector), 10_000)
+    if (!ready) {
+        val directory = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.getExternalFilesDir(null)
+        dumpWindowHierarchy(java.io.File(directory, "benchmark-failure.xml"))
+        takeScreenshot(java.io.File(directory, "benchmark-failure.png"))
+    }
+    check(ready) { "Screen did not become ready: $selector" }
 }
 
 internal fun UiDevice.clickIfPresent(

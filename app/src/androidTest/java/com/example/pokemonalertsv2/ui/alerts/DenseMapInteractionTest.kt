@@ -55,6 +55,7 @@ class DenseMapInteractionTest {
                 AlertsMapScreenContent(
                     alerts = alerts, onBack = {}, onRefresh = {},
                     initialMapStyle = style, showBackButton = false,
+                    clusteringConfigOverride = com.example.pokemonalertsv2.data.MapClusteringPreset.CURRENT.config,
                     showTimeLabels = true, showSpawnRadius = true
                 )
             }

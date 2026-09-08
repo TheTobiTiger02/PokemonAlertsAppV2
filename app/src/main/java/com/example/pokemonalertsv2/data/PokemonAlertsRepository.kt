@@ -10,6 +10,8 @@ import com.example.pokemonalertsv2.data.database.toDomain
 import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import com.example.pokemonalertsv2.util.TimeUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -28,7 +30,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     val alerts: Flow<List<PokemonAlert>> = alertDao.observeAllAlerts().map { entities ->
         entities.map { it.toDomain() }.filterNot { it.isInvalidated }
-    }
+    }.flowOn(Dispatchers.Default)
 
     /**
      * Returns the current list of alerts from the local database without triggering a network call.
@@ -108,7 +110,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
 
     /** Observe the locally-cached history alerts (Room). */
     val historyAlerts: Flow<List<PokemonAlert>> =
-        historyAlertDao.observeAll().map { entities -> entities.map { it.toDomain() } }
+        historyAlertDao.observeAll().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.Default)
 
     /**
      * Replaces the local history cache with the first page from the API.

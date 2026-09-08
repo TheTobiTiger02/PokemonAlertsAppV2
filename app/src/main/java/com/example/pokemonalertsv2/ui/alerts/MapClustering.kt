@@ -1,6 +1,9 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.MapClusteringConfig
+import com.example.pokemonalertsv2.data.MapClusteringPreset
+import com.example.pokemonalertsv2.data.MapGrouping
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlin.math.PI
 import kotlin.math.cos
@@ -13,11 +16,11 @@ import kotlin.math.sqrt
 /** Neighborhood/street view and closer show individual markers; only coincident markers group into stacks. */
 internal const val MAP_CLUSTER_MAX_ZOOM = 12.0
 
-/** Hard ceiling on individual pins plus cluster bubbles, including protected tracking pins. */
+/** Legacy overview budget, retained by the Current behavior preset. */
 internal const val MAX_RENDERED_MAP_MARKERS = 350
 
 /**
- * Ceiling for [MAP_CLUSTER_MAX_ZOOM] and closer.
+ * Legacy close-zoom budget, retained by the Current behavior preset.
  */
 internal const val MAX_RENDERED_MAP_MARKERS_ZOOMED_IN = 900
 
@@ -81,7 +84,8 @@ internal sealed interface MapMarkerItem {
         val bounds: MapGeoBounds,
         val sharedCategory: AlertCategory?,
         val topAlert: PokemonAlert = alerts.first(),
-        val isOverviewCluster: Boolean = false
+        val isOverviewCluster: Boolean = false,
+        val markerLimitActive: Boolean = false
     ) : MapMarkerItem
 }
 
@@ -101,21 +105,12 @@ internal fun spawnRadiusMeters(showSpawnRadius: Boolean, spacialRendEnabled: Boo
 
 /**
  * Compares two alerts by player value priority:
- * Hundo/Nundo/PvP > Raids > Rares > Rocket/Quest > highest IV/CP > soonest despawn.
+ * Hundo/Nundo/PvP > Raids > Rares > Rocket > other alerts > Quest-only.
+ * Within each category rank: highest IV/CP, soonest despawn, stable ID.
  */
 internal fun compareAlertPriority(a: PokemonAlert, b: PokemonAlert): Int {
-    fun categoryRank(alert: PokemonAlert): Int {
-        val cats = alert.alertCategories()
-        return when {
-            AlertCategory.HUNDO in cats || AlertCategory.NUNDO in cats || AlertCategory.PVP in cats -> 0
-            AlertCategory.RAID in cats -> 1
-            AlertCategory.RARE in cats -> 2
-            AlertCategory.ROCKET in cats || AlertCategory.QUEST in cats -> 3
-            else -> 4
-        }
-    }
-    val rankA = categoryRank(a)
-    val rankB = categoryRank(b)
+    val rankA = mapAlertCategoryRank(a.alertCategories())
+    val rankB = mapAlertCategoryRank(b.alertCategories())
     if (rankA != rankB) return rankA.compareTo(rankB)
 
     val ivA = a.ivPercentage ?: -1
@@ -144,8 +139,14 @@ internal fun clusterMapAlerts(
     cellDp: Float = MAP_CLUSTER_CELL_DP,
     spawnRadiusMeters: Double? = null,
     protectedAlertIds: Set<String> = emptySet(),
+    config: MapClusteringConfig = MapClusteringPreset.CURRENT.config,
+    budgetBounds: MapGeoBounds? = null,
     checkActive: () -> Unit = {}
 ): List<MapMarkerItem> {
+    val tuning = config.normalized()
+    val cutoff = tuning.zoomCutoff.toDouble()
+    val effectiveCellDp = if (config.grouping == MapGrouping.CURRENT && cellDp != MAP_CLUSTER_CELL_DP) cellDp else tuning.distanceDp.toFloat()
+    var limitActive = false
     val positioned = alerts.mapNotNull { alert ->
         checkActive()
         val latitude = alert.latitude ?: return@mapNotNull null
@@ -161,23 +162,34 @@ internal fun clusterMapAlerts(
     val clusterable = positioned.filterNot { it.alert.uniqueId in protectedAlertIds }
     // The UI protects at most the tracked destination and the browsed alert. Reserve their
     // slots before grouping.
-    val budget = MAX_RENDERED_MAP_MARKERS - protectedGroups.size
+    val budget = (if (zoom >= cutoff) tuning.closeLimit else tuning.overviewLimit) - protectedGroups.size
     require(budget >= 0 && (clusterable.isEmpty() || budget > 0)) {
         "Protected alerts must leave room for the clustered alerts"
     }
-    val densePathBudget = if (zoom >= MAP_CLUSTER_MAX_ZOOM) {
-        (MAX_RENDERED_MAP_MARKERS_ZOOMED_IN - protectedGroups.size).coerceAtLeast(budget)
-    } else {
-        budget
-    }
+    val densePathBudget = budget
     val scale = 256.0 * 2.0.pow(zoom.coerceIn(0.0, 24.0))
 
+    // The marker limit is a statement about the screen, so it is counted on the screen. Markers
+    // are prepared for a box padded beyond the viewport so panning has something ready, and
+    // counting that padded set is what used to make a 350 limit engage at a few dozen visible
+    // markers. Groups with no member inside [budgetBounds] are rendered but do not spend budget.
+    fun Collection<List<PositionedAlert>>.onScreenSize(): Int =
+        if (budgetBounds == null) size
+        else count { group ->
+            checkActive()
+            group.any { budgetBounds.contains(it.latitude, it.longitude) }
+        }
+
+    val onScreenAlertCount = if (budgetBounds == null) clusterable.size
+    else clusterable.count { checkActive(); budgetBounds.contains(it.latitude, it.longitude) }
+
     val normalGroups = when {
-        zoom >= MAP_CLUSTER_MAX_ZOOM -> {
+        zoom >= cutoff || tuning.grouping == MapGrouping.COINCIDENT -> {
             val exactGroups = clusterable.groupBy(::exactCoordinateKey).values.toList()
-            if (exactGroups.size > densePathBudget) {
+            if (exactGroups.onScreenSize() > densePathBudget) {
+                limitActive = true
                 val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
-                var cellSize = max(1.0, MAP_CLUSTER_ZOOMED_IN_CELL_DP.toDouble())
+                var cellSize = max(1.0, denseCellDp(config, effectiveCellDp).toDouble())
                 var cells: Collection<List<PositionedAlert>>
                 do {
                     checkActive()
@@ -190,17 +202,18 @@ internal fun clusterMapAlerts(
                     }
                     cells = buckets.values
                     cellSize *= 2.0
-                } while (cells.size > densePathBudget)
+                } while (cells.onScreenSize() > densePathBudget)
                 cells.toList()
             } else {
                 exactGroups
             }
         }
-        positioned.size > MAX_RENDERED_MAP_MARKERS -> {
+        tuning.grouping == MapGrouping.GRID || onScreenAlertCount > tuning.overviewLimit -> {
             // Overview zoom with dense dataset: grid-based clustering
             val points = clusterable.map { checkActive(); projectMapAlertToScreen(it, scale) }
-            var cellSize = max(1.0, cellDp.toDouble())
+            var cellSize = max(1.0, effectiveCellDp.toDouble())
             var cells: Collection<List<PositionedAlert>>
+            var overBudget: Boolean
             do {
                 checkActive()
                 val buckets = linkedMapOf<Long, MutableList<PositionedAlert>>()
@@ -211,13 +224,15 @@ internal fun clusterMapAlerts(
                     }.add(clusterable[index])
                 }
                 cells = buckets.values
+                overBudget = cells.onScreenSize() > densePathBudget
+                if (overBudget) limitActive = true
                 cellSize *= 2.0
-            } while (cells.size > densePathBudget)
+            } while (overBudget)
             cells.toList()
         }
         else -> {
             // Overview zoom with standard dataset: distance-based clustering
-            val thresholdDp = max(1.0, cellDp.toDouble())
+            val thresholdDp = max(1.0, effectiveCellDp.toDouble())
             val radiusGuardDp = spawnCircleGuardDp(clusterable, zoom, spawnRadiusMeters)
             val guardedThresholdDp = min(thresholdDp, radiusGuardDp ?: thresholdDp)
             val points = clusterable.map { projectMapAlertToScreen(it, scale) }
@@ -235,7 +250,7 @@ internal fun clusterMapAlerts(
         }
     }
     val groups = (normalGroups + protectedGroups).sortedBy { it.first().alert.uniqueId }
-    val isOverview = zoom < MAP_CLUSTER_MAX_ZOOM
+    val isOverview = zoom < cutoff && tuning.grouping != MapGrouping.COINCIDENT
 
     return groups.map { members ->
         checkActive()
@@ -248,19 +263,27 @@ internal fun clusterMapAlerts(
             val north = members.maxOf { it.latitude }
             val east = members.maxOf { it.longitude }
             val sharedCategory = members
-                .map { checkActive(); it.alert.alertCategories() }
+                .map { checkActive(); it.categories }
                 .reduce { common, categories -> common intersect categories }
                 .singleOrNull()
-            val topAlert = members.map { it.alert }.minWith(::compareAlertPriority)
+            val topAlert = members.minWith(::comparePositionedAlertPriority).alert
+            val latitude = if (isOverview) (south + north) / 2.0 else (topAlert.latitude ?: ((south + north) / 2.0))
+            val longitude = if (isOverview) (west + east) / 2.0 else (topAlert.longitude ?: ((west + east) / 2.0))
+            // Identity by place, not by membership. Hashing the member ids meant one alert
+            // expiring - or one pan that pulled a neighbour into the padded box - renamed every
+            // cluster, so the map tore down and re-added every annotation instead of swapping
+            // the icons of clusters that had not moved.
+            val key = exactCoordinateKey(latitude, longitude)
             MapMarkerItem.Cluster(
-                id = members.joinToString("|") { it.alert.uniqueId }.hashCode().toString(),
+                id = "c:${key.latitude}:${key.longitude}",
                 alerts = members.map { it.alert },
-                latitude = if (isOverview) (south + north) / 2.0 else (topAlert.latitude ?: ((south + north) / 2.0)),
-                longitude = if (isOverview) (west + east) / 2.0 else (topAlert.longitude ?: ((west + east) / 2.0)),
+                latitude = latitude,
+                longitude = longitude,
                 bounds = MapGeoBounds(south, west, north, east),
                 sharedCategory = sharedCategory,
                 topAlert = topAlert,
-                isOverviewCluster = isOverview
+                isOverviewCluster = isOverview,
+                markerLimitActive = limitActive
             )
         }
     }
@@ -353,14 +376,28 @@ internal fun connectedMapScreenComponents(
     return groups.values.map { it.toList() }
 }
 
+/**
+ * Starting grid cell for the dense close-zoom path.
+ *
+ * This used to be [MAP_CLUSTER_ZOOMED_IN_CELL_DP] unconditionally, so raising the close-zoom
+ * limit helped but the cluster *distance* setting did nothing here. A customised distance now
+ * applies; the untouched presets keep the cell they have always used.
+ */
+private fun denseCellDp(config: MapClusteringConfig, effectiveCellDp: Float): Float =
+    if (config.grouping == MapGrouping.CURRENT) MAP_CLUSTER_ZOOMED_IN_CELL_DP else effectiveCellDp
+
 private fun packCellKey(cellX: Int, cellY: Int): Long =
     (cellX.toLong() shl 32) or (cellY.toLong() and 0xFFFF_FFFFL)
 
 /**
  * The geographic rectangle a camera view covers, grown by a [marginFactor] on each side so
- * markers just off-screen are already rendered before the user pans to them. Tolerance for
- * rotation comes free: a diagonal-sized rectangle always contains the (possibly rotated)
- * viewport.
+ * markers just off-screen are already rendered before the user pans to them.
+ *
+ * Padding is applied *per axis*. It used to be a square built from the viewport half-diagonal,
+ * which bought tolerance for a rotated camera - except rotation gestures are disabled on both
+ * map layers, so all it ever did was inflate the box. On a 360x800 dp phone the diagonal square
+ * covered about eight times the visible area, and since the render budget was measured over
+ * whatever landed in this box, a "350 marker" limit engaged at roughly 43 markers on screen.
  *
  * Null when the viewport has no measurable size — callers then skip culling.
  */
@@ -370,19 +407,18 @@ internal fun mapViewportBounds(
     zoom: Double,
     viewportWidthDp: Float,
     viewportHeightDp: Float,
-    marginFactor: Double = 0.75
+    marginFactor: Double = MAP_VIEWPORT_MARGIN_FACTOR
 ): MapGeoBounds? {
     if (viewportWidthDp <= 0f || viewportHeightDp <= 0f) return null
     val latitudeRadians = centreLatitude * PI / 180.0
     val metersPerDp =
         METERS_PER_MAP_DP_AT_ZOOM_ZERO * cos(latitudeRadians) / 2.0.pow(zoom)
     if (metersPerDp <= 0.0) return null
-    val halfWidthMeters = viewportWidthDp / 2f * metersPerDp
-    val halfHeightMeters = viewportHeightDp / 2f * metersPerDp
-    val halfDiagonalMeters = (1.0 + marginFactor) *
-        kotlin.math.sqrt(halfWidthMeters * halfWidthMeters + halfHeightMeters * halfHeightMeters)
-    val latitudeDelta = halfDiagonalMeters / METERS_PER_DEGREE_LATITUDE
-    val longitudeDelta = halfDiagonalMeters /
+    val padding = 1.0 + marginFactor.coerceAtLeast(0.0)
+    val halfWidthMeters = viewportWidthDp / 2f * metersPerDp * padding
+    val halfHeightMeters = viewportHeightDp / 2f * metersPerDp * padding
+    val latitudeDelta = halfHeightMeters / METERS_PER_DEGREE_LATITUDE
+    val longitudeDelta = halfWidthMeters /
         (METERS_PER_DEGREE_LATITUDE * cos(latitudeRadians).coerceAtLeast(0.01))
     return MapGeoBounds(
         south = (centreLatitude - latitudeDelta).coerceIn(-85.0, 85.0),
@@ -390,6 +426,55 @@ internal fun mapViewportBounds(
         north = (centreLatitude + latitudeDelta).coerceIn(-85.0, 85.0),
         east = centreLongitude + longitudeDelta
     )
+}
+
+/**
+ * How far past the screen edge markers are prepared, as a fraction of the viewport.
+ *
+ * Tilt is still enabled outside picture-in-picture, which pushes the horizon further than the
+ * flat projection suggests, so this keeps real headroom - it just no longer pays for rotation
+ * tolerance nothing asks for.
+ */
+internal const val MAP_VIEWPORT_MARGIN_FACTOR = 0.35
+
+/**
+ * How far the camera may drift from the anchor markers were prepared for, as a fraction of the
+ * viewport, before the whole set is prepared again. Comfortably inside
+ * [MAP_VIEWPORT_MARGIN_FACTOR], so everything on screen is always within what was prepared.
+ */
+private const val MAP_ANCHOR_DRIFT_FRACTION = 0.25
+
+/**
+ * The camera position clustering is keyed on, held steady through small pans.
+ *
+ * Clustering is already sampled at camera idle rather than per gesture frame, but a scroll
+ * produces an idle at every stop, and each one used to re-cull, re-cluster and hand the map an
+ * entirely new marker set - the dominant cost of a fast scroll, and the source of most of the
+ * garbage it generated. A pan only uncovers genuinely new markers once it approaches the edge
+ * of what was prepared, so [previous] is kept until the camera drifts
+ * [MAP_ANCHOR_DRIFT_FRACTION] of a viewport away from it or the quantised zoom changes.
+ */
+internal fun retainedMapAnchor(
+    previous: MapCameraSnapshot?,
+    latitude: Double,
+    longitude: Double,
+    zoom: Double,
+    viewportWidthDp: Float,
+    viewportHeightDp: Float
+): MapCameraSnapshot {
+    val fresh = MapCameraSnapshot(latitude, longitude, zoom)
+    if (previous == null || previous.zoom != zoom) return fresh
+    if (viewportWidthDp <= 0f || viewportHeightDp <= 0f) return fresh
+    val latitudeRadians = latitude * PI / 180.0
+    val metersPerDp = METERS_PER_MAP_DP_AT_ZOOM_ZERO * cos(latitudeRadians) / 2.0.pow(zoom)
+    if (metersPerDp <= 0.0) return fresh
+    val latitudeDrift = viewportHeightDp * MAP_ANCHOR_DRIFT_FRACTION * metersPerDp /
+        METERS_PER_DEGREE_LATITUDE
+    val longitudeDrift = viewportWidthDp * MAP_ANCHOR_DRIFT_FRACTION * metersPerDp /
+        (METERS_PER_DEGREE_LATITUDE * cos(latitudeRadians).coerceAtLeast(0.01))
+    val withinDrift = kotlin.math.abs(latitude - previous.latitude) <= latitudeDrift &&
+        kotlin.math.abs(longitude - previous.longitude) <= longitudeDrift
+    return if (withinDrift) previous else fresh
 }
 
 /** Meters of latitude per degree; longitude spans this times cos(latitude). */
@@ -401,7 +486,8 @@ internal fun MapGeoBounds.contains(latitude: Double, longitude: Double): Boolean
 internal fun resolveMapClusterInteraction(
     cluster: MapMarkerItem.Cluster,
     currentZoom: Double,
-    maximumZoom: Double
+    maximumZoom: Double,
+    clusteringCutoff: Double = MAP_CLUSTER_MAX_ZOOM
 ): MapClusterInteraction {
     val targetZoom = min(currentZoom + 2.0, maximumZoom)
     // Already as close as this map goes.
@@ -418,7 +504,7 @@ internal fun resolveMapClusterInteraction(
     // forced on a dense area. Those *do* come apart, and dumping several hundred rows into a
     // list is a poor answer to a tap that one zoom step would resolve. Zoom when the members
     // would actually land apart, and only fall back to the list when they would not.
-    if (currentZoom >= MAP_CLUSTER_MAX_ZOOM &&
+    if (currentZoom >= clusteringCutoff &&
         clusterSpreadDp(cluster.bounds, targetZoom) < MAP_CLUSTER_SPLIT_MIN_DP
     ) {
         return MapClusterInteraction.ShowMembers
@@ -460,11 +546,36 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
     }
 }
 
+private fun mapAlertCategoryRank(categories: Set<AlertCategory>): Int = when {
+    AlertCategory.HUNDO in categories || AlertCategory.NUNDO in categories || AlertCategory.PVP in categories -> 0
+    AlertCategory.RAID in categories -> 1
+    AlertCategory.RARE in categories -> 2
+    AlertCategory.ROCKET in categories -> 3
+    categories.size == 1 && AlertCategory.QUEST in categories -> 5
+    else -> 4
+}
+
 private data class PositionedAlert(
     val alert: PokemonAlert,
     val latitude: Double,
     val longitude: Double
-)
+) {
+    val categories by lazy(LazyThreadSafetyMode.NONE) { alert.alertCategories() }
+    val rank by lazy(LazyThreadSafetyMode.NONE) { mapAlertCategoryRank(categories) }
+    val iv by lazy(LazyThreadSafetyMode.NONE) { alert.ivPercentage ?: -1 }
+}
+
+private fun comparePositionedAlertPriority(a: PositionedAlert, b: PositionedAlert): Int {
+    if (a.rank != b.rank) return a.rank.compareTo(b.rank)
+    if (a.iv != b.iv) return b.iv.compareTo(a.iv)
+    val cpA = a.alert.cp ?: -1
+    val cpB = b.alert.cp ?: -1
+    if (cpA != cpB) return cpB.compareTo(cpA)
+    val endA = TimeUtils.parseEndTimeToMillis(a.alert.endTime) ?: Long.MAX_VALUE
+    val endB = TimeUtils.parseEndTimeToMillis(b.alert.endTime) ?: Long.MAX_VALUE
+    if (endA != endB) return endA.compareTo(endB)
+    return a.alert.uniqueId.compareTo(b.alert.uniqueId)
+}
 
 /**
  * Centre distance in map dp at which two drawn spawn circles stop overlapping, or null when the
@@ -493,8 +604,41 @@ private fun projectMapAlertToScreen(alert: PositionedAlert, scale: Double): MapS
     )
 }
 
-private fun exactCoordinateKey(alert: PositionedAlert): String =
+private fun exactCoordinateKey(alert: PositionedAlert): MapCoordinateKey =
     exactCoordinateKey(alert.latitude, alert.longitude)
 
-private fun exactCoordinateKey(latitude: Double, longitude: Double): String =
-    "%.6f:%.6f".format(java.util.Locale.ROOT, latitude, longitude)
+internal data class MapCoordinateKey(val latitude: Long, val longitude: Long)
+
+/** Six-decimal HALF_UP grouping, including signed zero. Allocation-free: this runs per pin. */
+internal fun exactCoordinateKey(latitude: Double, longitude: Double): MapCoordinateKey =
+    MapCoordinateKey(coordinateMillionths(latitude), coordinateMillionths(longitude))
+
+private fun coordinateMillionths(value: Double): Long {
+    // HALF_UP is "away from zero at the halfway point", which is what rounding the magnitude
+    // and reapplying the sign gives. This runs once per coordinate per alert per clustering
+    // pass; the BigDecimal pair it replaces was the single largest allocator on that path.
+    val magnitude = kotlin.math.abs(value) * 1_000_000.0
+    val rounded = kotlin.math.floor(magnitude + 0.5).toLong()
+    val signed = if (value < 0.0) -rounded else rounded
+    return if (signed == 0L && java.lang.Double.doubleToRawLongBits(value) < 0L) Long.MIN_VALUE else signed
+}
+
+/** Preserve the existing six-decimal coordinate equivalence, including nearby distinct stops. */
+internal fun sameMapLocation(a: PokemonAlert, b: PokemonAlert): Boolean =
+    a.latitude != null && a.longitude != null && b.latitude != null && b.longitude != null &&
+        a.latitude.isFinite() && a.longitude.isFinite() && b.latitude.isFinite() && b.longitude.isFinite() &&
+        exactCoordinateKey(a.latitude, a.longitude) == exactCoordinateKey(b.latitude, b.longitude)
+
+internal fun MapMarkerItem.Cluster.isCoincident(): Boolean =
+    exactCoordinateKey(bounds.south, bounds.west) == exactCoordinateKey(bounds.north, bounds.east)
+
+internal fun sameStopCompanions(alert: PokemonAlert, eligible: List<PokemonAlert>): List<PokemonAlert> {
+    val latitude = alert.latitude ?: return emptyList()
+    val longitude = alert.longitude ?: return emptyList()
+    if (!latitude.isFinite() || !longitude.isFinite()) return emptyList()
+    val location = exactCoordinateKey(latitude, longitude)
+    return eligible.filter { candidate ->
+        candidate.uniqueId != alert.uniqueId && candidate.latitude?.isFinite() == true &&
+            candidate.longitude?.isFinite() == true && exactCoordinateKey(candidate.latitude, candidate.longitude) == location
+    }.sortedWith(::compareAlertPriority)
+}

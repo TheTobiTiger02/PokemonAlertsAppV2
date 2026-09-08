@@ -23,6 +23,21 @@ class StartupBenchmark {
         CompilationMode.Partial(BaselineProfileMode.Require)
     )
 
+    @Test
+    fun warmStartupWithBaselineProfile() = rule.measureRepeated(
+        packageName = TARGET_PACKAGE,
+        metrics = listOf(StartupTimingMetric()),
+        compilationMode = CompilationMode.Partial(BaselineProfileMode.Require),
+        startupMode = StartupMode.WARM,
+        iterations = 10,
+        setupBlock = {
+            device.prepareBenchmarkPermissions()
+            startActivityAndWait()
+            device.completeOnboardingIfNeeded()
+            pressHome()
+        }
+    ) { startActivityAndWait() }
+
     private fun measureColdStartup(compilationMode: CompilationMode) = rule.measureRepeated(
         packageName = "com.example.pokemonalertsv2",
         metrics = listOf(StartupTimingMetric()),
@@ -34,6 +49,7 @@ class StartupBenchmark {
             startActivityAndWait()
             device.completeOnboardingIfNeeded()
             pressHome()
+            device.executeShellCommand("am force-stop $TARGET_PACKAGE")
         }
     ) {
         startActivityAndWait()

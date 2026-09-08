@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.fcm
 
 import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.PushTopicCatalog
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
@@ -9,7 +10,15 @@ data class FcmAlertPayload(
     val alert: PokemonAlert,
     val title: String?,
     val body: String?,
-    val payloadVersion: String?
+    val payloadVersion: String?,
+    /**
+     * The server's deduplication key, stable across the several messages one alert is split
+     * into when it lands on more than [PushTopicCatalog.maxTopicsPerCondition] topics, and
+     * distinct between an alert and the tombstone that later invalidates it.
+     */
+    val pushKey: String? = null,
+    /** The topics this message was addressed to. Diagnostic only — never branch on it. */
+    val topics: String? = null
 )
 
 object FcmAlertPayloadParser {
@@ -18,6 +27,8 @@ object FcmAlertPayloadParser {
     private const val KEY_TITLE = "title"
     private const val KEY_BODY = "body"
     private const val KEY_PAYLOAD_VERSION = "payloadVersion"
+    private const val KEY_PUSH_KEY = "pushKey"
+    private const val KEY_TOPICS = "topics"
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -96,7 +107,9 @@ object FcmAlertPayloadParser {
             alert = alert,
             title = data[KEY_TITLE].takeIfNotBlank() ?: data["name"].takeIfNotBlank(),
             body = data[KEY_BODY].takeIfNotBlank() ?: data["description"].takeIfNotBlank(),
-            payloadVersion = data[KEY_PAYLOAD_VERSION].takeIfNotBlank()
+            payloadVersion = data[KEY_PAYLOAD_VERSION].takeIfNotBlank(),
+            pushKey = data[KEY_PUSH_KEY].takeIfNotBlank(),
+            topics = data[KEY_TOPICS].takeIfNotBlank()
         )
     }
 

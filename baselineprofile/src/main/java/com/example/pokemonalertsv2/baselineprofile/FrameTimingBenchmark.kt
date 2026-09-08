@@ -37,7 +37,13 @@ class FrameTimingBenchmark {
         device.completeOnboardingIfNeeded()
 
         listOf("History", "Settings", "Map", "Alerts").forEach { tab ->
-            device.clickIfPresent(By.text(tab))
+            device.requireClick(By.text(tab))
+            device.requireVisible(when (tab) {
+                "History" -> By.text("Alert History")
+                "Map" -> By.desc("Map settings and filters")
+                "Settings" -> By.text("Appearance & behavior")
+                else -> By.text("Pokémon Alerts")
+            })
             device.swipe(
                 device.displayWidth / 2,
                 device.displayHeight * 3 / 4,

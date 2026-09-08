@@ -427,6 +427,7 @@ private fun MapFilterSheetContent(
             )
 
             MapGroupHeading("Map")
+            MapClusteringSettingsButton()
 
             MapFilterSection(
                 title = "Style",

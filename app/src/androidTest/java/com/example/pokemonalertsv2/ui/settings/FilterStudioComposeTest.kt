@@ -52,7 +52,8 @@ class FilterStudioComposeTest {
                 onSave = { saved = it }
             )
         } }
-        rule.onNodeWithText("Catch 5 → Pikachu").performClick()
+        rule.onNodeWithContentDescription("Expand Pikachu").performClick()
+        rule.onNodeWithText("Catch 5").performClick()
         rule.onNodeWithText("Tasks").performClick()
         rule.onNodeWithText("Spin 3").performClick()
         rule.onNodeWithText("Rewards").performClick()

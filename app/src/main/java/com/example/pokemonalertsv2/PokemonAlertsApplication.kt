@@ -11,7 +11,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
-import com.example.pokemonalertsv2.fcm.FcmTopicSubscriber
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
@@ -21,10 +22,11 @@ import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
 import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.widget.WidgetUpdateCoordinator
-import android.os.Looper
-import com.google.android.gms.maps.MapView
+import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 import com.google.android.gms.maps.MapsInitializer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -50,11 +52,32 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         try {
             AlertNotifier.ensureChannel(this)
-            FcmTopicSubscriber.subscribe(this)
+            PushTopicSyncWorker.triggerSync(this, delaySeconds = 0)
+            PushTopicSyncWorker.schedule(this)
+            resyncPushTopicsOnFilterChanges()
             WidgetUpdateCoordinator.start(this)
             warmGoogleMaps()
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)
+        }
+    }
+
+    /**
+     * Re-plans the FCM topic subscription whenever the filters change.
+     *
+     * Watching the document in one place beats calling into the sync from every editor: the feed
+     * sheet, the map sheet, the filter studio, a profile edit and a backup restore all land here.
+     * The first emission is the current state, which [PushTopicSyncWorker.triggerSync] in
+     * `onCreate` has already covered.
+     */
+    private fun resyncPushTopicsOnFilterChanges() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                AlertPreferences(alertPreferencesDataStore).filterStateDocument
+                    .drop(1)
+                    .distinctUntilChanged()
+                    .collect { PushTopicSyncWorker.triggerSync(this@PokemonAlertsApplication) }
+            }
         }
     }
 
@@ -72,32 +95,8 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             runCatching { MapsInitializer.initialize(applicationContext, MapsInitializer.Renderer.LATEST, null) }
                 .onFailure { Log.w("PokemonAlertsApp", "Maps pre-warm skipped", it) }
         }
-        warmMapRendererClasses()
-    }
-
-    /**
-     * Builds and immediately destroys a throwaway [MapView] while the main thread is idle.
-     *
-     * [MapsInitializer.initialize] loads the Dynamite module but leaves the renderer classes
-     * untouched, so a trace still showed them being verified (`VerifyClass
-     * com.google.maps.api.android.lib6.*`) inside the first map frame — roughly a second of
-     * jank on the first Map tab entry. The SDK refuses `onCreate` off the main thread, so the
-     * work cannot simply be moved to a background thread; instead it runs from an idle handler,
-     * where it costs a frame nobody is waiting on rather than one in the middle of a tap.
-     *
-     * Class loading is per-process, so the real map then finds everything already verified.
-     * The view is never attached, and any failure is non-fatal because this is only a warm-up.
-     */
-    private fun warmMapRendererClasses() {
-        Looper.getMainLooper().queue.addIdleHandler {
-            runCatching {
-                MapView(this).apply {
-                    onCreate(null)
-                    onDestroy()
-                }
-            }.onFailure { Log.w("PokemonAlertsApp", "Map renderer warm-up skipped", it) }
-            false // one shot
-        }
+        // Let the visible map own renderer creation. A throwaway MapView here starts main-
+        // thread and GPU work during feed startup, even for users who never open the map.
     }
 
     override fun onStart(owner: LifecycleOwner) {
@@ -141,6 +140,19 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
                         DiskCache.Builder()
                             .directory(context.applicationContext.cacheDir.resolve("image_cache"))
                             .maxSizePercent(0.02)
+                            .build()
+                    }
+                    // Every marker sprite comes from the same icons host, and OkHttp allows
+                    // five concurrent requests per host by default. A screen of quest pins
+                    // therefore trickled in five at a time however fast the network was.
+                    .okHttpClient {
+                        okhttp3.OkHttpClient.Builder()
+                            .dispatcher(
+                                okhttp3.Dispatcher().apply {
+                                    maxRequests = 64
+                                    maxRequestsPerHost = 16
+                                }
+                            )
                             .build()
                     }
                     .crossfade(true)

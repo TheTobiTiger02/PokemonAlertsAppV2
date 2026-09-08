@@ -25,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -38,6 +39,7 @@ class ArrivalTrackingService : Service() {
     private var currentDestination: TrackedDestination? = null
     private var destinationJob: Job? = null
     private var expiryJob: Job? = null
+    private var chipRefreshJob: Job? = null
     private var walkingRouteJob: Job? = null
     private var evaluator = ArrivalFixEvaluator()
     private var locationUpdatesStarted = false
@@ -69,7 +71,7 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        promoteToForeground(ArrivalTrackingNotifications.restoring(this))
+        promoteToForeground(currentJourneyNotification() ?: ArrivalTrackingNotifications.restoring(this))
         if (destinationJob == null) {
             destinationJob = serviceScope.launch {
                 repository.destinationFlow.collectLatest { destination ->
@@ -87,6 +89,7 @@ class ArrivalTrackingService : Service() {
     override fun onDestroy() {
         stopLocationUpdates()
         expiryJob?.cancel()
+        chipRefreshJob?.cancel()
         walkingRouteJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
@@ -125,7 +128,31 @@ class ArrivalTrackingService : Service() {
             waiting = lastWaitingForPreciseLocation,
             inRange = lastInRange
         )
+        startChipRefreshLoop()
         startLocationUpdates()
+    }
+
+    /**
+     * Re-post the journey notification on a timer. The status bar chip renders around
+     * notification updates and times out after a few minutes of silence, so a trainer
+     * standing still — no location callbacks means no re-posts — would watch the chip
+     * fade even though the journey is alive. Navigation apps keep their chip the same
+     * way. Silent by setOnlyAlertOnce, and it keeps the "x left" text fresh as a bonus.
+     */
+    private fun startChipRefreshLoop() {
+        chipRefreshJob?.cancel()
+        chipRefreshJob = serviceScope.launch {
+            while (isActive) {
+                delay(CHIP_REFRESH_INTERVAL_MILLIS)
+                val destination = currentDestination ?: break
+                updateOngoing(
+                    destination = destination,
+                    distanceMeters = lastDirectDistanceMeters,
+                    waiting = lastWaitingForPreciseLocation,
+                    inRange = lastInRange
+                )
+            }
+        }
     }
 
     private fun scheduleExpiry(destination: TrackedDestination) {
@@ -332,6 +359,26 @@ class ArrivalTrackingService : Service() {
         }
     }
 
+    /**
+     * The live journey notification as it stands right now, so a repeated start (a map PiP
+     * browse switch or a resume on app open) can re-promote with it. The restoring placeholder
+     * is category service and unpromoted, so promoting with it would demote the Live Update out
+     * of the status bar chip; the destination flow never re-emits for the already-collected
+     * destination, leaving the demoted notification in the shade until the next location
+     * callback happens to re-post.
+     */
+    private fun currentJourneyNotification(): android.app.Notification? {
+        val destination = currentDestination ?: return null
+        return ArrivalTrackingNotifications.ongoing(
+            context = this,
+            destination = destination,
+            distanceMeters = lastDirectDistanceMeters,
+            walkingRoute = walkingRoute,
+            inRange = lastInRange,
+            waitingForPreciseLocation = lastWaitingForPreciseLocation
+        )
+    }
+
     private fun promoteToForeground(notification: android.app.Notification) {
         ServiceCompat.startForeground(
             this,
@@ -348,6 +395,8 @@ class ArrivalTrackingService : Service() {
     private fun stopTrackingService() {
         stopLocationUpdates()
         expiryJob?.cancel()
+        chipRefreshJob?.cancel()
+        chipRefreshJob = null
         walkingRouteJob?.cancel()
         walkingRouteJob = null
         walkingRoute = null
@@ -398,6 +447,12 @@ class ArrivalTrackingService : Service() {
         private const val MAX_LOCATION_AGE_MILLIS = 30_000L
         private const val MAX_GPS_TOLERANCE_METERS = 20f
         private const val ROUTE_DISPLAY_MAX_AGE_MILLIS = 10 * 60 * 1000L
+
+        /**
+         * Well inside the observed few-minute status bar chip timeout, cheap enough to run
+         * for the whole journey: one notification rebuild and one silent re-post.
+         */
+        private const val CHIP_REFRESH_INTERVAL_MILLIS = 30_000L
 
         @Volatile
         internal var locationSourceFactory: ArrivalLocationSourceFactory =

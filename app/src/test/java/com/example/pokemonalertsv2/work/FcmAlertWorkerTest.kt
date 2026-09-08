@@ -31,9 +31,9 @@ class FcmAlertWorkerTest {
     fun workName_usesMessageIdAndIsStable() {
         val payload = FcmAlertWorker.FcmAlertWorkPayload.encode(mapOf("alertId" to "6215"))
 
-        val first = FcmAlertWorker.FcmAlertWorkPayload.workName("message-1", payload)
-        val repeated = FcmAlertWorker.FcmAlertWorkPayload.workName("message-1", "different")
-        val different = FcmAlertWorker.FcmAlertWorkPayload.workName("message-2", payload)
+        val first = FcmAlertWorker.FcmAlertWorkPayload.workName(null, "message-1", payload)
+        val repeated = FcmAlertWorker.FcmAlertWorkPayload.workName(null, "message-1", "different")
+        val different = FcmAlertWorker.FcmAlertWorkPayload.workName(null, "message-2", payload)
 
         assertEquals(first, repeated)
         assertTrue(first.startsWith("pokemon_fcm_alert_"))
@@ -51,9 +51,35 @@ class FcmAlertWorkerTest {
         )
 
         assertEquals(
-            FcmAlertWorker.FcmAlertWorkPayload.workName(null, firstPayload),
-            FcmAlertWorker.FcmAlertWorkPayload.workName("  ", samePayload)
+            FcmAlertWorker.FcmAlertWorkPayload.workName(null, null, firstPayload),
+            FcmAlertWorker.FcmAlertWorkPayload.workName("  ", "  ", samePayload)
         )
+    }
+
+    /**
+     * The point of the key: an alert on more than five topics is sent as two messages with
+     * different message ids, and a device subscribed to topics in both halves receives both.
+     */
+    @Test
+    fun workName_prefersPushKeyOverMessageId() {
+        val payload = FcmAlertWorker.FcmAlertWorkPayload.encode(mapOf("alertId" to "6215"))
+
+        val firstHalf = FcmAlertWorker.FcmAlertWorkPayload.workName("6215", "message-1", payload)
+        val secondHalf = FcmAlertWorker.FcmAlertWorkPayload.workName("6215", "message-2", payload)
+
+        assertEquals(firstHalf, secondHalf)
+    }
+
+    @Test
+    fun workName_separatesAnAlertFromItsTombstone() {
+        val payload = FcmAlertWorker.FcmAlertWorkPayload.encode(mapOf("alertId" to "6215"))
+
+        val alert = FcmAlertWorker.FcmAlertWorkPayload.workName("6215", "message-1", payload)
+        val tombstone = FcmAlertWorker.FcmAlertWorkPayload.workName(
+            "6215:2026-09-08T12:00:00Z", "message-2", payload
+        )
+
+        assertFalse(alert == tombstone)
     }
 
     @Test

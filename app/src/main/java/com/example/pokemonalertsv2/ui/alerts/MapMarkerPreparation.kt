@@ -5,6 +5,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.MapClusteringConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -13,7 +14,8 @@ import kotlinx.coroutines.withContext
 internal data class PreparedMapMarkers(
     val alerts: List<PokemonAlert> = emptyList(),
     val items: List<MapMarkerItem> = emptyList(),
-    val spawnAlerts: List<PokemonAlert> = emptyList()
+    val spawnAlerts: List<PokemonAlert> = emptyList(),
+    val markerLimitActive: Boolean = false
 )
 
 /** SDK annotation creation is synchronous. Spread new overlays across frames, retaining survivors. */
@@ -46,20 +48,29 @@ internal fun rememberPreparedMapMarkers(
     bounds: MapGeoBounds?,
     zoom: Double,
     spawnRadius: Double?,
-    protectedIds: Set<String>
+    protectedIds: Set<String>,
+    config: MapClusteringConfig = MapClusteringConfig(),
+    screenBounds: MapGeoBounds? = null
 ): State<PreparedMapMarkers> = produceState(
     initialValue = PreparedMapMarkers(),
-    alerts, bounds, zoom, spawnRadius, protectedIds
+    alerts, bounds, zoom, spawnRadius, protectedIds, config, screenBounds
 ) {
-    value = prepareMapMarkers(alerts, bounds, zoom, spawnRadius, protectedIds)
+    value = prepareMapMarkers(alerts, bounds, zoom, spawnRadius, protectedIds, config, screenBounds)
 }
 
+/**
+ * [bounds] is the padded box markers are prepared for; [screenBounds] is the unpadded viewport
+ * the marker limit is counted against. Passing only [bounds] counts the padded set, which is
+ * what made the limit engage long before that many markers were visible.
+ */
 internal suspend fun prepareMapMarkers(
     alerts: List<PokemonAlert>,
     bounds: MapGeoBounds?,
     zoom: Double,
     spawnRadius: Double?,
-    protectedIds: Set<String>
+    protectedIds: Set<String>,
+    config: MapClusteringConfig = MapClusteringConfig(),
+    screenBounds: MapGeoBounds? = null
 ): PreparedMapMarkers = withContext(Dispatchers.Default) {
     val context = currentCoroutineContext()
     val visible = alerts.filter { alert ->
@@ -73,6 +84,8 @@ internal suspend fun prepareMapMarkers(
         zoom = zoom,
         spawnRadiusMeters = spawnRadius,
         protectedAlertIds = protectedIds,
+        config = config,
+        budgetBounds = screenBounds,
         checkActive = { context.ensureActive() }
     )
     val spawnAlerts = if (spawnRadius != null && zoom >= SPAWN_CIRCLE_MIN_ZOOM) {
@@ -88,7 +101,9 @@ internal suspend fun prepareMapMarkers(
     context.ensureActive()
     PreparedMapMarkers(
         visible,
-        items.sortedBy { if (it is MapMarkerItem.Alert && it.alert.uniqueId in protectedIds) 0 else 1 },
-        spawnAlerts
+        items.map { if (it is MapMarkerItem.Cluster && it.isCoincident())
+            MapMarkerItem.Alert(it.topAlert, it.latitude, it.longitude) else it }.sortedBy { if (it is MapMarkerItem.Alert && it.alert.uniqueId in protectedIds) 0 else 1 },
+        spawnAlerts,
+        items.any { it is MapMarkerItem.Cluster && it.markerLimitActive }
     )
 }

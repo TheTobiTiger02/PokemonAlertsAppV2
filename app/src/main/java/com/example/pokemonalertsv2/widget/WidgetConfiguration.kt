@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.data.FilterAssignment
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterStateCodec
+import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 
 internal enum class WidgetPriority {
     APP_DEFAULT,
@@ -141,6 +142,9 @@ internal object WidgetConfigurationStore {
             )
         }
         editor.apply()
+        // Widget filters count toward the push subscription: a widget is a surface that shows
+        // alerts, and it only refreshes in the background when FCM wakes the app.
+        PushTopicSyncWorker.triggerSync(context)
     }
 
     fun remove(context: Context, appWidgetId: Int) {
@@ -151,6 +155,7 @@ internal object WidgetConfigurationStore {
             .remove("$AREA_PREFIX$appWidgetId")
             .remove("$ASSIGNMENT_PREFIX$appWidgetId")
             .apply()
+        PushTopicSyncWorker.triggerSync(context)
     }
 
 }

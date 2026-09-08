@@ -24,8 +24,11 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.annotations.MarkerOptions
@@ -758,14 +761,25 @@ internal fun OpenStreetMapView(
     // image is slow, the clock can keep replacing labels with an immediate custom fallback.
     LaunchedEffect(markerItems, baseMarkerSizePx) {
         withContext(Dispatchers.IO) {
-            markerItems.asSequence()
+            // Distinct urls only, and several at a time. This used to walk every marker in
+            // order on one coroutine, so a screen of quest pins - each a separate reward
+            // sprite - fetched them strictly one after another.
+            val urls = markerItems.asSequence()
                 .filterIsInstance<MapMarkerItem.Alert>()
-                .map { it.alert }
-                .forEach { alert ->
-                    val url = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
-                        ?: alert.imageUrl?.takeIf { it.isNotBlank() }
-                    if (url != null) loadMapMarkerArtwork(context, url, baseMarkerSizePx)
+                .mapNotNull { item ->
+                    item.alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+                        ?: item.alert.imageUrl?.takeIf { it.isNotBlank() }
                 }
+                .distinct()
+                .toList()
+            val gate = kotlinx.coroutines.sync.Semaphore(MAP_ARTWORK_PREFETCH_CONCURRENCY)
+            coroutineScope {
+                urls.forEach { url ->
+                    launch {
+                        gate.withPermit { loadMapMarkerArtwork(context, url, baseMarkerSizePx) }
+                    }
+                }
+            }
         }
     }
     LaunchedEffect(
@@ -836,7 +850,7 @@ internal fun OpenStreetMapView(
                     AlertCategory.NUNDO -> "0%"
                     else -> visualStyle.shortCode
                 }
-                val timeLabel = mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown)
+                val timeLabel = mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown, coarsenBeyondWindow = true)
                 val icon = createMapMarkerIcon(
                     context = context,
                     sizePx = itemSizePx,
@@ -940,7 +954,7 @@ private fun createImmediateOpenStreetMapMarker(
             ?: alert.imageUrl?.takeIf { it.isNotBlank() },
         endTime = alert.endTime,
         showTimeLabel = showTimeLabels,
-        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis, minutePrecision) else null,
+        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis, minutePrecision, coarsenBeyondWindow = true) else null,
         palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
         goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
         category = visualStyle.category,

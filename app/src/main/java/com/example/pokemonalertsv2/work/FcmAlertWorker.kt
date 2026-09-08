@@ -72,6 +72,7 @@ class FcmAlertWorker(
         private const val TAG = "FcmAlertWorker"
         private const val KEY_ENCODED_PAYLOAD = "encoded_fcm_payload"
         private const val WORK_NAME_PREFIX = "pokemon_fcm_alert_"
+        private const val PUSH_KEY = "pushKey"
         private const val MAX_RUN_ATTEMPTS = 3
 
         @VisibleForTesting
@@ -91,7 +92,7 @@ class FcmAlertWorker(
                     .build()
 
                 WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
-                    FcmAlertWorkPayload.workName(messageId, encodedPayload),
+                    FcmAlertWorkPayload.workName(data[PUSH_KEY], messageId, encodedPayload),
                     workPolicy,
                     request
                 )
@@ -129,8 +130,20 @@ class FcmAlertWorker(
                 json.decodeFromString(payloadSerializer, encodedPayload)
             }.getOrNull()
 
-        fun workName(messageId: String?, encodedPayload: String): String {
-            val identity = messageId?.trim()?.takeIf(String::isNotEmpty) ?: encodedPayload
+        /**
+         * The identity two deliveries of the same alert must share.
+         *
+         * `pushKey` comes first because it is the only one that holds across a fan-out split:
+         * Firebase evaluates at most five topics per condition, so an alert on more than five is
+         * sent as two messages with *different* message ids, and a device subscribed to topics in
+         * both halves receives both. The key is still distinct between an alert and the tombstone
+         * that invalidates it (`{alertId}` vs `{alertId}:{invalidatedAt}`), so an invalidation is
+         * never swallowed as a duplicate of its own alert.
+         */
+        fun workName(pushKey: String?, messageId: String?, encodedPayload: String): String {
+            val identity = pushKey?.trim()?.takeIf(String::isNotEmpty)
+                ?: messageId?.trim()?.takeIf(String::isNotEmpty)
+                ?: encodedPayload
             return WORK_NAME_PREFIX + identity.sha256()
         }
 

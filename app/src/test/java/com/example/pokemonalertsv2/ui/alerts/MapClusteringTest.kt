@@ -69,7 +69,10 @@ class MapClusteringTest {
 
     @Test
     fun distantAlertsRemainIndividualAtNeighborhoodZoomEvenWithLargeDataset() {
-        val alerts = List(400) { index ->
+        // Sized against the close-zoom limit rather than a fixed number: the point is that a
+        // dataset within budget stays individual, not that any particular count does.
+        val count = com.example.pokemonalertsv2.data.MapClusteringPreset.CURRENT.config.closeLimit - 50
+        val alerts = List(count) { index ->
             PokemonAlert(
                 id = index,
                 name = "Alert $index",
@@ -80,7 +83,7 @@ class MapClusteringTest {
             )
         }
         val items = clusterMapAlerts(alerts, zoom = 15.0)
-        assertEquals(400, items.size)
+        assertEquals(count, items.size)
         assertTrue(items.all { it is MapMarkerItem.Alert })
     }
 

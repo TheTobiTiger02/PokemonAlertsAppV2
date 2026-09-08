@@ -24,37 +24,43 @@ class BaselineProfileGenerator {
         device.waitForIdle()
         device.completeOnboardingIfNeeded()
 
-        // Alerts: exercise card composition, feed scrolling, overflow, and details.
-        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
-            device.displayWidth / 2, device.displayHeight / 3, 18)
-        device.waitForIdle()
-        if (device.clickIfPresent(By.desc("More alert actions"), timeoutMillis = 500)) {
+        // Exercise returning-user paths, asserting every required navigation step.
+        device.requireVisible(By.text("Pokémon Alerts"))
+        device.requireClick(By.text("Alerts"))
+        // Restore the feed's scroll position between collection iterations before opening a card.
+        device.swipe(device.displayWidth / 2, device.displayHeight / 3,
+            device.displayWidth / 2, device.displayHeight * 3 / 4, 18)
+        if (device.clickIfPresent(By.text("Pikachu"), timeoutMillis = 1_000)) {
+            device.requireVisible(By.desc("Back"))
             device.pressBack()
         }
-        device.clickIfPresent(By.textContains("Rocket"), timeoutMillis = 500)
-        device.waitForIdle()
+        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
+            device.displayWidth / 2, device.displayHeight / 3, 18)
+        device.requireClick(By.text("Map"))
+        device.requireVisible(By.desc("Map settings and filters"))
+        device.requireClick(By.desc("Show all visible alerts"))
+        device.swipe(device.displayWidth / 2, device.displayHeight / 2,
+            device.displayWidth * 2 / 3, device.displayHeight / 2, 18)
+        device.requireClick(By.desc("Map settings and filters"))
+        device.requireVisible(By.textContains("alerts visible"))
         device.pressBack()
-
-        // Map: include initialization, filter chips, and map-detail rendering when data exists.
-        device.clickIfPresent(By.text("Map"))
-        device.clickIfPresent(By.text("Raids"), timeoutMillis = 500)
-        device.click(device.displayWidth / 2, device.displayHeight / 2)
-        device.waitForIdle()
-        if (device.clickIfPresent(By.desc("More map alert actions"), timeoutMillis = 500)) {
-            device.pressBack()
-        }
-
-        device.clickIfPresent(By.text("Alerts"))
-        device.clickIfPresent(By.text("History"))
+        device.requireClick(By.text("History"))
+        device.requireVisible(By.text("Alert History"))
         device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
             device.displayWidth / 2, device.displayHeight / 3, 18)
-        device.waitForIdle()
-        if (device.clickIfPresent(By.desc("More alert actions"), timeoutMillis = 500)) {
+        device.requireClick(By.text("Settings"))
+        device.requireClick(By.text("Appearance & behavior"))
+        device.requireVisible(By.text("Display and sorting"))
+        device.pressBack()
+        device.requireClick(By.text("GoDex checklist"))
+        // A disconnected collection is a valid state; the fixture driver supplies a populated one.
+        if (device.clickIfPresent(By.textContains("still needed"), timeoutMillis = 1_000)) {
+            device.requireVisible(By.text("Search Pokémon, form, number, or key"))
+            device.findObject(By.clazz("android.widget.EditText"))?.text = "99"
+            device.waitForIdle()
             device.pressBack()
         }
-        device.clickIfPresent(By.text("Settings"))
-        device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
-            device.displayWidth / 2, device.displayHeight / 3, 18)
-        device.waitForIdle()
+        device.pressBack()
+        device.requireClick(By.text("Alerts"))
     }
 }

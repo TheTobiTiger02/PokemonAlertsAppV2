@@ -420,6 +420,7 @@ internal fun SettingsScreen(
 
                 if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
                 SettingsSection(title = "Display and sorting") {
+                    com.example.pokemonalertsv2.ui.alerts.MapClusteringSettingsButton()
                     Text(
                         text = "Theme",
                         style = MaterialTheme.typography.titleSmall,

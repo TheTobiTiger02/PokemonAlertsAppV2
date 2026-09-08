@@ -191,7 +191,7 @@ internal fun MapMarker(
         ?: alert.imageUrl?.takeIf { it.isNotBlank() }
     val now = countdownClock.value
     val timeLabel = remember(now, alert.endTime, minutePrecisionCountdown) {
-        mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown)
+        mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown, coarsenBeyondWindow = true)
     }
     val markerSizePx = remember(density, markerSizeDp) {
         with(density) { markerSizeDp.dp.toPx().toInt() }
@@ -413,7 +413,9 @@ private fun heapFraction(fraction: Double, floorBytes: Long = 2L * 1024 * 1024):
     return budget.coerceAtLeast(floorBytes).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
 }
 
-private val MARKER_ICON_CACHE_BYTES = heapFraction(0.08)
+// Trimmed from 8%: a finished icon is now a cached base bitmap plus a stamped label, so a miss
+// here is cheap and the room is better spent on the bases those misses are rebuilt from.
+private val MARKER_ICON_CACHE_BYTES = heapFraction(0.05)
 private val MARKER_ARTWORK_CACHE_BYTES = heapFraction(0.04)
 private val CLUSTER_BITMAP_CACHE_BYTES = heapFraction(0.02)
 
@@ -449,6 +451,7 @@ internal val markerFallbackCache = object : LruCache<String, MapMarkerIcon>(MARK
 internal fun trimMapBitmapCaches(level: Int) {
     val caches = listOf(
         markerIconCache,
+        markerBaseIconCache,
         markerArtworkCache,
         markerFallbackCache,
         clusterBitmapCache,
@@ -466,28 +469,95 @@ internal fun trimMapBitmapCaches(level: Int) {
 
 internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$sizePx|$url"
 
+/**
+ * Sprites are rasterized once at the largest marker band and scaled into the pin at draw time
+ * (the draw already fits the bitmap to the sprite area, whatever its size).
+ *
+ * Marker size steps 36/44/50 dp across zoom bands, and the size was part of the artwork cache
+ * key, so crossing a band missed every entry at once - re-downloading and re-decoding every
+ * sprite on screen, which is most of why quest pins took so long to reappear after a zoom.
+ */
+internal const val MAP_MARKER_ARTWORK_RASTER_DP = 50f
+
+/** Concurrent sprite prefetches. Matches the per-host request limit the image loader allows. */
+internal const val MAP_ARTWORK_PREFETCH_CONCURRENCY = 8
+
+@Volatile
+private var canonicalArtworkRasterPx: Int = 0
+
+internal fun mapMarkerArtworkRasterPx(context: android.content.Context, requestedPx: Int): Int {
+    val canonical =
+        (MAP_MARKER_ARTWORK_RASTER_DP * context.resources.displayMetrics.density).toInt()
+    canonicalArtworkRasterPx = canonical
+    return kotlin.math.max(canonical, requestedPx)
+}
+
+/**
+ * The same size for callers with no Context to hand. Before the first sized load has run there
+ * is nothing cached to look up anyway, so falling back to the requested size is harmless.
+ */
+internal fun mapMarkerArtworkRasterPx(requestedPx: Int): Int =
+    kotlin.math.max(canonicalArtworkRasterPx, requestedPx)
+
+private val artworkInFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<Bitmap?>>()
+
+/** Share each in-flight download and rasterization; waiting markers retain their own cancellation. */
 internal suspend fun loadMapMarkerArtwork(
     context: android.content.Context,
     url: String,
     sizePx: Int
 ): Bitmap? {
-    val cacheKey = mapMarkerArtworkCacheKey(url, sizePx)
+    val rasterPx = mapMarkerArtworkRasterPx(context, sizePx)
+    val cacheKey = mapMarkerArtworkCacheKey(url, rasterPx)
     markerArtworkCache.get(cacheKey)?.let { return it }
-    val imageRequest = ImageRequest.Builder(context)
-        .data(url)
-        .allowHardware(false)
-        .size(sizePx, sizePx)
-        .memoryCachePolicy(CachePolicy.ENABLED)
-        .diskCachePolicy(CachePolicy.ENABLED)
-        .build()
-    val drawable = (PokemonAlertsApplication.imageLoader(context).execute(imageRequest) as? SuccessResult)
-        ?.drawable ?: return null
-    currentCoroutineContext().ensureActive()
-    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-    drawable.setBounds(0, 0, sizePx, sizePx)
-    drawable.draw(Canvas(bitmap))
-    markerArtworkCache.put(cacheKey, bitmap)
-    return bitmap
+    // Keep the memory-hit path outside the await/try/finally coroutine state machine.
+    return loadUncachedMapMarkerArtwork(context, url, rasterPx, cacheKey)
+}
+
+private suspend fun loadUncachedMapMarkerArtwork(
+    context: android.content.Context,
+    url: String,
+    sizePx: Int,
+    cacheKey: String
+): Bitmap? {
+    val completion = kotlinx.coroutines.CompletableDeferred<Bitmap?>()
+    val existing = artworkInFlight.putIfAbsent(cacheKey, completion)
+    if (existing != null) {
+        return try { existing.await() } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            // A superseded marker may own the request. A still-visible waiter can retry it.
+            currentCoroutineContext().ensureActive()
+            artworkInFlight.remove(cacheKey, existing)
+            loadMapMarkerArtwork(context, url, sizePx)
+        }
+    }
+    try {
+        // A previous owner can complete between the first cache lookup and claiming this key.
+        val result = markerArtworkCache.get(cacheKey) ?: run {
+            val imageRequest = ImageRequest.Builder(context)
+                .data(url)
+                .allowHardware(false)
+                .size(sizePx, sizePx)
+                .memoryCachePolicy(CachePolicy.ENABLED)
+                .diskCachePolicy(CachePolicy.ENABLED)
+                .build()
+            val drawable = (PokemonAlertsApplication.imageLoader(context).execute(imageRequest) as? SuccessResult)?.drawable
+            currentCoroutineContext().ensureActive()
+            drawable?.let {
+                Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888).also { bitmap ->
+                    it.setBounds(0, 0, sizePx, sizePx)
+                    it.draw(Canvas(bitmap))
+                    markerArtworkCache.put(cacheKey, bitmap)
+                }
+            }
+        }
+        completion.complete(result)
+        return result
+    } catch (failure: Throwable) {
+        completion.completeExceptionally(failure)
+        throw failure
+    } finally {
+        artworkInFlight.remove(cacheKey, completion)
+    }
 }
 
 internal fun mapMarkerIconCacheKey(
@@ -515,6 +585,31 @@ internal fun mapMarkerIconCacheKey(
     request.isKecleon
 ).joinToString("|")
 
+/**
+ * The same key with the countdown taken out.
+ *
+ * Everything a marker draws except its countdown strip is independent of the label text and of
+ * whether the alert is urgent, yet both were part of the only cache key - so a ticking pin
+ * re-ran the whole pin (sprite scale, glows, PokeStop disc, badges) every single second to
+ * change two digits. Keyed this way, that work is done once and the tick only stamps the label
+ * onto a copy. [MapMarkerIconRequest.showTimeLabel] stays in the key because it decides whether
+ * the strip is reserved at all.
+ */
+internal fun mapMarkerBaseIconCacheKey(request: MapMarkerIconRequest): String =
+    mapMarkerIconCacheKey(
+        request.copy(timeLabel = null, endTime = null),
+        nowMillis = 0L
+    )
+
+/**
+ * Finished pins minus their countdown. Small next to the icon cache: a base is shared by every
+ * tick of every marker that draws the same pin.
+ */
+private val MARKER_BASE_ICON_CACHE_BYTES = heapFraction(0.04)
+internal val markerBaseIconCache = object : LruCache<String, MapMarkerIcon>(MARKER_BASE_ICON_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: MapMarkerIcon): Int = value.bitmap.byteCount
+}
+
 internal fun resolveInitialMapMarkerIcon(
     request: MapMarkerIconRequest,
     cacheKey: String = mapMarkerIconCacheKey(request)
@@ -529,7 +624,9 @@ internal fun renderMapMarkerToCanvas(
     totalWidth: Int,
     totalHeight: Int,
     groundY: Float,
-    isUrgent: Boolean
+    isUrgent: Boolean,
+    /** False draws everything but the countdown, leaving its strip clear to be stamped later. */
+    drawTimeLabel: Boolean = true
 ) {
     val sizePx = request.sizePx
     val centerX = totalWidth / 2f
@@ -855,7 +952,7 @@ internal fun renderMapMarkerToCanvas(
     }
 
     // 9. COUNTDOWN TIMER LABEL
-    if (request.showTimeLabel && !request.timeLabel.isNullOrBlank()) {
+    if (drawTimeLabel && request.showTimeLabel && !request.timeLabel.isNullOrBlank()) {
         val timeHeight = (sizePx * 0.22f).coerceAtLeast(16f)
         val labelGap = sizePx * 0.05f
         canvas.drawMarkerLabel(
@@ -878,7 +975,7 @@ internal fun createFallbackMapMarkerIcon(
     val sizePx = request.sizePx
     val isUrgent = isMapMarkerUrgent(request.endTime, nowMillis)
     val cachedArtwork = request.speciesImageUrl?.let { url ->
-        markerArtworkCache.get(mapMarkerArtworkCacheKey(url, sizePx))
+        markerArtworkCache.get(mapMarkerArtworkCacheKey(url, mapMarkerArtworkRasterPx(sizePx)))
     }
 
     val padding = (sizePx * 0.12f).toInt()
@@ -965,10 +1062,6 @@ internal suspend fun createMapMarkerIcon(
         val cacheKey = mapMarkerIconCacheKey(request)
         markerIconCache.get(cacheKey)?.let { return it }
 
-        val speciesBitmap = speciesImageUrl?.let { url ->
-            loadMapMarkerArtwork(context, url, sizePx)
-        }
-
         val padding = (sizePx * 0.12f).toInt()
         val labelGap = (sizePx * 0.05f).toInt()
         val timeHeight = if (showTimeLabel && timeLabel != null) {
@@ -980,24 +1073,47 @@ internal suspend fun createMapMarkerIcon(
         val groundY = padding + spriteAreaSize
         val totalHeight = (groundY + (if (timeHeight > 0) labelGap + timeHeight else 0) + padding).toInt()
         val totalWidth = (sizePx * 1.25f).toInt()
+        val anchor = Offset(0.5f, (groundY / totalHeight).coerceIn(0f, 1f))
 
-        val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+        // The pin without its countdown, shared across every tick of every marker drawing it.
+        val baseKey = mapMarkerBaseIconCacheKey(request)
+        val base = markerBaseIconCache.get(baseKey) ?: run {
+            val speciesBitmap = speciesImageUrl?.let { url ->
+                loadMapMarkerArtwork(context, url, sizePx)
+            }
+            val baseBitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+            renderMapMarkerToCanvas(
+                canvas = Canvas(baseBitmap),
+                request = request,
+                speciesBitmap = speciesBitmap,
+                totalWidth = totalWidth,
+                totalHeight = totalHeight,
+                groundY = groundY,
+                isUrgent = isUrgent,
+                drawTimeLabel = false
+            )
+            MapMarkerIcon(baseBitmap, anchor).also { markerBaseIconCache.put(baseKey, it) }
+        }
 
-        renderMapMarkerToCanvas(
-            canvas = canvas,
-            request = request,
-            speciesBitmap = speciesBitmap,
-            totalWidth = totalWidth,
-            totalHeight = totalHeight,
-            groundY = groundY,
-            isUrgent = isUrgent
-        )
-
-        val icon = MapMarkerIcon(
-            bitmap = bitmap,
-            anchor = Offset(0.5f, (groundY / totalHeight).coerceIn(0f, 1f))
-        )
+        val drawsLabel = showTimeLabel && !timeLabel.isNullOrBlank()
+        val icon = if (!drawsLabel) {
+            base
+        } else {
+            val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            canvas.drawBitmap(base.bitmap, 0f, 0f, null)
+            canvas.drawMarkerLabel(
+                centerX = totalWidth / 2f,
+                top = groundY + sizePx * 0.05f,
+                height = (sizePx * 0.22f).coerceAtLeast(16f),
+                text = timeLabel,
+                background = if (isUrgent) palette.error else AndroidColor.argb(200, 26, 26, 26),
+                foreground = AndroidColor.WHITE,
+                outline = if (isUrgent) AndroidColor.WHITE else AndroidColor.TRANSPARENT,
+                maxWidth = totalWidth.toFloat()
+            )
+            MapMarkerIcon(bitmap, anchor)
+        }
         markerIconCache.put(cacheKey, icon)
         return icon
     } catch (exception: kotlinx.coroutines.CancellationException) {

@@ -250,7 +250,9 @@ internal fun MapAlertSidePanel(
     modifier: Modifier,
     isDismissed: Boolean = false,
     onDismissAlert: () -> Unit = {},
-    onRestoreAlert: () -> Unit = {}
+    onRestoreAlert: () -> Unit = {},
+    companions: List<PokemonAlert> = emptyList(),
+    onOpenCompanion: (PokemonAlert) -> Unit = {}
 ) {
     Surface(
         modifier = modifier
@@ -275,6 +277,8 @@ internal fun MapAlertSidePanel(
             isDismissed = isDismissed,
             onDismissAlert = onDismissAlert,
             onRestoreAlert = onRestoreAlert,
+            companions = companions,
+            onOpenCompanion = onOpenCompanion,
             modifier = Modifier.padding(24.dp)
         )
     }
@@ -295,6 +299,8 @@ internal fun MapAlertDetailContent(
     isDismissed: Boolean = false,
     onDismissAlert: () -> Unit = {},
     onRestoreAlert: () -> Unit = {},
+    companions: List<PokemonAlert> = emptyList(),
+    onOpenCompanion: (PokemonAlert) -> Unit = {},
     goDexAction: @Composable () -> Unit = {
         GoDexCaughtAction(alert = alert, matchResult = goDexStatus)
     }
@@ -450,6 +456,23 @@ internal fun MapAlertDetailContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+        if (companions.isNotEmpty()) {
+            Text("Also at this stop", style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.testTag("same_stop_companions"))
+            companions.forEach { companion ->
+                Surface(onClick = { onOpenCompanion(companion) }, shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.fillMaxWidth().testTag("same_stop_${companion.uniqueId}")) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(companion.name ?: companion.cleanPokemonName, style = MaterialTheme.typography.titleSmall)
+                        questAlertPresentation(companion)?.let { quest ->
+                            quest.task?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                            quest.reward?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                }
+            }
+        }
         val venue = alert.venueName
         val venueType = alert.venueTypeLabel
         val address = alert.pokemonLocation

@@ -7,8 +7,10 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Body
 import retrofit2.http.Query
@@ -135,6 +137,18 @@ interface FilterCatalogService {
     suspend fun getFilterCatalog(): FilterCatalog
 }
 
+/**
+ * The push topic scheme. Returned as a raw [Response] so a 304 can be told apart from a body:
+ * the endpoint is ETagged and cached for an hour, and the catalog changes only when the
+ * operator adds an area or renames the base topic.
+ */
+interface PushTopicsService {
+    @GET("api/push-topics")
+    suspend fun getPushTopics(
+        @Header("If-None-Match") etag: String? = null
+    ): Response<PushTopicCatalog>
+}
+
 interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(): List<PokemonAlert>
@@ -197,6 +211,15 @@ object PokemonAlertsApi {
     }
 
     val service: PokemonAlertsService by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .client(client)
+            .build()
+            .create()
+    }
+
+    val pushTopicsService: PushTopicsService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))

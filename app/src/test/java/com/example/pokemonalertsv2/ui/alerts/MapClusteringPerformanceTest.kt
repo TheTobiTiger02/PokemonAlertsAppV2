@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.alerts
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -10,6 +11,100 @@ import org.junit.Test
 import kotlin.random.Random
 
 class MapClusteringPerformanceTest {
+
+    /**
+     * The reported bug: a 350 marker limit engaged with well under 350 markers on screen.
+     *
+     * Markers are prepared for a box padded beyond the viewport so a pan has something ready,
+     * and the budget used to be counted over that padded set. Off-screen markers therefore
+     * spent the on-screen budget, and on a phone the padded box held several times a screenful.
+     */
+    @Test
+    fun theMarkerLimitCountsWhatIsOnScreenNotWhatIsPreparedAroundIt() {
+        val centreLatitude = 49.87
+        val centreLongitude = 8.65
+        val zoom = 16.0
+        val screen = mapViewportBounds(
+            centreLatitude, centreLongitude, zoom,
+            viewportWidthDp = 360f, viewportHeightDp = 800f, marginFactor = 0.0
+        )!!
+        val prepared = mapViewportBounds(
+            centreLatitude, centreLongitude, zoom,
+            viewportWidthDp = 360f, viewportHeightDp = 800f
+        )!!
+        val config = com.example.pokemonalertsv2.data.MapClusteringConfig(
+            grouping = com.example.pokemonalertsv2.data.MapGrouping.CURRENT,
+            zoomCutoff = 12,
+            overviewLimit = 350,
+            closeLimit = 350
+        )
+
+        // 200 on screen, comfortably under the limit, at distinct coordinates.
+        val onScreen = List(200) { index ->
+            PokemonAlert(
+                id = index + 1, name = "on $index", type = listOf("Spawn"),
+                latitude = centreLatitude + (index % 20 - 10) * (screen.north - screen.south) / 40.0,
+                longitude = centreLongitude + (index / 20 - 5) * (screen.east - screen.west) / 40.0
+            )
+        }
+        // 300 more in the prepared ring, outside the screen but inside what gets rendered.
+        val offScreen = List(300) { index ->
+            PokemonAlert(
+                id = 10_000 + index, name = "off $index", type = listOf("Spawn"),
+                latitude = screen.north + (prepared.north - screen.north) * (0.1 + 0.8 * (index % 30) / 30.0),
+                longitude = centreLongitude + (index / 30 - 5) * (screen.east - screen.west) / 40.0
+            )
+        }
+        val alerts = onScreen + offScreen
+        assertTrue(onScreen.all { screen.contains(it.latitude!!, it.longitude!!) })
+        assertFalse(offScreen.any { screen.contains(it.latitude!!, it.longitude!!) })
+
+        val items = clusterMapAlerts(alerts, zoom, config = config, budgetBounds = screen)
+
+        // 500 prepared against a 350 limit, but only 200 of them are visible: nothing clusters.
+        assertTrue(items.none { it is MapMarkerItem.Cluster })
+        assertFalse(items.any { it is MapMarkerItem.Cluster && it.markerLimitActive })
+
+        // Counting the prepared set instead - the old behaviour - does force clustering.
+        val countingEverything = clusterMapAlerts(alerts, zoom, config = config)
+        assertTrue(countingEverything.any { it is MapMarkerItem.Cluster })
+    }
+
+    /** A cluster that stays put keeps its id, so the map swaps its icon instead of replacing it. */
+    @Test
+    fun clusterIdsSurviveAMembershipChange() {
+        val alerts = List(40) { index ->
+            PokemonAlert(
+                id = index + 1, name = "alert $index", type = listOf("Spawn"),
+                latitude = 49.87, longitude = 8.65
+            )
+        }
+        val before = clusterMapAlerts(alerts, 16.0).filterIsInstance<MapMarkerItem.Cluster>()
+        val after = clusterMapAlerts(alerts.dropLast(1), 16.0).filterIsInstance<MapMarkerItem.Cluster>()
+
+        assertEquals(1, before.size)
+        assertEquals(1, after.size)
+        assertEquals(before.single().id, after.single().id)
+        assertEquals(40, before.single().alerts.size)
+        assertEquals(39, after.single().alerts.size)
+    }
+
+    /** Small pans reuse the prepared anchor; leaving the safe area re-anchors. */
+    @Test
+    fun theClusteringAnchorSurvivesSmallPansOnly() {
+        val anchor = MapCameraSnapshot(49.87, 8.65, 16.0)
+        val width = 360f
+        val height = 800f
+        fun retained(latitude: Double, longitude: Double, zoom: Double = 16.0) =
+            retainedMapAnchor(anchor, latitude, longitude, zoom, width, height)
+
+        assertEquals(anchor, retained(49.87, 8.65))
+        assertEquals(anchor, retained(49.8702, 8.6502))
+        // A quarter of a viewport is still within what was prepared; a whole one is not.
+        assertNotEquals(anchor, retained(49.87 + 0.02, 8.65))
+        // A zoom change always re-anchors: the whole projection moved.
+        assertNotEquals(anchor, retained(49.87, 8.65, zoom = 16.5))
+    }
 
     @Test
     fun denseGridsRespectBudgetAndPreserveEveryMemberAcrossZoomsAndRadii() {
@@ -136,7 +231,7 @@ class MapClusteringPerformanceTest {
 
         assertTrue(
             "Zoomed in, a dense view must keep more detail than the zoomed-out budget allows",
-            items.size > MAX_RENDERED_MAP_MARKERS
+            items.size > com.example.pokemonalertsv2.data.MapClusteringPreset.CURRENT.config.overviewLimit
         )
         assertTrue(items.size <= capFor(15.0))
         assertEquals(
@@ -151,8 +246,9 @@ class MapClusteringPerformanceTest {
     }
 
     /** Coarsening only starts at the larger ceiling once individual markers are expected. */
-    private fun capFor(zoom: Double): Int =
-        if (zoom >= MAP_CLUSTER_MAX_ZOOM) MAX_RENDERED_MAP_MARKERS_ZOOMED_IN else MAX_RENDERED_MAP_MARKERS
+    private fun capFor(zoom: Double): Int = with(com.example.pokemonalertsv2.data.MapClusteringPreset.CURRENT.config) {
+        if (zoom >= zoomCutoff) closeLimit else overviewLimit
+    }
 
     @Test
     fun viewportBoundsCoversTheScreenPlusMarginAndRejectsDegenerateSizes() {
@@ -166,10 +262,28 @@ class MapClusteringPerformanceTest {
         assertNotNull(bounds)
         bounds!!
         assertTrue(bounds.contains(49.87, 8.65))
-        assertTrue(bounds.contains(49.87 + 0.05, 8.65))
-        assertTrue(bounds.contains(49.87, 8.65 + 0.08))
-        assertFalse(bounds.contains(49.87 + 0.6, 8.65))
-        assertFalse(bounds.contains(49.87, 8.65 + 0.9))
+
+        // Padding is per axis, so a portrait viewport gets a portrait box. It used to be a
+        // square built from the half-diagonal, which covered about eight times the visible
+        // area - and since the marker limit was counted over whatever fell in this box, a
+        // "350 marker" limit engaged at a few dozen markers actually on screen.
+        val latitudeSpan = bounds.north - bounds.south
+        val longitudeSpan = bounds.east - bounds.west
+        assertTrue(latitudeSpan > longitudeSpan)
+
+        // The screen corner plus the margin is covered; well beyond it is not.
+        val screen = mapViewportBounds(
+            centreLatitude = 49.87,
+            centreLongitude = 8.65,
+            zoom = 13.0,
+            viewportWidthDp = 400f,
+            viewportHeightDp = 800f,
+            marginFactor = 0.0
+        )!!
+        assertTrue(bounds.contains(screen.north, screen.east))
+        assertTrue(bounds.contains(screen.south, screen.west))
+        assertFalse(bounds.contains(49.87 + latitudeSpan, 8.65))
+        assertFalse(bounds.contains(49.87, 8.65 + longitudeSpan))
 
         assertNull(
             mapViewportBounds(49.87, 8.65, 13.0, viewportWidthDp = 0f, viewportHeightDp = 800f)
