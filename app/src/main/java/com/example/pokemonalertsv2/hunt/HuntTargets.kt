@@ -30,3 +30,19 @@ internal fun huntTargets(
     }
     return mapPipBrowseOrder(matches, originLatitude, originLongitude)
 }
+
+/**
+ * Whether one alert is something [definition] is hunting, right now.
+ *
+ * Split out from [huntTargets] because it is also the question asked of a
+ * destination restored from storage, where there is no list to rank: the
+ * journey store outlives any one hunt, so without this a hunt would happily
+ * adopt whatever the last one left behind.
+ */
+internal fun isHuntTarget(
+    alert: PokemonAlert,
+    definition: FilterDefinition,
+    nowMillis: Long = System.currentTimeMillis()
+): Boolean =
+    alert.isEligibleArrivalDestination(nowMillis) &&
+        AlertFilterMatcher.matches(alert, definition)

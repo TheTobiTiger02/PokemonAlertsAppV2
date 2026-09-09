@@ -35,9 +35,8 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_OPEN = 40_042
     private const val REQUEST_MAPS = 40_043
     private const val REQUEST_GOT_IT = 40_044
+    private const val REQUEST_OVERLAY = 40_045
 
-    /** Android 16+ (API 36) exposes the Now Bar / live-update surfaces. */
-    private const val LIVE_NOTIFICATION_MIN_SDK = 36
     /** Assumed max journey distance for the progress bar, in meters. */
     private const val PROGRESS_MAX_METERS = 10_000f
 
@@ -89,6 +88,39 @@ internal object ArrivalTrackingNotifications {
             .build()
     }
 
+    /**
+     * A hunt that is running but has nothing to walk to yet.
+     *
+     * A hunt outlives its targets — you can start one for a boss that has not
+     * spawned, and every target you catch leaves you with none until the next
+     * alert arrives. The service therefore stays alive with no destination, and
+     * this is what it says while it waits.
+     */
+    fun huntStandby(context: Context, huntName: String): Notification {
+        val title = "Hunting $huntName"
+        val body = "Waiting for a match"
+        if (Build.VERSION.SDK_INT < LIVE_NOTIFICATION_MIN_SDK) {
+            return ongoingBuilder(context)
+                .setContentTitle(title)
+                .setContentText(body)
+                .addAction(0, "Stop hunt", stopPendingIntent(context))
+                .build()
+        }
+        return liveBuilder(context, alert = null)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(Notification.BigTextStyle().bigText(body))
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, R.drawable.ic_poke_notification),
+                    "Stop hunt",
+                    stopPendingIntent(context)
+                ).build()
+            )
+            .apply { setShortCriticalText("Waiting") }
+            .build()
+    }
+
     fun ongoing(
         context: Context,
         destination: TrackedDestination,
@@ -96,7 +128,8 @@ internal object ArrivalTrackingNotifications {
         walkingRoute: WalkingRouteInfo? = null,
         inRange: Boolean = false,
         waitingForPreciseLocation: Boolean = false,
-        huntActive: Boolean = false
+        huntActive: Boolean = false,
+        offerOverlay: Boolean = false
     ): Notification {
         val alert = destination.alert
         val content = ongoingContent(
@@ -142,7 +175,10 @@ internal object ArrivalTrackingNotifications {
                 .addAction(
                     Notification.Action.Builder(
                         Icon.createWithResource(context, R.drawable.ic_poke_notification),
-                        "Stop",
+                        // During a hunt this ends the hunt, not just this leg. Saying
+                        // "Stop" while the hunt carried on and instantly picked a new
+                        // target is what made stopping feel like it did nothing.
+                        if (huntActive) "Stop hunt" else "Stop",
                         stopPendingIntent(context)
                     ).build()
                 )
@@ -159,9 +195,10 @@ internal object ArrivalTrackingNotifications {
                 }
                 .build()
         }
-        return ongoingBuilder(context)
+        return ongoingBuilder(context, alert)
             .setContentTitle(title)
             .setContentText(content)
+            .setSubText(content)
             .setContentIntent(openAlertPendingIntent(context, alert))
             .apply {
                 if (huntActive) {
@@ -170,9 +207,22 @@ internal object ArrivalTrackingNotifications {
             }
             .addAction(
                 R.drawable.ic_poke_notification,
-                "Stop",
+                if (huntActive) "Stop hunt" else "Stop",
                 stopPendingIntent(context)
             )
+            // Offered exactly when the readout has nowhere else to go: no chip on
+            // this API level, no overlay grant, and the map label only exists inside
+            // the floating window. Without this the journey degrades silently to a
+            // shade entry, which reads as the feature being broken.
+            .apply {
+                if (offerOverlay) {
+                    addAction(
+                        R.drawable.ic_pip,
+                        context.getString(R.string.journey_overlay_action),
+                        overlaySettingsPendingIntent(context)
+                    )
+                }
+            }
             .setRequestPromotedOngoing(true)
             // Carried on every version: below 36 NotificationCompat stores it as an
             // extra, at 36 it becomes the status bar chip's text. It was being computed
@@ -365,9 +415,18 @@ internal object ArrivalTrackingNotifications {
         return if (metadata.isEmpty()) lead else "$lead ${metadata.joinToString(" \u2022 ")}"
     }
 
-    private fun ongoingBuilder(context: Context): NotificationCompat.Builder =
+    private fun ongoingBuilder(
+        context: Context,
+        alert: PokemonAlert? = null
+    ): NotificationCompat.Builder =
         NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_poke_notification)
+            // The accent the raid Live Update already carries, and what tints the
+            // chip. liveBuilder set it on the API 36 path only, so the shade entry
+            // below that was the one uncoloured surface.
+            .apply {
+                alert?.let { setColor(resolveAlertVisualStyle(it).category.accentArgb.toInt()) }
+            }
             .setPriority(NotificationCompat.PRIORITY_LOW)
             // Navigation, not service, for the same reason [liveBuilder] uses it: a
             // journey to a place is not plumbing for a running service, and the
@@ -407,6 +466,18 @@ internal object ArrivalTrackingNotifications {
             Intent(context, ArrivalTrackingService::class.java).apply {
                 action = ArrivalTrackingService.ACTION_GOT_IT
             },
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+
+    /** Straight to the "Display over other apps" switch for this app. */
+    private fun overlaySettingsPendingIntent(context: Context): PendingIntent =
+        PendingIntent.getActivity(
+            context,
+            REQUEST_OVERLAY,
+            Intent(
+                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                android.net.Uri.parse("package:" + context.packageName)
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
 

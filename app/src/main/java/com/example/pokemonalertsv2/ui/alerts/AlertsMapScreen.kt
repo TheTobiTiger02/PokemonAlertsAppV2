@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.os.Build
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -114,6 +115,11 @@ import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
+import com.example.pokemonalertsv2.tracking.JourneyOverlay
+import com.example.pokemonalertsv2.tracking.JourneyReadoutSurface
+import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
+import com.example.pokemonalertsv2.tracking.shouldLabelJourneyOnMap
+import com.example.pokemonalertsv2.tracking.journeyDetailText
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
@@ -916,7 +922,7 @@ internal fun AlertsMapScreenContent(
         userLocation?.longitude
     ) {
         val definition = huntSession?.definition
-        if (!huntPictureInPicture || definition == null) {
+        if (definition == null) {
             emptyList()
         } else {
             huntTargets(
@@ -1234,6 +1240,62 @@ internal fun AlertsMapScreenContent(
                                 huntRepository.setTarget(intent.alert.uniqueId)
                             }
                         }
+                    }
+                }
+            }
+    }
+
+    // Which of the three surfaces this device uses. Re-read per composition rather
+    // than cached: the overlay grant is handed out in Settings, so the app comes
+    // back with it already changed.
+    val overlayAllowed by alertPreferences.journeyOverlayEnabled
+        .collectAsStateWithLifecycle(initialValue = false)
+    val journeyReadoutOnMap = shouldLabelJourneyOnMap(
+        resolveJourneyReadoutSurface(
+            sdkInt = Build.VERSION.SDK_INT,
+            canDrawOverlays = JourneyOverlay.canDraw(context),
+            overlayAllowed = overlayAllowed
+        )
+    )
+    val journeyDistanceMeters = remember(
+        arrivalTracking.activeDestination?.uniqueId,
+        userLocation?.latitude,
+        userLocation?.longitude
+    ) {
+        val destination = arrivalTracking.activeDestination ?: return@remember null
+        val location = userLocation ?: return@remember null
+        mapPipDistanceMeters(
+            location.latitude,
+            location.longitude,
+            destination.latitude,
+            destination.longitude
+        ).toFloat()
+    }
+
+    // A hunt has to walk you somewhere even when the floating map is closed.
+    // Target selection used to live entirely in the window's browse cursor, so on a
+    // device that shows the status bar chip -- where the window is deliberately not
+    // opened, because it would hide the chip -- a hunt started and then just sat there.
+    val currentHuntTargets by rememberUpdatedState(huntTargetAlerts)
+    val currentTrackedId by rememberUpdatedState(arrivalTracking.activeDestination?.uniqueId)
+    LaunchedEffect(huntSession?.name) {
+        if (huntSession == null) return@LaunchedEffect
+        snapshotFlow { currentTrackedId to currentHuntTargets.firstOrNull()?.uniqueId }
+            .distinctUntilChanged()
+            .collectLatest { (tracked, nearestId) ->
+                if (tracked != null || nearestId == null) return@collectLatest
+                val nearest = currentHuntTargets.firstOrNull() ?: return@collectLatest
+                // Same debounce the browse driver uses: the nearest match churns as
+                // the feed refreshes, and a journey should commit to one of them.
+                delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
+                withContext(NonCancellable) {
+                    // Re-read the hunt rather than trusting the composition: stopping
+                    // during the debounce above used to land here anyway, and start a
+                    // journey for a hunt that no longer existed -- which is what made
+                    // a stopped hunt look like it was still running.
+                    if (!huntRepository.isHunting()) return@withContext
+                    if (browseArrivalTracker.start(nearest)) {
+                        huntRepository.setTarget(nearest.uniqueId)
                     }
                 }
             }
@@ -1974,6 +2036,40 @@ internal fun AlertsMapScreenContent(
                         }
                     }
                 }
+            }
+        }
+
+        // The last-resort readout. On a device with the status bar chip, or with the
+        // floating pill, this stays off and the map keeps its space; it appears only
+        // when neither surface is available, because a journey with no readout at all
+        // is worse than one line over the map.
+        val journeyDestination = arrivalTracking.activeDestination
+        if (compactPictureInPicture && journeyDestination != null && journeyReadoutOnMap) {
+            Surface(
+                modifier = Modifier
+                    // Top, not bottom: the OpenStreetMap attribution owns the bottom
+                    // edge and the two would sit on top of each other in this window.
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .testTag("map_journey_label"),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = journeyDetailText(
+                        alert = journeyDestination.alert,
+                        distanceMeters = journeyDistanceMeters,
+                        inRange = false,
+                        huntActive = huntSession != null,
+                        inRangeFallback = stringResource(R.string.journey_overlay_in_range),
+                        locatingFallback = stringResource(R.string.journey_overlay_locating)
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
             }
         }
 

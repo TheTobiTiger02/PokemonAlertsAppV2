@@ -1160,7 +1160,7 @@ internal fun OpenStreetMapView(
  * shared sprite now, so leaving it out is what makes a pin's identity - and therefore its style
  * image - stable while the clock runs.
  */
-private fun openStreetMapIconRequest(
+internal fun openStreetMapIconRequest(
     alert: PokemonAlert,
     markerSizePx: Int,
     basePalette: MapMarkerPalette,
@@ -1223,7 +1223,7 @@ private const val MAX_CACHED_PINS = 1600
  * a glow - and it is the one property of an alert that changes on its own over time. Everything
  * else that affects the drawing is tracked by the cache's generation instead.
  */
-private fun openStreetMapPinCacheKey(item: MapMarkerItem, nowMillis: Long): String = when (item) {
+internal fun openStreetMapPinCacheKey(item: MapMarkerItem, nowMillis: Long): String = when (item) {
     is MapMarkerItem.Alert ->
         "a|${item.alert.uniqueId}|${isMapMarkerUrgent(item.alert.endTime, nowMillis)}"
     is MapMarkerItem.Cluster ->
@@ -1233,7 +1233,7 @@ private fun openStreetMapPinCacheKey(item: MapMarkerItem, nowMillis: Long): Stri
 private fun openStreetMapClusterIconId(item: MapMarkerItem.Cluster, sizePx: Int): String =
     "cluster|$sizePx|${item.sharedCategory?.name.orEmpty()}|${item.alerts.size}"
 
-private fun createImmediateOpenStreetMapMarker(
+internal fun createImmediateOpenStreetMapMarker(
     item: MapMarkerItem,
     markerSizePx: Int,
     clusterMarkerSizePx: Int,
@@ -1267,7 +1267,7 @@ private fun createImmediateOpenStreetMapMarker(
     )
 }
 
-private fun openStreetMapStyleJson(): String {
+internal fun openStreetMapStyleJson(): String {
     val tileUrl = BuildConfig.OSM_TILE_URL
         .replace("\\", "\\\\")
         .replace("\"", "\\\"")

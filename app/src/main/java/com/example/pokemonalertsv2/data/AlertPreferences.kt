@@ -19,6 +19,10 @@ private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
 private val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
 private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
+private val FLOATING_MAP_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_x")
+private val FLOATING_MAP_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_y")
+private val FLOATING_MAP_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_width")
+private val FLOATING_MAP_HEIGHT_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_height")
 private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("use_imperial_units")
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
@@ -245,6 +249,15 @@ interface AlertPreferencesStore {
         get() = flowOf(true)
 
     suspend fun updateJourneyOverlayEnabled(enabled: Boolean) = Unit
+
+    /**
+     * Where the trainer last left the floating hunt map, or null while they have
+     * never moved it. Read once when the window opens and written when a drag
+     * ends, so a suspend pair rather than a Flow — nothing observes it.
+     */
+    suspend fun getFloatingMapGeometry(): FloatingMapGeometry? = null
+
+    suspend fun updateFloatingMapGeometry(x: Int, y: Int, width: Int, height: Int) = Unit
 
     val lastSuccessfulAlertSyncMillis: Flow<Long>
     suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long)
@@ -669,6 +682,27 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         }
     }
 
+    override suspend fun getFloatingMapGeometry(): FloatingMapGeometry? {
+        val preferences = dataStore.data.first()
+        val width = preferences[FLOATING_MAP_WIDTH_KEY] ?: return null
+        val height = preferences[FLOATING_MAP_HEIGHT_KEY] ?: return null
+        return FloatingMapGeometry(
+            x = preferences[FLOATING_MAP_X_KEY] ?: 0,
+            y = preferences[FLOATING_MAP_Y_KEY] ?: 0,
+            width = width,
+            height = height
+        )
+    }
+
+    override suspend fun updateFloatingMapGeometry(x: Int, y: Int, width: Int, height: Int) {
+        dataStore.edit { prefs ->
+            prefs[FLOATING_MAP_X_KEY] = x
+            prefs[FLOATING_MAP_Y_KEY] = y
+            prefs[FLOATING_MAP_WIDTH_KEY] = width
+            prefs[FLOATING_MAP_HEIGHT_KEY] = height
+        }
+    }
+
     override val spacialRendEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[SPACIAL_REND_ENABLED_KEY] ?: false
     }
@@ -1036,4 +1070,12 @@ val DEFAULT_ROCKET_FILTER_TYPES: List<String> = listOf(
     "Normal", "Fire", "Water", "Electric", "Grass", "Ice",
     "Fighting", "Poison", "Ground", "Flying", "Psychic", "Bug",
     "Rock", "Ghost", "Dragon", "Dark", "Steel", "Fairy", "Mixed"
+)
+
+/** The floating hunt map's window position and size, in raw pixels. */
+data class FloatingMapGeometry(
+    val x: Int,
+    val y: Int,
+    val width: Int,
+    val height: Int
 )

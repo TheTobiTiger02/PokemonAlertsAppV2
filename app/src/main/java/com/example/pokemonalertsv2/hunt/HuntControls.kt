@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
+import com.example.pokemonalertsv2.tracking.JourneyOverlay
+import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
+import com.example.pokemonalertsv2.tracking.shouldOpenHuntPictureInPicture
 import kotlinx.coroutines.launch
 
 /**
@@ -52,6 +59,14 @@ fun HuntControls(
     val session by huntRepository.activeHunt.collectAsStateWithLifecycle()
 
     var pickerOpen by remember { mutableStateOf(false) }
+    val overlayAllowed by remember(context) {
+        AlertPreferences(context.alertPreferencesDataStore).journeyOverlayEnabled
+    }.collectAsStateWithLifecycle(initialValue = false)
+    val readoutSurface = resolveJourneyReadoutSurface(
+        sdkInt = Build.VERSION.SDK_INT,
+        canDrawOverlays = JourneyOverlay.canDraw(context),
+        overlayAllowed = overlayAllowed
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         val active = session
@@ -84,10 +99,10 @@ fun HuntControls(
                 TextButton(
                     onClick = {
                         scope.launch {
-                            huntRepository.stop()
-                            // The journey belongs to the hunt: leaving it running
-                            // would keep a pill up for a trip nobody is taking.
-                            ArrivalTrackingRepository.getInstance(context).stopTracking()
+                                    // One path for every stop button -- this one, the
+                            // window's, and the notification's -- so they cannot
+                            // end up ending different amounts of the hunt.
+                            ArrivalTrackingService.stopEverything(context)
                         }
                     }
                 ) {
@@ -106,9 +121,22 @@ fun HuntControls(
             onDismiss = { pickerOpen = false },
             onStart = { name, definition ->
                 scope.launch {
+                    // The hunt is written first, then the old journey is cleared.
+                    // The other order leaves a moment with neither a destination nor
+                    // a hunt, and a service running for the old journey reads that as
+                    // "nothing to do" and stops itself mid-start.
                     huntRepository.start(name = name, definition = definition)
+                    // A new hunt supersedes whatever you were walking to. Without
+                    // this the old journey simply carries on under the new hunt's
+                    // name, which is how a raid hunt ended up pointing at a spawn.
+                    ArrivalTrackingRepository.getInstance(context).stopTracking()
                     pickerOpen = false
-                    onHuntStarted()
+                    // Start the service even with nothing to walk to yet: it is
+                    // what waits for the first match to arrive.
+                    ArrivalTrackingService.startHunt(context)
+                    // Only where the floating map is the readout. On a device with the
+                    // status bar chip, opening it would hide the chip for the whole hunt.
+                    if (shouldOpenHuntPictureInPicture(readoutSurface)) onHuntStarted()
                 }
             }
         )

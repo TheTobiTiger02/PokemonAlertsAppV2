@@ -18,18 +18,16 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
-import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import kotlin.math.roundToInt
 
 /**
  * The floating journey pill.
  *
- * Android 15 has no status-bar chip a third-party app can reach — the surface
- * the Clock's timer uses is gated behind a per-app allowlist, and the AOSP API
- * for it (promoted ongoing notifications) is API 36. An overlay window is the
- * only way to keep the distance on screen while the trainer is in Pokemon GO,
- * so that is what this is: one line, always on top, never in the way.
+ * The middle of the three readout surfaces — see [resolveJourneyReadoutSurface].
+ * Below API 36 there is no promoted-ongoing chip to put the distance in, so an
+ * overlay window is the next best way to keep it on screen while the trainer is
+ * in Pokemon GO: one line, always on top, never in the way.
  *
  * Built from plain views rather than Compose. Hosting a ComposeView in a
  * WindowManager overlay needs ViewTreeLifecycleOwner and SavedStateRegistryOwner
@@ -109,29 +107,20 @@ internal class JourneyOverlay(context: Context) {
         }
     }
 
-    /**
-     * The same rule the notification chip follows, so the two never disagree:
-     * distance while walking, then whatever decides your next tap once you are
-     * close enough to see the thing.
-     */
+    /** Delegated so the pill, the chip and the map label cannot disagree. */
     private fun detailText(
         alert: PokemonAlert,
         distanceMeters: Float?,
         inRange: Boolean,
         huntActive: Boolean
-    ): String = when {
-        inRange -> (if (huntActive) huntInRangeChipText(alert) else null)
-            ?: appContext.getString(R.string.journey_overlay_in_range)
-        distanceMeters != null -> formatDistance(distanceMeters)
-        else -> appContext.getString(R.string.journey_overlay_locating)
-    }
-
-    private fun formatDistance(distanceMeters: Float): String =
-        if (distanceMeters < 1_000f) {
-            "${distanceMeters.roundToInt()} m"
-        } else {
-            String.format(java.util.Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
-        }
+    ): String = journeyDetailText(
+        alert = alert,
+        distanceMeters = distanceMeters,
+        inRange = inRange,
+        huntActive = huntActive,
+        inRangeFallback = appContext.getString(R.string.journey_overlay_in_range),
+        locatingFallback = appContext.getString(R.string.journey_overlay_locating)
+    )
 
     @SuppressLint("ClickableViewAccessibility")
     private fun createView(): LinearLayout {

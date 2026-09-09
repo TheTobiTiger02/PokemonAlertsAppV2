@@ -119,6 +119,32 @@ class HuntTargetsTest {
         assertTrue(targets.isEmpty())
     }
 
+    @Test
+    fun `a destination left over from another hunt is not this hunt's target`() {
+        // The journey store outlives a hunt, so a raid hunt booting up would find
+        // whatever the last one was walking to and present it as a raid.
+        val spawn = PokemonAlert(
+            name = "Larvitar",
+            type = listOf("Spawn"),
+            pokemon = "Larvitar",
+            latitude = 50.0,
+            longitude = 8.0,
+            endTime = future
+        )
+        assertEquals(false, isHuntTarget(spawn, dragonGrunts, now))
+    }
+
+    @Test
+    fun `a match that has already ended is not a target either`() {
+        val expired = grunt("Dragon", "Dragon", 50.0, 8.0).copy(endTime = past)
+        assertEquals(false, isHuntTarget(expired, dragonGrunts, now))
+    }
+
+    @Test
+    fun `a live match is`() {
+        assertEquals(true, isHuntTarget(grunt("Dragon", "Dragon", 50.0, 8.0), dragonGrunts, now))
+    }
+
     private fun grunt(
         name: String,
         gruntType: String,

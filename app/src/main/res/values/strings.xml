@@ -80,6 +80,7 @@
     <string name="journey_overlay_in_range">In range</string>
     <string name="journey_overlay_locating">Finding you…</string>
     <string name="journey_overlay_hide">Hide the journey pill</string>
+    <string name="journey_overlay_action">Show over apps</string>
     <string name="journey_overlay_title">Floating journey pill</string>
     <string name="journey_overlay_summary">Keeps the distance on screen while you walk, over other apps.</string>
     <string name="journey_overlay_permission_title">Allow the floating pill?</string>
