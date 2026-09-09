@@ -17,6 +17,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
@@ -33,6 +34,7 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_STOP = 40_041
     private const val REQUEST_OPEN = 40_042
     private const val REQUEST_MAPS = 40_043
+    private const val REQUEST_GOT_IT = 40_044
 
     /** Android 16+ (API 36) exposes the Now Bar / live-update surfaces. */
     private const val LIVE_NOTIFICATION_MIN_SDK = 36
@@ -93,7 +95,8 @@ internal object ArrivalTrackingNotifications {
         distanceMeters: Float? = null,
         walkingRoute: WalkingRouteInfo? = null,
         inRange: Boolean = false,
-        waitingForPreciseLocation: Boolean = false
+        waitingForPreciseLocation: Boolean = false,
+        huntActive: Boolean = false
     ): Notification {
         val alert = destination.alert
         val content = ongoingContent(
@@ -111,7 +114,9 @@ internal object ArrivalTrackingNotifications {
         val title = ongoingTitle(alert)
         val expandedBody = buildExpandedBody(alert, content, remaining)
         val chip = when {
-            inRange -> "In range"
+            // Close enough to see it: the distance has stopped being the useful
+            // number, so a hunt swaps in whatever decides the next tap instead.
+            inRange -> (if (huntActive) huntInRangeChipText(alert) else null) ?: "In range"
             waitingForPreciseLocation -> null
             walkingRoute != null -> formatDistance(walkingRoute.distanceMeters.toFloat())
             distanceMeters != null -> formatDistance(distanceMeters)
@@ -123,6 +128,17 @@ internal object ArrivalTrackingNotifications {
                 .setContentTitle(title)
                 .setContentText(content)
                 .setContentIntent(openAlertPendingIntent(context, alert))
+                .apply {
+                    if (huntActive) {
+                        addAction(
+                            Notification.Action.Builder(
+                                Icon.createWithResource(context, R.drawable.ic_check),
+                                "Got it",
+                                gotItPendingIntent(context)
+                            ).build()
+                        )
+                    }
+                }
                 .addAction(
                     Notification.Action.Builder(
                         Icon.createWithResource(context, R.drawable.ic_poke_notification),
@@ -147,12 +163,24 @@ internal object ArrivalTrackingNotifications {
             .setContentTitle(title)
             .setContentText(content)
             .setContentIntent(openAlertPendingIntent(context, alert))
+            .apply {
+                if (huntActive) {
+                    addAction(R.drawable.ic_check, "Got it", gotItPendingIntent(context))
+                }
+            }
             .addAction(
                 R.drawable.ic_poke_notification,
                 "Stop",
                 stopPendingIntent(context)
             )
             .setRequestPromotedOngoing(true)
+            // Carried on every version: below 36 NotificationCompat stores it as an
+            // extra, at 36 it becomes the status bar chip's text. It was being computed
+            // and thrown away on this path.
+            .apply { chip?.let { setShortCriticalText(it) } }
+            // BigTextStyle, not ProgressStyle: NotificationCompat.ProgressStyle degrades
+            // to the *default* style below API 36, which would drop the expanded body --
+            // the one place a pre-36 device renders the detail behind a tap.
             .setStyle(NotificationCompat.BigTextStyle().bigText(expandedBody))
             .build()
     }
@@ -341,7 +369,11 @@ internal object ArrivalTrackingNotifications {
         NotificationCompat.Builder(context, CHANNEL_ONGOING)
             .setSmallIcon(R.drawable.ic_poke_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            // Navigation, not service, for the same reason [liveBuilder] uses it: a
+            // journey to a place is not plumbing for a running service, and the
+            // promoted-ongoing surface filters CATEGORY_SERVICE out. Fixing this only
+            // on the API 36 builder left every device below it on the wrong category.
+            .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
@@ -359,6 +391,22 @@ internal object ArrivalTrackingNotifications {
             context,
             REQUEST_MAPS,
             Intent(Intent.ACTION_VIEW, alert.googleMapsUri),
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+
+    /**
+     * Delivered to the service rather than a receiver, the same way Stop is: an
+     * explicit component needs no manifest intent-filter, which is exactly what
+     * leaves [com.example.pokemonalertsv2.notifications.NotificationActionReceiver]'s
+     * snooze action undeliverable.
+     */
+    private fun gotItPendingIntent(context: Context): PendingIntent =
+        PendingIntent.getService(
+            context,
+            REQUEST_GOT_IT,
+            Intent(context, ArrivalTrackingService::class.java).apply {
+                action = ArrivalTrackingService.ACTION_GOT_IT
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
 

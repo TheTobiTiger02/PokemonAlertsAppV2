@@ -18,6 +18,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.Response
 
 class PokemonAlertsRepositoryTest {
 
@@ -96,30 +98,89 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
-    fun fetchAlerts_skipsDaoReplaceWhenFetchedDataIsUnchanged() = runTest {
+    fun fetchAlerts_skipsDaoWriteWhenServerReportsNotModified() = runTest {
         val alert = sampleAlert("Service")
-        service.alerts = listOf(alert)
         dao.alerts.value = listOf(alert.toEntity().copy(createdAt = 123L))
+        preferences.syncCursor = AlertSyncCursor(revision = 7L, etag = "etag-a")
+        service.syncStatus = 304
 
         val fetched = repository.fetchAlerts()
 
         assertEquals(listOf(alert), fetched)
         assertEquals(0, dao.insertCalls)
         assertEquals(0, dao.clearCalls)
+        assertEquals(listOf(7L to "etag-a"), service.syncRequests)
+        // A 304 tells us nothing new, so the cursor must not move.
+        assertEquals(AlertSyncCursor(revision = 7L, etag = "etag-a"), preferences.syncCursor)
     }
 
     @Test
-    fun fetchAlerts_prunesExpiredCacheWhenFetchedDataIsUnchanged() = runTest {
+    fun fetchAlerts_prunesExpiredCacheEvenWhenNotModified() = runTest {
+        // The server's own expiry timer and this device's clock can disagree, so
+        // a 304 must not stop the local sweep.
         val expired = sampleAlert("Expired", endTime = "1500000000000")
-        service.alerts = listOf(expired)
         dao.alerts.value = listOf(expired.toEntity().copy(createdAt = 123L))
+        preferences.syncCursor = AlertSyncCursor(revision = 7L, etag = "etag-a")
+        service.syncStatus = 304
 
         val fetched = repository.fetchAlerts()
 
-        assertEquals(listOf(expired), fetched)
+        assertTrue(fetched.isEmpty())
         assertTrue(dao.alerts.value.isEmpty())
         assertEquals(1, dao.clearCalls)
-        assertEquals(1, dao.insertCalls)
+    }
+
+    @Test
+    fun fetchAlerts_appliesDeltaUpsertsAndRemovals() = runTest {
+        val kept = sampleAlert("Kept", id = 1)
+        val doomed = sampleAlert("Doomed", id = 2)
+        dao.alerts.value = listOf(kept.toEntity(), doomed.toEntity())
+        preferences.syncCursor = AlertSyncCursor(revision = 4L, etag = "etag-old")
+
+        val added = sampleAlert("Added", id = 3)
+        service.alerts = listOf(added)
+        service.syncFull = false
+        service.syncRevision = 9L
+        service.syncEtag = "etag-new"
+        service.syncRemoved = listOf(RemovedAlert(id = 2, name = "Doomed", endTime = doomed.endTime))
+
+        repository.fetchAlerts()
+
+        assertEquals(
+            setOf("server-1", "server-3"),
+            dao.alerts.value.map { it.uniqueId }.toSet()
+        )
+        assertEquals(AlertSyncCursor(revision = 9L, etag = "etag-new"), preferences.syncCursor)
+    }
+
+    @Test
+    fun fetchAlerts_replacesCacheWhenServerCannotAnswerFromHistory() = runTest {
+        val stale = sampleAlert("Stale", id = 1)
+        dao.alerts.value = listOf(stale.toEntity())
+        preferences.syncCursor = AlertSyncCursor(revision = 4L, etag = "etag-old")
+
+        service.alerts = listOf(sampleAlert("Fresh", id = 2))
+        service.syncFull = true
+        service.syncRevision = 1L
+
+        repository.fetchAlerts()
+
+        assertEquals(listOf("server-2"), dao.alerts.value.map { it.uniqueId })
+    }
+
+    @Test
+    fun fetchAlerts_replacesCacheOnFirstSyncEvenWhenServerSendsADelta() = runTest {
+        // No stored cursor means the cache's provenance is unknown; a delta
+        // cannot be trusted to reconcile it.
+        val orphan = sampleAlert("Orphan", id = 1)
+        dao.alerts.value = listOf(orphan.toEntity())
+        service.alerts = listOf(sampleAlert("Fresh", id = 2))
+        service.syncFull = false
+        service.syncRevision = 3L
+
+        repository.fetchAlerts()
+
+        assertEquals(listOf("server-2"), dao.alerts.value.map { it.uniqueId })
     }
 
     @Test
@@ -562,9 +623,40 @@ class PokemonAlertsRepositoryTest {
         val totalStatsRequests = mutableListOf<String?>()
         val currentWeatherRequests = mutableListOf<String>()
 
-        override suspend fun getPokemonAlerts(): List<PokemonAlert> {
+        /** Set to 304 to make the next sync a no-op the way an unchanged server would. */
+        var syncStatus: Int = 200
+        var syncFull: Boolean = true
+        var syncRevision: Long = 1L
+        var syncRemoved: List<RemovedAlert> = emptyList()
+        var syncEtag: String? = null
+        val syncRequests = mutableListOf<Pair<Long?, String?>>()
+
+        override suspend fun getPokemonAlerts(since: Long?, etag: String?): Response<AlertSyncResponse> {
             fetchGate?.await()
-            return alerts
+            syncRequests += since to etag
+            if (syncStatus == 304) {
+                // Retrofit only produces a 304 through its error branch: OkHttp
+                // counts only 200..299 as successful.
+                val raw = okhttp3.Response.Builder()
+                    .code(304)
+                    .message("Not Modified")
+                    .protocol(okhttp3.Protocol.HTTP_1_1)
+                    .request(okhttp3.Request.Builder().url("http://localhost/api/pokemon").build())
+                    .build()
+                return Response.error("".toResponseBody(null), raw)
+            }
+            val headers = okhttp3.Headers.Builder().apply {
+                syncEtag?.let { add("ETag", it) }
+            }.build()
+            return Response.success(
+                AlertSyncResponse(
+                    revision = syncRevision,
+                    full = syncFull,
+                    alerts = alerts,
+                    removed = syncRemoved
+                ),
+                headers
+            )
         }
         override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
             historyResponse
@@ -786,6 +878,12 @@ class PokemonAlertsRepositoryTest {
 
         override val lastSuccessfulAlertSyncMillis: Flow<Long> = lastSyncState.asStateFlow()
         override suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long) { lastSyncState.value = timestampMillis }
+        var syncCursor: AlertSyncCursor = AlertSyncCursor()
+        override suspend fun getAlertSyncCursor(): AlertSyncCursor = syncCursor
+        override suspend fun updateAlertSyncCursor(cursor: AlertSyncCursor) { syncCursor = cursor }
+        private val lastPushState = MutableStateFlow(0L)
+        override val lastPushReceivedMillis: Flow<Long> = lastPushState.asStateFlow()
+        override suspend fun updateLastPushReceivedMillis(timestampMillis: Long) { lastPushState.value = timestampMillis }
         override suspend fun applyNotificationPreset(preset: NotificationPreset) = Unit
         override val selectedAlertFilterName: Flow<String> = selectedAlertFilterState.asStateFlow()
         override suspend fun updateSelectedAlertFilterName(filterName: String) { selectedAlertFilterState.value = filterName }

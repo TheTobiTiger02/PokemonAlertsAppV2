@@ -53,7 +53,11 @@ private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreference
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
 private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
+private val JOURNEY_OVERLAY_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("journey_overlay_enabled")
 private val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
+private val ALERT_SYNC_REVISION_KEY = androidx.datastore.preferences.core.longPreferencesKey("alert_sync_revision")
+private val ALERT_SYNC_ETAG_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_sync_etag")
+private val LAST_PUSH_RECEIVED_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_push_received_at")
 private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_alert_filter")
 
 // Per-surface category selections. An empty set means "no narrowing" — every category shows.
@@ -114,6 +118,18 @@ enum class MapStylePreference {
         }
     }
 }
+
+/**
+ * The client's position in the server's active-alert revision stream.
+ *
+ * [revision] is null until the first successful sync; the repository treats that
+ * as "replace everything", because a delta cannot be trusted to reconcile a
+ * cache whose starting point is unknown.
+ */
+data class AlertSyncCursor(
+    val revision: Long? = null,
+    val etag: String? = null
+)
 
 interface AlertPreferencesStore {
     /** Unified, versioned eligibility rules. Default bodies keep lightweight test stores source-compatible. */
@@ -220,8 +236,32 @@ interface AlertPreferencesStore {
     val spacialRendEnabled: Flow<Boolean>
     suspend fun updateSpacialRendEnabled(enabled: Boolean)
 
+    /**
+     * Whether an active journey shows the floating pill. Defaults on: the pill is
+     * the only always-visible readout below Android 16, and it still cannot appear
+     * without the overlay permission, so defaulting it on surprises nobody.
+     */
+    val journeyOverlayEnabled: Flow<Boolean>
+        get() = flowOf(true)
+
+    suspend fun updateJourneyOverlayEnabled(enabled: Boolean) = Unit
+
     val lastSuccessfulAlertSyncMillis: Flow<Long>
     suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long)
+
+    /**
+     * Where the last alert sync got to. Read once per sync and written once, so
+     * it is a suspend pair rather than a Flow — nothing observes it.
+     */
+    suspend fun getAlertSyncCursor(): AlertSyncCursor
+    suspend fun updateAlertSyncCursor(cursor: AlertSyncCursor)
+
+    /**
+     * When a push last reached this device. Surfaced in settings so a silent FCM
+     * outage is visible rather than looking like a quiet evening.
+     */
+    val lastPushReceivedMillis: Flow<Long>
+    suspend fun updateLastPushReceivedMillis(timestampMillis: Long)
 
     suspend fun applyNotificationPreset(preset: NotificationPreset)
 
@@ -619,6 +659,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         }
     }
 
+    override val journeyOverlayEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[JOURNEY_OVERLAY_ENABLED_KEY] ?: true
+    }
+
+    override suspend fun updateJourneyOverlayEnabled(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[JOURNEY_OVERLAY_ENABLED_KEY] = enabled
+        }
+    }
+
     override val spacialRendEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[SPACIAL_REND_ENABLED_KEY] ?: false
     }
@@ -636,6 +686,35 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long) {
         dataStore.edit { prefs ->
             prefs[LAST_SUCCESSFUL_ALERT_SYNC_KEY] = timestampMillis.coerceAtLeast(0L)
+        }
+    }
+
+    override suspend fun getAlertSyncCursor(): AlertSyncCursor {
+        val prefs = dataStore.data.first()
+        return AlertSyncCursor(
+            revision = prefs[ALERT_SYNC_REVISION_KEY],
+            etag = prefs[ALERT_SYNC_ETAG_KEY]
+        )
+    }
+
+    override val lastPushReceivedMillis: Flow<Long> = dataStore.data.map { preferences ->
+        preferences[LAST_PUSH_RECEIVED_KEY] ?: 0L
+    }
+
+    override suspend fun updateLastPushReceivedMillis(timestampMillis: Long) {
+        dataStore.edit { prefs ->
+            prefs[LAST_PUSH_RECEIVED_KEY] = timestampMillis.coerceAtLeast(0L)
+        }
+    }
+
+    override suspend fun updateAlertSyncCursor(cursor: AlertSyncCursor) {
+        dataStore.edit { prefs ->
+            val revision = cursor.revision
+            if (revision == null) prefs.remove(ALERT_SYNC_REVISION_KEY)
+            else prefs[ALERT_SYNC_REVISION_KEY] = revision
+            val etag = cursor.etag
+            if (etag.isNullOrBlank()) prefs.remove(ALERT_SYNC_ETAG_KEY)
+            else prefs[ALERT_SYNC_ETAG_KEY] = etag
         }
     }
 

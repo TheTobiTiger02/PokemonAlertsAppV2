@@ -3,13 +3,13 @@ package com.example.pokemonalertsv2.data
 import android.content.Context
 import androidx.annotation.VisibleForTesting
 import com.example.pokemonalertsv2.data.database.AlertDao
-import com.example.pokemonalertsv2.data.database.AlertEntity
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.toDomain
 import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.data.insights.InsightsHistory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
@@ -48,15 +48,53 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         if (!fetchMutex.tryLock()) {
             return getLocalAlerts()
         }
-        
+
         return try {
-            val remoteAlerts = service.getPokemonAlerts().filterNot { it.isInvalidated }
-            val remoteEntities = remoteAlerts.map { it.toEntity() }
-            if (!sameCachedAlerts(alertDao.getAllAlerts(), remoteEntities)) {
-                alertDao.replaceAll(remoteEntities)
+            val cursor = preferences.getAlertSyncCursor()
+            // Cursor 0 on a first run: the server answers with everything, and
+            // [firstSync] below makes that a replace rather than an upsert, so
+            // a cache of unknown provenance cannot survive.
+            val response = service.getPokemonAlerts(
+                since = cursor.revision ?: 0L,
+                etag = cursor.etag
+            )
+
+            if (response.code() == NOT_MODIFIED) {
+                // Nothing changed server-side: no body to parse and no cache to
+                // rewrite. This is what a scheduled poll almost always gets.
+                // The local expiry sweep still runs — it guards against clock
+                // skew between this device and the server's own timers, which a
+                // 304 says nothing about.
+                clearExpiredAlertsLocked()
+                return getLocalAlerts()
             }
+
+            val body = response.body()
+            if (!response.isSuccessful || body == null) {
+                throw IllegalStateException("Alert sync failed with HTTP ${response.code()}")
+            }
+
+            val firstSync = cursor.revision == null
+            val upserts = body.alerts.filterNot { it.isInvalidated }
+            if (body.full || firstSync) {
+                alertDao.replaceAll(upserts.map { it.toEntity() })
+            } else {
+                if (upserts.isNotEmpty()) alertDao.insertAlerts(upserts.map { it.toEntity() })
+                // Invalidated alerts arrive as upserts, not removals: the server
+                // still holds them, it has just marked them dead.
+                val goneUniqueIds = body.removed.map { it.uniqueId } +
+                    body.alerts.filter { it.isInvalidated }.map { it.uniqueId }
+                if (goneUniqueIds.isNotEmpty()) alertDao.deleteByUniqueIds(goneUniqueIds.distinct())
+            }
+
             clearExpiredAlertsLocked()
-            remoteAlerts
+            // Written only after the cache has actually been updated: a crash
+            // between the two would otherwise advance the cursor past changes
+            // that were never applied.
+            preferences.updateAlertSyncCursor(
+                AlertSyncCursor(revision = body.revision, etag = response.headers()[ETAG_HEADER])
+            )
+            getLocalAlerts()
         } finally {
             fetchMutex.unlock()
         }
@@ -155,6 +193,48 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         return response
     }
 
+    /**
+     * Reads a date range of history for aggregation, in memory only.
+     *
+     * Deliberately does **not** touch [historyAlertDao]: that table is the History
+     * tab's list, and [refreshHistory] replaces it wholesale, so caching an
+     * insights query here would silently rewrite what the user is looking at.
+     *
+     * Paged rather than hitting `api/history/all` because the answer is unbounded
+     * — a month of quests is tens of thousands of rows — and a cap the caller can
+     * see beats an unbounded response it cannot.
+     */
+    suspend fun fetchInsightsHistory(
+        startDate: String,
+        endDate: String,
+        type: String? = null,
+        q: String? = null,
+        maxRows: Int = INSIGHTS_MAX_ROWS,
+        pageSize: Int = INSIGHTS_PAGE_SIZE
+    ): InsightsHistory {
+        val rows = mutableListOf<PokemonAlert>()
+        var offset = 0
+        var total = Int.MAX_VALUE
+        while (rows.size < maxRows && offset < total) {
+            val response = service.getHistoryPaged(
+                limit = minOf(pageSize, maxRows - rows.size),
+                offset = offset,
+                type = type,
+                startDate = startDate,
+                endDate = endDate,
+                q = normalizedHistoryQuery(q)
+            )
+            if (response.data.isEmpty()) break
+            rows += response.data
+            total = response.total ?: rows.size
+            offset = (response.offset ?: offset) + response.data.size
+        }
+        return InsightsHistory(
+            alerts = rows,
+            hitCap = rows.size >= maxRows && rows.size < total
+        )
+    }
+
     private fun normalizedHistoryQuery(q: String?): String? = q?.trim()?.takeIf { it.isNotEmpty() }
 
     /** Wipes the local history cache (e.g. on logout / data-reset). */
@@ -238,6 +318,16 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun setOnboardingCompleted(completed: Boolean) = preferences.setOnboardingCompleted(completed)
 
     companion object {
+        private const val NOT_MODIFIED = 304
+
+        /**
+         * Enough rows for a month of a single species without letting a broad
+         * query (every quest, all areas) turn into an unbounded download.
+         */
+        const val INSIGHTS_MAX_ROWS = 3_000
+        const val INSIGHTS_PAGE_SIZE = 500
+        private const val ETAG_HEADER = "ETag"
+
         private val fetchMutex = Mutex()
 
         // Serializes seen-set read-modify-write across repository instances
@@ -249,74 +339,6 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
                 id?.let { add("server:$it") }
                 add(uniqueId)
             }
-        }
-
-        private fun sameCachedAlerts(
-            currentEntities: List<AlertEntity>,
-            remoteEntities: List<AlertEntity>
-        ): Boolean {
-            if (currentEntities.size != remoteEntities.size) return false
-
-            val currentSignatures = currentEntities.associate { entity ->
-                entity.uniqueId to entity.stableContentHash()
-            }
-            return remoteEntities.all { entity ->
-                currentSignatures[entity.uniqueId] == entity.stableContentHash()
-            }
-        }
-
-        private fun AlertEntity.stableContentHash(): Int {
-            var result = id ?: 0
-            result = 31 * result + name.hashCode()
-            result = 31 * result + description.hashCode()
-            result = 31 * result + imageUrl.hashCode()
-            result = 31 * result + longitude.hashCode()
-            result = 31 * result + latitude.hashCode()
-            result = 31 * result + endTime.hashCode()
-            result = 31 * result + type.hashCode()
-            result = 31 * result + thumbnailUrl.hashCode()
-            result = 31 * result + pokemon.hashCode()
-            result = 31 * result + pokemonForm.hashCode()
-            result = 31 * result + pokedexId.hashCode()
-            result = 31 * result + iv.hashCode()
-            result = 31 * result + ivAttack.hashCode()
-            result = 31 * result + ivDefense.hashCode()
-            result = 31 * result + ivStamina.hashCode()
-            result = 31 * result + gender.hashCode()
-            result = 31 * result + isShiny.hashCode()
-            result = 31 * result + cp.hashCode()
-            result = 31 * result + level.hashCode()
-            result = 31 * result + isWeatherBoosted.hashCode()
-            result = 31 * result + currentWeather.hashCode()
-            result = 31 * result + currentWeatherConfirmed.hashCode()
-            result = 31 * result + pokemonLocation.hashCode()
-            result = 31 * result + gym.hashCode()
-            result = 31 * result + pokestop.hashCode()
-            result = 31 * result + movesFast.hashCode()
-            result = 31 * result + movesCharged.hashCode()
-            result = 31 * result + hundoCPL20.hashCode()
-            result = 31 * result + hundoCPL25.hashCode()
-            result = 31 * result + pvpRankingsJson.hashCode()
-            result = 31 * result + gruntType.hashCode()
-            result = 31 * result + pokemonRewardsJson.hashCode()
-            result = 31 * result + questTask.hashCode()
-            result = 31 * result + questReward.hashCode()
-            result = 31 * result + requiresAR.hashCode()
-            result = 31 * result + newCp.hashCode()
-            result = 31 * result + newIv.hashCode()
-            result = 31 * result + weatherFrom.hashCode()
-            result = 31 * result + weatherTo.hashCode()
-            result = 31 * result + affectedAlertsJson.hashCode()
-            result = 31 * result + oldSpecies.hashCode()
-            result = 31 * result + oldIv.hashCode()
-            result = 31 * result + oldCp.hashCode()
-            result = 31 * result + newSpecies.hashCode()
-            result = 31 * result + area.hashCode()
-            result = 31 * result + alertCreatedAt.hashCode()
-            result = 31 * result + invalidatedAt.hashCode()
-            result = 31 * result + invalidationReason.hashCode()
-            result = 31 * result + invalidatedByAlertId.hashCode()
-            return result
         }
 
         fun create(context: Context): PokemonAlertsRepository {

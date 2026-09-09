@@ -11,6 +11,8 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.fcm.FcmAlertHandler
 import com.example.pokemonalertsv2.fcm.FcmAlertHandlingResult
 import kotlinx.serialization.builtins.MapSerializer
@@ -30,6 +32,11 @@ class FcmAlertWorker(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
+        // Stamped before anything can go wrong with the payload: the question
+        // this answers is "is push still reaching this device at all", and a
+        // message that arrived but failed to parse still answers it yes.
+        recordPushReceived()
+
         val encodedPayload = inputData.getString(KEY_ENCODED_PAYLOAD)
         val payload = encodedPayload?.let(FcmAlertWorkPayload::decode)
 
@@ -104,6 +111,17 @@ class FcmAlertWorker(
 
         internal fun enqueueAuthoritativeSync(context: Context) {
             AlertWorker.triggerImmediateSync(context.applicationContext)
+        }
+
+        /**
+         * A failure here must never fail the alert: this is diagnostics for the
+         * user, not part of delivery.
+         */
+        private suspend fun FcmAlertWorker.recordPushReceived() {
+            runCatching {
+                AlertPreferences(applicationContext.alertPreferencesDataStore)
+                    .updateLastPushReceivedMillis(System.currentTimeMillis())
+            }.onFailure { Log.w(TAG, "Could not record push receipt time", it) }
         }
 
         @VisibleForTesting

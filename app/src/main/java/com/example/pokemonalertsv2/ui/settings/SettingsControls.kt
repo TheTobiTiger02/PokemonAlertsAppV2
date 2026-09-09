@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.Manifest
@@ -329,6 +332,120 @@ internal fun PermissionStatusRow(
             )
         }
         OutlinedButton(onClick = onAction) { Text(actionLabel) }
+    }
+}
+
+/**
+ * When a push last arrived on this device.
+ *
+ * A push outage looks exactly like a quiet evening from inside the app, so this
+ * is the one place a user can tell the two apart. It reads as a warning once the
+ * gap is long enough that silence has stopped being plausible.
+ */
+@Composable
+internal fun PushLivenessRow(lastPushReceivedMillis: Long) {
+    val now = System.currentTimeMillis()
+    val elapsed = now - lastPushReceivedMillis
+    val stale = lastPushReceivedMillis <= 0L || elapsed >= PUSH_STALE_AFTER_MILLIS
+    val summary = when {
+        lastPushReceivedMillis <= 0L -> "No push has arrived yet"
+        elapsed < 60_000L -> "Just now"
+        elapsed < 3_600_000L -> "${elapsed / 60_000L} min ago"
+        elapsed < 86_400_000L -> "${elapsed / 3_600_000L} h ago"
+        else -> "${elapsed / 86_400_000L} d ago"
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("Last push received", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (stale) "$summary · pull to refresh to catch up" else summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (stale) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** Long enough that silence is more likely a fault than a quiet spell. */
+private const val PUSH_STALE_AFTER_MILLIS = 6 * 60 * 60 * 1000L
+
+/**
+ * The floating journey pill toggle, with the overlay grant folded in.
+ *
+ * Two states that look the same to the user but are not: switched off, and
+ * switched on without the "Display over other apps" permission. The row says
+ * which, because a pill that silently never appears reads as a broken feature.
+ */
+@Composable
+internal fun JourneyOverlayRow(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var permissionPromptOpen by rememberSaveable { mutableStateOf(false) }
+    // Re-read on every recomposition rather than caching: the grant is handed out
+    // in Settings, so the app comes back to this screen with it already changed.
+    val granted = Settings.canDrawOverlays(context)
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SwitchSetting(
+            title = stringResource(R.string.journey_overlay_title),
+            subtitle = stringResource(R.string.journey_overlay_summary),
+            checked = enabled,
+            onCheckedChange = { wanted ->
+                onEnabledChange(wanted)
+                if (wanted && !granted) permissionPromptOpen = true
+            }
+        )
+        if (enabled && !granted) {
+            TextButton(onClick = { permissionPromptOpen = true }) {
+                Text(
+                    stringResource(R.string.journey_overlay_permission_needed),
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+
+    if (permissionPromptOpen) {
+        AlertDialog(
+            onDismissRequest = { permissionPromptOpen = false },
+            title = { Text(stringResource(R.string.journey_overlay_permission_title)) },
+            text = { Text(stringResource(R.string.journey_overlay_permission_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        permissionPromptOpen = false
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:" + context.packageName)
+                                )
+                            )
+                        }.onFailure {
+                            // Some builds refuse the package-scoped form; the list
+                            // screen still gets the trainer to the same switch.
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                                )
+                            }
+                        }
+                    }
+                ) { Text(stringResource(R.string.journey_overlay_permission_positive)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { permissionPromptOpen = false }) {
+                    Text(stringResource(R.string.journey_overlay_permission_negative))
+                }
+            }
+        )
     }
 }
 

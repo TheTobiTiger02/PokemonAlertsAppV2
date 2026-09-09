@@ -28,16 +28,24 @@ object SettingsBackup {
     /**
      * Keys deliberately left out of the export.
      *
-     * These are session credentials. An export is a file the user may well email to
+     * Two reasons. Session credentials: an export is a file the user may well email to
      * themselves or drop in cloud storage, and a scraped-site session cookie in plaintext
      * is not something to hand out with a settings backup. The Pokebattler bearer token is
      * not listed because it never enters this store at all -- it lives encrypted in its own
      * SharedPreferences (see [com.example.pokemonalertsv2.data.counters.PokebattlerAuth]).
+     *
+     * And per-device sync state, which describes one install rather than the user's
+     * choices: restoring another device's alert-sync cursor would make this device skip
+     * changes it never received, and restoring its push receipt time would report delivery
+     * that never happened here.
      */
     val EXCLUDED_KEYS: Set<String> = setOf(
         "godex_session_cookies",
         "godex_session_state",
-        "godex_write_back_url"
+        "godex_write_back_url",
+        "alert_sync_revision",
+        "alert_sync_etag",
+        "last_push_received_at"
     )
 
     private val json = Json {

@@ -144,6 +144,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
+import androidx.activity.compose.BackHandler
+import com.example.pokemonalertsv2.ui.history.SpawnInsightsScreen
+import com.example.pokemonalertsv2.ui.history.SpawnInsightsViewModel
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
@@ -331,10 +334,17 @@ fun AlertHistoryRoute(
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
     consumeError: () -> Unit,
+    insightsViewModel: SpawnInsightsViewModel,
     showTopBar: Boolean = true
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+
+    // An in-place sub-screen rather than a fifth tab or a new Activity, the way
+    // Settings already navigates within itself.
+    var showInsights by rememberSaveable { mutableStateOf(false) }
+    val insightsState by insightsViewModel.uiState.collectAsStateWithLifecycle()
+    BackHandler(enabled = showInsights) { showInsights = false }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
     Scaffold(
@@ -347,12 +357,32 @@ fun AlertHistoryRoute(
                     windowInsets = WindowInsets(0),
                     title = {
                         Text(
-                            text = "Alert History",
+                            text = if (showInsights) "Spawn insights" else "Alert History",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold
                         )
                     },
                     actions = {
+                        IconButton(
+                            onClick = {
+                                if (!showInsights) {
+                                    insightsViewModel.seed(
+                                        query = uiState.searchQuery,
+                                        type = uiState.selectedType
+                                    )
+                                }
+                                showInsights = !showInsights
+                            }
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_insights),
+                                contentDescription = if (showInsights) {
+                                    "Back to history"
+                                } else {
+                                    "Spawn insights"
+                                }
+                            )
+                        }
                         IconButton(onClick = onRefresh) {
                             AnimatedRefreshIcon(
                                 refreshing = uiState.isLoading,
@@ -372,18 +402,27 @@ fun AlertHistoryRoute(
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            AlertHistoryPage(
-                uiState = uiState,
-                onRefresh = onRefresh,
-                onLoadMore = onLoadMore,
-                onDateChanged = onDateChanged,
-                onTypeChanged = onTypeChanged,
-                onSearchChanged = onSearchChanged,
-                onAlertClick = { alert ->
-                    val intent = AlertDetailActivity.createIntent(context, alert)
-                    context.startActivity(intent)
-                }
-            )
+            if (showInsights) {
+                SpawnInsightsScreen(
+                    state = insightsState,
+                    onQueryChange = insightsViewModel::setQuery,
+                    onRangeChange = insightsViewModel::setRange,
+                    onRun = insightsViewModel::run
+                )
+            } else {
+                AlertHistoryPage(
+                    uiState = uiState,
+                    onRefresh = onRefresh,
+                    onLoadMore = onLoadMore,
+                    onDateChanged = onDateChanged,
+                    onTypeChanged = onTypeChanged,
+                    onSearchChanged = onSearchChanged,
+                    onAlertClick = { alert ->
+                        val intent = AlertDetailActivity.createIntent(context, alert)
+                        context.startActivity(intent)
+                    }
+                )
+            }
         }
     }
 }

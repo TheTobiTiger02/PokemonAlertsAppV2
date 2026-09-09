@@ -149,9 +149,50 @@ interface PushTopicsService {
     ): Response<PushTopicCatalog>
 }
 
+/**
+ * Identity of an alert the server dropped from the active set.
+ *
+ * Carried as the alert's own fields rather than a local key: [PokemonAlert.uniqueId]
+ * is this app's invention, and the backend has no business knowing its shape.
+ */
+@Serializable
+data class RemovedAlert(
+    val id: Int? = null,
+    val name: String? = null,
+    val endTime: String? = null
+) {
+    /** Rebuilt with exactly the rule [PokemonAlert.uniqueId] uses. */
+    val uniqueId: String
+        get() = id?.let { "server-$it" } ?: "${name.orEmpty().trim()}|${endTime.orEmpty().trim()}"
+}
+
+/**
+ * The answer to "what changed since revision N".
+ *
+ * [full] means the server could not answer from its removal history — a restart,
+ * a cursor from the future, or an outage longer than the retained log — and
+ * [alerts] is a complete snapshot to replace the local cache with. Otherwise
+ * [alerts] are upserts and [removed] are deletions.
+ */
+@Serializable
+data class AlertSyncResponse(
+    val revision: Long = 0L,
+    val full: Boolean = true,
+    val alerts: List<PokemonAlert> = emptyList(),
+    val removed: List<RemovedAlert> = emptyList()
+)
+
 interface PokemonAlertsService {
+    /**
+     * Returned as a raw [Response] so a 304 is distinguishable from a body — the
+     * same reason [PushTopicsService] does. Omitting [since] asks for a full
+     * snapshot; passing the last known revision asks for a delta.
+     */
     @GET("api/pokemon")
-    suspend fun getPokemonAlerts(): List<PokemonAlert>
+    suspend fun getPokemonAlerts(
+        @Query("since") since: Long? = null,
+        @Header("If-None-Match") etag: String? = null
+    ): Response<AlertSyncResponse>
 
     /** Looks up durable weather for one area without requiring an alert. */
     @GET("api/current-weather")

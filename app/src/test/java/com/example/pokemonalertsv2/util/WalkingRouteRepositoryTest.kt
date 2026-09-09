@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.util
 
+import com.example.pokemonalertsv2.data.AlertSyncResponse
 import com.example.pokemonalertsv2.data.HistoryResponse
 import com.example.pokemonalertsv2.data.CurrentWeatherResponse
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -377,7 +378,8 @@ class WalkingRouteRepositoryTest {
             return routeHandler(request)
         }
 
-        override suspend fun getPokemonAlerts(): List<PokemonAlert> = emptyList()
+        override suspend fun getPokemonAlerts(since: Long?, etag: String?): retrofit2.Response<AlertSyncResponse> =
+            retrofit2.Response.success(AlertSyncResponse())
 
         override suspend fun getCurrentWeather(area: String): CurrentWeatherResponse = CurrentWeatherResponse()
 

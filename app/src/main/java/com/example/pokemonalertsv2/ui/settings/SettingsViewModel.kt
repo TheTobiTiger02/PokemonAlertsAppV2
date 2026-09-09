@@ -342,7 +342,18 @@ class SettingsViewModel(
     
     val notificationVibrate: StateFlow<Boolean> = preferences.notificationVibrate
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    /** Whether an active journey shows the floating pill (subject to the overlay grant). */
+    val journeyOverlayEnabled: StateFlow<Boolean> = preferences.journeyOverlayEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
+    /**
+     * When a push last arrived. A push outage is otherwise indistinguishable
+     * from a quiet evening, so this is the one signal that tells them apart.
+     */
+    val lastPushReceived: StateFlow<Long> = preferences.lastPushReceivedMillis
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
     val silenceUntil: StateFlow<Long> = preferences.silenceUntil
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
@@ -496,6 +507,12 @@ class SettingsViewModel(
     fun updateNotificationVibrate(enabled: Boolean) {
         viewModelScope.launch {
             preferences.updateNotificationVibrate(enabled)
+        }
+    }
+
+    fun updateJourneyOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateJourneyOverlayEnabled(enabled)
         }
     }
     

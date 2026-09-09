@@ -20,6 +20,12 @@
     <uses-permission
         android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"
         tools:targetApi="36" />
+    <!--
+        The floating journey pill. Android 15 has no status bar chip a third-party app
+        can reach, so an overlay is the only always-visible readout; the journey works
+        without the grant, just without the pill.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission

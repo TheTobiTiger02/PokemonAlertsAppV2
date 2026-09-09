@@ -10,11 +10,16 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.RaidTierParser
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
@@ -36,6 +41,7 @@ class ArrivalTrackingService : Service() {
         locationSourceFactory.create(applicationContext)
     }
     private val walkingRouteRepository by lazy { WalkingRouteRepository.getInstance() }
+    private val huntRepository by lazy { HuntRepository.getInstance(applicationContext) }
     private var currentDestination: TrackedDestination? = null
     private var destinationJob: Job? = null
     private var expiryJob: Job? = null
@@ -57,6 +63,19 @@ class ArrivalTrackingService : Service() {
     private var lastWaitingForPreciseLocation = false
     private var lastInRange = false
 
+    /**
+     * Whether a hunt owns this journey. Mirrored into a field because the
+     * notification is rebuilt from synchronous callbacks (location fixes, the
+     * chip refresh loop) that cannot suspend to read the store.
+     */
+    private var huntActive = false
+    private var huntJob: Job? = null
+
+    /** The floating pill, and whether the user has it switched on. */
+    private val journeyOverlay by lazy { JourneyOverlay(applicationContext) }
+    private var journeyOverlayEnabled = true
+    private var overlayPreferenceJob: Job? = null
+
     override fun onCreate() {
         super.onCreate()
         ArrivalTrackingNotifications.ensureChannels(this)
@@ -71,7 +90,45 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_GOT_IT) {
+            serviceScope.launch {
+                markCurrentTargetCaught()
+                stopTrackingService()
+            }
+            return START_NOT_STICKY
+        }
+
         promoteToForeground(currentJourneyNotification() ?: ArrivalTrackingNotifications.restoring(this))
+        if (overlayPreferenceJob == null) {
+            overlayPreferenceJob = serviceScope.launch {
+                AlertPreferences(applicationContext.alertPreferencesDataStore)
+                    .journeyOverlayEnabled
+                    .collect { enabled ->
+                        journeyOverlayEnabled = enabled
+                        if (!enabled) journeyOverlay.hide()
+                        currentDestination?.let { refreshJourneyOverlay(it) }
+                    }
+            }
+        }
+        if (huntJob == null) {
+            huntJob = serviceScope.launch {
+                huntRepository.sessionFlow.collect { session ->
+                    val active = session != null
+                    if (active == huntActive) return@collect
+                    huntActive = active
+                    // The Got it action appears and disappears with the hunt, so
+                    // the standing notification has to be rebuilt, not left stale.
+                    currentDestination?.let { destination ->
+                        updateOngoing(
+                            destination = destination,
+                            distanceMeters = lastDirectDistanceMeters,
+                            waiting = lastWaitingForPreciseLocation,
+                            inRange = lastInRange
+                        )
+                    }
+                }
+            }
+        }
         if (destinationJob == null) {
             destinationJob = serviceScope.launch {
                 repository.destinationFlow.collectLatest { destination ->
@@ -91,6 +148,9 @@ class ArrivalTrackingService : Service() {
         expiryJob?.cancel()
         chipRefreshJob?.cancel()
         walkingRouteJob?.cancel()
+        huntJob?.cancel()
+        overlayPreferenceJob?.cancel()
+        journeyOverlay.reset()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -102,6 +162,9 @@ class ArrivalTrackingService : Service() {
         if (previousDestination?.uniqueId != destination.uniqueId) {
             evaluator = ArrivalFixEvaluator()
             arrivalInProgress = false
+            // A new target is a new journey, so a pill the trainer swiped away on
+            // the last one comes back rather than staying hidden for the trip.
+            journeyOverlay.reset()
             walkingRouteJob?.cancel()
             walkingRouteJob = null
             walkingRoute = null
@@ -326,6 +389,21 @@ class ArrivalTrackingService : Service() {
             } else {
                 false
             }
+            // Arriving is not the end of a hunt — it is the moment the chip starts
+            // earning its place, showing the CP or the stop name you came for. Hold
+            // the journey open until "Got it" retires this target. A raid is the
+            // exception: its Live Update has taken over the chip already.
+            if (huntActive && !raidLiveUpdateStarted) {
+                lastInRange = true
+                updateOngoing(
+                    destination = destination,
+                    distanceMeters = lastDirectDistanceMeters,
+                    waiting = false,
+                    inRange = true
+                )
+                return@launch
+            }
+
             repository.stopTracking()
             if (!raidLiveUpdateStarted && hasNotificationPermission()) {
                 ArrivalTrackingNotifications.postArrival(
@@ -335,6 +413,24 @@ class ArrivalTrackingService : Service() {
             }
             stopTrackingService()
         }
+    }
+
+    /**
+     * "Got it": retire this target the same way a swipe on the feed would, so the
+     * thing you just caught disappears from the list, the map and the widgets
+     * rather than being offered again as the nearest match.
+     */
+    private suspend fun markCurrentTargetCaught() {
+        val destination = currentDestination ?: repository.currentDestination()
+        destination?.let { target ->
+            runCatching {
+                AlertPreferences(applicationContext.alertPreferencesDataStore)
+                    .addDismissedAlert(target.uniqueId)
+                AlertsWidgetProvider.requestUpdate(applicationContext)
+            }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
+        }
+        huntRepository.setTarget(null)
+        repository.stopTracking()
     }
 
     @SuppressLint("MissingPermission")
@@ -351,12 +447,34 @@ class ArrivalTrackingService : Service() {
             distanceMeters = distanceMeters,
             walkingRoute = walkingRoute,
             inRange = inRange,
-            waitingForPreciseLocation = waiting
+            waitingForPreciseLocation = waiting,
+            huntActive = huntActive
         )
         runCatching {
             NotificationManagerCompat.from(this)
                 .notify(ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID, notification)
         }
+        // Same call site as the notification so the two readouts cannot drift, and so
+        // the 30 s refresh loop keeps the pill alive while the trainer stands still.
+        showJourneyOverlay(destination, distanceMeters, inRange)
+    }
+
+    private fun showJourneyOverlay(
+        destination: TrackedDestination,
+        distanceMeters: Float?,
+        inRange: Boolean
+    ) {
+        if (!journeyOverlayEnabled) return
+        journeyOverlay.show(
+            alert = destination.alert,
+            distanceMeters = distanceMeters,
+            inRange = inRange,
+            huntActive = huntActive
+        )
+    }
+
+    private fun refreshJourneyOverlay(destination: TrackedDestination) {
+        showJourneyOverlay(destination, lastDirectDistanceMeters, lastInRange)
     }
 
     /**
@@ -375,7 +493,8 @@ class ArrivalTrackingService : Service() {
             distanceMeters = lastDirectDistanceMeters,
             walkingRoute = walkingRoute,
             inRange = lastInRange,
-            waitingForPreciseLocation = lastWaitingForPreciseLocation
+            waitingForPreciseLocation = lastWaitingForPreciseLocation,
+            huntActive = huntActive
         )
     }
 
@@ -402,6 +521,7 @@ class ArrivalTrackingService : Service() {
         walkingRoute = null
         walkingRouteUpdatedAtMillis = 0L
         currentDestination = null
+        journeyOverlay.reset()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -443,7 +563,9 @@ class ArrivalTrackingService : Service() {
     }
 
     companion object {
+        private const val TAG = "ArrivalTracking"
         const val ACTION_STOP = "com.example.pokemonalertsv2.tracking.STOP"
+        const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
         private const val MAX_LOCATION_AGE_MILLIS = 30_000L
         private const val MAX_GPS_TOLERANCE_METERS = 20f
         private const val ROUTE_DISPLAY_MAX_AGE_MILLIS = 10 * 60 * 1000L

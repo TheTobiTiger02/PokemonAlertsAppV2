@@ -68,14 +68,56 @@ class MapPipActionsTest {
     }
 
     @Test
-    fun `the browse chip names the alert and how long is left`() {
-        val label = mapPipBrowseLabel(
-            alert("Larvitar", 49.75, 8.6).copy(pokemon = "Larvitar", cp = 1234),
-            nowMillis = 0L
-        )
+    fun `a hunt window trades the follow toggle for Got it`() {
+        val specs = huntPipActionSpecs(canStep = true, hasTarget = true, maxActions = 3)
 
-        assertTrue(label, label.startsWith("Larvitar"))
-        assertTrue(label, label.contains("CP 1234"))
+        assertEquals(
+            listOf(MapPipCommand.PREVIOUS, MapPipCommand.GOT_IT, MapPipCommand.NEXT),
+            specs.map { it.command }
+        )
+        assertTrue(specs.all { it.enabled })
+        assertTrue(specs.none { it.command == MapPipCommand.TOGGLE_MODE })
+    }
+
+    @Test
+    fun `Got it is disabled with nothing targeted, stepping with nothing to step to`() {
+        val noTarget = huntPipActionSpecs(canStep = true, hasTarget = false, maxActions = 3)
+        assertFalse(noTarget.single { it.command == MapPipCommand.GOT_IT }.enabled)
+
+        val nothingLeft = huntPipActionSpecs(canStep = false, hasTarget = false, maxActions = 3)
+        assertEquals(3, nothingLeft.size)
+        assertTrue(nothingLeft.none { it.enabled })
+    }
+
+    @Test
+    fun `a one-slot system keeps stepping rather than the destructive action`() {
+        val specs = huntPipActionSpecs(canStep = true, hasTarget = true, maxActions = 1)
+
+        assertEquals(listOf(MapPipCommand.PREVIOUS), specs.map { it.command })
+    }
+
+    @Test
+    fun `hunting picks the hunt slots and otherwise leaves the map PiP alone`() {
+        val hunting = buildMapPipActionSpecs(
+            mode = MapPipMode.BROWSE,
+            canStep = true,
+            maxActions = 3,
+            hunting = true,
+            hasTarget = true
+        )
+        assertTrue(hunting.any { it.command == MapPipCommand.GOT_IT })
+
+        val normal = buildMapPipActionSpecs(
+            mode = MapPipMode.BROWSE,
+            canStep = true,
+            maxActions = 3,
+            hunting = false,
+            hasTarget = true
+        )
+        assertEquals(
+            mapPipActionSpecs(MapPipMode.BROWSE, canStep = true, maxActions = 3),
+            normal
+        )
     }
 
     @Test
@@ -262,53 +304,6 @@ class MapPipActionsTest {
     }
 
     // --- The label chip yields to the notification ----------------------------------------
-
-    @Test
-    fun `the chip yields to the notification and returns when nothing is tracking`() {
-        assertFalse(
-            "the notification already names the tracked alert",
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = true,
-                pipMode = MapPipMode.BROWSE,
-                browsedAlertId = "a",
-                trackedAlertId = "a"
-            )
-        )
-        assertTrue(
-            "tracking refused, so the window still has to name the alert",
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = true,
-                pipMode = MapPipMode.BROWSE,
-                browsedAlertId = "a",
-                trackedAlertId = null
-            )
-        )
-        assertTrue(
-            "nothing browsed and nothing tracked still needs the empty line",
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = true,
-                pipMode = MapPipMode.BROWSE,
-                browsedAlertId = null,
-                trackedAlertId = null
-            )
-        )
-        assertFalse(
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = true,
-                pipMode = MapPipMode.FOLLOW,
-                browsedAlertId = "a",
-                trackedAlertId = null
-            )
-        )
-        assertFalse(
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = false,
-                pipMode = MapPipMode.BROWSE,
-                browsedAlertId = "a",
-                trackedAlertId = null
-            )
-        )
-    }
 
     private fun alert(name: String, latitude: Double?, longitude: Double?) = PokemonAlert(
         name = name,

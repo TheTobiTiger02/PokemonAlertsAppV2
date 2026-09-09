@@ -241,6 +241,8 @@ internal fun SettingsScreen(
     val kecleonNotifications by viewModel.kecleonNotifications.collectAsStateWithLifecycle(initialValue = true)
     val rocketNotifications by viewModel.rocketNotifications.collectAsStateWithLifecycle(initialValue = true)
     val notificationVibrate by viewModel.notificationVibrate.collectAsStateWithLifecycle(initialValue = true)
+    val journeyOverlayEnabled by viewModel.journeyOverlayEnabled.collectAsStateWithLifecycle(initialValue = true)
+    val lastPushReceived by viewModel.lastPushReceived.collectAsStateWithLifecycle(initialValue = 0L)
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
     val quietHoursEnabled by viewModel.quietHoursEnabled.collectAsStateWithLifecycle()
     val quietHoursStart by viewModel.quietHoursStartMinute.collectAsStateWithLifecycle()
@@ -803,6 +805,10 @@ internal fun SettingsScreen(
                         actionLabel = if (backgroundLocationGranted) "Manage" else "Grant",
                         onAction = onManageLocationPermissions
                     )
+                    HorizontalDivider()
+                    // Permissions can all read green while push is still dead;
+                    // this is the only row that shows delivery actually working.
+                    PushLivenessRow(lastPushReceivedMillis = lastPushReceived)
                 }
                 SettingsSection(title = "Notification preferences") {
                     OutlinedButton(onClick = {
@@ -827,6 +833,14 @@ internal fun SettingsScreen(
                             subtitle = "Vibrate when receiving notifications",
                             checked = notificationVibrate,
                             onCheckedChange = { viewModel.updateNotificationVibrate(it) }
+                        )
+
+                        // The only always-visible readout below Android 16: the
+                        // status bar chip the Clock's timer uses is gated to system
+                        // apps, so an overlay is what is left.
+                        JourneyOverlayRow(
+                            enabled = journeyOverlayEnabled,
+                            onEnabledChange = { viewModel.updateJourneyOverlayEnabled(it) }
                         )
                         
                         // A standing nightly window. Kept separate from the one-off

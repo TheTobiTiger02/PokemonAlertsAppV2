@@ -110,6 +110,12 @@ import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
+import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
+import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
@@ -232,7 +238,15 @@ internal const val MAP_SECOND_PRECISION_WINDOW_MS = 15 * 60 * 1000L
 
 enum class MapPresentationMode {
     FULL,
-    COMPACT_PICTURE_IN_PICTURE
+    COMPACT_PICTURE_IN_PICTURE,
+
+    /**
+     * A hunt's own window. Shares the compact chrome with
+     * [COMPACT_PICTURE_IN_PICTURE] but browses the hunt's targets instead of the
+     * map's filter, and trades the follow toggle for "Got it" — the existing map
+     * PiP is deliberately left exactly as it was.
+     */
+    COMPACT_HUNT_PICTURE_IN_PICTURE
 }
 
 internal fun mapAlertsForPresentation(
@@ -315,7 +329,7 @@ fun AlertsMapRoute(
     initialZoom: Double? = null,
     onEnterPictureInPicture: (() -> Unit)? = null,
     pipCommands: Flow<MapPipCommand>? = null,
-    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null
+    onPipStateChanged: ((MapPipUiState) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val selectedMapCategories by viewModel.selectedMapCategories.collectAsStateWithLifecycle()
@@ -447,7 +461,7 @@ fun AlertsMapScreen(
     autoEnterPictureInPicture: Boolean = false,
     onToggleAutoEnterPictureInPicture: () -> Unit = {},
     pipCommands: Flow<MapPipCommand>? = null,
-    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null
+    onPipStateChanged: ((MapPipUiState) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
         alerts = alerts,
@@ -531,13 +545,20 @@ internal fun AlertsMapScreenContent(
     autoEnterPictureInPicture: Boolean = false,
     onToggleAutoEnterPictureInPicture: () -> Unit = {},
     pipCommands: Flow<MapPipCommand>? = null,
-    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
+    onPipStateChanged: ((MapPipUiState) -> Unit)? = null,
     locationTrackerFactory: MapPoseTrackerFactory = DefaultMapPoseTrackerFactory,
     clusteringConfigOverride: com.example.pokemonalertsv2.data.MapClusteringConfig? = null,
     pipArrivalTracker: MapPipArrivalTracker? = null
 ) {
     val context = LocalContext.current
     val arrivalTracking = rememberArrivalTrackingUiController()
+    val huntRepository = remember(context) { HuntRepository.getInstance(context) }
+    val arrivalTrackingRepository = remember(context) {
+        ArrivalTrackingRepository.getInstance(context)
+    }
+    val alertPreferences = remember(context) {
+        AlertPreferences(context.alertPreferencesDataStore)
+    }
     val defaultPipArrivalTracker = rememberMapPipArrivalTracker()
     val browseArrivalTracker = pipArrivalTracker ?: defaultPipArrivalTracker
     val density = LocalDensity.current
@@ -545,8 +566,9 @@ internal fun AlertsMapScreenContent(
     val lifecycleOwner = LocalLifecycleOwner.current
     val darkTheme = LocalAppDarkTheme.current
 
-    val compactPictureInPicture =
-        presentationMode == MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
+    val compactPictureInPicture = presentationMode != MapPresentationMode.FULL
+    val huntPictureInPicture =
+        presentationMode == MapPresentationMode.COMPACT_HUNT_PICTURE_IN_PICTURE
     val startingZoom = remember(initialZoom) { normalizeMapPictureInPictureZoom(initialZoom) }
     val defaultLatLng = remember { LatLng(ALSBACH_LATITUDE, ALSBACH_LONGITUDE) }
     val cameraPositionState = rememberCameraPositionState {
@@ -858,6 +880,7 @@ internal fun AlertsMapScreenContent(
     }
 
     val expirationNow = expirationClock.value
+    val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
     val filteredAlerts = remember(
         alerts,
         filterDefinition,
@@ -880,14 +903,42 @@ internal fun AlertsMapScreenContent(
             walkingRoutes = walkingRoutes
         )
     }
+
+    // A hunt window answers to the hunt, not to whatever the map happens to be
+    // filtered to: the whole point is that only the quarry is on screen.
+    val huntTargetAlerts = remember(
+        huntPictureInPicture,
+        huntSession,
+        alerts,
+        dismissedAlertIds,
+        expirationNow,
+        userLocation?.latitude,
+        userLocation?.longitude
+    ) {
+        val definition = huntSession?.definition
+        if (!huntPictureInPicture || definition == null) {
+            emptyList()
+        } else {
+            huntTargets(
+                alerts = alerts,
+                definition = definition,
+                dismissedAlertIds = dismissedAlertIds,
+                originLatitude = userLocation?.latitude ?: ALSBACH_LATITUDE,
+                originLongitude = userLocation?.longitude ?: ALSBACH_LONGITUDE,
+                nowMillis = expirationNow
+            )
+        }
+    }
     val renderedAlerts = remember(
         filteredAlerts,
+        huntTargetAlerts,
+        huntPictureInPicture,
         arrivalTracking.activeDestination,
         compactPictureInPicture,
         expirationNow
     ) {
         mapAlertsForPresentation(
-            filteredAlerts = filteredAlerts,
+            filteredAlerts = if (huntPictureInPicture) huntTargetAlerts else filteredAlerts,
             trackedAlert = arrivalTracking.activeDestination?.alert,
             compactPictureInPicture = compactPictureInPicture,
             nowMillis = expirationNow
@@ -1077,6 +1128,24 @@ internal fun AlertsMapScreenContent(
                     )
                 }
             }
+            MapPipCommand.GOT_IT -> {
+                // Retire the target the same way the notification's Got it does, then
+                // step to whatever is now nearest so the walk continues without
+                // anyone having to unlock the phone.
+                val caught = renderedAlerts.firstOrNull { it.uniqueId == selectedAlertId }
+                if (caught != null) {
+                    scope.launch {
+                        runCatching {
+                            alertPreferences.addDismissedAlert(caught.uniqueId)
+                            AlertsWidgetProvider.requestUpdate(context)
+                            huntRepository.setTarget(null)
+                            arrivalTrackingRepository.stopTracking()
+                        }
+                    }
+                    selectedAlertId = null
+                    stepBrowseSelection(forward = true)
+                }
+            }
         }
     }
 
@@ -1105,10 +1174,13 @@ internal fun AlertsMapScreenContent(
             trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
             renderedAlerts = renderedAlerts
         )
-        val browsing = browsedAlertId != null
+        // A hunt window is always browsing its quarry — it offers no follow toggle,
+        // so falling back to FOLLOW would strand it with no way out.
+        val browsing = browsedAlertId != null || huntPictureInPicture
         pipMode = if (browsing) MapPipMode.BROWSE else MapPipMode.FOLLOW
         cameraFollowEnabled = !browsing
         selectedAlertId = browsedAlertId
+            ?: renderedAlerts.firstOrNull().takeIf { huntPictureInPicture }?.uniqueId
         if (browsing) {
             lastFitLatitude = null
             lastFitLongitude = null
@@ -1157,6 +1229,9 @@ internal fun AlertsMapScreenContent(
                         withContext(NonCancellable) {
                             if (browseArrivalTracker.start(intent.alert)) {
                                 lastPipStartedId = intent.alert.uniqueId
+                                // Record it on the hunt too, so "Got it" knows what it
+                                // is retiring even if the window is gone by then.
+                                huntRepository.setTarget(intent.alert.uniqueId)
                             }
                         }
                     }
@@ -1165,9 +1240,17 @@ internal fun AlertsMapScreenContent(
     }
 
     val pipCanStep = renderedAlerts.isNotEmpty()
+    val pipHasTarget = selectedAlertId != null
     val currentPipStateReporter by rememberUpdatedState(onPipStateChanged)
-    LaunchedEffect(pipMode, pipCanStep) {
-        currentPipStateReporter?.invoke(pipMode, pipCanStep)
+    LaunchedEffect(pipMode, pipCanStep, huntPictureInPicture, pipHasTarget) {
+        currentPipStateReporter?.invoke(
+            MapPipUiState(
+                mode = pipMode,
+                canStep = pipCanStep,
+                hunting = huntPictureInPicture,
+                hasTarget = pipHasTarget
+            )
+        )
     }
 
     val mapUiSettings = remember(hasLocationPermission, compactPictureInPicture) {
@@ -1891,41 +1974,6 @@ internal fun AlertsMapScreenContent(
                         }
                     }
                 }
-            }
-        }
-
-        // A fallback, not the primary readout: while the arrival notification is up it already
-        // names the alert, so the window keeps this line off and gives the space to the map. It
-        // comes back when nothing is tracking to name it -- an alert that expired, or a preflight
-        // the window could not answer from here, such as a missing permission.
-        if (
-            shouldShowMapPipBrowseChip(
-                compactPictureInPicture = compactPictureInPicture,
-                pipMode = pipMode,
-                browsedAlertId = selectedAlertId,
-                trackedAlertId = arrivalTracking.activeDestination?.uniqueId
-            )
-        ) {
-            Surface(
-                modifier = Modifier
-                    // Top, not bottom: the OpenStreetMap attribution owns the bottom
-                    // edge and the two would sit on top of each other in this window.
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .testTag("map_pip_browse_chip"),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    text = selectedAlert
-                        ?.let { alert -> mapPipBrowseLabel(alert, markerCountdownClock.value) }
-                        ?: stringResource(R.string.map_pip_no_alerts),
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
             }
         }
 

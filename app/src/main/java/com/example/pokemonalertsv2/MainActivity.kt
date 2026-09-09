@@ -91,12 +91,15 @@ import com.example.pokemonalertsv2.ui.alerts.AlertsMapRoute
 import com.example.pokemonalertsv2.ui.alerts.ACTION_MAP_PIP_CONTROL
 import com.example.pokemonalertsv2.ui.alerts.EXTRA_MAP_PIP_COMMAND
 import com.example.pokemonalertsv2.ui.alerts.MapPipCommand
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.ui.alerts.MapPipMode
+import com.example.pokemonalertsv2.ui.alerts.MapPipUiState
 import com.example.pokemonalertsv2.ui.alerts.MapPresentationMode
 import com.example.pokemonalertsv2.ui.alerts.buildMapPipActions
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsRoute
 import com.example.pokemonalertsv2.ui.alerts.PokemonAlertsViewModel
 import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
+import com.example.pokemonalertsv2.ui.history.SpawnInsightsViewModel
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
@@ -158,6 +161,7 @@ class MainActivity : ComponentActivity() {
     private val alertsViewModel: PokemonAlertsViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
+    private val insightsViewModel: SpawnInsightsViewModel by viewModels()
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
     private val requestedRootTab = MutableStateFlow<Int?>(null)
     private val requestedSettingsDestination = MutableStateFlow<SettingsDestination?>(null)
@@ -180,6 +184,8 @@ class MainActivity : ComponentActivity() {
     private var inPictureInPicture by mutableStateOf(false)
     private var pipMode = MapPipMode.FOLLOW
     private var pipCanStep = false
+    private var pipHunting = false
+    private var pipHasTarget = false
     private var pipAutoEnter = false
     private var pipMapTabVisible = false
     private var maxPipActions = 0
@@ -235,10 +241,19 @@ class MainActivity : ComponentActivity() {
         applyPipParams()
     }
 
-    private fun updateMapPipState(mode: MapPipMode, canStep: Boolean) {
-        if (mode == pipMode && canStep == pipCanStep) return
-        pipMode = mode
-        pipCanStep = canStep
+    private fun updateMapPipState(state: MapPipUiState) {
+        if (
+            state.mode == pipMode &&
+            state.canStep == pipCanStep &&
+            state.hunting == pipHunting &&
+            state.hasTarget == pipHasTarget
+        ) {
+            return
+        }
+        pipMode = state.mode
+        pipCanStep = state.canStep
+        pipHunting = state.hunting
+        pipHasTarget = state.hasTarget
         applyPipParams()
     }
 
@@ -255,7 +270,16 @@ class MainActivity : ComponentActivity() {
     private fun buildPipParams(): PictureInPictureParams {
         val builder = PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
-            .setActions(buildMapPipActions(this, pipMode, pipCanStep, maxPipActions))
+            .setActions(
+                buildMapPipActions(
+                    context = this,
+                    mode = pipMode,
+                    canStep = pipCanStep,
+                    maxActions = maxPipActions,
+                    hunting = pipHunting,
+                    hasTarget = pipHasTarget
+                )
+            )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setSeamlessResizeEnabled(false)
             builder.setAutoEnterEnabled(pipAutoEnter && pipMapTabVisible)
@@ -420,6 +444,7 @@ class MainActivity : ComponentActivity() {
                             messages = transientMessages,
                             alertsViewModel = alertsViewModel,
                             historyViewModelProvider = { historyViewModel },
+                            insightsViewModelProvider = { insightsViewModel },
                             settingsViewModel = settingsViewModel,
                             requestedTab = requestedTab,
                             onRequestedTabConsumed = { requestedRootTab.value = null },
@@ -719,6 +744,7 @@ private fun MainScaffold(
     messages: SharedFlow<String>,
     alertsViewModel: PokemonAlertsViewModel,
     historyViewModelProvider: () -> AlertHistoryViewModel,
+    insightsViewModelProvider: () -> SpawnInsightsViewModel,
     settingsViewModel: SettingsViewModel,
     requestedTab: Int?,
     onRequestedTabConsumed: () -> Unit,
@@ -728,7 +754,7 @@ private fun MainScaffold(
     onOpenUnknownSourcesSettings: () -> Unit,
     pictureInPictureMode: Boolean = false,
     pipCommands: Flow<MapPipCommand>? = null,
-    onPipStateChanged: ((MapPipMode, Boolean) -> Unit)? = null,
+    onPipStateChanged: ((MapPipUiState) -> Unit)? = null,
     onMapPipAvailabilityChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
     onEnterPictureInPicture: (() -> Unit)? = null
 ) {
@@ -771,6 +797,11 @@ private fun MainScaffold(
     }
 
 
+    // A hunt owns the window while it runs: same map, but pointed at the quarry
+    // and carrying Got it instead of the follow toggle.
+    val huntRepository = remember(context) { HuntRepository.getInstance(context) }
+    val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
+
     val autoEnterMapPip by alertsViewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     LaunchedEffect(selectedTab, autoEnterMapPip) {
         onMapPipAvailabilityChanged(selectedTab == MAP_TAB_INDEX, autoEnterMapPip)
@@ -784,7 +815,11 @@ private fun MainScaffold(
                 viewModel = alertsViewModel,
                 onBack = {},
                 showBackButton = false,
-                presentationMode = MapPresentationMode.COMPACT_PICTURE_IN_PICTURE,
+                presentationMode = if (huntSession != null) {
+                    MapPresentationMode.COMPACT_HUNT_PICTURE_IN_PICTURE
+                } else {
+                    MapPresentationMode.COMPACT_PICTURE_IN_PICTURE
+                },
                 pipCommands = pipCommands,
                 onPipStateChanged = onPipStateChanged
             )
@@ -897,7 +932,8 @@ private fun MainScaffold(
                                 onDateChanged = historyViewModel::setDateFilter,
                                 onTypeChanged = historyViewModel::setTypeFilter,
                                 onSearchChanged = historyViewModel::setSearchQuery,
-                                consumeError = historyViewModel::consumeError
+                                consumeError = historyViewModel::consumeError,
+                                insightsViewModel = insightsViewModelProvider()
                             )
                         }
                         2 -> {

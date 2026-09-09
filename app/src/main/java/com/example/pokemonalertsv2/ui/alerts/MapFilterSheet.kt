@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.hunt.HuntControls
 import com.example.pokemonalertsv2.data.*
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
@@ -255,7 +256,11 @@ private fun MapFilterSheetContent(
             weatherCells = weatherCells,
             refreshing = refreshing,
             onRefresh = onRefresh,
-            onEnterPictureInPicture = onEnterPictureInPicture
+            onEnterPictureInPicture = onEnterPictureInPicture,
+            catalog = catalog,
+            artwork = artwork,
+            questRewardThumbnails = rewardThumbnails,
+            categoryCounts = categoryCounts
         )
 
         // One scroller, and nothing scrollable inside it. The species grid used to live here as
@@ -547,7 +552,11 @@ private fun MapPanelHeader(
     weatherCells: List<MapWeatherCell>,
     refreshing: Boolean,
     onRefresh: () -> Unit,
-    onEnterPictureInPicture: (() -> Unit)?
+    onEnterPictureInPicture: (() -> Unit)?,
+    catalog: FilterCatalog,
+    artwork: Map<String, String>,
+    questRewardThumbnails: Map<String, String>,
+    categoryCounts: Map<AlertCategory, Int>
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(
@@ -580,7 +589,11 @@ private fun MapPanelHeader(
         MapQuickActions(
             refreshing = refreshing,
             onRefresh = onRefresh,
-            onEnterPictureInPicture = onEnterPictureInPicture
+            onEnterPictureInPicture = onEnterPictureInPicture,
+            catalog = catalog,
+            artwork = artwork,
+            questRewardThumbnails = questRewardThumbnails,
+            categoryCounts = categoryCounts
         )
     }
 }
@@ -731,10 +744,27 @@ internal fun MapQuickActions(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)?,
+    catalog: FilterCatalog,
+    artwork: Map<String, String>,
+    questRewardThumbnails: Map<String, String>,
+    categoryCounts: Map<AlertCategory, Int>,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+    if (onEnterPictureInPicture != null) {
+        HuntControls(
+            catalog = catalog,
+            artwork = artwork,
+            questRewardThumbnails = questRewardThumbnails,
+            categoryCounts = categoryCounts,
+            onHuntStarted = onEnterPictureInPicture
+        )
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {
         FilledTonalButton(
@@ -764,6 +794,7 @@ internal fun MapQuickActions(
                 Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
     }
 }
 
@@ -878,15 +909,18 @@ private fun behaviourSummary(showDismissed: Boolean, autoPip: Boolean): String {
  * kind are live. The colours make this the legend as well, which is why the separate one is gone.
  */
 @Composable
-private fun AlertTypesSection(
+internal fun AlertTypesSection(
     definition: FilterDefinition,
     categoryCounts: Map<AlertCategory, Int>,
-    onDefinitionChange: (FilterDefinition) -> Unit
+    onDefinitionChange: (FilterDefinition) -> Unit,
+    // The map panel's copy points at the rail above the map. Reused elsewhere -- the
+    // hunt picker -- there is no rail, and saying so would be a lie.
+    setAllLabel: String = "The rail above the map edits this too"
 ) {
     val allTokens = remember { FilterAlertType.entries.map { normalizeFilterToken(it.name) } }
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         MapSetAllRow(
-            label = "The rail above the map edits this too",
+            label = setAllLabel,
             onAll = { onDefinitionChange(definition.copy(alertTypes = FilterSelection.All)) },
             onNone = { onDefinitionChange(definition.copy(alertTypes = FilterSelection.None)) }
         )
@@ -1084,7 +1118,7 @@ private fun DistanceSection(
 
 /** Raid tiers and Rocket grunt types are the same control over different catalogs. */
 @Composable
-private fun TokenSelectionSection(
+internal fun TokenSelectionSection(
     tokens: List<String>,
     selection: FilterSelection,
     onSelectionChange: (FilterSelection) -> Unit
@@ -1129,7 +1163,7 @@ private fun TokenSelectionSection(
  * the same problem.
  */
 @Composable
-private fun SpeciesPickerSheet(
+internal fun SpeciesPickerSheet(
     initialTarget: MapSelectorTarget,
     definition: FilterDefinition,
     catalog: FilterCatalog,
@@ -1424,7 +1458,7 @@ private fun FilterDefinition.speciesSummary(): String {
 
 // ----------------------------------------------------------------------------- helpers
 
-private fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSelection = when (target) {
+internal fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSelection = when (target) {
     MapSelectorTarget.SPAWN -> spawnSpecies
     MapSelectorTarget.RARE -> rareSpecies
     MapSelectorTarget.HUNDO -> hundoSpecies
@@ -1435,7 +1469,7 @@ private fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSele
     MapSelectorTarget.ROCKET -> rocketTypes
 }
 
-private fun FilterDefinition.withSelection(target: MapSelectorTarget, selection: FilterSelection): FilterDefinition = when (target) {
+internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection: FilterSelection): FilterDefinition = when (target) {
     MapSelectorTarget.SPAWN -> copy(spawnSpecies = selection)
     MapSelectorTarget.RARE -> copy(rareSpecies = selection)
     MapSelectorTarget.HUNDO -> copy(hundoSpecies = selection)
@@ -1446,7 +1480,7 @@ private fun FilterDefinition.withSelection(target: MapSelectorTarget, selection:
     MapSelectorTarget.ROCKET -> copy(rocketTypes = selection)
 }
 
-private fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> = when (this) {
+internal fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> = when (this) {
     MapSelectorTarget.RAID_SPECIES -> catalog.raidSpecies
     MapSelectorTarget.RAID_TIERS -> catalog.raidTiers
     MapSelectorTarget.ROCKET -> catalog.rocketTypes

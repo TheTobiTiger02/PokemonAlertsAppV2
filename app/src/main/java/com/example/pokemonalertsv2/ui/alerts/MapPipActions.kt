@@ -11,6 +11,7 @@ import androidx.annotation.StringRes
 import android.os.Build
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import kotlin.math.asin
 import kotlin.math.cos
@@ -18,7 +19,9 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import java.util.Locale
 
 /**
  * A picture-in-picture window never receives touch events, so the only controls we can
@@ -39,7 +42,10 @@ enum class MapPipMode {
 enum class MapPipCommand {
     TOGGLE_MODE,
     PREVIOUS,
-    NEXT;
+    NEXT,
+
+    /** Hunt windows only: retire the target you just caught and stop tracking it. */
+    GOT_IT;
 
     companion object {
         fun fromName(value: String?): MapPipCommand? =
@@ -49,6 +55,17 @@ enum class MapPipCommand {
 
 internal const val ACTION_MAP_PIP_CONTROL = "com.example.pokemonalertsv2.MAP_PIP_CONTROL"
 internal const val EXTRA_MAP_PIP_COMMAND = "extra_map_pip_command"
+
+/**
+ * Everything the window's toolbar depends on, in one value so adding a control
+ * does not mean threading another positional boolean through three signatures.
+ */
+data class MapPipUiState(
+    val mode: MapPipMode = MapPipMode.FOLLOW,
+    val canStep: Boolean = false,
+    val hunting: Boolean = false,
+    val hasTarget: Boolean = false
+)
 
 /** What each slot does, kept separate from the Android types so it can be unit tested. */
 internal data class MapPipActionSpec(
@@ -113,13 +130,68 @@ internal fun mapPipActionSpecs(
     return specs.take(maxActions)
 }
 
+/** Which set of slots the window is showing. */
+internal fun buildMapPipActionSpecs(
+    mode: MapPipMode,
+    canStep: Boolean,
+    maxActions: Int,
+    hunting: Boolean,
+    hasTarget: Boolean
+): List<MapPipActionSpec> = if (hunting) {
+    huntPipActionSpecs(canStep = canStep, hasTarget = hasTarget, maxActions = maxActions)
+} else {
+    mapPipActionSpecs(mode = mode, canStep = canStep, maxActions = maxActions)
+}
+
+/**
+ * A hunt window's three slots. There is no follow toggle here: a hunt is always
+ * browsing its quarry, so the slot the map PiP spends on that is spent on the
+ * one action a hunt actually needs. Got it sits in the middle, flanked by the
+ * stepping buttons, because it is the destructive one and the hardest to undo.
+ */
+internal fun huntPipActionSpecs(
+    canStep: Boolean,
+    hasTarget: Boolean,
+    maxActions: Int
+): List<MapPipActionSpec> {
+    if (maxActions <= 0) return emptyList()
+    return listOf(
+        MapPipActionSpec(
+            command = MapPipCommand.PREVIOUS,
+            iconRes = R.drawable.ic_pip_prev,
+            titleRes = R.string.map_pip_action_previous_alert,
+            enabled = canStep
+        ),
+        MapPipActionSpec(
+            command = MapPipCommand.GOT_IT,
+            iconRes = R.drawable.ic_check,
+            titleRes = R.string.map_pip_action_got_it,
+            enabled = hasTarget
+        ),
+        MapPipActionSpec(
+            command = MapPipCommand.NEXT,
+            iconRes = R.drawable.ic_pip_next,
+            titleRes = R.string.map_pip_action_next_alert,
+            enabled = canStep
+        )
+    ).take(maxActions)
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 internal fun buildMapPipActions(
     context: Context,
     mode: MapPipMode,
     canStep: Boolean,
-    maxActions: Int
-): List<RemoteAction> = mapPipActionSpecs(mode, canStep, maxActions).map { spec ->
+    maxActions: Int,
+    hunting: Boolean = false,
+    hasTarget: Boolean = false
+): List<RemoteAction> = buildMapPipActionSpecs(
+    mode = mode,
+    canStep = canStep,
+    maxActions = maxActions,
+    hunting = hunting,
+    hasTarget = hasTarget
+).map { spec ->
     val title = context.getString(spec.titleRes)
     RemoteAction(
         Icon.createWithResource(context, spec.iconRes),
@@ -205,15 +277,6 @@ internal fun mapPipDistanceMeters(
 }
 
 private const val MAP_PIP_EARTH_RADIUS_METERS = 6_371_000.0
-
-/**
- * One line of context for the browse cursor, since the window has no room for a card.
- */
-internal fun mapPipBrowseLabel(alert: PokemonAlert, nowMillis: Long): String = buildString {
-    append(alert.pokemon?.takeIf(String::isNotBlank) ?: alert.cleanPokemonName)
-    alert.displayCp?.let { append(" \u00b7 CP ").append(it) }
-    append(" \u00b7 ").append(mapCountdownLabel(alert.endTime, nowMillis))
-}
 
 /** How the window should frame the user and the alert they are browsing. */
 internal sealed interface MapPipFocus {
@@ -328,20 +391,6 @@ internal fun resolveMapPipTrackingIntent(
     if (!browsedAlert.isEligibleArrivalDestination(nowMillis)) return MapPipTrackingIntent.None
     return MapPipTrackingIntent.Start(browsedAlert)
 }
-
-/**
- * The one-line label at the top of the window is a fallback, not the primary readout: while the
- * arrival notification is up it already names the alert, so the window gives the space back to the
- * map. It returns when there is nothing tracking to name it.
- */
-internal fun shouldShowMapPipBrowseChip(
-    compactPictureInPicture: Boolean,
-    pipMode: MapPipMode,
-    browsedAlertId: String?,
-    trackedAlertId: String?
-): Boolean = compactPictureInPicture &&
-    pipMode == MapPipMode.BROWSE &&
-    (browsedAlertId == null || browsedAlertId != trackedAlertId)
 
 /**
  * How long the browse cursor has to settle before the destination is rewritten. Stepping through
