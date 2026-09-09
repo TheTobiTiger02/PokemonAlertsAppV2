@@ -8,7 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -30,8 +33,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.maplibre.android.annotations.IconFactory
-import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -50,6 +51,8 @@ import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
+import org.maplibre.android.style.layers.PropertyFactory.iconAnchor
+import org.maplibre.android.style.layers.PropertyFactory.iconOffset
 import org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement
 import org.maplibre.android.style.layers.PropertyFactory.iconImage
 import org.maplibre.android.style.layers.PropertyFactory.iconRotate
@@ -79,11 +82,53 @@ internal data class MapContentInsets(
     val bottom: Int
 )
 
+/**
+ * One symbol on the map's alert layer.
+ *
+ * [iconId] is the style image the symbol points at rather than a bitmap of its own, so every
+ * marker drawing the same pin shares one GPU texture; [labelId] is the countdown strip's own
+ * shared image. A countdown tick changes which image a symbol points at and nothing else, which
+ * is why the pin is uploaded once and then reused for as long as it stays on screen.
+ */
 internal data class OpenStreetMapMarker(
     val item: MapMarkerItem,
+    val iconId: String,
     val icon: MapMarkerIcon,
+    val labelId: String? = null,
+    val labelBitmap: Bitmap? = null,
     val zIndex: Float = 0f
-)
+) {
+    val kind: String
+        get() = when {
+            item is MapMarkerItem.Cluster -> MARKER_KIND_CLUSTER
+            zIndex >= MAP_EMPHASIZED_MARKER_Z_INDEX -> MARKER_KIND_EMPHASIZED
+            else -> MARKER_KIND_PIN
+        }
+}
+
+internal const val MARKER_KIND_PIN = "pin"
+internal const val MARKER_KIND_EMPHASIZED = "emph"
+internal const val MARKER_KIND_CLUSTER = "cluster"
+
+/**
+ * Where a pin's artwork sits relative to the coordinate it marks, in pixels.
+ *
+ * The pin bitmaps put the ground point a little above their bottom edge, to leave room for the
+ * shadow, and the countdown strip hangs below it. Both are a fixed fraction of the marker size,
+ * so one of these per size covers every marker drawn at that size and the layers can carry the
+ * offsets as constants instead of every feature carrying its own.
+ */
+internal data class MapSymbolGeometry(
+    val pinBottomOffsetPx: Float,
+    val labelTopOffsetPx: Float
+) {
+    companion object {
+        fun forMarkerSize(sizePx: Int): MapSymbolGeometry = MapSymbolGeometry(
+            pinBottomOffsetPx = (sizePx * 0.12f).toInt().toFloat(),
+            labelTopOffsetPx = sizePx * 0.05f
+        )
+    }
+}
 
 internal class OpenStreetMapLifecycleGuard(
     private val onStart: () -> Unit,
@@ -156,7 +201,8 @@ internal class OpenStreetMapController {
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     /** Live camera zoom, tracked only to gate the spawn-radius polygons. */
     private var pendingZoom: Double = 0.0
-    private var radiusLayersOrdered = false
+    private var pendingPinGeometry = MapSymbolGeometry(0f, 0f)
+    private var pendingEmphasizedGeometry = MapSymbolGeometry(0f, 0f)
     val maximumZoom: Double get() = map?.maxZoomLevel ?: 20.0
     var onAlertClick: (PokemonAlert) -> Unit = {}
     var onClusterClick: (MapMarkerItem.Cluster) -> Unit = {}
@@ -165,33 +211,41 @@ internal class OpenStreetMapController {
     var onWeatherCellClick: (String) -> Unit = {}
     private var pendingGesturesEnabled = true
 
-    // Currently-placed annotations by marker id, plus the bitmap each was built from, so a
-    // re-render only touches what actually changed instead of tearing every annotation down.
-    private val placedMarkers = LinkedHashMap<String, org.maplibre.android.annotations.Marker>()
-    private val placedBitmaps = HashMap<String, Bitmap>()
+    /** Style images this controller has registered, so each pin is uploaded exactly once. */
+    private val registeredImages = HashSet<String>()
     private val markerIndex = HashMap<String, MapMarkerItem>()
 
     fun attach(map: MapLibreMap, context: android.content.Context) {
         this.map = map
-        map.setOnMarkerClickListener { marker ->
-            if (this.map !== map) {
-                false
-            } else {
-                markerIndex[marker.title]?.let {
-                    when (it) {
-                        is MapMarkerItem.Alert -> onAlertClick(it.alert)
-                        is MapMarkerItem.Cluster -> onClusterClick(it)
-                    }
-                }
-                true
-            }
-        }
-        // The weather glyphs are a SymbolLayer, and setOnMarkerClickListener only ever fires
-        // for legacy annotations - which is why they were completely dead to touch here. Hit
-        // testing the rendered features is the equivalent for a style layer.
+        // Everything the map draws is a style layer now, so everything is hit-tested the same
+        // way. The alert pins used to be legacy annotations with their own click listener, and
+        // the weather glyphs - already a SymbolLayer - were completely dead to touch until this
+        // path was added for them; one query serves both.
         map.addOnMapClickListener { point ->
             if (this.map !== map) return@addOnMapClickListener false
             val screenPoint = map.projection.toScreenLocation(point)
+            // A finger is not a pixel: query a box around the touch, in the same order the
+            // layers are stacked, so an emphasized pin or a cluster wins over a pin beneath it.
+            val touchBox = android.graphics.RectF(
+                screenPoint.x - MARKER_TOUCH_SLOP_PX,
+                screenPoint.y - MARKER_TOUCH_SLOP_PX,
+                screenPoint.x + MARKER_TOUCH_SLOP_PX,
+                screenPoint.y + MARKER_TOUCH_SLOP_PX
+            )
+            val markerHit = listOf(ALERT_EMPHASIS_LAYER, ALERT_CLUSTER_LAYER, ALERT_PIN_LAYER)
+                .asSequence()
+                .flatMap { layer -> map.queryRenderedFeatures(touchBox, layer).asSequence() }
+                .mapNotNull { feature ->
+                    feature.getStringProperty(ALERT_ID_PROPERTY)?.let(markerIndex::get)
+                }
+                .firstOrNull()
+            if (markerHit != null) {
+                when (markerHit) {
+                    is MapMarkerItem.Alert -> onAlertClick(markerHit.alert)
+                    is MapMarkerItem.Cluster -> onClusterClick(markerHit)
+                }
+                return@addOnMapClickListener true
+            }
             val hit = map.queryRenderedFeatures(screenPoint, WEATHER_GLYPH_LAYER)
                 .firstOrNull { it.hasProperty(WEATHER_AREA_PROPERTY) }
                 ?.getStringProperty(WEATHER_AREA_PROPERTY)
@@ -225,7 +279,7 @@ internal class OpenStreetMapController {
         }
         applyContentInsets()
         applyGestureSettings()
-        renderMarkers(context)
+        renderMarkers()
     }
 
     /**
@@ -248,8 +302,10 @@ internal class OpenStreetMapController {
     fun attachStyle(style: Style, context: android.content.Context) {
         this.style = style
         this.imageContext = context.applicationContext
-        radiusLayersOrdered = false
         registeredWeatherImages.clear()
+        // A new style starts with an empty image table, so anything this controller registered
+        // against the old one is gone whether it is remembered here or not.
+        registeredImages.clear()
         style.addImage(USER_DOT_IMAGE, createMapUserMarkerBitmap(context, directional = false))
         style.addImage(USER_ARROW_IMAGE, createMapUserMarkerBitmap(context, directional = true))
         style.addSource(GeoJsonSource(WEATHER_CELL_SOURCE))
@@ -310,10 +366,85 @@ internal class OpenStreetMapController {
                 iconIgnorePlacement(true)
             )
         )
-        orderRadiusLayersBelowMarkers()
+        // The alert layers go on last, so they sit above the circles and cells without any
+        // reordering pass. The old annotation layer was created by the SDK whenever the first
+        // marker appeared, which is why the overlays underneath it had to be lifted and
+        // reinserted after the fact.
+        style.addSource(GeoJsonSource(ALERT_SOURCE))
+        style.addLayer(alertSymbolLayer(ALERT_PIN_LAYER, MARKER_KIND_PIN))
+        style.addLayer(alertLabelLayer(ALERT_LABEL_LAYER, MARKER_KIND_PIN))
+        style.addLayer(alertSymbolLayer(ALERT_CLUSTER_LAYER, MARKER_KIND_CLUSTER))
+        style.addLayer(alertSymbolLayer(ALERT_EMPHASIS_LAYER, MARKER_KIND_EMPHASIZED))
+        style.addLayer(alertLabelLayer(ALERT_EMPHASIS_LABEL_LAYER, MARKER_KIND_EMPHASIZED))
+        applySymbolGeometry()
+
         renderUserPose()
         renderSpawnRadii()
         renderWeatherCells()
+        renderMarkers()
+    }
+
+    /**
+     * A pin layer for one kind of marker.
+     *
+     * Overlap and placement checks are off because these are alerts, not map labels: a pin that
+     * MapLibre decided to hide for being too close to another one is an alert the user cannot
+     * see or tap. Clusters anchor at their centre because their artwork is a circle; pins anchor
+     * at the bottom and are nudged down by the shadow padding, so the ground point lands on the
+     * coordinate.
+     */
+    private fun alertSymbolLayer(layerId: String, kind: String): SymbolLayer =
+        SymbolLayer(layerId, ALERT_SOURCE).withProperties(
+            iconImage(Expression.get(ALERT_ICON_PROPERTY)),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true),
+            iconAnchor(
+                if (kind == MARKER_KIND_CLUSTER) {
+                    Property.ICON_ANCHOR_CENTER
+                } else {
+                    Property.ICON_ANCHOR_BOTTOM
+                }
+            )
+        ).withFilter(
+            Expression.eq(Expression.get(ALERT_KIND_PROPERTY), Expression.literal(kind))
+        )
+
+    /** The countdown strip, hung below the pin's ground point as an image of its own. */
+    private fun alertLabelLayer(layerId: String, kind: String): SymbolLayer =
+        SymbolLayer(layerId, ALERT_SOURCE).withProperties(
+            iconImage(Expression.get(ALERT_LABEL_PROPERTY)),
+            iconAllowOverlap(true),
+            iconIgnorePlacement(true),
+            iconAnchor(Property.ICON_ANCHOR_TOP)
+        ).withFilter(
+            Expression.all(
+                Expression.eq(Expression.get(ALERT_KIND_PROPERTY), Expression.literal(kind)),
+                Expression.has(ALERT_LABEL_PROPERTY)
+            )
+        )
+
+    /**
+     * Marker artwork is sized in zoom bands, so these change rarely - but when they do, every
+     * symbol on the layer moves with them, which is the whole reason the offsets live on the
+     * layer instead of on each feature.
+     */
+    fun setSymbolGeometry(pin: MapSymbolGeometry, emphasized: MapSymbolGeometry) {
+        if (pin == pendingPinGeometry && emphasized == pendingEmphasizedGeometry) return
+        pendingPinGeometry = pin
+        pendingEmphasizedGeometry = emphasized
+        applySymbolGeometry()
+    }
+
+    private fun applySymbolGeometry() {
+        val currentStyle = style ?: return
+        fun offset(layerId: String, x: Float, y: Float) {
+            currentStyle.getLayerAs<SymbolLayer>(layerId)
+                ?.setProperties(iconOffset(arrayOf(x, y)))
+        }
+        offset(ALERT_PIN_LAYER, 0f, pendingPinGeometry.pinBottomOffsetPx)
+        offset(ALERT_LABEL_LAYER, 0f, pendingPinGeometry.labelTopOffsetPx)
+        offset(ALERT_EMPHASIS_LAYER, 0f, pendingEmphasizedGeometry.pinBottomOffsetPx)
+        offset(ALERT_EMPHASIS_LABEL_LAYER, 0f, pendingEmphasizedGeometry.labelTopOffsetPx)
     }
 
     fun detach() {
@@ -361,9 +492,10 @@ internal class OpenStreetMapController {
         markers: List<OpenStreetMapMarker>,
         rawAlerts: List<PokemonAlert> = emptyList()
     ) {
+        imageContext = context.applicationContext
         pendingMarkers = markers
         pendingAlerts = rawAlerts
-        renderMarkers(context)
+        renderMarkers()
         renderSpawnRadii()
     }
 
@@ -395,68 +527,85 @@ internal class OpenStreetMapController {
     }
 
     /**
-     * Applies the desired marker set as a diff: stale annotations are removed, survivors keep
-     * their place on the map (updating icon or position only when those actually changed), and
-     * only genuinely new ids are added. The old `removeAnnotations()` + re-add-everything pass
-     * re-created every marker twice per countdown tick, which collapsed under Darmstadt volume.
+     * Publishes the whole marker set as one GeoJSON update.
+     *
+     * Each pin's artwork is registered as a style image the first time it is seen and then
+     * referenced by name, so markers that draw the same pin share a single GPU texture and a
+     * marker that stays on screen is never uploaded twice. Only genuinely new artwork costs
+     * anything here; the update itself is a source swap, which is why a countdown tick - which
+     * changes only which label image each symbol points at - no longer touches a texture at all.
+     *
+     * This replaces a per-marker annotation diff. That diff was already careful, but every
+     * annotation icon went through `IconFactory`, which mints a *separate* style image per call:
+     * a Darmstadt screenful with countdowns on re-uploaded 126 textures per tick, twice.
      */
-    private fun renderMarkers(context: android.content.Context) {
-        val currentMap = map ?: return
-        val iconFactory = IconFactory.getInstance(context)
-        val desired = LinkedHashMap<String, OpenStreetMapMarker>()
-        pendingMarkers.sortedBy(OpenStreetMapMarker::zIndex).forEach { model ->
-            desired[markerId(model.item)] = model
-        }
-
-        placedMarkers.keys.filterNot(desired::containsKey).forEach { id ->
-            placedMarkers.remove(id)?.let(currentMap::removeAnnotation)
-            placedBitmaps.remove(id)
-        }
-
-        desired.forEach { (id, model) ->
-            val existing = placedMarkers[id]
-            val target = LatLng(model.item.latitude, model.item.longitude)
-            val bitmapChanged = placedBitmaps[id] !== model.icon.bitmap
-            if (existing == null) {
-                placedMarkers[id] = currentMap.addMarker(
-                    MarkerOptions()
-                        .position(target)
-                        .title(id)
-                        .icon(iconFactory.fromBitmap(model.icon.bitmap))
-                )
-                placedBitmaps[id] = model.icon.bitmap
-            } else {
-                if (existing.position != target) {
-                    existing.position = target
-                }
-                if (bitmapChanged) {
-                    existing.icon = iconFactory.fromBitmap(model.icon.bitmap)
-                    placedBitmaps[id] = model.icon.bitmap
-                }
-            }
-        }
+    private fun renderMarkers() {
+        val currentStyle = style ?: return
+        val source = currentStyle.getSourceAs<GeoJsonSource>(ALERT_SOURCE) ?: return
+        val markers = pendingMarkers
+        val features = ArrayList<Feature>(markers.size)
+        val used = HashSet<String>(markers.size)
+        var uploaded = 0
 
         markerIndex.clear()
-        desired.forEach { (id, model) -> markerIndex[id] = model.item }
-        orderRadiusLayersBelowMarkers()
+        markers.forEach { model ->
+            val id = markerId(model.item)
+            if (registeredImages.add(model.iconId)) {
+                currentStyle.addImage(model.iconId, model.icon.bitmap)
+                uploaded++
+            }
+            used += model.iconId
+            val labelId = model.labelId
+            val labelBitmap = model.labelBitmap
+            if (labelId != null && labelBitmap != null) {
+                if (registeredImages.add(labelId)) {
+                    currentStyle.addImage(labelId, labelBitmap)
+                    uploaded++
+                }
+                used += labelId
+            }
+            features += Feature.fromGeometry(
+                Point.fromLngLat(model.item.longitude, model.item.latitude)
+            ).apply {
+                addStringProperty(ALERT_ID_PROPERTY, id)
+                addStringProperty(ALERT_KIND_PROPERTY, model.kind)
+                addStringProperty(ALERT_ICON_PROPERTY, model.iconId)
+                if (labelId != null) addStringProperty(ALERT_LABEL_PROPERTY, labelId)
+            }
+            markerIndex[id] = model.item
+        }
+
+        source.setGeoJson(FeatureCollection.fromFeatures(features))
+        val evicted = evictUnusedImages(currentStyle, used)
+        MapPerfLog.event(
+            "osm.symbols",
+            "total=${features.size} uploaded=$uploaded images=${registeredImages.size} evicted=$evicted"
+        )
     }
 
-    /** Legacy annotations can be created before or after style load; circles must stay below them. */
-    private fun orderRadiusLayersBelowMarkers() {
-        val currentStyle = style ?: return
-        if (radiusLayersOrdered || currentStyle.getLayer(ANNOTATION_POINTS_LAYER) == null) return
-        listOf(
-            WEATHER_CELL_LAYER,
-            WEATHER_CELL_LINE_LAYER,
-            WEATHER_GLYPH_LAYER,
-            SPAWN_RADIUS_LAYER,
-            SPAWN_RADIUS_LINE_LAYER,
-            USER_ACCURACY_LAYER
-        ).forEach { id ->
-            val layer = currentStyle.getLayer(id) ?: return@forEach
-            if (currentStyle.removeLayer(layer)) currentStyle.addLayerBelow(layer, ANNOTATION_POINTS_LAYER)
+    /**
+     * Drops style images nothing on screen is using once the table grows past its budget.
+     *
+     * Sharing artwork means the table only grows when genuinely new artwork appears, but panning
+     * across a city still accumulates species the user has left behind. Eviction waits for the
+     * budget rather than running every frame, because an image dropped the moment it scrolls off
+     * is an image re-uploaded the moment it scrolls back.
+     */
+    private fun evictUnusedImages(currentStyle: Style, inUse: Set<String>): Int {
+        // Countdown sprites go as soon as they stop being worn. At second precision the text
+        // changes every tick, so keeping them would add a handful of images per second forever;
+        // they are a few hundred bytes each and come straight back out of the bitmap cache.
+        val stale = registeredImages.filterTo(mutableListOf()) { id ->
+            id !in inUse && id.startsWith(COUNTDOWN_IMAGE_PREFIX)
         }
-        radiusLayersOrdered = true
+        if (registeredImages.size > MAX_REGISTERED_MARKER_IMAGES) {
+            registeredImages.filterNotTo(stale, inUse::contains)
+        }
+        stale.forEach { id ->
+            currentStyle.removeImage(id)
+            registeredImages.remove(id)
+        }
+        return stale.size
     }
 
     private fun renderUserPose() {
@@ -564,8 +713,30 @@ internal class OpenStreetMapController {
     }
 
     private companion object {
-        // Native annotation layer ID in the bundled MapLibre SDK.
-        const val ANNOTATION_POINTS_LAYER = "org.maplibre.annotations.points"
+        const val ALERT_SOURCE = "alert-source"
+        const val ALERT_PIN_LAYER = "alert-pin-layer"
+        const val ALERT_LABEL_LAYER = "alert-label-layer"
+        const val ALERT_CLUSTER_LAYER = "alert-cluster-layer"
+        const val ALERT_EMPHASIS_LAYER = "alert-emphasis-layer"
+        const val ALERT_EMPHASIS_LABEL_LAYER = "alert-emphasis-label-layer"
+        const val ALERT_ID_PROPERTY = "id"
+        const val ALERT_KIND_PROPERTY = "kind"
+        const val ALERT_ICON_PROPERTY = "icon"
+        const val ALERT_LABEL_PROPERTY = "label"
+
+        /**
+         * Roughly two screenfuls of distinct artwork. Large enough that panning around a city
+         * keeps hitting registered images, small enough that the image table cannot grow without
+         * bound over a long session.
+         */
+        const val MAX_REGISTERED_MARKER_IMAGES = 700
+
+        /** Countdown sprite ids carry this, so eviction can tell them from pin artwork. */
+        const val COUNTDOWN_IMAGE_PREFIX = "cd|"
+
+        /** Half a fingertip, so a pin is tappable at its edges and not only dead centre. */
+        const val MARKER_TOUCH_SLOP_PX = 28f
+
         const val WEATHER_CELL_SOURCE = "weather-cell-source"
         const val WEATHER_CELL_LAYER = "weather-cell-layer"
         const val WEATHER_CELL_LINE_LAYER = "weather-cell-line-layer"
@@ -782,9 +953,27 @@ internal fun OpenStreetMapView(
             }
         }
     }
+    // Pins and countdowns are built by separate passes, and only the publish pass below talks to
+    // the controller. The countdown used to be part of this effect's key, so every tick rebuilt
+    // every pin - the cull, the icon lookups and the whole marker list - to change two digits.
+    var pinMarkers by remember { mutableStateOf<List<OpenStreetMapMarker>>(emptyList()) }
+    /*
+     * Built pins, kept across camera moves.
+     *
+     * A pan changes which markers are on screen, not what any of them looks like, but the build
+     * pass still ran over the whole visible set every time the camera settled - several hundred
+     * cache-key constructions and lookups to re-derive pins that were already in hand. Keyed by
+     * the alert and by whether it is urgent, so a pan costs only the markers that are genuinely
+     * new. The map is recreated whenever anything that changes how a pin is *drawn* changes -
+     * palette, marker size, GoDex matches, emphasis - which is what [styleGeneration] tracks.
+     */
+    val styleGeneration = remember(
+        basePalette, goDexMatches, emphasizedAlertIds,
+        baseMarkerSizePx, emphasizedMarkerSizePx, clusterMarkerSizePx
+    ) { Any() }
+    val pinCache = remember(styleGeneration) { HashMap<String, OpenStreetMapMarker>() }
     LaunchedEffect(
         markerItems,
-        mapCountdownRefreshKey(showTimeLabels, now, countdownTickMillis),
         basePalette,
         goDexMatches,
         emphasizedAlertIds,
@@ -793,10 +982,12 @@ internal fun OpenStreetMapView(
         clusterMarkerSizePx
     ) {
         val immediateMarkers = withContext(Dispatchers.Default) {
+          MapPerfLog.timed("osm.immediate.build", { "n=${markerItems.size}" }) {
             markerItems.map { item ->
                 currentCoroutineContext().ensureActive()
                 val emphasized = item is MapMarkerItem.Alert &&
                     item.alert.uniqueId in emphasizedAlertIds
+                pinCache[openStreetMapPinCacheKey(item, now)]?.let { return@map it }
                 createImmediateOpenStreetMapMarker(
                     item = item,
                     markerSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx,
@@ -809,80 +1000,129 @@ internal fun OpenStreetMapView(
                     emphasized = emphasized
                 )
             }
+          }
         }
         currentCoroutineContext().ensureActive()
-        withContext(Dispatchers.Main.immediate) {
-            controller.setMarkers(context, immediateMarkers, alerts)
-        }
+        pinMarkers = immediateMarkers
         val markers = withContext(Dispatchers.IO) {
+          MapPerfLog.timed("osm.full.build", { "n=${markerItems.size}" }) {
             markerItems.mapNotNull { item ->
                 currentCoroutineContext().ensureActive()
+                val cacheKey = openStreetMapPinCacheKey(item, now)
+                pinCache[cacheKey]?.let { return@mapNotNull it }
                 // Any group of alerts is a count bubble. It used to borrow the top alert's
                 // species pin and wear a "+N" badge, which reads as one alert that happens to
                 // carry a number rather than as the several it stands for.
                 if (item is MapMarkerItem.Cluster) {
                     return@mapNotNull OpenStreetMapMarker(
-                        item,
-                        createOpenStreetMapClusterIcon(
+                        item = item,
+                        iconId = openStreetMapClusterIconId(item, clusterMarkerSizePx),
+                        icon = createOpenStreetMapClusterIcon(
                             item.alerts.size,
                             item.sharedCategory,
                             clusterMarkerSizePx
                         ),
-                        MAP_CLUSTER_MARKER_Z_INDEX
-                    )
+                        zIndex = MAP_CLUSTER_MARKER_Z_INDEX
+                    ).also { pinCache[cacheKey] = it }
                 }
                 val alert = (item as MapMarkerItem.Alert).alert
                 val emphasized = alert.uniqueId in emphasizedAlertIds
                 val itemSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx
-                val visualStyle = resolveAlertVisualStyle(alert)
-                val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
-                val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
-                val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
-                val isRare = visualStyle.category == AlertCategory.RARE
-                val questQuantity = extractQuestQuantity(alert.questReward)
-                val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
-                val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
-                val raidTier = resolveRaidTier(alert, visualStyle.category)
-                val matchResult = goDexMatches[alert.uniqueId]
-                    ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-                val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
-                    AlertCategory.HUNDO -> "100%"
-                    AlertCategory.NUNDO -> "0%"
-                    else -> visualStyle.shortCode
-                }
-                val timeLabel = mapCountdownLabel(alert.endTime, now, minutePrecisionCountdown, coarsenBeyondWindow = true)
+                val request = openStreetMapIconRequest(alert, itemSizePx, basePalette, goDexMatches)
+                // The pin is drawn without its countdown, so its identity - and the style image
+                // it becomes - does not change when the clock ticks.
                 val icon = createMapMarkerIcon(
                     context = context,
-                    sizePx = itemSizePx,
-                    categoryCode = markerLabel,
-                    speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
-                    speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
-                        ?: alert.imageUrl?.takeIf { it.isNotBlank() },
-                    endTime = alert.endTime,
-                    showTimeLabel = showTimeLabels,
-                    timeLabel = if (showTimeLabels) timeLabel else null,
-                    palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-                    goDexStatus = matchResult.status,
-                    category = visualStyle.category,
-                    isHundo = isHundo,
-                    isNundo = isNundo,
-                    isPvp = isPvp,
-                    isRare = isRare,
-                    questQuantity = questQuantity,
-                    raidTier = raidTier,
-                    isRocket = isRocket,
-                    isKecleon = isKecleon
+                    sizePx = request.sizePx,
+                    categoryCode = request.categoryCode,
+                    speciesName = request.speciesName,
+                    speciesImageUrl = request.speciesImageUrl,
+                    endTime = request.endTime,
+                    showTimeLabel = false,
+                    timeLabel = null,
+                    palette = request.palette,
+                    goDexStatus = request.goDexStatus,
+                    category = request.category,
+                    isHundo = request.isHundo,
+                    isNundo = request.isNundo,
+                    isPvp = request.isPvp,
+                    isRare = request.isRare,
+                    questQuantity = request.questQuantity,
+                    raidTier = request.raidTier,
+                    isRocket = request.isRocket,
+                    isKecleon = request.isKecleon
                 ) ?: return@mapNotNull null
                 OpenStreetMapMarker(
                     item = item,
+                    iconId = mapMarkerBaseIconCacheKey(request, now),
                     icon = icon,
                     zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
-                )
+                ).also {
+                    // Bounded: a long session panning across a city would otherwise hold every
+                    // pin it has ever drawn, and these carry bitmap references.
+                    if (pinCache.size > MAX_CACHED_PINS) pinCache.clear()
+                    pinCache[cacheKey] = it
+                }
+            }
+          }
+        }
+        currentCoroutineContext().ensureActive()
+        pinMarkers = markers
+    }
+
+    /*
+     * The only thing that talks to the controller.
+     *
+     * On a tick this runs alone: the pins are already built, so all it does is look up which
+     * shared countdown sprite each one should be wearing - almost always a cache hit - and
+     * republish. On the map that is a source swap and no texture work at all.
+     */
+    LaunchedEffect(
+        pinMarkers,
+        showTimeLabels,
+        minutePrecisionCountdown,
+        mapCountdownRefreshKey(showTimeLabels, now, countdownTickMillis),
+        basePalette
+    ) {
+        val published = if (!showTimeLabels) {
+            pinMarkers.map { it.copy(labelId = null, labelBitmap = null) }
+        } else {
+            withContext(Dispatchers.Default) {
+              MapPerfLog.timed("osm.labels.build", { "n=${pinMarkers.size}" }) {
+                pinMarkers.map { marker ->
+                    currentCoroutineContext().ensureActive()
+                    val alert = (marker.item as? MapMarkerItem.Alert)?.alert
+                        ?: return@map marker.copy(labelId = null, labelBitmap = null)
+                    val sizePx = if (marker.kind == MARKER_KIND_EMPHASIZED) {
+                        emphasizedMarkerSizePx
+                    } else {
+                        baseMarkerSizePx
+                    }
+                    val countdown = openStreetMapCountdown(
+                        alert, now, minutePrecisionCountdown,
+                        mapCountdownLabelHeightPx(sizePx), basePalette
+                    )
+                    marker.copy(labelId = countdown?.first, labelBitmap = countdown?.second)
+                }
+              }
             }
         }
         currentCoroutineContext().ensureActive()
         withContext(Dispatchers.Main.immediate) {
-            controller.setMarkers(context, markers, alerts)
+            MapPerfLog.timed("osm.publish", { "n=${published.size}" }) {
+                controller.setMarkers(context, published, alerts)
+            }
+        }
+    }
+
+    // Marker artwork is sized in zoom bands, so this fires rarely - but when it does, every
+    // symbol's offset moves with it.
+    LaunchedEffect(baseMarkerSizePx, emphasizedMarkerSizePx) {
+        withContext(Dispatchers.Main.immediate) {
+            controller.setSymbolGeometry(
+                pin = MapSymbolGeometry.forMarkerSize(baseMarkerSizePx),
+                emphasized = MapSymbolGeometry.forMarkerSize(emphasizedMarkerSizePx)
+            )
         }
     }
 
@@ -913,6 +1153,86 @@ internal fun OpenStreetMapView(
     }
 }
 
+/**
+ * How one alert wants to be drawn, without its countdown.
+ *
+ * Both render passes build this, and the countdown is deliberately absent: the strip is its own
+ * shared sprite now, so leaving it out is what makes a pin's identity - and therefore its style
+ * image - stable while the clock runs.
+ */
+private fun openStreetMapIconRequest(
+    alert: PokemonAlert,
+    markerSizePx: Int,
+    basePalette: MapMarkerPalette,
+    goDexMatches: Map<String, GoDexMatchResult>
+): MapMarkerIconRequest {
+    val visualStyle = resolveAlertVisualStyle(alert)
+    val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
+        AlertCategory.HUNDO -> "100%"
+        AlertCategory.NUNDO -> "0%"
+        else -> visualStyle.shortCode
+    }
+    return MapMarkerIconRequest(
+        sizePx = markerSizePx,
+        categoryCode = markerLabel,
+        speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
+        speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: alert.imageUrl?.takeIf { it.isNotBlank() },
+        endTime = alert.endTime,
+        showTimeLabel = false,
+        timeLabel = null,
+        palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
+        goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
+        category = visualStyle.category,
+        isHundo = visualStyle.category == AlertCategory.HUNDO ||
+            alert.formattedIv == "100%" || alert.iv == "100",
+        isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%",
+        isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty(),
+        isRare = visualStyle.category == AlertCategory.RARE,
+        questQuantity = extractQuestQuantity(alert.questReward),
+        raidTier = resolveRaidTier(alert, visualStyle.category),
+        isRocket = visualStyle.category == AlertCategory.ROCKET ||
+            alert.gruntType != null || alert.type?.contains("Rocket") == true,
+        isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
+    )
+}
+
+/** The countdown strip this alert should be wearing, as a shared image id and its bitmap. */
+private fun openStreetMapCountdown(
+    alert: PokemonAlert,
+    nowMillis: Long,
+    minutePrecision: Boolean,
+    labelHeightPx: Int,
+    palette: MapMarkerPalette
+): Pair<String, Bitmap>? {
+    val text = mapCountdownLabel(alert.endTime, nowMillis, minutePrecision, coarsenBeyondWindow = true)
+        ?.takeIf { it.isNotBlank() }
+        ?: return null
+    val urgent = isMapMarkerUrgent(alert.endTime, nowMillis)
+    return mapCountdownLabelImageKey(text, urgent, labelHeightPx) to
+        createMapCountdownLabelBitmap(text, urgent, labelHeightPx, palette)
+}
+
+/** Roughly four screenfuls of markers. */
+private const val MAX_CACHED_PINS = 1600
+
+/**
+ * What makes two requests for the same marker's pin identical.
+ *
+ * Urgency is in the key because it changes how the pin is drawn - an alert about to expire gains
+ * a glow - and it is the one property of an alert that changes on its own over time. Everything
+ * else that affects the drawing is tracked by the cache's generation instead.
+ */
+private fun openStreetMapPinCacheKey(item: MapMarkerItem, nowMillis: Long): String = when (item) {
+    is MapMarkerItem.Alert ->
+        "a|${item.alert.uniqueId}|${isMapMarkerUrgent(item.alert.endTime, nowMillis)}"
+    is MapMarkerItem.Cluster ->
+        "c|${item.id}|${item.alerts.size}|${item.sharedCategory?.name.orEmpty()}"
+}
+
+private fun openStreetMapClusterIconId(item: MapMarkerItem.Cluster, sizePx: Int): String =
+    "cluster|$sizePx|${item.sharedCategory?.name.orEmpty()}|${item.alerts.size}"
+
 private fun createImmediateOpenStreetMapMarker(
     item: MapMarkerItem,
     markerSizePx: Int,
@@ -926,50 +1246,23 @@ private fun createImmediateOpenStreetMapMarker(
 ): OpenStreetMapMarker {
     if (item is MapMarkerItem.Cluster) {
         return OpenStreetMapMarker(
-            item,
-            createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
-            MAP_CLUSTER_MARKER_Z_INDEX
+            item = item,
+            iconId = openStreetMapClusterIconId(item, clusterMarkerSizePx),
+            icon = createOpenStreetMapClusterIcon(item.alerts.size, item.sharedCategory, clusterMarkerSizePx),
+            zIndex = MAP_CLUSTER_MARKER_Z_INDEX
         )
     }
     val alert = (item as MapMarkerItem.Alert).alert
-    val visualStyle = resolveAlertVisualStyle(alert)
-    val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
-    val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
-    val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
-    val isRare = visualStyle.category == AlertCategory.RARE
-    val questQuantity = extractQuestQuantity(alert.questReward)
-    val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
-    val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
-    val raidTier = resolveRaidTier(alert, visualStyle.category)
-    val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
-        AlertCategory.HUNDO -> "100%"
-        AlertCategory.NUNDO -> "0%"
-        else -> visualStyle.shortCode
-    }
-    val request = MapMarkerIconRequest(
-        sizePx = markerSizePx,
-        categoryCode = markerLabel,
-        speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
-        speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
-            ?: alert.imageUrl?.takeIf { it.isNotBlank() },
-        endTime = alert.endTime,
-        showTimeLabel = showTimeLabels,
-        timeLabel = if (showTimeLabels) mapCountdownLabel(alert.endTime, nowMillis, minutePrecision, coarsenBeyondWindow = true) else null,
-        palette = basePalette.copy(primary = visualStyle.category.accentArgb.toInt()),
-        goDexStatus = goDexMatches[alert.uniqueId]?.status ?: GoDexMatchStatus.NOT_CONFIGURED,
-        category = visualStyle.category,
-        isHundo = isHundo,
-        isNundo = isNundo,
-        isPvp = isPvp,
-        isRare = isRare,
-        questQuantity = questQuantity,
-        raidTier = raidTier,
-        isRocket = isRocket,
-        isKecleon = isKecleon
-    )
+    val request = openStreetMapIconRequest(alert, markerSizePx, basePalette, goDexMatches)
+    val key = mapMarkerBaseIconCacheKey(request, nowMillis)
+    // A pin already rendered by an earlier pass keeps its own identity, so the full pass has
+    // nothing to replace. Only a genuine fallback gets a fallback id, and only that one is
+    // swapped out when the real artwork lands.
+    val ready = markerIconCache.get(key) ?: markerBaseIconCache.get(key)
     return OpenStreetMapMarker(
         item = item,
-        icon = resolveInitialMapMarkerIcon(request),
+        iconId = if (ready != null) key else "fallback|$key",
+        icon = ready ?: resolveInitialMapMarkerIcon(request, key),
         zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
     )
 }

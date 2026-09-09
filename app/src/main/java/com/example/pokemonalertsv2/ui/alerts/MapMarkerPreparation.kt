@@ -72,6 +72,27 @@ internal suspend fun prepareMapMarkers(
     config: MapClusteringConfig = MapClusteringConfig(),
     screenBounds: MapGeoBounds? = null
 ): PreparedMapMarkers = withContext(Dispatchers.Default) {
+    val prepared = MapPerfLog.timed("prepare") {
+        prepareMapMarkersInner(alerts, bounds, zoom, spawnRadius, protectedIds, config, screenBounds)
+    }
+    MapPerfLog.event(
+        "prepare.counts",
+        "in=${alerts.size} visible=${prepared.alerts.size} items=${prepared.items.size} " +
+            "clusters=${prepared.items.count { it is MapMarkerItem.Cluster }} " +
+            "zoom=${"%.1f".format(zoom)} limited=${prepared.markerLimitActive}"
+    )
+    prepared
+}
+
+private suspend fun prepareMapMarkersInner(
+    alerts: List<PokemonAlert>,
+    bounds: MapGeoBounds?,
+    zoom: Double,
+    spawnRadius: Double?,
+    protectedIds: Set<String>,
+    config: MapClusteringConfig,
+    screenBounds: MapGeoBounds?
+): PreparedMapMarkers {
     val context = currentCoroutineContext()
     val visible = alerts.filter { alert ->
         context.ensureActive()
@@ -99,7 +120,7 @@ internal suspend fun prepareMapMarkers(
             }.take(MAX_SPAWN_CIRCLES)
     } else emptyList()
     context.ensureActive()
-    PreparedMapMarkers(
+    return PreparedMapMarkers(
         visible,
         items.map { if (it is MapMarkerItem.Cluster && it.isCoincident())
             MapMarkerItem.Alert(it.topAlert, it.latitude, it.longitude) else it }.sortedBy { if (it is MapMarkerItem.Alert && it.alert.uniqueId in protectedIds) 0 else 1 },

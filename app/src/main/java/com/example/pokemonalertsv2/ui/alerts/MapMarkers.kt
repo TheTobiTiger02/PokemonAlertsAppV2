@@ -455,6 +455,7 @@ internal fun trimMapBitmapCaches(level: Int) {
         markerArtworkCache,
         markerFallbackCache,
         clusterBitmapCache,
+        countdownLabelBitmapCache,
         weatherCellBitmapCache
     )
     // Compared numerically, not by name: the constants ascend 5, 10, 15, 20, 40, 60, 80, so
@@ -560,30 +561,37 @@ private suspend fun loadUncachedMapMarkerArtwork(
     }
 }
 
+/**
+ * One [StringBuilder], not a nineteen-element list.
+ *
+ * `listOf(...).joinToString("|")` allocated a list, boxed every Int and Boolean in it, called
+ * `toString` on each, and then built the string - three times per marker per camera idle, which
+ * at Darmstadt density is over a thousand throwaway lists for a pan that changes nothing.
+ */
 internal fun mapMarkerIconCacheKey(
     request: MapMarkerIconRequest,
     nowMillis: Long = System.currentTimeMillis()
-): String = listOf(
-    "wingullmap-marker-v1",
-    request.sizePx,
-    request.categoryCode,
-    request.speciesName,
-    request.speciesImageUrl.orEmpty(),
-    request.showTimeLabel,
-    request.timeLabel.orEmpty(),
-    isMapMarkerUrgent(request.endTime, nowMillis),
-    request.palette,
-    request.goDexStatus,
-    request.category.name,
-    request.isHundo,
-    request.isNundo,
-    request.isPvp,
-    request.isRare,
-    request.questQuantity.orEmpty(),
-    request.raidTier.orEmpty(),
-    request.isRocket,
-    request.isKecleon
-).joinToString("|")
+): String = StringBuilder(160).apply {
+    append("wingullmap-marker-v1|")
+    append(request.sizePx).append('|')
+    append(request.categoryCode).append('|')
+    append(request.speciesName).append('|')
+    append(request.speciesImageUrl.orEmpty()).append('|')
+    append(request.showTimeLabel).append('|')
+    append(request.timeLabel.orEmpty()).append('|')
+    append(isMapMarkerUrgent(request.endTime, nowMillis)).append('|')
+    append(request.palette).append('|')
+    append(request.goDexStatus).append('|')
+    append(request.category.name).append('|')
+    append(request.isHundo).append('|')
+    append(request.isNundo).append('|')
+    append(request.isPvp).append('|')
+    append(request.isRare).append('|')
+    append(request.questQuantity.orEmpty()).append('|')
+    append(request.raidTier.orEmpty()).append('|')
+    append(request.isRocket).append('|')
+    append(request.isKecleon)
+}.toString()
 
 /**
  * The same key with the countdown taken out.
@@ -594,12 +602,16 @@ internal fun mapMarkerIconCacheKey(
  * change two digits. Keyed this way, that work is done once and the tick only stamps the label
  * onto a copy. [MapMarkerIconRequest.showTimeLabel] stays in the key because it decides whether
  * the strip is reserved at all.
+ *
+ * [endTime] is kept rather than nulled, because the pin itself changes when an alert becomes
+ * urgent - it gains a glow - and only the derived urgent flag reaches the key, not the timestamp.
+ * Nulling it collapsed urgent and non-urgent pins onto one entry, so whichever rendered first
+ * decided how both of them looked.
  */
-internal fun mapMarkerBaseIconCacheKey(request: MapMarkerIconRequest): String =
-    mapMarkerIconCacheKey(
-        request.copy(timeLabel = null, endTime = null),
-        nowMillis = 0L
-    )
+internal fun mapMarkerBaseIconCacheKey(
+    request: MapMarkerIconRequest,
+    nowMillis: Long = System.currentTimeMillis()
+): String = mapMarkerIconCacheKey(request.copy(timeLabel = null), nowMillis)
 
 /**
  * Finished pins minus their countdown. Small next to the icon cache: a base is shared by every
@@ -1076,7 +1088,7 @@ internal suspend fun createMapMarkerIcon(
         val anchor = Offset(0.5f, (groundY / totalHeight).coerceIn(0f, 1f))
 
         // The pin without its countdown, shared across every tick of every marker drawing it.
-        val baseKey = mapMarkerBaseIconCacheKey(request)
+        val baseKey = mapMarkerBaseIconCacheKey(request, nowMillis = System.currentTimeMillis())
         val base = markerBaseIconCache.get(baseKey) ?: run {
             val speciesBitmap = speciesImageUrl?.let { url ->
                 loadMapMarkerArtwork(context, url, sizePx)
@@ -1169,6 +1181,63 @@ internal fun Canvas.drawMarkerLabel(
     val textY = rect.centerY() - (textPaint.descent() + textPaint.ascent()) / 2f
     drawText(text, centerX, textY, textPaint)
 }
+
+private val COUNTDOWN_LABEL_CACHE_BYTES = heapFraction(0.01)
+
+/**
+ * Countdown strips as standalone sprites, keyed by what they say rather than by which marker
+ * says it.
+ *
+ * Baked into the pin, a countdown makes every visible marker's bitmap unique and short-lived:
+ * on the OpenStreetMap provider that meant re-uploading one GPU texture per marker per tick.
+ * As its own sprite the strip is shared by every marker showing the same remaining time, so a
+ * screenful of markers at minute precision needs a few dozen small images between them, and a
+ * tick changes which image a symbol points at rather than the image itself.
+ */
+internal val countdownLabelBitmapCache = object : LruCache<String, Bitmap>(COUNTDOWN_LABEL_CACHE_BYTES) {
+    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+}
+
+internal fun mapCountdownLabelImageKey(text: String, urgent: Boolean, heightPx: Int): String =
+    "cd|$heightPx|$urgent|$text"
+
+internal fun createMapCountdownLabelBitmap(
+    text: String,
+    urgent: Boolean,
+    heightPx: Int,
+    palette: MapMarkerPalette
+): Bitmap {
+    val height = heightPx.coerceAtLeast(12)
+    val cacheKey = mapCountdownLabelImageKey(text, urgent, height)
+    countdownLabelBitmapCache.get(cacheKey)?.let { return it }
+    // Measured the same way the strip inside the pin was, so the sprite is exactly as wide as
+    // the rounded rect it draws and no wider - the symbol carries no transparent margin.
+    val probe = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = height * 0.57f
+        isFakeBoldText = true
+    }
+    val width = (probe.measureText(text) + height * 0.55f * 2f)
+        .coerceAtLeast(height * 1.75f)
+        .toInt()
+        .coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    Canvas(bitmap).drawMarkerLabel(
+        centerX = width / 2f,
+        top = 0f,
+        height = height.toFloat(),
+        text = text,
+        background = if (urgent) palette.error else AndroidColor.argb(200, 26, 26, 26),
+        foreground = AndroidColor.WHITE,
+        outline = if (urgent) AndroidColor.WHITE else AndroidColor.TRANSPARENT,
+        maxWidth = width.toFloat()
+    )
+    countdownLabelBitmapCache.put(cacheKey, bitmap)
+    return bitmap
+}
+
+/** Height of the countdown strip for a marker drawn at [markerSizePx]. Matches the baked strip. */
+internal fun mapCountdownLabelHeightPx(markerSizePx: Int): Int =
+    (markerSizePx * 0.22f).toInt().coerceAtLeast(16)
 
 /**
  * Cluster bubbles differ only by category, count and size, so a membership change that keeps

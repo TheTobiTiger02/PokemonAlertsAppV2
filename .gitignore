@@ -56,3 +56,7 @@ build_log*.txt
 # Local developer/IDE files
 .idea/deploymentTargetSelector.xml
 .idea/deviceManager.xml
+.zcode/ 
+
+# Local performance artifacts (traces, logs, APKs) - never committed.
+/.local/

@@ -1949,37 +1949,22 @@ internal fun AlertsMapScreenContent(
                     showBackButton = showBackButton,
                     onBack = onBack,
                     onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail runs to the screen edge so chips scroll out from under it
-                    // rather than stopping short at a padded boundary, but it stops clear of
-                    // the pinned settings button so the last chip is never trapped beneath it.
+                    // The rail now owns the full width. Reserving the end for a pinned button
+                    // only ever kept the *last* chip clear of it: scrolled back to the start,
+                    // the leading chips still ran underneath it, so the button moved down to
+                    // the control column where the map's other actions already live.
                     contentPadding = PaddingValues(
                         start = Spacing.lg,
-                        end = controlsEndPadding + MAP_SETTINGS_BUTTON_SIZE + Spacing.sm,
+                        end = Spacing.lg,
                         top = 2.dp,
                         bottom = Spacing.xxs
                     )
                 )
 
-                Row(
-                    modifier = Modifier.padding(
-                        start = Spacing.lg,
-                        end = controlsEndPadding + MAP_SETTINGS_BUTTON_SIZE + Spacing.sm
-                    )
-                ) {
+                Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
                 }
             }
-
-            // Pinned, not part of the rail: it must stay reachable however far the categories
-            // are scrolled.
-            MapSettingsButton(
-                activeRuleCount = advancedFilterRuleCount,
-                onClick = { showFilterSheet = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = Spacing.xs, end = controlsEndPadding)
-            )
         }
 
         // Any active narrowing can empty the map, not just a muted category, so the recovery
@@ -2019,6 +2004,7 @@ internal fun AlertsMapScreenContent(
                 rewardThumbnails = questRewardThumbnails,
                 visibleCount = filteredAlerts.size,
                 totalCount = alerts.size,
+                categoryCounts = categoryCounts,
                 onDefinitionChange = onFilterDefinitionChange,
                 onOpenFilterStudio = { showFilterSheet = false; onOpenFilterStudio() },
                 onDismiss = { showFilterSheet = false },
@@ -2119,6 +2105,12 @@ internal fun AlertsMapScreenContent(
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 horizontalAlignment = Alignment.End
             ) {
+                // One column for everything the map does, ordered by how often it is reached
+                // for, with the most frequent lowest and nearest the thumb.
+                MapSettingsButton(
+                    activeRuleCount = advancedFilterRuleCount,
+                    onClick = { showFilterSheet = true }
+                )
                 // Secondary: framing the alerts is occasional, finding yourself is constant.
                 SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,
