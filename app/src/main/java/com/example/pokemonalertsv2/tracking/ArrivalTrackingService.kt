@@ -25,6 +25,7 @@ import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
+import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
 import com.example.pokemonalertsv2.ui.alerts.MapPoseCadence
 import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
@@ -534,19 +535,15 @@ class ArrivalTrackingService : Service() {
         }
     }
 
+    /** What to call a caught target in the undo button. */
+    private fun caughtDisplayName(destination: TrackedDestination): String =
+        huntTargetTitle(destination.alert)
+
     /**
      * "Got it": retire this target the same way a swipe on the feed would, so the
      * thing you just caught disappears from the list, the map and the widgets
      * rather than being offered again as the nearest match.
      */
-    /** What to call a caught target in the undo button. */
-    private fun caughtDisplayName(destination: TrackedDestination): String =
-        destination.alert.pokemon?.takeIf { it.isNotBlank() }
-        // Rocket and quest names carry the PokeStop -- "Ground Grunt @ Haus der
-        // Gartenfreunde" -- which is most of a button for none of the meaning.
-            ?: destination.alert.name.substringBefore(" @ ").trim().takeIf { it.isNotBlank() }
-            ?: "that one"
-
     private suspend fun markCurrentTargetCaught() {
         val destination = currentDestination ?: repository.currentDestination()
         destination?.let { target ->
