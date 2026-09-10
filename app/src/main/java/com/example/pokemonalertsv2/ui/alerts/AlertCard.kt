@@ -190,6 +190,7 @@ internal fun AlertCard(
     cardContext: AlertCardContext = AlertCardContext.LIVE,
     snoozeEnabled: Boolean = cardContext == AlertCardContext.LIVE,
     isGoing: Boolean = false,
+    huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
     modifier: Modifier = Modifier
@@ -341,6 +342,14 @@ internal fun AlertCard(
                     maxLines = 2
                 ) {
                     GoDexStatusPill(goDexStatus)
+                    // The one row in a feed of hundreds that the hunt is walking to.
+                    if (huntTarget) {
+                        AlertPill(
+                            text = "Hunt target",
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     displayIv?.let {
                         AlertPill(
                             text = "IV $it",

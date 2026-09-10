@@ -52,12 +52,16 @@ fun HuntControls(
     questRewardThumbnails: Map<String, String>,
     categoryCounts: Map<AlertCategory, Int>,
     onHuntStarted: () -> Unit,
+    userLocation: android.location.Location? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val huntRepository = remember(context) { HuntRepository.getInstance(context) }
     val session by huntRepository.activeHunt.collectAsStateWithLifecycle()
+    val destination by remember(context) {
+        ArrivalTrackingRepository.getInstance(context).destinationFlow
+    }.collectAsStateWithLifecycle(initialValue = null)
 
     var pickerOpen by remember { mutableStateOf(false) }
     val lastCaught by remember(context) {
@@ -93,13 +97,34 @@ fun HuntControls(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = "Hunting ${active.name}",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Hunting ${active.name}",
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    // Which match, not just which hunt. "Hunting Dragon grunts" on its
+                    // own left no way to tell from in here which of them you were
+                    // walking to.
+                    val target = destination?.alert
+                    Text(
+                        text = target?.let { "→ ${huntTargetTitle(it)}" } ?: "Waiting for a match",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    target?.let {
+                        Text(
+                            text = huntTargetDetail(it, huntTargetDistanceMeters(userLocation, it)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
                 TextButton(
                     onClick = {
                         scope.launch {

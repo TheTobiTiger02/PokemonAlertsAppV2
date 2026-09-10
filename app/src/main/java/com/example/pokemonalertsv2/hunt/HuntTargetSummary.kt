@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -55,4 +56,17 @@ internal fun huntTargetDetail(
         ?.let { "${TimeUtils.formatDurationShort(it)} left" }
 
     return listOfNotNull(glance.takeIf { it.isNotBlank() }, remaining).joinToString(" • ")
+}
+
+/** Straight-line metres to the target, or null without a fix or a position to walk to. */
+internal fun huntTargetDistanceMeters(from: Location?, alert: PokemonAlert): Float? {
+    val origin = from ?: return null
+    val latitude = alert.latitude ?: return null
+    val longitude = alert.longitude ?: return null
+    return WalkingRouteUtils.straightLineDistanceMeters(
+        originLatitude = origin.latitude,
+        originLongitude = origin.longitude,
+        destinationLatitude = latitude,
+        destinationLongitude = longitude
+    )
 }

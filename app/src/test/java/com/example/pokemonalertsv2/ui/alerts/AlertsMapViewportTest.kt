@@ -258,6 +258,38 @@ class AlertsMapViewportTest {
     }
 
     @Test
+    fun `a hunt emphasizes its target on the full map, but never the tap selection`() {
+        val browsed = alert("Browsed", 49.8, 8.6)
+        val tracked = alert("Tracked", 49.9, 8.7)
+        val rendered = listOf(browsed, tracked)
+
+        // Outside picture-in-picture the browse cursor is the ordinary tap-to-open
+        // selection, so emphasizing it would fire on every tap.
+        assertEquals(
+            setOf(tracked.uniqueId),
+            mapPipEmphasizedAlertIds(false, tracked.uniqueId, browsed.uniqueId, huntActive = true)
+        )
+        assertEquals(
+            setOf(tracked.uniqueId),
+            mapPipProtectedAlertIds(false, tracked.uniqueId, browsed.uniqueId, rendered, huntActive = true)
+        )
+        // A target that expired or was filtered away still reserves nothing.
+        assertEquals(
+            emptySet<String>(),
+            mapPipProtectedAlertIds(false, "gone", browsed.uniqueId, rendered, huntActive = true)
+        )
+        // And with no hunt running, nothing changes for the full map.
+        assertEquals(
+            emptySet<String>(),
+            mapPipEmphasizedAlertIds(false, tracked.uniqueId, browsed.uniqueId)
+        )
+        assertEquals(
+            emptySet<String>(),
+            mapPipProtectedAlertIds(false, tracked.uniqueId, browsed.uniqueId, rendered)
+        )
+    }
+
+    @Test
     fun `PiP frames an existing selection before the tracked destination`() {
         val selected = alert("Selected", 49.8, 8.6)
         val tracked = alert("Tracked", 49.9, 8.7)

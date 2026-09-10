@@ -142,6 +142,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.pokemonalertsv2.R
 import androidx.activity.compose.BackHandler
@@ -860,6 +861,12 @@ internal fun AlertsList(
     unifiedDefinition: FilterDefinition? = null
 ) {
     val arrivalTracking = rememberArrivalTrackingUiController()
+    // A hunt walks you to one alert at a time; the feed marks which one so the row
+    // and the map agree without having to compare coordinates.
+    val huntContext = LocalContext.current
+    val huntSession by remember(huntContext) {
+        HuntRepository.getInstance(huntContext).activeHunt
+    }.collectAsStateWithLifecycle()
     val countdownClock = rememberCountdownClock()
     var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     val activeFilterCount = if (unifiedDefinition != null) {
@@ -1074,6 +1081,7 @@ internal fun AlertsList(
                             }
                         },
                         isGoing = arrivalTracking.isTracking(model.alert),
+                        huntTarget = huntSession?.targetUniqueId == model.alert.uniqueId,
                         onGoingClick = if (model.alert.isEligibleArrivalDestination()) {
                             { arrivalTracking.onToggle(model.alert) }
                         } else {

@@ -114,6 +114,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.hunt.HuntTargetBanner
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
 import com.example.pokemonalertsv2.tracking.JourneyReadoutSurface
@@ -279,29 +280,35 @@ internal fun mapAlertsForPresentation(
  *
  * Both are matched against [renderedAlerts]: an id that has expired or been filtered away
  * reserves nothing.
+ *
+ * A running hunt gets the same treatment on the full map, but for the tracked
+ * alert only: there, the browse cursor is the ordinary tap-to-open selection, and
+ * emphasizing it would fire on every tap.
  */
 internal fun mapPipProtectedAlertIds(
     compactPictureInPicture: Boolean,
     trackedAlertId: String?,
     browsedAlertId: String?,
-    renderedAlerts: List<PokemonAlert>
+    renderedAlerts: List<PokemonAlert>,
+    huntActive: Boolean = false
 ): Set<String> {
-    if (!compactPictureInPicture) return emptySet()
+    if (!compactPictureInPicture && !huntActive) return emptySet()
     val available = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
     return setOfNotNull(
         trackedAlertId?.takeIf { it in available },
-        browsedAlertId?.takeIf { it in available }
+        browsedAlertId?.takeIf { compactPictureInPicture && it in available }
     )
 }
 
 internal fun mapPipEmphasizedAlertIds(
     compactPictureInPicture: Boolean,
     trackedAlertId: String?,
-    browsedAlertId: String?
-): Set<String> = if (compactPictureInPicture) {
-    setOfNotNull(trackedAlertId, browsedAlertId)
-} else {
-    emptySet()
+    browsedAlertId: String?,
+    huntActive: Boolean = false
+): Set<String> = when {
+    compactPictureInPicture -> setOfNotNull(trackedAlertId, browsedAlertId)
+    huntActive -> setOfNotNull(trackedAlertId)
+    else -> emptySet()
 }
 
 internal fun initialMapPipBrowsedAlertId(
@@ -954,24 +961,28 @@ internal fun AlertsMapScreenContent(
         compactPictureInPicture,
         arrivalTracking.activeDestination?.uniqueId,
         selectedAlertId,
-        renderedAlerts
+        renderedAlerts,
+        huntSession
     ) {
         mapPipProtectedAlertIds(
             compactPictureInPicture = compactPictureInPicture,
             trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
             browsedAlertId = selectedAlertId,
-            renderedAlerts = renderedAlerts
+            renderedAlerts = renderedAlerts,
+            huntActive = huntSession != null
         )
     }
     val emphasizedAlertIds = remember(
         compactPictureInPicture,
         arrivalTracking.activeDestination?.uniqueId,
-        selectedAlertId
+        selectedAlertId,
+        huntSession
     ) {
         mapPipEmphasizedAlertIds(
             compactPictureInPicture = compactPictureInPicture,
             trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
-            browsedAlertId = selectedAlertId
+            browsedAlertId = selectedAlertId,
+            huntActive = huntSession != null
         )
     }
     val goDexMatches = rememberGoDexMatchResults(
@@ -2107,6 +2118,23 @@ internal fun AlertsMapScreenContent(
 
                 Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
+                }
+
+                // A hunt emphasizes one marker somewhere on the map. This says which
+                // one it is without opening the panel that started the hunt.
+                huntSession?.let { hunt ->
+                    Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                        HuntTargetBanner(
+                            huntName = hunt.name,
+                            target = arrivalTracking.activeDestination?.alert,
+                            distanceMeters = journeyDistanceMeters,
+                            onClick = {
+                                arrivalTracking.activeDestination?.alert?.let {
+                                    focusBrowsedAlert(it, userLocation)
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }

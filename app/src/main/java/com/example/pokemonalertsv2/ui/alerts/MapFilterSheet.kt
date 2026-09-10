@@ -593,7 +593,8 @@ private fun MapPanelHeader(
             catalog = catalog,
             artwork = artwork,
             questRewardThumbnails = questRewardThumbnails,
-            categoryCounts = categoryCounts
+            categoryCounts = categoryCounts,
+            userLocation = userLocation
         )
     }
 }
@@ -748,6 +749,7 @@ internal fun MapQuickActions(
     artwork: Map<String, String>,
     questRewardThumbnails: Map<String, String>,
     categoryCounts: Map<AlertCategory, Int>,
+    userLocation: android.location.Location? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -760,6 +762,7 @@ internal fun MapQuickActions(
             artwork = artwork,
             questRewardThumbnails = questRewardThumbnails,
             categoryCounts = categoryCounts,
+            userLocation = userLocation,
             onHuntStarted = onEnterPictureInPicture
         )
     }
