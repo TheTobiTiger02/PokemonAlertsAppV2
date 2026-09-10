@@ -68,11 +68,15 @@ class ClusteringSettingsInstrumentedTest {
     }
 
     @Test fun presetsAndAdvancedControlsAreReachable() {
-        rule.setContent { PokemonAlertsV2Theme { MapClusteringSettingsButton() } }
-        rule.onNodeWithTag("map_clustering_settings").performClick()
+        // The controls used to open from a button of their own. They are a section of the
+        // map panel now, collapsed until its header is tapped, and there is no Done to
+        // dismiss -- the panel itself is the way out.
+        rule.setContent { PokemonAlertsV2Theme { MapClusteringSettingsSection() } }
+        rule.onNodeWithText("Density & grouping").performClick()
         rule.onNodeWithText("Overlap only").assertIsDisplayed()
         rule.onNodeWithText("Same-location stacks").assertIsDisplayed()
-        rule.onNodeWithText("Advanced").assertIsDisplayed()
-        rule.onNodeWithText("Done").performScrollTo().performClick()
+        // Below the fold in a section rendered on its own, so existence is the assertion.
+        rule.onNodeWithText("Advanced").assertExists()
+        rule.onNodeWithText("Reset").assertExists()
     }
 }

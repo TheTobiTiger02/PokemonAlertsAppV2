@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.MapPipArrivalTracker
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
@@ -141,7 +142,7 @@ class MapLiveTrackingComposeTest {
     @Test
     fun pictureInPictureBrowseCommandTracksTheAlertItLandsOn() {
         val commands = browseCommands()
-        val reportedStates = mutableListOf<Pair<MapPipMode, Boolean>>()
+        val reportedStates = mutableListOf<MapPipUiState>()
         val tracker = RecordingArrivalTracker(succeeds = true)
 
         composeRule.setContent {
@@ -154,7 +155,7 @@ class MapLiveTrackingComposeTest {
                     initialZoom = 15.0,
                     onEnterPictureInPicture = {},
                     pipCommands = commands,
-                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep },
+                    onPipStateChanged = { state -> reportedStates += state },
                     pipArrivalTracker = tracker,
                     locationTrackerFactory = browseLocationTracker()
                 )
@@ -163,7 +164,8 @@ class MapLiveTrackingComposeTest {
 
         composeRule.onNodeWithTag("map_pip_content").assertIsDisplayed()
         composeRule.waitUntil(timeoutMillis = 5_000L) { reportedStates.isNotEmpty() }
-        assertEquals(MapPipMode.FOLLOW to true, reportedStates.first())
+        assertEquals(MapPipMode.FOLLOW, reportedStates.first().mode)
+        assertTrue(reportedStates.first().canStep)
 
         composeRule.runOnIdle { commands.tryEmit(MapPipCommand.TOGGLE_MODE) }
 
@@ -175,7 +177,7 @@ class MapLiveTrackingComposeTest {
     @Test
     fun pictureInPictureBrowseKeepsTheChipWhenTrackingCannotStart() {
         val commands = browseCommands()
-        val reportedStates = mutableListOf<Pair<MapPipMode, Boolean>>()
+        val reportedStates = mutableListOf<MapPipUiState>()
         // A refused preflight - no location permission, say - is reported only by the chip
         // staying up, because the window has no way to raise a prompt the user could answer.
         val tracker = RecordingArrivalTracker(succeeds = false)
@@ -190,7 +192,7 @@ class MapLiveTrackingComposeTest {
                     initialZoom = 15.0,
                     onEnterPictureInPicture = {},
                     pipCommands = commands,
-                    onPipStateChanged = { mode, canStep -> reportedStates += mode to canStep },
+                    onPipStateChanged = { state -> reportedStates += state },
                     pipArrivalTracker = tracker,
                     locationTrackerFactory = browseLocationTracker()
                 )
@@ -199,13 +201,14 @@ class MapLiveTrackingComposeTest {
 
         composeRule.onNodeWithTag("map_pip_content").assertIsDisplayed()
         composeRule.waitUntil(timeoutMillis = 5_000L) { reportedStates.isNotEmpty() }
-        assertEquals(MapPipMode.FOLLOW to true, reportedStates.first())
+        assertEquals(MapPipMode.FOLLOW, reportedStates.first().mode)
+        assertTrue(reportedStates.first().canStep)
         composeRule.onNodeWithTag("map_pip_browse_chip").assertDoesNotExist()
 
         composeRule.runOnIdle { commands.tryEmit(MapPipCommand.TOGGLE_MODE) }
 
         composeRule.waitUntil(timeoutMillis = 5_000L) {
-            reportedStates.lastOrNull()?.first == MapPipMode.BROWSE
+            reportedStates.lastOrNull()?.mode == MapPipMode.BROWSE
         }
         composeRule.onNodeWithTag("map_pip_browse_chip").assertIsDisplayed()
         // Scoped to the chip: the map's own marker also carries the species name.
@@ -282,7 +285,13 @@ class MapLiveTrackingComposeTest {
                 MapQuickActions(
                     refreshing = false,
                     onRefresh = {},
-                    onEnterPictureInPicture = { selected = true }
+                    onEnterPictureInPicture = { selected = true },
+                    // The row carries the hunt controls now, and the hunt picker is built
+                    // from these. Empty is enough: this test only reaches the PiP button.
+                    catalog = FilterCatalog(),
+                    artwork = emptyMap(),
+                    questRewardThumbnails = emptyMap(),
+                    categoryCounts = emptyMap()
                 )
             }
         }

@@ -936,6 +936,9 @@ class ArrivalTrackingService : Service() {
      * Re-posts whichever notification is standing, so an action that appeared or
      * expired reaches the shade without waiting for the next location fix.
      */
+    // Guarded by hasNotificationPermission(), which lint cannot follow -- the same
+    // reason updateOngoing carries this.
+    @SuppressLint("MissingPermission")
     private fun refreshCurrentNotification() {
         if (!hasNotificationPermission()) return
         val notification = currentJourneyNotification()
