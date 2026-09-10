@@ -70,6 +70,9 @@ class ArrivalTrackingService : Service() {
     private var walkingRouteJob: Job? = null
     private var evaluator = ArrivalFixEvaluator()
     private var locationUpdatesStarted = false
+
+    /** The cadence the running request was made with, so a change can be detected. */
+    private var activeLocationCadence: ArrivalCadence? = null
     private var arrivalInProgress = false
     private var walkingRoute: WalkingRouteInfo? = null
     private var walkingRouteUpdatedAtMillis = 0L
@@ -361,7 +364,9 @@ class ArrivalTrackingService : Service() {
             inRange = lastInRange
         )
         startChipRefreshLoop()
-        startLocationUpdates()
+        // The distance was seeded from the last accepted fix just above, so the first
+        // request already goes out at the rate this leg deserves.
+        applyLocationCadence()
     }
 
     /**
@@ -405,9 +410,30 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    private fun startLocationUpdates() {
+    /**
+     * Points the location request at the cadence the current distance calls for.
+     *
+     * The request cannot be re-rated in place, so a change means tearing the old one
+     * down first -- leave it running and the fast request simply carries on
+     * underneath the slow one, which is the trap `startPoseTracking` documents.
+     */
+    private fun applyLocationCadence() {
+        val destination = currentDestination ?: return
+        val wanted = arrivalCadenceFor(
+            distanceMeters = lastDirectDistanceMeters,
+            radiusMeters = destination.radiusMeters,
+            current = activeLocationCadence
+        )
+        if (locationUpdatesStarted && wanted == activeLocationCadence) return
+        if (locationUpdatesStarted) stopLocationUpdates()
+        startLocationUpdates(wanted)
+    }
+
+    private fun startLocationUpdates(cadence: ArrivalCadence = ArrivalCadence.Arriving) {
         if (locationUpdatesStarted || !hasFineLocationPermission()) return
+        activeLocationCadence = cadence
         val started = locationSource.start(
+            cadence = cadence,
             onLocation = ::onLocation,
             onAvailabilityChanged = { available ->
                 if (!available && lastDirectDistanceMeters == null) {
@@ -430,6 +456,7 @@ class ArrivalTrackingService : Service() {
     }
 
     private fun stopLocationUpdates() {
+        activeLocationCadence = null
         if (!locationUpdatesStarted) return
         locationSource.stop()
         locationUpdatesStarted = false
@@ -475,6 +502,8 @@ class ArrivalTrackingService : Service() {
                 }
             )
         lastDirectDistanceMeters = distance[0]
+        // Closing on the target buys a faster rate; walking away gives it back.
+        applyLocationCadence()
         // A valid fix is useful for display even when its accuracy is too coarse to confirm
         // arrival. The evaluator still rejects fixes beyond its safety ceiling.
         lastWaitingForPreciseLocation = false

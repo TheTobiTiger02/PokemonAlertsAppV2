@@ -384,10 +384,17 @@ class ArrivalTrackingServiceInstrumentedTest {
         val started = CountDownLatch(1)
         private var onLocation: ((Location) -> Unit)? = null
 
+        /** The cadence of the request currently running, for cadence assertions. */
+        @Volatile
+        var cadence: ArrivalCadence? = null
+            private set
+
         override fun start(
+            cadence: ArrivalCadence,
             onLocation: (Location) -> Unit,
             onAvailabilityChanged: (Boolean) -> Unit
         ): Boolean {
+            this.cadence = cadence
             this.onLocation = onLocation
             this.onAvailabilityChanged = onAvailabilityChanged
             onAvailabilityChanged(true)
