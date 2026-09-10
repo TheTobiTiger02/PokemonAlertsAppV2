@@ -179,4 +179,171 @@ class HuntTargetsRoutedTest {
         assertEquals(40, routed.size)
         assertEquals(alerts.names().toSet(), routed.names().toSet())
     }
+
+    // --- 2-opt -------------------------------------------------------------
+
+    @Test
+    fun `the chain stops doubling back on a target it skipped`() {
+        // The greedy trap: from a, d is the cheapest single hop (40 m), but everything
+        // is expensive once you are at d, so the walk costs 690 m. Reversing the
+        // stretch after a gives a -> b -> c -> d at 250 m -- one 2-opt move.
+        val a = alert("a", 49.87330, 8.65200)
+        val b = alert("b", 49.87360, 8.65240)
+        val c = alert("c", 49.87390, 8.65280)
+        val d = alert("d", 49.87420, 8.65320)
+        val alerts = listOf(a, b, c, d)
+
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to a.uniqueId to 100.0,
+            (null as String?) to b.uniqueId to 200.0,
+            (null as String?) to c.uniqueId to 300.0,
+            (null as String?) to d.uniqueId to 400.0,
+            a.uniqueId to b.uniqueId to 50.0,
+            b.uniqueId to c.uniqueId to 50.0,
+            c.uniqueId to d.uniqueId to 50.0,
+            a.uniqueId to d.uniqueId to 40.0,
+            a.uniqueId to c.uniqueId to 300.0,
+            d.uniqueId to c.uniqueId to 500.0,
+            d.uniqueId to b.uniqueId to 600.0,
+            d.uniqueId to a.uniqueId to 500.0,
+            c.uniqueId to b.uniqueId to 50.0,
+            c.uniqueId to a.uniqueId to 300.0,
+            b.uniqueId to d.uniqueId to 600.0,
+            b.uniqueId to a.uniqueId to 50.0
+        )
+
+        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
+
+        assertEquals(listOf("a", "b", "c", "d"), routed.names())
+    }
+
+    @Test
+    fun `a reversal that only looks good on its cut edges is rejected`() {
+        // The two-edge shortcut would take this move; scoring the whole tour will not,
+        // because walking the reversed stretch backwards is far more expensive than
+        // walking it forwards. Directional legs are the reason we score the tour.
+        val a = alert("a", 49.87330, 8.65200)
+        val b = alert("b", 49.87360, 8.65240)
+        val c = alert("c", 49.87390, 8.65280)
+        val d = alert("d", 49.87420, 8.65320)
+        val alerts = listOf(a, b, c, d)
+
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to a.uniqueId to 100.0,
+            (null as String?) to b.uniqueId to 200.0,
+            (null as String?) to c.uniqueId to 300.0,
+            (null as String?) to d.uniqueId to 400.0,
+            a.uniqueId to b.uniqueId to 50.0,
+            b.uniqueId to c.uniqueId to 50.0,
+            c.uniqueId to d.uniqueId to 50.0,
+            // Backwards through the middle is brutal.
+            c.uniqueId to b.uniqueId to 5_000.0,
+            b.uniqueId to a.uniqueId to 5_000.0,
+            d.uniqueId to c.uniqueId to 5_000.0,
+            a.uniqueId to c.uniqueId to 60.0,
+            b.uniqueId to d.uniqueId to 60.0,
+            a.uniqueId to d.uniqueId to 90.0,
+            d.uniqueId to a.uniqueId to 90.0,
+            c.uniqueId to a.uniqueId to 60.0,
+            d.uniqueId to b.uniqueId to 60.0
+        )
+
+        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
+
+        assertEquals(listOf("a", "b", "c", "d"), routed.names())
+    }
+
+    @Test
+    fun `an unrouted chain is never rearranged`() {
+        val alerts = (0 until 6).map { alert("t$it", 49.8730 + it * 0.0008, 8.6515 + it * 0.0008) }
+
+        assertEquals(
+            huntWalkOrder(alerts, originLat, originLon, now).names(),
+            huntWalkOrder(alerts, originLat, originLon, now, costsOf()).names()
+        )
+    }
+
+    // --- chain-aware reachability ------------------------------------------
+
+    @Test
+    fun `a target reachable on its own is demoted once the walk ahead of it counts`() {
+        // Each is ~7 minutes from the trainer, so alone they all survive. Walked in
+        // sequence the third is reached after ~21 minutes, and it only has 12.
+        val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
+        val b = alert("b", 49.87360, 8.65240, endsInMinutes = 90)
+        val c = alert("c", 49.87390, 8.65280, endsInMinutes = 12)
+        val alerts = listOf(a, b, c)
+
+        val seconds = mapOf(a.uniqueId to 420L, b.uniqueId to 420L, c.uniqueId to 420L)
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to a.uniqueId to 570.0,
+            (null as String?) to b.uniqueId to 580.0,
+            (null as String?) to c.uniqueId to 590.0,
+            a.uniqueId to b.uniqueId to 570.0,
+            b.uniqueId to c.uniqueId to 570.0,
+            a.uniqueId to c.uniqueId to 580.0,
+            c.uniqueId to b.uniqueId to 570.0,
+            b.uniqueId to a.uniqueId to 570.0,
+            c.uniqueId to a.uniqueId to 580.0
+        )
+
+        // Judged alone, c is fine.
+        assertTrue(canArriveBeforeItEnds(c, originLat, originLon, now, costsOf(legs, seconds)))
+
+        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs, seconds))
+
+        // ...but it goes to the back once the walk ahead of it is counted.
+        assertEquals("c", routed.names().last())
+    }
+
+    @Test
+    fun `one unreachable target does not condemn the ones behind it`() {
+        // b expires almost immediately; a and c are both comfortable. Skipping b must
+        // not add its walk to the running total, so c survives.
+        val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
+        val b = alert("b", 49.87360, 8.65240, endsInMinutes = 1)
+        val c = alert("c", 49.87390, 8.65280, endsInMinutes = 90)
+        val alerts = listOf(a, b, c)
+
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to a.uniqueId to 100.0,
+            (null as String?) to b.uniqueId to 200.0,
+            (null as String?) to c.uniqueId to 300.0,
+            a.uniqueId to b.uniqueId to 100.0,
+            b.uniqueId to c.uniqueId to 100.0,
+            a.uniqueId to c.uniqueId to 150.0,
+            c.uniqueId to b.uniqueId to 100.0,
+            b.uniqueId to a.uniqueId to 100.0,
+            c.uniqueId to a.uniqueId to 150.0
+        )
+
+        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
+
+        assertEquals(3, routed.size)
+        assertEquals("b", routed.names().last())
+        assertTrue(routed.names().indexOf("c") < routed.names().indexOf("b"))
+    }
+
+    @Test
+    fun `an alert with no end time is carried, never demoted`() {
+        val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
+        val forever = PokemonAlert(
+            id = 9_999,
+            name = "forever",
+            pokemon = "forever",
+            type = listOf("Spawn"),
+            latitude = 49.87360,
+            longitude = 8.65240
+        )
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to a.uniqueId to 100.0,
+            (null as String?) to forever.uniqueId to 200.0,
+            a.uniqueId to forever.uniqueId to 100.0,
+            forever.uniqueId to a.uniqueId to 100.0
+        )
+
+        val routed = huntWalkOrder(listOf(a, forever), originLat, originLon, now, costsOf(legs))
+
+        assertEquals(setOf("a", "forever"), routed.names().toSet())
+    }
 }
