@@ -221,7 +221,8 @@ internal fun MapMarker(
         basePalette.copy(primary = visualStyle.category.accentArgb.toInt())
     }
     val isHundo = visualStyle.category == AlertCategory.HUNDO || alert.formattedIv == "100%" || alert.iv == "100"
-    val isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%"
+    val isNundo = visualStyle.category == AlertCategory.NUNDO ||
+        alert.formattedIv == "0%" || alert.iv == "0"
     val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
     val isRare = visualStyle.category == AlertCategory.RARE
     val questQuantity = remember(alert.questReward) { extractQuestQuantity(alert.questReward) }
@@ -479,6 +480,17 @@ internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$size
  * sprite on screen, which is most of why quest pins took so long to reappear after a zoom.
  */
 internal const val MAP_MARKER_ARTWORK_RASTER_DP = 50f
+
+/**
+ * The two glows that are not category accents.
+ *
+ * Hundo's red and PvP's blue predate the accent palette and are what trainers
+ * read the map by; the nundo glow, which used to be this same red, now comes
+ * from AlertCategory.NUNDO like every other nundo colour in the app.
+ */
+private const val HUNDO_GLOW_ARGB = 0xFFFF3B30.toInt()
+private const val PVP_GLOW_ARGB = 0xFF2F80ED.toInt()
+
 
 /** Concurrent sprite prefetches. Matches the per-host request limit the image loader allows. */
 internal const val MAP_ARTWORK_PREFETCH_CONCURRENCY = 8
@@ -764,12 +776,22 @@ internal fun renderMapMarkerToCanvas(
     }
 
     // 2. GLOWING HALOS BEHIND SPRITE
-    // Decision: Hundo/Nundo gets Red glow, PvP gets Blue glow, Rare spawns get NO glow!
-    val isHundoOrNundo = request.isHundo || request.isNundo ||
-        request.category == AlertCategory.HUNDO || request.category == AlertCategory.NUNDO
+    //
+    // A hundo and a nundo are opposite results and used to share one red glow,
+    // which made the best spawn on the map and the worst one look alike at a
+    // glance. They now take their own category accents, so the glow says the same
+    // thing every other surface already says. PvP keeps its blue; rare gets none.
+    val isHundo = request.isHundo || request.category == AlertCategory.HUNDO
+    val isNundo = request.isNundo || request.category == AlertCategory.NUNDO
     val isPvp = request.isPvp || request.category == AlertCategory.PVP
 
-    if (isHundoOrNundo) {
+    val glowColor = when {
+        isHundo -> HUNDO_GLOW_ARGB
+        isNundo -> AlertCategory.NUNDO.accentArgb.toInt()
+        isPvp -> PVP_GLOW_ARGB
+        else -> null
+    }
+    if (glowColor != null) {
         val glowRadius = spriteAreaSize * 0.62f
         val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = android.graphics.RadialGradient(
@@ -777,25 +799,8 @@ internal fun renderMapMarkerToCanvas(
                 spriteCenterY,
                 glowRadius,
                 intArrayOf(
-                    AndroidColor.argb(165, 255, 59, 48),
-                    AndroidColor.argb(80, 255, 59, 48),
-                    AndroidColor.TRANSPARENT
-                ),
-                floatArrayOf(0f, 0.55f, 1f),
-                android.graphics.Shader.TileMode.CLAMP
-            )
-        }
-        canvas.drawCircle(centerX, spriteCenterY, glowRadius, glowPaint)
-    } else if (isPvp) {
-        val glowRadius = spriteAreaSize * 0.62f
-        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = android.graphics.RadialGradient(
-                centerX,
-                spriteCenterY,
-                glowRadius,
-                intArrayOf(
-                    AndroidColor.argb(165, 47, 128, 237),
-                    AndroidColor.argb(80, 47, 128, 237),
+                    AndroidColor.argb(165, AndroidColor.red(glowColor), AndroidColor.green(glowColor), AndroidColor.blue(glowColor)),
+                    AndroidColor.argb(80, AndroidColor.red(glowColor), AndroidColor.green(glowColor), AndroidColor.blue(glowColor)),
                     AndroidColor.TRANSPARENT
                 ),
                 floatArrayOf(0f, 0.55f, 1f),
