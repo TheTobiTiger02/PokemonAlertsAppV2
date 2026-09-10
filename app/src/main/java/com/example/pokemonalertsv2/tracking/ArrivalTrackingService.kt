@@ -16,6 +16,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.CaughtAlert
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
@@ -26,6 +27,9 @@ import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
+import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
+import com.example.pokemonalertsv2.hunt.isUndoOfferLive
+import com.example.pokemonalertsv2.hunt.undoLastCatch
 import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
 import com.example.pokemonalertsv2.ui.alerts.MapPoseCadence
 import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
@@ -127,6 +131,10 @@ class ArrivalTrackingService : Service() {
     private var mapAlertsJob: Job? = null
     private var journeyOverlayEnabled = true
     private var overlayPreferenceJob: Job? = null
+    private var undoOfferJob: Job? = null
+
+    /** The live undo offer, or null. Drives the notification's Undo action. */
+    private var undoOffer: CaughtAlert? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -157,6 +165,14 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_UNDO_CATCH) {
+            // Everything the undo does to the journey is a write to the destination
+            // store, which destinationJob is already collecting -- so there is
+            // nothing to re-activate here by hand.
+            serviceScope.launch { undoLastCatch(applicationContext) }
+            return START_NOT_STICKY
+        }
+
         promoteToForeground(currentJourneyNotification() ?: ArrivalTrackingNotifications.restoring(this))
         if (overlayPreferenceJob == null) {
             overlayPreferenceJob = serviceScope.launch {
@@ -166,6 +182,27 @@ class ArrivalTrackingService : Service() {
                         journeyOverlayEnabled = enabled
                         if (!enabled) journeyOverlay.hide()
                         currentDestination?.let { refreshJourneyOverlay(it) }
+                    }
+            }
+        }
+        if (undoOfferJob == null) {
+            undoOfferJob = serviceScope.launch {
+                AlertPreferences(applicationContext.alertPreferencesDataStore)
+                    .lastCaughtAlert
+                    .collectLatest { caught ->
+                        undoOffer = caught?.takeIf { isUndoOfferLive(it, System.currentTimeMillis()) }
+                        refreshCurrentNotification()
+                        floatingMap.setUndoOffer(undoOffer != null)
+                        // While walking, the 30s chip loop would drop the action on
+                        // its own. In standby nothing re-posts, so the offer is aged
+                        // out here instead of sitting there indefinitely.
+                        val offer = undoOffer ?: return@collectLatest
+                        val remaining = CATCH_UNDO_WINDOW_MILLIS -
+                            (System.currentTimeMillis() - offer.caughtAtMillis)
+                        if (remaining > 0) delay(remaining)
+                        undoOffer = null
+                        refreshCurrentNotification()
+                        floatingMap.setUndoOffer(false)
                     }
             }
         }
@@ -243,6 +280,7 @@ class ArrivalTrackingService : Service() {
         acquireJob?.cancel()
         mapAlertsJob?.cancel()
         overlayPreferenceJob?.cancel()
+        undoOfferJob?.cancel()
         journeyOverlay.reset()
         stopPoseTracking()
         artworkJob?.cancel()
@@ -574,7 +612,8 @@ class ArrivalTrackingService : Service() {
             inRange = inRange,
             waitingForPreciseLocation = waiting,
             huntActive = huntActive,
-            offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL
+            offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
+            undoOffer = undoOffer
         )
         runCatching {
             NotificationManagerCompat.from(this)
@@ -661,6 +700,7 @@ class ArrivalTrackingService : Service() {
         floatingMap.onPrevious = { stepHuntTarget(forward = false) }
         floatingMap.onNext = { stepHuntTarget(forward = true) }
         floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
+        floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
         // Closing the window ends the hunt. There is one control for "I am done",
         // and it is the one every window has in its corner.
         floatingMap.onClose = { serviceScope.launch { stopEverything() } }
@@ -668,6 +708,7 @@ class ArrivalTrackingService : Service() {
             focusFloatingMap()
             refreshFloatingMapAlerts()
         }
+        floatingMap.setUndoOffer(undoOffer != null)
         // One place decides the cadence: full rate while there is a target being
         // walked to, backed off while the hunt is only waiting for one.
         startPoseTracking(if (currentDestination == null) MapPoseCadence.Standby else MapPoseCadence.Live)
@@ -886,8 +927,27 @@ class ArrivalTrackingService : Service() {
             inRange = lastInRange,
             waitingForPreciseLocation = lastWaitingForPreciseLocation,
             huntActive = huntActive,
-            offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL
+            offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
+            undoOffer = undoOffer
         )
+    }
+
+    /**
+     * Re-posts whichever notification is standing, so an action that appeared or
+     * expired reaches the shade without waiting for the next location fix.
+     */
+    private fun refreshCurrentNotification() {
+        if (!hasNotificationPermission()) return
+        val notification = currentJourneyNotification()
+            ?: if (huntActive) {
+                ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target", undoOffer)
+            } else {
+                return
+            }
+        runCatching {
+            NotificationManagerCompat.from(this)
+                .notify(ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID, notification)
+        }
     }
 
     private fun promoteToForeground(notification: android.app.Notification) {
@@ -927,7 +987,7 @@ class ArrivalTrackingService : Service() {
         renderedTargetKey = null
         standbyCentred = false
         promoteToForeground(
-            ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target")
+            ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target", undoOffer)
         )
         // Reached with currentDestination already null, so showFloatingMap picks
         // the backed-off cadence for us.
@@ -1065,7 +1125,8 @@ class ArrivalTrackingService : Service() {
         private const val FLOATING_MAP_MAX_MARKERS = 40
         const val ACTION_STOP = "com.example.pokemonalertsv2.tracking.STOP"
         const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
-        const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
+            const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
+        const val ACTION_UNDO_CATCH = "com.example.pokemonalertsv2.tracking.UNDO_CATCH"
         private const val MAX_LOCATION_AGE_MILLIS = 30_000L
         private const val MAX_GPS_TOLERANCE_METERS = 20f
         private const val ROUTE_DISPLAY_MAX_AGE_MILLIS = 10 * 60 * 1000L

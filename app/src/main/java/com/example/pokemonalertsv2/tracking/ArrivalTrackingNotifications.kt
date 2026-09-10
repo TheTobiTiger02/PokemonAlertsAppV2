@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.CaughtAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
@@ -36,6 +37,7 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_MAPS = 40_043
     private const val REQUEST_GOT_IT = 40_044
     private const val REQUEST_OVERLAY = 40_045
+    private const val REQUEST_UNDO = 40_046
 
     /** Assumed max journey distance for the progress bar, in meters. */
     private const val PROGRESS_MAX_METERS = 10_000f
@@ -96,13 +98,22 @@ internal object ArrivalTrackingNotifications {
      * alert arrives. The service therefore stays alive with no destination, and
      * this is what it says while it waits.
      */
-    fun huntStandby(context: Context, huntName: String): Notification {
+    fun huntStandby(
+        context: Context,
+        huntName: String,
+        undoOffer: CaughtAlert? = null
+    ): Notification {
         val title = "Hunting $huntName"
         val body = "Waiting for a match"
         if (Build.VERSION.SDK_INT < LIVE_NOTIFICATION_MIN_SDK) {
             return ongoingBuilder(context)
                 .setContentTitle(title)
                 .setContentText(body)
+                .apply {
+                    undoOffer?.let {
+                        addAction(R.drawable.ic_back, undoActionLabel(it), undoPendingIntent(context))
+                    }
+                }
                 .addAction(0, "Stop hunt", stopPendingIntent(context))
                 .build()
         }
@@ -110,6 +121,17 @@ internal object ArrivalTrackingNotifications {
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(Notification.BigTextStyle().bigText(body))
+            .apply {
+                undoOffer?.let {
+                    addAction(
+                        Notification.Action.Builder(
+                            Icon.createWithResource(context, R.drawable.ic_back),
+                            undoActionLabel(it),
+                            undoPendingIntent(context)
+                        ).build()
+                    )
+                }
+            }
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, R.drawable.ic_poke_notification),
@@ -129,7 +151,8 @@ internal object ArrivalTrackingNotifications {
         inRange: Boolean = false,
         waitingForPreciseLocation: Boolean = false,
         huntActive: Boolean = false,
-        offerOverlay: Boolean = false
+        offerOverlay: Boolean = false,
+        undoOffer: CaughtAlert? = null
     ): Notification {
         val alert = destination.alert
         val content = ongoingContent(
@@ -171,6 +194,17 @@ internal object ArrivalTrackingNotifications {
                             ).build()
                         )
                     }
+                    // After Got it, before Stop: a mis-tap on the tick and the way
+                    // back from it belong next to each other.
+                    undoOffer?.let {
+                        addAction(
+                            Notification.Action.Builder(
+                                Icon.createWithResource(context, R.drawable.ic_back),
+                                undoActionLabel(it),
+                                undoPendingIntent(context)
+                            ).build()
+                        )
+                    }
                 }
                 .addAction(
                     Notification.Action.Builder(
@@ -203,6 +237,9 @@ internal object ArrivalTrackingNotifications {
             .apply {
                 if (huntActive) {
                     addAction(R.drawable.ic_check, "Got it", gotItPendingIntent(context))
+                }
+                undoOffer?.let {
+                    addAction(R.drawable.ic_back, undoActionLabel(it), undoPendingIntent(context))
                 }
             }
             .addAction(
@@ -469,6 +506,17 @@ internal object ArrivalTrackingNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
 
+    /** The way back from a "Got it" that was a mis-tap. Delivered like Got it is. */
+    private fun undoPendingIntent(context: Context): PendingIntent =
+        PendingIntent.getService(
+            context,
+            REQUEST_UNDO,
+            Intent(context, ArrivalTrackingService::class.java).apply {
+                action = ArrivalTrackingService.ACTION_UNDO_CATCH
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+
     /** Straight to the "Display over other apps" switch for this app. */
     private fun overlaySettingsPendingIntent(context: Context): PendingIntent =
         PendingIntent.getActivity(
@@ -490,6 +538,9 @@ internal object ArrivalTrackingNotifications {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
+
+    /** Short enough for an action button; the full sentence lives in the app. */
+    internal fun undoActionLabel(caught: CaughtAlert): String = "Undo ${caught.displayName}"
 
     private fun displayName(alert: PokemonAlert): String =
         alert.pokemon?.takeIf { it.isNotBlank() }

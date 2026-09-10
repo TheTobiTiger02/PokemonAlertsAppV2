@@ -92,6 +92,8 @@ import com.example.pokemonalertsv2.ui.alerts.ACTION_MAP_PIP_CONTROL
 import com.example.pokemonalertsv2.ui.alerts.EXTRA_MAP_PIP_COMMAND
 import com.example.pokemonalertsv2.ui.alerts.MapPipCommand
 import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.hunt.isUndoOfferLive
+import com.example.pokemonalertsv2.hunt.undoLastCatch
 import com.example.pokemonalertsv2.ui.alerts.MapPipMode
 import com.example.pokemonalertsv2.ui.alerts.MapPipUiState
 import com.example.pokemonalertsv2.ui.alerts.MapPresentationMode
@@ -103,6 +105,8 @@ import com.example.pokemonalertsv2.ui.history.SpawnInsightsViewModel
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.ui.settings.SettingsScreen
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.navigation.DeepLinkTarget
 import com.example.pokemonalertsv2.navigation.parseDeepLink
@@ -801,6 +805,28 @@ private fun MainScaffold(
     // and carrying Got it instead of the follow toggle.
     val huntRepository = remember(context) { HuntRepository.getInstance(context) }
     val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
+
+    // Undoing a catch has to be offered where the trainer actually is, which is
+    // rarely the map panel that used to hold the only button. Sits above the PiP
+    // early return so a catch made in the window is offered the moment it is left.
+    val lastCaught by remember(context) {
+        AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
+    }.collectAsStateWithLifecycle(initialValue = null)
+    var lastOfferedCatchId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(lastCaught?.id, lastCaught?.caughtAtMillis) {
+        val caught = lastCaught ?: return@LaunchedEffect
+        // Liveness stops a cold start re-offering an old record; the id guard stops
+        // a configuration change offering the same one twice.
+        if (!isUndoOfferLive(caught, System.currentTimeMillis())) return@LaunchedEffect
+        if (caught.id == lastOfferedCatchId) return@LaunchedEffect
+        lastOfferedCatchId = caught.id
+        val result = snackbarHostState.showSnackbar(
+            message = "Caught ${caught.displayName}",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Long
+        )
+        if (result == SnackbarResult.ActionPerformed) undoLastCatch(context)
+    }
 
     val autoEnterMapPip by alertsViewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     LaunchedEffect(selectedTab, autoEnterMapPip) {

@@ -64,6 +64,7 @@ fun HuntControls(
     }.collectAsStateWithLifecycle(initialValue = null)
 
     var pickerOpen by remember { mutableStateOf(false) }
+    val panelOpenedAt = remember { System.currentTimeMillis() }
     val lastCaught by remember(context) {
         AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
     }.collectAsStateWithLifecycle(initialValue = null)
@@ -142,18 +143,14 @@ fun HuntControls(
 
         // The tick on the floating window sits between the two step arrows, on a
         // map being read while walking, and it retires the alert for good. This is
-        // the way back from a mis-tap.
-        lastCaught?.let { caught ->
+        // the way back from a mis-tap -- one of four, all going through the same
+        // undoLastCatch so they cannot undo different amounts of it.
+        //
+        // Liveness is read once, when the panel opens: it is a panel you are on
+        // your way out of, not a readout that has to count down in place.
+        lastCaught?.takeIf { isUndoOfferLive(it, panelOpenedAt) }?.let { caught ->
             TextButton(
-                onClick = {
-                    scope.launch {
-                        val preferences = AlertPreferences(context.alertPreferencesDataStore)
-                        preferences.removeDismissedAlert(caught.id)
-                        // Cleared either way: the offer is for the last catch, and
-                        // taking it back is the end of that offer.
-                        preferences.forgetCaughtAlert()
-                    }
-                },
+                onClick = { scope.launch { undoLastCatch(context) } },
                 modifier = Modifier.align(Alignment.Start)
             ) {
                 Icon(
@@ -163,7 +160,7 @@ fun HuntControls(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    "Undo catching ${caught.displayName}",
+                    undoOfferLabel(caught),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

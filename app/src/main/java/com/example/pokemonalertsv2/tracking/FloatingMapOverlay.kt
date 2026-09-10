@@ -21,6 +21,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.isVisible
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
@@ -83,6 +84,7 @@ internal class FloatingMapOverlay(context: Context) {
         ContextThemeWrapper(appContext, R.style.Theme_PokemonAlertsV2)
 
     private var root: FrameLayout? = null
+    private var undoButton: TextView? = null
     private var mapView: MapView? = null
     private var map: MapLibreMap? = null
 
@@ -118,6 +120,12 @@ internal class FloatingMapOverlay(context: Context) {
     var onPrevious: () -> Unit = {}
     var onNext: () -> Unit = {}
     var onGotIt: () -> Unit = {}
+
+    /**
+     * The way back from the tick. It sits between the two step arrows, so it gets
+     * hit by accident on a map being read while walking.
+     */
+    var onUndo: () -> Unit = {}
     /**
      * The close button. It ends the hunt rather than only hiding the window: the
      * window is the hunt's face, and a hunt still running behind a closed window
@@ -354,6 +362,7 @@ internal class FloatingMapOverlay(context: Context) {
         runCatching { windowManager.removeView(container) }
             .onFailure { Log.w(TAG, "Could not remove the floating map", it) }
         root = null
+        undoButton = null
         mapView = null
         map = null
         lifecycle = null
@@ -367,6 +376,11 @@ internal class FloatingMapOverlay(context: Context) {
      * fired -- MapView consumes touches for pan and pinch, so the parent never saw
      * them. A dedicated bar keeps both gestures working.
      */
+    /** Shows or hides the undo control, following the live offer. */
+    fun setUndoOffer(visible: Boolean) {
+        undoButton?.isVisible = visible
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun buildHandleBar(): LinearLayout = LinearLayout(themedContext).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -377,6 +391,9 @@ internal class FloatingMapOverlay(context: Context) {
         addView(controlButton("‹") { onPrevious() })
         addView(controlButton("✓") { onGotIt() })
         addView(controlButton("›") { onNext() })
+        // Built always, hidden until there is something to undo. Never replaces the
+        // tick: the next target can be caught inside the undo window.
+        addView(controlButton("↺") { onUndo() }.also { undoButton = it; it.isVisible = false })
         // Spacer: the buttons sit left, the grab area is everything right of them.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
         addView(controlButton("×") { onClose() })

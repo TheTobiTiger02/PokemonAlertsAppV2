@@ -115,6 +115,7 @@ import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.HuntTargetBanner
+import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
 import com.example.pokemonalertsv2.tracking.JourneyReadoutSurface
@@ -1154,6 +1155,12 @@ internal fun AlertsMapScreenContent(
                     scope.launch {
                         runCatching {
                             alertPreferences.addDismissedAlert(caught.uniqueId)
+                            // Without this the window's tick was the one catch with
+                            // no way back: nothing recorded the offer.
+                            alertPreferences.rememberCaughtAlert(
+                                caught.uniqueId,
+                                huntTargetTitle(caught)
+                            )
                             AlertsWidgetProvider.requestUpdate(context)
                             huntRepository.setTarget(null)
                             arrivalTrackingRepository.stopTracking()

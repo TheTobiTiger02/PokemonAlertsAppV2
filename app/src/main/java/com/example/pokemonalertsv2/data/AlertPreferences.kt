@@ -21,6 +21,7 @@ private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
 private val LAST_CAUGHT_ID_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_id")
 private val LAST_CAUGHT_NAME_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_name")
+private val LAST_CAUGHT_AT_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_caught_alert_at")
 private val FLOATING_MAP_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_x")
 private val FLOATING_MAP_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_y")
 private val FLOATING_MAP_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_width")
@@ -330,7 +331,11 @@ interface AlertPreferencesStore {
     val lastCaughtAlert: Flow<CaughtAlert?>
         get() = flowOf(null)
 
-    suspend fun rememberCaughtAlert(alertId: String, displayName: String) = Unit
+    suspend fun rememberCaughtAlert(
+        alertId: String,
+        displayName: String,
+        nowMillis: Long = System.currentTimeMillis()
+    ) = Unit
 
     suspend fun forgetCaughtAlert() = Unit
 
@@ -914,14 +919,22 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     // Dismissed alerts implementations
     override val lastCaughtAlert: Flow<CaughtAlert?> = dataStore.data.map { preferences ->
         preferences[LAST_CAUGHT_ID_KEY]?.let { id ->
-            CaughtAlert(id = id, displayName = preferences[LAST_CAUGHT_NAME_KEY] ?: "that one")
+            CaughtAlert(
+                id = id,
+                displayName = preferences[LAST_CAUGHT_NAME_KEY] ?: "that one",
+                // A record written before the offer had a clock reads as 0, which
+                // every liveness check treats as long expired. That is the point:
+                // the old offer lingered forever.
+                caughtAtMillis = preferences[LAST_CAUGHT_AT_KEY] ?: 0L
+            )
         }
     }
 
-    override suspend fun rememberCaughtAlert(alertId: String, displayName: String) {
+    override suspend fun rememberCaughtAlert(alertId: String, displayName: String, nowMillis: Long) {
         dataStore.edit { prefs ->
             prefs[LAST_CAUGHT_ID_KEY] = alertId
             prefs[LAST_CAUGHT_NAME_KEY] = displayName
+            prefs[LAST_CAUGHT_AT_KEY] = nowMillis
         }
     }
 
@@ -929,6 +942,7 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         dataStore.edit { prefs ->
             prefs.remove(LAST_CAUGHT_ID_KEY)
             prefs.remove(LAST_CAUGHT_NAME_KEY)
+            prefs.remove(LAST_CAUGHT_AT_KEY)
         }
     }
 
@@ -1117,8 +1131,14 @@ data class FloatingMapGeometry(
     val height: Int
 )
 
-/** What "Got it" last retired, and what to call it in the undo button. */
+/**
+ * What "Got it" last retired, and what to call it in the undo offer.
+ *
+ * [caughtAtMillis] bounds the offer: an undo button that is still sitting there an
+ * hour later is not a way back from a mis-tap, it is clutter.
+ */
 data class CaughtAlert(
     val id: String,
-    val displayName: String
+    val displayName: String,
+    val caughtAtMillis: Long = 0L
 )
