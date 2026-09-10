@@ -32,7 +32,8 @@ class MapSymbolIdentityTest {
         endTime: String? = null,
         timeLabel: String? = null,
         showTimeLabel: Boolean = false,
-        sizePx: Int = 120
+        sizePx: Int = 120,
+        ordinal: Int? = null
     ) = MapMarkerIconRequest(
         sizePx = sizePx,
         categoryCode = "CP 500",
@@ -43,7 +44,8 @@ class MapSymbolIdentityTest {
         timeLabel = timeLabel,
         palette = palette,
         goDexStatus = GoDexMatchStatus.NOT_CONFIGURED,
-        category = AlertCategory.SPAWN
+        category = AlertCategory.SPAWN,
+        ordinal = ordinal
     )
 
     private fun inMinutes(minutes: Long): String =
@@ -146,5 +148,34 @@ class MapSymbolIdentityTest {
 
     private companion object {
         const val NOW = 1_800_000_000_000L
+    }
+
+    @Test
+    fun `a hunt number changes the pins identity`() {
+        // The number is drawn on the pin, so it has to be in the key. Sharing a key
+        // would mean the second target renders the first one's texture -- on the
+        // MapLibre path this key IS the style-image id.
+        val plain = mapMarkerBaseIconCacheKey(request(), NOW)
+        val first = mapMarkerBaseIconCacheKey(request(ordinal = 1), NOW)
+        val second = mapMarkerBaseIconCacheKey(request(ordinal = 2), NOW)
+
+        assertNotEquals(plain, first)
+        assertNotEquals(first, second)
+    }
+
+    @Test
+    fun `the same number on the same species shares one image`() {
+        assertEquals(
+            mapMarkerBaseIconCacheKey(request(ordinal = 3), NOW),
+            mapMarkerBaseIconCacheKey(request(ordinal = 3), NOW)
+        )
+    }
+
+    @Test
+    fun `the number is in the countdown key too`() {
+        assertNotEquals(
+            mapMarkerIconCacheKey(request(ordinal = 1), NOW),
+            mapMarkerIconCacheKey(request(ordinal = 2), NOW)
+        )
     }
 }

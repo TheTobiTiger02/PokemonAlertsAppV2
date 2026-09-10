@@ -373,7 +373,14 @@ internal data class MapMarkerIconRequest(
     val questQuantity: String? = null,
     val raidTier: String? = null,
     val isRocket: Boolean = false,
-    val isKecleon: Boolean = false
+    val isKecleon: Boolean = false,
+    /**
+     * Where this alert sits in the hunt's walking order, 1-based, or null.
+     *
+     * Set only by the floating hunt window, and only for the first
+     * [HUNT_ORDINAL_MAX] targets -- see that constant for why the count is bounded.
+     */
+    val ordinal: Int? = null
 )
 
 internal fun extractQuestQuantity(questReward: String?): String? {
@@ -479,6 +486,16 @@ internal fun mapMarkerArtworkCacheKey(url: String, sizePx: Int): String = "$size
  * key, so crossing a band missed every entry at once - re-downloading and re-decoding every
  * sprite on screen, which is most of why quest pins took so long to reappear after a zoom.
  */
+/**
+ * How many hunt targets carry a number.
+ *
+ * One digit, so the badge stays readable on a 32dp pin -- and it bounds the cost.
+ * Each numbered pin is its own bitmap and, on the MapLibre path, its own uploaded
+ * texture, so an unbounded count would grow both with the size of the hunt. Nine is
+ * also about where a walking order stops being a plan anyone follows.
+ */
+internal const val HUNT_ORDINAL_MAX = 9
+
 internal const val MAP_MARKER_ARTWORK_RASTER_DP = 50f
 
 /**
@@ -602,7 +619,12 @@ internal fun mapMarkerIconCacheKey(
     append(request.questQuantity.orEmpty()).append('|')
     append(request.raidTier.orEmpty()).append('|')
     append(request.isRocket).append('|')
-    append(request.isKecleon)
+    append(request.isKecleon).append('|')
+    // Part of the key because it is part of the drawing. A field that changes the
+    // pixels but not the key collapses numbered and unnumbered pins onto one cache
+    // entry -- and on the MapLibre path this key is also the style-image id, so two
+    // markers sharing it render the same texture.
+    append(request.ordinal ?: 0)
 }.toString()
 
 /**
@@ -937,6 +959,42 @@ internal fun renderMapMarkerToCanvas(
         canvas.drawText(tierText, tierX, tCenterY, tierTextPaint)
     }
 
+    // 7. HUNT ORDER BADGE
+    //
+    // Ground-left, the one free corner: the quest quantity and the Rocket "R" sit
+    // ground-right, and the raid tier shares the top-left height with the GoDex
+    // badge. Same pill idiom as the tier badge above.
+    request.ordinal?.let { ordinal ->
+        val ordinalText = ordinal.toString()
+        val ordinalRadius = sizePx * 0.12f
+        val ordinalX = centerX - sizePx * 0.30f
+        val ordinalY = groundY - sizePx * 0.10f
+        val ordinalTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = ordinalRadius * 1.2f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        val ordinalWidth = ordinalTextPaint.measureText(ordinalText)
+        val ordinalHalfWidth = kotlin.math.max(ordinalRadius, ordinalWidth / 2f + sizePx * 0.045f)
+        val ordinalRect = android.graphics.RectF(
+            ordinalX - ordinalHalfWidth, ordinalY - ordinalRadius,
+            ordinalX + ordinalHalfWidth, ordinalY + ordinalRadius
+        )
+        val ordinalBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(23, 26, 32)
+        }
+        val ordinalStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.022f
+        }
+        canvas.drawRoundRect(ordinalRect, ordinalRadius, ordinalRadius, ordinalBgPaint)
+        canvas.drawRoundRect(ordinalRect, ordinalRadius, ordinalRadius, ordinalStrokePaint)
+        val oCenterY = ordinalY - (ordinalTextPaint.descent() + ordinalTextPaint.ascent()) / 2f
+        canvas.drawText(ordinalText, ordinalX, oCenterY, ordinalTextPaint)
+    }
+
 
     // 8. GODEX NEEDED BADGE
     if (request.goDexStatus == GoDexMatchStatus.NEEDED ||
@@ -1052,7 +1110,8 @@ internal suspend fun createMapMarkerIcon(
     questQuantity: String? = null,
     raidTier: String? = null,
     isRocket: Boolean = false,
-    isKecleon: Boolean = false
+    isKecleon: Boolean = false,
+    ordinal: Int? = null
 ): MapMarkerIcon? {
     try {
         val request = MapMarkerIconRequest(
@@ -1073,7 +1132,8 @@ internal suspend fun createMapMarkerIcon(
             questQuantity = questQuantity,
             raidTier = raidTier,
             isRocket = isRocket,
-            isKecleon = isKecleon
+            isKecleon = isKecleon,
+            ordinal = ordinal
         )
         val isUrgent = isMapMarkerUrgent(endTime, System.currentTimeMillis())
         val cacheKey = mapMarkerIconCacheKey(request)

@@ -1164,7 +1164,9 @@ internal fun openStreetMapIconRequest(
     alert: PokemonAlert,
     markerSizePx: Int,
     basePalette: MapMarkerPalette,
-    goDexMatches: Map<String, GoDexMatchResult>
+    goDexMatches: Map<String, GoDexMatchResult>,
+    /** The hunt's walking position for this alert. Only the floating window sets it. */
+    ordinal: Int? = null
 ): MapMarkerIconRequest {
     val visualStyle = resolveAlertVisualStyle(alert)
     val markerLabel = alert.displayCp?.let { "CP $it" } ?: when (visualStyle.category) {
@@ -1178,6 +1180,7 @@ internal fun openStreetMapIconRequest(
         speciesName = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.cleanPokemonName,
         speciesImageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
             ?: alert.imageUrl?.takeIf { it.isNotBlank() },
+        ordinal = ordinal,
         endTime = alert.endTime,
         showTimeLabel = false,
         timeLabel = null,
@@ -1242,7 +1245,8 @@ internal fun createImmediateOpenStreetMapMarker(
     minutePrecision: Boolean,
     basePalette: MapMarkerPalette,
     goDexMatches: Map<String, GoDexMatchResult>,
-    emphasized: Boolean
+    emphasized: Boolean,
+    ordinal: Int? = null
 ): OpenStreetMapMarker {
     if (item is MapMarkerItem.Cluster) {
         return OpenStreetMapMarker(
@@ -1253,7 +1257,7 @@ internal fun createImmediateOpenStreetMapMarker(
         )
     }
     val alert = (item as MapMarkerItem.Alert).alert
-    val request = openStreetMapIconRequest(alert, markerSizePx, basePalette, goDexMatches)
+    val request = openStreetMapIconRequest(alert, markerSizePx, basePalette, goDexMatches, ordinal)
     val key = mapMarkerBaseIconCacheKey(request, nowMillis)
     // A pin already rendered by an earlier pass keeps its own identity, so the full pass has
     // nothing to replace. Only a genuine fallback gets a fallback id, and only that one is

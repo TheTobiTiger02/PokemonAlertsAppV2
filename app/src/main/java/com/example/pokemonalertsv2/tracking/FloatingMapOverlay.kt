@@ -25,6 +25,7 @@ import androidx.core.view.isVisible
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
+import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerItem
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerPalette
 import com.example.pokemonalertsv2.ui.alerts.MapUserPose
@@ -265,10 +266,17 @@ internal class FloatingMapOverlay(context: Context) {
      * loads species artwork over the network, which is the right trade for a
      * full-screen map and the wrong one for a 220dp window on a walk.
      */
+    /**
+     * The hunt's targets, in walking order.
+     *
+     * The order is the point: [alerts] arrives already chained by
+     * [com.example.pokemonalertsv2.hunt.huntWalkOrder], so an alert's index *is* its
+     * position in the walk, and the first [HUNT_ORDINAL_MAX] wear it as a number.
+     */
     fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?) {
         if (map == null) return
-        val markers = alerts.mapNotNull { alert ->
-            val coordinates = alert.mapCoordinatesOrNull() ?: return@mapNotNull null
+        val markers = alerts.mapIndexedNotNull { index, alert ->
+            val coordinates = alert.mapCoordinatesOrNull() ?: return@mapIndexedNotNull null
             val emphasized = alert.uniqueId == emphasizedId
             createImmediateOpenStreetMapMarker(
                 item = MapMarkerItem.Alert(alert, coordinates.latitude, coordinates.longitude),
@@ -279,7 +287,8 @@ internal class FloatingMapOverlay(context: Context) {
                 minutePrecision = true,
                 basePalette = OVERLAY_PALETTE,
                 goDexMatches = emptyMap(),
-                emphasized = emphasized
+                emphasized = emphasized,
+                ordinal = huntOrdinalFor(index)
             )
         }
         runCatching { controller.setMarkers(themedContext, markers, alerts) }
@@ -302,12 +311,14 @@ internal class FloatingMapOverlay(context: Context) {
 
         val loaded = withContext(Dispatchers.IO) {
             val gate = Semaphore(ARTWORK_CONCURRENCY)
-            alerts.map { alert ->
+            alerts.mapIndexed { index, alert ->
                 async {
                     val coordinates = alert.mapCoordinatesOrNull() ?: return@async null
                     val emphasized = alert.uniqueId == emphasizedId
                     val sizePx = dp(if (emphasized) EMPHASIZED_MARKER_DP else MARKER_DP)
-                    val request = openStreetMapIconRequest(alert, sizePx, OVERLAY_PALETTE, emptyMap())
+                    val request = openStreetMapIconRequest(
+                        alert, sizePx, OVERLAY_PALETTE, emptyMap(), huntOrdinalFor(index)
+                    )
                     val icon = gate.withPermit {
                         createMapMarkerIcon(
                             context = themedContext,
@@ -328,7 +339,8 @@ internal class FloatingMapOverlay(context: Context) {
                             questQuantity = request.questQuantity,
                             raidTier = request.raidTier,
                             isRocket = request.isRocket,
-                            isKecleon = request.isKecleon
+                            isKecleon = request.isKecleon,
+                            ordinal = request.ordinal
                         )
                     } ?: return@async null
                     OpenStreetMapMarker(
@@ -639,6 +651,15 @@ internal class FloatingMapOverlay(context: Context) {
         value.toFloat(),
         appContext.resources.displayMetrics
     ).roundToInt()
+
+    /**
+     * The number this pin wears, or null past [HUNT_ORDINAL_MAX].
+     *
+     * A target that has scrolled out of the numbered head is still drawn -- it just
+     * stops claiming a place in the plan.
+     */
+    private fun huntOrdinalFor(index: Int): Int? =
+        (index + 1).takeIf { it <= HUNT_ORDINAL_MAX }
 
     companion object {
         private const val TAG = "FloatingMapOverlay"
