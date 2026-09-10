@@ -29,11 +29,20 @@ internal interface HuntLegCosts {
     /** Seconds to walk from the trainer to [toId]. See [huntWalkSeconds]. */
     fun walkSecondsFromOriginOrNull(toId: String): Long?
 
+    /**
+     * The same costs judged from where the trainer is now, and at [nowMillis].
+     *
+     * Cheap by contract: callers use it on the location-fix path, so it may allocate
+     * a small wrapper but must not copy or recompute the legs.
+     */
+    fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts
+
     /** Nothing routed: exactly today's behaviour. The default at every call site. */
     object None : HuntLegCosts {
         override val calculatedAtMillis: Long = 0L
         override fun walkedMetersOrNull(fromId: String?, toId: String): Double? = null
         override fun walkSecondsFromOriginOrNull(toId: String): Long? = null
+        override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts = this
     }
 }
 
@@ -122,8 +131,7 @@ internal class ResolvedHuntLegCosts(
             HUNT_ORIGIN_DRIFT_METERS
     }
 
-    /** The same costs judged from where the trainer is now. Allocates one wrapper. */
-    fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts =
+    override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts =
         ResolvedHuntLegCosts(
             legs = legs,
             nodes = nodes,

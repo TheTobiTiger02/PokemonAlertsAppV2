@@ -114,7 +114,10 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
+import com.example.pokemonalertsv2.hunt.huntLegNode
 import com.example.pokemonalertsv2.hunt.HuntTargetBanner
+import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
@@ -920,6 +923,11 @@ internal fun AlertsMapScreenContent(
 
     // A hunt window answers to the hunt, not to whatever the map happens to be
     // filtered to: the whole point is that only the quarry is on screen.
+    // Emits only when the cache publishes, which only happens on a prefetch, which
+    // only happens on the debounced effect below -- so this cannot drive recomposition
+    // in a loop.
+    val huntRouteCosts by remember { HuntRouteMatrixCache.getInstance().costs }
+        .collectAsStateWithLifecycle()
     val huntTargetAlerts = remember(
         huntPictureInPicture,
         huntSession,
@@ -927,19 +935,23 @@ internal fun AlertsMapScreenContent(
         dismissedAlertIds,
         expirationNow,
         userLocation?.latitude,
-        userLocation?.longitude
+        userLocation?.longitude,
+        huntRouteCosts
     ) {
         val definition = huntSession?.definition
         if (definition == null) {
             emptyList()
         } else {
+            val latitude = userLocation?.latitude ?: ALSBACH_LATITUDE
+            val longitude = userLocation?.longitude ?: ALSBACH_LONGITUDE
             huntTargets(
                 alerts = alerts,
                 definition = definition,
                 dismissedAlertIds = dismissedAlertIds,
-                originLatitude = userLocation?.latitude ?: ALSBACH_LATITUDE,
-                originLongitude = userLocation?.longitude ?: ALSBACH_LONGITUDE,
-                nowMillis = expirationNow
+                originLatitude = latitude,
+                originLongitude = longitude,
+                nowMillis = expirationNow,
+                costs = huntRouteCosts.forOrigin(latitude, longitude, expirationNow)
             )
         }
     }
@@ -1296,6 +1308,42 @@ internal fun AlertsMapScreenContent(
     // opened, because it would hide the chip -- a hunt started and then just sat there.
     val currentHuntTargets by rememberUpdatedState(huntTargetAlerts)
     val currentTrackedId by rememberUpdatedState(arrivalTracking.activeDestination?.uniqueId)
+
+    // Keep the walked legs fresh while the map is on screen. The service does this
+    // too; whichever asks first pays, and the other reads the published snapshot.
+    //
+    // Keyed on inputs -- the alerts, the dismissed set, a coarse position -- and never
+    // on huntTargetAlerts, which is downstream of the snapshot this produces. Feeding
+    // the ordered list back in here would be a loop with a network call in it.
+    val currentAlerts by rememberUpdatedState(alerts)
+    val currentDismissed by rememberUpdatedState(dismissedAlertIds)
+    LaunchedEffect(huntSession?.name) {
+        val definition = huntSession?.definition ?: return@LaunchedEffect
+        snapshotFlow {
+            Triple(
+                currentAlerts,
+                currentDismissed,
+                userLocation?.let { huntLegNode(it.latitude, it.longitude) }
+            )
+        }
+            .distinctUntilChanged()
+            .collectLatest {
+                delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
+                val location = userLocation ?: return@collectLatest
+                val candidates = withContext(Dispatchers.Default) {
+                    huntRoutingCandidates(
+                        alerts = currentAlerts,
+                        definition = definition,
+                        dismissedAlertIds = currentDismissed,
+                        originLatitude = location.latitude,
+                        originLongitude = location.longitude
+                    )
+                }
+                if (candidates.isEmpty()) return@collectLatest
+                HuntRouteMatrixCache.getInstance()
+                    .prefetch(location.latitude, location.longitude, candidates)
+            }
+    }
     LaunchedEffect(huntSession?.name) {
         if (huntSession == null) return@LaunchedEffect
         snapshotFlow { currentTrackedId to currentHuntTargets.firstOrNull()?.uniqueId }

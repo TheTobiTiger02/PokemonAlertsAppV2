@@ -27,6 +27,8 @@ import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
+import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
+import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
 import com.example.pokemonalertsv2.hunt.isUndoOfferLive
 import com.example.pokemonalertsv2.hunt.undoLastCatch
@@ -133,6 +135,13 @@ class ArrivalTrackingService : Service() {
     private var overlayPreferenceJob: Job? = null
     private var undoOfferJob: Job? = null
 
+    /**
+     * Walked legs for the hunt ordering. Read on the fix path, never fetched there --
+     * [huntMatrixJob] does that on its own cadence.
+     */
+    private val huntMatrix by lazy { HuntRouteMatrixCache.getInstance() }
+    private var huntMatrixJob: Job? = null
+
     /** The live undo offer, or null. Drives the notification's Undo action. */
     private var undoOffer: CaughtAlert? = null
 
@@ -219,6 +228,7 @@ class ArrivalTrackingService : Service() {
                     refreshFloatingMapAlerts()
                     maybeAcquireHuntTarget()
                     if (!changed) return@collect
+                    if (active) startHuntMatrixLoop() else stopHuntMatrixLoop()
                     showFloatingMap()
                     // A hunt started with no matches yet still has to hold the
                     // service open, or there is nothing alive to notice the first one.
@@ -281,6 +291,7 @@ class ArrivalTrackingService : Service() {
         mapAlertsJob?.cancel()
         overlayPreferenceJob?.cancel()
         undoOfferJob?.cancel()
+        huntMatrixJob?.cancel()
         journeyOverlay.reset()
         stopPoseTracking()
         artworkJob?.cancel()
@@ -776,12 +787,17 @@ class ArrivalTrackingService : Service() {
     private fun currentHuntTargets(excluding: String? = null): List<PokemonAlert> {
         val definition = huntDefinition ?: return emptyList()
         val origin = lastAcceptedLocation
+        val latitude = origin?.latitude ?: currentDestination?.latitude ?: 0.0
+        val longitude = origin?.longitude ?: currentDestination?.longitude ?: 0.0
         return huntTargets(
             alerts = liveAlerts,
             definition = definition,
             dismissedAlertIds = if (excluding == null) dismissedAlertIds else dismissedAlertIds + excluding,
-            originLatitude = origin?.latitude ?: currentDestination?.latitude ?: 0.0,
-            originLongitude = origin?.longitude ?: currentDestination?.longitude ?: 0.0
+            originLatitude = latitude,
+            originLongitude = longitude,
+            // One volatile read and one small wrapper. This runs on the 3 s fix path,
+            // so it may look things up but must never go and fetch them.
+            costs = huntMatrix.snapshot().forOrigin(latitude, longitude, System.currentTimeMillis())
         )
     }
 
@@ -1001,6 +1017,52 @@ class ArrivalTrackingService : Service() {
     }
 
     /**
+     * Keeps the walked legs fresh while a hunt runs.
+     *
+     * Deliberately a slow loop of its own rather than anything hung off the location
+     * callback: it reads [lastAcceptedLocation] and [liveAlerts], which the fix path
+     * and the feed collector already maintain, so walking refreshes the matrix
+     * without the 3 s path knowing this feature exists. A stationary trainer with a
+     * warm cache costs one mutex acquisition per pass.
+     */
+    private fun startHuntMatrixLoop() {
+        if (huntMatrixJob?.isActive == true) return
+        huntMatrixJob = serviceScope.launch {
+            while (isActive) {
+                val definition = huntDefinition
+                val origin = lastAcceptedLocation
+                if (definition != null && origin != null) {
+                    val candidates = withContext(Dispatchers.Default) {
+                        huntRoutingCandidates(
+                            alerts = liveAlerts,
+                            definition = definition,
+                            dismissedAlertIds = dismissedAlertIds,
+                            originLatitude = origin.latitude,
+                            originLongitude = origin.longitude
+                        )
+                    }
+                    if (candidates.isNotEmpty() &&
+                        huntMatrix.prefetch(origin.latitude, origin.longitude, candidates)
+                    ) {
+                        // The same targets in a new order still have to be redrawn, and
+                        // renderedTargetKey is built from the ordered id list, so it
+                        // notices -- cleared anyway so a no-op reorder cannot stick.
+                        renderedTargetKey = null
+                        refreshFloatingMapAlerts()
+                        maybeAcquireHuntTarget()
+                    }
+                }
+                delay(HUNT_MATRIX_REFRESH_MILLIS)
+            }
+        }
+    }
+
+    private fun stopHuntMatrixLoop() {
+        huntMatrixJob?.cancel()
+        huntMatrixJob = null
+    }
+
+    /**
      * Starts walking to the nearest hunt target whenever the hunt has none.
      *
      * This is what makes a hunt self-driving: it runs from the alert feed, so a
@@ -1130,6 +1192,15 @@ class ArrivalTrackingService : Service() {
         const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
             const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
         const val ACTION_UNDO_CATCH = "com.example.pokemonalertsv2.tracking.UNDO_CATCH"
+
+        /**
+         * How often the walked legs are refreshed while hunting.
+         *
+         * Slow on purpose. The legs between targets do not change as the trainer
+         * walks, only the row from the trainer does, and /api/routes/matrix shares one
+         * per-client allowance with the walking routes the map is already fetching.
+         */
+        private const val HUNT_MATRIX_REFRESH_MILLIS = 30_000L
         private const val MAX_LOCATION_AGE_MILLIS = 30_000L
         private const val MAX_GPS_TOLERANCE_METERS = 20f
         private const val ROUTE_DISPLAY_MAX_AGE_MILLIS = 10 * 60 * 1000L

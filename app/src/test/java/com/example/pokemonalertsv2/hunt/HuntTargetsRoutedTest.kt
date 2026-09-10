@@ -45,6 +45,7 @@ class HuntTargetsRoutedTest {
         override val calculatedAtMillis = now
         override fun walkedMetersOrNull(fromId: String?, toId: String): Double? = legs[fromId to toId]
         override fun walkSecondsFromOriginOrNull(toId: String): Long? = seconds[toId]
+        override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts = this
     }
 
     private fun List<PokemonAlert>.names() = map { it.name }
