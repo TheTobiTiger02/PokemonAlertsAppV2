@@ -1,12 +1,24 @@
 package com.example.pokemonalertsv2.hunt
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -14,17 +26,25 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.data.FilterSelectionMode
+import com.example.pokemonalertsv2.data.MAX_FILTER_PROFILE_NAME
+import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.data.QuestFilterRules
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.AlertTypesSection
@@ -39,10 +59,13 @@ import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 /**
  * Choose what to hunt, here and now.
  *
- * Saved filter profiles are deliberately absent: a hunt is a decision you make
- * standing on a street corner, not one you set up in Settings beforehand. The
- * controls are the same ones Filter Studio and the map panel use, so a hunt is
- * expressible in exactly the vocabulary the rest of the app already speaks.
+ * The controls are the same ones Filter Studio and the map panel use, so a hunt
+ * is expressible in exactly the vocabulary the rest of the app already speaks.
+ *
+ * Hunts you have run before are listed at the top, and starting one is a single
+ * tap. They are not Filter Studio profiles: the list is a record of what you
+ * have actually hunted, written by starting a hunt rather than set up in
+ * Settings beforehand -- see [SavedHunt].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,8 +75,16 @@ internal fun HuntTargetSheet(
     questRewardThumbnails: Map<String, String>,
     categoryCounts: Map<AlertCategory, Int>,
     onDismiss: () -> Unit,
-    onStart: (name: String, definition: FilterDefinition) -> Unit
+    onStart: (name: String, definition: FilterDefinition, savedHuntId: String?) -> Unit
 ) {
+    val context = LocalContext.current
+    val huntRepository = remember(context) { HuntRepository.getInstance(context) }
+    val scope = rememberCoroutineScope()
+    val savedHunts by huntRepository.savedHunts.collectAsStateWithLifecycle()
+    // Set when a saved hunt is opened for editing, so starting writes back to that
+    // row instead of leaving a near-duplicate beside it.
+    var editingId by remember { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<SavedHunt?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Every selection starts empty, not "all".
     //
@@ -79,6 +110,26 @@ internal fun HuntTargetSheet(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("What are you hunting?", style = MaterialTheme.typography.titleLarge)
+
+            if (savedHunts.isNotEmpty()) {
+                Section("Hunted before") {
+                    savedHunts.forEach { saved ->
+                        SavedHuntRow(
+                            hunt = saved,
+                            onStart = { onStart(saved.name, saved.definition, saved.id) },
+                            onEdit = {
+                                draft = saved.definition.forHuntDraft()
+                                editingId = saved.id
+                            },
+                            onRename = { renaming = saved },
+                            onDelete = {
+                                scope.launch { huntRepository.deleteSavedHunt(saved.id) }
+                                if (editingId == saved.id) editingId = null
+                            }
+                        )
+                    }
+                }
+            }
 
             AlertTypesSection(
                 definition = draft,
@@ -156,7 +207,7 @@ internal fun HuntTargetSheet(
 
             val hunt = remember(draft) { draft.forHunt() }
             Button(
-                onClick = { onStart(huntName(hunt, catalog), hunt) },
+                onClick = { onStart(huntName(hunt, catalog), hunt, editingId) },
                 enabled = ready,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -176,6 +227,17 @@ internal fun HuntTargetSheet(
         )
     }
 
+    renaming?.let { target ->
+        HuntNameDialog(
+            initial = target.name,
+            onDismiss = { renaming = null },
+            onConfirm = { name ->
+                scope.launch { huntRepository.renameSavedHunt(target.id, name) }
+                renaming = null
+            }
+        )
+    }
+
     if (questsOpen) {
         QuestRulesDialog(
             current = draft.quests,
@@ -189,6 +251,111 @@ internal fun HuntTargetSheet(
             }
         )
     }
+}
+
+/**
+ * One remembered hunt: tap to run it again, overflow for the rest.
+ *
+ * The name is the whole row's affordance because that is what the trainer is
+ * looking for -- the sub-line only says how narrow it is, which matters when two
+ * hunts read alike.
+ */
+@Composable
+private fun SavedHuntRow(
+    hunt: SavedHunt,
+    onStart: () -> Unit,
+    onEdit: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onStart)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = hunt.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = when (val rules = hunt.definition.advancedRuleCount) {
+                    0 -> "Anything of that kind"
+                    1 -> "1 extra rule"
+                    else -> "$rules extra rules"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = "More for ${hunt.name}"
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    onClick = {
+                        menuOpen = false
+                        onEdit()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    onClick = {
+                        menuOpen = false
+                        onRename()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    onClick = {
+                        menuOpen = false
+                        onDelete()
+                    }
+                )
+            }
+        }
+    }
+}
+
+/** Renaming a saved hunt. Deliberately local: FiltersHub's dialog belongs to Settings. */
+@Composable
+private fun HuntNameDialog(
+    initial: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var value by remember(initial) { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename hunt") },
+        text = {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { value = it.take(MAX_FILTER_PROFILE_NAME) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(value) },
+                enabled = value.isNotBlank()
+            ) { Text("Rename") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
 }
 
 @Composable

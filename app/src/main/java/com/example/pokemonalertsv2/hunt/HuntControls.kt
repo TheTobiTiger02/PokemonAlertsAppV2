@@ -175,13 +175,25 @@ fun HuntControls(
             questRewardThumbnails = questRewardThumbnails,
             categoryCounts = categoryCounts,
             onDismiss = { pickerOpen = false },
-            onStart = { name, definition ->
+            onStart = { name, definition, savedHuntId ->
                 scope.launch {
+                    // Remembered before the hunt starts, so the row exists to point
+                    // the session at. Re-running an identical hunt touches that row
+                    // rather than leaving a second copy beside it.
+                    val saved = huntRepository.recordStart(
+                        name = name,
+                        definition = definition,
+                        replacingId = savedHuntId
+                    )
                     // The hunt is written first, then the old journey is cleared.
                     // The other order leaves a moment with neither a destination nor
                     // a hunt, and a service running for the old journey reads that as
                     // "nothing to do" and stops itself mid-start.
-                    huntRepository.start(name = name, definition = definition)
+                    huntRepository.start(
+                        name = name,
+                        definition = definition,
+                        savedHuntId = saved.id
+                    )
                     // A new hunt supersedes whatever you were walking to. Without
                     // this the old journey simply carries on under the new hunt's
                     // name, which is how a raid hunt ended up pointing at a spawn.
