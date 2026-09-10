@@ -19,6 +19,8 @@ private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
 private val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
 private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
+private val LAST_CAUGHT_ID_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_id")
+private val LAST_CAUGHT_NAME_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_name")
 private val FLOATING_MAP_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_x")
 private val FLOATING_MAP_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_y")
 private val FLOATING_MAP_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_width")
@@ -317,6 +319,21 @@ interface AlertPreferencesStore {
     suspend fun updateExcludedRaidTiers(types: Set<String>)
     
     // Dismissed alerts
+    /**
+     * The last target retired with "Got it", so it can be put back.
+     *
+     * The tick sits between the two step arrows in a 30dp bar on a moving map,
+     * and it dismisses the alert for good -- one fat-fingered tap and the thing
+     * you were walking to is gone with no way back. Null once undone, or once
+     * nothing has been caught.
+     */
+    val lastCaughtAlert: Flow<CaughtAlert?>
+        get() = flowOf(null)
+
+    suspend fun rememberCaughtAlert(alertId: String, displayName: String) = Unit
+
+    suspend fun forgetCaughtAlert() = Unit
+
     val dismissedAlertIds: Flow<Set<String>>
     suspend fun addDismissedAlert(alertId: String)
     suspend fun removeDismissedAlert(alertId: String)
@@ -895,6 +912,26 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     }
     
     // Dismissed alerts implementations
+    override val lastCaughtAlert: Flow<CaughtAlert?> = dataStore.data.map { preferences ->
+        preferences[LAST_CAUGHT_ID_KEY]?.let { id ->
+            CaughtAlert(id = id, displayName = preferences[LAST_CAUGHT_NAME_KEY] ?: "that one")
+        }
+    }
+
+    override suspend fun rememberCaughtAlert(alertId: String, displayName: String) {
+        dataStore.edit { prefs ->
+            prefs[LAST_CAUGHT_ID_KEY] = alertId
+            prefs[LAST_CAUGHT_NAME_KEY] = displayName
+        }
+    }
+
+    override suspend fun forgetCaughtAlert() {
+        dataStore.edit { prefs ->
+            prefs.remove(LAST_CAUGHT_ID_KEY)
+            prefs.remove(LAST_CAUGHT_NAME_KEY)
+        }
+    }
+
     override val dismissedAlertIds: Flow<Set<String>> = dataStore.data.map { preferences ->
         preferences[DISMISSED_ALERTS_KEY] ?: emptySet()
     }
@@ -1078,4 +1115,10 @@ data class FloatingMapGeometry(
     val y: Int,
     val width: Int,
     val height: Int
+)
+
+/** What "Got it" last retired, and what to call it in the undo button. */
+data class CaughtAlert(
+    val id: String,
+    val displayName: String
 )

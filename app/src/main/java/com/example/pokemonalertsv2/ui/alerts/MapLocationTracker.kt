@@ -106,6 +106,51 @@ internal fun sensorAxesForDisplayRotation(rotation: Int): Pair<Int, Int> = when 
     else -> SensorManager.AXIS_X to SensorManager.AXIS_Y
 }
 
+/**
+ * How hard to work for a pose.
+ *
+ * The map screen wants a fix a second, because the dot is being watched. A hunt
+ * that is waiting for its first match wants the same dot but nobody is watching
+ * it move, and a 1 Hz high-accuracy request held open for an hour of waiting is
+ * a real battery cost for no benefit.
+ */
+internal data class MapPoseCadence(
+    val intervalMillis: Long,
+    val minIntervalMillis: Long,
+    val maxDelayMillis: Long,
+    val priority: Int,
+    val sensorDelay: Int
+) {
+    companion object {
+        /** Being watched: a fix a second, at full accuracy. */
+        val Live = MapPoseCadence(
+            intervalMillis = 1_000L,
+            minIntervalMillis = 500L,
+            maxDelayMillis = 1_000L,
+            priority = Priority.PRIORITY_HIGH_ACCURACY,
+            sensorDelay = SensorManager.SENSOR_DELAY_UI
+        )
+
+        /**
+         * Waiting: often enough that the map is not lying about where you are, and
+         * that "nearest match" means nearest to *here* when one finally arrives.
+         *
+         * The saving is the interval, not the priority -- GPS duty-cycles between
+         * fixes, and twenty seconds apart is a twentieth of the work. Balanced
+         * power was the obvious choice and the wrong one: it can be satisfied from
+         * the network alone, which indoors means no fix at all, and a waiting hunt
+         * with no fix cannot tell which of its matches is nearest.
+         */
+        val Standby = MapPoseCadence(
+            intervalMillis = 20_000L,
+            minIntervalMillis = 10_000L,
+            maxDelayMillis = 60_000L,
+            priority = Priority.PRIORITY_HIGH_ACCURACY,
+            sensorDelay = SensorManager.SENSOR_DELAY_NORMAL
+        )
+    }
+}
+
 /** Foreground-only location and device-heading source used by the map screen. */
 internal interface MapPoseTracker {
     fun start()
@@ -125,7 +170,8 @@ internal val DefaultMapPoseTrackerFactory: MapPoseTrackerFactory = { context, on
 internal class MapLocationTracker(
     context: Context,
     private val onPose: (MapUserPose) -> Unit,
-    private val onStatus: (MapTrackingStatus) -> Unit
+    private val onStatus: (MapTrackingStatus) -> Unit,
+    private val cadence: MapPoseCadence = MapPoseCadence.Live
 ) : MapPoseTracker, SensorEventListener {
     private val appContext = context.applicationContext
     private val fusedClient = LocationServices.getFusedLocationProviderClient(appContext)
@@ -160,10 +206,12 @@ internal class MapLocationTracker(
         if (started || !hasLocationPermission()) return
         started = true
         onStatus(if (latestLocation == null) MapTrackingStatus.SEARCHING else MapTrackingStatus.ACTIVE)
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1_000L)
-            .setMinUpdateIntervalMillis(500L)
-            .setMaxUpdateDelayMillis(1_000L)
-            .setWaitForAccurateLocation(true)
+        val request = LocationRequest.Builder(cadence.priority, cadence.intervalMillis)
+            .setMinUpdateIntervalMillis(cadence.minIntervalMillis)
+            .setMaxUpdateDelayMillis(cadence.maxDelayMillis)
+            // Only worth waiting for when the fix is being watched; while standing
+            // by it just delays the first pose the window has to draw.
+            .setWaitForAccurateLocation(cadence.priority == Priority.PRIORITY_HIGH_ACCURACY)
             .setGranularity(Granularity.GRANULARITY_PERMISSION_LEVEL)
             .build()
         runCatching {
@@ -172,7 +220,7 @@ internal class MapLocationTracker(
             onStatus(MapTrackingStatus.DEGRADED)
         }
         rotationVectorSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            sensorManager.registerListener(this, it, cadence.sensorDelay)
         }
     }
 

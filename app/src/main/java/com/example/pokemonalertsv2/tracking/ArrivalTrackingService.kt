@@ -26,6 +26,7 @@ import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
+import com.example.pokemonalertsv2.ui.alerts.MapPoseCadence
 import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
 import com.example.pokemonalertsv2.ui.alerts.MAP_PIP_REFIT_METERS
 import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
@@ -99,6 +100,7 @@ class ArrivalTrackingService : Service() {
      * only alive while the window is, because it holds a 1 Hz fix request.
      */
     private var poseTracker: MapPoseTracker? = null
+    private var poseCadence: MapPoseCadence? = null
 
     /** What the floating map is currently drawing, so identical work is skipped. */
     private var renderedTargetKey: String? = null
@@ -537,12 +539,21 @@ class ArrivalTrackingService : Service() {
      * thing you just caught disappears from the list, the map and the widgets
      * rather than being offered again as the nearest match.
      */
+    /** What to call a caught target in the undo button. */
+    private fun caughtDisplayName(destination: TrackedDestination): String =
+        destination.alert.pokemon?.takeIf { it.isNotBlank() }
+        // Rocket and quest names carry the PokeStop -- "Ground Grunt @ Haus der
+        // Gartenfreunde" -- which is most of a button for none of the meaning.
+            ?: destination.alert.name.substringBefore(" @ ").trim().takeIf { it.isNotBlank() }
+            ?: "that one"
+
     private suspend fun markCurrentTargetCaught() {
         val destination = currentDestination ?: repository.currentDestination()
         destination?.let { target ->
             runCatching {
-                AlertPreferences(applicationContext.alertPreferencesDataStore)
-                    .addDismissedAlert(target.uniqueId)
+                val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
+                preferences.addDismissedAlert(target.uniqueId)
+                preferences.rememberCaughtAlert(target.uniqueId, caughtDisplayName(target))
                 AlertsWidgetProvider.requestUpdate(applicationContext)
             }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
         }
@@ -660,7 +671,9 @@ class ArrivalTrackingService : Service() {
             focusFloatingMap()
             refreshFloatingMapAlerts()
         }
-        startPoseTracking()
+        // One place decides the cadence: full rate while there is a target being
+        // walked to, backed off while the hunt is only waiting for one.
+        startPoseTracking(if (currentDestination == null) MapPoseCadence.Standby else MapPoseCadence.Live)
         focusFloatingMap()
         refreshFloatingMapAlerts()
     }
@@ -676,8 +689,11 @@ class ArrivalTrackingService : Service() {
     private suspend fun catchTargetAndAdvance() {
         val caught = currentDestination ?: repository.currentDestination() ?: return
         runCatching {
-            AlertPreferences(applicationContext.alertPreferencesDataStore)
-                .addDismissedAlert(caught.uniqueId)
+            val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
+            preferences.addDismissedAlert(caught.uniqueId)
+            // Remembered so a mis-tap on the tick can be taken back; see
+            // AlertPreferences.lastCaughtAlert.
+            preferences.rememberCaughtAlert(caught.uniqueId, caughtDisplayName(caught))
             AlertsWidgetProvider.requestUpdate(applicationContext)
         }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
 
@@ -795,8 +811,12 @@ class ArrivalTrackingService : Service() {
         )
     }
 
-    private fun startPoseTracking() {
-        if (poseTracker != null) return
+    private fun startPoseTracking(cadence: MapPoseCadence = MapPoseCadence.Live) {
+        if (poseTracker != null && poseCadence == cadence) return
+        // A cadence change means a new request, and the old one has to go first or
+        // the fast one keeps running underneath the slow one.
+        stopPoseTracking()
+        poseCadence = cadence
         poseTracker = MapLocationTracker(
             applicationContext,
             { pose ->
@@ -817,10 +837,20 @@ class ArrivalTrackingService : Service() {
                     }
                     // Ranking targets by distance is a different matter -- that wants
                     // a fix worth trusting.
-                    if (isFreshValidLocation(pose.location)) lastAcceptedLocation = pose.location
+                    if (isFreshValidLocation(pose.location)) {
+                        val first = lastAcceptedLocation == null
+                        lastAcceptedLocation = pose.location
+                        // The first real fix is what a waiting hunt was missing to be
+                        // able to choose at all.
+                        if (first) {
+                            refreshFloatingMapAlerts()
+                            maybeAcquireHuntTarget()
+                        }
+                    }
                 }
             },
-            { /* status drives the in-app map's chrome; the window has none */ }
+            { /* status drives the in-app map's chrome; the window has none */ },
+            cadence
         ).also { it.start() }
     }
 
@@ -828,7 +858,7 @@ class ArrivalTrackingService : Service() {
     private fun stopPoseTracking() {
         poseTracker?.stop()
         poseTracker = null
-        floatingMap.setUserPose(null)
+        poseCadence = null
     }
 
     private fun readoutSurface(): JourneyReadoutSurface = resolveJourneyReadoutSurface(
@@ -902,8 +932,9 @@ class ArrivalTrackingService : Service() {
         promoteToForeground(
             ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target")
         )
+        // Reached with currentDestination already null, so showFloatingMap picks
+        // the backed-off cadence for us.
         showFloatingMap()
-        startPoseTracking()
         refreshFloatingMapAlerts()
         focusFloatingMapOnUser()
         serviceScope.launch { runCatching { huntRepository.setTarget(null) } }
@@ -919,6 +950,12 @@ class ArrivalTrackingService : Service() {
      */
     private fun maybeAcquireHuntTarget() {
         if (!huntActive || currentDestination != null || acquireJob?.isActive == true) return
+        // Every part of choosing a target is measured from where the trainer is:
+        // which one is nearest, and whether the walk fits in the time left. With no
+        // fix yet the origin falls back to 0,0 and the "nearest" target is whichever
+        // happens to lie closest to the Gulf of Guinea. Standby is already holding
+        // the service open, and a pose is seconds away -- so wait for it.
+        if (lastAcceptedLocation == null) return
         val next = currentHuntTargets().firstOrNull() ?: return
         acquireJob = serviceScope.launch {
             runCatching {

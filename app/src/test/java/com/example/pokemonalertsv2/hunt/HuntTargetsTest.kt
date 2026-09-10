@@ -145,6 +145,62 @@ class HuntTargetsTest {
         assertEquals(true, isHuntTarget(grunt("Dragon", "Dragon", 50.0, 8.0), dragonGrunts, now))
     }
 
+    @Test
+    fun `a target that ends before you could walk to it drops behind one that does not`() {
+        // 200 m away but gone in a minute, against 900 m away and up for an hour.
+        // Nearest-first sends you to the first and you arrive to nothing.
+        val fleeting = grunt("Near", "Dragon", 50.0018, 8.0)
+            .copy(endTime = Instant.parse("2026-09-09T12:01:00Z").toString())
+        val reachable = grunt("Far", "Dragon", 50.0081, 8.0)
+
+        val order = huntWalkOrder(listOf(fleeting, reachable), 50.0, 8.0, now)
+
+        assertEquals(listOf("Far", "Near"), order.map { it.name })
+    }
+
+    @Test
+    fun `an unreachable target is moved, never dropped`() {
+        val fleeting = grunt("Near", "Dragon", 50.0018, 8.0)
+            .copy(endTime = Instant.parse("2026-09-09T12:01:00Z").toString())
+        assertEquals(1, huntWalkOrder(listOf(fleeting), 50.0, 8.0, now).size)
+    }
+
+    @Test
+    fun `an alert with no end time has nothing to miss`() {
+        val endless = grunt("Endless", "Dragon", 50.05, 8.0).copy(endTime = "")
+        assertTrue(canArriveBeforeItEnds(endless, 50.0, 8.0, now))
+    }
+
+    @Test
+    fun `the walk chains through a cluster instead of fanning out from you`() {
+        // Two targets north, one south. Nearest-first from where you stand goes
+        // north 300 m, back south past yourself 400 m, then north again 500 m.
+        // Chaining takes the two northern ones together.
+        val north = grunt("North", "Dragon", 50.0027, 8.0)
+        val farNorth = grunt("FarNorth", "Dragon", 50.0045, 8.0)
+        val south = grunt("South", "Dragon", 49.9964, 8.0)
+
+        val order = huntWalkOrder(listOf(north, south, farNorth), 50.0, 8.0, now)
+
+        assertEquals(listOf("North", "FarNorth", "South"), order.map { it.name })
+    }
+
+    @Test
+    fun `the nearest target is still the one you are sent to first`() {
+        // Chaining changes what comes after, never where you start.
+        val order = huntWalkOrder(
+            listOf(
+                grunt("Far", "Dragon", 50.0045, 8.0),
+                grunt("Near", "Dragon", 50.0009, 8.0),
+                grunt("Middle", "Dragon", 50.0027, 8.0)
+            ),
+            50.0,
+            8.0,
+            now
+        )
+        assertEquals("Near", order.first().name)
+    }
+
     private fun grunt(
         name: String,
         gruntType: String,

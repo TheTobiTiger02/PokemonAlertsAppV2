@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -59,6 +60,9 @@ fun HuntControls(
     val session by huntRepository.activeHunt.collectAsStateWithLifecycle()
 
     var pickerOpen by remember { mutableStateOf(false) }
+    val lastCaught by remember(context) {
+        AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
+    }.collectAsStateWithLifecycle(initialValue = null)
     val overlayAllowed by remember(context) {
         AlertPreferences(context.alertPreferencesDataStore).journeyOverlayEnabled
     }.collectAsStateWithLifecycle(initialValue = false)
@@ -99,7 +103,7 @@ fun HuntControls(
                 TextButton(
                     onClick = {
                         scope.launch {
-                                    // One path for every stop button -- this one, the
+                            // One path for every stop button -- this one, the
                             // window's, and the notification's -- so they cannot
                             // end up ending different amounts of the hunt.
                             ArrivalTrackingService.stopEverything(context)
@@ -108,6 +112,36 @@ fun HuntControls(
                 ) {
                     Text("Stop hunt")
                 }
+            }
+        }
+
+        // The tick on the floating window sits between the two step arrows, on a
+        // map being read while walking, and it retires the alert for good. This is
+        // the way back from a mis-tap.
+        lastCaught?.let { caught ->
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        val preferences = AlertPreferences(context.alertPreferencesDataStore)
+                        preferences.removeDismissedAlert(caught.id)
+                        // Cleared either way: the offer is for the last catch, and
+                        // taking it back is the end of that offer.
+                        preferences.forgetCaughtAlert()
+                    }
+                },
+                modifier = Modifier.align(Alignment.Start)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_back),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Undo catching ${caught.displayName}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
