@@ -475,4 +475,33 @@ class HuntTargetsRoutedTest {
         assertEquals("target", routed.names().first())
         assertEquals(4, routed.size)
     }
+
+    @Test
+    fun `the alert next to a far anchor is chained, not left in the tail`() {
+        // Tapping a distant pin is the whole point of tap-to-retarget, and the chain
+        // pool used to be cut by distance from the *trainer* -- so the alerts actually
+        // beside the anchor fell outside the nearest-30 and were never candidates.
+        // #2 came back as something near the trainer instead of near the anchor.
+        // ~600 m out, which is a normal tap -- far enough that its neighbours rank
+        // past the trainer's nearest thirty, near enough that everything here is
+        // still comfortably reachable.
+        val anchor = alert("anchor", originLat + 0.0054, originLon)
+        val besideAnchor = alert("besideAnchor", originLat + 0.0055, originLon)
+        val alsoBesideAnchor = alert("alsoBesideAnchor", originLat + 0.0056, originLon)
+        // Enough clutter around the trainer to fill the pool on its own.
+        val nearTrainer = (0 until 34).map {
+            alert("near$it", originLat + it * 0.00008, originLon + it * 0.00008)
+        }
+        val alerts = nearTrainer + listOf(anchor, besideAnchor, alsoBesideAnchor)
+
+        val routed = huntWalkOrder(
+            alerts, originLat, originLon, now, costsOf(), anchorId = anchor.uniqueId
+        )
+
+        assertEquals("anchor", routed.names().first())
+        assertTrue(
+            "expected an alert beside the anchor at #2, got ${routed.names()[1]}",
+            routed.names()[1] in setOf("besideAnchor", "alsoBesideAnchor")
+        )
+    }
 }

@@ -91,7 +91,15 @@ internal fun huntWalkOrder(
     val chainLongitude = anchor?.mapCoordinatesOrNull()?.longitude ?: originLongitude
     val chainFromId = anchor?.uniqueId
 
-    val chained = chainNearest(rest, chainLatitude, chainLongitude, costs, chainFromId)
+    // Re-ranked around the anchor before the chain sees it, because chainNearest only
+    // chains its first HUNT_CHAIN_POOL entries and appends the remainder untouched.
+    // Ranked from the trainer, the alerts actually beside a distant anchor fall past
+    // that cut and are never candidates -- so the stop after a far tapped target came
+    // back as something near the trainer instead of something near the target.
+    val restForChain =
+        if (anchor == null) rest else mapPipBrowseOrder(rest, chainLatitude, chainLongitude)
+
+    val chained = chainNearest(restForChain, chainLatitude, chainLongitude, costs, chainFromId)
     // 2-opt first: reachability judges the order you will actually walk, and this is
     // what changes it. Run over `rest` only, which is also what keeps the anchor at
     // the front -- a reversal starting at index 0 could otherwise displace it.
