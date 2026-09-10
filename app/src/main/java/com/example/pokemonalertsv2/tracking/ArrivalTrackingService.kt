@@ -27,6 +27,8 @@ import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
+import com.example.pokemonalertsv2.hunt.shouldRetargetHuntTo
+import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
 import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
 import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
@@ -741,6 +743,10 @@ class ArrivalTrackingService : Service() {
         floatingMap.onNext = { stepHuntTarget(forward = true) }
         floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
         floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
+        floatingMap.onAlertTap = { retargetHuntTo(it) }
+        floatingMap.onClusterTap = { cluster ->
+            floatingMap.focusCluster(cluster.alerts.mapNotNull { it.mapCoordinatesOrNull() })
+        }
         // Closing the window ends the hunt. There is one control for "I am done",
         // and it is the one every window has in its corner.
         floatingMap.onClose = { serviceScope.launch { stopEverything() } }
@@ -813,6 +819,25 @@ class ArrivalTrackingService : Service() {
         }
     }
 
+    /**
+     * Makes a tapped pin the hunt's target.
+     *
+     * Deliberately does **not** stop the current journey first. Clearing the slot
+     * emits null on destinationFlow, which drives stopTrackingService() and tears the
+     * service down -- the replacement would then be started on a dying scope. The
+     * single slot is overwritten instead, and destinationJob picks it up, the same way
+     * stepHuntTarget does it.
+     */
+    private fun retargetHuntTo(alert: PokemonAlert) {
+        if (!shouldRetargetHuntTo(alert, currentDestination?.uniqueId, huntActive)) return
+        serviceScope.launch {
+            runCatching {
+                repository.startTracking(alert)
+                huntRepository.setTarget(alert.uniqueId)
+            }.onFailure { Log.w(TAG, "Could not switch to the tapped hunt target", it) }
+        }
+    }
+
     private fun currentHuntTargets(excluding: String? = null): List<PokemonAlert> {
         val definition = huntDefinition ?: return emptyList()
         val origin = lastAcceptedLocation
@@ -826,7 +851,12 @@ class ArrivalTrackingService : Service() {
             originLongitude = longitude,
             // One volatile read and one small wrapper. This runs on the 3 s fix path,
             // so it may look things up but must never go and fetch them.
-            costs = huntMatrix.snapshot().forOrigin(latitude, longitude, System.currentTimeMillis())
+            costs = huntMatrix.snapshot().forOrigin(latitude, longitude, System.currentTimeMillis()),
+            // The list is the route onward from what is actually being walked to --
+            // except when that is the alert being excluded, which is the catch path
+            // asking "where next", and chaining onward from something already caught
+            // would be nonsense.
+            anchorId = currentDestination?.uniqueId?.takeIf { it != excluding }
         )
     }
 

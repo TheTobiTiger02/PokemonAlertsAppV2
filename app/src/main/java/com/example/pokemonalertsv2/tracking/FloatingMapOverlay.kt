@@ -26,6 +26,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
 import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
+import com.example.pokemonalertsv2.ui.alerts.AlertMapCoordinates
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerItem
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerPalette
 import com.example.pokemonalertsv2.ui.alerts.MapUserPose
@@ -121,6 +122,15 @@ internal class FloatingMapOverlay(context: Context) {
     var onPrevious: () -> Unit = {}
     var onNext: () -> Unit = {}
     var onGotIt: () -> Unit = {}
+
+    /**
+     * A pin was tapped. The window is where you are looking while walking, so this is
+     * how you change your mind about where you are going.
+     */
+    var onAlertTap: (PokemonAlert) -> Unit = {}
+
+    /** A stack was tapped. Opening it up is the only useful answer at this size. */
+    var onClusterTap: (MapMarkerItem.Cluster) -> Unit = {}
 
     /**
      * The way back from the tick. It sits between the two step arrows, so it gets
@@ -247,6 +257,11 @@ internal class FloatingMapOverlay(context: Context) {
                 if (view.isDestroyed) return@setStyle
                 map = ready
                 controller.attach(ready, themedContext)
+                // The hit-testing was already running here and dispatching to nothing:
+                // attach() installs a map click listener that resolves a tap through
+                // queryRenderedFeatures back to an alert id. This is the whole of it.
+                controller.onAlertClick = { alert -> onAlertTap(alert) }
+                controller.onClusterClick = { cluster -> onClusterTap(cluster) }
                 controller.attachStyle(style, themedContext)
                 controller.setGesturesEnabled(true)
                 ready.addOnCameraMoveStartedListener { reason ->
@@ -480,6 +495,14 @@ internal class FloatingMapOverlay(context: Context) {
      * picture-in-picture window used: fit both points, unless they are close
      * enough that bounds would slam the camera to maximum zoom.
      */
+    /** Opens a tapped stack up, so the tap does something rather than nothing. */
+    fun focusCluster(coordinates: List<AlertMapCoordinates>) {
+        if (coordinates.isEmpty()) return
+        cameraAdjustedByHand = true
+        runCatching { controller.fitAlerts(coordinates, dp(CLUSTER_FIT_PADDING_DP)) }
+            .onFailure { Log.w(TAG, "Could not open the tapped stack", it) }
+    }
+
     fun focus(
         userLatitude: Double?,
         userLongitude: Double?,
@@ -674,7 +697,10 @@ internal class FloatingMapOverlay(context: Context) {
         private const val MIN_HEIGHT_DP = 140
         private const val MAX_WIDTH_DP = 360
         private const val MAX_HEIGHT_DP = 420
-        private const val MARKER_DP = 32
+        /** Enough room that an opened stack is not glued to the window's edges. */
+    private const val CLUSTER_FIT_PADDING_DP = 16
+
+    private const val MARKER_DP = 32
         private const val EMPHASIZED_MARKER_DP = 40
         private const val ARTWORK_CONCURRENCY = 8
 

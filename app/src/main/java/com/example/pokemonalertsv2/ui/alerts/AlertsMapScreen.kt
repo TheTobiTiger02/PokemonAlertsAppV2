@@ -936,7 +936,8 @@ internal fun AlertsMapScreenContent(
         expirationNow,
         userLocation?.latitude,
         userLocation?.longitude,
-        huntRouteCosts
+        huntRouteCosts,
+        arrivalTracking.activeDestination?.uniqueId
     ) {
         val definition = huntSession?.definition
         if (definition == null) {
@@ -951,7 +952,10 @@ internal fun AlertsMapScreenContent(
                 originLatitude = latitude,
                 originLongitude = longitude,
                 nowMillis = expirationNow,
-                costs = huntRouteCosts.forOrigin(latitude, longitude, expirationNow)
+                costs = huntRouteCosts.forOrigin(latitude, longitude, expirationNow),
+                // The route onward from what is being walked to, not a ranking from
+                // wherever the trainer happens to stand.
+                anchorId = arrivalTracking.activeDestination?.uniqueId
             )
         }
     }

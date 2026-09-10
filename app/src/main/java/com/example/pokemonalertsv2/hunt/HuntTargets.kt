@@ -27,14 +27,15 @@ internal fun huntTargets(
     originLatitude: Double,
     originLongitude: Double,
     nowMillis: Long = System.currentTimeMillis(),
-    costs: HuntLegCosts = HuntLegCosts.None
+    costs: HuntLegCosts = HuntLegCosts.None,
+    anchorId: String? = null
 ): List<PokemonAlert> {
     val matches = alerts.filter { alert ->
         alert.uniqueId !in dismissedAlertIds &&
             alert.isEligibleArrivalDestination(nowMillis) &&
             AlertFilterMatcher.matches(alert, definition)
     }
-    return huntWalkOrder(matches, originLatitude, originLongitude, nowMillis, costs)
+    return huntWalkOrder(matches, originLatitude, originLongitude, nowMillis, costs, anchorId)
 }
 
 /**
@@ -67,16 +68,42 @@ internal fun huntWalkOrder(
     originLatitude: Double,
     originLongitude: Double,
     nowMillis: Long = System.currentTimeMillis(),
-    costs: HuntLegCosts = HuntLegCosts.None
+    costs: HuntLegCosts = HuntLegCosts.None,
+    anchorId: String? = null
 ): List<PokemonAlert> {
     val (reachable, tooLate) = mapPipBrowseOrder(alerts, originLatitude, originLongitude)
         .partition { canArriveBeforeItEnds(it, originLatitude, originLongitude, nowMillis, costs) }
-    val chained = chainNearest(reachable, originLatitude, originLongitude, costs)
+
+    // The target already being walked to leads, and the rest are chained from *it*
+    // rather than from the trainer -- so the list is the route you are on, not a
+    // ranking of what happens to be near you. An anchor that is not there at all
+    // (caught, expired, filtered away) is simply ignored.
+    //
+    // Taken from either side of the partition on purpose: a committed target that the
+    // coarse check calls too late is still the one you are walking to, and shoving it
+    // to the back of its own route would be the opposite of useful.
+    val anchor = anchorId?.let { id ->
+        reachable.firstOrNull { it.uniqueId == id } ?: tooLate.firstOrNull { it.uniqueId == id }
+    }
+    val rest = if (anchor == null) reachable else reachable.filterNot { it.uniqueId == anchor.uniqueId }
+    val alsoTooLate = if (anchor == null) tooLate else tooLate.filterNot { it.uniqueId == anchor.uniqueId }
+    val chainLatitude = anchor?.mapCoordinatesOrNull()?.latitude ?: originLatitude
+    val chainLongitude = anchor?.mapCoordinatesOrNull()?.longitude ?: originLongitude
+    val chainFromId = anchor?.uniqueId
+
+    val chained = chainNearest(rest, chainLatitude, chainLongitude, costs, chainFromId)
     // 2-opt first: reachability judges the order you will actually walk, and this is
-    // what changes it.
-    val improved = improveChain(chained, originLatitude, originLongitude, costs)
-    val (keeping, missing) = chainReachability(improved, originLatitude, originLongitude, nowMillis, costs)
-    return keeping + missing + tooLate
+    // what changes it. Run over `rest` only, which is also what keeps the anchor at
+    // the front -- a reversal starting at index 0 could otherwise displace it.
+    val improved = improveChain(chained, chainLatitude, chainLongitude, costs, chainFromId)
+
+    val ordered = if (anchor == null) improved else listOf(anchor) + improved
+    // Still seeded from the trainer: the first leg of the walk is the one to the
+    // anchor, and it has to be on the clock like any other.
+    val (keeping, missing) = chainReachability(
+        ordered, originLatitude, originLongitude, nowMillis, costs, anchor?.uniqueId
+    )
+    return keeping + missing + alsoTooLate
 }
 
 /**
@@ -151,7 +178,8 @@ private fun improveChain(
     ordered: List<PokemonAlert>,
     originLatitude: Double,
     originLongitude: Double,
-    costs: HuntLegCosts
+    costs: HuntLegCosts,
+    fromAlertId: String? = null
 ): List<PokemonAlert> {
     if (ordered.size < 4) return ordered
     val pool = ordered.take(HUNT_CHAIN_POOL)
@@ -159,7 +187,7 @@ private fun improveChain(
     if (!anyRoutedLeg(pool, costs)) return ordered
 
     var best = pool
-    var bestCost = tourCost(best, originLatitude, originLongitude, costs)
+    var bestCost = tourCost(best, originLatitude, originLongitude, costs, fromAlertId)
     repeat(HUNT_TWO_OPT_MAX_SWEEPS) {
         var improvedThisSweep = false
         for (i in 0 until best.size - 1) {
@@ -167,7 +195,7 @@ private fun improveChain(
                 val candidate = best.toMutableList().apply {
                     subList(i, j + 1).reverse()
                 }
-                val candidateCost = tourCost(candidate, originLatitude, originLongitude, costs)
+                val candidateCost = tourCost(candidate, originLatitude, originLongitude, costs, fromAlertId)
                 if (candidateCost < bestCost) {
                     best = candidate
                     bestCost = candidateCost
@@ -185,10 +213,11 @@ private fun tourCost(
     order: List<PokemonAlert>,
     originLatitude: Double,
     originLongitude: Double,
-    costs: HuntLegCosts
+    costs: HuntLegCosts,
+    fromAlertId: String? = null
 ): Double {
     var total = 0.0
-    var fromId: String? = null
+    var fromId: String? = fromAlertId
     var fromLatitude = originLatitude
     var fromLongitude = originLongitude
     for (alert in order) {
@@ -252,7 +281,9 @@ private fun chainReachability(
     originLatitude: Double,
     originLongitude: Double,
     nowMillis: Long,
-    costs: HuntLegCosts
+    costs: HuntLegCosts,
+    /** Never demoted: you are already walking to it. Still advances the clock. */
+    anchorId: String? = null
 ): Pair<List<PokemonAlert>, List<PokemonAlert>> {
     if (order.size < 2) return order to emptyList()
     if (!anyRoutedLeg(order, costs)) return order to emptyList()
@@ -280,7 +311,7 @@ private fun chainReachability(
             walkingDurationSeconds = (arrivalSeconds * HUNT_ROUTED_REACHABILITY_MARGIN).toLong(),
             remainingMillis = endMillis - nowMillis
         )
-        if (expires) {
+        if (expires && alert.uniqueId != anchorId) {
             missing += alert
             continue
         }
@@ -320,7 +351,9 @@ private fun chainNearest(
     ordered: List<PokemonAlert>,
     originLatitude: Double,
     originLongitude: Double,
-    costs: HuntLegCosts
+    costs: HuntLegCosts,
+    /** The alert the chain starts at, or null for the trainer. See [huntWalkOrder]. */
+    fromAlertId: String? = null
 ): List<PokemonAlert> {
     // Two targets used to be worth short-circuiting: sorted by straight line from
     // the trainer and chained greedily from the trainer are the same two orders.
@@ -330,7 +363,7 @@ private fun chainNearest(
     val pool = ordered.take(HUNT_CHAIN_POOL).toMutableList()
     val tail = ordered.drop(HUNT_CHAIN_POOL)
     val chain = ArrayList<PokemonAlert>(pool.size)
-    var fromId: String? = null
+    var fromId: String? = fromAlertId
     var fromLatitude = originLatitude
     var fromLongitude = originLongitude
     while (pool.isNotEmpty()) {
@@ -359,6 +392,27 @@ private fun chainNearest(
 
 /** Enough to cover the cluster you are standing in, cheap enough to redo often. */
 private const val HUNT_CHAIN_POOL = 30
+
+/**
+ * Whether tapping [alert] should make it the hunt's target.
+ *
+ * Kept out of the service so the rule is testable on its own, the way
+ * [com.example.pokemonalertsv2.ui.alerts.resolveMapPipTrackingIntent] is. Eligibility
+ * is checked *here* rather than left to
+ * [com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository.startTracking],
+ * which throws on a bad destination -- a tap on an expired pin should do nothing, not
+ * crash a walk.
+ */
+internal fun shouldRetargetHuntTo(
+    alert: PokemonAlert,
+    currentTargetId: String?,
+    huntActive: Boolean,
+    nowMillis: Long = System.currentTimeMillis()
+): Boolean {
+    if (!huntActive) return false
+    if (alert.uniqueId == currentTargetId) return false
+    return alert.isEligibleArrivalDestination(nowMillis)
+}
 
 /**
  * Whether one alert is something [definition] is hunting, right now.
