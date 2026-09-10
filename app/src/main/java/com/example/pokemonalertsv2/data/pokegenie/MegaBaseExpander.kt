@@ -5,6 +5,13 @@ import com.example.pokemonalertsv2.data.counters.megaBaseSpeciesId
 import java.util.Locale
 
 /**
+ * Bumped whenever this expander's output would change, so a stored roster is expanded
+ * again rather than being left on the old shape. See
+ * [PokeGenieRepository.expandStoredRosterIfNeeded]; 0 means "never expanded".
+ */
+const val MEGA_EXPANSION_VERSION = 1
+
+/**
  * Adds the base-form rows Poké Genie leaves out of its export.
  *
  * Poké Genie merges a Pokémon's base form and its Mega Evolution into one entry, and the

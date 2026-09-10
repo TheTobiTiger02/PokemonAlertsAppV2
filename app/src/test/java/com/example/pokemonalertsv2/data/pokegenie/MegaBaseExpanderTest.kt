@@ -191,4 +191,17 @@ class MegaBaseExpanderTest {
         assertEquals("Charizard", result.rows[1].name)
         assertEquals("Machamp", result.rows[0].name)
     }
+
+    @Test
+    fun `expanding an already expanded roster adds nothing`() {
+        // A stored roster is expanded in place, which means this pass runs again on
+        // rows a previous one produced -- it has to be a no-op then.
+        val once = MegaBaseExpander.expand(listOf(mega()))
+        assertEquals(1, once.synthesizedBaseCount)
+
+        val twice = MegaBaseExpander.expand(once.rows)
+
+        assertEquals(0, twice.synthesizedBaseCount)
+        assertEquals(once.rows, twice.rows)
+    }
 }

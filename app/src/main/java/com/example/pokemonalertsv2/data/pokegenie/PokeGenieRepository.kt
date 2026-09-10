@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.FileInputStream
 
@@ -103,6 +105,11 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
         }
     }
 
+    private val expansionMutex = Mutex()
+
+    @Volatile
+    private var expansionChecked = false
+
     suspend fun count(): Int = withContext(Dispatchers.IO) { dao.count() }
 
     /** Live roster size, so an import taken while a raid card is open is picked up. */
@@ -114,8 +121,48 @@ class PokeGenieRepository @VisibleForTesting internal constructor(
 
     /** Every scanned Pokemon, for the local raid simulator to rank. */
     suspend fun ownedForSimulation(): List<OwnedPokemon> = withContext(Dispatchers.IO) {
+        expandStoredRosterIfNeeded()
         val catalogue = catalogue()
         dao.getAll().map { it.toOwned(catalogue) }
+    }
+
+    /**
+     * Adds the base-form rows a roster imported before [MegaBaseExpander] shipped never got.
+     *
+     * Poke Genie merges a base form and its mega into one entry and exports only the mega,
+     * so an unexpanded roster recommends Mega Charizard Y and never plain Charizard -- which
+     * is the wrong answer whenever no mega is active. Import does this already; this is the
+     * same pass over what is already stored, so the fix reaches a roster without asking for
+     * the CSV again.
+     *
+     * Runs once per expander revision. Idempotent regardless: the expander declines to
+     * synthesize a base form when a copy at least as good is already there, which after one
+     * pass it always is.
+     */
+    suspend fun expandStoredRosterIfNeeded(): Int = withContext(Dispatchers.IO) {
+        if (expansionChecked) return@withContext 0
+        expansionMutex.withLock {
+            if (expansionChecked) return@withLock 0
+            val stored = dao.getAll()
+            if (stored.isEmpty()) {
+                // Nothing to expand, and nothing to record either: the next import runs
+                // the current expander itself.
+                expansionChecked = true
+                return@withLock 0
+            }
+            if (preferences.megaExpansionVersion() >= MEGA_EXPANSION_VERSION) {
+                expansionChecked = true
+                return@withLock 0
+            }
+            val expanded = MegaBaseExpander.expand(stored.map { it.toRow() })
+            if (expanded.synthesizedBaseCount > 0) {
+                val importedAt = stored.firstOrNull()?.importedAt ?: System.currentTimeMillis()
+                dao.replaceAll(expanded.rows.map { it.toEntity(importedAt) })
+            }
+            preferences.setMegaExpansionVersion(MEGA_EXPANSION_VERSION)
+            expansionChecked = true
+            expanded.synthesizedBaseCount
+        }
     }
 
     /** Imported rows used as identity/move constraints for server-backed Pokébattler scoring. */
@@ -305,6 +352,33 @@ private fun PokeGenieRow.toEntity(importedAt: Long): PokeGenieMonEntity {
         importedAt = importedAt
     )
 }
+
+/**
+ * The stored row back in its parsed form, so [MegaBaseExpander] can be run over a roster
+ * that is already in the database. The inverse of [PokeGenieRow.toEntity]; the match keys
+ * are left out because the expander derives its own.
+ */
+private fun PokeGenieMonEntity.toRow(): PokeGenieRow = PokeGenieRow(
+    scanIndex = scanIndex,
+    name = displayName,
+    form = form,
+    pokedexNumber = pokedexNumber,
+    gender = gender,
+    cp = cp,
+    hp = hp,
+    atkIv = atkIv,
+    defIv = defIv,
+    staIv = staIv,
+    levelMin = levelMin,
+    levelMax = levelMax,
+    level = level,
+    quickMove = quickMove,
+    chargeMove = chargeMove,
+    chargeMove2 = chargeMove2,
+    shadowState = ShadowState.entries.firstOrNull { it.name == shadowState } ?: ShadowState.NORMAL,
+    lucky = lucky,
+    favorite = favorite
+)
 
 private fun PokeGenieMonEntity.toOwned(catalogue: SpeciesCatalogue): OwnedPokemon {
     // Derived rather than read back from matchKey/altMatchKeys: the stored keys are a

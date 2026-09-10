@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import kotlinx.coroutines.flow.first
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
@@ -105,6 +106,17 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[OWNED_ONLY_KEY] = ownedOnly }
     }
 
+    /**
+     * Which revision of [com.example.pokemonalertsv2.data.pokegenie.MegaBaseExpander] has
+     * been run over the stored roster. 0 for a roster imported before it existed.
+     */
+    suspend fun megaExpansionVersion(): Int =
+        dataStore.data.first()[PG_EXPANSION_KEY] ?: 0
+
+    suspend fun setMegaExpansionVersion(version: Int) {
+        dataStore.edit { it[PG_EXPANSION_KEY] = version }
+    }
+
     /** Drops the obsolete trainer number left by earlier versions. */
     suspend fun clearPokebattlerTrainerNumber() {
         dataStore.edit { it.remove(PB_TRAINER_KEY) }
@@ -158,5 +170,6 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         val PG_IMPORTED_AT_KEY = longPreferencesKey("poke_genie_imported_at")
         val PB_TRAINER_KEY = stringPreferencesKey("pokebattler_trainer_number")
         val ACTIVE_MEGA_KEY = stringPreferencesKey("raid_counters_active_mega")
+        val PG_EXPANSION_KEY = intPreferencesKey("poke_genie_mega_expansion_version")
     }
 }
