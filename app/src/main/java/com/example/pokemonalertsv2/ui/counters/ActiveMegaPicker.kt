@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +11,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -30,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,9 +97,13 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
 /**
  * The picker itself.
  *
- * Lists every mega the game master knows rather than only the ones the roster can reach: a
- * stale or missing CSV must not hide a mega the trainer really does have. Ones whose base
- * species *is* in the roster are already sorted first by the ViewModel and are marked here.
+ * A grid of artwork rather than a list of ~90 names: a mega is recognised by its sprite long
+ * before its name is read, and the flat list meant scrolling past eighty megas the trainer
+ * does not own to reach one they do.
+ *
+ * Two modes for the same reason. "In your roster" is what can actually be fielded and is the
+ * default whenever the roster reaches any mega at all; "All megas" is always one tap away,
+ * because a stale or missing CSV must never hide a mega the trainer really does have.
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,10 +112,16 @@ internal fun ActiveMegaSheet(
     onSelect: (String?) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    val matches = remember(state.megaOptions, query) {
+    val owned = remember(state.megaOptions, state.ownedBaseSpeciesIds) {
+        state.megaOptions.filter { it.baseSpeciesId in state.ownedBaseSpeciesIds }
+    }
+    // Defaulting to a filter that would show nothing is worse than not filtering.
+    var rosterOnly by rememberSaveable(owned.isNotEmpty()) { mutableStateOf(owned.isNotEmpty()) }
+    val matches = remember(state.megaOptions, owned, rosterOnly, query) {
+        val pool = if (rosterOnly) owned else state.megaOptions
         val needle = query.trim().lowercase(Locale.ROOT)
-        if (needle.isEmpty()) state.megaOptions
-        else state.megaOptions.filter { it.displayName.lowercase(Locale.ROOT).contains(needle) }
+        if (needle.isEmpty()) pool
+        else pool.filter { it.displayName.lowercase(Locale.ROOT).contains(needle) }
     }
     // The sheet's content slot is a wrap-content column, so a lazy list inside it can be
     // measured with an unbounded height. Bound it against the window explicitly.
@@ -129,6 +148,24 @@ internal fun ActiveMegaSheet(
             return@Column
         }
 
+        if (owned.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                FilterChip(
+                    selected = rosterOnly,
+                    onClick = { rosterOnly = true },
+                    label = { Text("In your roster (${owned.size})") }
+                )
+                FilterChip(
+                    selected = !rosterOnly,
+                    onClick = { rosterOnly = false },
+                    label = { Text("All megas") }
+                )
+            }
+        }
+
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -137,15 +174,28 @@ internal fun ActiveMegaSheet(
             modifier = Modifier.fillMaxWidth()
         )
 
-        LazyColumn(
+        if (matches.isEmpty()) {
+            Text(
+                text = "No mega matches that.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 84.dp),
             modifier = Modifier
                 .heightIn(max = listMaxHeight)
                 .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
+            // Pinned in both modes: "no mega" is a real answer, not the absence of one.
             item(key = "none") {
-                MegaRow(
-                    label = "None — no mega active",
+                MegaTile(
+                    label = "No mega",
                     selected = state.activeMegaId == null,
                     sprite = null,
                     inRoster = false,
@@ -154,7 +204,7 @@ internal fun ActiveMegaSheet(
                 )
             }
             items(matches, key = { it.pokemonId }) { mega ->
-                MegaRow(
+                MegaTile(
                     label = mega.displayName,
                     selected = state.activeMegaId == mega.pokemonId,
                     sprite = mega,
@@ -168,7 +218,7 @@ internal fun ActiveMegaSheet(
 }
 
 @Composable
-private fun MegaRow(
+private fun MegaTile(
     label: String,
     selected: Boolean,
     sprite: MegaSpecies?,
@@ -176,47 +226,74 @@ private fun MegaRow(
     state: RaidCountersUiState,
     onClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Always reserve the slot. CounterSprite renders nothing at all when it has no
-        // URLs, which left rows with missing artwork shifted left against their neighbours.
-        Box(modifier = Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-            if (sprite != null) {
-                CounterSprite(
-                    urls = state.spriteUrls[sprite.pokemonId].orEmpty(),
-                    size = 32.dp,
-                    type = state.pokemonTypes[sprite.pokemonId]?.firstOrNull()
-                )
+    OutlinedCard(
+        onClick = onClick,
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.outlinedCardColors(
+            containerColor = if (selected) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            } else {
+                MaterialTheme.colorScheme.surface
             }
+        ),
+        border = BorderStroke(
+            width = if (selected) 2.dp else 1.dp,
+            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = Modifier.semantics {
+            contentDescription = if (selected) "$label, selected" else label
         }
-        Column(modifier = Modifier.weight(1f)) {
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 88.dp)
+                .padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Box(contentAlignment = Alignment.TopEnd) {
+                // Always reserve the slot. CounterSprite renders nothing at all when it has
+                // no URLs, which left tiles with missing artwork shorter than their neighbours.
+                Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                    if (sprite != null) {
+                        CounterSprite(
+                            urls = state.spriteUrls[sprite.pokemonId].orEmpty(),
+                            size = 40.dp,
+                            type = state.pokemonTypes[sprite.pokemonId]?.firstOrNull()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (selected) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
             if (inRoster) {
                 Text(
-                    text = "In your roster",
+                    text = "Owned",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
                 )
             }
-        }
-        if (selected) {
-            Icon(
-                imageVector = Icons.Filled.Check,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary
-            )
         }
     }
 }
