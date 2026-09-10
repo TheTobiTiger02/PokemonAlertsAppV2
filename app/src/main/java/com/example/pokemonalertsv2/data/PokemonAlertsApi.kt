@@ -101,6 +101,51 @@ data class WalkingRoutesResponse(
 )
 
 @Serializable
+data class RouteMatrixPoint(
+    val id: String,
+    val latitude: Double,
+    val longitude: Double
+)
+
+/**
+ * [costing] carries no default on purpose.
+ *
+ * kotlinx.serialization omits a property that still holds its default value, and the
+ * endpoint rejects a body without `costing` with 400. As a default it went out on the
+ * wire as `{"points":[...]}` and every request failed -- invisibly, because the client
+ * backs off on failure and simply never routes. Build these with [pedestrian].
+ */
+@Serializable
+data class RouteMatrixRequest(
+    val costing: String,
+    val points: List<RouteMatrixPoint>
+) {
+    companion object {
+        const val PEDESTRIAN = "pedestrian"
+
+        fun pedestrian(points: List<RouteMatrixPoint>): RouteMatrixRequest =
+            RouteMatrixRequest(costing = PEDESTRIAN, points = points)
+    }
+}
+
+/**
+ * A square pedestrian cost matrix, row-ordered from -> to.
+ *
+ * The cells are nullable on purpose and must stay that way: a null means the pair
+ * has no walking route. Declared non-null they would decode as 0 under the shared
+ * `coerceInputValues = true`, and an unreachable target would read as adjacent --
+ * the worst answer this type can give. Covered by RouteMatrixSerializationTest.
+ */
+@Serializable
+data class RouteMatrixResponse(
+    val provider: String = "",
+    val calculatedAt: String = "",
+    val ids: List<String> = emptyList(),
+    val distanceMeters: List<List<Int?>> = emptyList(),
+    val durationSeconds: List<List<Int?>> = emptyList()
+)
+
+@Serializable
 data class FilterCatalogObservationWindow(
     val days: Int = 0,
     val start: String = "",
@@ -227,6 +272,11 @@ interface PokemonAlertsService {
     suspend fun getWalkingRoutes(
         @Body request: WalkingRouteRequest
     ): WalkingRoutesResponse
+
+    @POST("api/routes/matrix")
+    suspend fun getRouteMatrix(
+        @Body request: RouteMatrixRequest
+    ): RouteMatrixResponse
 }
 
 object PokemonAlertsApi {

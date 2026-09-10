@@ -4,6 +4,8 @@ import com.example.pokemonalertsv2.data.AlertSyncResponse
 import com.example.pokemonalertsv2.data.HistoryResponse
 import com.example.pokemonalertsv2.data.CurrentWeatherResponse
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.RouteMatrixRequest
+import com.example.pokemonalertsv2.data.RouteMatrixResponse
 import com.example.pokemonalertsv2.data.PokemonAlertsService
 import com.example.pokemonalertsv2.data.TotalStatsResponse
 import com.example.pokemonalertsv2.data.WalkingRouteRequest
@@ -402,5 +404,8 @@ class WalkingRouteRepositoryTest {
         ): HistoryResponse = HistoryResponse()
 
         override suspend fun getTotalStats(date: String?): TotalStatsResponse = TotalStatsResponse()
+
+        override suspend fun getRouteMatrix(request: RouteMatrixRequest): RouteMatrixResponse =
+            RouteMatrixResponse()
     }
 }

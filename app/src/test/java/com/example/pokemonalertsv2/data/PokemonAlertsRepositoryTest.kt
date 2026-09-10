@@ -685,6 +685,9 @@ class PokemonAlertsRepositoryTest {
                 provider = "test",
                 calculatedAt = "2026-07-24T12:00:00Z"
             )
+
+        override suspend fun getRouteMatrix(request: RouteMatrixRequest): RouteMatrixResponse =
+            RouteMatrixResponse()
     }
 
     private data class HistoryPagedRequest(
