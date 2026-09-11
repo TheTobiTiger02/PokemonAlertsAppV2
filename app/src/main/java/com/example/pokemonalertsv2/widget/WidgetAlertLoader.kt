@@ -105,10 +105,10 @@ internal object WidgetAlertLoader {
         val criteria = WidgetAlertFilter.Criteria(
             dismissedAlertIds = dismissedIds,
             selectedArea = if (unifiedDefinition == null) effectiveArea else "All",
-            maxDistanceKm = if (unifiedDefinition == null) when (val mode = configuration.distance) {
+            maxDistanceMeters = if (unifiedDefinition == null) when (val mode = configuration.distance) {
                     WidgetDistanceMode.InheritApp -> maxDistance
                     WidgetDistanceMode.Unlimited -> 0
-                    is WidgetDistanceMode.Fixed -> mode.kilometers
+                    is WidgetDistanceMode.Fixed -> mode.meters
                 } else 0,
             widgetFilterTypes = filterTypes,
             filterDefinition = unifiedDefinition,
@@ -121,12 +121,12 @@ internal object WidgetAlertLoader {
         // unreachable in time at any plausible walking speed can never match anyway.
         val candidateAlerts = WidgetAlertFilter.filterWithoutDistance(alerts, criteria).filter { alert ->
             val direct = origin?.let { WidgetAlertFilter.directDistanceMeters(it, alert) }
-            if (criteria.maxDistanceKm > 0 && direct != null && direct > criteria.maxDistanceKm * 1000f) {
+            if (criteria.maxDistanceMeters > 0 && direct != null && direct > criteria.maxDistanceMeters) {
                 return@filter false
             }
             val definition = criteria.filterDefinition
             if (definition != null && direct != null) {
-                if (definition.maxDistanceKm > 0 && direct > definition.maxDistanceKm * 1000f) return@filter false
+                if (definition.maxDistanceMeters > 0 && direct > definition.maxDistanceMeters) return@filter false
                 if (definition.maxWalkingMinutes > 0 && direct > definition.maxWalkingMinutes * 60L * 1.8f) return@filter false
             }
             true

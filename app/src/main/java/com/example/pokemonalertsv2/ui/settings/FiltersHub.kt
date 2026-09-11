@@ -86,7 +86,7 @@ private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignm
     val location = buildList {
         if (definition.areas.mode == FilterSelectionMode.NONE) add("No areas")
         if (definition.areas.mode == FilterSelectionMode.ONLY) add("${definition.areas.selectedCount} areas")
-        if (definition.maxDistanceKm > 0) add("${definition.maxDistanceKm} km")
+        if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
         definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 distance override" else "$it distance overrides") }
         if (definition.maxWalkingMinutes > 0) add("${definition.maxWalkingMinutes} min walk")
     }.ifEmpty { listOf("Anywhere") }.joinToString(" • ")
@@ -253,8 +253,15 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
             FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
             (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
         }
-        Text("Default distance — ${distanceLabel(definition.maxDistanceKm)}", style = MaterialTheme.typography.titleSmall)
-        Slider(definition.maxDistanceKm.toFloat(), { onChange(definition.copy(maxDistanceKm = kotlin.math.round(it).toInt())) }, valueRange = 0f..MAX_FILTER_DISTANCE_KM.toFloat())
+        Text("Default distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
+        Slider(
+            value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
+            onValueChange = {
+                onChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
+            },
+            valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
+            steps = ALERT_DISTANCE_STEPS_METERS.size - 2
+        )
         val overrideCount = definition.distanceOverrides.ruleCount
         OutlinedButton(onClick = onEditDistanceOverrides, modifier = Modifier.fillMaxWidth()) {
             Text(if (overrideCount == 0) "Per-type and per-species limits" else "Per-type and per-species limits ($overrideCount)")

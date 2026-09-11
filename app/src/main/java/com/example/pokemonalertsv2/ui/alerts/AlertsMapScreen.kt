@@ -1593,7 +1593,7 @@ internal fun AlertsMapScreenContent(
         // behind it. Alert types are deliberately excluded: the rail already shows those.
         val advancedFilterRuleCount = remember(filterDefinition) {
             filterDefinition.advancedRuleCount +
-                (if (filterDefinition.maxDistanceKm > 0) 1 else 0) +
+                (if (filterDefinition.maxDistanceMeters > 0) 1 else 0) +
                 (if (filterDefinition.maxWalkingMinutes > 0) 1 else 0)
         }
         // One outlined weather cell per scanned area. Suppressed in picture-in-picture,

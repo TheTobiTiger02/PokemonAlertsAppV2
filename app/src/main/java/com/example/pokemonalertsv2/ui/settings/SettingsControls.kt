@@ -97,6 +97,7 @@ import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.notifications.QuietHours
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.distanceLabel
 import com.example.pokemonalertsv2.data.godex.GoDexConfig
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
@@ -470,7 +471,7 @@ internal fun SettingsOverview(
         SortPreference.DISTANCE -> "Distance"
         SortPreference.NAME -> "Name"
     }
-    val distanceLabel = if (maxDistance == 0) "Unlimited distance" else "$maxDistance km maximum"
+    val distanceSummary = if (maxDistance == 0) "Unlimited distance" else "${distanceLabel(maxDistance)} maximum"
     val notificationSummary = when {
         !notificationsEnabled -> "Off"
         !foregroundLocationGranted -> "On - location access needed"

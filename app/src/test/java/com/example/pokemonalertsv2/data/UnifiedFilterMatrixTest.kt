@@ -65,7 +65,8 @@ class UnifiedFilterMatrixTest {
         assertTrue(map.alertTypes.contains("QUEST"))
         assertFalse(map.alertTypes.contains("RAID"))
         assertEquals(feed.areas, notifications.areas)
-        assertEquals(5, notifications.maxDistanceKm)
+        // The legacy preference stored kilometers; migration widens it to meters.
+        assertEquals(5_000, notifications.maxDistanceMeters)
         assertEquals(15, notifications.maxWalkingMinutes)
         assertEquals(FilterSelection.None, notifications.spawnSpecies)
         assertTrue(notifications.hundoSpecies.contains("pikachu"))
@@ -87,7 +88,7 @@ class UnifiedFilterMatrixTest {
         val decoded = FilterStateCodec.decode(FilterStateCodec.encode(document))!!
         assertTrue(decoded.feed.resolve(decoded).alertTypes.contains("QUEST"))
         assertFalse(decoded.map.resolve(decoded).alertTypes.contains("QUEST"))
-        assertEquals(2, decoded.schemaVersion)
+        assertEquals(CURRENT_FILTER_SCHEMA_VERSION, decoded.schemaVersion)
     }
 
     @Test fun normalizationMissingFieldsAndReachabilityAreExplicit() {
@@ -95,7 +96,7 @@ class UnifiedFilterMatrixTest {
         assertTrue(FilterSelection.All.contains(null))
         assertFalse(FilterSelection.None.contains(null))
         assertFalse(FilterSelection.only(listOf("Alsbach")).contains(null))
-        val definition = FilterDefinition(maxDistanceKm = 2, maxWalkingMinutes = 10)
+        val definition = FilterDefinition(maxDistanceMeters = 2_000, maxWalkingMinutes = 10)
         assertTrue(AlertFilterMatcher.matches(fixtures.first(), definition, FilterMatchContext(Float.NaN, null)))
         assertFalse(AlertFilterMatcher.matches(fixtures.first(), definition, FilterMatchContext(null, 601)))
         assertTrue(AlertFilterMatcher.matches(fixtures.first(), definition, FilterMatchContext(2000f, 600)))

@@ -48,7 +48,9 @@ import com.example.pokemonalertsv2.ui.settings.DistanceOverridesDialog
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.settings.SwitchSetting
-import com.example.pokemonalertsv2.ui.settings.distanceLabel
+import com.example.pokemonalertsv2.data.ALERT_DISTANCE_STEPS_METERS
+import com.example.pokemonalertsv2.data.distanceLabel
+import com.example.pokemonalertsv2.data.distanceStepIndex
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.util.s2CellAt
 import com.example.pokemonalertsv2.util.TravelTime
@@ -73,7 +75,7 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.NUNDO
 )
 
-private val DISTANCE_PRESETS = listOf(0, 1, 3, 5, 10, 25)
+private val DISTANCE_PRESETS = listOf(0, 500, 1_000, 3_000, 5_000, 10_000, 25_000) // meters
 
 /**
  * Section ids, kept as bits of one Int so several sections can be open at once and the set
@@ -351,7 +353,7 @@ private fun MapFilterSheetContent(
                 MapPanelSection(
                     title = "Distance & walking time",
                     summary = definition.distanceSummary(),
-                    active = definition.maxDistanceKm > 0 || definition.maxWalkingMinutes > 0,
+                    active = definition.maxDistanceMeters > 0 || definition.maxWalkingMinutes > 0,
                     expanded = isOpen(SECTION_DISTANCE),
                     onToggle = { toggle(SECTION_DISTANCE) }
                 ) {
@@ -1061,27 +1063,30 @@ private fun DistanceSection(
             ) {
                 Text("Straight-line distance", style = MaterialTheme.typography.labelLarge)
                 Text(
-                    text = distanceLabel(definition.maxDistanceKm),
+                    text = distanceLabel(definition.maxDistanceMeters),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
                 )
             }
             Slider(
-                value = definition.maxDistanceKm.toFloat(),
-                onValueChange = { onDefinitionChange(definition.copy(maxDistanceKm = kotlin.math.round(it).toInt())) },
-                valueRange = 0f..MAX_FILTER_DISTANCE_KM.toFloat(),
+                value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
+                onValueChange = {
+                    onDefinitionChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
+                },
+                valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
+                steps = ALERT_DISTANCE_STEPS_METERS.size - 2,
                 modifier = Modifier.semantics { contentDescription = "Maximum distance" }
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
-                DISTANCE_PRESETS.forEach { km ->
+                DISTANCE_PRESETS.forEach { meters ->
                     FilterChip(
-                        selected = definition.maxDistanceKm == km,
-                        onClick = { onDefinitionChange(definition.copy(maxDistanceKm = km)) },
-                        label = { Text(if (km == 0) "Unlimited" else "$km km") },
+                        selected = definition.maxDistanceMeters == meters,
+                        onClick = { onDefinitionChange(definition.copy(maxDistanceMeters = meters)) },
+                        label = { Text(distanceLabel(meters)) },
                         shape = RoundedCornerShape(16.dp)
                     )
                 }
@@ -1444,7 +1449,7 @@ private fun FilterSelection.tokenSummary(catalog: List<String>, noun: String): S
 
 private fun FilterDefinition.distanceSummary(): String {
     val parts = buildList {
-        if (maxDistanceKm > 0) add(distanceLabel(maxDistanceKm))
+        if (maxDistanceMeters > 0) add(distanceLabel(maxDistanceMeters))
         if (maxWalkingMinutes > 0) add(TravelTime.label(maxWalkingMinutes) + " walk")
     }
     return if (parts.isEmpty()) "No limit" else parts.joinToString(" · ")

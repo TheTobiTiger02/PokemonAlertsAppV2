@@ -243,7 +243,7 @@ fun PokemonAlertsRoute(
                                 categories = selectedFeedCategories,
                                 sort = savedSortPreference,
                                 area = selectedArea,
-                                maxDistance = maxDistance
+                                maxDistanceMeters = maxDistance
                             )
                         },
                         onDelete = viewModel::deleteFilterPreset

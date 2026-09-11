@@ -46,7 +46,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.ALERT_DISTANCE_STEPS_METERS
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.distanceLabel
+import com.example.pokemonalertsv2.data.distanceStepIndex
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.CategoryFilterGrid
 import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
@@ -252,8 +255,11 @@ internal fun WidgetConfigScreen(
     var priority by remember { mutableStateOf(initialConfiguration.priority) }
     var distanceMode by remember { mutableStateOf(initialConfiguration.distance) }
     var fixedDistance by remember {
-        mutableStateOf((initialConfiguration.distance as? WidgetDistanceMode.Fixed)?.kilometers ?: 10)
+        mutableStateOf((initialConfiguration.distance as? WidgetDistanceMode.Fixed)?.meters ?: 10_000)
     }
+    // Same scale as the in-app sliders, minus the Unlimited entry: a fixed widget distance
+    // is always at least 100 m.
+    val fixedDistanceSteps = remember { ALERT_DISTANCE_STEPS_METERS.drop(1) }
     var areaMode by remember { mutableStateOf(initialConfiguration.area) }
 
     Scaffold(
@@ -448,15 +454,15 @@ internal fun WidgetConfigScreen(
                     }
                 }
                 if (distanceMode is WidgetDistanceMode.Fixed) {
-                    Text("$fixedDistance km", style = MaterialTheme.typography.labelLarge)
+                    Text(distanceLabel(fixedDistance), style = MaterialTheme.typography.labelLarge)
                     Slider(
-                        value = fixedDistance.toFloat(),
+                        value = (distanceStepIndex(fixedDistance) - 1).coerceAtLeast(0).toFloat(),
                         onValueChange = {
-                            fixedDistance = it.toInt().coerceIn(1, 50)
+                            fixedDistance = fixedDistanceSteps[kotlin.math.round(it).toInt().coerceIn(fixedDistanceSteps.indices)]
                             distanceMode = WidgetDistanceMode.Fixed(fixedDistance)
                         },
-                        valueRange = 1f..50f,
-                        steps = 48
+                        valueRange = 0f..fixedDistanceSteps.lastIndex.toFloat(),
+                        steps = fixedDistanceSteps.size - 2
                     )
                 }
             }

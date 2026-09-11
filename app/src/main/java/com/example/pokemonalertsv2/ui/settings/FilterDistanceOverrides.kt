@@ -26,10 +26,7 @@ import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.*
 
 /** Starting point for a new limit when the surface itself has no default distance. */
-private const val DEFAULT_SEED_LIMIT_KM = 10
-
-/** Renders a limit the way the rest of the studio talks about distance. */
-internal fun distanceLabel(km: Int): String = if (km <= 0) "Unlimited" else "$km km"
+private const val DEFAULT_SEED_LIMIT_METERS = 10_000
 
 /**
  * Editor for limits that are narrower or wider than the surface default.
@@ -51,7 +48,7 @@ internal fun DistanceOverridesDialog(
             Column(Modifier.padding(16.dp)) {
                 Text("Distance limits", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Default is ${distanceLabel(definition.maxDistanceKm)}. A species limit wins over an alert type limit, which wins over the default.",
+                    "Default is ${distanceLabel(definition.maxDistanceMeters)}. A species limit wins over an alert type limit, which wins over the default.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
@@ -61,8 +58,8 @@ internal fun DistanceOverridesDialog(
                     FilterAlertType.entries.forEach { type ->
                         DistanceLimitRow(
                             label = type.label,
-                            km = overrides.perType[type.name],
-                            fallbackLabel = distanceLabel(definition.maxDistanceKm),
+                            meters = overrides.perType[type.name],
+                            fallbackLabel = distanceLabel(definition.maxDistanceMeters),
                             onChange = { overrides = overrides.withType(type, it) }
                         )
                     }
@@ -74,11 +71,11 @@ internal fun DistanceOverridesDialog(
                     if (overrides.perSpecies.isEmpty()) {
                         Text("No species limits yet. A species limit applies wherever that species appears, including as a quest reward.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    overrides.perSpecies.entries.sortedBy { it.key }.forEach { (token, km) ->
+                    overrides.perSpecies.entries.sortedBy { it.key }.forEach { (token, meters) ->
                         DistanceLimitRow(
                             label = displayNameFor(token, speciesCandidates),
-                            km = km,
-                            fallbackLabel = distanceLabel(definition.maxDistanceKm),
+                            meters = meters,
+                            fallbackLabel = distanceLabel(definition.maxDistanceMeters),
                             onRemove = { overrides = overrides.copy(perSpecies = overrides.perSpecies - token) },
                             onChange = { overrides = overrides.copy(perSpecies = if (it == null) overrides.perSpecies - token else overrides.perSpecies + (token to it)) }
                         )
@@ -101,7 +98,7 @@ internal fun DistanceOverridesDialog(
             onPick = { species ->
                 // Seed at the surface default so the row starts where the user already is; when
                 // the default is unlimited there is no meaningful anchor, so start at 10 km.
-                overrides = overrides.withSpecies(species, definition.maxDistanceKm.takeIf { it > 0 } ?: DEFAULT_SEED_LIMIT_KM)
+                overrides = overrides.withSpecies(species, definition.maxDistanceMeters.takeIf { it > 0 } ?: DEFAULT_SEED_LIMIT_METERS)
                 addingSpecies = false
             }
         )
@@ -116,7 +113,7 @@ private fun displayNameFor(token: String, candidates: List<String>): String =
 @Composable
 private fun DistanceLimitRow(
     label: String,
-    km: Int?,
+    meters: Int?,
     fallbackLabel: String,
     onChange: (Int?) -> Unit,
     onRemove: (() -> Unit)? = null
@@ -127,13 +124,13 @@ private fun DistanceLimitRow(
                 Column(Modifier.weight(1f)) {
                     Text(label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (km == null) "Uses default — $fallbackLabel" else distanceLabel(km),
+                        if (meters == null) "Uses default — $fallbackLabel" else distanceLabel(meters),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (km == null) {
-                    TextButton(onClick = { onChange(DEFAULT_SEED_LIMIT_KM) }, modifier = Modifier.semantics { contentDescription = "Set a limit for $label" }) { Text("Set limit") }
+                if (meters == null) {
+                    TextButton(onClick = { onChange(DEFAULT_SEED_LIMIT_METERS) }, modifier = Modifier.semantics { contentDescription = "Set a limit for $label" }) { Text("Set limit") }
                 } else {
                     TextButton(onClick = { onChange(null) }, modifier = Modifier.semantics { contentDescription = "Use default for $label" }) { Text("Use default") }
                 }
@@ -141,11 +138,14 @@ private fun DistanceLimitRow(
                     IconButton(onClick = it, modifier = Modifier.semantics { contentDescription = "Remove $label limit" }) { Icon(Icons.Default.Close, null) }
                 }
             }
-            if (km != null) {
+            if (meters != null) {
                 Slider(
-                    value = km.toFloat(),
-                    onValueChange = { onChange(kotlin.math.round(it).toInt()) },
-                    valueRange = 0f..MAX_FILTER_DISTANCE_KM.toFloat(),
+                    value = distanceStepIndex(meters).toFloat(),
+                    onValueChange = {
+                        onChange(ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)])
+                    },
+                    valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
+                    steps = ALERT_DISTANCE_STEPS_METERS.size - 2,
                     modifier = Modifier.semantics { contentDescription = "$label distance limit" }
                 )
             }

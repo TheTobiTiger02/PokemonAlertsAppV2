@@ -55,12 +55,12 @@ class FilterDefinitionUnionTest {
     fun unionOf_dropsDistanceBecauseItIsNotATopic() {
         val union = unionOf(
             listOf(
-                FilterDefinition(maxDistanceKm = 5, maxWalkingMinutes = 10),
-                FilterDefinition(maxDistanceKm = 20, maxWalkingMinutes = 30)
+                FilterDefinition(maxDistanceMeters = 5_000, maxWalkingMinutes = 10),
+                FilterDefinition(maxDistanceMeters = 20_000, maxWalkingMinutes = 30)
             )
         )
 
-        assertEquals(0, union.maxDistanceKm)
+        assertEquals(0, union.maxDistanceMeters)
         assertEquals(0, union.maxWalkingMinutes)
     }
 

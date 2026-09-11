@@ -56,7 +56,8 @@ private val QUIET_HOURS_ENABLED_KEY = androidx.datastore.preferences.core.boolea
 private val QUIET_HOURS_START_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_start_minute")
 private val QUIET_HOURS_END_KEY = androidx.datastore.preferences.core.intPreferencesKey("quiet_hours_end_minute")
 private val SELECTED_AREA_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_area")
-private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance")
+private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance") // Legacy: kilometers
+private val MAX_DISTANCE_METERS_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance_meters")
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
 private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
@@ -231,6 +232,7 @@ interface AlertPreferencesStore {
     val selectedArea: Flow<String>
     suspend fun updateSelectedArea(area: String)
     
+    /** Straight-line alert limit in meters, 0 for unlimited. */
     val maxDistance: Flow<Int>
     suspend fun updateMaxDistance(distance: Int)
 
@@ -664,13 +666,14 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         }
     }
     
+    // Falls back to the legacy kilometer value so upgrades and restored old backups keep their limit.
     override val maxDistance: Flow<Int> = dataStore.data.map { preferences ->
-        preferences[MAX_DISTANCE_KEY] ?: 0
+        preferences[MAX_DISTANCE_METERS_KEY] ?: (preferences[MAX_DISTANCE_KEY] ?: 0) * 1000
     }
-    
+
     override suspend fun updateMaxDistance(distance: Int) {
         dataStore.edit { prefs ->
-            prefs[MAX_DISTANCE_KEY] = distance
+            prefs[MAX_DISTANCE_METERS_KEY] = distance.coerceIn(0, MAX_FILTER_DISTANCE_METERS)
         }
     }
 
@@ -1023,10 +1026,12 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
 
     fun legacyLocation(): Triple<FilterSelection, Int, Int> {
         val area = preferences[SELECTED_AREA_KEY].orEmpty()
+        val maxDistanceMeters = preferences[MAX_DISTANCE_METERS_KEY]
+            ?: (preferences[MAX_DISTANCE_KEY] ?: 0) * 1000
         return Triple(
             if (area.isBlank() || area.equals("All", ignoreCase = true)) FilterSelection.All
             else FilterSelection.only(listOf(area)),
-            (preferences[MAX_DISTANCE_KEY] ?: 0).coerceIn(0, 50),
+            maxDistanceMeters.coerceIn(0, MAX_FILTER_DISTANCE_METERS),
             (preferences[MAX_WALKING_MINUTES_KEY] ?: TravelTime.NO_LIMIT).coerceIn(0, 240)
         )
     }
@@ -1041,12 +1046,12 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
         ?: LEGACY_FEED_FILTER_TO_CATEGORIES[preferences[SELECTED_ALERT_FILTER_KEY]]?.let(FilterSelection::only)
         ?: FilterSelection.All
     val mutedMap = preferences[MAP_CATEGORIES_KEY].orEmpty()
-    val (areas, maxDistance, maxWalking) = legacyLocation()
+    val (areas, maxDistanceMeters, maxWalking) = legacyLocation()
 
     val feedDefinition = FilterDefinition(
         alertTypes = feedSelection,
         areas = areas,
-        maxDistanceKm = maxDistance,
+        maxDistanceMeters = maxDistanceMeters,
         maxWalkingMinutes = maxWalking
     )
     val mapDefinition = FilterDefinition(alertTypes = typesFromMuted(mutedMap))
@@ -1075,7 +1080,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
     val notificationDefinition = FilterDefinition(
         alertTypes = notificationTypeSelection,
         areas = areas,
-        maxDistanceKm = maxDistance,
+        maxDistanceMeters = maxDistanceMeters,
         maxWalkingMinutes = maxWalking,
         spawnSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
         rareSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
@@ -1103,7 +1108,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
                     alertTypes = presetSelection,
                     areas = if (preset.area.equals("All", ignoreCase = true)) FilterSelection.All
                     else FilterSelection.only(listOf(preset.area)),
-                    maxDistanceKm = preset.maxDistance.coerceIn(0, 50),
+                    maxDistanceMeters = preset.maxDistanceMeters.coerceIn(0, MAX_FILTER_DISTANCE_METERS),
                     feedSort = preset.sort
                 )
             )

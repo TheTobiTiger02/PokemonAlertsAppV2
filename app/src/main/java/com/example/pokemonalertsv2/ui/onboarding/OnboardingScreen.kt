@@ -41,7 +41,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.pokemonalertsv2.data.ALERT_DISTANCE_STEPS_METERS
 import com.example.pokemonalertsv2.data.NotificationPreset
+import com.example.pokemonalertsv2.data.distanceLabel
+import com.example.pokemonalertsv2.data.distanceStepIndex
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
@@ -179,11 +182,16 @@ private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onD
         }
     }
     Text(
-        if (distance == 0) "Distance: Unlimited" else "Distance: $distance km",
+        "Distance: ${distanceLabel(distance)}",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface
     )
-    Slider(value = distance.toFloat(), onValueChange = { onDistance(kotlin.math.round(it).toInt()) }, valueRange = 0f..50f)
+    Slider(
+        value = distanceStepIndex(distance).toFloat(),
+        onValueChange = { onDistance(ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]) },
+        valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
+        steps = ALERT_DISTANCE_STEPS_METERS.size - 2
+    )
 }
 
 @Composable

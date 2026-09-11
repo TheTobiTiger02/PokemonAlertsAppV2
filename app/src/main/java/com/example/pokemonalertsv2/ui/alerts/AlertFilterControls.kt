@@ -169,6 +169,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.InputChip
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
+import com.example.pokemonalertsv2.data.distanceLabel
 import com.example.pokemonalertsv2.util.TravelTime
 
 @Composable
@@ -350,7 +351,7 @@ internal fun AlertListControls(
                             FilterChip(
                                 selected = true,
                                 onClick = onClearDistanceFilter,
-                                label = { Text("Within $maxDistance km") },
+                                label = { Text("Within ${distanceLabel(maxDistance)}") },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, "Clear distance filter", Modifier.size(16.dp))
                                 }
@@ -566,7 +567,7 @@ internal fun alertEmptyStateMessage(
     }
     selectedArea != "All" -> "No active alerts are available in $selectedArea right now."
     maxDistance > 0 && !locationAvailable -> "Distance filtering needs location access. Enable location or clear the distance limit."
-    maxDistance > 0 -> "No active alerts are within $maxDistance km."
+    maxDistance > 0 -> "No active alerts are within ${distanceLabel(maxDistance)}."
     showDismissed -> "There are no dismissed alerts to show."
     else -> "No alerts match the current filters."
 }
@@ -783,7 +784,7 @@ internal fun FilterPresetsSection(
                                 name = draftName,
                                 sort = currentSort.name,
                                 area = currentArea,
-                                maxDistance = currentMaxDistance,
+                                maxDistanceMeters = currentMaxDistance,
                                 categories = currentCategories.toStoredNames()
                             )
                         ),

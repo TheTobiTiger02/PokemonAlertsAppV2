@@ -36,7 +36,7 @@ fun unionOf(definitions: List<FilterDefinition>): FilterDefinition {
         FilterDefinition(
             alertTypes = left.alertTypes.union(right.alertTypes),
             areas = left.areas.union(right.areas),
-            maxDistanceKm = 0,
+            maxDistanceMeters = 0,
             maxWalkingMinutes = 0,
             spawnSpecies = left.spawnSpecies.union(right.spawnSpecies),
             rareSpecies = left.rareSpecies.union(right.rareSpecies),

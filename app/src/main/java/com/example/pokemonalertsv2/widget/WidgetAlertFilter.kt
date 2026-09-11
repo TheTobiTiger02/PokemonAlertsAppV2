@@ -17,7 +17,7 @@ internal object WidgetAlertFilter {
     data class Criteria(
         val dismissedAlertIds: Set<String>,
         val selectedArea: String,
-        val maxDistanceKm: Int,
+        val maxDistanceMeters: Int,
         val widgetFilterTypes: Set<String>,
         val filterDefinition: FilterDefinition? = null,
         val nowMillis: Long = System.currentTimeMillis()
@@ -37,7 +37,7 @@ internal object WidgetAlertFilter {
         distanceMeters: (origin: Origin, alert: PokemonAlert) -> Float? = ::directDistanceMeters,
         walkingDurationSeconds: (alert: PokemonAlert) -> Long? = { null }
     ): Result {
-        val distanceFilterApplied = criteria.maxDistanceKm <= 0 || origin != null
+        val distanceFilterApplied = criteria.maxDistanceMeters <= 0 || origin != null
 
         return Result.Filtered(
             alerts.filter { alert ->
@@ -91,10 +91,10 @@ internal object WidgetAlertFilter {
         if (criteria.filterDefinition == null && !matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
 
         var effectiveDistance: Float? = null
-        if (applyDistance && criteria.maxDistanceKm > 0 && origin != null) {
+        if (applyDistance && criteria.maxDistanceMeters > 0 && origin != null) {
             val meters = distanceMeters(origin, alert)
             effectiveDistance = meters
-            if (meters != null && !meters.isNaN() && meters > criteria.maxDistanceKm * 1000) {
+            if (meters != null && !meters.isNaN() && meters > criteria.maxDistanceMeters) {
                 return false
             }
         }

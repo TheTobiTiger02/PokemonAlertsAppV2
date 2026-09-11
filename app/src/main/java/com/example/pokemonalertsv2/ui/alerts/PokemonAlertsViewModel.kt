@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.util.CachedLocationProvider
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.MapStylePreference
@@ -277,7 +278,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         categories: Set<AlertCategory>,
         sort: SortPreference,
         area: String,
-        maxDistance: Int
+        maxDistanceMeters: Int
     ) {
         viewModelScope.launch {
             repository.alertPreferences.saveFilterPreset(
@@ -285,7 +286,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                     name = name,
                     sort = sort.name,
                     area = area,
-                    maxDistance = maxDistance,
+                    maxDistanceMeters = maxDistanceMeters,
                     categories = categories.toStoredNames()
                 )
             )
@@ -308,7 +309,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         updateSelectedFeedCategories(preset.categories.toCategorySelection())
         updateSortPreference(sort)
         updateSelectedArea(preset.area)
-        updateMaxDistance(preset.maxDistance)
+        updateMaxDistance(preset.maxDistanceMeters)
     }
 
     // Per-surface category selections. Each surface stores its own set so the map keeps
@@ -441,9 +442,9 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     fun updateMaxDistance(distance: Int) {
         viewModelScope.launch {
-            repository.alertPreferences.updateMaxDistance(distance.coerceIn(0, 50))
+            repository.alertPreferences.updateMaxDistance(distance.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
             repository.alertPreferences.updateFilterStateDocument { document ->
-                val feed = document.feed.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
+                val feed = document.feed.resolve(document).copy(maxDistanceMeters = distance.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
                 document.withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
             }
             AlertsWidgetProvider.requestUpdate(getApplication())

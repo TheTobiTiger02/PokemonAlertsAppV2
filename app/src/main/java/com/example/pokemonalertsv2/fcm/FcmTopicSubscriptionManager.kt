@@ -78,7 +78,7 @@ object FcmTopicSubscriptionManager {
         ids.map { id ->
             val configuration = WidgetConfigurationStore.get(context, id)
             configuration.filterAssignment?.resolve(document)
-                ?: configuration.legacyFilterDefinition(appArea = "All", appDistanceKm = 0)
+                ?: configuration.legacyFilterDefinition(appArea = "All", appDistanceMeters = 0)
         }
     }.getOrDefault(emptyList())
 

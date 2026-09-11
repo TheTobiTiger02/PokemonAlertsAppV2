@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.BuiltInFilterProfiles
 import com.example.pokemonalertsv2.data.FilterAlertType
@@ -556,8 +557,8 @@ class SettingsViewModel(
         viewModelScope.launch {
             preferences.updateMaxDistance(distance)
             preferences.updateFilterStateDocument { document ->
-                val feed = document.feed.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
-                val notifications = document.notifications.resolve(document).copy(maxDistanceKm = distance.coerceIn(0, 50))
+                val feed = document.feed.resolve(document).copy(maxDistanceMeters = distance.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
+                val notifications = document.notifications.resolve(document).copy(maxDistanceMeters = distance.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
                 document
                     .withAssignment(FilterSurface.FEED, FilterAssignment.local(feed))
                     .withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(notifications))

@@ -4,8 +4,15 @@ import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
 import java.text.Normalizer
 import java.util.Locale
+import kotlin.math.abs
 
 /** An explicit selection. Empty sets never carry a second, hidden meaning. */
 @Serializable
@@ -86,26 +93,26 @@ data class QuestFilterRules(
 /**
  * Distance limits that are narrower (or wider) than the surface default.
  *
- * Resolution is most-specific-wins: species beats alert type beats [FilterDefinition.maxDistanceKm].
+ * Resolution is most-specific-wins: species beats alert type beats [FilterDefinition.maxDistanceMeters].
  * `0` means unlimited at every level, so an override can widen as well as narrow.
  */
 @Serializable
 data class DistanceOverrides(
-    /** [FilterAlertType.name] -> km. */
+    /** [FilterAlertType.name] -> meters. */
     val perType: Map<String, Int> = emptyMap(),
-    /** Normalized species/reward token -> km. */
+    /** Normalized species/reward token -> meters. */
     val perSpecies: Map<String, Int> = emptyMap()
 ) {
     val ruleCount: Int get() = perType.size + perSpecies.size
 
-    fun withType(type: FilterAlertType, km: Int?): DistanceOverrides = copy(
-        perType = if (km == null) perType - type.name else perType + (type.name to km.coerceIn(0, MAX_FILTER_DISTANCE_KM))
+    fun withType(type: FilterAlertType, meters: Int?): DistanceOverrides = copy(
+        perType = if (meters == null) perType - type.name else perType + (type.name to meters.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
     )
 
-    fun withSpecies(species: String, km: Int?): DistanceOverrides {
+    fun withSpecies(species: String, meters: Int?): DistanceOverrides {
         val token = normalizeFilterTokenOrNull(species) ?: return this
         return copy(
-            perSpecies = if (km == null) perSpecies - token else perSpecies + (token to km.coerceIn(0, MAX_FILTER_DISTANCE_KM))
+            perSpecies = if (meters == null) perSpecies - token else perSpecies + (token to meters.coerceIn(0, MAX_FILTER_DISTANCE_METERS))
         )
     }
 
@@ -118,7 +125,7 @@ data class DistanceOverrides(
 data class FilterDefinition(
     val alertTypes: FilterSelection = FilterSelection.All,
     val areas: FilterSelection = FilterSelection.All,
-    val maxDistanceKm: Int = 0,
+    val maxDistanceMeters: Int = 0,
     val maxWalkingMinutes: Int = 0,
     val distanceOverrides: DistanceOverrides = DistanceOverrides.None,
     val spawnSpecies: FilterSelection = FilterSelection.All,
@@ -144,7 +151,7 @@ data class FilterDefinition(
 
     /** True when any distance limit is in play, so callers know whether to prefetch walking routes. */
     val usesDistanceRules: Boolean
-        get() = maxDistanceKm > 0 || maxWalkingMinutes > 0 || distanceOverrides.ruleCount > 0
+        get() = maxDistanceMeters > 0 || maxWalkingMinutes > 0 || distanceOverrides.ruleCount > 0
 }
 
 @Serializable
@@ -222,10 +229,42 @@ enum class FilterSurface(val label: String) {
     FEED("Feed"), MAP("Map"), NOTIFICATIONS("Notifications")
 }
 
-/** 2 added [FilterDefinition.distanceOverrides]; v1 documents still decode because the field is defaulted. */
-const val CURRENT_FILTER_SCHEMA_VERSION = 2
+/**
+ * 2 added [FilterDefinition.distanceOverrides]; 3 stores distances in meters (v1/v2 stored
+ * kilometers). Older documents still decode: [FilterStateCodec] rewrites distance fields on read.
+ */
+const val CURRENT_FILTER_SCHEMA_VERSION = 3
 const val MAX_FILTER_PROFILE_NAME = 40
-const val MAX_FILTER_DISTANCE_KM = 50
+const val MAX_FILTER_DISTANCE_METERS = 50_000
+
+/**
+ * The scale every straight-line distance slider snaps to: 100 m steps below 1 km, then 1 km
+ * steps up to [MAX_FILTER_DISTANCE_METERS]. Index 0 is Unlimited; the slider value is the index.
+ */
+val ALERT_DISTANCE_STEPS_METERS: List<Int> =
+    listOf(0) + (100..900 step 100) + (1000..MAX_FILTER_DISTANCE_METERS step 1000)
+
+/** Nearest position of [meters] on [ALERT_DISTANCE_STEPS_METERS], for placing a slider thumb. */
+fun distanceStepIndex(meters: Int): Int {
+    var bestIndex = 0
+    var bestDelta = Int.MAX_VALUE
+    ALERT_DISTANCE_STEPS_METERS.forEachIndexed { index, step ->
+        val delta = abs(step - meters)
+        if (delta < bestDelta) {
+            bestIndex = index
+            bestDelta = delta
+        }
+    }
+    return bestIndex
+}
+
+/** Human label for a meter limit: "Unlimited", "500 m", "3 km", or "1.5 km" for mixed values. */
+fun distanceLabel(meters: Int): String = when {
+    meters <= 0 -> "Unlimited"
+    meters < 1000 -> "$meters m"
+    meters % 1000 == 0 -> "${meters / 1000} km"
+    else -> "${meters / 1000}.${(meters % 1000) / 100} km"
+}
 
 object FilterStateCodec {
     private val json = Json {
@@ -236,8 +275,13 @@ object FilterStateCodec {
     fun encode(document: FilterStateDocument): String = json.encodeToString(FilterStateDocument.serializer(), document)
 
     fun decode(raw: String?): FilterStateDocument? {
-        if (raw.isNullOrBlank()) return null
-        return runCatching { json.decodeFromString(FilterStateDocument.serializer(), raw) }.getOrNull()
+        val text = raw?.takeIf(String::isNotBlank) ?: return null
+        return runCatching {
+            json.decodeFromJsonElement(
+                FilterStateDocument.serializer(),
+                migrateKilometerDistances(json.parseToJsonElement(text))
+            )
+        }.getOrNull()
             ?.takeIf { it.schemaVersion >= 1 }
     }
 
@@ -245,8 +289,52 @@ object FilterStateCodec {
         json.encodeToString(FilterAssignment.serializer(), assignment)
 
     fun decodeAssignment(raw: String?): FilterAssignment? {
-        if (raw.isNullOrBlank()) return null
-        return runCatching { json.decodeFromString(FilterAssignment.serializer(), raw) }.getOrNull()
+        val text = raw?.takeIf(String::isNotBlank) ?: return null
+        return runCatching {
+            json.decodeFromJsonElement(
+                FilterAssignment.serializer(),
+                migrateKilometerDistances(json.parseToJsonElement(text))
+            )
+        }.getOrNull()
+    }
+
+    /**
+     * Schema 3 switched distances from kilometers to meters. Anything stamped below 3 gets its
+     * `maxDistanceKm` and override-map values rescaled; the field rename makes the rewrite
+     * idempotent, since migrated output only ever contains `maxDistanceMeters`.
+     *
+     * The version is read once at the root — documents carry it at the top level, saved
+     * assignments inside their definition — and early v1 payloads may omit it on nested
+     * objects entirely, so the rewrite deliberately sweeps the whole tree.
+     */
+    private fun migrateKilometerDistances(root: JsonElement): JsonElement {
+        val document = root as? JsonObject ?: return root
+        val version = (document["schemaVersion"] as? JsonPrimitive)?.intOrNull
+            ?: ((document["definition"] as? JsonObject)?.get("schemaVersion") as? JsonPrimitive)?.intOrNull
+            ?: CURRENT_FILTER_SCHEMA_VERSION
+        if (version >= CURRENT_FILTER_SCHEMA_VERSION) return root
+        return rescaleDistanceNode(document)
+    }
+
+    private fun rescaleDistanceNode(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.map { (key, value) ->
+            when {
+                key == "schemaVersion" -> key to JsonPrimitive(CURRENT_FILTER_SCHEMA_VERSION)
+                key == "maxDistanceKm" ->
+                    "maxDistanceMeters" to JsonPrimitive((value as? JsonPrimitive)?.intOrNull?.times(1000) ?: 0)
+                key == "perType" || key == "perSpecies" -> key to rescaleIntValues(value)
+                else -> key to rescaleDistanceNode(value)
+            }
+        }.toMap())
+        is JsonArray -> JsonArray(element.map(::rescaleDistanceNode))
+        else -> element
+    }
+
+    private fun rescaleIntValues(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.mapValues { (_, value) ->
+            JsonPrimitive((value as? JsonPrimitive)?.intOrNull?.times(1000) ?: 0)
+        })
+        else -> element
     }
 }
 
@@ -297,9 +385,9 @@ object AlertFilterMatcher {
 
     /**
      * Most specific wins: a species override beats a type override beats the surface default.
-     * Returns km, where 0 means unlimited.
+     * Returns meters, where 0 means unlimited.
      */
-    internal fun distanceLimitKmFor(
+    internal fun distanceLimitMetersFor(
         type: FilterAlertType,
         alert: PokemonAlert,
         definition: FilterDefinition
@@ -310,7 +398,7 @@ object AlertFilterMatcher {
             if (token != null) overrides.perSpecies[token]?.let { return it }
             overrides.perType[type.name]?.let { return it }
         }
-        return definition.maxDistanceKm
+        return definition.maxDistanceMeters
     }
 
     /** A missing or non-finite distance never hides an alert, matching the walking-time rule. */
@@ -320,11 +408,11 @@ object AlertFilterMatcher {
         definition: FilterDefinition,
         context: FilterMatchContext
     ): Boolean {
-        val limitKm = distanceLimitKmFor(type, alert, definition)
-        if (limitKm <= 0) return true
+        val limitMeters = distanceLimitMetersFor(type, alert, definition)
+        if (limitMeters <= 0) return true
         val distance = context.effectiveDistanceMeters ?: return true
         if (!distance.isFinite()) return true
-        return distance <= limitKm * 1000f
+        return distance <= limitMeters
     }
 
     private fun matchesAdvanced(type: FilterAlertType, alert: PokemonAlert, definition: FilterDefinition): Boolean = when (type) {

@@ -20,7 +20,7 @@ class WidgetAlertFilterTest {
 
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(alert),
-            criteria = criteria(maxDistanceKm = 5),
+            criteria = criteria(maxDistanceMeters = 5_000),
             origin = origin,
             distanceMeters = { _, _ -> 1_000f }
         )
@@ -35,7 +35,7 @@ class WidgetAlertFilterTest {
 
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(inRange, outOfRange),
-            criteria = criteria(maxDistanceKm = 5),
+            criteria = criteria(maxDistanceMeters = 5_000),
             origin = origin,
             distanceMeters = { _, alert ->
                 if (alert.name == "In Range") 1_000f else 6_000f
@@ -51,7 +51,7 @@ class WidgetAlertFilterTest {
 
         val result = WidgetAlertSnapshotStore.resolve(
             alerts = listOf(alert),
-            criteria = criteria(maxDistanceKm = 5),
+            criteria = criteria(maxDistanceMeters = 5_000),
             origin = origin,
             walkingRoutes = mapOf(alert.uniqueId to WalkingRouteInfo(6_000, 4_000))
         )
@@ -68,7 +68,7 @@ class WidgetAlertFilterTest {
             alerts = listOf(outOfRange, wrongArea),
             criteria = criteria(
                 selectedArea = "North",
-                maxDistanceKm = 5
+                maxDistanceMeters = 5_000
             )
         )
 
@@ -151,7 +151,7 @@ class WidgetAlertFilterTest {
         val alert = sampleAlert("Unknown Distance")
         val result = WidgetAlertFilter.filterAlerts(
             alerts = listOf(alert),
-            criteria = criteria(maxDistanceKm = 5),
+            criteria = criteria(maxDistanceMeters = 5_000),
             origin = null
         ) as WidgetAlertFilter.Result.Filtered
 
@@ -171,7 +171,7 @@ class WidgetAlertFilterTest {
             criteria = criteria(
                 dismissedAlertIds = setOf(dismissed.uniqueId),
                 selectedArea = "North",
-                maxDistanceKm = 5
+                maxDistanceMeters = 5_000
             ),
             origin = null
         )
@@ -186,7 +186,7 @@ class WidgetAlertFilterTest {
         WidgetAlertSnapshotStore.clearForTesting()
         val result = WidgetAlertSnapshotStore.resolve(
             alerts = listOf(newAlert),
-            criteria = criteria(maxDistanceKm = 5),
+            criteria = criteria(maxDistanceMeters = 5_000),
             origin = null
         )
 
@@ -296,13 +296,13 @@ class WidgetAlertFilterTest {
     private fun criteria(
         dismissedAlertIds: Set<String> = emptySet(),
         selectedArea: String = "All",
-        maxDistanceKm: Int = 0,
+        maxDistanceMeters: Int = 0,
         widgetFilterTypes: Set<String> = emptySet(),
         nowMillis: Long = 1_000_000_000_000L
     ) = WidgetAlertFilter.Criteria(
         dismissedAlertIds = dismissedAlertIds,
         selectedArea = selectedArea,
-        maxDistanceKm = maxDistanceKm,
+        maxDistanceMeters = maxDistanceMeters,
         widgetFilterTypes = widgetFilterTypes,
         nowMillis = nowMillis
     )

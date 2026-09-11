@@ -7,7 +7,7 @@ import org.junit.Test
 class FilterPresetsTest {
 
     private fun preset(name: String, filter: String = "RAIDS") =
-        FilterPreset(name = name, filter = filter, sort = "DISTANCE", area = "Alsbach", maxDistance = 5)
+        FilterPreset(name = name, filter = filter, sort = "DISTANCE", area = "Alsbach", maxDistanceMeters = 5_000)
 
     @Test
     fun `presets survive a round trip`() {
@@ -72,13 +72,26 @@ class FilterPresetsTest {
     @Test
     fun `describe summarises only the parts that are actually set`() {
         val described = FilterPresets.describe(
-            FilterPreset(name = "n", filter = "RAIDS", area = "Alsbach", maxDistance = 5)
+            FilterPreset(name = "n", filter = "RAIDS", area = "Alsbach", maxDistanceMeters = 5_000)
         )
         assertTrue(described.contains("Raids"))
         assertTrue(described.contains("Alsbach"))
         assertTrue(described.contains("5 km"))
 
+        val subKilometer = FilterPresets.describe(
+            FilterPreset(name = "n", filter = "RAIDS", maxDistanceMeters = 500)
+        )
+        assertTrue(subKilometer.contains("500 m"))
+
         val minimal = FilterPresets.describe(FilterPreset(name = "n", filter = "ALL"))
         assertEquals("All", minimal)
+    }
+
+    @Test
+    fun `stored kilometer distances migrate to meters on decode`() {
+        val legacy = """[{"name":"Near home","filter":"RAIDS","sort":"DISTANCE","area":"Alsbach","maxDistance":5}]"""
+        val decoded = FilterPresets.decode(legacy).single()
+        assertEquals(5_000, decoded.maxDistanceMeters)
+        assertEquals(listOf(decoded), FilterPresets.decode(FilterPresets.encode(decoded.let(::listOf))))
     }
 }

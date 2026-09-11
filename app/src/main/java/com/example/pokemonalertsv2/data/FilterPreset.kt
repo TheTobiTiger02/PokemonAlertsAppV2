@@ -2,7 +2,14 @@ package com.example.pokemonalertsv2.data
 
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
 
 /**
  * A named combination of the feed's filter controls.
@@ -21,7 +28,7 @@ data class FilterPreset(
     val filter: String = "ALL",
     val sort: String = "POSTED_TIME",
     val area: String = "All",
-    val maxDistance: Int = 0,
+    val maxDistanceMeters: Int = 0,
     /** [com.example.pokemonalertsv2.ui.alerts.AlertCategory] names. Empty = no type narrowing. */
     val categories: Set<String> = emptySet()
 )
@@ -33,18 +40,34 @@ object FilterPresets {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private val serializer = ListSerializer(FilterPreset.serializer())
+
     fun encode(presets: List<FilterPreset>): String =
-        json.encodeToString(kotlinx.serialization.builtins.ListSerializer(FilterPreset.serializer()), presets)
+        json.encodeToString(serializer, presets)
 
     /** A corrupt or hand-edited value yields no presets rather than crashing the feed. */
     fun decode(raw: String?): List<FilterPreset> {
         if (raw.isNullOrBlank()) return emptyList()
         return runCatching {
-            json.decodeFromString(
-                kotlinx.serialization.builtins.ListSerializer(FilterPreset.serializer()),
-                raw
-            )
+            json.decodeFromJsonElement(serializer, migrateKilometerDistances(json.parseToJsonElement(raw)))
         }.getOrDefault(emptyList())
+    }
+
+    /**
+     * Distances switched from kilometers to meters when the field was renamed
+     * `maxDistance` → [FilterPreset.maxDistanceMeters]; the old key name marks stored
+     * values as kilometers, so the rewrite is idempotent without a schema marker.
+     */
+    private fun migrateKilometerDistances(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.map { (key, value) ->
+            if (key == "maxDistance") {
+                "maxDistanceMeters" to JsonPrimitive((value as? JsonPrimitive)?.intOrNull?.times(1000) ?: 0)
+            } else {
+                key to value
+            }
+        }.toMap())
+        is JsonArray -> JsonArray(element.map(::migrateKilometerDistances))
+        else -> element
     }
 
     /**
@@ -80,7 +103,7 @@ object FilterPresets {
                 add(preset.filter.lowercase().replaceFirstChar { it.uppercase() })
             }
             if (preset.area != "All") add(preset.area)
-            if (preset.maxDistance > 0) add("${preset.maxDistance} km")
+            if (preset.maxDistanceMeters > 0) add(distanceLabel(preset.maxDistanceMeters))
         }
         return parts.joinToString(" • ")
     }

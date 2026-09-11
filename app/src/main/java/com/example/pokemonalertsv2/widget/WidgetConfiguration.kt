@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.data.FilterAssignment
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterStateCodec
+import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
 import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 
 internal enum class WidgetPriority {
@@ -20,11 +21,30 @@ internal enum class WidgetPriority {
 internal sealed interface WidgetDistanceMode {
     data object InheritApp : WidgetDistanceMode
     data object Unlimited : WidgetDistanceMode
-    data class Fixed(val kilometers: Int) : WidgetDistanceMode {
+    data class Fixed(val meters: Int) : WidgetDistanceMode {
         init {
-            require(kilometers in 1..50)
+            require(meters in 100..MAX_FILTER_DISTANCE_METERS)
         }
     }
+}
+
+/**
+ * Reads a stored distance entry. `FIXEDM:` carries meters; plain `FIXED:` predates the
+ * sub-kilometer scale and stored kilometers, so it rescales on read.
+ */
+internal fun parseStoredDistance(raw: String?): WidgetDistanceMode = when {
+    raw == null || raw == "INHERIT" -> WidgetDistanceMode.InheritApp
+    raw == "UNLIMITED" -> WidgetDistanceMode.Unlimited
+    raw.startsWith("FIXED:") -> raw.substringAfter(':').toIntOrNull()
+        ?.let { it * 1000 }
+        ?.coerceIn(100, MAX_FILTER_DISTANCE_METERS)
+        ?.let(WidgetDistanceMode::Fixed)
+        ?: WidgetDistanceMode.InheritApp
+    raw.startsWith("FIXEDM:") -> raw.substringAfter(':').toIntOrNull()
+        ?.coerceIn(100, MAX_FILTER_DISTANCE_METERS)
+        ?.let(WidgetDistanceMode::Fixed)
+        ?: WidgetDistanceMode.InheritApp
+    else -> WidgetDistanceMode.InheritApp
 }
 
 internal sealed interface WidgetAreaMode {
@@ -49,13 +69,13 @@ internal data class WidgetConfiguration(
     val filterAssignment: FilterAssignment? = null
 )
 
-internal fun WidgetConfiguration.legacyFilterDefinition(appArea: String, appDistanceKm: Int): FilterDefinition {
+internal fun WidgetConfiguration.legacyFilterDefinition(appArea: String, appDistanceMeters: Int): FilterDefinition {
     val effectiveArea = when (val mode = area) { WidgetAreaMode.InheritApp -> appArea; is WidgetAreaMode.Fixed -> mode.area }
-    val effectiveDistance = when (val mode = distance) { WidgetDistanceMode.InheritApp -> appDistanceKm; WidgetDistanceMode.Unlimited -> 0; is WidgetDistanceMode.Fixed -> mode.kilometers }
+    val effectiveDistance = when (val mode = distance) { WidgetDistanceMode.InheritApp -> appDistanceMeters; WidgetDistanceMode.Unlimited -> 0; is WidgetDistanceMode.Fixed -> mode.meters }
     return FilterDefinition(
         alertTypes = if (selectedAlertTypes.isEmpty()) FilterSelection.All else FilterSelection.only(FilterAlertType.entries.filterNot { it.name in selectedAlertTypes }.map { it.name }),
         areas = if (effectiveArea == "All") FilterSelection.All else FilterSelection.only(listOf(effectiveArea)),
-        maxDistanceKm = effectiveDistance
+        maxDistanceMeters = effectiveDistance
     )
 }
 
@@ -75,15 +95,7 @@ internal object WidgetConfigurationStore {
             ?.let { runCatching { WidgetPriority.valueOf(it) }.getOrNull() }
             ?: WidgetPriority.APP_DEFAULT
         val rawDistance = prefs.getString("$DISTANCE_PREFIX$appWidgetId", null)
-        val distance = when {
-            rawDistance == null || rawDistance == "INHERIT" -> WidgetDistanceMode.InheritApp
-            rawDistance == "UNLIMITED" -> WidgetDistanceMode.Unlimited
-            rawDistance.startsWith("FIXED:") -> rawDistance.substringAfter(':').toIntOrNull()
-                ?.coerceIn(1, 50)
-                ?.let(WidgetDistanceMode::Fixed)
-                ?: WidgetDistanceMode.InheritApp
-            else -> WidgetDistanceMode.InheritApp
-        }
+        val distance = parseStoredDistance(rawDistance)
         val rawArea = prefs.getString("$AREA_PREFIX$appWidgetId", null)
         val area = when {
             rawArea == null || rawArea == "INHERIT" -> WidgetAreaMode.InheritApp
@@ -124,7 +136,7 @@ internal object WidgetConfigurationStore {
         val distance = when (val mode = configuration.distance) {
             WidgetDistanceMode.InheritApp -> "INHERIT"
             WidgetDistanceMode.Unlimited -> "UNLIMITED"
-            is WidgetDistanceMode.Fixed -> "FIXED:${mode.kilometers.coerceIn(1, 50)}"
+            is WidgetDistanceMode.Fixed -> "FIXEDM:${mode.meters.coerceIn(100, MAX_FILTER_DISTANCE_METERS)}"
         }
         val area = when (val mode = configuration.area) {
             WidgetAreaMode.InheritApp -> "INHERIT"
