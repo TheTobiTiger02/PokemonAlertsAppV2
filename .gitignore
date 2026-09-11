@@ -60,3 +60,6 @@ build_log*.txt
 
 # Local performance artifacts (traces, logs, APKs) - never committed.
 /.local/
+
+# ProjectAtlas local index and generated host configs.
+/.projectatlas/

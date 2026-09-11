@@ -1,0 +1,11 @@
+[mcp_servers.projectatlas]
+command = 'C:\Users\GBT B450M-S2H\AppData\Local\ProjectAtlas\bin\projectatlas.exe'
+args = [
+    "--require-version",
+    "0.4.5",
+    "--db",
+    'C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\.projectatlas\projectatlas.db',
+    "--config",
+    'C:\Users\GBT B450M-S2H\AndroidStudioProjects\PokemonAlertsV2\.projectatlas\config.toml',
+    "mcp",
+]

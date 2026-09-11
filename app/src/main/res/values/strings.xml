@@ -77,6 +77,7 @@
     <string name="map_pip_action_next_alert">Next alert</string>
     <string name="map_pip_action_got_it">Got it</string>
     <string name="map_pip_auto_enter">Auto picture-in-picture</string>
+    <string name="map_pip_tracking_unavailable">%1$s · Open app to start tracking</string>
     <string name="journey_overlay_in_range">In range</string>
     <string name="journey_overlay_locating">Finding you…</string>
     <string name="journey_overlay_hide">Hide the journey pill</string>

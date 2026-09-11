@@ -33,6 +33,9 @@ internal data class ArrivalCadence(
 
         /** Far enough that the next fix cannot change any decision being made. */
         val Far = ArrivalCadence(20_000L, 10_000L, 25f)
+
+        /** Keep a usable origin for new matches even while the trainer is stationary. */
+        val Standby = ArrivalCadence(20_000L, 10_000L, 0f)
     }
 }
 

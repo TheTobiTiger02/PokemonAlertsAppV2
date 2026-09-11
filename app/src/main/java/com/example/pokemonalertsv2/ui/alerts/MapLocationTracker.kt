@@ -96,7 +96,7 @@ internal fun shouldAcceptLiveLocation(
 ): Boolean =
     latitude.isFinite() && longitude.isFinite() &&
         latitude in -90.0..90.0 && longitude in -180.0..180.0 &&
-        candidateAgeMillis <= 30_000L &&
+        candidateAgeMillis in 0L..30_000L &&
         (currentElapsedRealtimeNanos == null || candidateElapsedRealtimeNanos >= currentElapsedRealtimeNanos)
 
 internal fun sensorAxesForDisplayRotation(rotation: Int): Pair<Int, Int> = when (rotation) {
@@ -265,7 +265,7 @@ internal class MapLocationTracker(
 
     private fun acceptLocation(location: Location) {
         val ageMillis = if (location.elapsedRealtimeNanos > 0L) {
-            ((SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L).coerceAtLeast(0L)
+            (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L
         } else {
             Long.MAX_VALUE
         }

@@ -7,6 +7,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -20,6 +22,18 @@ class ArrivalTrackingRepositoryInstrumentedTest {
     fun cleanUp() = runBlocking {
         repository.stopTracking()
         repository.updateArrivalRadius(ArrivalTrackingRepository.DEFAULT_RADIUS_METERS)
+    }
+
+    @Test
+    fun oldCompletionCannotClearARestartedJourney() = runBlocking<Unit> {
+        val alert = PokemonAlert(name = "Restarted destination", type = listOf("Custom"),
+            latitude = 49.86, longitude = 8.65)
+        val original = repository.startTracking(alert, nowMillis = 1234L)
+        val replacement = repository.startTracking(alert, nowMillis = 5678L)
+        assertFalse(repository.stopTrackingIfCurrent(original))
+        assertEquals(replacement.startedAtMillis, repository.currentDestination()?.startedAtMillis)
+        assertTrue(repository.stopTrackingIfCurrent(replacement))
+        assertNull(repository.currentDestination())
     }
 
     @Test

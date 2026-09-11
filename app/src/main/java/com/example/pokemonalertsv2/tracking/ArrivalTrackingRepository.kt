@@ -148,6 +148,21 @@ class ArrivalTrackingRepository private constructor(context: Context) {
         dataStore.edit { preferences -> preferences.remove(ACTIVE_DESTINATION_KEY) }
     }
 
+    /** An asynchronous completion may retire only the journey that started it. */
+    internal suspend fun stopTrackingIfCurrent(expected: TrackedDestination): Boolean {
+        var stopped = false
+        dataStore.edit { preferences ->
+            val current = preferences[ACTIVE_DESTINATION_KEY]?.decodeDestination()
+            if (current?.uniqueId == expected.uniqueId &&
+                current.startedAtMillis == expected.startedAtMillis
+            ) {
+                preferences.remove(ACTIVE_DESTINATION_KEY)
+                stopped = true
+            }
+        }
+        return stopped
+    }
+
     suspend fun updateArrivalRadius(radiusMeters: Int) {
         val normalized = normalizeRadius(radiusMeters)
         dataStore.edit { preferences ->

@@ -86,6 +86,9 @@ class ArrivalTrackingService : Service() {
      * standing trainer would otherwise leave the Live Update with no distance at all.
      */
     private var lastAcceptedLocation: Location? = null
+    /** Observation time, not callback time: batches and replays are not new GPS fixes. */
+    private var lastArrivalFixMillis: Long? = null
+    private var locationAvailable = true
     private var lastWaitingForPreciseLocation = false
     private var lastInRange = false
 
@@ -160,7 +163,7 @@ class ArrivalTrackingService : Service() {
             // One stop, not two. While a hunt is running the journey is only the
             // current leg of it, so stopping the leg alone left the hunt live and
             // it immediately picked another target -- the button looked broken.
-            serviceScope.launch { stopEverything() }
+            stopEverything(applicationContext)
             return START_NOT_STICKY
         }
 
@@ -261,8 +264,20 @@ class ArrivalTrackingService : Service() {
                     preferences.dismissedAlertIds
                 ) { alerts, dismissed -> alerts to dismissed }
                     .collect { (alerts, dismissed) ->
+                        val destination = currentDestination
+                        val targetWasInFeed = destination != null &&
+                            liveAlerts.any { it.uniqueId == destination.uniqueId }
                         liveAlerts = alerts
                         dismissedAlertIds = dismissed
+                        // An observed removal/invalidation ends this leg, not the hunt.
+                        // Do not discard a restored or explicitly selected destination
+                        // merely because the initial Room snapshot does not contain it.
+                        if (huntActive && targetWasInFeed &&
+                            alerts.none { it.uniqueId == destination.uniqueId } &&
+                            repository.currentDestination()?.uniqueId == destination.uniqueId
+                        ) {
+                            repository.stopTracking()
+                        }
                         refreshFloatingMapAlerts()
                         maybeAcquireHuntTarget()
                     }
@@ -330,6 +345,7 @@ class ArrivalTrackingService : Service() {
         val previousDestination = currentDestination
         if (previousDestination?.uniqueId != destination.uniqueId) {
             evaluator = ArrivalFixEvaluator()
+            lastArrivalFixMillis = null
             arrivalInProgress = false
             // A new target is a new journey, so a pill the trainer swiped away on
             // the last one comes back rather than staying hidden for the trip.
@@ -384,6 +400,7 @@ class ArrivalTrackingService : Service() {
             while (isActive) {
                 delay(CHIP_REFRESH_INTERVAL_MILLIS)
                 val destination = currentDestination ?: break
+                expireUnavailableLocation()
                 updateOngoing(
                     destination = destination,
                     distanceMeters = lastDirectDistanceMeters,
@@ -438,6 +455,9 @@ class ArrivalTrackingService : Service() {
             cadence = cadence,
             onLocation = ::onLocation,
             onAvailabilityChanged = { available ->
+                locationAvailable = available
+                if (!available) evaluator.reset()
+                expireUnavailableLocation()
                 if (!available && lastDirectDistanceMeters == null) {
                     lastWaitingForPreciseLocation = true
                     currentDestination?.let { destination ->
@@ -465,9 +485,10 @@ class ArrivalTrackingService : Service() {
     }
 
     private fun onLocation(location: Location) {
-        val destination = currentDestination ?: return
+        val destination = currentDestination
         if (!isFreshValidLocation(location)) {
             evaluator.reset()
+            if (destination == null) return
             if (lastDirectDistanceMeters == null) {
                 lastWaitingForPreciseLocation = true
                 lastInRange = false
@@ -480,23 +501,34 @@ class ArrivalTrackingService : Service() {
             } else {
                 // A stale/unavailable callback is transient on many phones. Keep the last
                 // known distance and route visible instead of flickering back to a blocked state.
-                lastWaitingForPreciseLocation = false
+                expireUnavailableLocation()
                 updateOngoing(
                     destination = destination,
                     distanceMeters = lastDirectDistanceMeters,
-                    waiting = false,
+                    waiting = lastWaitingForPreciseLocation,
                     inRange = lastInRange
                 )
             }
             return
         }
-        lastAcceptedLocation = location
+        val fixMillis = locationObservationMillis(location)
+        if (lastArrivalFixMillis?.let { fixMillis <= it } == true) return
+        lastArrivalFixMillis = fixMillis
+        lastAcceptedLocation = Location(location)
+        locationAvailable = true
+        if (destination == null) {
+            if (huntActive) {
+                refreshFloatingMapAlerts()
+                maybeAcquireHuntTarget()
+            }
+            return
+        }
         val distance = floatArrayOf(directDistanceMeters(location, destination))
         val result = evaluator.evaluate(
                 distanceMeters = distance[0],
                 accuracyMeters = location.accuracy,
                 radiusMeters = destination.radiusMeters,
-                elapsedRealtimeMillis = SystemClock.elapsedRealtime(),
+                elapsedRealtimeMillis = fixMillis,
                 gpsToleranceMeters = if (destination.alert.usesPokemonGoInteractionRadius()) {
                     MAX_GPS_TOLERANCE_METERS
                 } else {
@@ -555,6 +587,7 @@ class ArrivalTrackingService : Service() {
             }
             val active = currentDestination
             if (active?.uniqueId != destination.uniqueId) return@launch
+            if (lastWaitingForPreciseLocation) return@launch
             if (route != null) {
                 walkingRoute = route
                 walkingRouteUpdatedAtMillis = SystemClock.elapsedRealtime()
@@ -589,6 +622,10 @@ class ArrivalTrackingService : Service() {
             } else {
                 false
             }
+            val active = repository.currentDestination()
+            if (active?.uniqueId != destination.uniqueId ||
+                active.startedAtMillis != destination.startedAtMillis
+            ) return@launch
             // Arriving is not the end of a hunt — it is the moment the chip starts
             // earning its place, showing the CP or the stop name you came for. Hold
             // the journey open until "Got it" retires this target. A raid is the
@@ -604,14 +641,15 @@ class ArrivalTrackingService : Service() {
                 return@launch
             }
 
-            repository.stopTracking()
+            if (!repository.stopTrackingIfCurrent(destination)) return@launch
             if (!raidLiveUpdateStarted && hasNotificationPermission()) {
                 ArrivalTrackingNotifications.postArrival(
                     this@ArrivalTrackingService,
                     destination
                 )
             }
-            stopTrackingService()
+            // The destination collector owns standby/shutdown. A newer journey may
+            // already be queued by the time the DataStore edit above returns.
         }
     }
 
@@ -749,7 +787,7 @@ class ArrivalTrackingService : Service() {
         }
         // Closing the window ends the hunt. There is one control for "I am done",
         // and it is the one every window has in its corner.
-        floatingMap.onClose = { serviceScope.launch { stopEverything() } }
+        floatingMap.onClose = { stopEverything(applicationContext) }
         floatingMap.show {
             focusFloatingMap()
             refreshFloatingMapAlerts()
@@ -934,9 +972,8 @@ class ArrivalTrackingService : Service() {
             applicationContext,
             { pose ->
                 floatingMap.setUserPose(pose)
-                // In standby there is no journey feeding location updates, so this
-                // 1 Hz stream is also what keeps "nearest target" meaning nearest to
-                // where the trainer actually is by the time a match arrives.
+                // The pose stream paints the window; the independent arrival source
+                // supplies the origin for target acquisition even without a window.
                 if (currentDestination == null) {
                     // Standby opens the window before there is any fix to frame, so
                     // the camera sits at null island until this puts it on the
@@ -948,18 +985,8 @@ class ArrivalTrackingService : Service() {
                         standbyCentred = true
                         floatingMap.recenter(pose.location.latitude, pose.location.longitude)
                     }
-                    // Ranking targets by distance is a different matter -- that wants
-                    // a fix worth trusting.
-                    if (isFreshValidLocation(pose.location)) {
-                        val first = lastAcceptedLocation == null
-                        lastAcceptedLocation = pose.location
-                        // The first real fix is what a waiting hunt was missing to be
-                        // able to choose at all.
-                        if (first) {
-                            refreshFloatingMapAlerts()
-                            maybeAcquireHuntTarget()
-                        }
-                    }
+                    // Target acquisition uses the service's location source, including
+                    // when no overlay permission exists. A map pose only draws the map.
                 }
             },
             { /* status drives the in-app map's chrome; the window has none */ },
@@ -1058,6 +1085,7 @@ class ArrivalTrackingService : Service() {
         walkingRoute = null
         walkingRouteUpdatedAtMillis = 0L
         currentDestination = null
+        lastArrivalFixMillis = null
         lastDirectDistanceMeters = null
         lastInRange = false
         lastWaitingForPreciseLocation = false
@@ -1072,7 +1100,13 @@ class ArrivalTrackingService : Service() {
         showFloatingMap()
         refreshFloatingMapAlerts()
         focusFloatingMapOnUser()
-        serviceScope.launch { runCatching { huntRepository.setTarget(null) } }
+        startLocationUpdates(ArrivalCadence.Standby)
+        serviceScope.launch {
+            if (repository.currentDestination() == null) {
+                huntRepository.setTarget(null)
+                maybeAcquireHuntTarget()
+            }
+        }
     }
 
     /**
@@ -1090,7 +1124,7 @@ class ArrivalTrackingService : Service() {
             while (isActive) {
                 val definition = huntDefinition
                 val origin = lastAcceptedLocation
-                if (definition != null && origin != null) {
+                if (definition != null && origin != null && isFreshValidLocation(origin)) {
                     val candidates = withContext(Dispatchers.Default) {
                         huntRoutingCandidates(
                             alerts = liveAlerts,
@@ -1135,28 +1169,20 @@ class ArrivalTrackingService : Service() {
         // which one is nearest, and whether the walk fits in the time left. With no
         // fix yet the origin falls back to 0,0 and the "nearest" target is whichever
         // happens to lie closest to the Gulf of Guinea. Standby is already holding
-        // the service open, and a pose is seconds away -- so wait for it.
-        if (lastAcceptedLocation == null) return
+        // the service open, and its GPS source supplies the missing origin.
+        if (lastAcceptedLocation?.let(::isFreshValidLocation) != true) return
         val next = currentHuntTargets().firstOrNull() ?: return
         acquireJob = serviceScope.launch {
             runCatching {
                 // Re-check under the coroutine: the hunt can end between the feed
                 // update that scheduled this and the write that would resurrect it.
                 if (!huntRepository.isHunting()) return@launch
+                // The destination collector may still be restoring a persisted leg.
+                if (repository.currentDestination() != null) return@launch
                 repository.startTracking(next)
                 huntRepository.setTarget(next.uniqueId)
             }.onFailure { Log.w(TAG, "Could not start walking to ${next.uniqueId}", it) }
         }
-    }
-
-    /** Ends the hunt and the journey together, then shuts the service down. */
-    private suspend fun stopEverything() {
-        runCatching { huntRepository.stop() }
-        huntActive = false
-        huntDefinition = null
-        huntName = null
-        runCatching { repository.stopTracking() }
-        stopTrackingService(force = true)
     }
 
     /** Brings the app forward from the window, on whatever it was last showing. */
@@ -1232,11 +1258,30 @@ class ArrivalTrackingService : Service() {
         if (location.latitude !in -90.0..90.0 || location.longitude !in -180.0..180.0) return false
         val ageMillis = if (location.elapsedRealtimeNanos > 0L) {
             ((SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000L)
-                .coerceAtLeast(0L)
         } else {
-            (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
+            System.currentTimeMillis() - location.time
         }
-        return ageMillis <= MAX_LOCATION_AGE_MILLIS && location.hasAccuracy()
+        return ageMillis in 0L..MAX_LOCATION_AGE_MILLIS && location.hasAccuracy()
+    }
+
+    private fun locationObservationMillis(location: Location): Long =
+        if (location.elapsedRealtimeNanos > 0L) {
+            location.elapsedRealtimeNanos / 1_000_000L
+        } else {
+            // Older providers may supply only wall time. Put it on the evaluator's
+            // monotonic clock while retaining the observation's age.
+            SystemClock.elapsedRealtime() - (System.currentTimeMillis() - location.time)
+        }
+
+    /** Retain a transient outage's readout, but do not label an old fix as current. */
+    private fun expireUnavailableLocation() {
+        if (!locationAvailable && lastAcceptedLocation?.let(::isFreshValidLocation) != true) {
+            evaluator.reset()
+            lastWaitingForPreciseLocation = true
+            lastInRange = false
+            walkingRoute = null
+            walkingRouteUpdatedAtMillis = 0L
+        }
     }
 
     companion object {

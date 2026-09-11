@@ -9,6 +9,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MapLocationTrackerTest {
+    @Test fun `future observation cannot poison the live location watermark`() {
+        assertFalse(shouldAcceptLiveLocation(null, 60_000_000_000L, -60_000L, 49.738, 8.603))
+        assertTrue(shouldAcceptLiveLocation(null, 1_000_000_000L, 0L, 49.738, 8.603))
+    }
+
     @Test
     fun `gps tap starts tracking and camera follow`() {
         val state = MapTrackingInteractionState().onGpsTapped()

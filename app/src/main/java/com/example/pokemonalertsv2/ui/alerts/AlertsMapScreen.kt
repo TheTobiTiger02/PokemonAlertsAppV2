@@ -1232,6 +1232,7 @@ internal fun AlertsMapScreenContent(
     // then carries the name, CP, distance and walking time, which is what lets the window drop its
     // own label chip and give that space back to the map.
     var lastPipStartedId by remember { mutableStateOf<String?>(null) }
+    var failedPipTargetId by remember { mutableStateOf<String?>(null) }
     val currentCompactPictureInPicture by rememberUpdatedState(compactPictureInPicture)
     val currentRenderedAlerts by rememberUpdatedState(renderedAlerts)
     val currentActiveDestinationId by rememberUpdatedState(
@@ -1255,12 +1256,14 @@ internal fun AlertsMapScreenContent(
             .distinctUntilChanged { previous, next -> previous.sameTargetAs(next) }
             .collectLatest { intent ->
                 when (intent) {
-                    MapPipTrackingIntent.None -> Unit
+                    MapPipTrackingIntent.None -> { failedPipTargetId = null }
                     MapPipTrackingIntent.Stop -> {
+                        failedPipTargetId = null
                         withContext(NonCancellable) { browseArrivalTracker.stop() }
                         lastPipStartedId = null
                     }
                     is MapPipTrackingIntent.Start -> {
+                        failedPipTargetId = null
                         // collectLatest cancels this block when the cursor moves on, so a run of
                         // steps writes the destination once, for the alert the user stops on.
                         delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
@@ -1268,10 +1271,13 @@ internal fun AlertsMapScreenContent(
                         // collectLatest joins the block before starting the next one.
                         withContext(NonCancellable) {
                             if (browseArrivalTracker.start(intent.alert)) {
+                                failedPipTargetId = null
                                 lastPipStartedId = intent.alert.uniqueId
                                 // Record it on the hunt too, so "Got it" knows what it
                                 // is retiring even if the window is gone by then.
                                 huntRepository.setTarget(intent.alert.uniqueId)
+                            } else {
+                                failedPipTargetId = intent.alert.uniqueId
                             }
                         }
                     }
@@ -2114,7 +2120,28 @@ internal fun AlertsMapScreenContent(
         // when neither surface is available, because a journey with no readout at all
         // is worse than one line over the map.
         val journeyDestination = arrivalTracking.activeDestination
-        if (compactPictureInPicture && journeyDestination != null && journeyReadoutOnMap) {
+        val failedPipTarget = renderedAlerts.firstOrNull {
+            it.uniqueId == failedPipTargetId && it.uniqueId == selectedAlertId
+        }.takeIf { compactPictureInPicture && pipMode == MapPipMode.BROWSE }
+        if (failedPipTarget != null) {
+            // A refused start has no notification to carry this information.
+            Surface(
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                    .testTag("map_pip_browse_chip"),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = stringResource(R.string.map_pip_tracking_unavailable, huntTargetTitle(failedPipTarget)),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        } else if (compactPictureInPicture && journeyDestination != null && journeyReadoutOnMap) {
             Surface(
                 modifier = Modifier
                     // Top, not bottom: the OpenStreetMap attribution owns the bottom

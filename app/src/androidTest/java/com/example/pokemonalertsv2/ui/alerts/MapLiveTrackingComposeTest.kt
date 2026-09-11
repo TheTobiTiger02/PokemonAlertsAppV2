@@ -210,12 +210,22 @@ class MapLiveTrackingComposeTest {
         composeRule.waitUntil(timeoutMillis = 5_000L) {
             reportedStates.lastOrNull()?.mode == MapPipMode.BROWSE
         }
+        composeRule.waitUntil(timeoutMillis = 5_000L) {
+            composeRule.onAllNodes(hasTestTag("map_pip_browse_chip")).fetchSemanticsNodes().isNotEmpty()
+        }
         composeRule.onNodeWithTag("map_pip_browse_chip").assertIsDisplayed()
         // Scoped to the chip: the map's own marker also carries the species name.
         composeRule.onNode(
             hasAnyAncestor(hasTestTag("map_pip_browse_chip")) and
                 hasText("Larvitar", substring = true)
         ).assertExists()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val bitmap = instrumentation.uiAutomation.takeScreenshot()
+        java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "pip-tracking-refused.png")
+            .outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        composeRule.runOnIdle { commands.tryEmit(MapPipCommand.TOGGLE_MODE) }
+        composeRule.onNodeWithTag("map_pip_browse_chip").assertDoesNotExist()
     }
 
     /**
