@@ -98,7 +98,23 @@ class ArrivalTrackingService : Service() {
      * chip refresh loop) that cannot suspend to read the store.
      */
     private var huntActive = false
+
+    /**
+     * Whether the trainer has parked the route. Mirrored for the same reason
+     * [huntActive] is: the acquire path runs on location fixes and cannot suspend.
+     */
+    private var huntPaused = false
     private var huntJob: Job? = null
+
+    /**
+     * Set when the target changes, consumed by the next [focusFloatingMap].
+     *
+     * Framing is normally withheld until the trainer has walked [MAP_PIP_REFIT_METERS],
+     * and withheld entirely once they have panned the map by hand -- both right while
+     * walking one leg, both wrong the instant the leg changes. Tapping a pin used to
+     * retarget the hunt and leave the camera exactly where it was.
+     */
+    private var pendingCameraRefocus = false
 
     /** The floating pill, and whether the user has it switched on. */
     private val journeyOverlay by lazy { JourneyOverlay(applicationContext) }
@@ -233,6 +249,12 @@ class ArrivalTrackingService : Service() {
                     val active = session != null
                     val changed = active != huntActive
                     huntActive = active
+                    val pausedChanged = huntPaused != (session?.paused == true)
+                    huntPaused = session?.paused == true
+                    floatingMap.setPaused(huntPaused)
+                    // Standby says which of the two reasons it has no target, so the
+                    // wording has to follow the flag rather than wait for the next one.
+                    if (pausedChanged && !changed) refreshCurrentNotification()
                     refreshFloatingMapAlerts()
                     maybeAcquireHuntTarget()
                     if (!changed) return@collect
@@ -353,6 +375,8 @@ class ArrivalTrackingService : Service() {
             renderedTargetKey = null
             lastFocusLatitude = null
             lastFocusLongitude = null
+            // A new leg is a new picture: you and the thing you are now walking to.
+            pendingCameraRefocus = true
             walkingRouteJob?.cancel()
             walkingRouteJob = null
             walkingRoute = null
@@ -782,6 +806,12 @@ class ArrivalTrackingService : Service() {
         floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
         floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
         floatingMap.onAlertTap = { retargetHuntTo(it) }
+        floatingMap.onRecalculate = { recalculateHuntRoute() }
+        // One button, two meanings, because the state it acts on is visible in its own
+        // glyph: park the route, or -- resuming -- plan a fresh one from here.
+        floatingMap.onPauseToggle = {
+            if (huntPaused) recalculateHuntRoute() else pauseHuntRoute()
+        }
         floatingMap.onClusterTap = { cluster ->
             floatingMap.focusCluster(cluster.alerts.mapNotNull { it.mapCoordinatesOrNull() })
         }
@@ -793,6 +823,7 @@ class ArrivalTrackingService : Service() {
             refreshFloatingMapAlerts()
         }
         floatingMap.setUndoOffer(undoOffer != null)
+        floatingMap.setPaused(huntPaused)
         // One place decides the cadence: full rate while there is a target being
         // walked to, backed off while the hunt is only waiting for one.
         startPoseTracking(if (currentDestination == null) MapPoseCadence.Standby else MapPoseCadence.Live)
@@ -870,13 +901,96 @@ class ArrivalTrackingService : Service() {
         if (!shouldRetargetHuntTo(alert, currentDestination?.uniqueId, huntActive)) return
         serviceScope.launch {
             runCatching {
+                // Tapping a pin is an unambiguous "go here", so it is also the way out
+                // of a paused hunt -- otherwise the tap would start a leg that the
+                // acquire guard immediately refuses to follow up.
+                huntRepository.setPaused(false)
                 repository.startTracking(alert)
                 huntRepository.setTarget(alert.uniqueId)
             }.onFailure { Log.w(TAG, "Could not switch to the tapped hunt target", it) }
         }
     }
 
-    private fun currentHuntTargets(excluding: String? = null): List<PokemonAlert> {
+    /**
+     * Parks the route without ending the hunt.
+     *
+     * Clearing the destination drops the service into [enterHuntStandby], which keeps
+     * the window, the foreground notification and a standby GPS rate alive -- exactly
+     * the state a hunt waiting for its first match already runs in. The only
+     * difference is [huntPaused], which stops the acquire path choosing for you.
+     */
+    private fun pauseHuntRoute() {
+        if (!huntActive) return
+        serviceScope.launch {
+            runCatching {
+                huntRepository.setPaused(true)
+                huntRepository.setTarget(null)
+                repository.stopTracking()
+            }.onFailure { Log.w(TAG, "Could not pause the hunt route", it) }
+        }
+    }
+
+    /**
+     * Re-plans the route from where the trainer is standing now.
+     *
+     * Two things make this different from simply waiting for the next matrix refresh.
+     * The legs from the trainer are dropped and re-asked rather than read out of a
+     * cache that says where they were ten minutes ago, and the chain is built with no
+     * anchor -- so the plan starts from the trainer instead of continuing onward from a
+     * target they have walked away from. Also the way back out of a pause.
+     */
+    private fun recalculateHuntRoute() {
+        if (!huntActive) return
+        serviceScope.launch {
+            runCatching { huntRepository.setPaused(false) }
+            val definition = huntDefinition
+            val origin = lastAcceptedLocation?.takeIf(::isFreshValidLocation)
+            if (definition != null && origin != null) {
+                val candidates = withContext(Dispatchers.Default) {
+                    huntRoutingCandidates(
+                        alerts = liveAlerts,
+                        definition = definition,
+                        dismissedAlertIds = dismissedAlertIds,
+                        originLatitude = origin.latitude,
+                        originLongitude = origin.longitude
+                    )
+                }
+                if (candidates.isNotEmpty()) {
+                    huntMatrix.prefetch(
+                        originLatitude = origin.latitude,
+                        originLongitude = origin.longitude,
+                        targets = candidates,
+                        force = true
+                    )
+                }
+            }
+            // Recomputed after the matrix lands, and deliberately without an anchor.
+            val next = currentHuntTargets(ignoreAnchor = true).firstOrNull()
+            renderedTargetKey = null
+            if (next == null) {
+                refreshFloatingMapAlerts()
+                return@launch
+            }
+            if (next.uniqueId == currentDestination?.uniqueId) {
+                // Same answer as before: nothing to restart, but the trainer pressed a
+                // button and deserves to see the map agree with the plan.
+                pendingCameraRefocus = true
+                refreshFloatingMapAlerts()
+                focusFloatingMap()
+                return@launch
+            }
+            runCatching {
+                repository.startTracking(next)
+                huntRepository.setTarget(next.uniqueId)
+            }.onFailure { Log.w(TAG, "Could not recalculate the hunt route", it) }
+        }
+    }
+
+    private fun currentHuntTargets(
+        excluding: String? = null,
+        /** Re-plan from the trainer rather than onward from the committed target. */
+        ignoreAnchor: Boolean = false
+    ): List<PokemonAlert> {
         val definition = huntDefinition ?: return emptyList()
         val origin = lastAcceptedLocation
         val latitude = origin?.latitude ?: currentDestination?.latitude ?: 0.0
@@ -894,7 +1008,11 @@ class ArrivalTrackingService : Service() {
             // except when that is the alert being excluded, which is the catch path
             // asking "where next", and chaining onward from something already caught
             // would be nonsense.
-            anchorId = currentDestination?.uniqueId?.takeIf { it != excluding }
+            anchorId = if (ignoreAnchor) {
+                null
+            } else {
+                currentDestination?.uniqueId?.takeIf { it != excluding }
+            }
         )
     }
 
@@ -936,13 +1054,18 @@ class ArrivalTrackingService : Service() {
     private fun focusFloatingMap() {
         val destination = currentDestination ?: return
         if (!floatingMap.isShowing) return
+        // A changed target overrides both of the rules below: the move gate is about a
+        // camera that is already on the right pair of points, and a hand-panned camera
+        // was panned to look at the leg you are no longer walking.
+        val refocus = pendingCameraRefocus
+        pendingCameraRefocus = false
         // Re-frame only once the trainer has actually moved. Animating on every fix
         // reads as the map drifting under your thumb.
         val origin = lastAcceptedLocation
         if (origin != null) {
             val previousLat = lastFocusLatitude
             val previousLon = lastFocusLongitude
-            if (previousLat != null && previousLon != null) {
+            if (!refocus && previousLat != null && previousLon != null) {
                 val moved = mapPipDistanceMeters(
                     previousLat,
                     previousLon,
@@ -958,7 +1081,8 @@ class ArrivalTrackingService : Service() {
             userLatitude = lastAcceptedLocation?.latitude,
             userLongitude = lastAcceptedLocation?.longitude,
             targetLatitude = destination.latitude,
-            targetLongitude = destination.longitude
+            targetLongitude = destination.longitude,
+            force = refocus
         )
     }
 
@@ -1045,7 +1169,12 @@ class ArrivalTrackingService : Service() {
         if (!hasNotificationPermission()) return
         val notification = currentJourneyNotification()
             ?: if (huntActive) {
-                ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target", undoOffer)
+                ArrivalTrackingNotifications.huntStandby(
+                    context = this,
+                    huntName = huntName ?: "your target",
+                    undoOffer = undoOffer,
+                    paused = huntPaused
+                )
             } else {
                 return
             }
@@ -1093,7 +1222,12 @@ class ArrivalTrackingService : Service() {
         renderedTargetKey = null
         standbyCentred = false
         promoteToForeground(
-            ArrivalTrackingNotifications.huntStandby(this, huntName ?: "your target", undoOffer)
+            ArrivalTrackingNotifications.huntStandby(
+                context = this,
+                huntName = huntName ?: "your target",
+                undoOffer = undoOffer,
+                paused = huntPaused
+            )
         )
         // Reached with currentDestination already null, so showFloatingMap picks
         // the backed-off cadence for us.
@@ -1165,6 +1299,10 @@ class ArrivalTrackingService : Service() {
      */
     private fun maybeAcquireHuntTarget() {
         if (!huntActive || currentDestination != null || acquireJob?.isActive == true) return
+        // Paused is the whole feature: without this the hunt would pick the target
+        // straight back up and the button would look broken, exactly the way Stop did
+        // before it learned to end the hunt rather than the leg.
+        if (huntPaused) return
         // Every part of choosing a target is measured from where the trainer is:
         // which one is nearest, and whether the walk fits in the time left. With no
         // fix yet the origin falls back to 0,0 and the "nearest" target is whichever
@@ -1312,8 +1450,14 @@ class ArrivalTrackingService : Service() {
         /**
          * Well inside the observed few-minute status bar chip timeout, cheap enough to run
          * for the whole journey: one notification rebuild and one silent re-post.
+         *
+         * Ten seconds rather than thirty because the chip is a distance the trainer is
+         * watching change, and at 30 s a walk updates about once a block. This costs no
+         * GPS and no network -- it re-renders the last accepted fix, so a standing
+         * trainer sees exactly the same number three times -- which is why the real
+         * fix rate is left to [arrivalCadenceFor] instead.
          */
-        private const val CHIP_REFRESH_INTERVAL_MILLIS = 30_000L
+        private const val CHIP_REFRESH_INTERVAL_MILLIS = 10_000L
 
         @Volatile
         internal var locationSourceFactory: ArrivalLocationSourceFactory =

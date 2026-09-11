@@ -87,6 +87,7 @@ internal class FloatingMapOverlay(context: Context) {
 
     private var root: FrameLayout? = null
     private var undoButton: TextView? = null
+    private var pauseButton: TextView? = null
     private var mapView: MapView? = null
     private var map: MapLibreMap? = null
 
@@ -152,6 +153,19 @@ internal class FloatingMapOverlay(context: Context) {
 
     /** Bring the app forward, on the map. */
     var onOpenApp: () -> Unit = {}
+
+    /**
+     * Re-plan the route from where the trainer is standing now.
+     *
+     * The route is chained onward from the target you are walking to, which is right
+     * until you go somewhere else -- an errand, a bus, a friend calling you over. Then
+     * the plan describes a walk you are no longer on, and this is how you say so
+     * without ending the hunt and starting it again.
+     */
+    var onRecalculate: () -> Unit = {}
+
+    /** Park the route, or pick it back up. See HuntSession.paused. */
+    var onPauseToggle: () -> Unit = {}
 
 
 
@@ -390,6 +404,7 @@ internal class FloatingMapOverlay(context: Context) {
             .onFailure { Log.w(TAG, "Could not remove the floating map", it) }
         root = null
         undoButton = null
+        pauseButton = null
         mapView = null
         map = null
         lifecycle = null
@@ -408,6 +423,14 @@ internal class FloatingMapOverlay(context: Context) {
         undoButton?.isVisible = visible
     }
 
+    /**
+     * Points the pause control at whichever thing it would do next, because a button
+     * whose glyph is what it will do is the only one you can read while walking.
+     */
+    fun setPaused(paused: Boolean) {
+        pauseButton?.text = if (paused) PLAY_GLYPH else PAUSE_GLYPH
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun buildHandleBar(): LinearLayout = LinearLayout(themedContext).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -421,6 +444,11 @@ internal class FloatingMapOverlay(context: Context) {
         // Built always, hidden until there is something to undo. Never replaces the
         // tick: the next target can be caught inside the undo window.
         addView(controlButton("↺") { onUndo() }.also { undoButton = it; it.isVisible = false })
+        // The two route controls, after the ones that act on a single target: "this
+        // plan is wrong" and "I am not walking it right now" are a different kind of
+        // press from "caught it" and "next".
+        addView(controlButton("⟳") { onRecalculate() })
+        addView(controlButton(PAUSE_GLYPH) { onPauseToggle() }.also { pauseButton = it })
         // Spacer: the buttons sit left, the grab area is everything right of them.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
         addView(controlButton("×") { onClose() })
@@ -466,7 +494,9 @@ internal class FloatingMapOverlay(context: Context) {
             text = label
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(0xFF16181D.toInt())
-            setPadding(dp(9), dp(2), dp(9), dp(2))
+            // Tightened from 9dp when the bar went from five controls to seven: at the
+            // default 220dp width the close button was being pushed off the end.
+            setPadding(dp(6), dp(2), dp(6), dp(2))
             // Claims its own touches, so a tap on a button is not read as a drag
             // of the bar underneath it.
             isClickable = true
@@ -686,6 +716,11 @@ internal class FloatingMapOverlay(context: Context) {
 
     companion object {
         private const val TAG = "FloatingMapOverlay"
+
+        /** Text, not emoji: the bar is glyphs at 15sp and these have to match it. */
+        private const val PAUSE_GLYPH = "❚❚"
+        private const val PLAY_GLYPH = "▶"
+
         private const val WIDTH_DP = 220
         private const val HEIGHT_DP = 170
         private const val FIT_PADDING_DP = 24

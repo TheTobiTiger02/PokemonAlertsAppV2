@@ -6,7 +6,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class HuntChipTextTest {
+class HuntReadoutTest {
 
     @Test
     fun `a spawn in range reports its CP`() {
@@ -39,14 +39,15 @@ class HuntChipTextTest {
     }
 
     @Test
-    fun `a quest in range reports the reward, falling back to the stop`() {
+    fun `a quest in range reports the stop, not the reward`() {
         val withReward = PokemonAlert(
             name = "Spinda Quest",
             type = listOf("Quest"),
+            questTask = "Catch 5 Pokemon",
             questReward = "Spinda",
             pokestop = "Brunnen"
         )
-        assertEquals("Spinda", huntInRangeChipText(withReward))
+        assertEquals("Brunnen", huntInRangeChipText(withReward))
 
         val withoutReward = PokemonAlert(
             name = "Quest",
@@ -54,6 +55,79 @@ class HuntChipTextTest {
             pokestop = "Brunnen"
         )
         assertEquals("Brunnen", huntInRangeChipText(withoutReward))
+    }
+
+    @Test
+    fun `a quest in range titles on the stop and details the task and reward`() {
+        val alert = PokemonAlert(
+            name = "Spinda Quest",
+            type = listOf("Quest"),
+            questTask = "Catch 5 Pokemon",
+            questReward = "Spinda",
+            pokestop = "Brunnen"
+        )
+
+        assertEquals("Brunnen", huntInRangeTitle(alert))
+        val lines = huntInRangeLines(alert)
+        assertEquals("Catch 5 Pokemon", lines.first())
+        assertTrue(lines.any { it == "Reward: Spinda" })
+        // The task is already the lead line; alertDetailLines must not repeat it.
+        assertEquals(1, lines.count { it == "Catch 5 Pokemon" })
+    }
+
+    @Test
+    fun `a quest needing AR says so`() {
+        val alert = PokemonAlert(
+            name = "AR Quest",
+            type = listOf("Quest"),
+            questTask = "Take a snapshot",
+            requiresAR = true,
+            pokestop = "Brunnen"
+        )
+
+        assertTrue(huntInRangeLines(alert).contains("AR required"))
+    }
+
+    @Test
+    fun `a rocket in range names the grunt`() {
+        val alert = PokemonAlert(
+            name = "Dragon Grunt",
+            type = listOf("Rocket"),
+            gruntType = "Dragon",
+            pokestop = "Alter Wasserturm"
+        )
+
+        assertEquals("Alter Wasserturm", huntInRangeTitle(alert))
+        assertEquals("Dragon grunt", huntInRangeLines(alert).first())
+    }
+
+    @Test
+    fun `a spawn in range keeps the caller's title and reports CP and IV`() {
+        val alert = PokemonAlert(
+            name = "Larvitar",
+            type = listOf("Spawn"),
+            pokemon = "Larvitar",
+            cp = 1234,
+            ivAttack = 15,
+            ivDefense = 15,
+            ivStamina = 15
+        )
+
+        assertNull(huntInRangeTitle(alert))
+        assertTrue(huntInRangeLines(alert).contains("CP 1234"))
+    }
+
+    @Test
+    fun `a raid leaves the expanded card to the raid live update`() {
+        val alert = PokemonAlert(
+            name = "Rayquaza",
+            type = listOf("Raid"),
+            pokemon = "Rayquaza",
+            gym = "Marktplatz"
+        )
+
+        assertNull(huntInRangeTitle(alert))
+        assertTrue(huntInRangeLines(alert).isEmpty())
     }
 
     @Test

@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
+import com.example.pokemonalertsv2.tracking.usesPoiArrivalRadius
 import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlin.math.ceil
@@ -26,8 +29,13 @@ internal interface HuntLegCosts {
      */
     fun walkedMetersOrNull(fromId: String?, toId: String): Double?
 
-    /** Seconds to walk from the trainer to [toId]. See [huntWalkSeconds]. */
-    fun walkSecondsFromOriginOrNull(toId: String): Long?
+    /**
+     * Seconds to walk from the trainer to [toId]. See [huntWalkSeconds].
+     *
+     * [slackMeters] is the part of the walk you never have to make -- the radius you
+     * can interact from. See [huntInteractionRadiusMeters].
+     */
+    fun walkSecondsFromOriginOrNull(toId: String, slackMeters: Double = 0.0): Long?
 
     /**
      * The same costs judged from where the trainer is now, and at [nowMillis].
@@ -41,7 +49,7 @@ internal interface HuntLegCosts {
     object None : HuntLegCosts {
         override val calculatedAtMillis: Long = 0L
         override fun walkedMetersOrNull(fromId: String?, toId: String): Double? = null
-        override fun walkSecondsFromOriginOrNull(toId: String): Long? = null
+        override fun walkSecondsFromOriginOrNull(toId: String, slackMeters: Double): Long? = null
         override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts = this
     }
 }
@@ -94,6 +102,28 @@ internal fun huntLegNode(latitude: Double, longitude: Double): HuntLegNode =
     HuntLegNode(Math.round(latitude * 10_000.0).toInt(), Math.round(longitude * 10_000.0).toInt())
 
 internal data class HuntLegKey(val from: HuntLegNode, val to: HuntLegNode)
+
+/**
+ * How close you actually have to get before you can interact with [alert].
+ *
+ * Pokemon GO lets you spin a stop or start a raid from 80 m and catch a spawn from
+ * 40 m, so the last stretch of every leg is a walk nobody makes. Priced into the route
+ * this is the difference between "walk to the pin" and "walk until it is tappable",
+ * and it is why a stop you pass at 80 m used to sort behind a spawn 20 m further on.
+ *
+ * Deliberately *not*
+ * [com.example.pokemonalertsv2.tracking.effectiveArrivalRadius]: that folds in the
+ * user's configured tracking radius and the Spacial Rend toggle, neither of which the
+ * ordering code has, and a route should be shaped by the game's rules rather than by
+ * a tracking preference. Non-spawn free-coordinate alerts take the same 40 m as a
+ * spawn, which is what [ArrivalTrackingRepository.DEFAULT_RADIUS_METERS] is anyway.
+ */
+internal fun huntInteractionRadiusMeters(alert: PokemonAlert): Double =
+    if (alert.usesPoiArrivalRadius()) {
+        ArrivalTrackingRepository.POI_RADIUS_METERS.toDouble()
+    } else {
+        ArrivalTrackingRepository.SPAWN_RADIUS_METERS.toDouble()
+    }
 
 /** Seconds to walk [meters], on the app's one speed model. */
 internal fun huntWalkSeconds(meters: Int): Long =
@@ -157,9 +187,14 @@ internal class ResolvedHuntLegCosts(
     override fun walkedMetersOrNull(fromId: String?, toId: String): Double? =
         legOrNull(fromId, toId)?.distanceMeters?.toDouble()
 
-    override fun walkSecondsFromOriginOrNull(toId: String): Long? {
+    override fun walkSecondsFromOriginOrNull(toId: String, slackMeters: Double): Long? {
         val leg = legOrNull(null, toId) ?: return null
-        return if (HUNT_USE_PROVIDER_DURATIONS) leg.durationSeconds.toLong()
-        else huntWalkSeconds(leg.distanceMeters)
+        val walked = (leg.distanceMeters - slackMeters).coerceAtLeast(0.0)
+        if (!HUNT_USE_PROVIDER_DURATIONS) return huntWalkSeconds(walked.toInt())
+        // Prorated rather than returned whole: the provider timed the walk to the pin,
+        // and the last [slackMeters] of it is a walk nobody makes.
+        if (leg.distanceMeters <= 0) return leg.durationSeconds.toLong()
+        val share = walked / leg.distanceMeters
+        return ceil(leg.durationSeconds * share).toLong().coerceAtLeast(0L)
     }
 }

@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.tracking
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
+import com.example.pokemonalertsv2.util.TimeUtils
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -95,6 +96,41 @@ fun journeyDetailText(
     inRange -> (if (huntActive) huntInRangeChipText(alert) else null) ?: inRangeFallback
     distanceMeters != null -> formatJourneyDistance(distanceMeters)
     else -> locatingFallback
+}
+
+/**
+ * Everything about an alert that is worth a line once you have arrived.
+ *
+ * The facts, in the order you want them: what to look for (CP, or a raid's hundo
+ * range), how good it is, what the quest asks and pays, and how long you have. Shared
+ * between the arrival heads-up and the hunt's in-range live card, which were two
+ * hand-written lists describing the same alert.
+ *
+ * Returns lines, not a sentence: one caller joins them with bullets onto a lead, the
+ * other stacks them in an expanded notification.
+ */
+fun alertDetailLines(
+    alert: PokemonAlert,
+    nowMillis: Long = System.currentTimeMillis()
+): List<String> = buildList {
+    val exactCp = if (alert.isWeatherChange) alert.newCp else alert.cp
+    exactCp?.takeIf { it > 0 }?.let { add("CP $it") }
+    // A raid boss has no CP until you beat it, so the catch-screen numbers stand in.
+    if (exactCp == null && alert.hasTypeContaining("raid")) {
+        alert.hundoCP?.level20?.takeIf { it > 0 }?.let { add("100% L20 $it") }
+        alert.hundoCP?.level25?.takeIf { it > 0 }?.let { add("100% L25 $it") }
+    }
+    val iv = if (alert.isWeatherChange) alert.newIv else alert.formattedIv
+    iv?.takeIf { it.isNotBlank() }?.let { add("IV $it") }
+    alert.pokemonForm?.takeIf { it.isNotBlank() }?.let(::add)
+    if (alert.hasTypeContaining("quest")) {
+        alert.questTask?.takeIf { it.isNotBlank() }?.let(::add)
+        alert.questReward?.takeIf { it.isNotBlank() }?.let(::add)
+    }
+    TimeUtils.parseEndTimeToMillis(alert.endTime)
+        ?.minus(nowMillis)
+        ?.takeIf { it > 0L }
+        ?.let { add("${TimeUtils.formatDurationShort(it)} left") }
 }
 
 /** Metres up close, kilometres once the number stops reading at a glance. */

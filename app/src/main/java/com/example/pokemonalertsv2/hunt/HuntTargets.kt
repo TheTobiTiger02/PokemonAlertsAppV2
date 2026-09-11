@@ -5,7 +5,6 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
-import com.example.pokemonalertsv2.ui.alerts.mapPipBrowseOrder
 import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.TravelTime
@@ -55,7 +54,8 @@ internal fun huntTargets(
  *
  * "Nearest" is a real walked leg wherever [costs] has one, and a straight line
  * everywhere else -- so a target across a river no longer sorts ahead of one on
- * this side of it.
+ * this side of it. Every leg is measured to the point where the alert becomes
+ * *tappable* rather than to its pin; see [huntInteractionRadiusMeters].
  *
  * 3. **Then the plan is checked against itself.** [improveChain] takes the crossings
  *    out of the greedy chain, and [chainReachability] asks the question the first
@@ -71,7 +71,7 @@ internal fun huntWalkOrder(
     costs: HuntLegCosts = HuntLegCosts.None,
     anchorId: String? = null
 ): List<PokemonAlert> {
-    val (reachable, tooLate) = mapPipBrowseOrder(alerts, originLatitude, originLongitude)
+    val (reachable, tooLate) = huntApproachOrder(alerts, originLatitude, originLongitude)
         .partition { canArriveBeforeItEnds(it, originLatitude, originLongitude, nowMillis, costs) }
 
     // The target already being walked to leads, and the rest are chained from *it*
@@ -97,7 +97,7 @@ internal fun huntWalkOrder(
     // that cut and are never candidates -- so the stop after a far tapped target came
     // back as something near the trainer instead of something near the target.
     val restForChain =
-        if (anchor == null) rest else mapPipBrowseOrder(rest, chainLatitude, chainLongitude)
+        if (anchor == null) rest else huntApproachOrder(rest, chainLatitude, chainLongitude)
 
     val chained = chainNearest(restForChain, chainLatitude, chainLongitude, costs, chainFromId)
     // 2-opt first: reachability judges the order you will actually walk, and this is
@@ -113,6 +113,57 @@ internal fun huntWalkOrder(
     )
     return keeping + missing + alsoTooLate
 }
+
+/**
+ * Nearest-first by *approach* distance: how far there is to walk before the alert is
+ * tappable, not how far away its pin is.
+ *
+ * Deliberately its own function rather than a change to
+ * [com.example.pokemonalertsv2.ui.alerts.mapPipBrowseOrder], which is also the browse
+ * cursor's order and should keep stepping through pins by pin distance.
+ *
+ * Ties break on the alert id, the same way the browse order does, so two alerts on one
+ * PokeStop -- now genuinely tied at zero -- cannot swap places between recompositions.
+ * Alerts without coordinates are dropped here, as they were before.
+ */
+internal fun huntApproachOrder(
+    alerts: List<PokemonAlert>,
+    originLatitude: Double,
+    originLongitude: Double
+): List<PokemonAlert> = alerts
+    .mapNotNull { alert -> alert.mapCoordinatesOrNull()?.let { alert to it } }
+    .sortedWith(
+        compareBy(
+            { (alert, coordinates) ->
+                huntApproachMeters(
+                    originLatitude,
+                    originLongitude,
+                    coordinates.latitude,
+                    coordinates.longitude,
+                    alert
+                )
+            },
+            { (alert, _) -> alert.uniqueId }
+        )
+    )
+    .map { (alert, _) -> alert }
+
+/**
+ * Straight-line metres left to walk before [alert] is tappable.
+ *
+ * Zero once you are already standing inside its interaction radius, which is the
+ * intended answer: something you can tap without moving belongs at the front of the
+ * route, not wherever its pin happens to sit.
+ */
+private fun huntApproachMeters(
+    fromLatitude: Double,
+    fromLongitude: Double,
+    toLatitude: Double,
+    toLongitude: Double,
+    alert: PokemonAlert
+): Double =
+    (mapPipDistanceMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) -
+        huntInteractionRadiusMeters(alert)).coerceAtLeast(0.0)
 
 /**
  * Whether the walk gets you there before the alert ends.
@@ -136,15 +187,21 @@ internal fun canArriveBeforeItEnds(
 ): Boolean {
     val coordinates = alert.mapCoordinatesOrNull() ?: return true
     val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: return true
-    val routedSeconds = costs.walkSecondsFromOriginOrNull(alert.uniqueId)
+    // Both branches measure to the edge of the interaction radius: you have arrived
+    // when the alert is tappable, not when you are standing on its pin.
+    val routedSeconds = costs.walkSecondsFromOriginOrNull(
+        toId = alert.uniqueId,
+        slackMeters = huntInteractionRadiusMeters(alert)
+    )
     val seconds = if (routedSeconds != null) {
         (routedSeconds * HUNT_ROUTED_REACHABILITY_MARGIN).toLong()
     } else {
-        val distance = mapPipDistanceMeters(
+        val distance = huntApproachMeters(
             originLatitude,
             originLongitude,
             coordinates.latitude,
-            coordinates.longitude
+            coordinates.longitude,
+            alert
         ).toFloat()
         WalkingRouteUtils.estimateWalkingRouteInfo(distance)?.durationSeconds ?: return true
     }
@@ -238,7 +295,14 @@ private fun tourCost(
     return total
 }
 
-/** One leg in walked metres: routed where known, scaled straight line where not. */
+/**
+ * One leg in walked metres: routed where known, scaled straight line where not.
+ *
+ * Minus the radius you can interact with [to] from, because that stretch is priced
+ * into every route the router returns and walked by nobody. One subtraction here
+ * reaches the greedy chain, the 2-opt tour cost and the reachability clock at once,
+ * so all three agree on what a leg costs. A leg you are already inside costs zero.
+ */
 private fun legMeters(
     fromId: String?,
     fromLatitude: Double,
@@ -247,13 +311,14 @@ private fun legMeters(
     costs: HuntLegCosts
 ): Double {
     val coordinates = to.mapCoordinatesOrNull() ?: return 0.0
-    return costs.walkedMetersOrNull(fromId, to.uniqueId)
+    val toPin = costs.walkedMetersOrNull(fromId, to.uniqueId)
         ?: (mapPipDistanceMeters(
             fromLatitude,
             fromLongitude,
             coordinates.latitude,
             coordinates.longitude
         ) * WalkingRouteUtils.DETOUR_FACTOR)
+    return (toPin - huntInteractionRadiusMeters(to)).coerceAtLeast(0.0)
 }
 
 private fun anyRoutedLeg(order: List<PokemonAlert>, costs: HuntLegCosts): Boolean {
@@ -377,15 +442,13 @@ private fun chainNearest(
     while (pool.isNotEmpty()) {
         val nextIndex = pool.indices.minBy { index ->
             val alert = pool[index]
-            val coordinates = alert.mapCoordinatesOrNull()
-                ?: return@minBy Double.MAX_VALUE
-            costs.walkedMetersOrNull(fromId, alert.uniqueId)
-                ?: (mapPipDistanceMeters(
-                    fromLatitude,
-                    fromLongitude,
-                    coordinates.latitude,
-                    coordinates.longitude
-                ) * WalkingRouteUtils.DETOUR_FACTOR)
+            // Through [legMeters] rather than inline, so the greedy chain, the 2-opt
+            // tour and the reachability clock cannot disagree about what a leg costs --
+            // the inline copy here is what kept charging for the last 80 m of a stop.
+            // Still guarded here: legMeters answers zero for an alert with no
+            // coordinates, and zero would put it at the front of the walk.
+            if (alert.mapCoordinatesOrNull() == null) return@minBy Double.MAX_VALUE
+            legMeters(fromId, fromLatitude, fromLongitude, alert, costs)
         }
         val next = pool.removeAt(nextIndex)
         chain += next

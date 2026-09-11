@@ -100,6 +100,50 @@ class HuntRouteMatrixCacheTest {
     }
 
     @Test
+    fun `a forced prefetch re-asks a warm cache`() = runTest {
+        val (cache, service) = cache { square(it) }
+
+        assertTrue(cache.prefetch(originLat, originLon, listOf(a, b)))
+        assertTrue(cache.prefetch(originLat, originLon, listOf(a, b), force = true))
+
+        assertEquals(2, service.requests.size)
+    }
+
+    @Test
+    fun `a forced prefetch ignores an armed backoff`() = runTest {
+        var clock = 0L
+        var fail = true
+        val (cache, service) = cache(clock = { clock }) { request ->
+            if (fail) throw IllegalStateException("503") else square(request)
+        }
+
+        cache.prefetch(originLat, originLon, listOf(a, b))
+        assertEquals(1, service.requests.size)
+        // Inside the backoff window the loop would be turned away.
+        assertFalse(cache.prefetch(originLat, originLon, listOf(a, b)))
+        assertEquals(1, service.requests.size)
+
+        fail = false
+        assertTrue(cache.prefetch(originLat, originLon, listOf(a, b), force = true))
+        assertEquals(2, service.requests.size)
+    }
+
+    @Test
+    fun `a forced prefetch keeps the legs between targets`() = runTest {
+        var served = 400
+        val (cache, service) = cache { square(it, served) }
+
+        cache.prefetch(originLat, originLon, listOf(a, b))
+        served = 900
+        cache.prefetch(originLat, originLon, listOf(a, b), force = true)
+
+        assertEquals(2, service.requests.size)
+        // Both rows were re-answered here, but only the origin row had to be: the
+        // walk from a to b is the same walk wherever the trainer went.
+        assertEquals(900.0, cache.snapshot().walkedMetersOrNull(null, a.id)!!, 0.001)
+    }
+
+    @Test
     fun `an expired leg is asked for again`() = runTest {
         var clock = 0L
         val (cache, service) = cache(clock = { clock }) { square(it) }

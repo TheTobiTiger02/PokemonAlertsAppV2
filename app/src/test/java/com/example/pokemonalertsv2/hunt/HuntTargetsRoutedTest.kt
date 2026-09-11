@@ -44,7 +44,11 @@ class HuntTargetsRoutedTest {
     ) = object : HuntLegCosts {
         override val calculatedAtMillis = now
         override fun walkedMetersOrNull(fromId: String?, toId: String): Double? = legs[fromId to toId]
-        override fun walkSecondsFromOriginOrNull(toId: String): Long? = seconds[toId]
+        // Slack is the interaction radius the caller wants taken off the walk; the
+        // real implementation takes it off the distance, so this takes the equivalent
+        // off the time. See huntInteractionRadiusMeters.
+        override fun walkSecondsFromOriginOrNull(toId: String, slackMeters: Double): Long? =
+            seconds[toId]?.let { (it - huntWalkSeconds(slackMeters.toInt())).coerceAtLeast(0L) }
         override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts = this
     }
 

@@ -48,7 +48,16 @@ data class HuntSession(
     @SerialName("profileId") val savedHuntId: String? = null,
     val startedAtMillis: Long,
     /** The alert being walked to, or null between targets. */
-    val targetUniqueId: String? = null
+    val targetUniqueId: String? = null,
+    /**
+     * Whether the trainer has parked the route.
+     *
+     * A hunt with no target is normally a hunt waiting for one, and the service will
+     * start walking you to the next match the moment it arrives. Paused is the other
+     * reason to have no target: you have gone to do something else, and you want the
+     * hunt to stay alive and stop choosing for you until you come back.
+     */
+    val paused: Boolean = false
 )
 
 /**
@@ -112,6 +121,19 @@ class HuntRepository private constructor(context: Context) {
             val session = preferences[ACTIVE_HUNT_KEY]?.decodeSession() ?: return@edit
             preferences[ACTIVE_HUNT_KEY] =
                 json.encodeToString(HuntSession.serializer(), session.copy(targetUniqueId = uniqueId))
+        }
+    }
+
+    /**
+     * Parks or resumes the route. A no-op without a hunt, like [setTarget]: pausing
+     * something that is not running should not bring it into existence.
+     */
+    suspend fun setPaused(paused: Boolean) {
+        dataStore.edit { preferences ->
+            val session = preferences[ACTIVE_HUNT_KEY]?.decodeSession() ?: return@edit
+            if (session.paused == paused) return@edit
+            preferences[ACTIVE_HUNT_KEY] =
+                json.encodeToString(HuntSession.serializer(), session.copy(paused = paused))
         }
     }
 

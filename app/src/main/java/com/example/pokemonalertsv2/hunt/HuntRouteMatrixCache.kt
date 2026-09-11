@@ -69,12 +69,20 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
      * Returns true when a snapshot was published. Never throws: every failure leaves
      * the last snapshot in place, which is what makes the hunt degrade to straight
      * lines instead of breaking.
+     *
+     * [force] is the Recalculate button: it drops the trainer's own row and asks again
+     * even when the cache is warm and even while backing off, because the trainer has
+     * just told us the answer we are holding is wrong. It does **not** bypass the
+     * in-flight dedupe -- one press is one request, not a second one alongside the
+     * loop's -- and the legs between targets are kept, since those are the same walk
+     * wherever the trainer went.
      */
     suspend fun prefetch(
         originLatitude: Double,
         originLongitude: Double,
         targets: List<HuntRoutePoint>,
-        timeoutMillis: Long = PREFETCH_TIMEOUT_MILLIS
+        timeoutMillis: Long = PREFETCH_TIMEOUT_MILLIS,
+        force: Boolean = false
     ): Boolean {
         val origin = HuntRoutePoint(HUNT_ORIGIN_ID, originLatitude, originLongitude)
         val points = buildPoints(origin, targets)
@@ -86,13 +94,17 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
         cacheMutex.withLock {
             val current = nowMillis()
             prune(current)
-            if (isFullyResolved(points, current)) {
-                publishLocked(points, current)
-                return true
-            }
-            if (current < backoffUntilMillis) {
-                publishLocked(points, current)
-                return false
+            if (force) {
+                evictOriginRowLocked(points)
+            } else {
+                if (isFullyResolved(points, current)) {
+                    publishLocked(points, current)
+                    return true
+                }
+                if (current < backoffUntilMillis) {
+                    publishLocked(points, current)
+                    return false
+                }
             }
             val running = inFlight
             if (running != null) {
@@ -138,6 +150,20 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
             .take(maxTargets)
             .toList()
         return listOf(origin) + trimmed
+    }
+
+    /**
+     * Forgets every leg touching the trainer's node, so a forced prefetch cannot be
+     * answered out of the cache. Positive and negative entries both: an origin row the
+     * server called unreachable is exactly what a trainer who has walked somewhere else
+     * wants re-asked.
+     */
+    private fun evictOriginRowLocked(points: List<HuntRoutePoint>) {
+        val origin = huntLegNode(points.first().latitude, points.first().longitude)
+        val touchesOrigin = { key: HuntLegKey -> key.from == origin || key.to == origin }
+        legs.keys.removeAll(touchesOrigin)
+        legExpiry.keys.removeAll(touchesOrigin)
+        negativeCache.keys.removeAll(touchesOrigin)
     }
 
     private fun isFullyResolved(points: List<HuntRoutePoint>, current: Long): Boolean =

@@ -5,14 +5,14 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
-import com.example.pokemonalertsv2.ui.alerts.mapPipBrowseOrder
 import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 
 /**
  * The targets worth routing, chosen without ever consulting a routed cost.
  *
- * **Straight-line only, deliberately, and it must stay that way.** If this list were
- * ranked by the published costs, a new snapshot would reorder the targets, which
+ * **Straight-line only, deliberately, and it must stay that way.** Approach distance
+ * (straight line minus the interaction radius) is still a pure function of the alerts,
+ * so the fixed point holds. If this list were ranked by the published costs, a new snapshot would reorder the targets, which
  * would change the list, which would trigger another prefetch -- a loop with a
  * network call in it. Ranking by straight line is a fixed point: the same alerts in,
  * the same ids out, routed or not.
@@ -35,7 +35,7 @@ internal fun huntRoutingCandidates(
             alert.isEligibleArrivalDestination(nowMillis) &&
             AlertFilterMatcher.matches(alert, definition)
     }
-    return mapPipBrowseOrder(matches, originLatitude, originLongitude)
+    return huntApproachOrder(matches, originLatitude, originLongitude)
         .asSequence()
         .mapNotNull { alert ->
             alert.mapCoordinatesOrNull()?.let { coordinates ->

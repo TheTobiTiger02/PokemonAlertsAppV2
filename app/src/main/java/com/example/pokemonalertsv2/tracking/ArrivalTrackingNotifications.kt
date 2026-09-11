@@ -19,6 +19,8 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.CaughtAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
+import com.example.pokemonalertsv2.hunt.huntInRangeLines
+import com.example.pokemonalertsv2.hunt.huntInRangeTitle
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
@@ -101,10 +103,16 @@ internal object ArrivalTrackingNotifications {
     fun huntStandby(
         context: Context,
         huntName: String,
-        undoOffer: CaughtAlert? = null
+        undoOffer: CaughtAlert? = null,
+        /** Parked by the trainer, rather than waiting for the feed. See HuntSession.paused. */
+        paused: Boolean = false
     ): Notification {
-        val title = "Hunting $huntName"
-        val body = "Waiting for a match"
+        val title = if (paused) "Hunt paused: $huntName" else "Hunting $huntName"
+        val body = if (paused) {
+            "Tap a target on the map, or recalculate"
+        } else {
+            "Waiting for a match"
+        }
         if (Build.VERSION.SDK_INT < LIVE_NOTIFICATION_MIN_SDK) {
             return ongoingBuilder(context)
                 .setContentTitle(title)
@@ -139,7 +147,7 @@ internal object ArrivalTrackingNotifications {
                     stopPendingIntent(context)
                 ).build()
             )
-            .apply { setShortCriticalText("Waiting") }
+            .apply { setShortCriticalText(if (paused) "Paused" else "Waiting") }
             .build()
     }
 
@@ -155,7 +163,7 @@ internal object ArrivalTrackingNotifications {
         undoOffer: CaughtAlert? = null
     ): Notification {
         val alert = destination.alert
-        val content = ongoingContent(
+        val walkingContent = ongoingContent(
             destination = destination,
             distanceMeters = distanceMeters,
             walkingRoute = walkingRoute,
@@ -167,8 +175,19 @@ internal object ArrivalTrackingNotifications {
             ?.takeIf { it > 0L }
             ?.let { " \u2022 ${TimeUtils.formatDurationShort(it)} left" }
             .orEmpty()
-        val title = ongoingTitle(alert)
-        val expandedBody = buildExpandedBody(alert, content, remaining)
+        // Arrived, during a hunt: the distance and the progress bar have both been
+        // spent, so the card becomes the reason you walked here -- the task, the
+        // reward, which grunt. Empty for a raid and for anything with nothing to add,
+        // which is what keeps the walking readout as the default.
+        val arrivedLines = if (inRange && huntActive) huntInRangeLines(alert) else emptyList()
+        val content = arrivedLines.firstOrNull() ?: walkingContent
+        val title = (if (arrivedLines.isEmpty()) null else huntInRangeTitle(alert))
+            ?: ongoingTitle(alert)
+        val expandedBody = if (arrivedLines.isEmpty()) {
+            buildExpandedBody(alert, content, remaining)
+        } else {
+            arrivedLines.joinToString("\n")
+        }
         val chip = when {
             // Close enough to see it: the distance has stopped being the useful
             // number, so a hunt swaps in whatever decides the next tap instead.
@@ -217,12 +236,19 @@ internal object ArrivalTrackingNotifications {
                     ).build()
                 )
                 .setStyle(
-                    buildProgressStyle(
-                        context = context,
-                        alert = alert,
-                        distanceMeters = distanceMeters,
-                        waitingForPreciseLocation = waitingForPreciseLocation
-                    )
+                    // A progress bar reading "you are here" is worth less than the
+                    // task and the reward. BigTextStyle is promotion-eligible -- see
+                    // [restoring] -- so the status bar chip survives the swap.
+                    if (expandedBody.isNotBlank() && arrivedLines.isNotEmpty()) {
+                        Notification.BigTextStyle().bigText(expandedBody)
+                    } else {
+                        buildProgressStyle(
+                            context = context,
+                            alert = alert,
+                            distanceMeters = distanceMeters,
+                            waitingForPreciseLocation = waitingForPreciseLocation
+                        )
+                    }
                 )
                 .apply {
                     chip?.let { setShortCriticalText(it) }
@@ -430,25 +456,7 @@ internal object ArrivalTrackingNotifications {
             else -> "You\u2019re within $radiusMeters m of the alert."
         }
 
-        val metadata = buildList {
-            val exactCp = if (alert.isWeatherChange) alert.newCp else alert.cp
-            exactCp?.takeIf { it > 0 }?.let { add("CP $it") }
-            if (exactCp == null && alert.hasTypeContaining("raid")) {
-                alert.hundoCP?.level20?.takeIf { it > 0 }?.let { add("100% L20 $it") }
-                alert.hundoCP?.level25?.takeIf { it > 0 }?.let { add("100% L25 $it") }
-            }
-            val iv = if (alert.isWeatherChange) alert.newIv else alert.formattedIv
-            iv?.takeIf { it.isNotBlank() }?.let { add("IV $it") }
-            alert.pokemonForm?.takeIf { it.isNotBlank() }?.let(::add)
-            if (alert.hasTypeContaining("quest")) {
-                alert.questTask?.takeIf { it.isNotBlank() }?.let(::add)
-                alert.questReward?.takeIf { it.isNotBlank() }?.let(::add)
-            }
-            TimeUtils.parseEndTimeToMillis(alert.endTime)
-                ?.minus(nowMillis)
-                ?.takeIf { it > 0L }
-                ?.let { add("${TimeUtils.formatDurationShort(it)} left") }
-        }
+        val metadata = alertDetailLines(alert, nowMillis)
         return if (metadata.isEmpty()) lead else "$lead ${metadata.joinToString(" \u2022 ")}"
     }
 
