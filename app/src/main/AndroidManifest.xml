@@ -54,6 +54,12 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".MainActivity" />
         </activity>
+        <activity android:name=".catchroutes.CatchRoutesActivity"
+            android:exported="false" android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+            android:theme="@style/Theme.PokemonAlertsV2" />
+        <service android:name=".catchroutes.CatchRouteService" android:exported="false"
+            android:foregroundServiceType="location" />
         <activity
             android:name=".ui.counters.ManualRaidActivity"
             android:exported="false"

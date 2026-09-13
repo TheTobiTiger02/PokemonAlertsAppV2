@@ -2369,6 +2369,11 @@ internal fun AlertsMapScreenContent(
                     activeRuleCount = advancedFilterRuleCount,
                     onClick = { showFilterSheet = true }
                 )
+                SmallFloatingActionButton(
+                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.testTag("open_catch_routes")
+                ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
                 // Secondary: framing the alerts is occasional, finding yourself is constant.
                 SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,

@@ -69,6 +69,7 @@ data class HuntSession(
  * process death.
  */
 class HuntRepository private constructor(context: Context) {
+    private val appContext = context.applicationContext
     private val dataStore = context.applicationContext.huntSessionDataStore
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val json = Json {
@@ -97,7 +98,8 @@ class HuntRepository private constructor(context: Context) {
         definition: FilterDefinition,
         savedHuntId: String? = null,
         nowMillis: Long = System.currentTimeMillis()
-    ): HuntSession {
+    ): HuntSession = com.example.pokemonalertsv2.tracking.NavigationSessionGate.change {
+        com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(appContext).stop()
         val session = HuntSession(
             name = name,
             definition = definition,
@@ -105,7 +107,7 @@ class HuntRepository private constructor(context: Context) {
             startedAtMillis = nowMillis
         )
         write(session)
-        return session
+        session
     }
 
     suspend fun stop() {

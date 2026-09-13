@@ -124,10 +124,11 @@ class ArrivalTrackingRepository private constructor(context: Context) {
     suspend fun startTracking(
         alert: PokemonAlert,
         nowMillis: Long = System.currentTimeMillis()
-    ): TrackedDestination {
+    ): TrackedDestination = NavigationSessionGate.change {
         require(alert.isEligibleArrivalDestination(nowMillis)) {
             "Alert is not an active destination with valid coordinates"
         }
+        com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(appContext).stop()
         val radius = alert.effectiveArrivalRadius(
             configuredRadiusMeters = dataStore.data.first()[ARRIVAL_RADIUS_KEY]
                 ?: DEFAULT_RADIUS_METERS,
@@ -141,7 +142,7 @@ class ArrivalTrackingRepository private constructor(context: Context) {
         dataStore.edit { preferences ->
             preferences[ACTIVE_DESTINATION_KEY] = json.encodeToString(destination)
         }
-        return destination
+        destination
     }
 
     suspend fun stopTracking() {
