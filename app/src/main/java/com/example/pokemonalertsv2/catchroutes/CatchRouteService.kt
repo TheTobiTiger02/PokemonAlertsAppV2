@@ -58,7 +58,7 @@ class CatchRouteService : Service() {
                         return@collectLatest
                     }
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(s))
-                    overlayMap?.update(s.itinerary.settings, s.itinerary, point)
+                    overlayMap?.update(s.itinerary.settings, s.displayItinerary, point)
                     overlayText?.text = readout(s)
                     overlayPause?.text = if (s.paused) "Resume" else "Pause"
                 }
@@ -67,7 +67,7 @@ class CatchRouteService : Service() {
         return START_STICKY
     }
     private fun readout(s: CatchSession?): String = if (s == null) "Restoring route…" else
-        "${if (s.paused) "Paused · " else ""}${s.remaining.size} remaining · ${s.caught} caught"
+        "${if (s.paused) "Paused · " else ""}${s.availabilityReadout} · ${s.caught} caught"
     private fun notification(s: CatchSession?): Notification {
         val open = PendingIntent.getActivity(this, 70, Intent(this, CatchRoutesActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -101,7 +101,7 @@ class CatchRouteService : Service() {
             }; true
         }
         root.addView(title)
-        val map = CatchRouteMapView(this).also { it.update(s.itinerary.settings, s.itinerary, controller.location.value) }
+        val map = CatchRouteMapView(this).also { it.update(s.itinerary.settings, s.displayItinerary, controller.location.value) }
         overlayMap = map
         root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
         val buttons = LinearLayout(this)

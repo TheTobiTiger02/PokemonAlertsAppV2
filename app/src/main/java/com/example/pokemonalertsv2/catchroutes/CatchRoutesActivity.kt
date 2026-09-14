@@ -124,7 +124,7 @@ class CatchRoutesActivity : ComponentActivity() {
         LaunchedEffect(pip) { delay(500); mapView?.fit() }
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-        val plan = active?.itinerary ?: model.itinerary
+        val plan = active?.displayItinerary ?: model.itinerary
         val settings = active?.itinerary?.settings ?: model.settings
         val encounters = active?.remaining ?: plan?.encounters.orEmpty()
         val groups = remember(encounters) { groupCatchEncounters(encounters) }
@@ -148,17 +148,17 @@ class CatchRoutesActivity : ComponentActivity() {
                         }, onRelease = { it.destroy() })
                     if (!pip) TextButton(onClick = { mapView?.fit() }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) { Text("Fit route") }
                     if (mapFailed) Surface(Modifier.align(Alignment.Center)) { Text("Map unavailable. Check connection.", Modifier.padding(12.dp)) }
-                    if (pip) Surface(Modifier.align(Alignment.TopCenter)) { Text("${encounters.size} potential · ${active?.caught ?: 0} caught", Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall) }
+                    if (pip) Surface(Modifier.align(Alignment.TopCenter)) { Text("${active?.availabilityReadout ?: "${encounters.size} potential"} · ${active?.caught ?: 0} caught", Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall) }
                     else if (active == null) Surface(Modifier.align(Alignment.BottomCenter).padding(8.dp), tonalElevation = 4.dp, shape = MaterialTheme.shapes.small) {
                         Text("Tap map to set $picking", Modifier.padding(8.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                if (!pip) LazyColumn(Modifier.fillMaxWidth().weight(1.15f).padding(horizontal = 16.dp), state = formState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
+                if (!pip) LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1.15f).padding(horizontal = 16.dp), state = formState, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 20.dp)) {
                     if (active != null) {
                         item {
                             Text(active!!.itinerary.settings.name, style = MaterialTheme.typography.titleLarge)
                             if (active!!.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
-                            Text("${active!!.visits.count { !it.skipped }} visited · ${active!!.caught} caught · ${encounters.size} remaining")
+                            Text("${active!!.visits.count { !it.skipped }} visited · ${active!!.caught} caught · ${active!!.availabilityReadout}")
                             if (active!!.needsRefresh && !active!!.finished) Text("Timing needs refreshing before visits resume.", color = MaterialTheme.colorScheme.error)
                             if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
                             notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -203,10 +203,10 @@ class CatchRoutesActivity : ComponentActivity() {
                                 CatchPrediction.entries.forEach { prediction ->
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         RadioButton(selected = settings.prediction == prediction, onClick = { model.edit(settings.copy(prediction = prediction)) })
-                                        Text(when (prediction) { CatchPrediction.THIRTY_MINUTES -> "Assume 30-minute spawns"; CatchPrediction.SIXTY_MINUTES -> "Assume 60-minute spawns"; CatchPrediction.SUPPORTED_ONLY -> "Supported windows only" })
+                                        Text(when (prediction) { CatchPrediction.AUTOMATIC -> "Automatic (learned timing)"; CatchPrediction.THIRTY_MINUTES -> "Assume 30-minute spawns"; CatchPrediction.SIXTY_MINUTES -> "Assume 60-minute spawns"; CatchPrediction.SUPPORTED_ONLY -> "Supported windows only" })
                                     }
                                 }
-                                Text("Despawn time alone does not establish spawn time. Assumptions are predictions, not live confirmation.", style = MaterialTheme.typography.bodySmall)
+                                Text("Automatic uses learned timing, with a 30-minute fallback where unknown. Predictions are not live confirmation; event spawnpoints may require a live sighting.", style = MaterialTheme.typography.bodySmall)
                             }
                             Text("Potential encounters · walking time only · no planned waiting", style = MaterialTheme.typography.bodySmall)
                             model.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("catch_route_error")) }
@@ -230,8 +230,9 @@ class CatchRoutesActivity : ComponentActivity() {
                     if (plan != null) {
                         item {
                             HorizontalDivider()
-                            Text("${encounters.size} potential encounters", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.testTag("catch_route_result"))
-                            Text("${encounters.count { it.opportunity.observed }} observed · ${encounters.count { !it.opportunity.observed }} predicted")
+                            Text("Follow arrows and dark numbered stages in order. Green circles count spawnpoints.", style = MaterialTheme.typography.bodySmall)
+                            Text(if (active?.needsRefresh == true) "Timing needs refresh" else "${encounters.size} potential encounters", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.testTag("catch_route_result"))
+                            if (active?.needsRefresh != true) Text("${encounters.count { it.opportunity.observed }} observed · ${encounters.count { !it.opportunity.observed }} predicted")
                             Text("${String.format(Locale.getDefault(), "%.2f", plan.distanceMeters / 1000)} km · finish ${time(plan.finishAtMillis)}")
                             plan.warnings.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             if (active == null) Button(onClick = {
@@ -255,11 +256,14 @@ class CatchRoutesActivity : ComponentActivity() {
         }
         details?.let { group -> AlertDialog(onDismissRequest = { details = null }, confirmButton = { TextButton(onClick = { details = null }) { Text("Close") } }, title = { Text("Spawn timing evidence") }, text = {
             LazyColumn { items(group) { e -> Column(Modifier.padding(bottom = 12.dp)) {
-                Text("${time(e.opportunity.availableFrom)}–${time(e.opportunity.despawnAt)} · ${e.opportunity.basis.replace('_', ' ')}")
+                Text("${time(e.opportunity.availableFrom)}–${time(e.opportunity.despawnAt)} · ${if (e.opportunity.basis == "inferred_lifetime") "Estimated 60-minute lifetime" else e.opportunity.basis.replace('_', ' ')}")
                 Text("Source: ${e.opportunity.source ?: "unknown"} · expiry evidence: ${e.opportunity.despawnBasis ?: "unknown"}", style = MaterialTheme.typography.bodySmall)
                 Text("Catalogue: ${e.opportunity.catalogueSeenAt ?: "unknown"}\nLast live observation: ${e.opportunity.liveLastSeenAt ?: "unknown"}", style = MaterialTheme.typography.bodySmall)
+                if (e.opportunity.activityPattern == "likely_event") Text("Likely event spawnpoint (inferred from intermittent observations)")
+                if (e.opportunity.requiresLiveConfirmation) Text("Requires live confirmation; this window is observed only.")
                 if (e.opportunity.timingConflict) Text("Conflicting timing evidence", color = MaterialTheme.colorScheme.error)
                 plan?.sources?.firstOrNull { it.source == e.opportunity.source }?.let { source ->
+                    source.liveSnapshot?.let { live -> Text("Live coverage: ${live.coverageKind ?: "unknown"} \u00b7 refreshed ${live.refreshedAt ?: "unknown"} \u00b7 complete: ${live.complete ?: "unknown"} \u00b7 ${live.returned ?: "?"} returned / ${live.dropped ?: "?"} dropped", style = MaterialTheme.typography.bodySmall) }
                     Text("${source.coverageKind ?: "Unknown coverage"} · refreshed ${source.refreshedAt ?: "unknown"} · ${source.returned ?: "?"} returned / ${source.dropped ?: "?"} dropped", style = MaterialTheme.typography.bodySmall)
                 }
                 e.opportunity.lowerBoundSeconds?.let { Text("Observed duration lower bound: ${it / 60} minutes. Not an exact start.") }

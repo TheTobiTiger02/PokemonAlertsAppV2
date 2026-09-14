@@ -32,7 +32,7 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
         withTimeoutOrNull(30_000) {
             val loaded = availability.load(settings, progress)
             val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
-            if (data.opportunities.isEmpty()) throw CatchApiException("No usable spawn windows in this area and time. Try another start or enable predictions.")
+            if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) "No usable spawn windows. ${data.restrictedPointCount} spawnpoints require live confirmation; predictions cannot enable them." else "No usable spawn windows in this area and time. Try another start or enable predictions.")
             val groups = candidateGroups(settings, data.opportunities)
             for (seed in 0..2) {
                 coroutineContext.ensureActive()

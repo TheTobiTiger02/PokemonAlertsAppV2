@@ -202,6 +202,73 @@ class CatchRouteTest {
         try { CatchRoutePlanner(fake).generate(settings()); fail("Expected cancellation") } catch (_: CancellationException) { }
     }
 
+    @Test fun `automatic learns without overriding and manual settings remain explicit`() = runTest {
+        for ((mode, duration) in listOf(CatchPrediction.AUTOMATIC to null, CatchPrediction.THIRTY_MINUTES to "1800",
+            CatchPrediction.SIXTY_MINUTES to "3600", CatchPrediction.SUPPORTED_ONLY to null)) {
+            val fake = Fake().apply { pages += Response.success(page(listOf("one"))) }
+            SpawnAvailabilityRepository(fake).load(settings().copy(prediction = mode))
+            assertEquals(duration, fake.queries.single()["assumedDurationSeconds"])
+            assertEquals((mode != CatchPrediction.SUPPORTED_ONLY).toString(), fake.queries.single()["includePredictions"])
+        }
+        assertEquals(CatchPrediction.AUTOMATIC, CatchRouteSettings().prediction)
+    }
+
+    @Test fun `mixed windows preserve learned timing and enforce event restrictions`() {
+        val original = Json.parseToJsonElement(row("event")).jsonObject
+        val window = original.getValue("windows").jsonArray.single().jsonObject
+        fun w(basis: String) = JsonObject(window + mapOf("basis" to JsonPrimitive(basis), "despawnBasis" to JsonPrimitive("verified_observation")))
+        val warnings = mutableListOf<String>()
+        val mixed = JsonObject(original + mapOf("windows" to JsonArray(listOf(w("inferred_lifetime"), w("future_basis"), w("observed_encounter")))))
+        val parsed = parseSpawnWindows(mixed) { warnings += it }!!
+        assertEquals(listOf("inferred_lifetime", "observed_encounter"), parsed.map { it.basis })
+        assertEquals("verified_observation", parsed.first().despawnBasis)
+        assertEquals(1, warnings.size)
+        val restricted = JsonObject(mixed + mapOf("requiresLiveConfirmation" to JsonPrimitive(true), "activityPattern" to JsonPrimitive("likely_event")))
+        val only = parseSpawnWindows(restricted)!!.single()
+        assertTrue(only.observed && only.requiresLiveConfirmation)
+        assertEquals("likely_event", only.activityPattern)
+        assertTrue(parsed.last().evidenceRank > parsed.first().evidenceRank)
+        assertTrue(parsed.first().evidenceRank > opportunity().evidenceRank)
+    }
+
+    @Test fun `live snapshot and empty restricted availability survive repository`() = runTest {
+        val point = JsonObject(Json.parseToJsonElement(row("event")).jsonObject + mapOf("windows" to JsonArray(emptyList()), "requiresLiveConfirmation" to JsonPrimitive(true)))
+        val source = Json.parseToJsonElement("""{"source":"wingull","complete":true,"liveSnapshot":{"refreshedAt":"2026-09-12T12:00:00Z","complete":false,"returned":12,"dropped":1,"coverageKind":"live_snapshot"}}""").jsonObject
+        val response = JsonObject(page(emptyList()) + mapOf("data" to JsonArray(listOf(point)), "sources" to JsonArray(listOf(source))))
+        val fake = Fake().apply { pages += Response.success(response) }
+        val data = SpawnAvailabilityRepository(fake).load(settings())
+        assertEquals(1, data.restrictedPointCount)
+        assertTrue(data.opportunities.isEmpty())
+        assertEquals(12, data.sources.single().liveSnapshot?.returned)
+        assertTrue(data.warnings.any { it.contains("incomplete live coverage") })
+        fake.pages += Response.success(response)
+        val error = runCatching { CatchRoutePlanner(fake).generate(settings()) }.exceptionOrNull()
+        assertTrue(error?.message.orEmpty().contains("predictions cannot enable them"))
+    }
+
+    @Test fun `stale session hides targets and blocks visits until replacement`() {
+        val plan = CatchItinerary(settings(), path(0.0, 200.0), listOf(CatchEncounter(opportunity(), now, 100.0)), emptyList())
+        val session = CatchSession(plan, caught = 4, needsRefresh = true)
+        assertTrue(session.remaining.isEmpty())
+        assertTrue(session.displayItinerary.encounters.isEmpty())
+        assertEquals(plan.path, session.displayItinerary.path)
+        assertEquals("Timing needs refresh", session.availabilityReadout)
+        val progress = CatchRouteProgress()
+        progress.accept(session, p(100.0), 5.0, now, now)
+        assertTrue(progress.accept(session, p(100.0), 5.0, now + 2500, now + 2500).visits.isEmpty())
+        assertEquals(1, session.copy(needsRefresh = false).remaining.size)
+        assertEquals(4, session.caught)
+    }
+
+    @Test fun `old serialized settings and opportunities retain compatibility`() {
+        val json = kotlinx.serialization.json.Json { encodeDefaults = true; ignoreUnknownKeys = true }
+        val old = json.decodeFromString<CatchRouteSettings>("""{"prediction":"THIRTY_MINUTES"}""")
+        assertEquals(CatchPrediction.THIRTY_MINUTES, old.prediction)
+        val oldOpportunity = json.decodeFromString<SpawnOpportunity>("""{"id":"x","pointId":"p","point":{"latitude":0.0,"longitude":0.0},"availableFrom":1,"despawnAt":2,"basis":"observed_encounter"}""")
+        assertFalse(oldOpportunity.requiresLiveConfirmation)
+        assertEquals("unknown", oldOpportunity.activityPattern)
+    }
+
     private class Fake : CatchRoutesService {
         val pages = mutableListOf<Response<JsonObject>>()
         val catalogues = mutableListOf<Response<JsonObject>>()

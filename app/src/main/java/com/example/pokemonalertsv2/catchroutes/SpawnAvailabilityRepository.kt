@@ -70,7 +70,7 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
             "to" to Instant.ofEpochMilli(settings.endAtMillis).toString(), "limit" to "2000",
             "includePredictions" to (settings.prediction != CatchPrediction.SUPPORTED_ONLY).toString(),
         )
-        if (settings.prediction != CatchPrediction.SUPPORTED_ONLY) query["assumedDurationSeconds"] =
+        if (settings.prediction in listOf(CatchPrediction.THIRTY_MINUTES, CatchPrediction.SIXTY_MINUTES)) query["assumedDurationSeconds"] =
             if (settings.prediction == CatchPrediction.SIXTY_MINUTES) "3600" else "1800"
         repeat(3) { attempt ->
             val rows = linkedMapOf<String, SpawnOpportunity>()
@@ -80,6 +80,7 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
             var cursor: String? = null
             var version: String? = null
             var restart = false
+            var restrictedPointCount = 0
             var page = 0
             do {
                 coroutineContext.ensureActive()
@@ -97,7 +98,12 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
                     val name = s["source"]?.jsonPrimitive?.contentOrNull ?: "Unknown"
                     sourceMetadata[name] = SpawnSourceMetadata(name, s["refreshedAt"]?.jsonPrimitive?.contentOrNull,
                         s["complete"]?.jsonPrimitive?.booleanOrNull, s["coverageKind"]?.jsonPrimitive?.contentOrNull,
-                        s["returned"]?.jsonPrimitive?.intOrNull, s["dropped"]?.jsonPrimitive?.intOrNull)
+                        s["returned"]?.jsonPrimitive?.intOrNull, s["dropped"]?.jsonPrimitive?.intOrNull,
+                        (s["liveSnapshot"] as? JsonObject)?.let { live ->
+                            SpawnLiveSnapshot(live["refreshedAt"]?.jsonPrimitive?.contentOrNull, live["complete"]?.jsonPrimitive?.booleanOrNull,
+                                live["coverageKind"]?.jsonPrimitive?.contentOrNull, live["returned"]?.jsonPrimitive?.intOrNull, live["dropped"]?.jsonPrimitive?.intOrNull)
+                        })
+                    if (sourceMetadata[name]?.liveSnapshot?.complete == false) warnings += "$name: incomplete live coverage."
                     if (s["complete"]?.jsonPrimitive?.booleanOrNull != true) warnings += "${s["source"]?.jsonPrimitive?.content ?: "Source"}: incomplete coverage."
                 }
                 for (raw in body.getValue("data").jsonArray) {
@@ -106,7 +112,8 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
                     if (sourceName != null && sources.none { it.jsonObject["source"]?.jsonPrimitive?.contentOrNull == sourceName }) {
                         warnings += "$sourceName: freshness and coverage are unknown."
                     }
-                    val parsed = point?.let { parseSpawnWindows(it) }
+                    if (point?.get("requiresLiveConfirmation")?.jsonPrimitive?.booleanOrNull == true) restrictedPointCount++
+                    val parsed = point?.let { parseSpawnWindows(it) { warning -> warnings += warning } }
                     if (parsed == null) { warnings += "Invalid spawnpoint records were excluded."; continue }
                     for (o in parsed) {
                         val earliest = catchDistance(settings.start, o.point).let { max(0.0, it - settings.radius) } / settings.speedMps * 1000
@@ -117,7 +124,7 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
                 cursor = body["nextCursor"]?.jsonPrimitive?.contentOrNull
                 if (cursor != null && !cursors.add(cursor)) throw CatchApiException("Backend repeated a pagination cursor.")
             } while (cursor != null)
-            if (!restart) return SpawnAvailability(rows.values.toList(), version.orEmpty(), warnings.toList(), sourceMetadata.values.toList())
+            if (!restart) return SpawnAvailability(rows.values.toList(), version.orEmpty(), warnings.toList(), sourceMetadata.values.toList(), restrictedPointCount)
             if (attempt == 2) throw CatchApiException("Spawn data changed repeatedly. Please retry.")
             progress("Spawn data changed; restarting download")
         }
@@ -133,24 +140,31 @@ internal fun validateEnvelope(body: JsonObject) {
     }
 }
 
-internal fun parseSpawnWindows(row: JsonObject): List<SpawnOpportunity>? = runCatching {
+internal fun parseSpawnWindows(row: JsonObject, warning: (String) -> Unit = {}): List<SpawnOpportunity>? = runCatching {
     val point = CatchPoint(row.getValue("latitude").jsonPrimitive.double, row.getValue("longitude").jsonPrimitive.double)
     require(point.valid)
     val id = row.getValue("id").jsonPrimitive.content
     require(id.isNotBlank())
     if (row["associationAmbiguous"]?.jsonPrimitive?.booleanOrNull == true) return@runCatching emptyList()
     val uncertainty = (row["uncertainty"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()
-    row.getValue("windows").jsonArray.map { raw ->
-        val w = raw.jsonObject
-        val from = Instant.parse(w.getValue("availableFrom").jsonPrimitive.content).toEpochMilli()
-        val until = Instant.parse(w.getValue("despawnAt").jsonPrimitive.content).toEpochMilli()
-        val basis = w.getValue("basis").jsonPrimitive.content
-        require(until > from && basis in listOf("observed_encounter", "recurring_schedule", "assumed_duration", "unverified_encounter"))
-        SpawnOpportunity(w.getValue("opportunityId").jsonPrimitive.content, id, point, from, until, basis,
-            (uncertainty + (w["uncertainty"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()).distinct(),
-            row["observedDurationLowerBoundSeconds"]?.jsonPrimitive?.intOrNull,
-            row["source"]?.jsonPrimitive?.contentOrNull, row["catalogueSeenAt"]?.jsonPrimitive?.contentOrNull,
-            row["liveLastSeenAt"]?.jsonPrimitive?.contentOrNull, row["timingConflict"]?.jsonPrimitive?.booleanOrNull == true,
-            row["despawnBasis"]?.jsonPrimitive?.contentOrNull)
+    val restricted = row["requiresLiveConfirmation"]?.jsonPrimitive?.booleanOrNull == true
+    row.getValue("windows").jsonArray.mapNotNull { raw ->
+        runCatching {
+            val w = raw.jsonObject
+            val from = Instant.parse(w.getValue("availableFrom").jsonPrimitive.content).toEpochMilli()
+            val until = Instant.parse(w.getValue("despawnAt").jsonPrimitive.content).toEpochMilli()
+            val basis = w.getValue("basis").jsonPrimitive.content
+            require(until > from && basis in listOf("observed_encounter", "recurring_schedule", "inferred_lifetime", "assumed_duration", "unverified_encounter"))
+            if (restricted && basis != "observed_encounter") return@mapNotNull null
+            require(w.getValue("opportunityId").jsonPrimitive.content.isNotBlank())
+            SpawnOpportunity(w.getValue("opportunityId").jsonPrimitive.content, id, point, from, until, basis,
+                (uncertainty + (w["uncertainty"] as? JsonArray)?.map { it.jsonPrimitive.content }.orEmpty()).distinct(),
+                row["observedDurationLowerBoundSeconds"]?.jsonPrimitive?.intOrNull,
+                row["source"]?.jsonPrimitive?.contentOrNull, row["catalogueSeenAt"]?.jsonPrimitive?.contentOrNull,
+                row["liveLastSeenAt"]?.jsonPrimitive?.contentOrNull, row["timingConflict"]?.jsonPrimitive?.booleanOrNull == true,
+                w["despawnBasis"]?.jsonPrimitive?.contentOrNull ?: row["despawnBasis"]?.jsonPrimitive?.contentOrNull,
+                restricted, row["activityPattern"]?.jsonPrimitive?.contentOrNull ?: "unknown",
+                row["activityPatternBasis"]?.jsonPrimitive?.contentOrNull)
+        }.getOrElse { warning("Invalid or unsupported spawn windows were excluded."); null }
     }
 }.getOrNull()

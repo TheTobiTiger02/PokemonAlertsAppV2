@@ -121,10 +121,13 @@ class CatchRouteController private constructor(private val context: Context) {
         val remainingMinutes = kotlin.math.ceil((s.itinerary.settings.endAtMillis - now) / 60_000.0).toInt()
         if (remainingMinutes <= 0) return
         lastRefresh = now
+        mutable.value = s.copy(needsRefresh = true)
+        evaluator.reset()
         val epoch = generation
         refreshJob = scope.launch {
             recalculating.value = true
             try {
+                command { persist() }
                 val original = s.itinerary.settings
                 val settings = original.copy(start = p, startAtMillis = now, durationMinutes = remainingMinutes,
                     finish = if (original.finish == CatchFinish.ROUND_TRIP) CatchFinish.PIN else original.finish,

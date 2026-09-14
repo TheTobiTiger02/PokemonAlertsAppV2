@@ -9,7 +9,7 @@ data class CatchPoint(val latitude: Double, val longitude: Double) {
 }
 
 @Serializable enum class CatchFinish { ROUND_TRIP, ANYWHERE, PIN }
-@Serializable enum class CatchPrediction { THIRTY_MINUTES, SIXTY_MINUTES, SUPPORTED_ONLY }
+@Serializable enum class CatchPrediction { AUTOMATIC, THIRTY_MINUTES, SIXTY_MINUTES, SUPPORTED_ONLY }
 
 @Serializable
 data class CatchRouteSettings(
@@ -21,7 +21,7 @@ data class CatchRouteSettings(
     val end: CatchPoint? = null,
     val speedMps: Double = 1.36,
     val spacialRend: Boolean = false,
-    val prediction: CatchPrediction = CatchPrediction.THIRTY_MINUTES,
+    val prediction: CatchPrediction = CatchPrediction.AUTOMATIC,
     /** Exact original deadline for internal replans, including the final stretch. */
     val deadlineMillis: Long? = null,
 ) {
@@ -53,16 +53,22 @@ data class SpawnOpportunity(
     val liveLastSeenAt: String? = null,
     val timingConflict: Boolean = false,
     val despawnBasis: String? = null,
+    val requiresLiveConfirmation: Boolean = false,
+    val activityPattern: String = "unknown",
+    val activityPatternBasis: String? = null,
 ) {
     val observed: Boolean get() = basis == "observed_encounter"
-    val evidenceRank: Int get() = when (basis) { "observed_encounter" -> 3; "recurring_schedule" -> 2; "assumed_duration" -> 1; else -> 0 }
+    val evidenceRank: Int get() = when (basis) { "observed_encounter" -> 4; "recurring_schedule" -> 3; "inferred_lifetime" -> 2; "assumed_duration" -> 1; else -> 0 }
 }
 
 @Serializable data class SpawnSourceMetadata(val source: String, val refreshedAt: String? = null, val complete: Boolean? = null,
+    val coverageKind: String? = null, val returned: Int? = null, val dropped: Int? = null, val liveSnapshot: SpawnLiveSnapshot? = null)
+
+@Serializable data class SpawnLiveSnapshot(val refreshedAt: String? = null, val complete: Boolean? = null,
     val coverageKind: String? = null, val returned: Int? = null, val dropped: Int? = null)
 
 data class SpawnAvailability(val opportunities: List<SpawnOpportunity>, val version: String, val warnings: List<String>,
-    val sources: List<SpawnSourceMetadata> = emptyList())
+    val sources: List<SpawnSourceMetadata> = emptyList(), val restrictedPointCount: Int = 0)
 
 @Serializable data class CatchPathPosition(val point: CatchPoint, val meters: Double)
 @Serializable data class CatchEncounter(val opportunity: SpawnOpportunity, val arrivalMillis: Long, val meters: Double)
@@ -93,7 +99,9 @@ data class SpawnAvailability(val opportunities: List<SpawnOpportunity>, val vers
     val finished: Boolean = false,
 ) {
     fun wasVisited(opportunity: SpawnOpportunity): Boolean = visits.any { sameCycle(it.opportunity, opportunity, it.visitedAt) }
-    val remaining: List<CatchEncounter> get() = itinerary.encounters.filterNot { wasVisited(it.opportunity) }
+    val remaining: List<CatchEncounter> get() = if (needsRefresh) emptyList() else itinerary.encounters.filterNot { wasVisited(it.opportunity) }
+    val displayItinerary: CatchItinerary by lazy { if (needsRefresh) itinerary.copy(encounters = emptyList()) else itinerary }
+    val availabilityReadout: String get() = if (needsRefresh) "Timing needs refresh" else "${remaining.size} remaining"
 }
 
 // Use the actual visit instant to reconcile an expiry correction without consuming a later hourly cycle.
