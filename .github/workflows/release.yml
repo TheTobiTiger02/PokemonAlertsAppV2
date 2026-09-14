@@ -84,7 +84,7 @@ jobs:
       - name: Test and build release APK
         if: steps.tag_check.outputs.exists == 'false'
         run: |
-          ./gradlew \
+          ./gradlew --max-workers=1 \
             testDebugUnitTest \
             testReleaseUnitTest \
             compileDebugAndroidTestKotlin \
