@@ -811,6 +811,7 @@ internal fun OpenStreetMapView(
     interactive: Boolean = true,
     protectedAlertIds: Set<String> = emptySet(),
     emphasizedAlertIds: Set<String> = emptySet(),
+    huntOrdinals: Map<String, Int> = emptyMap(),
     baseMarkerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
     emphasizedMarkerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
     clusterMarkerSizeDp: Float = MAP_FULL_CLUSTER_SIZE_DP
@@ -968,7 +969,7 @@ internal fun OpenStreetMapView(
      * palette, marker size, GoDex matches, emphasis - which is what [styleGeneration] tracks.
      */
     val styleGeneration = remember(
-        basePalette, goDexMatches, emphasizedAlertIds,
+        basePalette, goDexMatches, emphasizedAlertIds, huntOrdinals,
         baseMarkerSizePx, emphasizedMarkerSizePx, clusterMarkerSizePx
     ) { Any() }
     val pinCache = remember(styleGeneration) { HashMap<String, OpenStreetMapMarker>() }
@@ -977,6 +978,7 @@ internal fun OpenStreetMapView(
         basePalette,
         goDexMatches,
         emphasizedAlertIds,
+        huntOrdinals,
         baseMarkerSizePx,
         emphasizedMarkerSizePx,
         clusterMarkerSizePx
@@ -997,7 +999,8 @@ internal fun OpenStreetMapView(
                     minutePrecision = minutePrecisionCountdown,
                     basePalette = basePalette,
                     goDexMatches = goDexMatches,
-                    emphasized = emphasized
+                    emphasized = emphasized,
+                    ordinal = (item as? MapMarkerItem.Alert)?.alert?.uniqueId?.let { huntOrdinals[it] }
                 )
             }
           }
@@ -1028,7 +1031,7 @@ internal fun OpenStreetMapView(
                 val alert = (item as MapMarkerItem.Alert).alert
                 val emphasized = alert.uniqueId in emphasizedAlertIds
                 val itemSizePx = if (emphasized) emphasizedMarkerSizePx else baseMarkerSizePx
-                val request = openStreetMapIconRequest(alert, itemSizePx, basePalette, goDexMatches)
+                val request = openStreetMapIconRequest(alert, itemSizePx, basePalette, goDexMatches, huntOrdinals[alert.uniqueId])
                 // The pin is drawn without its countdown, so its identity - and the style image
                 // it becomes - does not change when the clock ticks.
                 val icon = createMapMarkerIcon(
@@ -1050,7 +1053,8 @@ internal fun OpenStreetMapView(
                     questQuantity = request.questQuantity,
                     raidTier = request.raidTier,
                     isRocket = request.isRocket,
-                    isKecleon = request.isKecleon
+                    isKecleon = request.isKecleon,
+                    ordinal = request.ordinal
                 ) ?: return@mapNotNull null
                 OpenStreetMapMarker(
                     item = item,

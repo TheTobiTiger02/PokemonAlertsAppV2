@@ -84,7 +84,8 @@ internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) 
             )
             .semantics {
                 contentDescription = "Battle setup: level ${options.attackerLevel}, " +
-                    "${options.weather.label}, ${options.friendship.label}, ${options.sort.label}"
+                    "${options.weather.label}, ${options.friendship.label}, ${options.sort.label}, " +
+                    "Party Power ${if (options.partyPower) "on" else "off"}"
             },
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
@@ -100,6 +101,7 @@ internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) 
                     text = buildString {
                         append("L${options.attackerLevel} · ${options.weather.label} · ")
                         append(options.friendship.label)
+                        if (options.partyPower) append(" · Party Power")
                         append(" · ${options.sort.label}")
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -167,6 +169,9 @@ internal fun BattleSetupSheet(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        SheetSwitchRow("Party Power", options.partyPower) {
+            actions.onOptionsChanged(options.copy(partyPower = it))
+        }
         SheetSwitchRow("Include megas", options.includeMegas) {
             actions.onOptionsChanged(options.copy(includeMegas = it))
         }

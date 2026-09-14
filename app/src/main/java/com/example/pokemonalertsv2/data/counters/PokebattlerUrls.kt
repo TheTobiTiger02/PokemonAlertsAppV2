@@ -79,6 +79,8 @@ object PokebattlerUrls {
         "aggregation" to "AVERAGE",
         "randomAssistants" to "-1",
         "friendLevel" to options.friendship.apiValue,
+        // Matches the website toggle: one trainer off, two trainers with Party Power.
+        "numParty" to if (options.partyPower) "2" else "1",
         "includeLegendary" to options.includeLegendary.toString(),
         "includeShadow" to options.includeShadow.toString(),
         "includeMegas" to options.includeMegas.toString()

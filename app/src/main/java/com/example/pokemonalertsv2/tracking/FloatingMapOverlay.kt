@@ -469,6 +469,11 @@ internal class FloatingMapOverlay(context: Context) {
 
     private fun iconButton(iconRes: Int, onClick: () -> Unit): ImageView =
         ImageView(themedContext).apply {
+            contentDescription = when (iconRes) {
+                R.drawable.ic_fit_map -> "Focus Hunt target or route"
+                R.drawable.ic_my_location -> "Centre on my location"
+                else -> "Open map in app"
+            }
             setImageResource(iconRes)
             imageTintList = ColorStateList.valueOf(0xFF16181D.toInt())
             scaleType = ImageView.ScaleType.FIT_CENTER
@@ -531,6 +536,13 @@ internal class FloatingMapOverlay(context: Context) {
         cameraAdjustedByHand = true
         runCatching { controller.fitAlerts(coordinates, dp(CLUSTER_FIT_PADDING_DP)) }
             .onFailure { Log.w(TAG, "Could not open the tapped stack", it) }
+    }
+
+    fun focusRoute(coordinates: List<AlertMapCoordinates>, force: Boolean = false) {
+        if (cameraAdjustedByHand && !force) return
+        if (force) cameraAdjustedByHand = false
+        runCatching { controller.fitAlerts(coordinates, dp(FIT_PADDING_DP)) }
+            .onFailure { Log.w(TAG, "Could not frame the Hunt route", it) }
     }
 
     fun focus(

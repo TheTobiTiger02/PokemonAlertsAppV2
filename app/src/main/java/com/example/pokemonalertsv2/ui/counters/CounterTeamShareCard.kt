@@ -99,6 +99,7 @@ object CounterTeamShareCard {
             if (state.showingPersonal) append("My Pokémon") else append("L${state.options.attackerLevel}")
             append(" · ").append(state.options.weather.label)
             append(" · ").append(state.options.friendship.label)
+            if (state.options.partyPower) append(" · Party Power")
         }
         return ShareContent(
             bossName = state.bossDisplayName ?: "Raid boss",

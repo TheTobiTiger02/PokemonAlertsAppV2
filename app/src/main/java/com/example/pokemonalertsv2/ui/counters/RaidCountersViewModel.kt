@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import kotlinx.coroutines.ensureActive
+
 import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
@@ -297,12 +299,20 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
 
     fun onOptionsChanged(options: RaidCounterOptions) {
         if (_uiState.value.options == options) return
+        val partyChanged = _uiState.value.options.partyPower != options.partyPower
         // Touching weather at all makes it the user's, so the "from this raid" note goes away.
         val stillFromAlert = _uiState.value.weatherFromAlert &&
             options.weather == _uiState.value.options.weather
         _uiState.update {
             it.copy(
                 options = options,
+                counters = if (partyChanged) emptyList() else it.counters,
+                personal = if (partyChanged) null else it.personal,
+                team = if (partyChanged) emptyList() else it.team,
+                degradedOptions = if (partyChanged) emptyList() else it.degradedOptions,
+                errorMessage = null,
+                personalError = null,
+                isLoading = true,
                 weatherFromAlert = stillFromAlert,
                 weatherUnconfirmed = stillFromAlert && it.weatherUnconfirmed
             )
@@ -460,6 +470,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 val dexes = runCatching { gameMaster.dexNumbersFor(ids) }.getOrDefault(emptyMap())
                 // One local read for the whole move table, memoized in the repository.
                 val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -489,6 +500,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                 computePersonal()
             }
             .onFailure { throwable ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 val error = (throwable as? CountersException)?.error
                 _uiState.update {
                     it.copy(
@@ -662,12 +674,14 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
 
     /** Applies a full or partial Pokébattler ranking, fetching sprites for the new rows. */
     private suspend fun publishPersonal(result: PokebattlerPersonalResult, stillLoading: Boolean) {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val ranking = result.ranking
         val ids = ranking.ranked.map { it.pokemonId } + ranking.team.map { it.counter.pokemonId }
         val sprites = runCatching { gameMaster.spriteUrls(ids) }.getOrDefault(emptyMap())
         val types = runCatching { gameMaster.typesFor(ids) }.getOrDefault(emptyMap())
         val dexes = runCatching { gameMaster.dexNumbersFor(ids) }.getOrDefault(emptyMap())
         val moveTypes = runCatching { gameMaster.moveTypesByLabel() }.getOrDefault(emptyMap())
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         _uiState.update {
             it.copy(
                 personalLoading = stillLoading,

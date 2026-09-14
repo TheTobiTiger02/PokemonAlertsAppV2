@@ -77,6 +77,12 @@ class HuntRepository private constructor(context: Context) {
         encodeDefaults = true
     }
 
+    private val batterySaverKey = androidx.datastore.preferences.core.booleanPreferencesKey("battery_saver")
+    val batterySaverEnabled: Flow<Boolean> = dataStore.data.map { it[batterySaverKey] ?: false }.distinctUntilChanged()
+    suspend fun setBatterySaverEnabled(enabled: Boolean) {
+        dataStore.edit { it[batterySaverKey] = enabled }
+    }
+
     val sessionFlow: Flow<HuntSession?> = dataStore.data
         .map { preferences -> preferences[ACTIVE_HUNT_KEY]?.decodeSession() }
         .distinctUntilChanged()

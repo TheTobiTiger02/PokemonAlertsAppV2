@@ -63,7 +63,8 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
                 attackStrategy = prefs[STRATEGY_KEY].toEnum(PokebattlerAttackStrategy.CINEMATIC),
                 includeMegas = prefs[MEGAS_KEY] ?: true,
                 includeShadow = prefs[SHADOW_KEY] ?: true,
-                includeLegendary = prefs[LEGENDARY_KEY] ?: true
+                includeLegendary = prefs[LEGENDARY_KEY] ?: true,
+                partyPower = prefs[PARTY_POWER_KEY] ?: false
             ),
             source = prefs[SOURCE_KEY].toEnum(CounterSourceId.ALL_POKEMON),
             ownedOnly = prefs[OWNED_ONLY_KEY] ?: false,
@@ -87,6 +88,7 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
             prefs[MEGAS_KEY] = options.includeMegas
             prefs[SHADOW_KEY] = options.includeShadow
             prefs[LEGENDARY_KEY] = options.includeLegendary
+            prefs[PARTY_POWER_KEY] = options.partyPower
         }
     }
 
@@ -153,6 +155,7 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
         this?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
 
     private companion object {
+        val PARTY_POWER_KEY = booleanPreferencesKey("raid_counters_party_power")
         val LEVEL_KEY = intPreferencesKey("raid_counters_attacker_level")
         val WEATHER_KEY = stringPreferencesKey("raid_counters_weather")
         val FRIENDSHIP_KEY = stringPreferencesKey("raid_counters_friendship")

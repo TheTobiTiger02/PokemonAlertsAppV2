@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.notifications
 
-import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.*
+import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -94,6 +95,23 @@ class AlertNotifierSettingsTest {
 
         assertTrue(settings.shouldNotify(sampleAlert(type = listOf("Quest")), GoDexMatchStatus.COLLECTED))
         assertFalse(settings.shouldNotify(sampleAlert(type = listOf("Rocket")), GoDexMatchStatus.NEEDED))
+    }
+
+    @Test fun rareFlamigoDistanceLimitIsIndependentOfHuntMatching() {
+        val flamigo = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Rare"), latitude = 49.7, longitude = 8.6)
+        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Rare")), rareSpecies = FilterSelection.only(listOf("Flamigo")))
+        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.RARE.name to 300)))
+        val settings = notificationSettings().copy(filterDefinition = notifications)
+        assertTrue(isHuntTarget(flamigo, hunt))
+        assertTrue(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 299f)))
+        assertTrue(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 300f)))
+        assertFalse(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 301f)))
+        assertFalse(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 3000f)))
+        // User explicitly retains notification delivery when distance cannot be checked.
+        assertTrue(settings.shouldNotify(flamigo, matchContext = FilterMatchContext()))
+        val dualType = flamigo.copy(type = listOf("Rare", "Hundo"), iv = "100")
+        val overlapping = settings.copy(filterDefinition = notifications.copy(alertTypes = FilterSelection.only(listOf("Rare", "Hundo"))))
+        assertTrue(overlapping.shouldNotify(dualType, matchContext = FilterMatchContext(effectiveDistanceMeters = 3000f)))
     }
 
     private fun notificationSettings(

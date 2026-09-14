@@ -113,6 +113,8 @@ import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.hunt.HuntMapFocus
+import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
 import com.example.pokemonalertsv2.hunt.huntLegNode
@@ -959,6 +961,7 @@ internal fun AlertsMapScreenContent(
             )
         }
     }
+    val huntOrdinals = huntTargetAlerts.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
     val renderedAlerts = remember(
         filteredAlerts,
         huntTargetAlerts,
@@ -968,13 +971,15 @@ internal fun AlertsMapScreenContent(
         expirationNow
     ) {
         mapAlertsForPresentation(
-            filteredAlerts = if (huntPictureInPicture) huntTargetAlerts else filteredAlerts,
+            filteredAlerts = if (huntPictureInPicture) huntTargetAlerts else
+                (filteredAlerts + huntTargetAlerts.take(HUNT_ORDINAL_MAX)).distinctBy { it.uniqueId },
             trackedAlert = arrivalTracking.activeDestination?.alert,
             compactPictureInPicture = compactPictureInPicture,
             nowMillis = expirationNow
         )
     }
     val protectedAlertIds = remember(
+        huntOrdinals,
         compactPictureInPicture,
         arrivalTracking.activeDestination?.uniqueId,
         selectedAlertId,
@@ -987,7 +992,7 @@ internal fun AlertsMapScreenContent(
             browsedAlertId = selectedAlertId,
             renderedAlerts = renderedAlerts,
             huntActive = huntSession != null
-        )
+        ) + huntOrdinals.keys
     }
     val emphasizedAlertIds = remember(
         compactPictureInPicture,
@@ -1042,6 +1047,7 @@ internal fun AlertsMapScreenContent(
     // Generous enough that neither marker is drawn flush against an edge or under the chip
     // - the window is only about 145 dp tall, so there is no room for a subtler margin.
     val pipFitPaddingPx = with(density) { 40.dp.roundToPx() }
+    var huntFocus by remember(huntSession?.startedAtMillis) { mutableStateOf(HuntMapFocus.READY) }
     var lastFitLatitude by remember { mutableStateOf<Double?>(null) }
     var lastFitLongitude by remember { mutableStateOf<Double?>(null) }
 
@@ -1050,6 +1056,7 @@ internal fun AlertsMapScreenContent(
      * "where is it" and "where am I" at once. Without a fix yet, the alert is all we have.
      */
     fun focusBrowsedAlert(alert: PokemonAlert, from: android.location.Location?) {
+        huntFocus = HuntMapFocus.READY
         val coordinates = alert.mapCoordinatesOrNull() ?: return
         if (from == null) {
             lastFitLatitude = null
@@ -1104,6 +1111,40 @@ internal fun AlertsMapScreenContent(
                 }
             }
         }
+    }
+
+    fun fitHuntRoute() {
+        val points = huntRouteFocusCoordinates(
+            huntTargetAlerts, userLocation?.latitude, userLocation?.longitude
+        )
+        if (points.isEmpty()) return
+        applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
+        if (points.size == 1) {
+            moveMapCamera(points[0].latitude, points[0].longitude, 16.0)
+        } else if (mapSource == MapDisplaySource.GOOGLE) {
+            scope.launch {
+                runCatching {
+                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(
+                        LatLngBounds.Builder().apply {
+                            points.forEach { include(LatLng(it.latitude, it.longitude)) }
+                        }.build(), pipFitPaddingPx
+                    ), 500)
+                    val position = cameraPositionState.position
+                    updateRetainedCamera(MapCameraSnapshot(position.target.latitude, position.target.longitude, position.zoom.toDouble()))
+                }
+            }
+        } else openStreetMapController.fitAlerts(points, pipFitPaddingPx)
+    }
+
+    fun pressHuntFocus() {
+        val next = huntFocus.pressed()
+        applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
+        if (next == HuntMapFocus.ROUTE) fitHuntRoute()
+        else {
+            val target = arrivalTracking.activeDestination?.alert ?: huntTargetAlerts.firstOrNull()
+            if (target != null) focusBrowsedAlert(target, userLocation) else fitHuntRoute()
+        }
+        huntFocus = next
     }
 
     fun stepBrowseSelection(forward: Boolean) {
@@ -1423,6 +1464,10 @@ internal fun AlertsMapScreenContent(
     } else {
         openStreetMapLoaded
     }
+    LaunchedEffect(huntFocus, huntTargetAlerts.take(HUNT_ORDINAL_MAX).map { it.mapCoordinatesOrNull() }, currentMapLoaded, mapSource) {
+        if (currentMapLoaded && huntFocus == HuntMapFocus.ROUTE) fitHuntRoute()
+    }
+
     val mapLoadState = resolveMapLoadState(currentMapLoaded, mapLoadFailed)
 
     LaunchedEffect(mapSource, mapLoadAttempt, currentMapLoaded) {
@@ -1519,7 +1564,9 @@ internal fun AlertsMapScreenContent(
 
     val currentFocusBrowsedAlert by rememberUpdatedState(
         newValue = { alert: PokemonAlert, from: android.location.Location? ->
+            val previousFocus = huntFocus
             focusBrowsedAlert(alert, from)
+            huntFocus = previousFocus
         }
     )
     // Re-frame as the user walks, but only once they have actually moved: the fix stream is
@@ -1545,7 +1592,7 @@ internal fun AlertsMapScreenContent(
                     location.latitude,
                     location.longitude
                 ) >= MAP_PIP_REFIT_METERS
-            if (moved) {
+            if (moved && huntFocus != HuntMapFocus.ROUTE) {
                 currentFocusBrowsedAlert(alert, location)
             }
         }
@@ -1724,6 +1771,7 @@ internal fun AlertsMapScreenContent(
         val markerCountdownClock = rememberCountdownClock(markerTickMillis)
 
         fun fitVisibleAlerts() {
+            if (huntSession != null) { pressHuntFocus(); return }
             applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
             if (visibleCoordinates.isEmpty()) {
                 Toast.makeText(context, R.string.map_no_alerts_to_show, Toast.LENGTH_SHORT).show()
@@ -1863,6 +1911,7 @@ internal fun AlertsMapScreenContent(
                                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                                 onClick = {
                                     if (!compactPictureInPicture) {
+                                        if (huntSession != null) focusBrowsedAlert(item.alert, userLocation)
                                         selectedAlertId = item.alert.uniqueId
                                     }
                                 },
@@ -1871,7 +1920,8 @@ internal fun AlertsMapScreenContent(
                                 } else {
                                     baseMarkerSizeDp
                                 },
-                                emphasized = emphasized
+                                emphasized = emphasized,
+                                ordinal = huntOrdinals[item.alert.uniqueId]
                             )
                         }
                         is MapMarkerItem.Cluster -> key("cluster-${item.id}") {
@@ -1976,7 +2026,10 @@ internal fun AlertsMapScreenContent(
                         Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
                     },
                     onAlertClick = {
-                        if (!compactPictureInPicture) selectedAlertId = it.uniqueId
+                        if (!compactPictureInPicture) {
+                            if (huntSession != null) focusBrowsedAlert(it, userLocation)
+                            selectedAlertId = it.uniqueId
+                        }
                     },
                     onClusterClick = { cluster ->
                         when (
@@ -2013,6 +2066,7 @@ internal fun AlertsMapScreenContent(
                     interactive = !compactPictureInPicture,
                     protectedAlertIds = protectedAlertIds,
                     emphasizedAlertIds = emphasizedAlertIds,
+                    huntOrdinals = huntOrdinals,
                     baseMarkerSizeDp = baseMarkerSizeDp,
                     emphasizedMarkerSizeDp = emphasizedMarkerSizeDp,
                     clusterMarkerSizeDp = clusterMarkerSizeDp
@@ -2215,9 +2269,7 @@ internal fun AlertsMapScreenContent(
                             target = arrivalTracking.activeDestination?.alert,
                             distanceMeters = journeyDistanceMeters,
                             onClick = {
-                                arrivalTracking.activeDestination?.alert?.let {
-                                    focusBrowsedAlert(it, userLocation)
-                                }
+                                pressHuntFocus()
                             }
                         )
                     }
@@ -2383,7 +2435,9 @@ internal fun AlertsMapScreenContent(
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_fit_map),
-                        contentDescription = stringResource(R.string.map_show_all_alerts)
+                        contentDescription = if (huntSession != null) {
+                            if (huntFocus == HuntMapFocus.TARGET) "Show Hunt route" else "Focus Hunt target"
+                        } else stringResource(R.string.map_show_all_alerts)
                     )
                 }
                 FloatingActionButton(

@@ -115,7 +115,9 @@ data class RaidCounterOptions(
     val attackStrategy: PokebattlerAttackStrategy = PokebattlerAttackStrategy.CINEMATIC,
     val includeMegas: Boolean = true,
     val includeShadow: Boolean = true,
-    val includeLegendary: Boolean = true
+    val includeLegendary: Boolean = true,
+    /** Standard Pokébattler Party Power; never silently removed by baseline fallback. */
+    val partyPower: Boolean = false
 ) {
 
     /**

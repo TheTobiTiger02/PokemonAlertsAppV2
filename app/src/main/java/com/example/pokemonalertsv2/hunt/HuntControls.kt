@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
 import android.os.Build
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -63,6 +65,8 @@ fun HuntControls(
         ArrivalTrackingRepository.getInstance(context).destinationFlow
     }.collectAsStateWithLifecycle(initialValue = null)
 
+    val batterySaverEnabled by huntRepository.batterySaverEnabled.collectAsStateWithLifecycle(initialValue = false)
+    var batterySaverProblem by remember { mutableStateOf<String?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
     val panelOpenedAt = remember { System.currentTimeMillis() }
     val lastCaught by remember(context) {
@@ -138,6 +142,28 @@ fun HuntControls(
                 ) {
                     Text("Stop hunt")
                 }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Battery Saver", modifier = Modifier.weight(1f))
+            androidx.compose.material3.Switch(
+                checked = batterySaverEnabled,
+                onCheckedChange = { enabled ->
+                    batterySaverProblem = if (enabled) HuntBatterySaver.unavailableReason(context) else null
+                    if (batterySaverProblem == null) scope.launch { huntRepository.setBatterySaverEnabled(enabled) }
+                },
+                modifier = Modifier.semantics { contentDescription = "Hunt Battery Saver" }
+            )
+        }
+        Text("During a hunt, turn the phone upside down to black out the screen. Turn upright to restore it; long press the black screen to disable.", style = MaterialTheme.typography.bodySmall)
+        batterySaverProblem?.let { problem ->
+            Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            if (!android.provider.Settings.canDrawOverlays(context)) {
+                TextButton(onClick = {
+                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:${context.packageName}")))
+                }) { Text("Allow display over other apps") }
             }
         }
 

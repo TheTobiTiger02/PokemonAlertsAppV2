@@ -23,6 +23,9 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.MainActivity
+import com.example.pokemonalertsv2.hunt.HuntMapFocus
+import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
+import com.example.pokemonalertsv2.hunt.HuntBatterySaver
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.huntTargets
@@ -97,6 +100,9 @@ class ArrivalTrackingService : Service() {
      * notification is rebuilt from synchronous callbacks (location fixes, the
      * chip refresh loop) that cannot suspend to read the store.
      */
+    private var renderedHuntTargets: List<PokemonAlert> = emptyList()
+    private var huntStartedAt: Long? = null
+    private var huntFocus = HuntMapFocus.READY
     private var huntActive = false
 
     /**
@@ -104,6 +110,12 @@ class ArrivalTrackingService : Service() {
      * [huntActive] is: the acquire path runs on location fixes and cannot suspend.
      */
     private var huntPaused = false
+    private var batterySaverJob: Job? = null
+    private val batterySaver by lazy {
+        HuntBatterySaver(this) {
+            serviceScope.launch { huntRepository.setBatterySaverEnabled(false) }
+        }
+    }
     private var huntJob: Job? = null
 
     /**
@@ -172,6 +184,11 @@ class ArrivalTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         ArrivalTrackingNotifications.ensureChannels(this)
+        batterySaverJob = serviceScope.launch {
+            kotlinx.coroutines.flow.combine(huntRepository.sessionFlow, huntRepository.batterySaverEnabled) { session, enabled ->
+                session != null && enabled
+            }.collect { batterySaver.setEnabled(it) }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -242,6 +259,8 @@ class ArrivalTrackingService : Service() {
         if (huntJob == null) {
             huntJob = serviceScope.launch {
                 huntRepository.sessionFlow.collect { session ->
+                    if (huntStartedAt != session?.startedAtMillis) huntFocus = HuntMapFocus.READY
+                    huntStartedAt = session?.startedAtMillis
                     // Keep the definition, not just the flag: the floating map draws
                     // the hunt's targets, which only the definition can produce.
                     huntDefinition = session?.definition
@@ -324,6 +343,8 @@ class ArrivalTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        batterySaverJob?.cancel()
+        batterySaver.close()
         stopLocationUpdates()
         expiryJob?.cancel()
         chipRefreshJob?.cancel()
@@ -787,9 +808,12 @@ class ArrivalTrackingService : Service() {
         }
         floatingMap.onRecenter = { focusFloatingMapOnUser() }
         floatingMap.onFit = {
+            huntFocus = huntFocus.pressed()
             val destination = currentDestination
-            if (destination == null) {
-                focusFloatingMapOnUser()
+            if (huntFocus == HuntMapFocus.ROUTE) {
+                focusHuntRoute(force = true)
+            } else if (destination == null) {
+                lastAcceptedLocation?.let { floatingMap.recenter(it.latitude, it.longitude) }
             } else {
                 floatingMap.focus(
                     userLatitude = lastAcceptedLocation?.latitude,
@@ -818,11 +842,13 @@ class ArrivalTrackingService : Service() {
         // Closing the window ends the hunt. There is one control for "I am done",
         // and it is the one every window has in its corner.
         floatingMap.onClose = { stopEverything(applicationContext) }
+        val mapWasShowing = floatingMap.isShowing
         floatingMap.show {
             focusFloatingMap()
             refreshFloatingMapAlerts()
         }
         floatingMap.setUndoOffer(undoOffer != null)
+        if (!mapWasShowing) batterySaver.restoreOverlayOrder()
         floatingMap.setPaused(huntPaused)
         // One place decides the cadence: full rate while there is a target being
         // walked to, backed off while the hunt is only waiting for one.
@@ -872,6 +898,7 @@ class ArrivalTrackingService : Service() {
      * An overlay gets the touch directly, so this is a method call.
      */
     private fun stepHuntTarget(forward: Boolean) {
+        huntFocus = HuntMapFocus.READY
         val targets = currentHuntTargets()
         if (targets.isEmpty()) return
         val nextId = stepMapPipSelection(
@@ -898,6 +925,9 @@ class ArrivalTrackingService : Service() {
      * stepHuntTarget does it.
      */
     private fun retargetHuntTo(alert: PokemonAlert) {
+        huntFocus = HuntMapFocus.READY
+        pendingCameraRefocus = true
+        focusFloatingMap()
         if (!shouldRetargetHuntTo(alert, currentDestination?.uniqueId, huntActive)) return
         serviceScope.launch {
             runCatching {
@@ -1037,11 +1067,13 @@ class ArrivalTrackingService : Service() {
         }
         // This runs from updateOngoing, i.e. on every location fix. Rebuilding every
         // pin that often -- Canvas work, on the main thread -- was most of the lag.
-        val key = targets.joinToString(",") { it.uniqueId } + "|" + emphasized.orEmpty()
+        renderedHuntTargets = targets
+        val key = targets.joinToString(",") { "${it.uniqueId}:${it.latitude}:${it.longitude}" } + "|" + emphasized.orEmpty()
         if (key == renderedTargetKey) return
         renderedTargetKey = key
 
         floatingMap.setAlerts(targets, emphasized)
+        if (huntFocus == HuntMapFocus.ROUTE) focusHuntRoute()
         // Then the real artwork, off the main thread, replacing the placeholders.
         artworkJob?.cancel()
         artworkJob = serviceScope.launch {
@@ -1050,8 +1082,20 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    /** Keeps the window framed on the trainer and the target as either moves. */
+    /** Fits the displayed numbered route without reranking it from a new GPS fix. */
+    private fun focusHuntRoute(force: Boolean = false) {
+        floatingMap.focusRoute(
+            huntRouteFocusCoordinates(
+                renderedHuntTargets, lastAcceptedLocation?.latitude, lastAcceptedLocation?.longitude
+            ), force
+        )
+    }
+
     private fun focusFloatingMap() {
+        if (huntFocus == HuntMapFocus.ROUTE) {
+            pendingCameraRefocus = false
+            return
+        }
         val destination = currentDestination ?: return
         if (!floatingMap.isShowing) return
         // A changed target overrides both of the rules below: the move gate is about a
@@ -1105,7 +1149,7 @@ class ArrivalTrackingService : Service() {
                     // on freshness: showing the map where the trainer last was beats
                     // showing them the Gulf of Guinea, and it is the same pose the
                     // in-app map already draws its dot from.
-                    if (!standbyCentred) {
+                    if (!standbyCentred && huntFocus != HuntMapFocus.ROUTE) {
                         standbyCentred = true
                         floatingMap.recenter(pose.location.latitude, pose.location.longitude)
                     }
@@ -1335,6 +1379,7 @@ class ArrivalTrackingService : Service() {
 
     /** Standby has no destination, so the camera frames the trainer instead. */
     private fun focusFloatingMapOnUser() {
+        huntFocus = HuntMapFocus.READY
         val origin = lastAcceptedLocation ?: return
         floatingMap.recenter(origin.latitude, origin.longitude)
     }

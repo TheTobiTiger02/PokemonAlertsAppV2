@@ -172,6 +172,7 @@ internal fun MapMarker(
     onClick: () -> Unit,
     markerSizeDp: Float = MAP_FULL_MARKER_SIZE_DP,
     emphasized: Boolean = false,
+    ordinal: Int? = null,
 ) {
     val context = LocalContext.current
     val coordinates = remember(alert.latitude, alert.longitude) {
@@ -250,7 +251,8 @@ internal fun MapMarker(
         questQuantity,
         raidTier,
         isRocket,
-        isKecleon
+        isKecleon,
+        ordinal
     ) {
         MapMarkerIconRequest(
             sizePx = markerSizePx,
@@ -270,7 +272,8 @@ internal fun MapMarker(
             questQuantity = questQuantity,
             raidTier = raidTier,
             isRocket = isRocket,
-            isKecleon = isKecleon
+            isKecleon = isKecleon,
+            ordinal = ordinal
         )
     }
     val markerCacheKey = remember(markerIconRequest) {

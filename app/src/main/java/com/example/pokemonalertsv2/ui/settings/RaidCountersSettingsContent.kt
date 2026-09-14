@@ -107,6 +107,11 @@ fun RaidCountersSettingsContent(
         )
 
         SwitchSetting(
+            title = "Party Power",
+            checked = options.partyPower,
+            onCheckedChange = { onOptionsChanged(options.copy(partyPower = it)) }
+        )
+        SwitchSetting(
             title = "Include megas",
             checked = options.includeMegas,
             onCheckedChange = { onOptionsChanged(options.copy(includeMegas = it)) }

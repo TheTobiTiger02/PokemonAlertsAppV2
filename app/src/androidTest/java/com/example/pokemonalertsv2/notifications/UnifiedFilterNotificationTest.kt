@@ -12,6 +12,37 @@ import org.junit.Test
 import java.time.Instant
 
 class UnifiedFilterNotificationTest {
+    @Test fun rareDistanceSettingsRemainIndependentWhileHunting() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val preferences = AlertPreferences(context.alertPreferencesDataStore)
+        val hunts = com.example.pokemonalertsv2.hunt.HuntRepository.getInstance(context)
+        org.junit.Assume.assumeTrue(hunts.currentSession() == null)
+        val previous = preferences.filterStateDocument.first()
+        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Rare")), rareSpecies = FilterSelection.only(listOf("Flamigo")))
+        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.RARE.name to 300)))
+        val alert = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Rare"))
+        try {
+            preferences.updateFilterStateDocument { it.copy(notifications = FilterAssignment.local(notifications)) }
+            val before = AlertNotifier.NotificationSettings.load(preferences)
+                .copy(notificationsEnabled = true, silenceUntil = 0, quietHoursEnabled = false)
+            hunts.start("Flamigo QA", hunt)
+            val during = AlertNotifier.NotificationSettings.load(preferences)
+                .copy(notificationsEnabled = true, silenceUntil = 0, quietHoursEnabled = false)
+            assertEquals(before.filterDefinition, during.filterDefinition)
+            for (settings in listOf(before, during)) {
+                assertTrue(settings.shouldNotify(alert, matchContext = FilterMatchContext(effectiveDistanceMeters = 299f)))
+                assertTrue(settings.shouldNotify(alert, matchContext = FilterMatchContext(effectiveDistanceMeters = 300f)))
+                assertFalse(settings.shouldNotify(alert, matchContext = FilterMatchContext(effectiveDistanceMeters = 301f)))
+                assertTrue(settings.shouldNotify(alert, matchContext = FilterMatchContext()))
+            }
+            assertEquals(previous.feed, preferences.filterStateDocument.first().feed)
+            assertEquals(previous.map, preferences.filterStateDocument.first().map)
+        } finally {
+            hunts.stop()
+            preferences.updateFilterStateDocument { previous }
+        }
+    }
+
     @Test fun postsOnlyAllowedFutureAlertsAndPreservesOtherSurfaces() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
