@@ -116,10 +116,10 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntMapFocus
 import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
 import com.example.pokemonalertsv2.hunt.HuntRepository
-import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
+import com.example.pokemonalertsv2.hunt.HuntPlan
 import com.example.pokemonalertsv2.hunt.huntLegNode
+import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.HuntTargetBanner
-import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
@@ -128,7 +128,6 @@ import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
 import com.example.pokemonalertsv2.tracking.shouldLabelJourneyOnMap
 import com.example.pokemonalertsv2.tracking.journeyDetailText
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
-import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
@@ -925,43 +924,65 @@ internal fun AlertsMapScreenContent(
 
     // A hunt window answers to the hunt, not to whatever the map happens to be
     // filtered to: the whole point is that only the quarry is on screen.
-    // Emits only when the cache publishes, which only happens on a prefetch, which
-    // only happens on the debounced effect below -- so this cannot drive recomposition
-    // in a loop.
-    val huntRouteCosts by remember { HuntRouteMatrixCache.getInstance().costs }
+    // The plan is the tracking service's, published through the repository, so the map
+    // and the floating window always number the same route -- and the map no longer
+    // plans (and fetches legs) a second time inside composition.
+    val publishedHuntPlan by remember(huntRepository) { huntRepository.plan }
         .collectAsStateWithLifecycle()
-    val huntTargetAlerts = remember(
-        huntPictureInPicture,
-        huntSession,
-        alerts,
-        dismissedAlertIds,
-        expirationNow,
-        userLocation?.latitude,
-        userLocation?.longitude,
-        huntRouteCosts,
-        arrivalTracking.activeDestination?.uniqueId
-    ) {
+    // Only for a hunt the service is not planning (it has not started, or is not running at
+    // all): the map plans for itself, off the main thread, from what it is showing. Once the
+    // service publishes, this goes quiet.
+    var localHuntPlan by remember { mutableStateOf(HuntPlan.Empty) }
+    val servicePlanning = publishedHuntPlan != HuntPlan.Empty
+    val currentMapAlerts by rememberUpdatedState(alerts)
+    val currentMapDismissed by rememberUpdatedState(dismissedAlertIds)
+    LaunchedEffect(huntSession?.definition, huntSession?.area, servicePlanning) {
         val definition = huntSession?.definition
-        if (definition == null) {
-            emptyList()
-        } else {
-            val latitude = userLocation?.latitude ?: ALSBACH_LATITUDE
-            val longitude = userLocation?.longitude ?: ALSBACH_LONGITUDE
-            huntTargets(
-                alerts = alerts,
-                definition = definition,
-                dismissedAlertIds = dismissedAlertIds,
-                originLatitude = latitude,
-                originLongitude = longitude,
-                nowMillis = expirationNow,
-                costs = huntRouteCosts.forOrigin(latitude, longitude, expirationNow),
-                // The route onward from what is being walked to, not a ranking from
-                // wherever the trainer happens to stand.
-                anchorId = arrivalTracking.activeDestination?.uniqueId
+        if (definition == null || servicePlanning) {
+            localHuntPlan = HuntPlan.Empty
+            return@LaunchedEffect
+        }
+        snapshotFlow {
+            listOf(
+                currentMapAlerts,
+                currentMapDismissed,
+                userLocation?.let { huntLegNode(it.latitude, it.longitude) },
+                arrivalTracking.activeDestination?.uniqueId,
+                expirationClock.value
             )
         }
+            .distinctUntilChanged()
+            .collectLatest {
+                val location = userLocation
+                val latitude = location?.latitude ?: ALSBACH_LATITUDE
+                val longitude = location?.longitude ?: ALSBACH_LONGITUDE
+                val destinationId = arrivalTracking.activeDestination?.uniqueId
+                val previous = (listOfNotNull(destinationId) + localHuntPlan.route.map { it.uniqueId }).distinct()
+                val alertsNow = currentMapAlerts
+                val dismissedNow = currentMapDismissed
+                localHuntPlan = withContext(Dispatchers.Default) {
+                    huntTargets(
+                        alerts = alertsNow,
+                        definition = definition,
+                        dismissedAlertIds = dismissedNow,
+                        originLatitude = latitude,
+                        originLongitude = longitude,
+                        previousRouteIds = previous,
+                        area = huntSession?.area.orEmpty()
+                    )
+                }
+            }
     }
-    val huntOrdinals = huntTargetAlerts.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
+    val shownHuntPlan = if (servicePlanning) publishedHuntPlan else localHuntPlan
+    val huntRoute = remember(huntSession, shownHuntPlan, dismissedAlertIds) {
+        if (huntSession?.definition == null) emptyList()
+        else shownHuntPlan.route.filter { it.uniqueId !in dismissedAlertIds }
+    }
+    val huntTargetAlerts = remember(huntSession, shownHuntPlan, dismissedAlertIds) {
+        if (huntSession?.definition == null) emptyList()
+        else shownHuntPlan.ordered.filter { it.uniqueId !in dismissedAlertIds }
+    }
+    val huntOrdinals = huntRoute.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
     val renderedAlerts = remember(
         filteredAlerts,
         huntTargetAlerts,
@@ -972,7 +993,7 @@ internal fun AlertsMapScreenContent(
     ) {
         mapAlertsForPresentation(
             filteredAlerts = if (huntPictureInPicture) huntTargetAlerts else
-                (filteredAlerts + huntTargetAlerts.take(HUNT_ORDINAL_MAX)).distinctBy { it.uniqueId },
+                (filteredAlerts + huntRoute.take(HUNT_ORDINAL_MAX)).distinctBy { it.uniqueId },
             trackedAlert = arrivalTracking.activeDestination?.alert,
             compactPictureInPicture = compactPictureInPicture,
             nowMillis = expirationNow
@@ -1115,7 +1136,7 @@ internal fun AlertsMapScreenContent(
 
     fun fitHuntRoute() {
         val points = huntRouteFocusCoordinates(
-            huntTargetAlerts, userLocation?.latitude, userLocation?.longitude
+            huntRoute, userLocation?.latitude, userLocation?.longitude
         )
         if (points.isEmpty()) return
         applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
@@ -1360,41 +1381,6 @@ internal fun AlertsMapScreenContent(
     val currentHuntTargets by rememberUpdatedState(huntTargetAlerts)
     val currentTrackedId by rememberUpdatedState(arrivalTracking.activeDestination?.uniqueId)
 
-    // Keep the walked legs fresh while the map is on screen. The service does this
-    // too; whichever asks first pays, and the other reads the published snapshot.
-    //
-    // Keyed on inputs -- the alerts, the dismissed set, a coarse position -- and never
-    // on huntTargetAlerts, which is downstream of the snapshot this produces. Feeding
-    // the ordered list back in here would be a loop with a network call in it.
-    val currentAlerts by rememberUpdatedState(alerts)
-    val currentDismissed by rememberUpdatedState(dismissedAlertIds)
-    LaunchedEffect(huntSession?.name) {
-        val definition = huntSession?.definition ?: return@LaunchedEffect
-        snapshotFlow {
-            Triple(
-                currentAlerts,
-                currentDismissed,
-                userLocation?.let { huntLegNode(it.latitude, it.longitude) }
-            )
-        }
-            .distinctUntilChanged()
-            .collectLatest {
-                delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
-                val location = userLocation ?: return@collectLatest
-                val candidates = withContext(Dispatchers.Default) {
-                    huntRoutingCandidates(
-                        alerts = currentAlerts,
-                        definition = definition,
-                        dismissedAlertIds = currentDismissed,
-                        originLatitude = location.latitude,
-                        originLongitude = location.longitude
-                    )
-                }
-                if (candidates.isEmpty()) return@collectLatest
-                HuntRouteMatrixCache.getInstance()
-                    .prefetch(location.latitude, location.longitude, candidates)
-            }
-    }
     LaunchedEffect(huntSession?.name) {
         if (huntSession == null) return@LaunchedEffect
         snapshotFlow { currentTrackedId to currentHuntTargets.firstOrNull()?.uniqueId }
@@ -1464,7 +1450,7 @@ internal fun AlertsMapScreenContent(
     } else {
         openStreetMapLoaded
     }
-    LaunchedEffect(huntFocus, huntTargetAlerts.take(HUNT_ORDINAL_MAX).map { it.mapCoordinatesOrNull() }, currentMapLoaded, mapSource) {
+    LaunchedEffect(huntFocus, huntRoute.take(HUNT_ORDINAL_MAX).map { it.mapCoordinatesOrNull() }, currentMapLoaded, mapSource) {
         if (currentMapLoaded && huntFocus == HuntMapFocus.ROUTE) fitHuntRoute()
     }
 

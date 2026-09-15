@@ -81,8 +81,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 67
-        versionName = "1.10.8"
+        versionCode = 68
+        versionName = "1.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -148,6 +148,18 @@ tasks.matching {
                 releaseSigningMissingProperties.joinToString()
         }
     }
+}
+
+// HuntReplaySimulationTest is opt-in: pass -Phunt.replay.dir=<recording> to run it.
+tasks.withType<Test>().configureEach {
+    listOf("dir", "startLat", "startLon", "endShiftMinutes", "minutes", "holdBackPercent", "label").forEach { name ->
+        providers.gradleProperty("hunt.replay.$name").orNull?.let { systemProperty("hunt.replay.$name", it) }
+    }
+    // CatchRouteBenchmarkTest is opt-in the same way: -Pcatch.bench.dir=<recorded windows>.
+    listOf("dir", "label").forEach { name ->
+        providers.gradleProperty("catch.bench.$name").orNull?.let { systemProperty("catch.bench.$name", it) }
+    }
+    if (providers.gradleProperty("catch.bench.dir").isPresent) maxHeapSize = "3g"
 }
 
 androidComponents {

@@ -33,7 +33,7 @@ class FloatingHuntMapInstrumentedTest {
             }
             assertTrue("Floating map must load", ready)
             instrumentation.runOnMainSync {
-                overlay.setAlerts(targets, targets.first().uniqueId)
+                overlay.setAlerts(targets, targets.first().uniqueId, targets.size)
                 overlay.focus(49.740, 8.6, 49.741, 8.6, force = true)
             }
             SystemClock.sleep(1_500)

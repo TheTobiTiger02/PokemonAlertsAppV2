@@ -42,7 +42,7 @@ class HuntTargetsTest {
             originLatitude = 50.0,
             originLongitude = 8.0,
             nowMillis = now
-        )
+        ).ordered
 
         assertEquals(listOf("Dragon"), targets.map { it.gruntType })
     }
@@ -62,7 +62,7 @@ class HuntTargetsTest {
             originLatitude = 50.0,
             originLongitude = 8.0,
             nowMillis = now
-        )
+        ).ordered
 
         assertEquals(listOf("near", "middle", "far"), targets.map { it.name })
     }
@@ -79,7 +79,7 @@ class HuntTargetsTest {
             originLatitude = 50.0,
             originLongitude = 8.0,
             nowMillis = now
-        )
+        ).ordered
 
         assertEquals(listOf("remaining"), targets.map { it.name })
     }
@@ -100,7 +100,7 @@ class HuntTargetsTest {
             originLatitude = 50.0,
             originLongitude = 8.0,
             nowMillis = now
-        )
+        ).ordered
 
         assertEquals(listOf("good"), targets.map { it.name })
     }
@@ -114,7 +114,7 @@ class HuntTargetsTest {
             originLatitude = 50.0,
             originLongitude = 8.0,
             nowMillis = now
-        )
+        ).ordered
 
         assertTrue(targets.isEmpty())
     }
@@ -146,29 +146,31 @@ class HuntTargetsTest {
     }
 
     @Test
-    fun `a target that ends before you could walk to it drops behind one that does not`() {
+    fun `a target that ends before you could walk to it is left off the route`() {
         // 200 m away but gone in a minute, against 900 m away and up for an hour.
         // Nearest-first sends you to the first and you arrive to nothing.
         val fleeting = grunt("Near", "Dragon", 50.0018, 8.0)
             .copy(endTime = Instant.parse("2026-09-09T12:01:00Z").toString())
         val reachable = grunt("Far", "Dragon", 50.0081, 8.0)
 
-        val order = huntWalkOrder(listOf(fleeting, reachable), 50.0, 8.0, now)
+        val plan = huntPlan(listOf(fleeting, reachable), 50.0, 8.0, now)
 
-        assertEquals(listOf("Far", "Near"), order.map { it.name })
+        assertEquals(listOf("Far"), plan.route.map { it.name })
+        // Not numbered, but still offered: an estimate is not a fact.
+        assertEquals(listOf("Near"), plan.others.map { it.name })
     }
 
     @Test
-    fun `an unreachable target is moved, never dropped`() {
+    fun `an unreachable target is still offered, never dropped`() {
         val fleeting = grunt("Near", "Dragon", 50.0018, 8.0)
             .copy(endTime = Instant.parse("2026-09-09T12:01:00Z").toString())
-        assertEquals(1, huntWalkOrder(listOf(fleeting), 50.0, 8.0, now).size)
+        assertEquals(1, huntPlan(listOf(fleeting), 50.0, 8.0, now).ordered.size)
     }
 
     @Test
     fun `an alert with no end time has nothing to miss`() {
         val endless = grunt("Endless", "Dragon", 50.05, 8.0).copy(endTime = "")
-        assertTrue(canArriveBeforeItEnds(endless, 50.0, 8.0, now))
+        assertEquals(listOf("Endless"), huntPlan(listOf(endless), 50.0, 8.0, now).route.map { it.name })
     }
 
     @Test
@@ -180,15 +182,14 @@ class HuntTargetsTest {
         val farNorth = grunt("FarNorth", "Dragon", 50.0045, 8.0)
         val south = grunt("South", "Dragon", 49.9964, 8.0)
 
-        val order = huntWalkOrder(listOf(north, south, farNorth), 50.0, 8.0, now)
+        val order = huntPlan(listOf(north, south, farNorth), 50.0, 8.0, now).route
 
         assertEquals(listOf("North", "FarNorth", "South"), order.map { it.name })
     }
 
     @Test
-    fun `the nearest target is still the one you are sent to first`() {
-        // Chaining changes what comes after, never where you start.
-        val order = huntWalkOrder(
+    fun `the nearest target is still the one you are sent to first along a line`() {
+        val order = huntPlan(
             listOf(
                 grunt("Far", "Dragon", 50.0045, 8.0),
                 grunt("Near", "Dragon", 50.0009, 8.0),
@@ -197,8 +198,37 @@ class HuntTargetsTest {
             50.0,
             8.0,
             now
+        ).route
+        assertEquals(listOf("Near", "Middle", "Far"), order.map { it.name })
+    }
+
+    @Test
+    fun `an area limits a hunt to the alerts inside it`() {
+        val area = listOf(
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(49.999, 7.999),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(49.999, 8.001),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(50.003, 8.001),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(50.003, 7.999)
         )
-        assertEquals("Near", order.first().name)
+        val alerts = listOf(
+            grunt("inside", "Dragon", latitude = 50.002, longitude = 8.0),
+            grunt("outside", "Dragon", latitude = 50.001, longitude = 8.004),
+            grunt("nowhere", "Dragon", latitude = null, longitude = null)
+        )
+        fun names(area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint>) = huntTargets(
+            alerts = alerts,
+            definition = dragonGrunts,
+            dismissedAlertIds = emptySet(),
+            originLatitude = 50.0,
+            originLongitude = 8.0,
+            nowMillis = now,
+            area = area
+        ).ordered.map { it.name }
+
+        assertEquals(listOf("inside"), names(area))
+        assertTrue("no area keeps every match", "outside" in names(emptyList()))
+        assertTrue(isHuntTarget(alerts[0], dragonGrunts, now, area))
+        assertTrue(!isHuntTarget(alerts[1], dragonGrunts, now, area))
     }
 
     private fun grunt(

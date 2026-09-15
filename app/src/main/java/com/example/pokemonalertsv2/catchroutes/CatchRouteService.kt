@@ -58,7 +58,7 @@ class CatchRouteService : Service() {
                         return@collectLatest
                     }
                     getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(s))
-                    overlayMap?.update(s.itinerary.settings, s.displayItinerary, point)
+                    overlayMap?.update(s.itinerary.settings, s.displayItinerary, point, s.progressMeters)
                     overlayText?.text = readout(s)
                     overlayPause?.text = if (s.paused) "Resume" else "Pause"
                 }
@@ -101,7 +101,7 @@ class CatchRouteService : Service() {
             }; true
         }
         root.addView(title)
-        val map = CatchRouteMapView(this).also { it.update(s.itinerary.settings, s.displayItinerary, controller.location.value) }
+        val map = CatchRouteMapView(this).also { it.update(s.itinerary.settings, s.displayItinerary, controller.location.value, s.progressMeters) }
         overlayMap = map
         root.addView(map, LinearLayout.LayoutParams(-1, 0, 1f))
         val buttons = LinearLayout(this)

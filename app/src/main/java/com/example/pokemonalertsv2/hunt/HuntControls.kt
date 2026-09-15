@@ -201,7 +201,7 @@ fun HuntControls(
             questRewardThumbnails = questRewardThumbnails,
             categoryCounts = categoryCounts,
             onDismiss = { pickerOpen = false },
-            onStart = { name, definition, savedHuntId ->
+            onStart = { name, definition, savedHuntId, area ->
                 scope.launch {
                     // Remembered before the hunt starts, so the row exists to point
                     // the session at. Re-running an identical hunt touches that row
@@ -209,7 +209,8 @@ fun HuntControls(
                     val saved = huntRepository.recordStart(
                         name = name,
                         definition = definition,
-                        replacingId = savedHuntId
+                        replacingId = savedHuntId,
+                        area = area
                     )
                     // The hunt is written first, then the old journey is cleared.
                     // The other order leaves a moment with neither a destination nor
@@ -218,7 +219,8 @@ fun HuntControls(
                     huntRepository.start(
                         name = name,
                         definition = definition,
-                        savedHuntId = saved.id
+                        savedHuntId = saved.id,
+                        area = area
                     )
                     // A new hunt supersedes whatever you were walking to. Without
                     // this the old journey simply carries on under the new hunt's

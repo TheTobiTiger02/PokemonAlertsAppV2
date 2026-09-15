@@ -30,7 +30,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var job: Job? = null
     private var generation = 0L
-    fun edit(value: CatchRouteSettings) { generation++; job?.cancel(); busy = false; settings = value; itinerary = null; error = null }
+    fun edit(value: CatchRouteSettings) { generation++; job?.cancel(); busy = false; settings = value; itinerary = null; error = null; recommendation = null }
     fun startPoint(value: CatchPoint) { hasStart = true; edit(settings.copy(start = value)) }
     fun schedule(at: Long?) { useNow = at == null; edit(settings.copy(startAtMillis = at ?: 0)) }
     fun load(entity: CatchSetupEntity) {
@@ -66,6 +66,45 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
             finally { if (epoch == generation) busy = false }
         }
     }
+    /** What the last recommendation found, e.g. "Best start: 14 expected · next best 11". */
+    var recommendation by mutableStateOf<String?>(null)
+        private set
+
+    /** Picks the start position with the most expected catches for the chosen departure. */
+    fun recommendStart() = recommend("start spots") { service, resolved, progress ->
+        CatchRouteRecommender(service).recommendStart(resolved, progress = progress).also { hasStart = true }
+    }
+
+    /** Picks the departure in the next six hours with the most expected catches from the chosen start. */
+    fun recommendTime() = recommend("departure times") { service, resolved, progress ->
+        CatchRouteRecommender(service).recommendTime(resolved, progress = progress).also { useNow = false }
+    }
+
+    private fun recommend(what: String, search: suspend (CatchRoutesService, CatchRouteSettings, (String) -> Unit) -> CatchRecommendation) {
+        if (busy) return
+        error = null; recommendation = null
+        if (settings.durationMinutes !in 10..360) { error = "Choose 10–360 minutes."; return }
+        if (System.currentTimeMillis() < retryAt) { error = "Routing is busy. Retry after the countdown."; return }
+        val resolved = settings.copy(startAtMillis = if (useNow) System.currentTimeMillis() else settings.startAtMillis)
+        val epoch = ++generation
+        job = viewModelScope.launch {
+            busy = true; itinerary = null
+            try {
+                val found = search(PokemonAlertsApi.catchRoutesService, resolved) { if (epoch == generation) progress = it }
+                settings = found.settings
+                itinerary = found.itinerary
+                val zone = java.time.ZoneId.systemDefault()
+                fun describe(s: CatchRouteSettings) = java.time.Instant.ofEpochMilli(s.startAtMillis).atZone(zone)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                // Candidates were ranked on straight-line estimates; only the chosen route's numbers are real.
+                recommendation = "Best of ${found.compared} $what · leaving ${describe(found.settings)}"
+                progress = "Route ready"
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { error = e.message ?: "No recommendation found."; retryAt = (e as? CatchApiException)?.retryAtMillis ?: 0 }
+            finally { if (epoch == generation) busy = false }
+        }
+    }
+
     fun follow() = viewModelScope.launch {
         itinerary?.let { plan ->
             try { controller.begin(plan) } catch (e: Exception) { error = e.message ?: "Unable to start guidance." }

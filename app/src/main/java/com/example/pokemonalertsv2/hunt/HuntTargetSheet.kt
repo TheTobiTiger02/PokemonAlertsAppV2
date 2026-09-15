@@ -37,7 +37,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.pokemonalertsv2.catchroutes.CatchAreaPicker
+import com.example.pokemonalertsv2.catchroutes.CatchPoint
+import com.example.pokemonalertsv2.catchroutes.isArea
 import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.ui.alerts.ALSBACH_LATITUDE
+import com.example.pokemonalertsv2.ui.alerts.ALSBACH_LONGITUDE
+import com.example.pokemonalertsv2.ui.alerts.getLastKnownLocation
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
@@ -75,7 +81,7 @@ internal fun HuntTargetSheet(
     questRewardThumbnails: Map<String, String>,
     categoryCounts: Map<AlertCategory, Int>,
     onDismiss: () -> Unit,
-    onStart: (name: String, definition: FilterDefinition, savedHuntId: String?) -> Unit
+    onStart: (name: String, definition: FilterDefinition, savedHuntId: String?, area: List<CatchPoint>) -> Unit
 ) {
     val context = LocalContext.current
     val huntRepository = remember(context) { HuntRepository.getInstance(context) }
@@ -96,6 +102,9 @@ internal fun HuntTargetSheet(
     var draft by remember { mutableStateOf(EMPTY_HUNT_DRAFT) }
     var speciesTarget by remember { mutableStateOf<MapSelectorTarget?>(null) }
     var questsOpen by remember { mutableStateOf(false) }
+    // Optional walking area: matches outside it are never suggested.
+    var area by remember { mutableStateOf<List<CatchPoint>>(emptyList()) }
+    var areaOpen by remember { mutableStateOf(false) }
 
     val chosenTypes = remember(draft) { draft.chosenTypes() }
     val ready = chosenTypes.isNotEmpty()
@@ -116,10 +125,11 @@ internal fun HuntTargetSheet(
                     savedHunts.forEach { saved ->
                         SavedHuntRow(
                             hunt = saved,
-                            onStart = { onStart(saved.name, saved.definition, saved.id) },
+                            onStart = { onStart(saved.name, saved.definition, saved.id, saved.area) },
                             onEdit = {
                                 draft = saved.definition.forHuntDraft()
                                 editingId = saved.id
+                                area = saved.area
                             },
                             onRename = { renaming = saved },
                             onDelete = {
@@ -205,9 +215,21 @@ internal fun HuntTargetSheet(
                 }
             }
 
+            Section("Where?") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (area.isArea()) "Only inside your area (${area.size} corners)" else "Anywhere nearby",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (area.isArea()) TextButton(onClick = { area = emptyList() }) { Text("Remove") }
+                    OutlinedButton(onClick = { areaOpen = true }) { Text(if (area.isArea()) "Edit area" else "Limit to area") }
+                }
+            }
+
             val hunt = remember(draft) { draft.forHunt() }
             Button(
-                onClick = { onStart(huntName(hunt, catalog), hunt, editingId) },
+                onClick = { onStart(huntName(hunt, catalog), hunt, editingId, area) },
                 enabled = ready,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -235,6 +257,19 @@ internal fun HuntTargetSheet(
                 scope.launch { huntRepository.renameSavedHunt(target.id, name) }
                 renaming = null
             }
+        )
+    }
+
+    if (areaOpen) {
+        val center = remember {
+            getLastKnownLocation(context)?.let { CatchPoint(it.latitude, it.longitude) } ?: CatchPoint(ALSBACH_LATITUDE, ALSBACH_LONGITUDE)
+        }
+        CatchAreaPicker(
+            initial = area,
+            center = center,
+            title = "Hunt area",
+            onDismiss = { areaOpen = false },
+            onDone = { area = it; areaOpen = false }
         )
     }
 

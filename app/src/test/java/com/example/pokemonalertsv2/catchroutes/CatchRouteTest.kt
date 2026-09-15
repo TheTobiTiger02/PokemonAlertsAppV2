@@ -269,6 +269,110 @@ class CatchRouteTest {
         assertEquals("unknown", oldOpportunity.activityPattern)
     }
 
+    @Test fun `windows carry probability and schedule, and older payloads fall back per basis`() {
+        val row = Json.parseToJsonElement("""{"id":"s","latitude":0.0,"longitude":0.0009,
+            "schedule":{"despawnSecondOfHour":900,"spawnSecondOfHour":2700,"durationSeconds":1800,"durationBasis":"observed_30","confidence":0.75,"supportCycles":3,"totalCycles":4,"lastVerifiedAt":"2026-09-12T11:15:00Z"},
+            "windows":[{"opportunityId":"s@1","availableFrom":"2026-09-12T12:00:00Z","despawnAt":"2026-09-12T12:30:00Z","basis":"recurring_schedule","probability":0.62},
+                       {"opportunityId":"s@2","availableFrom":"2026-09-12T13:00:00Z","despawnAt":"2026-09-12T13:30:00Z","basis":"recurring_schedule","probability":7}]}""").jsonObject
+        val parsed = parseSpawnWindows(row)!!
+        assertEquals(0.62, parsed[0].expectedCatch, 1e-9)
+        assertEquals(1.0, parsed[1].expectedCatch, 1e-9)
+        assertEquals(1800, parsed[0].schedule?.durationSeconds)
+        assertEquals("observed_30", parsed[0].schedule?.durationBasis)
+        val old = parseSpawnWindows(Json.parseToJsonElement(row("legacy")).jsonObject)!!.single()
+        assertNull(old.probability)
+        assertEquals(0.5, old.expectedCatch, 1e-9)
+        assertTrue(opportunity().copy(basis = "observed_encounter").expectedCatch > old.expectedCatch)
+    }
+
+    @Test fun `beam prefers the likelier window over a guess at equal distance`() = runTest {
+        val guess = opportunity("guess", 50.0, until = now + 600_000).copy(probability = 0.3)
+        val verified = opportunity("verified", 50.0, until = now + 600_000).copy(point = CatchPoint(0.0005, 50.0 / 111_195), probability = 0.9)
+        val anchors = listOf(CatchAnchor(guess.point, listOf(guess)), CatchAnchor(verified.point, listOf(verified)))
+        // Budget reaches only one of the two.
+        val costs = listOf(listOf(0.0, 500.0, 500.0), listOf(500.0, 0.0, 900.0), listOf(500.0, 900.0, 0.0))
+        assertEquals(listOf(1), catchBeamOrder(settings(), anchors, costs))
+    }
+
+    @Test fun `waiting is off by default and, when allowed, waits for a spawn that starts soon`() = runTest {
+        val soon = opportunity("soon", 100.0, from = now + 180_000)
+        val anchors = listOf(CatchAnchor(soon.point, listOf(soon)))
+        val costs = listOf(listOf(0.0, 100.0), listOf(100.0, 0.0))
+        assertEquals(0L, catchWaitAt(settings(), listOf(soon), now + 100_000, emptySet()))
+        assertTrue(catchBeamOrder(settings(), anchors, costs).isEmpty())
+        val patient = settings().copy(maxWaitMinutes = 2)
+        assertEquals(80_000L, catchWaitAt(patient, listOf(soon), now + 100_000, emptySet()))
+        assertEquals(listOf(0), catchBeamOrder(patient, anchors, costs))
+        // Too far off for the allowed wait.
+        assertEquals(0L, catchWaitAt(patient.copy(maxWaitMinutes = 1), listOf(soon), now + 100_000, emptySet()))
+        // A wait counts against the walking budget, and inside the circle it makes the encounter.
+        val waits = planCatchWaits(patient, listOf(soon.point to 100.0), listOf(soon))
+        assertEquals(listOf(CatchWait(100.0, 80_000L)), waits)
+        val encounter = scoreCatchPath(path(0.0, 100.0, 140.0), patient, listOf(soon), waits).single()
+        assertEquals(now + 180_000, encounter.arrivalMillis)
+        assertTrue(scoreCatchPath(path(0.0, 100.0, 140.0), patient, listOf(soon)).isEmpty())
+        assertTrue(runCatching { settings().copy(maxWaitMinutes = 16).validate() }.isFailure)
+    }
+
+    @Test fun `spawnpoint detail parses schedule, species and upcoming windows`() {
+        val body = Json.parseToJsonElement("""{"id":"derived:x","source":"pogomapper","latitude":49.74,"longitude":8.62,
+            "encounterCount":5,"verifiedEncounterCount":4,"liveLastSeenAt":"2026-09-12T11:50:00Z","timingConflict":false,"requiresLiveConfirmation":false,
+            "schedule":{"despawnSecondOfHour":1200,"durationSeconds":3600,"durationBasis":"observed_60","confidence":1.0,"supportCycles":4,"totalCycles":4},
+            "recentEncounters":[{"source":"pogomapper","pokemonId":25,"firstSeenAt":"2026-09-12T11:30:00Z","upstreamFirstSeenAt":"2026-09-12T11:05:00Z","verifiedExpiry":1789214400},
+                                {"source":"pogomapper","pokemonId":null,"firstSeenAt":"2026-09-12T10:30:00Z","unverifiedExpiry":1789210800}],
+            "upcomingWindows":[{"opportunityId":"derived:x@1","availableFrom":"2026-09-12T12:20:00Z","despawnAt":"2026-09-12T13:20:00Z","basis":"inferred_lifetime","probability":0.9}],
+            "uncertainty":["no_recent_live_observation"]}""").jsonObject
+        val detail = parseSpawnpointDetail(body)!!
+        assertEquals(3600, detail.schedule?.durationSeconds)
+        assertEquals(listOf(25, null), detail.sightings.map { it.pokemonId })
+        assertEquals(Instant.parse("2026-09-12T11:05:00Z").toEpochMilli(), detail.sightings.first().firstSeenAt)
+        assertTrue(detail.sightings.first().verified && !detail.sightings.last().verified)
+        assertEquals(0.9, detail.upcoming.single().expectedCatch, 1e-9)
+        assertNull(parseSpawnpointDetail(JsonObject(body + ("latitude" to JsonPrimitive(300)))))
+    }
+
+    @Test fun `details sheet reads the spawnpoint's state and hour in words`() {
+        val active = opportunity(from = now - 60_000, until = now + 600_000)
+        assertEquals(SpawnState.ACTIVE, spawnStatus(listOf(active), now).state)
+        assertEquals("Active · 10m 00s left", spawnStatus(listOf(active), now).text)
+        val later = opportunity(from = now + 240_000, until = now + 2_000_000).copy(id = "one-later")
+        assertEquals("Spawns in 4m 00s", spawnStatus(listOf(later), now).text)
+        assertEquals(SpawnState.ENDED, spawnStatus(listOf(opportunity(until = now - 1)), now).state)
+        assertEquals(":05:09", secondOfHourLabel(309))
+        // A 30-minute spawn despawning at :10 started at :40 the hour before: two segments.
+        val wrapped = hourBar(SpawnSchedule(despawnSecondOfHour = 600, durationSeconds = 1800, durationBasis = "observed_30"), null, java.time.ZoneOffset.UTC)
+        assertEquals(2, wrapped.segments.size)
+        assertEquals(0f, wrapped.segments[0].start)
+        assertEquals(2400 / 3600f, wrapped.segments[1].start, 1e-6f)
+        assertTrue(wrapped.certain)
+        assertEquals(listOf(0f..1f), hourBar(SpawnSchedule(despawnSecondOfHour = 600, durationSeconds = 3600, durationBasis = "observed_60"), null).segments)
+        assertFalse(hourBar(null, opportunity(), java.time.ZoneOffset.UTC).certain)
+        assertEquals("Estimated 60-minute lifetime", basisLabel("inferred_lifetime"))
+        assertEquals("Verified schedule", confidenceLabel(opportunity().copy(probability = 0.9)))
+        val selections = spawnpointSelections(listOf(CatchEncounter(active, now, 10.0), CatchEncounter(later, now + 240_000, 10.0),
+            CatchEncounter(opportunity("other", 200.0), now, 200.0)))
+        assertEquals(2, selections.size)
+        assertEquals(2, selections.first().opportunities.size)
+    }
+
+    @Test fun `event spawnpoints read as such in the detail`() {
+        val body = Json.parseToJsonElement("""{"id":"e","latitude":49.87,"longitude":8.65,"activityPattern":"event_only",
+            "eventTypes":["pokemon-spotlight-hour"],"lastActiveAt":"2026-09-10T16:00:00.000Z","reason":"event_only_inactive",
+            "nextEvent":{"name":"Rattata Spotlight Hour","eventType":"pokemon-spotlight-hour","startAt":"2026-09-17T16:00:00.000Z","endAt":"2026-09-17T17:00:00.000Z"},
+            "upcomingWindows":[]}""").jsonObject
+        val detail = parseSpawnpointDetail(body)!!
+        assertEquals(listOf("pokemon-spotlight-hour"), detail.eventTypes)
+        assertEquals("Rattata Spotlight Hour", detail.nextEvent?.name)
+        assertEquals("event_only_inactive", detail.reason)
+        val notice = activityNotice(detail.activityPattern, detail.eventTypes, detail.nextEvent, detail.reason, now)!!
+        assertTrue(notice.startsWith("Event spawnpoint: only spawns during Spotlight Hours."))
+        assertTrue(notice.contains("Next: Rattata Spotlight Hour"))
+        val during = activityNotice("event_only", detail.eventTypes, detail.nextEvent, null, detail.nextEvent!!.startAt + 60_000)!!
+        assertTrue(during.contains("Active now"))
+        assertTrue(activityNotice("unknown", emptyList(), null, "catalogue_only", now)!!.contains("catalogue"))
+        assertNull(activityNotice("regular", emptyList(), null, null, now))
+    }
+
     private class Fake : CatchRoutesService {
         val pages = mutableListOf<Response<JsonObject>>()
         val catalogues = mutableListOf<Response<JsonObject>>()
@@ -282,6 +386,7 @@ class CatchRouteTest {
             return pages.removeAt(0)
         }
         override suspend fun catalogue(query: Map<String,String>, etag: String?): Response<JsonObject> { etags += etag; return catalogues.removeAt(0) }
+        override suspend fun spawnpoint(id: String): Response<JsonObject> = error("not used")
         override suspend fun matrix(request: RouteMatrixRequest): Response<RouteMatrixResponse> {
             routingCalls++
             val costs = request.points.map { a -> request.points.map { b -> catchDistance(CatchPoint(a.latitude,a.longitude),CatchPoint(b.latitude,b.longitude)).toInt() } }

@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
@@ -42,8 +44,32 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.pokemonalertsv2.data.counters.PersonalCounter
 import com.example.pokemonalertsv2.data.gamemaster.MegaSpecies
 import java.util.Locale
+
+/** How many megas the quick pick offers, like Poké Genie's shortlist. */
+internal const val TOP_MEGA_COUNT = 6
+
+/** A mega from the trainer's own collection, with its best copy's result against this boss. */
+internal data class TopMega(val mega: MegaSpecies, val best: PersonalCounter, val overallRank: Int)
+
+/**
+ * The megas in the trainer's collection that do best against this boss, best first.
+ *
+ * [ranked] is the personal ranking, best first, which already contains mega rows for every
+ * mega-capable Pokémon in the roster. Each mega species appears once, with its best copy and
+ * where that copy sits in the whole ranking.
+ */
+internal fun topRosterMegas(ranked: List<PersonalCounter>, megaOptions: List<MegaSpecies>, limit: Int = TOP_MEGA_COUNT): List<TopMega> {
+    val byId = megaOptions.associateBy { it.pokemonId.uppercase(Locale.ROOT) }
+    val seen = mutableSetOf<String>()
+    return ranked.withIndex().mapNotNull { (index, counter) ->
+        val id = counter.pokemonId.uppercase(Locale.ROOT)
+        val mega = byId[id] ?: return@mapNotNull null
+        if (!seen.add(id)) null else TopMega(mega, counter, index + 1)
+    }.take(limit)
+}
 
 /**
  * Which Mega Evolution the trainer currently has active.
@@ -123,9 +149,12 @@ internal fun ActiveMegaSheet(
         if (needle.isEmpty()) pool
         else pool.filter { it.displayName.lowercase(Locale.ROOT).contains(needle) }
     }
+    val topMegas = remember(state.personal, state.megaOptions) {
+        topRosterMegas(state.personal?.ranked.orEmpty(), state.megaOptions)
+    }
     // The sheet's content slot is a wrap-content column, so a lazy list inside it can be
     // measured with an unbounded height. Bound it against the window explicitly.
-    val listMaxHeight = (LocalConfiguration.current.screenHeightDp * 0.6f).dp
+    val listMaxHeight = (LocalConfiguration.current.screenHeightDp * (if (topMegas.isEmpty()) 0.6f else 0.45f)).dp
 
     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
         Text("Active mega", style = MaterialTheme.typography.headlineSmall)
@@ -146,6 +175,36 @@ internal fun ActiveMegaSheet(
                 modifier = Modifier.padding(bottom = 20.dp)
             )
             return@Column
+        }
+
+        // Quick pick: the megas from the collection that help most against this boss, best first.
+        if (topMegas.isNotEmpty()) {
+            Text("Best megas for this raid", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "From your collection, ranked against this boss.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 12.dp)
+            ) {
+                items(topMegas.size, key = { "top-" + topMegas[it].mega.pokemonId }) { index ->
+                    val top = topMegas[index]
+                    Box(modifier = Modifier.width(96.dp)) {
+                        MegaTile(
+                            label = top.mega.displayName,
+                            selected = state.activeMegaId == top.mega.pokemonId,
+                            sprite = top.mega,
+                            inRoster = false,
+                            detail = "#${top.overallRank} · ${String.format(Locale.getDefault(), "%.1f", top.best.dps)} DPS",
+                            state = state,
+                            onClick = { onSelect(top.mega.pokemonId) }
+                        )
+                    }
+                }
+            }
         }
 
         if (owned.isNotEmpty()) {
@@ -199,6 +258,7 @@ internal fun ActiveMegaSheet(
                     selected = state.activeMegaId == null,
                     sprite = null,
                     inRoster = false,
+                    detail = null,
                     state = state,
                     onClick = { onSelect(null) }
                 )
@@ -209,6 +269,7 @@ internal fun ActiveMegaSheet(
                     selected = state.activeMegaId == mega.pokemonId,
                     sprite = mega,
                     inRoster = mega.baseSpeciesId in state.ownedBaseSpeciesIds,
+                    detail = null,
                     state = state,
                     onClick = { onSelect(mega.pokemonId) }
                 )
@@ -223,6 +284,7 @@ private fun MegaTile(
     selected: Boolean,
     sprite: MegaSpecies?,
     inRoster: Boolean,
+    detail: String?,
     state: RaidCountersUiState,
     onClick: () -> Unit
 ) {
@@ -286,7 +348,14 @@ private fun MegaTile(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            if (inRoster) {
+            if (detail != null) {
+                Text(
+                    text = detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1
+                )
+            } else if (inRoster) {
                 Text(
                     text = "Owned",
                     style = MaterialTheme.typography.labelSmall,

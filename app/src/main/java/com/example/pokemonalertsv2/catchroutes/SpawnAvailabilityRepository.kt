@@ -18,7 +18,38 @@ interface CatchRoutesService {
     @GET("api/spawnpoints") suspend fun catalogue(@QueryMap query: Map<String, String>, @Header("If-None-Match") etag: String?): Response<JsonObject>
     @POST("api/routes/matrix") suspend fun matrix(@Body request: RouteMatrixRequest): Response<RouteMatrixResponse>
     @POST("api/routes/path") suspend fun path(@Body request: RouteMatrixRequest): Response<CatchPathResponse>
+    @GET("api/spawnpoints/{id}") suspend fun spawnpoint(@Path("id") id: String): Response<JsonObject>
 }
+
+/** One retained sighting at a spawnpoint: which Pokémon, and the cycle it belonged to. */
+data class SpawnpointSighting(val pokemonId: Int?, val source: String?, val firstSeenAt: Long?, val despawnAt: Long?, val verified: Boolean)
+
+/** Everything the details sheet shows beyond the planning window itself. */
+data class SpawnpointDetail(
+    val id: String,
+    val point: CatchPoint,
+    val schedule: SpawnSchedule?,
+    val sightings: List<SpawnpointSighting>,
+    val upcoming: List<SpawnOpportunity>,
+    val liveLastSeenAt: String?,
+    val catalogueSeenAt: String?,
+    val encounterCount: Int?,
+    val verifiedEncounterCount: Int?,
+    val timingConflict: Boolean,
+    val requiresLiveConfirmation: Boolean,
+    val activityPattern: String,
+    val uncertainty: List<String>,
+    val source: String?,
+    /** Event types this point spawns during, for event-only points. */
+    val eventTypes: List<String> = emptyList(),
+    val nextEvent: SpawnpointEvent? = null,
+    val lastActiveAt: String? = null,
+    /** Why the backend planned no window here, e.g. `event_only_inactive`, `dormant_spawnpoint`, `catalogue_only`. */
+    val reason: String? = null,
+)
+
+/** The next game event an event spawnpoint is expected to wake up for. */
+data class SpawnpointEvent(val name: String, val eventType: String, val startAt: Long, val endAt: Long)
 
 @Serializable data class CatchPathGeometry(val type: String, val coordinates: List<List<Double>>)
 @Serializable data class CatchPathLeg(val fromId: String, val toId: String, val distanceMeters: Double, val durationSeconds: Double, val geometry: CatchPathGeometry)
@@ -43,6 +74,11 @@ fun <T> Response<T>.catchBody(now: Long = System.currentTimeMillis()): T {
 }
 
 class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
+    suspend fun detail(id: String): SpawnpointDetail {
+        val body = service.spawnpoint(id).catchBody()
+        return parseSpawnpointDetail(body) ?: throw CatchApiException("Backend returned an unreadable spawnpoint.")
+    }
+
     // Catalogue ETags are query-specific. Window responses are never placed in this cache.
     private val catalogues = linkedMapOf<Map<String, String>, Pair<String?, JsonObject>>()
     suspend fun catalogue(query: Map<String, String>): JsonObject {
@@ -56,20 +92,31 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
         return body
     }
 
-    suspend fun load(settings: CatchRouteSettings, progress: (String) -> Unit = {}): SpawnAvailability {
+    /**
+     * Spawn windows a route with [settings] can use. [searchRadiusMeters] widens the box and the reach
+     * check for a start still to be chosen around `settings.start`; [untilMillis] extends the time range
+     * for a departure still to be chosen after `settings.startAtMillis` (the backend allows six hours).
+     */
+    suspend fun load(settings: CatchRouteSettings, progress: (String) -> Unit = {}, searchRadiusMeters: Double = 0.0,
+        untilMillis: Long = settings.endAtMillis): SpawnAvailability {
         settings.validate()
-        val distance = settings.walkingBudgetMeters + settings.radius
+        val distance = settings.walkingBudgetMeters + settings.radius + searchRadiusMeters
         val latPad = distance / 111_195.0
         val lonPad = latPad / cos(Math.toRadians(settings.start.latitude)).coerceAtLeast(0.01)
+        // Only as far as walking reaches, and never beyond the drawn area.
+        val (areaSouthWest, areaNorthEast) = if (settings.area.isArea()) areaBounds(settings.area)
+            else CatchPoint(-90.0, -180.0) to CatchPoint(90.0, 180.0)
         val query = mutableMapOf(
-            "south" to max(-90.0, settings.start.latitude - latPad).toString(),
-            "north" to min(90.0, settings.start.latitude + latPad).toString(),
-            "west" to max(-180.0, settings.start.longitude - lonPad).toString(),
-            "east" to min(180.0, settings.start.longitude + lonPad).toString(),
+            "south" to max(max(-90.0, settings.start.latitude - latPad), areaSouthWest.latitude).toString(),
+            "north" to min(min(90.0, settings.start.latitude + latPad), areaNorthEast.latitude).toString(),
+            "west" to max(max(-180.0, settings.start.longitude - lonPad), areaSouthWest.longitude).toString(),
+            "east" to min(min(180.0, settings.start.longitude + lonPad), areaNorthEast.longitude).toString(),
             "from" to Instant.ofEpochMilli(settings.startAtMillis).toString(),
-            "to" to Instant.ofEpochMilli(settings.endAtMillis).toString(), "limit" to "2000",
+            "to" to Instant.ofEpochMilli(untilMillis).toString(), "limit" to "2000",
             "includePredictions" to (settings.prediction != CatchPrediction.SUPPORTED_ONLY).toString(),
         )
+        if (query.getValue("south").toDouble() > query.getValue("north").toDouble() || query.getValue("west").toDouble() > query.getValue("east").toDouble())
+            throw CatchApiException("The area is out of walking reach from the start.")
         if (settings.prediction in listOf(CatchPrediction.THIRTY_MINUTES, CatchPrediction.SIXTY_MINUTES)) query["assumedDurationSeconds"] =
             if (settings.prediction == CatchPrediction.SIXTY_MINUTES) "3600" else "1800"
         repeat(3) { attempt ->
@@ -116,8 +163,7 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
                     val parsed = point?.let { parseSpawnWindows(it) { warning -> warnings += warning } }
                     if (parsed == null) { warnings += "Invalid spawnpoint records were excluded."; continue }
                     for (o in parsed) {
-                        val earliest = catchDistance(settings.start, o.point).let { max(0.0, it - settings.radius) } / settings.speedMps * 1000
-                        if (settings.startAtMillis + earliest < o.despawnAt && o.availableFrom < settings.endAtMillis) rows[o.id] = o
+                        if (usableFor(settings, o, searchRadiusMeters, untilMillis)) rows[o.id] = o
                     }
                 }
                 progress("Loaded ${++page} pages · ${rows.size} opportunities")
@@ -164,7 +210,74 @@ internal fun parseSpawnWindows(row: JsonObject, warning: (String) -> Unit = {}):
                 row["liveLastSeenAt"]?.jsonPrimitive?.contentOrNull, row["timingConflict"]?.jsonPrimitive?.booleanOrNull == true,
                 w["despawnBasis"]?.jsonPrimitive?.contentOrNull ?: row["despawnBasis"]?.jsonPrimitive?.contentOrNull,
                 restricted, row["activityPattern"]?.jsonPrimitive?.contentOrNull ?: "unknown",
-                row["activityPatternBasis"]?.jsonPrimitive?.contentOrNull)
+                row["activityPatternBasis"]?.jsonPrimitive?.contentOrNull,
+                w["probability"]?.jsonPrimitive?.doubleOrNull?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0),
+                (row["schedule"] as? JsonObject)?.let(::parseSpawnSchedule))
         }.getOrElse { warning("Invalid or unsupported spawn windows were excluded."); null }
     }
 }.getOrNull()
+
+internal fun parseSpawnSchedule(o: JsonObject): SpawnSchedule = SpawnSchedule(
+    despawnSecondOfHour = o["despawnSecondOfHour"]?.jsonPrimitive?.intOrNull?.takeIf { it in 0..3599 },
+    spawnSecondOfHour = o["spawnSecondOfHour"]?.jsonPrimitive?.intOrNull?.takeIf { it in 0..3599 },
+    durationSeconds = o["durationSeconds"]?.jsonPrimitive?.intOrNull?.takeIf { it in 1..3600 },
+    durationBasis = o["durationBasis"]?.jsonPrimitive?.contentOrNull ?: "unknown",
+    confidence = o["confidence"]?.jsonPrimitive?.doubleOrNull?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0),
+    supportCycles = o["supportCycles"]?.jsonPrimitive?.intOrNull,
+    totalCycles = o["totalCycles"]?.jsonPrimitive?.intOrNull,
+    lastVerifiedAt = o["lastVerifiedAt"]?.jsonPrimitive?.contentOrNull,
+)
+
+internal fun parseSpawnpointDetail(body: JsonObject): SpawnpointDetail? = runCatching {
+    val id = body.getValue("id").jsonPrimitive.content
+    val point = CatchPoint(body.getValue("latitude").jsonPrimitive.double, body.getValue("longitude").jsonPrimitive.double)
+    require(id.isNotBlank() && point.valid)
+    val instant = { value: String? -> value?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } }
+    val sightings = (body["recentEncounters"] as? JsonArray).orEmpty().mapNotNull { raw ->
+        val e = raw as? JsonObject ?: return@mapNotNull null
+        val verified = e["verifiedExpiry"]?.jsonPrimitive?.longOrNull
+        val expiry = verified ?: e["unverifiedExpiry"]?.jsonPrimitive?.longOrNull
+        val firstSeen = instant(e["upstreamFirstSeenAt"]?.jsonPrimitive?.contentOrNull)
+            ?.takeIf { upstream -> instant(e["firstSeenAt"]?.jsonPrimitive?.contentOrNull)?.let { upstream <= it } != false }
+            ?: instant(e["firstSeenAt"]?.jsonPrimitive?.contentOrNull)
+        SpawnpointSighting(e["pokemonId"]?.jsonPrimitive?.intOrNull?.takeIf { it > 0 }, e["source"]?.jsonPrimitive?.contentOrNull,
+            firstSeen, expiry?.times(1000), verified != null)
+    }
+    // Upcoming windows reuse the planner's parser, so the sheet and the route agree.
+    val upcoming = parseSpawnWindows(buildJsonObject {
+        body.forEach { (key, value) -> if (key != "windows") put(key, value) }
+        put("windows", body["upcomingWindows"] as? JsonArray ?: JsonArray(emptyList()))
+    }).orEmpty()
+    SpawnpointDetail(id, point, (body["schedule"] as? JsonObject)?.let(::parseSpawnSchedule), sightings, upcoming,
+        body["liveLastSeenAt"]?.jsonPrimitive?.contentOrNull, body["catalogueSeenAt"]?.jsonPrimitive?.contentOrNull,
+        body["encounterCount"]?.jsonPrimitive?.intOrNull, body["verifiedEncounterCount"]?.jsonPrimitive?.intOrNull,
+        body["timingConflict"]?.jsonPrimitive?.booleanOrNull == true, body["requiresLiveConfirmation"]?.jsonPrimitive?.booleanOrNull == true,
+        body["activityPattern"]?.jsonPrimitive?.contentOrNull ?: "unknown",
+        (body["uncertainty"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty(),
+        body["source"]?.jsonPrimitive?.contentOrNull,
+        (body["eventTypes"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty(),
+        (body["nextEvent"] as? JsonObject)?.let { e ->
+            val start = instant(e["startAt"]?.jsonPrimitive?.contentOrNull)
+            val end = instant(e["endAt"]?.jsonPrimitive?.contentOrNull)
+            if (start == null || end == null) null
+            else SpawnpointEvent(e["name"]?.jsonPrimitive?.contentOrNull ?: "Event", e["eventType"]?.jsonPrimitive?.contentOrNull ?: "event", start, end)
+        },
+        body["lastActiveAt"]?.jsonPrimitive?.contentOrNull,
+        body["reason"]?.jsonPrimitive?.contentOrNull)
+}.getOrNull()
+
+/**
+ * Whether a route with [settings] could catch [o]: inside the area, not an event window unless those are
+ * wanted, and reachable before it despawns. [slackMeters] relaxes reach for a start not chosen yet.
+ */
+internal fun usableFor(settings: CatchRouteSettings, o: SpawnOpportunity, slackMeters: Double = 0.0,
+    untilMillis: Long = settings.endAtMillis): Boolean {
+    if (!pointInArea(o.point, settings.area)) return false
+    if (!settings.includeEventSpawns && o.eventOnly) return false
+    val earliest = max(0.0, catchDistance(settings.start, o.point) - settings.radius - slackMeters) / settings.speedMps * 1000
+    return settings.startAtMillis + earliest < o.despawnAt && o.availableFrom < untilMillis
+}
+
+/** The part of [this] a route with [settings] can use; for recommendations that load once and try many starts. */
+internal fun SpawnAvailability.forRoute(settings: CatchRouteSettings): SpawnAvailability =
+    copy(opportunities = opportunities.filter { usableFor(settings, it) })

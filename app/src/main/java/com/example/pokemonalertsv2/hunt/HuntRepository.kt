@@ -11,7 +11,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -57,7 +60,9 @@ data class HuntSession(
      * reason to have no target: you have gone to do something else, and you want the
      * hunt to stay alive and stop choosing for you until you come back.
      */
-    val paused: Boolean = false
+    val paused: Boolean = false,
+    /** Optional polygon the hunt is limited to; alerts outside it are never suggested. */
+    val area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
 )
 
 /**
@@ -93,6 +98,19 @@ class HuntRepository private constructor(context: Context) {
         initialValue = null
     )
 
+    private val publishedPlan = MutableStateFlow(HuntPlan.Empty)
+
+    /**
+     * The route the tracking service is currently walking, published so the in-app map
+     * draws the same plan instead of computing a second one of its own. In memory only:
+     * the service re-plans within seconds of starting, so there is nothing worth restoring.
+     */
+    internal val plan: StateFlow<HuntPlan> = publishedPlan.asStateFlow()
+
+    internal fun publishPlan(plan: HuntPlan) {
+        publishedPlan.value = plan
+    }
+
     suspend fun currentSession(): HuntSession? =
         dataStore.data.first()[ACTIVE_HUNT_KEY]?.decodeSession()
 
@@ -103,14 +121,16 @@ class HuntRepository private constructor(context: Context) {
         name: String,
         definition: FilterDefinition,
         savedHuntId: String? = null,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
     ): HuntSession = com.example.pokemonalertsv2.tracking.NavigationSessionGate.change {
         com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(appContext).stop()
         val session = HuntSession(
             name = name,
             definition = definition,
             savedHuntId = savedHuntId,
-            startedAtMillis = nowMillis
+            startedAtMillis = nowMillis,
+            area = area
         )
         write(session)
         session
@@ -171,6 +191,7 @@ class HuntRepository private constructor(context: Context) {
         name: String,
         definition: FilterDefinition,
         replacingId: String? = null,
+        area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList(),
         nowMillis: Long = System.currentTimeMillis(),
         id: String = UUID.randomUUID().toString()
     ): SavedHunt {
@@ -182,12 +203,13 @@ class HuntRepository private constructor(context: Context) {
                 definition = definition,
                 nowMillis = nowMillis,
                 id = id,
-                replacingId = replacingId
+                replacingId = replacingId,
+                area = area
             )
             preferences[SAVED_HUNTS_KEY] = updated.encode()
             recorded = row
         }
-        return recorded ?: SavedHunt(id, name, definition, nowMillis)
+        return recorded ?: SavedHunt(id, name, definition, nowMillis, area = area)
     }
 
     suspend fun renameSavedHunt(id: String, name: String) = editSavedHunts { renameSavedHunt(it, id, name) }

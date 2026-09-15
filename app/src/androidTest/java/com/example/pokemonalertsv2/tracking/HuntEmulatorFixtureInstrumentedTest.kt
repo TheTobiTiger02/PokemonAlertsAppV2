@@ -36,6 +36,14 @@ class HuntEmulatorFixtureInstrumentedTest {
             repository.processIncomingAlert(it)
         }
         preferences.forgetCaughtAlert()
+        // A live-feed hunt instead of the two fixture alerts: every Rocket in one area.
+        args.getString("rocketArea")?.let { area ->
+            hunts.start("Rockets", FilterDefinition(
+                alertTypes = FilterSelection.only(listOf("ROCKET")),
+                areas = FilterSelection.only(listOf(area))
+            ))
+            return@runBlocking
+        }
         if (args.getString("active") == "true") {
             hunts.start("Playback", FilterDefinition(areas = FilterSelection.only(listOf("HuntPlaybackFixture"))))
             if (args.getString("standby") != "true") {

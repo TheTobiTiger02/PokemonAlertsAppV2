@@ -12,6 +12,16 @@ The optimizer scores time spent within each spawn's 40 m circle, or 80 m with Sp
 
 Generation uses three bounded candidate sets, directed matrices and beam search, then bounded insertion, removal and reordering, geometry validation and detour refinements. All fetched opportunities can score along a path, including opportunities outside candidate anchors. The generation budget is eight routing requests and 30 seconds. This heuristic does not prove a global optimum.
 
+The order search also counts spawns a leg walks past, not only the circle at each stop, and plans to 97 % of the walking budget so the routed path, which rarely equals the matrix sum, still fits. `CatchRouteBenchmarkTest` (opt-in, `-Pcatch.bench.dir`) compares the planner with a slow reference search on recorded windows.
+
+## Options and recommendations
+
+- **Event spawns** (off by default) keeps windows at event-only spawnpoints, which the backend sends only while a matching event runs.
+- **Limit to area** draws a polygon by tapping corners. Only spawnpoints inside count, a routed path that leaves the area (beyond 20 m) is rejected, and the start (and a pinned finish) must lie inside. Hunt mode uses the same picker; alerts outside a hunt's area are never planned or targeted.
+- **Best start spot** compares the 12 densest spawn clusters inside the area (or within 2 km); **Best start time** compares departures every 15 minutes over the next six hours. Windows download once, candidates are ranked on straight-line costs with the planner's own search, and only the best two are routed.
+
+The preview draws one start-to-finish coloured line (walked part grey), screen-spaced chevrons, numbered stops for every ~150 m stretch with catches (next stop orange during guidance), spawn dots (amber for event spawnpoints), and range circles only for the spawnpoint whose details are open.
+
 ## Guidance
 
 Starting guidance replaces the active Hunt or arrival journey. Starting a Hunt or arrival journey stops Catch route guidance. Saved setups and session snapshots use their own Room database, `catch_routes.db`.

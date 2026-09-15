@@ -7,12 +7,11 @@ import org.junit.Test
 import java.time.Instant
 
 /**
- * Ordering once real walked legs are available.
+ * Planning once real walked legs are available, and keeping a plan once the trainer is on it.
  *
- * The costs are hand-built rather than fetched: this is about what the ordering does
- * with an answer, not about how the answer arrives. Alerts are named so the
- * assertions read, and keyed on [PokemonAlert.uniqueId] because that is what the
- * ordering actually looks legs up by.
+ * The costs are hand-built rather than fetched: this is about what the planner does with an
+ * answer, not about how the answer arrives. Alerts are named so the assertions read, and keyed
+ * on [PokemonAlert.uniqueId] because that is what the planner actually looks legs up by.
  */
 class HuntTargetsRoutedTest {
 
@@ -38,474 +37,355 @@ class HuntTargetsRoutedTest {
     )
 
     /** Costs that answer for exactly the legs handed to them, and nothing else. */
-    private fun costsOf(
-        legs: Map<Pair<String?, String>, Double> = emptyMap(),
-        seconds: Map<String, Long> = emptyMap()
-    ) = object : HuntLegCosts {
+    private fun costsOf(legs: Map<Pair<String?, String>, Double> = emptyMap()) = object : HuntLegCosts {
         override val calculatedAtMillis = now
         override fun walkedMetersOrNull(fromId: String?, toId: String): Double? = legs[fromId to toId]
-        // Slack is the interaction radius the caller wants taken off the walk; the
-        // real implementation takes it off the distance, so this takes the equivalent
-        // off the time. See huntInteractionRadiusMeters.
         override fun walkSecondsFromOriginOrNull(toId: String, slackMeters: Double): Long? =
-            seconds[toId]?.let { (it - huntWalkSeconds(slackMeters.toInt())).coerceAtLeast(0L) }
+            legs[null to toId]?.let { huntWalkSeconds((it - slackMeters).coerceAtLeast(0.0).toInt()) }
         override fun forOrigin(latitude: Double, longitude: Double, nowMillis: Long): HuntLegCosts = this
     }
 
+    /** Every leg between [alerts] at [meters], plus the given overrides. */
+    private fun uniform(alerts: List<PokemonAlert>, meters: Double, overrides: Map<Pair<String?, String>, Double>) =
+        buildMap<Pair<String?, String>, Double> {
+            for (from in alerts) for (to in alerts) if (from !== to) put(from.uniqueId to to.uniqueId, meters)
+            for (to in alerts) put((null as String?) to to.uniqueId, meters)
+            putAll(overrides)
+        }
+
     private fun List<PokemonAlert>.names() = map { it.name }
 
-    @Test
-    fun `with nothing routed the order is exactly what it was before`() {
-        // The regression guard for the DETOUR_FACTOR scaling in chainNearest: one
-        // positive factor on every fallback must not reorder anything.
-        val alerts = listOf(
-            alert("far", 49.8800, 8.6600),
-            alert("near", 49.8730, 8.6515),
-            alert("mid", 49.8760, 8.6540),
-            alert("other", 49.8745, 8.6490)
-        )
-
-        val withNone = huntWalkOrder(alerts, originLat, originLon, now, HuntLegCosts.None)
-        val withAllNull = huntWalkOrder(alerts, originLat, originLon, now, costsOf())
-        val withDefault = huntWalkOrder(alerts, originLat, originLon, now)
-
-        assertEquals(withNone.names(), withAllNull.names())
-        assertEquals(withNone.names(), withDefault.names())
-    }
+    private fun plan(
+        alerts: List<PokemonAlert>,
+        legs: Map<Pair<String?, String>, Double> = emptyMap(),
+        previous: List<PokemonAlert> = emptyList(),
+        pinned: PokemonAlert? = null
+    ) = huntPlan(
+        alerts, originLat, originLon, now, costsOf(legs),
+        previousRouteIds = previous.map { it.uniqueId },
+        pinnedId = pinned?.uniqueId
+    )
 
     @Test
-    fun `the target across the river sorts behind the one on this side`() {
+    fun `the target across the river is walked after the one on this side`() {
         // "b" is nearer as the crow flies, but the only bridge is a long way round.
         val a = alert("a", 49.87330, 8.65200)
         val b = alert("b", 49.87300, 8.65150)
-        val alerts = listOf(a, b)
 
-        assertEquals(listOf("b", "a"), huntWalkOrder(alerts, originLat, originLon, now).names())
+        assertEquals("b", plan(listOf(a, b)).route.first().name)
 
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now,
-            costsOf(mapOf(null to a.uniqueId to 120.0, null to b.uniqueId to 1400.0))
-        )
+        val routed = plan(listOf(a, b), mapOf(null to a.uniqueId to 120.0, null to b.uniqueId to 1400.0))
 
-        assertEquals(listOf("a", "b"), routed.names())
+        assertEquals(listOf("a", "b"), routed.route.names())
     }
 
     @Test
-    fun `the chain follows routed legs between targets, not just from the trainer`() {
+    fun `the route follows routed legs between targets, not just from the trainer`() {
         val a = alert("a", 49.87330, 8.65200)
         val b = alert("b", 49.87500, 8.65600)
         val c = alert("c", 49.87360, 8.65240)
-        val alerts = listOf(a, b, c)
 
         // a is nearest the trainer; from a, c is a short hop while b is far.
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now,
-            costsOf(
-                mapOf(
-                    null to a.uniqueId to 100.0,
-                    null to b.uniqueId to 900.0,
-                    null to c.uniqueId to 250.0,
-                    a.uniqueId to b.uniqueId to 1500.0,
-                    a.uniqueId to c.uniqueId to 90.0,
-                    c.uniqueId to b.uniqueId to 1400.0,
-                    c.uniqueId to a.uniqueId to 95.0,
-                    b.uniqueId to a.uniqueId to 1500.0,
-                    b.uniqueId to c.uniqueId to 1400.0
-                )
+        val routed = plan(
+            listOf(a, b, c),
+            mapOf(
+                null to a.uniqueId to 100.0,
+                null to b.uniqueId to 900.0,
+                null to c.uniqueId to 250.0,
+                a.uniqueId to b.uniqueId to 1500.0,
+                a.uniqueId to c.uniqueId to 90.0,
+                c.uniqueId to b.uniqueId to 1400.0,
+                c.uniqueId to a.uniqueId to 95.0,
+                b.uniqueId to a.uniqueId to 1500.0,
+                b.uniqueId to c.uniqueId to 1400.0
             )
         )
 
-        assertEquals(listOf("a", "c", "b"), routed.names())
+        assertEquals(listOf("a", "c", "b"), routed.route.names())
     }
 
     @Test
-    fun `a missing leg mid-chain falls back without losing anyone`() {
+    fun `a missing leg falls back to a straight line without losing anyone`() {
         val a = alert("a", 49.87330, 8.65200)
         val b = alert("b", 49.87500, 8.65600)
         val c = alert("c", 49.87360, 8.65240)
-        val alerts = listOf(a, b, c)
 
-        // Only the trainer's legs are known; nothing between targets is.
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now,
-            costsOf(
-                mapOf(
-                    null to a.uniqueId to 100.0,
-                    null to b.uniqueId to 900.0,
-                    null to c.uniqueId to 250.0
-                )
-            )
+        val routed = plan(
+            listOf(a, b, c),
+            mapOf(null to a.uniqueId to 100.0, null to b.uniqueId to 900.0, null to c.uniqueId to 250.0)
         )
 
-        assertEquals(3, routed.size)
-        assertEquals(setOf("a", "b", "c"), routed.names().toSet())
-        assertEquals("a", routed.first().name)
+        assertEquals(setOf("a", "b", "c"), routed.route.names().toSet())
+        assertEquals("a", routed.route.first().name)
     }
 
     @Test
-    fun `a routed walk that clearly overruns drops the target to the back`() {
+    fun `a routed walk that clearly overruns keeps the target off the route`() {
         val soon = alert("soon", 49.87300, 8.65150, endsInMinutes = 5)
         val later = alert("later", 49.87600, 8.65600, endsInMinutes = 90)
-        val alerts = listOf(soon, later)
 
         // The estimate says "soon" is reachable, so it leads.
-        assertEquals(listOf("soon", "later"), huntWalkOrder(alerts, originLat, originLon, now).names())
+        assertEquals("soon", plan(listOf(soon, later)).route.first().name)
 
-        // Routed, the walk is 40 minutes and the alert has 5 -- clearly too late.
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now,
-            costsOf(seconds = mapOf(soon.uniqueId to 2_400L))
-        )
+        // Routed, the walk is 3 km and the alert has 5 minutes -- clearly too late.
+        val routed = plan(listOf(soon, later), mapOf(null to soon.uniqueId to 3_000.0))
 
-        assertEquals(listOf("later", "soon"), routed.names())
+        assertEquals(listOf("later"), routed.route.names())
+        assertEquals(listOf("soon"), routed.others.names())
     }
 
     @Test
-    fun `a borderline overrun keeps the target, thanks to the margin`() {
+    fun `a stop reached just in time is on the route, and one reached just too late is not`() {
         val soon = alert("soon", 49.87300, 8.65150, endsInMinutes = 10)
-        // 640 s routed against 600 s left: over, but only just, so the margin keeps it.
-        val costs = costsOf(seconds = mapOf(soon.uniqueId to 640L))
-
-        assertTrue(canArriveBeforeItEnds(soon, originLat, originLon, now, costs))
-        assertEquals(listOf("soon"), huntWalkOrder(listOf(soon), originLat, originLon, now, costs).names())
+        // ~590 s against 600 s left, then ~640 s: nothing is numbered that the walk misses.
+        assertEquals(listOf("soon"), plan(listOf(soon), mapOf(null to soon.uniqueId to 840.0)).route.names())
+        assertEquals(emptyList<String>(), plan(listOf(soon), mapOf(null to soon.uniqueId to 910.0)).route.names())
     }
 
     @Test
-    fun `more targets than the matrix covers still come back whole and ordered`() {
+    fun `more targets than the planner covers still come back whole`() {
         val alerts = (0 until 40).map { alert("t$it", 49.8700 + it * 0.0004, 8.6500 + it * 0.0004) }
-        // Only the first handful are routed, as the 29-target cap would give.
-        val legs = alerts.take(5).mapIndexed { index, a ->
-            ((null as String?) to a.uniqueId) to (100.0 + index)
-        }.toMap()
 
-        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
+        val routed = plan(alerts)
 
-        assertEquals(40, routed.size)
-        assertEquals(alerts.names().toSet(), routed.names().toSet())
+        assertEquals(alerts.names().toSet(), routed.ordered.names().toSet())
+        assertEquals(40, routed.ordered.size)
     }
 
-    // --- 2-opt -------------------------------------------------------------
-
     @Test
-    fun `the chain stops doubling back on a target it skipped`() {
+    fun `the route does not double back for a target it skipped`() {
         // The greedy trap: from a, d is the cheapest single hop (40 m), but everything
-        // is expensive once you are at d, so the walk costs 690 m. Reversing the
-        // stretch after a gives a -> b -> c -> d at 250 m -- one 2-opt move.
+        // is expensive once you are at d. Walking a -> b -> c -> d is the short way.
         val a = alert("a", 49.87330, 8.65200)
         val b = alert("b", 49.87360, 8.65240)
         val c = alert("c", 49.87390, 8.65280)
         val d = alert("d", 49.87420, 8.65320)
-        val alerts = listOf(a, b, c, d)
 
         val legs = mapOf<Pair<String?, String>, Double>(
             (null as String?) to a.uniqueId to 100.0,
             (null as String?) to b.uniqueId to 200.0,
             (null as String?) to c.uniqueId to 300.0,
             (null as String?) to d.uniqueId to 400.0,
-            a.uniqueId to b.uniqueId to 50.0,
-            b.uniqueId to c.uniqueId to 50.0,
-            c.uniqueId to d.uniqueId to 50.0,
-            a.uniqueId to d.uniqueId to 40.0,
+            a.uniqueId to b.uniqueId to 90.0,
+            b.uniqueId to c.uniqueId to 90.0,
+            c.uniqueId to d.uniqueId to 90.0,
+            a.uniqueId to d.uniqueId to 80.0,
             a.uniqueId to c.uniqueId to 300.0,
             d.uniqueId to c.uniqueId to 500.0,
             d.uniqueId to b.uniqueId to 600.0,
             d.uniqueId to a.uniqueId to 500.0,
-            c.uniqueId to b.uniqueId to 50.0,
+            c.uniqueId to b.uniqueId to 90.0,
             c.uniqueId to a.uniqueId to 300.0,
             b.uniqueId to d.uniqueId to 600.0,
-            b.uniqueId to a.uniqueId to 50.0
+            b.uniqueId to a.uniqueId to 90.0
         )
 
-        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
-
-        assertEquals(listOf("a", "b", "c", "d"), routed.names())
+        assertEquals(listOf("a", "b", "c", "d"), plan(listOf(a, b, c, d), legs).route.names())
     }
 
     @Test
-    fun `a reversal that only looks good on its cut edges is rejected`() {
-        // The two-edge shortcut would take this move; scoring the whole tour will not,
-        // because walking the reversed stretch backwards is far more expensive than
-        // walking it forwards. Directional legs are the reason we score the tour.
+    fun `a reversal that is only cheaper forwards is rejected`() {
+        // Walking the middle stretch backwards is far more expensive than walking it
+        // forwards. Routed legs are directional, which is why whole routes are scored.
         val a = alert("a", 49.87330, 8.65200)
         val b = alert("b", 49.87360, 8.65240)
         val c = alert("c", 49.87390, 8.65280)
         val d = alert("d", 49.87420, 8.65320)
-        val alerts = listOf(a, b, c, d)
 
         val legs = mapOf<Pair<String?, String>, Double>(
             (null as String?) to a.uniqueId to 100.0,
             (null as String?) to b.uniqueId to 200.0,
             (null as String?) to c.uniqueId to 300.0,
             (null as String?) to d.uniqueId to 400.0,
-            a.uniqueId to b.uniqueId to 50.0,
-            b.uniqueId to c.uniqueId to 50.0,
-            c.uniqueId to d.uniqueId to 50.0,
-            // Backwards through the middle is brutal.
+            a.uniqueId to b.uniqueId to 90.0,
+            b.uniqueId to c.uniqueId to 90.0,
+            c.uniqueId to d.uniqueId to 90.0,
             c.uniqueId to b.uniqueId to 5_000.0,
             b.uniqueId to a.uniqueId to 5_000.0,
             d.uniqueId to c.uniqueId to 5_000.0,
-            a.uniqueId to c.uniqueId to 60.0,
-            b.uniqueId to d.uniqueId to 60.0,
-            a.uniqueId to d.uniqueId to 90.0,
-            d.uniqueId to a.uniqueId to 90.0,
-            c.uniqueId to a.uniqueId to 60.0,
-            d.uniqueId to b.uniqueId to 60.0
+            a.uniqueId to c.uniqueId to 5_000.0,
+            b.uniqueId to d.uniqueId to 5_000.0,
+            a.uniqueId to d.uniqueId to 5_000.0,
+            d.uniqueId to a.uniqueId to 5_000.0,
+            c.uniqueId to a.uniqueId to 5_000.0,
+            d.uniqueId to b.uniqueId to 5_000.0
         )
 
-        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
-
-        assertEquals(listOf("a", "b", "c", "d"), routed.names())
+        assertEquals(listOf("a", "b", "c", "d"), plan(listOf(a, b, c, d), legs).route.names())
     }
 
-    @Test
-    fun `an unrouted chain is never rearranged`() {
-        val alerts = (0 until 6).map { alert("t$it", 49.8730 + it * 0.0008, 8.6515 + it * 0.0008) }
-
-        assertEquals(
-            huntWalkOrder(alerts, originLat, originLon, now).names(),
-            huntWalkOrder(alerts, originLat, originLon, now, costsOf()).names()
-        )
-    }
-
-    // --- chain-aware reachability ------------------------------------------
+    // --- only stops the walk will make ----------------------------------------
 
     @Test
-    fun `a target reachable on its own is demoted once the walk ahead of it counts`() {
-        // Each is ~7 minutes from the trainer, so alone they all survive. Walked in
-        // sequence the third is reached after ~21 minutes, and it only has 12.
+    fun `a stop that would run out later is walked first rather than dropped`() {
+        // Each is ~7 minutes from the trainer. Walked a, b, c the last is reached after
+        // ~21 minutes and it only has 12 -- so it goes first, and all three are caught.
         val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
         val b = alert("b", 49.87360, 8.65240, endsInMinutes = 90)
         val c = alert("c", 49.87390, 8.65280, endsInMinutes = 12)
-        val alerts = listOf(a, b, c)
+        val legs = uniform(listOf(a, b, c), 610.0, mapOf((null as String?) to a.uniqueId to 590.0))
 
-        val seconds = mapOf(a.uniqueId to 420L, b.uniqueId to 420L, c.uniqueId to 420L)
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to a.uniqueId to 570.0,
-            (null as String?) to b.uniqueId to 580.0,
-            (null as String?) to c.uniqueId to 590.0,
-            a.uniqueId to b.uniqueId to 570.0,
-            b.uniqueId to c.uniqueId to 570.0,
-            a.uniqueId to c.uniqueId to 580.0,
-            c.uniqueId to b.uniqueId to 570.0,
-            b.uniqueId to a.uniqueId to 570.0,
-            c.uniqueId to a.uniqueId to 580.0
-        )
+        val routed = plan(listOf(a, b, c), legs)
 
-        // Judged alone, c is fine.
-        assertTrue(canArriveBeforeItEnds(c, originLat, originLon, now, costsOf(legs, seconds)))
-
-        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs, seconds))
-
-        // ...but it goes to the back once the walk ahead of it is counted.
-        assertEquals("c", routed.names().last())
+        assertEquals("c", routed.route.first().name)
+        assertEquals(setOf("a", "b", "c"), routed.route.names().toSet())
     }
 
     @Test
-    fun `one unreachable target does not condemn the ones behind it`() {
-        // b expires almost immediately; a and c are both comfortable. Skipping b must
-        // not add its walk to the running total, so c survives.
+    fun `a stop nobody can reach in time is never numbered, and costs the rest nothing`() {
+        // The zigzag screenshot: stops the plan had given up on used to be appended to the
+        // numbered route anyway. b ends almost at once; a and c are comfortable.
         val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
         val b = alert("b", 49.87360, 8.65240, endsInMinutes = 1)
         val c = alert("c", 49.87390, 8.65280, endsInMinutes = 90)
-        val alerts = listOf(a, b, c)
+        val legs = uniform(listOf(a, b, c), 200.0, mapOf((null as String?) to a.uniqueId to 100.0))
 
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to a.uniqueId to 100.0,
-            (null as String?) to b.uniqueId to 200.0,
-            (null as String?) to c.uniqueId to 300.0,
-            a.uniqueId to b.uniqueId to 100.0,
-            b.uniqueId to c.uniqueId to 100.0,
-            a.uniqueId to c.uniqueId to 150.0,
-            c.uniqueId to b.uniqueId to 100.0,
-            b.uniqueId to a.uniqueId to 100.0,
-            c.uniqueId to a.uniqueId to 150.0
-        )
+        val routed = plan(listOf(a, b, c), legs)
 
-        val routed = huntWalkOrder(alerts, originLat, originLon, now, costsOf(legs))
-
-        assertEquals(3, routed.size)
-        assertEquals("b", routed.names().last())
-        assertTrue(routed.names().indexOf("c") < routed.names().indexOf("b"))
+        assertEquals(listOf("a", "c"), routed.route.names())
+        assertEquals(listOf("b"), routed.others.names())
     }
 
     @Test
-    fun `an alert with no end time is carried, never demoted`() {
-        val a = alert("a", 49.87330, 8.65200, endsInMinutes = 90)
-        val forever = PokemonAlert(
-            id = 9_999,
-            name = "forever",
-            pokemon = "forever",
-            type = listOf("Spawn"),
-            latitude = 49.87360,
-            longitude = 8.65240
-        )
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to a.uniqueId to 100.0,
-            (null as String?) to forever.uniqueId to 200.0,
-            a.uniqueId to forever.uniqueId to 100.0,
-            forever.uniqueId to a.uniqueId to 100.0
-        )
+    fun `every stop on the route is reached before it ends`() {
+        // A row of stops that all end together, most too far to make: the route holds
+        // only what the walk reaches, and in walking order.
+        val alerts = (0 until 12).map { alert("t$it", originLat + (it + 1) * 0.0018, originLon, endsInMinutes = 12) }
 
-        val routed = huntWalkOrder(listOf(a, forever), originLat, originLon, now, costsOf(legs))
+        val routed = plan(alerts)
 
-        assertEquals(setOf("a", "forever"), routed.names().toSet())
+        assertTrue(routed.route.isNotEmpty())
+        assertTrue(routed.others.isNotEmpty())
+        assertEquals(alerts.take(routed.route.size).names(), routed.route.names())
     }
 
-    // --- the committed target anchors the route ----------------------------
+    // --- keeping the route the trainer is on ----------------------------------
 
     @Test
-    fun `the target being walked to leads, and the rest follow from it`() {
-        val here = alert("here", 49.87280, 8.65120)     // right next to the trainer
-        val target = alert("target", 49.88000, 8.66000)  // the one being walked to
+    fun `the route being walked is kept when a fresh plan is only a little better`() {
+        val x = alert("x", 49.87400, 8.65300)
+        val y = alert("y", 49.87420, 8.65320)
+        // From scratch y then x is 20 m quicker -- not worth turning the trainer round.
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to x.uniqueId to 300.0,
+            (null as String?) to y.uniqueId to 280.0,
+            x.uniqueId to y.uniqueId to 100.0,
+            y.uniqueId to x.uniqueId to 100.0
+        )
+
+        assertEquals(listOf("y", "x"), plan(listOf(x, y), legs).route.names())
+        assertEquals(listOf("x", "y"), plan(listOf(x, y), legs, previous = listOf(x, y)).route.names())
+    }
+
+    @Test
+    fun `a new alert right on the way is taken first when that is clearly better`() {
+        // Screenshot 2: the target is 900 m east, and a new alert lands 100 m away on the
+        // path to it. Walking past it and coming back later would be absurd.
+        val target = alert("target", 49.87300, 8.66300)
+        val onTheWay = alert("onTheWay", 49.87280, 8.65250)
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to target.uniqueId to 900.0,
+            (null as String?) to onTheWay.uniqueId to 100.0,
+            onTheWay.uniqueId to target.uniqueId to 810.0,
+            target.uniqueId to onTheWay.uniqueId to 810.0
+        )
+
+        val routed = plan(listOf(target, onTheWay), legs, previous = listOf(target))
+
+        assertEquals(listOf("onTheWay", "target"), routed.route.names())
+    }
+
+    @Test
+    fun `a new alert off to the side is not forced in front of the target`() {
+        val target = alert("target", 49.87400, 8.65300)
+        val next = alert("next", 49.87450, 8.65350)
+        val newcomer = alert("newcomer", 49.87100, 8.64900)
+        val legs = mapOf<Pair<String?, String>, Double>(
+            (null as String?) to target.uniqueId to 200.0,
+            (null as String?) to next.uniqueId to 270.0,
+            (null as String?) to newcomer.uniqueId to 260.0,
+            target.uniqueId to next.uniqueId to 70.0,
+            next.uniqueId to target.uniqueId to 70.0,
+            target.uniqueId to newcomer.uniqueId to 460.0,
+            newcomer.uniqueId to target.uniqueId to 460.0,
+            next.uniqueId to newcomer.uniqueId to 530.0,
+            newcomer.uniqueId to next.uniqueId to 530.0
+        )
+
+        val routed = plan(listOf(target, next, newcomer), legs, previous = listOf(target, next))
+
+        assertEquals(listOf("target", "next", "newcomer"), routed.route.names())
+    }
+
+    @Test
+    fun `a kept target that can no longer be reached gives way to the next stop`() {
+        val gone = alert("gone", 49.87400, 8.65300, endsInMinutes = 1)
+        val next = alert("next", 49.87450, 8.65350)
+        val legs = uniform(listOf(gone, next), 900.0, emptyMap())
+
+        val routed = plan(listOf(gone, next), legs, previous = listOf(gone, next))
+
+        assertEquals(listOf("next"), routed.route.names())
+    }
+
+    @Test
+    fun `a previous route id that is no longer a match is ignored`() {
+        val alerts = listOf(alert("a", 49.87330, 8.65200), alert("b", 49.87500, 8.65600))
+        val gone = alert("gone", 49.87400, 8.65300)
+
+        assertEquals(plan(alerts).route.names(), plan(alerts, previous = listOf(gone)).route.names())
+    }
+
+    // --- a target picked by hand ----------------------------------------------
+
+    @Test
+    fun `a hand-picked target leads, and the rest follow from it`() {
+        val here = alert("here", 49.87280, 8.65120)
+        val target = alert("target", 49.88000, 8.66000)
         val nearTarget = alert("nearTarget", 49.88010, 8.66010)
         val alerts = listOf(here, target, nearTarget)
 
-        // Unanchored, the one under your feet leads.
-        assertEquals("here", huntWalkOrder(alerts, originLat, originLon, now).names().first())
+        assertEquals("here", plan(alerts).route.first().name)
 
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now, costsOf(), anchorId = target.uniqueId
-        )
+        val routed = plan(alerts, pinned = target)
 
-        // Anchored, the list is the route: target, then what is near the target, and
-        // the alert beside the trainer sorts last because it is a detour from there.
-        assertEquals(listOf("target", "nearTarget", "here"), routed.names())
+        assertEquals(listOf("target", "nearTarget"), routed.route.names().take(2))
     }
 
     @Test
-    fun `the rest are chained on legs from the anchor, not from the trainer`() {
-        val target = alert("target", 49.87400, 8.65300)
-        val a = alert("a", 49.87500, 8.65400)
-        val b = alert("b", 49.87600, 8.65500)
-        val alerts = listOf(target, a, b)
-
-        // From the trainer a looks closer; from the anchor b is the short hop.
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to target.uniqueId to 200.0,
-            (null as String?) to a.uniqueId to 210.0,
-            (null as String?) to b.uniqueId to 900.0,
-            target.uniqueId to b.uniqueId to 40.0,
-            target.uniqueId to a.uniqueId to 800.0,
-            b.uniqueId to a.uniqueId to 60.0,
-            a.uniqueId to b.uniqueId to 60.0
-        )
-
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now, costsOf(legs), anchorId = target.uniqueId
-        )
-
-        assertEquals(listOf("target", "b", "a"), routed.names())
-    }
-
-    @Test
-    fun `an anchor that is not on the list is ignored`() {
-        val alerts = listOf(
-            alert("a", 49.87330, 8.65200),
-            alert("b", 49.87500, 8.65600),
-            alert("c", 49.87360, 8.65240)
-        )
-
-        assertEquals(
-            huntWalkOrder(alerts, originLat, originLon, now).names(),
-            huntWalkOrder(alerts, originLat, originLon, now, costsOf(), anchorId = "server-gone").names()
-        )
-    }
-
-    @Test
-    fun `a null anchor changes nothing`() {
-        val alerts = listOf(
-            alert("a", 49.87330, 8.65200),
-            alert("b", 49.87500, 8.65600),
-            alert("c", 49.87360, 8.65240)
-        )
-
-        assertEquals(
-            huntWalkOrder(alerts, originLat, originLon, now).names(),
-            huntWalkOrder(alerts, originLat, originLon, now, costsOf(), anchorId = null).names()
-        )
-    }
-
-    @Test
-    fun `the anchor is never demoted, even when its own arrival looks late`() {
-        // You are already walking to it; dropping it to the back of its own route
-        // would be perverse. It still puts its leg on the clock for the ones behind.
+    fun `a hand-picked target leads even when it looks too late`() {
         val target = alert("target", 49.87400, 8.65300, endsInMinutes = 1)
         val other = alert("other", 49.87500, 8.65400, endsInMinutes = 90)
-        val alerts = listOf(target, other)
+        val legs = uniform(listOf(target, other), 900.0, emptyMap())
 
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to target.uniqueId to 900.0,
-            (null as String?) to other.uniqueId to 950.0,
-            target.uniqueId to other.uniqueId to 100.0,
-            other.uniqueId to target.uniqueId to 100.0
-        )
-
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now, costsOf(legs), anchorId = target.uniqueId
-        )
-
-        assertEquals("target", routed.names().first())
+        assertEquals("target", plan(listOf(target, other), legs, pinned = target).route.first().name)
     }
 
     @Test
-    fun `2-opt cannot displace the anchor from the front`() {
-        val target = alert("target", 49.87400, 8.65300)
-        val a = alert("a", 49.87420, 8.65320)
-        val b = alert("b", 49.87440, 8.65340)
-        val c = alert("c", 49.87460, 8.65360)
-        val alerts = listOf(target, a, b, c)
-
-        // Legs that make the anchor look like a terrible place to start.
-        val legs = mapOf<Pair<String?, String>, Double>(
-            (null as String?) to target.uniqueId to 100.0,
-            (null as String?) to a.uniqueId to 100.0,
-            (null as String?) to b.uniqueId to 100.0,
-            (null as String?) to c.uniqueId to 100.0,
-            target.uniqueId to a.uniqueId to 5_000.0,
-            target.uniqueId to b.uniqueId to 5_000.0,
-            target.uniqueId to c.uniqueId to 5_000.0,
-            a.uniqueId to b.uniqueId to 10.0,
-            b.uniqueId to c.uniqueId to 10.0,
-            a.uniqueId to c.uniqueId to 10.0,
-            c.uniqueId to b.uniqueId to 10.0,
-            b.uniqueId to a.uniqueId to 10.0,
-            c.uniqueId to a.uniqueId to 10.0
-        )
-
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now, costsOf(legs), anchorId = target.uniqueId
-        )
-
-        assertEquals("target", routed.names().first())
-        assertEquals(4, routed.size)
-    }
-
-    @Test
-    fun `the alert next to a far anchor is chained, not left in the tail`() {
-        // Tapping a distant pin is the whole point of tap-to-retarget, and the chain
-        // pool used to be cut by distance from the *trainer* -- so the alerts actually
-        // beside the anchor fell outside the nearest-30 and were never candidates.
-        // #2 came back as something near the trainer instead of near the anchor.
-        // ~600 m out, which is a normal tap -- far enough that its neighbours rank
-        // past the trainer's nearest thirty, near enough that everything here is
-        // still comfortably reachable.
+    fun `the alert next to a far hand-picked target follows it`() {
+        // Tapping a distant pin is the whole point of tap-to-retarget, and ranking
+        // candidates only from the trainer left the alerts beside the target out of reach.
         val anchor = alert("anchor", originLat + 0.0054, originLon)
         val besideAnchor = alert("besideAnchor", originLat + 0.0055, originLon)
         val alsoBesideAnchor = alert("alsoBesideAnchor", originLat + 0.0056, originLon)
-        // Enough clutter around the trainer to fill the pool on its own.
         val nearTrainer = (0 until 34).map {
             alert("near$it", originLat + it * 0.00008, originLon + it * 0.00008)
         }
-        val alerts = nearTrainer + listOf(anchor, besideAnchor, alsoBesideAnchor)
 
-        val routed = huntWalkOrder(
-            alerts, originLat, originLon, now, costsOf(), anchorId = anchor.uniqueId
-        )
+        val routed = plan(nearTrainer + listOf(anchor, besideAnchor, alsoBesideAnchor), pinned = anchor)
 
-        assertEquals("anchor", routed.names().first())
+        assertEquals("anchor", routed.route.first().name)
         assertTrue(
-            "expected an alert beside the anchor at #2, got ${routed.names()[1]}",
-            routed.names()[1] in setOf("besideAnchor", "alsoBesideAnchor")
+            "expected an alert beside the anchor at #2, got ${routed.route.names()[1]}",
+            routed.route.names()[1] in setOf("besideAnchor", "alsoBesideAnchor")
         )
+    }
+
+    @Test
+    fun `a hand-picked target that is not a match is ignored`() {
+        val alerts = listOf(alert("a", 49.87330, 8.65200), alert("b", 49.87500, 8.65600))
+        val gone = alert("gone", 49.87400, 8.65300)
+
+        assertEquals(plan(alerts).route.names(), plan(alerts, pinned = gone).route.names())
     }
 }

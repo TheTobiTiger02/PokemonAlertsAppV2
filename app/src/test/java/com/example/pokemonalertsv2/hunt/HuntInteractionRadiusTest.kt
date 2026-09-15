@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.hunt
 
 import com.example.pokemonalertsv2.data.PokemonAlert
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 
@@ -60,7 +59,7 @@ class HuntInteractionRadiusTest {
         val theSpawn = spawn("spawn", 49.87337, 8.65112) // ~69 m
         val alerts = listOf(theStop, theSpawn)
 
-        assertEquals(listOf("stop", "spawn"), huntWalkOrder(alerts, originLat, originLon, now).names())
+        assertEquals(listOf("stop", "spawn"), huntPlan(alerts, originLat, originLon, now).route.names())
     }
 
     @Test
@@ -71,7 +70,7 @@ class HuntInteractionRadiusTest {
 
         assertEquals(
             listOf("underfoot", "nearby"),
-            huntWalkOrder(alerts, originLat, originLon, now).names()
+            huntPlan(alerts, originLat, originLon, now).route.names()
         )
     }
 
@@ -83,18 +82,27 @@ class HuntInteractionRadiusTest {
 
         // To the pin, a is the shorter walk. To the point where each is tappable,
         // b is: 130 - 80 beats 100 - 40.
-        val routed = huntWalkOrder(
+        val routed = huntPlan(
             alerts, originLat, originLon, now,
-            costsOf(mapOf(null to a.uniqueId to 100.0, null to b.uniqueId to 130.0))
-        )
+            costsOf(
+                mapOf(
+                    null to a.uniqueId to 100.0,
+                    null to b.uniqueId to 130.0,
+                    // Far apart, and the same walk either way once each radius is taken
+                    // off, so only the first leg decides.
+                    a.uniqueId to b.uniqueId to 5_040.0,
+                    b.uniqueId to a.uniqueId to 5_000.0
+                )
+            )
+        ).route
 
-        assertEquals(listOf("b", "a"), routed.names())
+        assertEquals("b", routed.first().name)
     }
 
     @Test
-    fun `one shared radius leaves the order exactly as it was`() {
-        // Every alert a spawn: the subtraction is one constant across the whole list,
-        // so nothing may move. The regression guard for the ordering at large.
+    fun `a walk of spawns sweeps outward from the trainer`() {
+        // Every alert a spawn, so the radius is one constant and only the geometry
+        // decides: the nearest first, then onward without crossing back.
         val alerts = listOf(
             spawn("far", 49.8800, 8.6600),
             spawn("near", 49.8730, 8.6515),
@@ -102,7 +110,7 @@ class HuntInteractionRadiusTest {
             spawn("other", 49.8745, 8.6490)
         )
 
-        val ordered = huntWalkOrder(alerts, originLat, originLon, now)
+        val ordered = huntPlan(alerts, originLat, originLon, now).route
 
         assertEquals(listOf("near", "other", "mid", "far"), ordered.names())
     }
@@ -116,6 +124,6 @@ class HuntInteractionRadiusTest {
         // seconds, which just fits inside what is left.
         val costs = costsOf(mapOf(null to ending.uniqueId to 175.0))
 
-        assertTrue(canArriveBeforeItEnds(ending, originLat, originLon, now, costs))
+        assertEquals(listOf("ending"), huntPlan(listOf(ending), originLat, originLon, now, costs).route.names())
     }
 }

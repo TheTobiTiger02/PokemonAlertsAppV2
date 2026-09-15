@@ -23,15 +23,20 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.MainActivity
+import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
 import com.example.pokemonalertsv2.hunt.HuntMapFocus
+import com.example.pokemonalertsv2.hunt.HuntPlan
+import com.example.pokemonalertsv2.hunt.huntOriginMoved
 import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
 import com.example.pokemonalertsv2.hunt.HuntBatterySaver
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
+import com.example.pokemonalertsv2.hunt.insideHuntArea
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.hunt.shouldRetargetHuntTo
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
+import com.example.pokemonalertsv2.ui.alerts.mapCountdownLabel
 import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
 import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
@@ -53,6 +58,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -159,6 +165,8 @@ class ArrivalTrackingService : Service() {
 
     /** Latest inputs for the floating map's marker set, kept so any of the three can move it. */
     private var huntDefinition: FilterDefinition? = null
+    /** The hunt's drawn area; alerts outside it are invisible to every hunt decision. */
+    private var huntArea: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
     private var huntName: String? = null
 
     /** Whether the standby camera has been put on the trainer yet. */
@@ -177,6 +185,33 @@ class ArrivalTrackingService : Service() {
      */
     private val huntMatrix by lazy { HuntRouteMatrixCache.getInstance() }
     private var huntMatrixJob: Job? = null
+
+    /**
+     * The hunt's current plan. Made off the main thread by [huntPlanJob] and only read
+     * everywhere else: planning used to run inline, on the main thread, on every location
+     * fix, feed update and notification tick, and that is what made a long hunt lag.
+     */
+    private var huntPlan: HuntPlan = HuntPlan.Empty
+    private var huntPlanJob: Job? = null
+    private val huntPlanRequests = Channel<Unit>(Channel.CONFLATED)
+
+    /** Where the trainer stood for [huntPlan]; walking on past a threshold asks for a new one. */
+    private var huntPlanLatitude: Double? = null
+    private var huntPlanLongitude: Double? = null
+
+    /** The target the hunt itself last chose, as opposed to one the trainer picked elsewhere. */
+    private var huntTargetId: String? = null
+
+    /** A target the trainer picked by hand: the plan leads with it rather than switching away. */
+    private var pinnedHuntTargetId: String? = null
+
+    /** What the walked legs were last fetched for, so an unchanged hunt does not fetch again. */
+    private var matrixOriginLatitude: Double? = null
+    private var matrixOriginLongitude: Double? = null
+    private var matrixTargetIds: Set<String> = emptySet()
+
+    /** The countdown text the floating map's numbered pins were last drawn with. */
+    private var renderedLabelKey: String? = null
 
     /** The live undo offer, or null. Drives the notification's Undo action. */
     private var undoOffer: CaughtAlert? = null
@@ -263,8 +298,16 @@ class ArrivalTrackingService : Service() {
                     huntStartedAt = session?.startedAtMillis
                     // Keep the definition, not just the flag: the floating map draws
                     // the hunt's targets, which only the definition can produce.
+                    val definitionChanged = huntDefinition != session?.definition || huntArea != session?.area.orEmpty()
                     huntDefinition = session?.definition
+                    huntArea = session?.area.orEmpty()
                     huntName = session?.name
+                    huntTargetId = session?.targetUniqueId
+                    if (definitionChanged) {
+                        // A different hunt: nothing of the old route carries over.
+                        huntPlan = HuntPlan.Empty
+                        pinnedHuntTargetId = null
+                    }
                     val active = session != null
                     val changed = active != huntActive
                     huntActive = active
@@ -274,10 +317,15 @@ class ArrivalTrackingService : Service() {
                     // Standby says which of the two reasons it has no target, so the
                     // wording has to follow the flag rather than wait for the next one.
                     if (pausedChanged && !changed) refreshCurrentNotification()
+                    if (active) {
+                        startHuntPlanLoop()
+                        if (definitionChanged || pausedChanged) requestHuntPlan()
+                    }
                     refreshFloatingMapAlerts()
                     maybeAcquireHuntTarget()
                     if (!changed) return@collect
                     if (active) startHuntMatrixLoop() else stopHuntMatrixLoop()
+                    if (!active) stopHuntPlanLoop()
                     showFloatingMap()
                     // A hunt started with no matches yet still has to hold the
                     // service open, or there is nothing alive to notice the first one.
@@ -319,8 +367,7 @@ class ArrivalTrackingService : Service() {
                         ) {
                             repository.stopTracking()
                         }
-                        refreshFloatingMapAlerts()
-                        maybeAcquireHuntTarget()
+                        requestHuntPlan()
                     }
             }
         }
@@ -355,6 +402,7 @@ class ArrivalTrackingService : Service() {
         overlayPreferenceJob?.cancel()
         undoOfferJob?.cancel()
         huntMatrixJob?.cancel()
+        huntPlanJob?.cancel()
         journeyOverlay.reset()
         stopPoseTracking()
         artworkJob?.cancel()
@@ -381,7 +429,7 @@ class ArrivalTrackingService : Service() {
         // going" during a hunt still wins. Only a journey that predates the hunt
         // is a leftover, and that is the one to check against what is being hunted.
         if (destination.startedAtMillis >= session.startedAtMillis) return true
-        return isHuntTarget(destination.alert, session.definition)
+        return isHuntTarget(destination.alert, session.definition, area = session.area)
     }
 
     private fun activate(destination: TrackedDestination) {
@@ -561,11 +609,9 @@ class ArrivalTrackingService : Service() {
         lastArrivalFixMillis = fixMillis
         lastAcceptedLocation = Location(location)
         locationAvailable = true
+        if (huntActive) requestHuntPlanIfMoved(location)
         if (destination == null) {
-            if (huntActive) {
-                refreshFloatingMapAlerts()
-                maybeAcquireHuntTarget()
-            }
+            if (huntActive) maybeAcquireHuntTarget()
             return
         }
         val distance = floatArrayOf(directDistanceMeters(location, destination))
@@ -876,18 +922,23 @@ class ArrivalTrackingService : Service() {
             AlertsWidgetProvider.requestUpdate(applicationContext)
         }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
 
-        // Exclude it here rather than waiting for the dismissed-ids flow to come
-        // back round, or the very alert just caught is the nearest one again.
-        val next = currentHuntTargets(excluding = caught.uniqueId).firstOrNull()
+        pinnedHuntTargetId = null
+        // Ahead of the dismissed-ids flow, which the next plan would otherwise race.
+        dismissedAlertIds = dismissedAlertIds + caught.uniqueId
+        // The next stop on the route already planned, skipping the one just caught rather
+        // than waiting for the dismissed-ids flow to come back round.
+        val next = huntPlan.route.firstOrNull { it.uniqueId != caught.uniqueId }
         if (next == null) {
             huntRepository.setTarget(null)
             repository.stopTracking()
+            requestHuntPlan()
             return
         }
         runCatching {
             repository.startTracking(next)
             huntRepository.setTarget(next.uniqueId)
         }.onFailure { Log.w(TAG, "Could not advance to the next hunt target", it) }
+        requestHuntPlan()
     }
 
     /**
@@ -899,7 +950,7 @@ class ArrivalTrackingService : Service() {
      */
     private fun stepHuntTarget(forward: Boolean) {
         huntFocus = HuntMapFocus.READY
-        val targets = currentHuntTargets()
+        val targets = huntPlan.ordered
         if (targets.isEmpty()) return
         val nextId = stepMapPipSelection(
             orderedIds = targets.map { it.uniqueId },
@@ -907,11 +958,14 @@ class ArrivalTrackingService : Service() {
             forward = forward
         ) ?: return
         val next = targets.firstOrNull { it.uniqueId == nextId } ?: return
+        // Stepping is choosing by hand, so the plan must not step straight back.
+        pinnedHuntTargetId = next.uniqueId
         serviceScope.launch {
             runCatching {
                 repository.startTracking(next)
                 huntRepository.setTarget(next.uniqueId)
             }.onFailure { Log.w(TAG, "Could not switch to the next hunt target", it) }
+            requestHuntPlan()
         }
     }
 
@@ -929,6 +983,7 @@ class ArrivalTrackingService : Service() {
         pendingCameraRefocus = true
         focusFloatingMap()
         if (!shouldRetargetHuntTo(alert, currentDestination?.uniqueId, huntActive)) return
+        pinnedHuntTargetId = alert.uniqueId
         serviceScope.launch {
             runCatching {
                 // Tapping a pin is an unambiguous "go here", so it is also the way out
@@ -938,6 +993,7 @@ class ArrivalTrackingService : Service() {
                 repository.startTracking(alert)
                 huntRepository.setTarget(alert.uniqueId)
             }.onFailure { Log.w(TAG, "Could not switch to the tapped hunt target", it) }
+            requestHuntPlan()
         }
     }
 
@@ -978,7 +1034,7 @@ class ArrivalTrackingService : Service() {
             if (definition != null && origin != null) {
                 val candidates = withContext(Dispatchers.Default) {
                     huntRoutingCandidates(
-                        alerts = liveAlerts,
+                        alerts = liveAlerts.insideHuntArea(huntArea),
                         definition = definition,
                         dismissedAlertIds = dismissedAlertIds,
                         originLatitude = origin.latitude,
@@ -994,8 +1050,11 @@ class ArrivalTrackingService : Service() {
                     )
                 }
             }
-            // Recomputed after the matrix lands, and deliberately without an anchor.
-            val next = currentHuntTargets(ignoreAnchor = true).firstOrNull()
+            // Planned after the matrix lands, and deliberately from scratch: no route to keep
+            // and no hand-picked target to lead with.
+            pinnedHuntTargetId = null
+            applyHuntPlan(computeHuntPlan(fromScratch = true), follow = false)
+            val next = huntPlan.route.firstOrNull()
             renderedTargetKey = null
             if (next == null) {
                 refreshFloatingMapAlerts()
@@ -1016,39 +1075,122 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    private fun currentHuntTargets(
-        excluding: String? = null,
-        /** Re-plan from the trainer rather than onward from the committed target. */
-        ignoreAnchor: Boolean = false
-    ): List<PokemonAlert> {
-        val definition = huntDefinition ?: return emptyList()
-        val origin = lastAcceptedLocation
-        val latitude = origin?.latitude ?: currentDestination?.latitude ?: 0.0
-        val longitude = origin?.longitude ?: currentDestination?.longitude ?: 0.0
-        return huntTargets(
-            alerts = liveAlerts,
-            definition = definition,
-            dismissedAlertIds = if (excluding == null) dismissedAlertIds else dismissedAlertIds + excluding,
-            originLatitude = latitude,
-            originLongitude = longitude,
-            // One volatile read and one small wrapper. This runs on the 3 s fix path,
-            // so it may look things up but must never go and fetch them.
-            costs = huntMatrix.snapshot().forOrigin(latitude, longitude, System.currentTimeMillis()),
-            // The list is the route onward from what is actually being walked to --
-            // except when that is the alert being excluded, which is the catch path
-            // asking "where next", and chaining onward from something already caught
-            // would be nonsense.
-            anchorId = if (ignoreAnchor) {
-                null
-            } else {
-                currentDestination?.uniqueId?.takeIf { it != excluding }
-            }
-        )
+    private fun requestHuntPlan() {
+        huntPlanRequests.trySend(Unit)
+    }
+
+    /** Re-plans once the trainer has walked far enough for the old plan's first leg to be off. */
+    private fun requestHuntPlanIfMoved(location: Location) {
+        val latitude = huntPlanLatitude
+        val longitude = huntPlanLongitude
+        if (latitude == null || longitude == null ||
+            huntOriginMoved(latitude, longitude, location.latitude, location.longitude, HUNT_PLAN_MOVE_METERS)
+        ) {
+            requestHuntPlan()
+        }
     }
 
     /**
-     * The hunt's targets, nearest first, drawn on the floating map with the one
-     * currently being walked to emphasised.
+     * Plans on request, one at a time. Requests that land while a plan is being made
+     * collapse into one more, and plans are spaced by [HUNT_PLAN_MIN_INTERVAL_MILLIS], so a
+     * burst of fixes and feed updates costs one plan rather than one each.
+     */
+    private fun startHuntPlanLoop() {
+        if (huntPlanJob?.isActive == true) return
+        huntPlanJob = serviceScope.launch {
+            for (request in huntPlanRequests) {
+                applyHuntPlan(computeHuntPlan())
+                delay(HUNT_PLAN_MIN_INTERVAL_MILLIS)
+            }
+        }
+    }
+
+    private fun stopHuntPlanLoop() {
+        huntPlanJob?.cancel()
+        huntPlanJob = null
+        huntPlan = HuntPlan.Empty
+        huntPlanLatitude = null
+        huntPlanLongitude = null
+        pinnedHuntTargetId = null
+        huntRepository.publishPlan(HuntPlan.Empty)
+    }
+
+    /**
+     * The plan for the hunt as it stands, made on [Dispatchers.Default].
+     *
+     * Carries the current route forward unless [fromScratch] -- the Recalculate button --
+     * with the target being walked to first, so a new alert is fitted into the walk rather
+     * than the walk being rebuilt around it.
+     */
+    private suspend fun computeHuntPlan(fromScratch: Boolean = false): HuntPlan {
+        val definition = huntDefinition ?: return HuntPlan.Empty
+        // Every part of the plan is measured from where the trainer is. Without a fix the
+        // destination stands in; without either there is nothing to measure from.
+        val origin = lastAcceptedLocation
+        val latitude = origin?.latitude ?: currentDestination?.latitude ?: return HuntPlan.Empty
+        val longitude = origin?.longitude ?: currentDestination?.longitude ?: return HuntPlan.Empty
+        val alerts = liveAlerts.insideHuntArea(huntArea)
+        val dismissed = dismissedAlertIds
+        val destinationId = currentDestination?.uniqueId
+        val previous = if (fromScratch) {
+            emptyList()
+        } else {
+            (listOfNotNull(destinationId) + huntPlan.route.map { it.uniqueId }).distinct()
+        }
+        val pinned = if (fromScratch) null else pinnedHuntTargetId?.takeIf { it == destinationId }
+        val costs = huntMatrix.snapshot()
+        huntPlanLatitude = latitude
+        huntPlanLongitude = longitude
+        return withContext(Dispatchers.Default) {
+            val now = System.currentTimeMillis()
+            huntTargets(
+                alerts = alerts,
+                definition = definition,
+                dismissedAlertIds = dismissed,
+                originLatitude = latitude,
+                originLongitude = longitude,
+                nowMillis = now,
+                costs = costs.forOrigin(latitude, longitude, now),
+                previousRouteIds = previous,
+                pinnedId = pinned
+            )
+        }
+    }
+
+    private fun applyHuntPlan(plan: HuntPlan, follow: Boolean = true) {
+        if (!huntActive) return
+        huntPlan = plan
+        huntRepository.publishPlan(plan)
+        refreshFloatingMapAlerts()
+        maybeAcquireHuntTarget()
+        if (follow) followHuntPlan()
+    }
+
+    /**
+     * Moves the walk onto the plan's first stop when the plan has moved on from the target.
+     *
+     * The planner only does that when it is clearly better, or when the target can no longer
+     * be reached in time. A target the trainer picked by hand, or started outside the hunt,
+     * is theirs and is left alone.
+     */
+    private fun followHuntPlan() {
+        if (!huntActive || huntPaused) return
+        val destination = currentDestination ?: return
+        if (destination.uniqueId == pinnedHuntTargetId || destination.uniqueId != huntTargetId) return
+        val head = huntPlan.route.firstOrNull() ?: return
+        if (head.uniqueId == destination.uniqueId || acquireJob?.isActive == true) return
+        acquireJob = serviceScope.launch {
+            runCatching {
+                if (repository.currentDestination()?.uniqueId != destination.uniqueId) return@launch
+                repository.startTracking(head)
+                huntRepository.setTarget(head.uniqueId)
+            }.onFailure { Log.w(TAG, "Could not follow the hunt plan to ${head.uniqueId}", it) }
+        }
+    }
+
+    /**
+     * The hunt's plan drawn on the floating map: the route numbered and counting down, the
+     * rest nearest first, and the target being walked to emphasised.
      */
     private fun refreshFloatingMapAlerts() {
         if (!floatingMap.isShowing) return
@@ -1056,7 +1198,8 @@ class ArrivalTrackingService : Service() {
         // every one of them is a Canvas-drawn pin. Beyond the nearest few dozen they
         // are neither reachable on foot nor distinguishable in a window this small,
         // so the window draws the nearest slice and the emphasised target always.
-        val all = currentHuntTargets()
+        val plan = huntPlan
+        val all = plan.ordered
         val emphasized = currentDestination?.uniqueId
         val nearest = all.take(FLOATING_MAP_MAX_MARKERS)
         val tracked = all.firstOrNull { it.uniqueId == emphasized }
@@ -1065,19 +1208,32 @@ class ArrivalTrackingService : Service() {
         } else {
             nearest
         }
+        val numbered = minOf(plan.route.size, targets.size)
         // This runs from updateOngoing, i.e. on every location fix. Rebuilding every
         // pin that often -- Canvas work, on the main thread -- was most of the lag.
-        renderedHuntTargets = targets
-        val key = targets.joinToString(",") { "${it.uniqueId}:${it.latitude}:${it.longitude}" } + "|" + emphasized.orEmpty()
-        if (key == renderedTargetKey) return
+        renderedHuntTargets = targets.take(numbered)
+        val now = System.currentTimeMillis()
+        // The numbered pins in order, everything else as a set: re-planning reshuffles the far
+        // end of the route and which unnumbered match is nearest, and none of that changes
+        // what a pin looks like.
+        val wearsNumber = minOf(numbered, HUNT_ORDINAL_MAX)
+        val key = targets.take(wearsNumber).joinToString(",") { it.uniqueId } + "|" +
+            targets.drop(wearsNumber).map { it.uniqueId }.sorted().joinToString(",") + "|" + emphasized.orEmpty()
+        val labelKey = targets.take(minOf(numbered, HUNT_ORDINAL_MAX))
+            .joinToString(",") { mapCountdownLabel(it.endTime, now, minutePrecision = true) }
+        if (key == renderedTargetKey && labelKey == renderedLabelKey) return
+        val pinsChanged = key != renderedTargetKey
         renderedTargetKey = key
+        renderedLabelKey = labelKey
 
-        floatingMap.setAlerts(targets, emphasized)
+        floatingMap.setAlerts(targets, emphasized, numbered)
+        // A countdown ticking over only swaps label images; the artwork is already there.
+        if (!pinsChanged) return
         if (huntFocus == HuntMapFocus.ROUTE) focusHuntRoute()
         // Then the real artwork, off the main thread, replacing the placeholders.
         artworkJob?.cancel()
         artworkJob = serviceScope.launch {
-            runCatching { floatingMap.loadArtwork(targets, emphasized) }
+            runCatching { floatingMap.loadArtwork(targets, emphasized, numbered) }
                 .onFailure { if (it !is kotlinx.coroutines.CancellationException) Log.w(TAG, "Artwork pass failed", it) }
         }
     }
@@ -1305,24 +1461,33 @@ class ArrivalTrackingService : Service() {
                 if (definition != null && origin != null && isFreshValidLocation(origin)) {
                     val candidates = withContext(Dispatchers.Default) {
                         huntRoutingCandidates(
-                            alerts = liveAlerts,
+                            alerts = liveAlerts.insideHuntArea(huntArea),
                             definition = definition,
                             dismissedAlertIds = dismissedAlertIds,
                             originLatitude = origin.latitude,
                             originLongitude = origin.longitude
                         )
                     }
-                    if (candidates.isNotEmpty() &&
+                    // Only when it can change the answer: the trainer's row is kept until they
+                    // have walked past the drift the costs tolerate anyway, and the legs between
+                    // targets only need asking for when the targets themselves change. Asking
+                    // every pass re-sent a full matrix every ~11 m walked.
+                    val ids = candidates.mapTo(HashSet()) { it.id }
+                    val fromLatitude = matrixOriginLatitude
+                    val fromLongitude = matrixOriginLongitude
+                    val moved = fromLatitude == null || fromLongitude == null ||
+                        huntOriginMoved(fromLatitude, fromLongitude, origin.latitude, origin.longitude)
+                    if (candidates.isNotEmpty() && (moved || ids != matrixTargetIds) &&
                         huntMatrix.prefetch(origin.latitude, origin.longitude, candidates)
                     ) {
-                        // The same targets in a new order still have to be redrawn, and
-                        // renderedTargetKey is built from the ordered id list, so it
-                        // notices -- cleared anyway so a no-op reorder cannot stick.
-                        renderedTargetKey = null
-                        refreshFloatingMapAlerts()
-                        maybeAcquireHuntTarget()
+                        matrixOriginLatitude = origin.latitude
+                        matrixOriginLongitude = origin.longitude
+                        matrixTargetIds = ids
                     }
                 }
+                // Also the plan's clock: stops run out of time while a trainer stands still,
+                // and new legs may have just landed.
+                requestHuntPlan()
                 delay(HUNT_MATRIX_REFRESH_MILLIS)
             }
         }
@@ -1330,6 +1495,9 @@ class ArrivalTrackingService : Service() {
 
     private fun stopHuntMatrixLoop() {
         huntMatrixJob?.cancel()
+        matrixOriginLatitude = null
+        matrixOriginLongitude = null
+        matrixTargetIds = emptySet()
         huntMatrixJob = null
     }
 
@@ -1353,7 +1521,7 @@ class ArrivalTrackingService : Service() {
         // happens to lie closest to the Gulf of Guinea. Standby is already holding
         // the service open, and its GPS source supplies the missing origin.
         if (lastAcceptedLocation?.let(::isFreshValidLocation) != true) return
-        val next = currentHuntTargets().firstOrNull() ?: return
+        val next = huntPlan.route.firstOrNull() ?: return
         acquireJob = serviceScope.launch {
             runCatching {
                 // Re-check under the coroutine: the hunt can end between the feed
@@ -1488,6 +1656,12 @@ class ArrivalTrackingService : Service() {
          * per-client allowance with the walking routes the map is already fetching.
          */
         private const val HUNT_MATRIX_REFRESH_MILLIS = 30_000L
+
+        /** Walked this far from where the plan was made, the first leg is worth re-pricing. */
+        private const val HUNT_PLAN_MOVE_METERS = 25.0
+
+        /** At most one plan per this long, however fast requests arrive. */
+        private const val HUNT_PLAN_MIN_INTERVAL_MILLIS = 1_000L
         private const val MAX_LOCATION_AGE_MILLIS = 30_000L
         private const val MAX_GPS_TOLERANCE_METERS = 20f
         private const val ROUTE_DISPLAY_MAX_AGE_MILLIS = 10 * 60 * 1000L

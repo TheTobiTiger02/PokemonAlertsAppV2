@@ -29,8 +29,8 @@ class CatchRouteBackendUiTest {
                 listOf(CatchPathPosition(p, 0.0)), listOf(CatchEncounter(observed, now + 60000, 0.0), CatchEncounter(inferred, now + 60000, 0.0)), listOf(p))
             try {
                 controller.begin(plan)
-                compose.onNodeWithTag("catch_route_form").performScrollToNode(hasText("opportunities", substring = true))
-                compose.onNodeWithText("opportunities", substring = true).performClick()
+                compose.onNodeWithTag("catch_route_form").performScrollToNode(hasTestTag("catch_stop_0"))
+                compose.onNodeWithTag("catch_stop_0").performClick()
                 compose.onNodeWithText("Likely event spawnpoint", substring = true).performScrollTo().assertIsDisplayed()
                 compose.onNodeWithText("Requires live confirmation", substring = true).performScrollTo().assertIsDisplayed()
                 compose.onNodeWithText("Estimated 60-minute lifetime", substring = true).performScrollTo().assertIsDisplayed()

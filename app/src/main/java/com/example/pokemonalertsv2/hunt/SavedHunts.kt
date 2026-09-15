@@ -22,7 +22,9 @@ data class SavedHunt(
     val name: String,
     val definition: FilterDefinition,
     val savedAtMillis: Long,
-    val lastUsedAtMillis: Long = savedAtMillis
+    val lastUsedAtMillis: Long = savedAtMillis,
+    /** The area the hunt was limited to, so running it again keeps the same limit. */
+    val area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
 )
 
 /** Past this, the list stops being a shortcut and becomes another thing to read. */
@@ -50,20 +52,23 @@ internal fun recordStartedHunt(
     nowMillis: Long,
     id: String,
     replacingId: String? = null,
-    maxEntries: Int = MAX_SAVED_HUNTS
+    maxEntries: Int = MAX_SAVED_HUNTS,
+    area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
 ): Pair<List<SavedHunt>, SavedHunt> {
     val replacing = replacingId?.let { target -> existing.firstOrNull { it.id == target } }
     val match = replacing ?: existing.firstOrNull { it.definition == definition }
     val row = match?.copy(
         name = if (match.definition == definition) match.name else name.trimmedHuntName(),
         definition = definition,
-        lastUsedAtMillis = nowMillis
+        lastUsedAtMillis = nowMillis,
+        area = area
     ) ?: SavedHunt(
         id = id,
         name = name.trimmedHuntName(),
         definition = definition,
         savedAtMillis = nowMillis,
-        lastUsedAtMillis = nowMillis
+        lastUsedAtMillis = nowMillis,
+        area = area
     )
     val merged = existing.filterNot { it.id == row.id } + row
     return savedHuntOrder(merged).take(maxEntries) to row

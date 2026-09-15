@@ -24,6 +24,16 @@ data class CatchRouteSettings(
     val prediction: CatchPrediction = CatchPrediction.AUTOMATIC,
     /** Exact original deadline for internal replans, including the final stretch. */
     val deadlineMillis: Long? = null,
+    /**
+     * Longest the planner may stand at a stop for a spawn that starts soon. 0 keeps the
+     * original walking-only behaviour, where a future spawn counts only if it starts while
+     * you are passing through its circle.
+     */
+    val maxWaitMinutes: Int = 0,
+    /** Plan spawnpoints that only spawn during events (Spotlight Hours, Community Days). Off by default. */
+    val includeEventSpawns: Boolean = false,
+    /** Optional polygon the route must stay inside; fewer than three corners means no limit. */
+    val area: List<CatchPoint> = emptyList(),
 ) {
     val radius: Double get() = if (spacialRend) 80.0 else 40.0
     val endAtMillis: Long get() = deadlineMillis ?: (startAtMillis + durationMinutes * 60_000L)
@@ -40,6 +50,10 @@ data class CatchRouteSettings(
         require(speedMps.isFinite() && speedMps in 0.5..2.5) { "Walking pace must be 1.8–9 km/h." }
         require(finish != CatchFinish.PIN || end != null) { "Pick a finishing point." }
         require(startAtMillis > 0) { "Choose a starting time." }
+        require(maxWaitMinutes in 0..15) { "Waiting must be 0–15 minutes." }
+        require(area.isEmpty() || (area.isArea() && area.all { it.valid })) { "Draw the area with at least three corners." }
+        require(pointInArea(start, area)) { "The start must be inside the area." }
+        require(finish != CatchFinish.PIN || end == null || pointInArea(end, area)) { "The finish must be inside the area." }
     }
 }
 
@@ -56,10 +70,37 @@ data class SpawnOpportunity(
     val requiresLiveConfirmation: Boolean = false,
     val activityPattern: String = "unknown",
     val activityPatternBasis: String? = null,
+    /** Backend's chance that this window really holds a Pokémon, 0–1. Null from older backends. */
+    val probability: Double? = null,
+    val schedule: SpawnSchedule? = null,
 ) {
     val observed: Boolean get() = basis == "observed_encounter"
+    /** A window at a spawnpoint that only spawns during events; the backend sends these only while one runs. */
+    val eventOnly: Boolean get() = activityPattern == "event_only" || "event_only_spawnpoint" in uncertainty
     val evidenceRank: Int get() = when (basis) { "observed_encounter" -> 4; "recurring_schedule" -> 3; "inferred_lifetime" -> 2; "assumed_duration" -> 1; else -> 0 }
+
+    /**
+     * What reaching this window is worth to a route: its probability, or for a backend that
+     * does not send one, a fixed value per basis in the same order as [evidenceRank].
+     */
+    val expectedCatch: Double get() = probability?.coerceIn(0.0, 1.0) ?: when (basis) {
+        "observed_encounter" -> 1.0; "recurring_schedule" -> 0.8; "inferred_lifetime" -> 0.7
+        "assumed_duration" -> 0.5; else -> 0.4
+    }
 }
+
+/** A spawnpoint's learned hourly schedule, as the backend voted it. */
+@Serializable
+data class SpawnSchedule(
+    val despawnSecondOfHour: Int? = null,
+    val spawnSecondOfHour: Int? = null,
+    val durationSeconds: Int? = null,
+    val durationBasis: String = "unknown",
+    val confidence: Double? = null,
+    val supportCycles: Int? = null,
+    val totalCycles: Int? = null,
+    val lastVerifiedAt: String? = null,
+)
 
 @Serializable data class SpawnSourceMetadata(val source: String, val refreshedAt: String? = null, val complete: Boolean? = null,
     val coverageKind: String? = null, val returned: Int? = null, val dropped: Int? = null, val liveSnapshot: SpawnLiveSnapshot? = null)
@@ -72,6 +113,14 @@ data class SpawnAvailability(val opportunities: List<SpawnOpportunity>, val vers
 
 @Serializable data class CatchPathPosition(val point: CatchPoint, val meters: Double)
 @Serializable data class CatchEncounter(val opportunity: SpawnOpportunity, val arrivalMillis: Long, val meters: Double)
+
+/** A planned stop: stand still [millis] at [meters] along the path for a spawn to start. */
+@Serializable data class CatchWait(val meters: Double, val millis: Long)
+
+/** Clock time at [meters] along a path, counting every wait planned at or before that point. */
+fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchWait>, includeWaitsAt: Boolean = true): Long =
+    settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() +
+        waits.filter { if (includeWaitsAt) it.meters <= meters + 0.01 else it.meters < meters - 0.01 }.sumOf { it.millis }
 @Serializable data class CatchItinerary(
     val settings: CatchRouteSettings,
     val path: List<CatchPathPosition>,
@@ -80,10 +129,13 @@ data class SpawnAvailability(val opportunities: List<SpawnOpportunity>, val vers
     val warnings: List<String> = emptyList(),
     val version: String = "",
     val sources: List<SpawnSourceMetadata> = emptyList(),
+    val waits: List<CatchWait> = emptyList(),
 ) {
     val distanceMeters: Double get() = path.lastOrNull()?.meters ?: 0.0
-    val finishAtMillis: Long get() = settings.startAtMillis + ceil(distanceMeters / settings.speedMps * 1000).toLong()
+    val waitMillis: Long get() = waits.sumOf { it.millis }
+    val finishAtMillis: Long get() = settings.startAtMillis + ceil(distanceMeters / settings.speedMps * 1000).toLong() + waitMillis
     val observedCount: Int get() = encounters.count { it.opportunity.observed }
+    val expectedCatches: Double get() = encounters.sumOf { it.opportunity.expectedCatch }
 }
 
 @Serializable data class CatchVisit(val opportunity: SpawnOpportunity, val visitedAt: Long, val skipped: Boolean = false)
@@ -147,7 +199,8 @@ class CatchSpatialIndex<T>(items: List<T>, private val coordinate: (T) -> CatchP
     }
 }
 
-fun scoreCatchPath(path: List<CatchPathPosition>, settings: CatchRouteSettings, opportunities: List<SpawnOpportunity>): List<CatchEncounter> {
+fun scoreCatchPath(path: List<CatchPathPosition>, settings: CatchRouteSettings, opportunities: List<SpawnOpportunity>,
+    waits: List<CatchWait> = emptyList()): List<CatchEncounter> {
     val index = CatchSpatialIndex(opportunities) { it.point }
     val found = mutableMapOf<String, CatchEncounter>()
     path.zipWithNext().forEach { (a, b) ->
@@ -156,12 +209,14 @@ fun scoreCatchPath(path: List<CatchPathPosition>, settings: CatchRouteSettings, 
             val interval = catchCircleInterval(a.point, b.point, o.point, settings.radius) ?: return@inner
             val entryMeters = a.meters + (b.meters - a.meters) * interval.start
             val exitMeters = a.meters + (b.meters - a.meters) * interval.endInclusive
-            val enter = settings.startAtMillis + ceil(entryMeters / settings.speedMps * 1000).toLong()
-            val leave = settings.startAtMillis + floor(exitMeters / settings.speedMps * 1000).toLong()
+            // Waits planned inside the circle keep you in range longer; nothing else does.
+            val enter = catchTimeAt(settings, entryMeters, waits, includeWaitsAt = false)
+            val leave = settings.startAtMillis + floor(exitMeters / settings.speedMps * 1000).toLong() +
+                waits.filter { it.meters <= exitMeters + 0.01 }.sumOf { it.millis }
             val at = max(enter, o.availableFrom)
-            // No waiting: a future spawn counts only if it activates while walking inside its circle.
+            // A future spawn counts only if it activates while you are inside its circle.
             if (at <= leave && at < o.despawnAt && at <= settings.endAtMillis) {
-                found[o.id] = CatchEncounter(o, at, (at - settings.startAtMillis) / 1000.0 * settings.speedMps)
+                found[o.id] = CatchEncounter(o, at, min(exitMeters, entryMeters + (at - enter) / 1000.0 * settings.speedMps))
             }
         }
     }

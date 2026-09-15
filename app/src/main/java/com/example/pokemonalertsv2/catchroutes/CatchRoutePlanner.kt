@@ -10,12 +10,14 @@ import kotlin.math.*
 class CatchRoutePlanner(private val service: CatchRoutesService) {
     private val availability = SpawnAvailabilityRepository(service)
 
+    /** [preloaded] skips the windows download (recommendations load once for many candidates). */
     suspend fun generate(settings: CatchRouteSettings, visits: List<CatchVisit> = emptyList(),
-        progress: (String) -> Unit = {}): CatchItinerary = withContext(Dispatchers.Default) {
+        preloaded: SpawnAvailability? = null, progress: (String) -> Unit = {}): CatchItinerary = withContext(Dispatchers.Default) {
         settings.validate()
         var best: CatchItinerary? = null
         var lastError: Exception? = null
         var requests = 0
+        var leftArea = false
         suspend fun path(points: List<CatchPoint>, data: SpawnAvailability): CatchItinerary? {
             if (requests >= 8 || points.size !in 2..30) return null
             requests++
@@ -24,13 +26,22 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
             if (response.status == "unreachable") return null
             val positions = validateCatchPath(response, request, settings)
             if (positions.last().meters > settings.walkingBudgetMeters + 0.01) return null
-            val encounters = scoreCatchPath(positions, settings, data.opportunities)
+            // The streets between two in-area stops can still leave the area; such a route is not an option.
+            if (!pathInsideArea(positions, settings.area)) { leftArea = true; return null }
+            // Where each routed point sits along the path: the path is scaled to leg distances.
+            val stopMeters = response.legs.runningFold(0.0) { total, leg -> total + leg.distanceMeters }
+            val stops = points.indices.drop(1).take(points.size - 1 - if (settings.destination != null) 1 else 0)
+                .map { i -> points[i] to stopMeters[i] }
+            val waits = planCatchWaits(settings, stops, data.opportunities)
+                .takeIf { waits -> positions.last().meters + waits.sumOf { it.millis } / 1000.0 * settings.speedMps <= settings.walkingBudgetMeters + 0.01 }
+                .orEmpty()
+            val encounters = scoreCatchPath(positions, settings, data.opportunities, waits)
             val warnings = data.warnings + if (encounters.any { it.opportunity.uncertainty.isNotEmpty() })
-                listOf("Predictions include uncertain timing. Open a group for evidence.") else emptyList()
-            return CatchItinerary(settings, positions, encounters, points, warnings, data.version, data.sources)
+                listOf("Predictions include uncertain timing. Open a spawnpoint for evidence.") else emptyList()
+            return CatchItinerary(settings, positions, encounters, points, warnings, data.version, data.sources, waits)
         }
         withTimeoutOrNull(30_000) {
-            val loaded = availability.load(settings, progress)
+            val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
             val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
             if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) "No usable spawn windows. ${data.restrictedPointCount} spawnpoints require live confirmation; predictions cannot enable them." else "No usable spawn windows in this area and time. Try another start or enable predictions.")
             val groups = candidateGroups(settings, data.opportunities)
@@ -45,7 +56,9 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
                     val request = request(points)
                     val matrix = service.matrix(request).catchBody()
                     val costs = validateCatchMatrix(matrix, request)
-                    val order = improveCatchOrder(settings, anchors, costs, catchBeamOrder(settings, anchors, costs))
+                    val legs = CatchLegCoverage(settings, points, data.opportunities)
+                    val budget = settings.walkingBudgetMeters * CATCH_ORDER_BUDGET_SHARE
+                    val order = improveCatchOrder(settings, anchors, costs, catchBeamOrder(settings, anchors, costs, legs = legs, budget = budget), legs, budget)
                     var selected = listOf(settings.start) + order.map { anchors[it].point } + listOfNotNull(settings.destination)
                     if (selected.size < 2) continue
                     // Remove consecutive equal positions but retain a closed route's final return.
@@ -94,7 +107,8 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
         }
         coroutineContext.ensureActive()
         best?.takeIf { it.encounters.isNotEmpty() }
-            ?: throw (lastError ?: CatchApiException("No complete walking route found within 30 seconds. Try a shorter session or a nearby start."))
+            ?: throw (lastError ?: CatchApiException(if (leftArea) "Every walking route found leaves the area. Draw a larger area or move the start."
+                else "No complete walking route found within 30 seconds. Try a shorter session or a nearby start."))
     }
     private fun Long?.orZero() = this ?: 0L
     private fun request(points: List<CatchPoint>) = RouteMatrixRequest.pedestrian(points.mapIndexed { i, p -> RouteMatrixPoint("p$i", p.latitude, p.longitude) })
@@ -107,12 +121,12 @@ internal fun candidateGroups(settings: CatchRouteSettings, opportunities: List<S
     // One seed per ~40 m cell; retain every opportunity in the spatial index for final path scoring.
     return opportunities.distinctBy { floor(it.point.latitude / 0.00036) to floor(it.point.longitude / 0.00055) }
         .map { o -> CatchAnchor(o.point, index.near(o.point, radius = settings.radius).filter { catchDistance(o.point, it.point) <= settings.radius }) }
-        .sortedByDescending { it.opportunities.size / (1 + catchDistance(settings.start, it.point) / 1000) }
+        .sortedByDescending { it.opportunities.sumOf { o -> o.expectedCatch } / (1 + catchDistance(settings.start, it.point) / 1000) }
 }
 
 internal fun selectCandidates(groups: List<CatchAnchor>, start: CatchPoint, seed: Int): List<CatchAnchor> {
     val ordered = when (seed) {
-        1 -> groups.sortedByDescending { it.opportunities.size / (1 + catchDistance(start, it.point) / 250) }
+        1 -> groups.sortedByDescending { it.opportunities.sumOf { o -> o.expectedCatch } / (1 + catchDistance(start, it.point) / 250) }
         2 -> groups.groupBy { floor((atan2(it.point.latitude - start.latitude, it.point.longitude - start.longitude) + PI) / (PI / 4)).toInt() }
             .values.toList().let { sectors -> (0 until (sectors.maxOfOrNull { it.size } ?: 0)).flatMap { i -> sectors.mapNotNull { it.getOrNull(i) } } }
         else -> groups
@@ -137,15 +151,80 @@ internal fun validateCatchMatrix(matrix: RouteMatrixResponse, request: RouteMatr
     } }
 }
 
-internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>): List<Int> {
-    data class State(val order: List<Int>, val covered: Set<String>, val evidence: Int, val meters: Double)
-    val budget = settings.walkingBudgetMeters
+/**
+ * How long to stand at a stop reached at [arrival]: until the start, within the allowed wait, that
+ * adds the most expected catches among [opportunities] not yet [covered]. Zero when waiting is off
+ * or gains nothing; ties go to the shortest wait.
+ */
+internal fun catchWaitAt(settings: CatchRouteSettings, opportunities: List<SpawnOpportunity>, arrival: Long, covered: Set<String>): Long {
+    if (settings.maxWaitMinutes <= 0) return 0
+    val limit = min(arrival + settings.maxWaitMinutes * 60_000L, settings.endAtMillis)
+    fun value(at: Long) = opportunities.sumOf { if (it.id !in covered && at >= it.availableFrom && at < it.despawnAt) it.expectedCatch else 0.0 }
+    var bestAt = arrival
+    var best = value(arrival)
+    for (at in opportunities.asSequence().map { it.availableFrom }.filter { it in (arrival + 1)..limit }.distinct().sorted()) {
+        val gained = value(at)
+        if (gained > best + 1e-9) { best = gained; bestAt = at }
+    }
+    return bestAt - arrival
+}
+
+/** Waits along a routed path, stop by stop, with the same rule the order search used. */
+internal fun planCatchWaits(settings: CatchRouteSettings, stops: List<Pair<CatchPoint, Double>>, opportunities: List<SpawnOpportunity>): List<CatchWait> {
+    if (settings.maxWaitMinutes <= 0) return emptyList()
+    val index = CatchSpatialIndex(opportunities) { it.point }
+    val waits = mutableListOf<CatchWait>()
+    val covered = mutableSetOf<String>()
+    for ((point, meters) in stops) {
+        val near = index.near(point, radius = settings.radius).filter { catchDistance(point, it.point) <= settings.radius }
+        val arrival = catchTimeAt(settings, meters, waits)
+        val wait = catchWaitAt(settings, near, arrival, covered)
+        if (wait > 0) waits += CatchWait(meters, wait)
+        near.filter { arrival + wait >= it.availableFrom && arrival + wait < it.despawnAt }.forEach { covered += it.id }
+    }
+    return waits
+}
+
+/**
+ * Spawn windows passed on the way between two matrix points, with the straight line standing in for the
+ * street: each with the fractions of the leg where its circle is entered and left. Lets the order search
+ * value what a leg walks past, not only the circle at its end.
+ */
+internal class CatchLegCoverage(private val settings: CatchRouteSettings, private val points: List<CatchPoint>, opportunities: List<SpawnOpportunity>) {
+    data class Pass(val opportunity: SpawnOpportunity, val enter: Double, val leave: Double)
+    private val index = CatchSpatialIndex(opportunities) { it.point }
+    private val cache = HashMap<Long, List<Pass>>()
+    fun along(from: Int, to: Int): List<Pass> = cache.getOrPut(from * 4096L + to) {
+        val a = points[from]; val b = points[to]
+        index.near(a, b, settings.radius).mapNotNull { o -> catchCircleInterval(a, b, o.point, settings.radius)?.let { Pass(o, it.start, it.endInclusive) } }
+    }
+    /** Windows caught walking [distance] metres from point [from] to [to], leaving at [departAt], not yet in [covered]. */
+    fun gained(from: Int, to: Int, distance: Double, departAt: Long, covered: Set<String>): List<SpawnOpportunity> =
+        along(from, to).filter { pass ->
+            val o = pass.opportunity
+            if (o.id in covered) return@filter false
+            val enter = departAt + (pass.enter * distance / settings.speedMps * 1000).toLong()
+            val leave = departAt + (pass.leave * distance / settings.speedMps * 1000).toLong()
+            val at = max(enter, o.availableFrom)
+            at <= leave && at < o.despawnAt
+        }.map { it.opportunity }
+}
+
+/** The order search plans to this share of the walking budget: the routed path is rarely exactly the matrix sum. */
+internal const val CATCH_ORDER_BUDGET_SHARE = 0.97
+
+
+internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>,
+    width: Int = 48, depth: Int = 28, legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): List<Int> {
+    data class State(val order: List<Int>, val covered: Set<String>, val expected: Double, val meters: Double, val waitMillis: Long = 0)
     val finishIndex = if (settings.destination != null) anchors.size + 1 else null
     fun finishCost(s: State): Double? = finishIndex?.let { costs[s.order.lastOrNull()?.plus(1) ?: 0][it] } ?: if (finishIndex == null) 0.0 else null
-    val comparator = compareByDescending<State> { it.covered.size }.thenByDescending { it.evidence }.thenBy { it.meters + (finishCost(it) ?: Double.POSITIVE_INFINITY) }
-    var beam = listOf(State(emptyList(), emptySet(), 0, 0.0))
+    fun spent(s: State) = s.meters + s.waitMillis / 1000.0 * settings.speedMps
+    // Expected catches, not a count: a verified window is worth more than a guessed one.
+    val comparator = compareByDescending<State> { round(it.expected * 1000) }.thenBy { spent(it) + (finishCost(it) ?: Double.POSITIVE_INFINITY) }
+    var beam = listOf(State(emptyList(), emptySet(), 0.0, 0.0))
     var best: State? = beam.first().takeIf { finishCost(it)?.let { d -> d <= budget } == true }
-    repeat(28) {
+    repeat(depth) {
         coroutineContext.ensureActive()
         val next = mutableListOf<State>()
         for (s in beam) for (i in anchors.indices) {
@@ -154,42 +233,66 @@ internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<
             if (distance <= 0.0 && s.order.contains(i)) continue
             val meters = s.meters + distance
             val returnMeters = if (finishIndex != null) costs[i + 1][finishIndex] ?: continue else 0.0
-            if (meters + returnMeters > budget) continue
-            val at = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong()
-            val gained = anchors[i].opportunities.filter { it.id !in s.covered && at >= it.availableFrom && at < it.despawnAt }
-            if (gained.isEmpty() && i in s.order) continue
-            val n = State(s.order + i, s.covered + gained.map { it.id }, s.evidence + gained.sumOf { it.evidenceRank }, meters)
-            next += n
-            if (best == null || comparator.compare(n, best!!) < 0) best = n
+            if (meters + returnMeters + s.waitMillis / 1000.0 * settings.speedMps > budget) continue
+            val arrival = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() + s.waitMillis
+            val departAt = settings.startAtMillis + ceil(s.meters / settings.speedMps * 1000).toLong() + s.waitMillis
+            val passed = legs?.gained(s.order.lastOrNull()?.plus(1) ?: 0, i + 1, distance, departAt, s.covered).orEmpty()
+            val coveredOnArrival = if (passed.isEmpty()) s.covered else s.covered + passed.map { it.id }
+            // Both walking on and, when it pays, waiting here are kept; the beam decides which ends better.
+            val wait = catchWaitAt(settings, anchors[i].opportunities, arrival, coveredOnArrival)
+            for (w in if (wait > 0) listOf(0L, wait) else listOf(0L)) {
+                if (meters + returnMeters + (s.waitMillis + w) / 1000.0 * settings.speedMps > budget) continue
+                val at = arrival + w
+                val gained = passed + anchors[i].opportunities.filter { it.id !in coveredOnArrival && at >= it.availableFrom && at < it.despawnAt }
+                if (gained.isEmpty() && i in s.order) continue
+                val n = State(s.order + i, s.covered + gained.map { it.id }, s.expected + gained.sumOf { it.expectedCatch }, meters, s.waitMillis + w)
+                next += n
+                if (best == null || comparator.compare(n, best!!) < 0) best = n
+            }
         }
-        beam = next.sortedWith(comparator).distinctBy { it.order.lastOrNull() to it.covered }.take(48)
+        beam = next.sortedWith(comparator).distinctBy { Triple(it.order.lastOrNull(), it.covered, it.waitMillis) }.take(width)
         if (beam.isEmpty()) return best?.order.orEmpty()
     }
     return best?.order.orEmpty()
 }
 
+internal data class CatchOrderScore(val expected: Double, val meters: Double)
+
+/**
+ * Expected catches and walking (waits counted as distance) for visiting [anchors] in [order] on [costs],
+ * or null when it breaks the budget or a leg is unroutable. With [legs], windows passed along each leg count too; without, only each anchor's own circle.
+ */
+internal fun scoreCatchOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>, order: List<Int>,
+    legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): CatchOrderScore? {
+    var previous = 0
+    var meters = 0.0
+    var waited = 0L
+    val covered = mutableSetOf<String>()
+    var expected = 0.0
+    for (i in order) {
+        val distance = costs[previous][i + 1] ?: return null
+        val departAt = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() + waited
+        legs?.gained(previous, i + 1, distance, departAt, covered)?.forEach { if (covered.add(it.id)) expected += it.expectedCatch }
+        meters += distance
+        if (meters + waited / 1000.0 * settings.speedMps > budget) return null
+        val arrival = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() + waited
+        val wait = catchWaitAt(settings, anchors[i].opportunities, arrival, covered)
+        waited += wait
+        for (o in anchors[i].opportunities) {
+            if (arrival + wait >= o.availableFrom && arrival + wait < o.despawnAt && covered.add(o.id)) expected += o.expectedCatch
+        }
+        previous = i + 1
+    }
+    if (settings.destination != null) meters += costs[previous][anchors.size + 1] ?: return null
+    val spent = meters + waited / 1000.0 * settings.speedMps
+    return if (spent <= budget) CatchOrderScore(expected, spent) else null
+}
+
 /** Bounded local improvement on the same directed matrix. Geometry still decides the final score. */
 internal suspend fun improveCatchOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>,
-    initial: List<Int>): List<Int> {
-    data class Score(val count: Int, val evidence: Int, val meters: Double)
-    fun score(order: List<Int>): Score? {
-        var previous = 0
-        var meters = 0.0
-        val covered = mutableSetOf<String>()
-        var evidence = 0
-        for (i in order) {
-            meters += costs[previous][i + 1] ?: return null
-            if (meters > settings.walkingBudgetMeters) return null
-            val at = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong()
-            for (o in anchors[i].opportunities) {
-                if (at >= o.availableFrom && at < o.despawnAt && covered.add(o.id)) evidence += o.evidenceRank
-            }
-            previous = i + 1
-        }
-        if (settings.destination != null) meters += costs[previous][anchors.size + 1] ?: return null
-        return if (meters <= settings.walkingBudgetMeters) Score(covered.size, evidence, meters) else null
-    }
-    val comparator = compareByDescending<Score> { it.count }.thenByDescending { it.evidence }.thenBy { it.meters }
+    initial: List<Int>, legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): List<Int> {
+    fun score(order: List<Int>): CatchOrderScore? = scoreCatchOrder(settings, anchors, costs, order, legs, budget)
+    val comparator = compareByDescending<CatchOrderScore> { round(it.expected * 1000) }.thenBy { it.meters }
     var best = initial
     var bestScore = score(initial)
     repeat(2) {
@@ -212,11 +315,15 @@ internal suspend fun improveCatchOrder(settings: CatchRouteSettings, anchors: Li
     return best
 }
 
-internal fun betterCatchRoute(candidate: CatchItinerary, current: CatchItinerary?): Boolean = current == null ||
-    candidate.encounters.size > current.encounters.size ||
-    (candidate.encounters.size == current.encounters.size &&
-        (candidate.encounters.sumOf { it.opportunity.evidenceRank } > current.encounters.sumOf { it.opportunity.evidenceRank } ||
-        (candidate.encounters.sumOf { it.opportunity.evidenceRank } == current.encounters.sumOf { it.opportunity.evidenceRank } && candidate.distanceMeters < current.distanceMeters)))
+/** More expected catches wins; then more encounters; then the shorter walk. */
+internal fun betterCatchRoute(candidate: CatchItinerary, current: CatchItinerary?): Boolean {
+    if (current == null) return true
+    val a = round(candidate.expectedCatches * 1000)
+    val b = round(current.expectedCatches * 1000)
+    if (a != b) return a > b
+    if (candidate.encounters.size != current.encounters.size) return candidate.encounters.size > current.encounters.size
+    return candidate.distanceMeters < current.distanceMeters
+}
 
 internal fun validateCatchPath(response: CatchPathResponse, request: RouteMatrixRequest, settings: CatchRouteSettings): List<CatchPathPosition> {
     if (response.status != "ok" || response.legs.size != request.points.size - 1 || response.snappedPoints.map { it.id } != request.points.map { it.id })

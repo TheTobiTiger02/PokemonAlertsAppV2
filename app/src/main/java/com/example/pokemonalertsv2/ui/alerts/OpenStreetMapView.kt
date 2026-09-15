@@ -1205,7 +1205,7 @@ internal fun openStreetMapIconRequest(
 }
 
 /** The countdown strip this alert should be wearing, as a shared image id and its bitmap. */
-private fun openStreetMapCountdown(
+internal fun openStreetMapCountdown(
     alert: PokemonAlert,
     nowMillis: Long,
     minutePrecision: Boolean,

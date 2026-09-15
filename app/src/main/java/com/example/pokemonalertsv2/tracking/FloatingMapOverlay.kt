@@ -38,6 +38,8 @@ import com.example.pokemonalertsv2.ui.alerts.createMapMarkerIcon
 import com.example.pokemonalertsv2.ui.alerts.mapMarkerArtworkRasterPx
 import com.example.pokemonalertsv2.ui.alerts.mapMarkerBaseIconCacheKey
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapIconRequest
+import com.example.pokemonalertsv2.ui.alerts.openStreetMapCountdown
+import com.example.pokemonalertsv2.ui.alerts.mapCountdownLabelHeightPx
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -298,27 +300,32 @@ internal class FloatingMapOverlay(context: Context) {
     /**
      * The hunt's targets, in walking order.
      *
-     * The order is the point: [alerts] arrives already chained by
-     * [com.example.pokemonalertsv2.hunt.huntWalkOrder], so an alert's index *is* its
-     * position in the walk, and the first [HUNT_ORDINAL_MAX] wear it as a number.
+     * The order is the point: [alerts] starts with the planned route
+     * ([com.example.pokemonalertsv2.hunt.HuntPlan.route]), so for the first [numbered] alerts
+     * the index *is* the position in the walk. Those wear it as a number, up to
+     * [HUNT_ORDINAL_MAX], along with how long they have left; the rest are matches the plan
+     * is not sending you to and wear neither.
      */
-    fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?) {
+    fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
         if (map == null) return
+        val now = System.currentTimeMillis()
         val markers = alerts.mapIndexedNotNull { index, alert ->
             val coordinates = alert.mapCoordinatesOrNull() ?: return@mapIndexedNotNull null
             val emphasized = alert.uniqueId == emphasizedId
+            val sizePx = dp(if (emphasized) EMPHASIZED_MARKER_DP else MARKER_DP)
+            val ordinal = huntOrdinalFor(index, numbered)
             createImmediateOpenStreetMapMarker(
                 item = MapMarkerItem.Alert(alert, coordinates.latitude, coordinates.longitude),
-                markerSizePx = dp(if (emphasized) EMPHASIZED_MARKER_DP else MARKER_DP),
+                markerSizePx = sizePx,
                 clusterMarkerSizePx = dp(MARKER_DP),
                 showTimeLabels = false,
-                nowMillis = System.currentTimeMillis(),
+                nowMillis = now,
                 minutePrecision = true,
                 basePalette = OVERLAY_PALETTE,
                 goDexMatches = emptyMap(),
                 emphasized = emphasized,
-                ordinal = huntOrdinalFor(index)
-            )
+                ordinal = ordinal
+            ).withCountdown(alert, ordinal, sizePx, now)
         }
         runCatching { controller.setMarkers(themedContext, markers, alerts) }
             .onFailure { Log.w(TAG, "Could not draw the floating map markers", it) }
@@ -332,7 +339,7 @@ internal class FloatingMapOverlay(context: Context) {
      * every pin fell back to initials, forever. This is the pass that actually
      * loads them, and it populates the shared caches for everyone.
      */
-    suspend fun loadArtwork(alerts: List<PokemonAlert>, emphasizedId: String?) {
+    suspend fun loadArtwork(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
         if (map == null) return
         // Teaches the Context-free raster helper the canonical size. Until this has
         // run once the fallback path looks artwork up under a key nothing writes.
@@ -346,7 +353,7 @@ internal class FloatingMapOverlay(context: Context) {
                     val emphasized = alert.uniqueId == emphasizedId
                     val sizePx = dp(if (emphasized) EMPHASIZED_MARKER_DP else MARKER_DP)
                     val request = openStreetMapIconRequest(
-                        alert, sizePx, OVERLAY_PALETTE, emptyMap(), huntOrdinalFor(index)
+                        alert, sizePx, OVERLAY_PALETTE, emptyMap(), huntOrdinalFor(index, numbered)
                     )
                     val icon = gate.withPermit {
                         createMapMarkerIcon(
@@ -377,7 +384,7 @@ internal class FloatingMapOverlay(context: Context) {
                         iconId = mapMarkerBaseIconCacheKey(request),
                         icon = icon,
                         zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
-                    )
+                    ).withCountdown(alert, request.ordinal, sizePx, System.currentTimeMillis())
                 }
             }.awaitAll().filterNotNull()
         }
@@ -723,8 +730,25 @@ internal class FloatingMapOverlay(context: Context) {
      * A target that has scrolled out of the numbered head is still drawn -- it just
      * stops claiming a place in the plan.
      */
-    private fun huntOrdinalFor(index: Int): Int? =
-        (index + 1).takeIf { it <= HUNT_ORDINAL_MAX }
+    private fun huntOrdinalFor(index: Int, numbered: Int): Int? =
+        (index + 1).takeIf { index < numbered && it <= HUNT_ORDINAL_MAX }
+
+    /**
+     * Hangs the time left under a numbered pin. Minute precision on purpose: the label is a
+     * shared image, so it only changes -- and the window only redraws -- once a minute.
+     */
+    private fun OpenStreetMapMarker.withCountdown(
+        alert: PokemonAlert,
+        ordinal: Int?,
+        sizePx: Int,
+        nowMillis: Long
+    ): OpenStreetMapMarker {
+        if (ordinal == null) return this
+        val countdown = openStreetMapCountdown(
+            alert, nowMillis, minutePrecision = true, mapCountdownLabelHeightPx(sizePx), OVERLAY_PALETTE
+        ) ?: return this
+        return copy(labelId = countdown.first, labelBitmap = countdown.second)
+    }
 
     companion object {
         private const val TAG = "FloatingMapOverlay"
