@@ -61,6 +61,12 @@ internal data class TopMega(val mega: MegaSpecies, val best: PersonalCounter, va
  * mega-capable Pokémon in the roster. Each mega species appears once, with its best copy and
  * where that copy sits in the whole ranking.
  */
+/** Ranking place and trainers needed, the same estimator the counters list shows ("#2 · 2.41 trainers"). */
+internal fun megaShortlistDetail(top: TopMega): String {
+    val trainers = top.best.metrics.estimator?.takeIf { it.isFinite() }
+    return if (trainers == null) "#${top.overallRank}" else "#${top.overallRank} · ${"%.2f".format(Locale.US, trainers)} trainers"
+}
+
 internal fun topRosterMegas(ranked: List<PersonalCounter>, megaOptions: List<MegaSpecies>, limit: Int = TOP_MEGA_COUNT): List<TopMega> {
     val byId = megaOptions.associateBy { it.pokemonId.uppercase(Locale.ROOT) }
     val seen = mutableSetOf<String>()
@@ -198,7 +204,7 @@ internal fun ActiveMegaSheet(
                             selected = state.activeMegaId == top.mega.pokemonId,
                             sprite = top.mega,
                             inRoster = false,
-                            detail = "#${top.overallRank} · ${String.format(Locale.getDefault(), "%.1f", top.best.dps)} DPS",
+                            detail = megaShortlistDetail(top),
                             state = state,
                             onClick = { onSelect(top.mega.pokemonId) }
                         )

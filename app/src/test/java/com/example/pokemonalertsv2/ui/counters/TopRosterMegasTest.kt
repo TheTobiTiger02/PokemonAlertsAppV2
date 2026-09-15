@@ -9,12 +9,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TopRosterMegasTest {
-    private fun counter(pokemonId: String, dps: Double) = PersonalCounter(
+    private fun counter(pokemonId: String, dps: Double, attackers: Double = 6.0) = PersonalCounter(
         owned = OwnedPokemon(displayName = pokemonId, form = null, level = 40.0, atkIv = 15, defIv = 15, staIv = 15, cp = 3000,
             quickMove = "Counter", chargeMove = "Dynamic Punch", shadow = false, lucky = false, matchKeys = listOf(pokemonId)),
         pokemonId = pokemonId, displayName = pokemonId, fastMove = syntheticFastMove("COUNTER"),
         chargedMove = syntheticChargedMove("DYNAMIC_PUNCH"), movesetAssumed = false, dps = dps, tdo = 100.0, rating = 50.0,
-        estimatedAttackers = 6.0
+        estimatedAttackers = attackers
     )
 
     private val megas = listOf("LUCARIO_MEGA", "GENGAR_MEGA", "CHARIZARD_MEGA_Y", "BLAZIKEN_MEGA", "GARCHOMP_MEGA", "ALAKAZAM_MEGA", "MEWTWO_MEGA_X")
@@ -30,6 +30,12 @@ class TopRosterMegasTest {
         assertEquals(listOf("LUCARIO_MEGA", "BLAZIKEN_MEGA", "GENGAR_MEGA"), top.map { it.mega.pokemonId })
         assertEquals(listOf(2, 5, 6), top.map { it.overallRank })
         assertEquals(19.0, top.first().best.dps, 0.0)
+    }
+
+    @Test
+    fun `the shortlist shows ranking place and trainers needed`() {
+        val top = TopMega(megas.first(), counter("LUCARIO_MEGA", 19.0, attackers = 14.46), 2)
+        assertEquals("#2 · 2.41 trainers", megaShortlistDetail(top))
     }
 
     @Test

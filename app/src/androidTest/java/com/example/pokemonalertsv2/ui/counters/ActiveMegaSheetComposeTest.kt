@@ -20,12 +20,12 @@ class ActiveMegaSheetComposeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun counter(pokemonId: String, dps: Double) = PersonalCounter(
+    private fun counter(pokemonId: String, dps: Double, attackers: Double = 6.0) = PersonalCounter(
         owned = OwnedPokemon(displayName = pokemonId, form = null, level = 40.0, atkIv = 15, defIv = 15, staIv = 15, cp = 3000,
             quickMove = "Counter", chargeMove = "Aura Sphere", shadow = false, lucky = false, matchKeys = listOf(pokemonId)),
         pokemonId = pokemonId, displayName = pokemonId, fastMove = syntheticFastMove("COUNTER"),
         chargedMove = syntheticChargedMove("AURA_SPHERE"), movesetAssumed = false, dps = dps, tdo = 500.0, rating = 50.0,
-        estimatedAttackers = 6.0
+        estimatedAttackers = attackers
     )
 
     @Test
@@ -36,7 +36,7 @@ class ActiveMegaSheetComposeTest {
             MegaSpecies("GENGAR_MEGA", "Mega Gengar", "GENGAR"),
             MegaSpecies("LUCARIO_MEGA", "Mega Lucario", "LUCARIO"),
         )
-        val ranked = listOf(counter("MACHAMP_SHADOW_FORM", 21.0), counter("LUCARIO_MEGA", 19.4), counter("GENGAR_MEGA", 15.2))
+        val ranked = listOf(counter("MACHAMP_SHADOW_FORM", 21.0), counter("LUCARIO_MEGA", 19.4, 14.46), counter("GENGAR_MEGA", 15.2, 18.0))
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 ActiveMegaSheet(
@@ -50,11 +50,11 @@ class ActiveMegaSheetComposeTest {
             }
         }
         composeRule.onNodeWithText("Best megas for this raid").assertIsDisplayed()
-        composeRule.onNodeWithText("#2 · 19.4 DPS").assertIsDisplayed()
-        composeRule.onNodeWithText("#3 · 15.2 DPS").assertIsDisplayed()
+        composeRule.onNodeWithText("#2 · 2.41 trainers").assertIsDisplayed()
+        composeRule.onNodeWithText("#3 · 3.00 trainers").assertIsDisplayed()
         // Lucario shows twice (shortlist and grid); Absol, not in the ranking, only in the grid.
         assertEquals(2, composeRule.onAllNodesWithText("Mega Lucario").fetchSemanticsNodes().size)
-        composeRule.onNodeWithText("#2 · 19.4 DPS").performClick()
+        composeRule.onNodeWithText("#2 · 2.41 trainers").performClick()
         assertEquals("LUCARIO_MEGA", selected)
     }
 }
