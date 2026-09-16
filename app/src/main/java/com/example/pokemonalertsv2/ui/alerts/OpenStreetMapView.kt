@@ -22,7 +22,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.hunt.HuntPath
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
@@ -47,7 +49,9 @@ import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.fillColor
 import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.fillOutlineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineCap
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
+import org.maplibre.android.style.layers.PropertyFactory.lineJoin
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.layers.PropertyFactory.lineOpacity
 import org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap
@@ -62,6 +66,7 @@ import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import org.maplibre.geojson.Polygon
 import kotlin.math.asin
@@ -195,6 +200,7 @@ internal class OpenStreetMapController {
     private var pendingSpacialRendEnabled = false
     private var pendingUserPose: MapUserPose? = null
     private var pendingWeatherCells: List<MapWeatherCell> = emptyList()
+    private var pendingHuntPath: HuntPath = HuntPath.None
     /** Held so weather glyphs can be rasterised whenever the cell set changes, not just on attach. */
     private var imageContext: android.content.Context? = null
     private val registeredWeatherImages = HashSet<String>()
@@ -311,6 +317,8 @@ internal class OpenStreetMapController {
         style.addSource(GeoJsonSource(WEATHER_CELL_SOURCE))
         style.addSource(GeoJsonSource(WEATHER_GLYPH_SOURCE))
         style.addSource(GeoJsonSource(SPAWN_RADIUS_SOURCE))
+        style.addSource(GeoJsonSource(HUNT_PATH_SOURCE))
+        style.addSource(GeoJsonSource(HUNT_PATH_NEXT_SOURCE))
         style.addSource(GeoJsonSource(USER_ACCURACY_SOURCE))
         style.addSource(GeoJsonSource(USER_POSE_SOURCE))
         // Weather cells sit at the very bottom: they are ~10km across, so anything drawn
@@ -340,6 +348,33 @@ internal class OpenStreetMapController {
                 lineColor(AndroidColor.parseColor("#1A73E8")),
                 lineWidth(2.5f),
                 lineOpacity(0.85f)
+            )
+        )
+        // The hunt's walk, above the circles so it reads as a route and below the trainer and the pins,
+        // which must never be hidden by it.
+        style.addLayer(
+            LineLayer(HUNT_PATH_CASING_LAYER, HUNT_PATH_SOURCE).withProperties(
+                lineColor(AndroidColor.WHITE),
+                lineWidth(7f),
+                lineOpacity(0.7f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND)
+            )
+        )
+        style.addLayer(
+            LineLayer(HUNT_PATH_LAYER, HUNT_PATH_SOURCE).withProperties(
+                lineColor(AndroidColor.parseColor("#1E63F0")),
+                lineWidth(4.5f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND)
+            )
+        )
+        style.addLayer(
+            LineLayer(HUNT_PATH_NEXT_LAYER, HUNT_PATH_NEXT_SOURCE).withProperties(
+                lineColor(AndroidColor.parseColor("#E8710A")),
+                lineWidth(5.5f),
+                lineCap(Property.LINE_CAP_ROUND),
+                lineJoin(Property.LINE_JOIN_ROUND)
             )
         )
         style.addLayer(
@@ -381,6 +416,7 @@ internal class OpenStreetMapController {
         renderUserPose()
         renderSpawnRadii()
         renderWeatherCells()
+        renderHuntPath()
         renderMarkers()
     }
 
@@ -503,6 +539,12 @@ internal class OpenStreetMapController {
         imageContext = context.applicationContext
         pendingWeatherCells = cells
         renderWeatherCells()
+    }
+
+    /** The hunt's walk as streets; [HuntPath.None] clears it. */
+    fun setHuntPath(path: HuntPath) {
+        pendingHuntPath = path
+        renderHuntPath()
     }
 
     fun setSpawnRadiusOptions(showRadius: Boolean, spacialRend: Boolean) {
@@ -636,6 +678,19 @@ internal class OpenStreetMapController {
         )
     }
 
+    /** Draws the hunt's route: the leg being walked in its own colour, the rest behind it. */
+    private fun renderHuntPath() {
+        val currentStyle = style ?: return
+        val routeSource = currentStyle.getSourceAs<GeoJsonSource>(HUNT_PATH_SOURCE) ?: return
+        val nextSource = currentStyle.getSourceAs<GeoJsonSource>(HUNT_PATH_NEXT_SOURCE) ?: return
+        fun line(points: List<CatchPoint>) = if (points.size < 2) emptyList() else listOf(
+            Feature.fromGeometry(LineString.fromLngLats(points.map { Point.fromLngLat(it.longitude, it.latitude) }))
+        )
+        val path = pendingHuntPath as? HuntPath.Resolved
+        routeSource.setGeoJson(FeatureCollection.fromFeatures(line(path?.rest.orEmpty())))
+        nextSource.setGeoJson(FeatureCollection.fromFeatures(line(path?.next.orEmpty())))
+    }
+
     /**
      * Draws one outlined cell per scanned area, with the condition glyph at its centre.
      *
@@ -743,6 +798,11 @@ internal class OpenStreetMapController {
         const val WEATHER_GLYPH_SOURCE = "weather-glyph-source"
         const val WEATHER_GLYPH_LAYER = "weather-glyph-layer"
         const val WEATHER_AREA_PROPERTY = "area"
+        const val HUNT_PATH_SOURCE = "hunt-path-source"
+        const val HUNT_PATH_CASING_LAYER = "hunt-path-casing-layer"
+        const val HUNT_PATH_LAYER = "hunt-path-layer"
+        const val HUNT_PATH_NEXT_SOURCE = "hunt-path-next-source"
+        const val HUNT_PATH_NEXT_LAYER = "hunt-path-next-layer"
         const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
         const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
         const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
@@ -808,6 +868,7 @@ internal fun OpenStreetMapView(
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
     weatherCells: List<MapWeatherCell> = emptyList(),
+    huntPath: HuntPath = HuntPath.None,
     interactive: Boolean = true,
     protectedAlertIds: Set<String> = emptySet(),
     emphasizedAlertIds: Set<String> = emptySet(),
@@ -1149,6 +1210,12 @@ internal fun OpenStreetMapView(
     LaunchedEffect(weatherCells) {
         withContext(Dispatchers.Main.immediate) {
             controller.setWeatherCells(context, weatherCells)
+        }
+    }
+
+    LaunchedEffect(huntPath) {
+        withContext(Dispatchers.Main.immediate) {
+            controller.setHuntPath(huntPath)
         }
     }
 

@@ -117,6 +117,9 @@ import com.example.pokemonalertsv2.hunt.HuntMapFocus
 import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.HuntPlan
+import com.example.pokemonalertsv2.hunt.HuntPath
+import com.example.pokemonalertsv2.hunt.HuntPathCache
+import com.example.pokemonalertsv2.hunt.HuntRoutePoint
 import com.example.pokemonalertsv2.hunt.huntLegNode
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.HuntTargetBanner
@@ -174,6 +177,9 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Polygon
+import com.google.maps.android.compose.Polyline
+import com.google.android.gms.maps.model.JointType
+import com.google.android.gms.maps.model.RoundCap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
@@ -380,6 +386,7 @@ fun AlertsMapRoute(
     val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle()
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
     val showWeatherCells by viewModel.showWeatherCells.collectAsStateWithLifecycle()
+    val showHuntPath by viewModel.showHuntPath.collectAsStateWithLifecycle()
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     AlertsMapScreen(
@@ -425,6 +432,8 @@ fun AlertsMapRoute(
         onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) },
         showWeatherCells = showWeatherCells,
         onToggleWeatherCells = { viewModel.updateShowWeatherCells(!showWeatherCells) },
+        showHuntPath = showHuntPath,
+        onToggleHuntPath = { viewModel.updateShowHuntPath(!showHuntPath) },
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = viewModel::dismissAlert,
         onRestoreAlert = viewModel::undoDismissAlert,
@@ -470,6 +479,8 @@ fun AlertsMapScreen(
     onToggleSpacialRend: () -> Unit = {},
     showWeatherCells: Boolean = true,
     onToggleWeatherCells: () -> Unit = {},
+    showHuntPath: Boolean = true,
+    onToggleHuntPath: () -> Unit = {},
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
     onRestoreAlert: (String) -> Unit = {},
@@ -510,6 +521,8 @@ fun AlertsMapScreen(
         onToggleSpacialRend = onToggleSpacialRend,
         showWeatherCells = showWeatherCells,
         onToggleWeatherCells = onToggleWeatherCells,
+        showHuntPath = showHuntPath,
+        onToggleHuntPath = onToggleHuntPath,
         dismissedAlertIds = dismissedAlertIds,
         onDismissAlert = onDismissAlert,
         onRestoreAlert = onRestoreAlert,
@@ -554,6 +567,8 @@ internal fun AlertsMapScreenContent(
     onToggleSpacialRend: () -> Unit = {},
     showWeatherCells: Boolean = true,
     onToggleWeatherCells: () -> Unit = {},
+    showHuntPath: Boolean = true,
+    onToggleHuntPath: () -> Unit = {},
     dismissedAlertIds: Set<String> = emptySet(),
     onDismissAlert: (String) -> Unit = {},
     onRestoreAlert: (String) -> Unit = {},
@@ -983,6 +998,25 @@ internal fun AlertsMapScreenContent(
         else shownHuntPlan.ordered.filter { it.uniqueId !in dismissedAlertIds }
     }
     val huntOrdinals = huntRoute.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
+    // The street path is one cache for the app: the service fills it while it plans, the map while it does not.
+    val huntPathCache = remember { HuntPathCache.getInstance() }
+    val publishedHuntPath by huntPathCache.path.collectAsStateWithLifecycle()
+    val huntPathStops = remember(huntRoute) {
+        huntRoute.mapNotNull { alert ->
+            alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
+        }
+    }
+    val huntPathLocation = userLocation?.let { huntLegNode(it.latitude, it.longitude) }
+    LaunchedEffect(showHuntPath, servicePlanning, huntPathStops, huntPathLocation) {
+        val location = userLocation
+        if (!showHuntPath || servicePlanning || location == null || huntPathStops.isEmpty()) return@LaunchedEffect
+        runCatching { huntPathCache.request(location.latitude, location.longitude, huntPathStops) }
+    }
+    val huntPath = if (showHuntPath && huntSession?.definition != null && huntPathStops.isNotEmpty()) {
+        publishedHuntPath
+    } else {
+        HuntPath.None
+    }
     val renderedAlerts = remember(
         filteredAlerts,
         huntTargetAlerts,
@@ -1829,6 +1863,26 @@ internal fun AlertsMapScreenContent(
                         zIndex = 1_000f
                     )
                 }
+                (huntPath as? HuntPath.Resolved)?.let { path ->
+                    // Same look as the OpenStreetMap layers: white casing, blue walk, the next leg in orange.
+                    val rest = path.rest.map { LatLng(it.latitude, it.longitude) }
+                    val next = path.next.map { LatLng(it.latitude, it.longitude) }
+                    listOf(rest, next).forEach { line ->
+                        if (line.size >= 2) Polyline(
+                            points = line, color = Color.White.copy(alpha = 0.7f),
+                            width = 7f * density.density, startCap = RoundCap(), endCap = RoundCap(),
+                            jointType = JointType.ROUND, zIndex = 300f
+                        )
+                    }
+                    if (rest.size >= 2) Polyline(
+                        points = rest, color = Color(0xFF1E63F0), width = 4.5f * density.density,
+                        startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = 301f
+                    )
+                    if (next.size >= 2) Polyline(
+                        points = next, color = Color(0xFFE8710A), width = 5.5f * density.density,
+                        startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = 302f
+                    )
+                }
                 if (cameraAnchor.zoom >= WEATHER_CELL_MIN_ZOOM) {
                     weatherCells.forEach { cell ->
                         key("weather-${cell.area}") {
@@ -2049,6 +2103,7 @@ internal fun AlertsMapScreenContent(
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
                     weatherCells = weatherCells,
+                    huntPath = huntPath,
                     interactive = !compactPictureInPicture,
                     protectedAlertIds = protectedAlertIds,
                     emphasizedAlertIds = emphasizedAlertIds,
@@ -2343,6 +2398,8 @@ internal fun AlertsMapScreenContent(
                 onToggleSpacialRend = onToggleSpacialRend,
                 showWeatherCells = showWeatherCells,
                 onToggleWeatherCells = onToggleWeatherCells,
+                showHuntPath = showHuntPath,
+                onToggleHuntPath = onToggleHuntPath,
                 showDismissed = mapShowDismissed,
                 onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
                 autoEnterPictureInPicture = autoEnterPictureInPicture,

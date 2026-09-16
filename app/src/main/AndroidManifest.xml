@@ -32,6 +32,12 @@
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         tools:targetApi="31" />
 
+    <!-- Route export opens Google Maps directly when it is installed; without this the package is
+         invisible on API 30+ and every export would fall back to the browser. -->
+    <queries>
+        <package android:name="com.google.android.apps.maps" />
+    </queries>
+
     <application
         android:name=".PokemonAlertsApplication"
         android:allowBackup="true"

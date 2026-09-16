@@ -73,6 +73,7 @@ private val FEED_CATEGORIES_KEY = stringSetPreferencesKey("feed_filter_categorie
 private val MAP_CATEGORIES_KEY = stringSetPreferencesKey("map_filter_categories")
 private val MAP_SHOW_DISMISSED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("map_show_dismissed")
 private val SHOW_WEATHER_CELLS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_weather_cells")
+private val SHOW_HUNT_PATH_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_hunt_path")
 
 /**
  * One-time read migration from the old single-select feed tab ([SELECTED_ALERT_FILTER_KEY])
@@ -301,6 +302,10 @@ interface AlertPreferencesStore {
     /** Draws the Pokemon GO weather cell over each scanned area. On by default. */
     val showWeatherCells: Flow<Boolean>
     suspend fun updateShowWeatherCells(enabled: Boolean)
+
+    /** Draws the hunt's walk along the streets instead of leaving it implied. On by default. */
+    val showHuntPath: Flow<Boolean>
+    suspend fun updateShowHuntPath(enabled: Boolean)
     
     // Sub-type filtering - Sets of excluded types
     val excludedHundoTypes: Flow<Set<String>>
@@ -852,6 +857,14 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 
     override suspend fun updateShowWeatherCells(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[SHOW_WEATHER_CELLS_KEY] = enabled }
+    }
+
+    override val showHuntPath: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_HUNT_PATH_KEY] ?: true
+    }
+
+    override suspend fun updateShowHuntPath(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[SHOW_HUNT_PATH_KEY] = enabled }
     }
 
     override suspend fun updateMapShowDismissed(enabled: Boolean) {

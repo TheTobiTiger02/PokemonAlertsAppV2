@@ -31,7 +31,14 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
     private var generation = 0L
     fun edit(value: CatchRouteSettings) { generation++; job?.cancel(); busy = false; settings = value; itinerary = null; error = null; recommendation = null }
-    fun startPoint(value: CatchPoint) { hasStart = true; edit(settings.copy(start = value)) }
+    /** A new start leaves a route walked as drawn, which has to start at its own first point. */
+    fun startPoint(value: CatchPoint) { hasStart = true; edit((if (settings.fixed) settings.withoutImport() else settings).copy(start = value)) }
+    val goRoutes = GoRouteRepository(PokemonAlertsApi.goRoutesService)
+    /** Walk [record] exactly as drawn. */
+    fun importFixed(record: GoRouteRecord, reverse: Boolean) { hasStart = true; edit(settings.walking(record, reverse)) }
+    /** Plan freely, but near [record]. */
+    fun importGuide(record: GoRouteRecord) { hasStart = true; edit(settings.guidedBy(record)) }
+    fun removeImport() = edit(settings.withoutImport())
     fun schedule(at: Long?) { useNow = at == null; edit(settings.copy(startAtMillis = at ?: 0)) }
     fun load(entity: CatchSetupEntity) {
         runCatching { store.decodeSetup(entity) }.onSuccess {

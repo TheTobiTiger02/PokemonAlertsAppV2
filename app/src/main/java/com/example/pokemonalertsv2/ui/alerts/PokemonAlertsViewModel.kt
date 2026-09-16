@@ -473,6 +473,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .asPreferenceState(false)
     val showWeatherCells = repository.alertPreferences.showWeatherCells
         .asPreferenceState(true)
+    val showHuntPath = repository.alertPreferences.showHuntPath
+        .asPreferenceState(true)
 
     val selectedArea = repository.alertPreferences.selectedArea
         .asPreferenceState("All")
@@ -523,6 +525,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateShowWeatherCells(enabled: Boolean) {
         viewModelScope.launch {
             repository.alertPreferences.updateShowWeatherCells(enabled)
+        }
+    }
+
+    fun updateShowHuntPath(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateShowHuntPath(enabled)
         }
     }
 

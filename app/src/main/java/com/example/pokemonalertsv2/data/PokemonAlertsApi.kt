@@ -285,6 +285,11 @@ object PokemonAlertsApi {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(client).build().create(com.example.pokemonalertsv2.catchroutes.CatchRoutesService::class.java)
     }
+    val goRoutesService: com.example.pokemonalertsv2.catchroutes.GoRoutesService by lazy {
+        Retrofit.Builder().baseUrl(BASE_URL)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .client(client).build().create(com.example.pokemonalertsv2.catchroutes.GoRoutesService::class.java)
+    }
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true

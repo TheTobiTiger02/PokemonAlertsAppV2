@@ -126,6 +126,8 @@ internal fun MapFilterSheet(
     onToggleSpacialRend: () -> Unit,
     showWeatherCells: Boolean,
     onToggleWeatherCells: () -> Unit,
+    showHuntPath: Boolean = true,
+    onToggleHuntPath: () -> Unit = {},
     showDismissed: Boolean,
     onToggleDismissed: () -> Unit,
     categoryCounts: Map<AlertCategory, Int> = emptyMap(),
@@ -162,6 +164,8 @@ internal fun MapFilterSheet(
             onToggleSpacialRend = onToggleSpacialRend,
             showWeatherCells = showWeatherCells,
             onToggleWeatherCells = onToggleWeatherCells,
+            showHuntPath = showHuntPath,
+            onToggleHuntPath = onToggleHuntPath,
             showDismissed = showDismissed,
             onToggleDismissed = onToggleDismissed,
             onEnterPictureInPicture = onEnterPictureInPicture,
@@ -227,6 +231,8 @@ private fun MapFilterSheetContent(
     onToggleSpacialRend: () -> Unit,
     showWeatherCells: Boolean,
     onToggleWeatherCells: () -> Unit,
+    showHuntPath: Boolean = true,
+    onToggleHuntPath: () -> Unit = {},
     showDismissed: Boolean,
     onToggleDismissed: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)? = null,
@@ -414,7 +420,8 @@ private fun MapFilterSheetContent(
                         showTimeLabels = showTimeLabels,
                         showSpawnRadius = showSpawnRadius,
                         spacialRendEnabled = spacialRendEnabled,
-                        showWeatherCells = showWeatherCells
+                        showWeatherCells = showWeatherCells,
+                        showHuntPath = showHuntPath
                     ),
                     active = showTimeLabels || showSpawnRadius || spacialRendEnabled,
                     expanded = isOpen(SECTION_OVERLAYS),
@@ -432,6 +439,12 @@ private fun MapFilterSheetContent(
                             subtitle = "Outline the game's weather cell over each scanned area",
                             checked = showWeatherCells,
                             onCheckedChange = { onToggleWeatherCells() }
+                        )
+                        SwitchSetting(
+                            title = "Hunt path",
+                            subtitle = "Draw the hunt's walk along the streets, the next leg highlighted",
+                            checked = showHuntPath,
+                            onCheckedChange = { onToggleHuntPath() }
                         )
                         SwitchSetting(
                             title = "Spawn radius",
@@ -891,11 +904,13 @@ private fun overlaySummary(
     showTimeLabels: Boolean,
     showSpawnRadius: Boolean,
     spacialRendEnabled: Boolean,
-    showWeatherCells: Boolean
+    showWeatherCells: Boolean,
+    showHuntPath: Boolean
 ): String {
     val on = buildList {
         if (showTimeLabels) add("Countdowns")
         if (showWeatherCells) add("Weather cells")
+        if (showHuntPath) add("Hunt path")
         if (showSpawnRadius) add(if (spacialRendEnabled) "Spawn radius 80m" else "Spawn radius")
     }
     return if (on.isEmpty()) "None" else on.joinToString(", ")

@@ -14,6 +14,12 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
     suspend fun generate(settings: CatchRouteSettings, visits: List<CatchVisit> = emptyList(),
         preloaded: SpawnAvailability? = null, progress: (String) -> Unit = {}): CatchItinerary = withContext(Dispatchers.Default) {
         settings.validate()
+        if (settings.fixed) {
+            val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
+            val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
+            // Zero encounters is still a route: the trainer chose to walk it.
+            return@withContext planFixedRoute(settings, data)
+        }
         var best: CatchItinerary? = null
         var lastError: Exception? = null
         var requests = 0

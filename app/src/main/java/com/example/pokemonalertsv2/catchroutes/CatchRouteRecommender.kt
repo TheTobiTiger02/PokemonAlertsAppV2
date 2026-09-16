@@ -108,6 +108,7 @@ internal fun startCandidates(settings: CatchRouteSettings, opportunities: List<S
 
 /** The planner's own order search on straight-line costs: a routing-free estimate of expected catches. */
 internal suspend fun estimateExpectedCatches(settings: CatchRouteSettings, data: SpawnAvailability): Double {
+    if (settings.fixed) return planFixedRoute(settings, data.forRoute(settings)).expectedCatches
     val usable = data.opportunities.filter { usableFor(settings, it) }
     if (usable.isEmpty()) return 0.0
     val anchors = selectCandidates(candidateGroups(settings, usable), settings.start, 0)

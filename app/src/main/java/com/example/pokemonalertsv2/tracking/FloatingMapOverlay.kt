@@ -24,6 +24,7 @@ import android.widget.TextView
 import androidx.core.view.isVisible
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.hunt.HuntPath
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
 import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
 import com.example.pokemonalertsv2.ui.alerts.AlertMapCoordinates
@@ -306,6 +307,13 @@ internal class FloatingMapOverlay(context: Context) {
      * [HUNT_ORDINAL_MAX], along with how long they have left; the rest are matches the plan
      * is not sending you to and wear neither.
      */
+    /** The hunt's walk along the streets; [HuntPath.None] clears it. */
+    fun setHuntPath(path: HuntPath) {
+        if (map == null) return
+        runCatching { controller.setHuntPath(path) }
+            .onFailure { Log.w(TAG, "Could not draw the hunt path", it) }
+    }
+
     fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
         if (map == null) return
         val now = System.currentTimeMillis()

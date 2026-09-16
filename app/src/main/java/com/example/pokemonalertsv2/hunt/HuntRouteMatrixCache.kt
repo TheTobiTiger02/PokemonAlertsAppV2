@@ -101,7 +101,7 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
                     publishLocked(points, current)
                     return true
                 }
-                if (current < backoffUntilMillis) {
+                if (current < backoffUntilMillis || current < HuntRoutingGate.blockedUntilMillis) {
                     publishLocked(points, current)
                     return false
                 }
@@ -248,6 +248,7 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
                         }
                         consecutiveFailures = 0
                         backoffUntilMillis = 0L
+                        HuntRoutingGate.clear()
                         publishLocked(points, current)
                     }
                     // A malformed answer is a contract bug, not an outage: retrying it
@@ -256,6 +257,8 @@ internal class HuntRouteMatrixCache @VisibleForTesting internal constructor(
                         consecutiveFailures++
                         val delay = BASE_BACKOFF_MILLIS shl (consecutiveFailures - 1).coerceAtMost(BACKOFF_SHIFT_CAP)
                         backoffUntilMillis = current + delay.coerceAtMost(MAX_BACKOFF_MILLIS)
+                        // Both routing endpoints share one allowance at the edge; hold the path fetches too.
+                        HuntRoutingGate.blockUntil(backoffUntilMillis)
                     }
                 }
             }

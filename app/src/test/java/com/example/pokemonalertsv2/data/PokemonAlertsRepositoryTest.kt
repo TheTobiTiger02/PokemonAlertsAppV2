@@ -904,6 +904,9 @@ class PokemonAlertsRepositoryTest {
         private val showWeatherCellsState = MutableStateFlow(true)
         override val showWeatherCells: Flow<Boolean> = showWeatherCellsState.asStateFlow()
         override suspend fun updateShowWeatherCells(enabled: Boolean) { showWeatherCellsState.value = enabled }
+        private val showHuntPathState = MutableStateFlow(true)
+        override val showHuntPath: Flow<Boolean> = showHuntPathState.asStateFlow()
+        override suspend fun updateShowHuntPath(enabled: Boolean) { showHuntPathState.value = enabled }
     }
 
     private class FakeAlertDao : AlertDao() {

@@ -131,7 +131,9 @@ class CatchRouteController private constructor(private val context: Context) {
                 val original = s.itinerary.settings
                 val settings = original.copy(start = p, startAtMillis = now, durationMinutes = remainingMinutes,
                     finish = if (original.finish == CatchFinish.ROUND_TRIP) CatchFinish.PIN else original.finish,
-                    end = original.destination, deadlineMillis = original.endAtMillis)
+                    end = original.destination, deadlineMillis = original.endAtMillis,
+                    // A route walked as drawn carries on from where the trainer is on it, never re-optimised.
+                    fixedPath = if (original.fixed) remainingFixedPath(original.fixedPath, p, s.progressMeters) else original.fixedPath)
                 val plan = CatchRoutePlanner(PokemonAlertsApi.catchRoutesService).generate(settings, s.visits)
                 command {
                     val current = mutable.value

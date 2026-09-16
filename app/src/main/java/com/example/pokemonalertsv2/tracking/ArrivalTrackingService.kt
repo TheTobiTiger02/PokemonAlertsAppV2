@@ -38,6 +38,9 @@ import com.example.pokemonalertsv2.hunt.shouldRetargetHuntTo
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
 import com.example.pokemonalertsv2.ui.alerts.mapCountdownLabel
 import com.example.pokemonalertsv2.hunt.HuntRouteMatrixCache
+import com.example.pokemonalertsv2.hunt.HuntPath
+import com.example.pokemonalertsv2.hunt.HuntPathCache
+import com.example.pokemonalertsv2.hunt.HuntRoutePoint
 import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
 import com.example.pokemonalertsv2.hunt.isUndoOfferLive
@@ -62,6 +65,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -185,6 +189,10 @@ class ArrivalTrackingService : Service() {
      */
     private val huntMatrix by lazy { HuntRouteMatrixCache.getInstance() }
     private var huntMatrixJob: Job? = null
+
+    /** Street geometry for the numbered route, asked for on the matrix's cadence. */
+    private val huntPath by lazy { HuntPathCache.getInstance() }
+    private var drawnHuntPath: HuntPath = HuntPath.None
 
     /**
      * The hunt's current plan. Made off the main thread by [huntPlanJob] and only read
@@ -1054,6 +1062,7 @@ class ArrivalTrackingService : Service() {
             // and no hand-picked target to lead with.
             pinnedHuntTargetId = null
             applyHuntPlan(computeHuntPlan(fromScratch = true), follow = false)
+            launch { refreshHuntPath(force = true) }
             val next = huntPlan.route.firstOrNull()
             renderedTargetKey = null
             if (next == null) {
@@ -1227,6 +1236,8 @@ class ArrivalTrackingService : Service() {
         renderedLabelKey = labelKey
 
         floatingMap.setAlerts(targets, emphasized, numbered)
+        // A window opened mid-hunt draws the line it already has rather than waiting a refresh pass.
+        if (pinsChanged) floatingMap.setHuntPath(drawnHuntPath)
         // A countdown ticking over only swaps label images; the artwork is already there.
         if (!pinsChanged) return
         if (huntFocus == HuntMapFocus.ROUTE) focusHuntRoute()
@@ -1488,12 +1499,38 @@ class ArrivalTrackingService : Service() {
                 // Also the plan's clock: stops run out of time while a trainer stands still,
                 // and new legs may have just landed.
                 requestHuntPlan()
+                refreshHuntPath()
                 delay(HUNT_MATRIX_REFRESH_MILLIS)
             }
         }
     }
 
+    /**
+     * Asks for the street path through the current plan's numbered stops and draws it in the floating map.
+     *
+     * Every failure keeps the line already drawn: the cache publishes nothing new, so the map is never left
+     * showing a half route.
+     */
+    private suspend fun refreshHuntPath(force: Boolean = false) {
+        val enabled = runCatching {
+            AlertPreferences(applicationContext.alertPreferencesDataStore).showHuntPath.first()
+        }.getOrDefault(true)
+        val origin = lastAcceptedLocation?.takeIf(::isFreshValidLocation)
+        if (enabled && huntActive && origin != null) {
+            val stops = huntPlan.route.mapNotNull { alert ->
+                alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
+            }
+            runCatching { huntPath.request(origin.latitude, origin.longitude, stops, force) }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+        }
+        drawnHuntPath = if (enabled && huntActive) huntPath.snapshot() else HuntPath.None
+        floatingMap.setHuntPath(drawnHuntPath)
+    }
+
     private fun stopHuntMatrixLoop() {
+        serviceScope.launch { huntPath.clear() }
+        drawnHuntPath = HuntPath.None
+        floatingMap.setHuntPath(HuntPath.None)
         huntMatrixJob?.cancel()
         matrixOriginLatitude = null
         matrixOriginLongitude = null

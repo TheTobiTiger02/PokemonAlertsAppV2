@@ -34,7 +34,13 @@ data class CatchRouteSettings(
     val includeEventSpawns: Boolean = false,
     /** Optional polygon the route must stay inside; fewer than three corners means no limit. */
     val area: List<CatchPoint> = emptyList(),
+    /** An imported Pokémon GO route walked exactly as drawn; two or more points turn the optimizer off. */
+    val fixedPath: List<CatchPoint> = emptyList(),
+    /** The GO route these settings came from, walked or used as a guide. */
+    val sourceRouteId: String? = null,
+    val sourceRouteName: String? = null,
 ) {
+    val fixed: Boolean get() = fixedPath.size >= 2
     val radius: Double get() = if (spacialRend) 80.0 else 40.0
     val endAtMillis: Long get() = deadlineMillis ?: (startAtMillis + durationMinutes * 60_000L)
     val walkingBudgetMeters: Double get() = (endAtMillis - startAtMillis) / 1000.0 * speedMps
@@ -54,6 +60,8 @@ data class CatchRouteSettings(
         require(area.isEmpty() || (area.isArea() && area.all { it.valid })) { "Draw the area with at least three corners." }
         require(pointInArea(start, area)) { "The start must be inside the area." }
         require(finish != CatchFinish.PIN || end == null || pointInArea(end, area)) { "The finish must be inside the area." }
+        require(fixedPath.isEmpty() || (fixed && fixedPath.all { it.valid })) { "The imported route has no usable path." }
+        require(!fixed || catchDistance(start, fixedPath.first()) <= 25.0) { "A route walked as drawn starts at its first point." }
     }
 }
 
