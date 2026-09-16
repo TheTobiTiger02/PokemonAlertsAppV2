@@ -20,7 +20,9 @@ internal sealed interface HuntPath {
     data class Resolved(
         val next: List<CatchPoint>,
         val rest: List<CatchPoint>,
-        val calculatedAtMillis: Long
+        val calculatedAtMillis: Long,
+        /** The stops this line walks through, in order; a line for any other order must not be drawn. */
+        val stopIds: List<String> = emptyList()
     ) : HuntPath
 }
 
@@ -70,7 +72,7 @@ internal fun huntPathFrom(chain: List<HuntRoutePoint>, legs: Map<HuntLegKey, Lis
     for (leg in resolved.drop(1)) {
         if (rest.isEmpty()) rest += leg else rest += leg.drop(1)
     }
-    return HuntPath.Resolved(next = resolved.first(), rest = rest, calculatedAtMillis = nowMillis)
+    return HuntPath.Resolved(next = resolved.first(), rest = rest, calculatedAtMillis = nowMillis, stopIds = chain.drop(1).map { it.id })
 }
 
 /**

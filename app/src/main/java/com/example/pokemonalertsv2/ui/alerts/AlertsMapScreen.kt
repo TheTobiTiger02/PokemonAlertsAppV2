@@ -1012,10 +1012,9 @@ internal fun AlertsMapScreenContent(
         if (!showHuntPath || servicePlanning || location == null || huntPathStops.isEmpty()) return@LaunchedEffect
         runCatching { huntPathCache.request(location.latitude, location.longitude, huntPathStops) }
     }
-    val huntPath = if (showHuntPath && huntSession?.definition != null && huntPathStops.isNotEmpty()) {
-        publishedHuntPath
-    } else {
-        HuntPath.None
+    // Only a line through exactly these numbered stops; a path fetched for an older order is not drawn.
+    val huntPath = remember(publishedHuntPath, huntPathStops, showHuntPath, huntSession?.definition) {
+        if (showHuntPath && huntSession?.definition != null) huntPathCache.pathFor(huntPathStops) else HuntPath.None
     }
     val renderedAlerts = remember(
         filteredAlerts,

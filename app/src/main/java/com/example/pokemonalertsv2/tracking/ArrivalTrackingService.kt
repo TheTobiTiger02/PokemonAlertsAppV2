@@ -192,7 +192,8 @@ class ArrivalTrackingService : Service() {
 
     /** Street geometry for the numbered route, asked for on the matrix's cadence. */
     private val huntPath by lazy { HuntPathCache.getInstance() }
-    private var drawnHuntPath: HuntPath = HuntPath.None
+    private var showHuntPath = true
+    private var huntPathStopIds: List<String> = emptyList()
 
     /**
      * The hunt's current plan. Made off the main thread by [huntPlanJob] and only read
@@ -1171,6 +1172,12 @@ class ArrivalTrackingService : Service() {
         huntPlan = plan
         huntRepository.publishPlan(plan)
         refreshFloatingMapAlerts()
+        // The line has to follow the new order now, not at the next matrix pass.
+        val stopIds = plan.route.map { it.uniqueId }
+        if (stopIds != huntPathStopIds) {
+            huntPathStopIds = stopIds
+            serviceScope.launch { refreshHuntPath() }
+        }
         maybeAcquireHuntTarget()
         if (follow) followHuntPlan()
     }
@@ -1236,8 +1243,9 @@ class ArrivalTrackingService : Service() {
         renderedLabelKey = labelKey
 
         floatingMap.setAlerts(targets, emphasized, numbered)
-        // A window opened mid-hunt draws the line it already has rather than waiting a refresh pass.
-        if (pinsChanged) floatingMap.setHuntPath(drawnHuntPath)
+        // A window opened mid-hunt draws the line it already has rather than waiting a refresh pass,
+        // and a re-plan drops a line that no longer matches the numbers.
+        if (pinsChanged) floatingMap.setHuntPath(currentHuntPath())
         // A countdown ticking over only swaps label images; the artwork is already there.
         if (!pinsChanged) return
         if (huntFocus == HuntMapFocus.ROUTE) focusHuntRoute()
@@ -1512,24 +1520,28 @@ class ArrivalTrackingService : Service() {
      * showing a half route.
      */
     private suspend fun refreshHuntPath(force: Boolean = false) {
-        val enabled = runCatching {
+        showHuntPath = runCatching {
             AlertPreferences(applicationContext.alertPreferencesDataStore).showHuntPath.first()
         }.getOrDefault(true)
         val origin = lastAcceptedLocation?.takeIf(::isFreshValidLocation)
-        if (enabled && huntActive && origin != null) {
-            val stops = huntPlan.route.mapNotNull { alert ->
-                alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
-            }
-            runCatching { huntPath.request(origin.latitude, origin.longitude, stops, force) }
+        if (showHuntPath && huntActive && origin != null) {
+            runCatching { huntPath.request(origin.latitude, origin.longitude, huntPathStops(), force) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
         }
-        drawnHuntPath = if (enabled && huntActive) huntPath.snapshot() else HuntPath.None
-        floatingMap.setHuntPath(drawnHuntPath)
+        floatingMap.setHuntPath(currentHuntPath())
     }
+
+    private fun huntPathStops(): List<HuntRoutePoint> = huntPlan.route.mapNotNull { alert ->
+        alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
+    }
+
+    /** The street path for the plan as it stands now, or nothing while it is being fetched. */
+    private fun currentHuntPath(): HuntPath =
+        if (showHuntPath && huntActive) huntPath.pathFor(huntPathStops()) else HuntPath.None
 
     private fun stopHuntMatrixLoop() {
         serviceScope.launch { huntPath.clear() }
-        drawnHuntPath = HuntPath.None
+        huntPathStopIds = emptyList()
         floatingMap.setHuntPath(HuntPath.None)
         huntMatrixJob?.cancel()
         matrixOriginLatitude = null

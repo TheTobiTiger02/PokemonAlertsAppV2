@@ -58,6 +58,18 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
     fun snapshot(): HuntPath = published.value
 
     /**
+     * The published path if it walks exactly [stops], as the chain [request] would build them, else
+     * [HuntPath.None]. The plan re-orders far more often than a path can be fetched, and a line through an
+     * older order contradicts the numbered pins; no line is the honest answer until the new one lands.
+     */
+    fun pathFor(stops: List<HuntRoutePoint>): HuntPath {
+        val origin = anchor ?: return HuntPath.None
+        val path = published.value as? HuntPath.Resolved ?: return HuntPath.None
+        val expected = huntPathChain(origin, stops).drop(1).map { it.id }
+        return if (expected.isNotEmpty() && path.stopIds == expected) path else HuntPath.None
+    }
+
+    /**
      * Publishes the street path from the trainer through [stops], fetching the legs it is missing.
      *
      * Returns true when the published path covers the whole chain. [force] is the Recalculate button: it

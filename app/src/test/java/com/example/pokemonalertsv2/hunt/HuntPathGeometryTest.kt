@@ -54,6 +54,7 @@ class HuntPathGeometryTest {
         assertEquals(CatchPoint(a.latitude, a.longitude), path.rest.first())
         assertEquals(CatchPoint(c.latitude, c.longitude), path.rest.last())
         assertEquals(42L, path.calculatedAtMillis)
+        assertEquals(listOf("a", "b", "c"), path.stopIds)
         // A missing leg draws nothing rather than half a route.
         assertEquals(HuntPath.None, huntPathFrom(chain, legs - key(a, b), 42L))
     }

@@ -143,4 +143,15 @@ class HuntPathCacheTest {
         assertEquals(2, service.requests.size)
         assertEquals(2, service.requests.last().points.size)
     }
+
+    @Test fun `a path is only handed out for the route it was fetched for`() = runTest {
+        val (cache, _) = cache(::ok)
+        assertEquals(HuntPath.None, cache.pathFor(listOf(a, b, c)))
+        cache.request(originLat, originLon, listOf(a, b, c))
+        assertTrue(cache.pathFor(listOf(a, b, c)) is HuntPath.Resolved)
+        // The plan re-ordered or swapped a stop before a new path arrived: no line rather than the old one.
+        assertEquals(HuntPath.None, cache.pathFor(listOf(b, a, c)))
+        assertEquals(HuntPath.None, cache.pathFor(listOf(a, b)))
+        assertEquals(HuntPath.None, cache.pathFor(listOf(a, b, c.copy(id = "d"))))
+    }
 }
