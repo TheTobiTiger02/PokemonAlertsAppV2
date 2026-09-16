@@ -12,7 +12,8 @@ class DeepLinksTest {
         assertEquals(DeepLinkTarget.RootTab(0), parseDeepLink("pokemonalerts://alerts"))
         assertEquals(DeepLinkTarget.RootTab(1), parseDeepLink("pokemonalerts://history"))
         assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("pokemonalerts://map"))
-        assertEquals(DeepLinkTarget.RootTab(3), parseDeepLink("pokemonalerts://settings"))
+        assertEquals(DeepLinkTarget.RootTab(3), parseDeepLink("pokemonalerts://events"))
+        assertEquals(DeepLinkTarget.RootTab(4), parseDeepLink("pokemonalerts://settings"))
     }
 
     @Test
@@ -42,7 +43,7 @@ class DeepLinksTest {
     @Test
     fun `unknown settings page falls back to the settings tab rather than failing`() {
         assertEquals(
-            DeepLinkTarget.RootTab(3),
+            DeepLinkTarget.RootTab(4),
             parseDeepLink("pokemonalerts://settings/not_a_page")
         )
     }

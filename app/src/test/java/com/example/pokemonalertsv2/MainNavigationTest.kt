@@ -10,8 +10,10 @@ class MainNavigationTest {
     fun rootTabIndicesResolveAlertsAndMapDestinations() {
         assertEquals(ALERTS_TAB_INDEX, rootTabIndexOrNull(ALERTS_TAB_INDEX))
         assertEquals(MAP_TAB_INDEX, rootTabIndexOrNull(MAP_TAB_INDEX))
+        assertEquals(EVENTS_TAB_INDEX, rootTabIndexOrNull(EVENTS_TAB_INDEX))
+        assertEquals(SETTINGS_TAB_INDEX, rootTabIndexOrNull(SETTINGS_TAB_INDEX))
         assertEquals(null, rootTabIndexOrNull(-1))
-        assertEquals(null, rootTabIndexOrNull(4))
+        assertEquals(null, rootTabIndexOrNull(5))
     }
 
     @Test

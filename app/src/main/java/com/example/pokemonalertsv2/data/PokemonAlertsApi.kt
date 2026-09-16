@@ -285,6 +285,11 @@ object PokemonAlertsApi {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(client).build().create(com.example.pokemonalertsv2.catchroutes.CatchRoutesService::class.java)
     }
+    val eventsService: com.example.pokemonalertsv2.events.EventsService by lazy {
+        Retrofit.Builder().baseUrl(BASE_URL)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .client(client).build().create(com.example.pokemonalertsv2.events.EventsService::class.java)
+    }
     val liveSpeciesService: com.example.pokemonalertsv2.megaboost.LiveSpeciesService by lazy {
         Retrofit.Builder().baseUrl(BASE_URL)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))

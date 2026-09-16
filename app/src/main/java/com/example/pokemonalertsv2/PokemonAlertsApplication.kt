@@ -54,6 +54,8 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             AlertNotifier.ensureChannel(this)
             PushTopicSyncWorker.triggerSync(this, delaySeconds = 0)
             PushTopicSyncWorker.schedule(this)
+            com.example.pokemonalertsv2.work.EventReminderNotifyWorker.ensureChannel(this)
+            com.example.pokemonalertsv2.work.EventReminderWorker.schedule(this)
             resyncPushTopicsOnFilterChanges()
             WidgetUpdateCoordinator.start(this)
             warmGoogleMaps()

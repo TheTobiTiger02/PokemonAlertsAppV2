@@ -139,6 +139,7 @@ internal fun activityNotice(pattern: String?, eventTypes: List<String>, nextEven
         nextEvent?.let { e ->
             if (now >= e.startAt && now < e.endAt) append(" Active now: ${e.name}, until ${clock(e.endAt)}.")
             else append(" Next: ${e.name}, ${dayAndClock(e.startAt)}.")
+            if (e.featured.isNotEmpty()) append(" Featured: ${e.featured.joinToString(", ")}.")
         }
     }
     pattern == "likely_event" -> "Likely event spawnpoint: it appears only during some periods."

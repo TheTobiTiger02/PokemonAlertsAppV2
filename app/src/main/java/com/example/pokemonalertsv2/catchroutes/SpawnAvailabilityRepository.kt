@@ -49,7 +49,9 @@ data class SpawnpointDetail(
 )
 
 /** The next game event an event spawnpoint is expected to wake up for. */
-data class SpawnpointEvent(val name: String, val eventType: String, val startAt: Long, val endAt: Long)
+data class SpawnpointEvent(val name: String, val eventType: String, val startAt: Long, val endAt: Long,
+    /** The Pokémon a Spotlight Hour or Community Day features, when the calendar knows them. */
+    val featured: List<String> = emptyList())
 
 @Serializable data class CatchPathGeometry(val type: String, val coordinates: List<List<Double>>)
 @Serializable data class CatchPathLeg(val fromId: String, val toId: String, val distanceMeters: Double, val durationSeconds: Double, val geometry: CatchPathGeometry)
@@ -260,7 +262,8 @@ internal fun parseSpawnpointDetail(body: JsonObject): SpawnpointDetail? = runCat
             val start = instant(e["startAt"]?.jsonPrimitive?.contentOrNull)
             val end = instant(e["endAt"]?.jsonPrimitive?.contentOrNull)
             if (start == null || end == null) null
-            else SpawnpointEvent(e["name"]?.jsonPrimitive?.contentOrNull ?: "Event", e["eventType"]?.jsonPrimitive?.contentOrNull ?: "event", start, end)
+            else SpawnpointEvent(e["name"]?.jsonPrimitive?.contentOrNull ?: "Event", e["eventType"]?.jsonPrimitive?.contentOrNull ?: "event", start, end,
+                (e["featured"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.get("name")?.jsonPrimitive?.contentOrNull }.orEmpty())
         },
         body["lastActiveAt"]?.jsonPrimitive?.contentOrNull,
         body["reason"]?.jsonPrimitive?.contentOrNull)

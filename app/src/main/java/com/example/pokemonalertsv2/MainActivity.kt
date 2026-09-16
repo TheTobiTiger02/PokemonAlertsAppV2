@@ -45,10 +45,12 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -151,11 +153,14 @@ private val NAV_DESTINATIONS = listOf(
     NavDestination(R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
     NavDestination(R.string.alerts_section_history, Icons.Filled.DateRange, Icons.Outlined.DateRange),
     NavDestination(R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
+    NavDestination(R.string.navigation_events, Icons.Filled.Star, Icons.Outlined.Star),
     NavDestination(R.string.navigation_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
 )
 
 internal const val ALERTS_TAB_INDEX = 0
 internal const val MAP_TAB_INDEX = 2
+internal const val EVENTS_TAB_INDEX = 3
+internal const val SETTINGS_TAB_INDEX = 4
 
 internal fun rootTabIndexOrNull(index: Int): Int? =
     index.takeIf { it in NAV_DESTINATIONS.indices }
@@ -660,12 +665,18 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_INITIAL_TAB = "extra_initial_tab"
-        private const val NAV_SETTINGS_TAB_INDEX = 3
+        private const val NAV_SETTINGS_TAB_INDEX = SETTINGS_TAB_INDEX
 
         internal fun createAlertsIntent(context: Context): Intent =
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_INITIAL_TAB, ALERTS_TAB_INDEX)
+            }
+
+        internal fun createEventsIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_INITIAL_TAB, EVENTS_TAB_INDEX)
             }
 
         internal fun createMapIntent(context: Context): Intent =
@@ -934,7 +945,7 @@ private fun MainScaffold(
                                 onOpenFilterStudio = {
                                     settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.FEED)
                                     localSettingsDestination = SettingsDestination.ALERT_FILTERS
-                                    selectedTab = 3
+                                    selectedTab = SETTINGS_TAB_INDEX
                                 },
                                 onStartManualRaid = {
                                     context.startActivity(
@@ -969,13 +980,16 @@ private fun MainScaffold(
                                 onOpenFilterStudio = {
                                     settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.MAP)
                                     localSettingsDestination = SettingsDestination.ALERT_FILTERS
-                                    selectedTab = 3
+                                    selectedTab = SETTINGS_TAB_INDEX
                                 },
                                 showBackButton = false,
                                 onEnterPictureInPicture = onEnterPictureInPicture
                             )
                         }
-                        3 -> {
+                        EVENTS_TAB_INDEX -> {
+                            com.example.pokemonalertsv2.events.EventsRoute()
+                        }
+                        SETTINGS_TAB_INDEX -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
                                 onManageLocationPermissions = onManageLocationPermissions,

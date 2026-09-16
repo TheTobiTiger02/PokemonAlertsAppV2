@@ -25,7 +25,8 @@ internal const val DEEP_LINK_SCHEME = "pokemonalerts"
 private const val TAB_ALERTS = 0
 private const val TAB_HISTORY = 1
 private const val TAB_MAP = 2
-private const val TAB_SETTINGS = 3
+private const val TAB_EVENTS = 3
+private const val TAB_SETTINGS = 4
 
 /**
  * Parses a deep link into a target, or null if it is not one of ours.
@@ -34,7 +35,7 @@ private const val TAB_SETTINGS = 3
  * be unit-tested on the JVM without Robolectric; the Activity does the Uri.toString().
  *
  * Accepted:
- *  - `pokemonalerts://alerts`, `://history`, `://map`, `://settings`
+ *  - `pokemonalerts://alerts`, `://history`, `://map`, `://events`, `://settings`
  *  - `pokemonalerts://settings/<destination-name>` (case-insensitive, e.g. `godex`)
  *  - `pokemonalerts://alert/<id>`
  */
@@ -59,6 +60,7 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
         "alerts" -> DeepLinkTarget.RootTab(TAB_ALERTS)
         "history" -> DeepLinkTarget.RootTab(TAB_HISTORY)
         "map" -> DeepLinkTarget.RootTab(TAB_MAP)
+        "events" -> DeepLinkTarget.RootTab(TAB_EVENTS)
         "settings" -> {
             val name = tail.firstOrNull()
                 ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)

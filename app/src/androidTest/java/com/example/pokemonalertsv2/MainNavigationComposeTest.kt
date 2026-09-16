@@ -40,7 +40,7 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "History", "Map", "Settings").forEach { label ->
+        listOf("Alerts", "History", "Map", "Events", "Settings").forEach { label ->
             composeRule.onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
