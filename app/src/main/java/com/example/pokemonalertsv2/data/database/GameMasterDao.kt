@@ -21,6 +21,12 @@ interface GameMasterDao {
     )
     suspend fun speciesLookup(ids: List<String>): List<SpeciesLookupRow>
 
+    @Query(
+        "SELECT pokemonId, rarity, dexNumber, formId, megaEvoId, type1, type2 " +
+            "FROM pokebattler_species WHERE dexNumber IN (:dex)"
+    )
+    suspend fun speciesByDex(dex: List<Int>): List<SpeciesLookupRow>
+
     /** Ids only: enough to arbitrate a guessed form spelling, without the stats rows. */
     @Query("SELECT pokemonId FROM pokebattler_species")
     suspend fun allSpeciesIds(): List<String>

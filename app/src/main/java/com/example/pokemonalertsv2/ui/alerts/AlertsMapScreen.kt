@@ -630,6 +630,7 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showMegaBoost by rememberSaveable { mutableStateOf(false) }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -2344,6 +2345,9 @@ internal fun AlertsMapScreenContent(
                 Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
             }
         }
+        if (!compactPictureInPicture && showMegaBoost) {
+            com.example.pokemonalertsv2.megaboost.MegaBoostSheet(onDismiss = { showMegaBoost = false })
+        }
         // Filters live on the map so a quick narrowing never costs a trip to Settings.
         // Only one of the filter sheet and the alert detail sheet is ever open.
         if (!compactPictureInPicture && showFilterSheet && selectedAlert == null) {
@@ -2468,6 +2472,11 @@ internal fun AlertsMapScreenContent(
                     containerColor = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.testTag("open_catch_routes")
                 ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
+                SmallFloatingActionButton(
+                    onClick = { showMegaBoost = true },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.testTag("open_mega_boost")
+                ) { Text("Mega", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp)) }
                 // Secondary: framing the alerts is occasional, finding yourself is constant.
                 SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,

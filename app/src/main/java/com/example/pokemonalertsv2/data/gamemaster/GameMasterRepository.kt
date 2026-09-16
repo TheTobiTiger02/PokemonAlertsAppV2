@@ -13,6 +13,7 @@ import com.example.pokemonalertsv2.data.database.PokebattlerSpeciesEntity
 import com.example.pokemonalertsv2.data.database.SpeciesLookupRow
 import com.example.pokemonalertsv2.data.counters.PokebattlerNameNormalizer
 import com.example.pokemonalertsv2.data.counters.isMegaOrPrimalId
+import com.example.pokemonalertsv2.megaboost.LiveSpecies
 import com.example.pokemonalertsv2.data.counters.megaBaseSpeciesId
 import com.example.pokemonalertsv2.data.counters.prettifyPokemonName
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
@@ -153,6 +154,29 @@ class GameMasterRepository @VisibleForTesting internal constructor(
         return lookup.mapValues { (_, row) -> listOfNotNull(row.type1, row.type2) }
             .filterValues { it.isNotEmpty() }
     }
+
+    /**
+     * Types for live spawns, keyed by Pokédex number and game form, megas skipped.
+     *
+     * Every form with its own row (Alolan Raichu is form 50) is keyed by that form; the species as
+     * such is keyed with a null form, using the row without a form, else the shortest id (Pokebattler
+     * files some species only under a form, e.g. `CASTFORM_NORMAL_FORM`). A form without its own row,
+     * such as a species' "normal" form id, falls back to that entry.
+     */
+    suspend fun typesBySpeciesForm(dex: Collection<Int>): Map<LiveSpecies, List<String>> =
+        withContext(Dispatchers.IO) {
+            if (dex.isEmpty()) return@withContext emptyMap()
+            val rows = dex.distinct().chunked(500).flatMap { dao.speciesByDex(it) }
+                .filter { it.dexNumber != null && !it.pokemonId.isMegaOrPrimalId() && it.megaEvoId == null }
+                .filter { it.type1 != null || it.type2 != null }
+            buildMap {
+                rows.groupBy { it.dexNumber!! }.forEach { (number, forms) ->
+                    val default = forms.firstOrNull { it.formId == null } ?: forms.minBy { it.pokemonId.length }
+                    put(LiveSpecies(number, null), listOfNotNull(default.type1, default.type2))
+                    forms.filter { it.formId != null }.forEach { put(LiveSpecies(number, it.formId), listOfNotNull(it.type1, it.type2)) }
+                }
+            }
+        }
 
     /**
      * National dex number per Pokebattler id.
