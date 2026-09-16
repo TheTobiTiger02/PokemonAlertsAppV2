@@ -34,6 +34,33 @@ class GameEventsTest {
         assertEquals(ZoneId.of("UTC"), cd.copy(localTime = false).displayZone(ZoneId.of("UTC")))
     }
 
+    @Test fun `an event page parses every block type and skips what it does not know`() {
+        val page = json.decodeFromString<EventPage>("""{"id":"x","hasPage":true,"sectionKeys":["spawns","research"],"sections":[
+            {"key":"spawns","title":"Spawns","icon":"https://cdn/wild.png","blocks":[
+              {"type":"heading","level":3,"text":"From 5:00 a.m. to 5:00 p.m."},
+              {"type":"text","text":"Wild encounters."},
+              {"type":"list","items":["One","Two"]},
+              {"type":"pokemon","items":[{"name":"Wattrel","image":"https://cdn/pm940.icon.png","shiny":false,"type":"electric","pokemonId":940}]},
+              {"type":"bonuses","items":[{"text":"2x Candy","image":null}]},
+              {"type":"moves","items":[{"pokemon":"Machamp","move":"Karate Chop","category":"Fast Attack","type":"fighting"}]},
+              {"type":"image","url":"https://cdn/graphic.jpg"},
+              {"type":"somethingNew","whatever":1}]},
+            {"key":"research","title":"Research","blocks":[
+              {"type":"research","tasks":[{"task":"Catch 10 Pokémon","rewards":[{"name":"Fidough","shiny":true,"type":"fairy","pokemonId":926,"minCp":389,"maxCp":422}]}]},
+              {"type":"specialResearch","steps":[{"number":1,"name":"Step one","tasks":[{"task":"Make 7 Nice Throws","rewards":[{"name":"Ultra Ball","quantity":20}]}],
+                "rewards":[{"name":"Candy XL","quantity":5}]}]}]}]}""")
+        val blocks = page.sections[0].blocks
+        assertEquals(listOf("One", "Two"), blocks[2].strings())
+        assertEquals(940, blocks[3].pokemon().single().pokemonId)
+        assertEquals("2x Candy", blocks[4].bonuses().single().text)
+        assertEquals("Karate Chop", blocks[5].moves().single().move)
+        assertEquals("somethingNew", blocks[7].type)
+        val research = page.sections[1].blocks
+        assertEquals("CP 389–422", rewardCaption(research[0].tasks.single().rewards.single()))
+        assertEquals("×20", rewardCaption(research[1].steps.single().tasks.single().rewards.single()))
+        assertEquals(listOf("Spawns", "Research", "Raids"), cardSectionBadges(listOf("about", "spawns", "research", "sales", "raids")))
+    }
+
     @Test fun `events split into running and upcoming days, ended and hidden ones left out`() {
         val events = listOf(
             event("season", "season", "2026-09-08T08:00:00Z", "2026-12-01T09:00:00Z"),

@@ -1,8 +1,14 @@
 package com.example.pokemonalertsv2.events
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.Path
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -10,6 +16,7 @@ import java.time.ZoneId
 /** The backend's event calendar (LeekDuck via ScrapedDuck, plus hand-entered events). */
 interface EventsService {
     @GET("api/events") suspend fun events(): Response<GameEventsResponse>
+    @GET("api/events/{id}") suspend fun event(@Path("id") id: String): Response<EventPage>
 }
 
 @Serializable data class GameEventsResponse(val data: List<GameEvent> = emptyList())
@@ -33,12 +40,67 @@ interface EventsService {
     val shinies: List<EventPokemon> = emptyList(),
     val raidBosses: List<EventPokemon> = emptyList(),
     val source: String? = null,
+    /** The backend holds the event's LeekDuck page; [sectionKeys] name its sections (spawns, raids, research, …). */
+    val hasPage: Boolean = false,
+    val sectionKeys: List<String> = emptyList(),
 ) {
     val startMillis: Long get() = runCatching { Instant.parse(startAt).toEpochMilli() }.getOrDefault(0L)
     val endMillis: Long get() = runCatching { Instant.parse(endAt).toEpochMilli() }.getOrDefault(0L)
 }
 
-@Serializable data class EventPokemon(val name: String, val image: String? = null, val canBeShiny: Boolean = false, val pokemonId: Int? = null)
+/** An event's LeekDuck page: its sections as LeekDuck shows them, each a list of typed blocks. */
+@Serializable data class EventPage(val sections: List<EventSection> = emptyList(), val pageFetchedAt: String? = null)
+
+@Serializable data class EventSection(val key: String, val title: String, val icon: String? = null, val blocks: List<EventBlock> = emptyList())
+
+/**
+ * One piece of a page section. [type] says which fields apply: `heading` ([level], [text]), `text`, `list`
+ * ([items] as strings), `pokemon` ([items] as [EventPokemon]), `bonuses` ([items] as [EventBonus]), `research`
+ * ([tasks]), `specialResearch` ([steps]), `moves` ([items] as [EventMove]) and `image` ([url]). Unknown types
+ * are skipped by the screen, so the backend can add more without breaking older apps.
+ */
+@Serializable data class EventBlock(
+    val type: String,
+    val level: Int? = null,
+    val text: String? = null,
+    val url: String? = null,
+    val items: List<JsonElement> = emptyList(),
+    val tasks: List<EventTask> = emptyList(),
+    val steps: List<EventResearchStep> = emptyList(),
+) {
+    fun strings(): List<String> = items.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+    fun pokemon(): List<EventPokemon> = decodeItems()
+    fun bonuses(): List<EventBonus> = decodeItems()
+    fun moves(): List<EventMove> = decodeItems()
+    private inline fun <reified T> decodeItems(): List<T> = items.mapNotNull { runCatching { blockJson.decodeFromJsonElement<T>(it) }.getOrNull() }
+}
+
+private val blockJson = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
+
+@Serializable data class EventTask(val task: String, val rewards: List<EventReward> = emptyList())
+@Serializable data class EventResearchStep(val number: Int? = null, val name: String? = null, val tasks: List<EventTask> = emptyList(),
+    val rewards: List<EventReward> = emptyList())
+/** A research reward: a Pokémon (with its CP range at encounter level) or an item with a quantity. */
+@Serializable data class EventReward(val name: String? = null, val image: String? = null, val shiny: Boolean = false, val type: String? = null,
+    val pokemonId: Int? = null, val minCp: Int? = null, val maxCp: Int? = null, val quantity: Int? = null)
+@Serializable data class EventMove(val pokemon: String? = null, val move: String? = null, val category: String? = null, val type: String? = null)
+
+/** Readable names for the section keys LeekDuck uses, for the small badges on event cards. */
+fun sectionLabel(key: String): String = when (key) {
+    "about" -> "About"
+    "go-pass" -> "GO Pass"
+    else -> key.split('-').joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+}
+
+/** Sections worth a badge on the card: the ones that say what to do or catch. */
+fun cardSectionBadges(keys: List<String>): List<String> =
+    keys.filter { it in setOf("spawns", "raids", "eggs", "research", "bonuses", "moves") }.map(::sectionLabel)
+
+@Serializable data class EventPokemon(val name: String, val image: String? = null, val canBeShiny: Boolean = false, val pokemonId: Int? = null,
+    /** On page lists LeekDuck says `shiny` and the Pokémon's type; the feed says `canBeShiny`. */
+    val shiny: Boolean = false, val type: String? = null) {
+    val shinyAvailable: Boolean get() = canBeShiny || shiny
+}
 @Serializable data class EventBonus(val text: String, val image: String? = null)
 
 /** Battle League weeks and far-away Wild Area events are noise for most trainers; one chip away. */

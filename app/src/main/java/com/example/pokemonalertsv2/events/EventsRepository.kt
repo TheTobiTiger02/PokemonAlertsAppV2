@@ -23,6 +23,28 @@ class EventsRepository(context: Context, private val service: EventsService = Po
     private val cacheFile = File(context.applicationContext.filesDir, "events.json")
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
 
+    private val pageDir = File(context.applicationContext.filesDir, "event-pages")
+    private val pages = java.util.concurrent.ConcurrentHashMap<String, EventPage>()
+
+    /** The event's LeekDuck page: fresh when the backend answers, else the copy kept from last time, else null. */
+    suspend fun page(eventId: String): EventPage? {
+        val file = File(pageDir, "${eventId.hashCode().toUInt()}.json")
+        return try {
+            val response = service.event(eventId)
+            val page = response.catchBody()
+            pages[eventId] = page
+            withContext(Dispatchers.IO) { runCatching { pageDir.mkdirs(); file.writeText(json.encodeToString(EventPage.serializer(), page)) } }
+            page
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            pages[eventId] ?: withContext(Dispatchers.IO) { runCatching { json.decodeFromString<EventPage>(file.readText()) }.getOrNull() }
+        }
+    }
+
+    /** A page already in memory, so reopening an event shows it at once. */
+    fun remembered(eventId: String): EventPage? = pages[eventId]
+
     suspend fun cached(): List<GameEvent> = withContext(Dispatchers.IO) {
         runCatching { json.decodeFromString<GameEventsResponse>(cacheFile.readText()).data }.getOrDefault(emptyList())
     }

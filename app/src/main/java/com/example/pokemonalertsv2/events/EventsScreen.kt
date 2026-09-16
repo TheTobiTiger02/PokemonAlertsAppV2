@@ -68,6 +68,8 @@ fun EventsRoute() {
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
     fun changed(block: suspend () -> Unit) = scope.launch { block(); EventReminderWorker.replan(context) }
     EventsContent(
+        loadPage = repository::page,
+        rememberedPage = repository::remembered,
         state = EventsUiState(events, settings, loading, error, now),
         onRefresh = { refresh() },
         onToggleHidden = { type -> scope.launch { preferences.toggleHidden(type) } },
@@ -88,6 +90,8 @@ fun EventsContent(
     onToggleReminderType: (String) -> Unit,
     onLeadMinutes: (Int) -> Unit,
     onOpenLink: (String) -> Unit,
+    loadPage: suspend (String) -> EventPage? = { null },
+    rememberedPage: (String) -> EventPage? = { null },
 ) {
     val sections = remember(state.events, state.nowMillis, state.settings.hiddenTypes) {
         groupEvents(state.events, state.nowMillis, state.settings.hiddenTypes)
@@ -131,9 +135,8 @@ fun EventsContent(
         }
     }
     selected?.let { event ->
-        ModalBottomSheet(onDismissRequest = { selected = null }) {
-            EventDetail(event, state, onToggleStar = onToggleStar, onOpenLink = onOpenLink)
-        }
+        EventDetailScreen(event, state, onDismiss = { selected = null }, onToggleStar = onToggleStar, onOpenLink = onOpenLink,
+            loadPage = loadPage, rememberedPage = rememberedPage)
     }
     if (reminderSettingsOpen) ModalBottomSheet(onDismissRequest = { reminderSettingsOpen = false }) {
         ReminderSettings(state.settings, (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
@@ -142,7 +145,7 @@ fun EventsContent(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 6.dp))
 }
 
@@ -173,13 +176,16 @@ private fun EventCard(event: GameEvent, state: EventsUiState, onClick: () -> Uni
                 }
                 val pokemon = event.featured.ifEmpty { event.raidBosses }
                 if (pokemon.isNotEmpty()) PokemonRow(pokemon)
+                val badges = cardSectionBadges(event.sectionKeys)
+                if (badges.isNotEmpty()) Text(badges.joinToString(" · "), style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary)
             }
         }
     }
 }
 
 @Composable
-private fun StarButton(event: GameEvent, settings: EventSettings, onToggleStar: (String) -> Unit) {
+internal fun StarButton(event: GameEvent, settings: EventSettings, onToggleStar: (String) -> Unit) {
     val starred = event.id in settings.starredIds
     IconButton(onClick = { onToggleStar(event.id) }, modifier = Modifier.testTag("event_star_${event.id}")) {
         Icon(Icons.Filled.Star, contentDescription = if (starred) "Don't remind me" else "Remind me",
@@ -188,57 +194,13 @@ private fun StarButton(event: GameEvent, settings: EventSettings, onToggleStar: 
 }
 
 @Composable
-private fun PokemonRow(pokemon: List<EventPokemon>) {
+internal fun PokemonRow(pokemon: List<EventPokemon>) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         items(pokemon) { p ->
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
                 AsyncImage(model = p.image, contentDescription = p.name, modifier = Modifier.size(44.dp).clip(CircleShape))
                 Text(p.name, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (p.canBeShiny) Text("✨ shiny", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EventDetail(event: GameEvent, state: EventsUiState, onToggleStar: (String) -> Unit, onOpenLink: (String) -> Unit) {
-    LazyColumn(Modifier.padding(horizontal = 20.dp).testTag("event_detail"), verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 24.dp)) {
-        event.image?.let { image ->
-            item { AsyncImage(model = image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(160.dp)) }
-        }
-        item {
-            Text(event.heading ?: eventTypeName(event.eventType), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(event.name, style = MaterialTheme.typography.headlineSmall)
-            Text(timeRange(event), style = MaterialTheme.typography.bodyMedium)
-            if (event.spawnRelevant) Text("Changes wild spawns", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes)
-                    "You'll be reminded ${state.settings.leadMinutes} min before" else "No reminder",
-                    style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                StarButton(event, state.settings, onToggleStar)
-            }
-        }
-        if (event.featured.isNotEmpty()) item { SectionTitle("Featured Pokémon"); PokemonRow(event.featured) }
-        if (event.raidBosses.isNotEmpty()) item { SectionTitle("Raid bosses"); PokemonRow(event.raidBosses) }
-        if (event.shinies.isNotEmpty()) item { SectionTitle("Shinies"); PokemonRow(event.shinies) }
-        if (event.bonuses.isNotEmpty()) {
-            item { SectionTitle("Bonuses") }
-            items(event.bonuses) { bonus ->
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    bonus.image?.let { AsyncImage(model = it, contentDescription = null, modifier = Modifier.size(28.dp)) }
-                    Text(bonus.text, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            items(event.bonusDisclaimers) { line ->
-                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        event.link?.let { link ->
-            item {
-                OutlinedButton(onClick = { onOpenLink(link) }, modifier = Modifier.fillMaxWidth().testTag("event_open_link")) { Text("Open on LeekDuck") }
+                if (p.shinyAvailable) Text("✨ shiny", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -266,7 +228,7 @@ private fun ReminderSettings(settings: EventSettings, types: List<String>, onTog
     }
 }
 
-private fun timeRange(event: GameEvent): String {
+internal fun timeRange(event: GameEvent): String {
     val zone = event.displayZone()
     val start = Instant.ofEpochMilli(event.startMillis).atZone(zone)
     val end = Instant.ofEpochMilli(event.endMillis).atZone(zone)
