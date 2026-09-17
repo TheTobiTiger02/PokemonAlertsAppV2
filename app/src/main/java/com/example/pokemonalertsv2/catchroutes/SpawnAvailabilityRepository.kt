@@ -116,6 +116,8 @@ class SpawnAvailabilityRepository(private val service: CatchRoutesService) {
             "from" to Instant.ofEpochMilli(settings.startAtMillis).toString(),
             "to" to Instant.ofEpochMilli(untilMillis).toString(), "limit" to "2000",
             "includePredictions" to (settings.prediction != CatchPrediction.SUPPORTED_ONLY).toString(),
+            // Event spawnpoints are only predicted outside their events when they are wanted at all.
+            "eventSpawns" to if (settings.includeEventSpawns) "always" else "running",
         )
         if (query.getValue("south").toDouble() > query.getValue("north").toDouble() || query.getValue("west").toDouble() > query.getValue("east").toDouble())
             throw CatchApiException("The area is out of walking reach from the start.")
@@ -213,6 +215,7 @@ internal fun parseSpawnWindows(row: JsonObject, warning: (String) -> Unit = {}):
                 w["despawnBasis"]?.jsonPrimitive?.contentOrNull ?: row["despawnBasis"]?.jsonPrimitive?.contentOrNull,
                 restricted, row["activityPattern"]?.jsonPrimitive?.contentOrNull ?: "unknown",
                 row["activityPatternBasis"]?.jsonPrimitive?.contentOrNull,
+                (row["eventTypes"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty(),
                 w["probability"]?.jsonPrimitive?.doubleOrNull?.takeIf { it.isFinite() }?.coerceIn(0.0, 1.0),
                 (row["schedule"] as? JsonObject)?.let(::parseSpawnSchedule))
         }.getOrElse { warning("Invalid or unsupported spawn windows were excluded."); null }
@@ -276,7 +279,10 @@ internal fun parseSpawnpointDetail(body: JsonObject): SpawnpointDetail? = runCat
 internal fun usableFor(settings: CatchRouteSettings, o: SpawnOpportunity, slackMeters: Double = 0.0,
     untilMillis: Long = settings.endAtMillis): Boolean {
     if (!pointInArea(o.point, settings.area)) return false
-    if (!settings.includeEventSpawns && o.eventOnly) return false
+    // An event spawnpoint counts only when event spawns are wanted and one of its types is chosen. A point
+    // with no type on record has not proven which event it answers to, so any choice accepts it.
+    if (o.eventOnly && (!settings.includeEventSpawns ||
+            (o.eventTypes.isNotEmpty() && o.eventTypes.none { it in settings.eventSpawnTypes }))) return false
     val earliest = max(0.0, catchDistance(settings.start, o.point) - settings.radius - slackMeters) / settings.speedMps * 1000
     return settings.startAtMillis + earliest < o.despawnAt && o.availableFrom < untilMillis
 }

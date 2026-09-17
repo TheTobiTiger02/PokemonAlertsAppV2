@@ -40,6 +40,26 @@ class CatchAreaRecommendTest {
         assertEquals(listOf("r"), listOf(regular, event, flagged, outside).filter { usableFor(settings.copy(area = square), it) }.map { it.id })
     }
 
+    @Test fun `event spawnpoints are filtered by the chosen event types`() {
+        val settings = CatchRouteSettings(start = p(0.0), startAtMillis = now, durationMinutes = 30,
+            finish = CatchFinish.ANYWHERE, includeEventSpawns = true)
+        assertEquals(EVENT_SPAWN_TYPES, settings.eventSpawnTypes)
+        val base = SpawnOpportunity("s", "s", p(50.0), now, now + 1_800_000, "recurring_schedule", activityPattern = "event_only")
+        val spotlight = base.copy(eventTypes = listOf("pokemon-spotlight-hour"))
+        val communityDay = base.copy(id = "c", pointId = "c", eventTypes = listOf("community-day"))
+        val both = base.copy(id = "b", pointId = "b", eventTypes = listOf("community-day", "pokemon-spotlight-hour"))
+        val unproven = base.copy(id = "u", pointId = "u")
+        val all = listOf(spotlight, communityDay, both, unproven)
+
+        assertEquals(listOf("s", "c", "b", "u"), all.filter { usableFor(settings, it) }.map { it.id })
+        val spotlightOnly = settings.copy(eventSpawnTypes = setOf("pokemon-spotlight-hour"))
+        assertEquals(listOf("s", "b", "u"), all.filter { usableFor(spotlightOnly, it) }.map { it.id })
+        val cdOnly = settings.copy(eventSpawnTypes = setOf("community-day"))
+        assertEquals(listOf("c", "b", "u"), all.filter { usableFor(cdOnly, it) }.map { it.id })
+        // Types never widen what the switch itself decides.
+        assertEquals(emptyList<String>(), all.filter { usableFor(settings.copy(includeEventSpawns = false), it) }.map { it.id })
+    }
+
     @Test fun `settings need the start inside the area and old saved settings still read`() {
         val base = CatchRouteSettings(start = p(0.0), startAtMillis = now)
         base.copy(area = square).validate()

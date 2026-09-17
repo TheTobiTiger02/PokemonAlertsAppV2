@@ -32,6 +32,11 @@ data class CatchRouteSettings(
     val maxWaitMinutes: Int = 0,
     /** Plan spawnpoints that only spawn during events (Spotlight Hours, Community Days). Off by default. */
     val includeEventSpawns: Boolean = false,
+    /**
+     * Which event types those spawnpoints may come from; every type by default. A spawnpoint responds to
+     * the types it has been seen in, so one seen at a Spotlight Hour and a Community Day carries both.
+     */
+    val eventSpawnTypes: Set<String> = EVENT_SPAWN_TYPES,
     /** Optional polygon the route must stay inside; fewer than three corners means no limit. */
     val area: List<CatchPoint> = emptyList(),
     /** An imported Pokémon GO route walked exactly as drawn; two or more points turn the optimizer off. */
@@ -65,6 +70,16 @@ data class CatchRouteSettings(
     }
 }
 
+/** The event types a spawnpoint can respond to, as the backend names them. */
+val EVENT_SPAWN_TYPES: Set<String> = setOf("pokemon-spotlight-hour", "community-day", "event", "wild-area")
+
+val EVENT_SPAWN_TYPE_LABELS: Map<String, String> = mapOf(
+    "pokemon-spotlight-hour" to "Spotlight Hour",
+    "community-day" to "Community Day",
+    "event" to "Events",
+    "wild-area" to "Wild Area",
+)
+
 @Serializable
 data class SpawnOpportunity(
     val id: String, val pointId: String, val point: CatchPoint,
@@ -78,13 +93,18 @@ data class SpawnOpportunity(
     val requiresLiveConfirmation: Boolean = false,
     val activityPattern: String = "unknown",
     val activityPatternBasis: String? = null,
+    /** The event types this spawnpoint has been seen in; empty when it is not an event spawnpoint. */
+    val eventTypes: List<String> = emptyList(),
     /** Backend's chance that this window really holds a Pokémon, 0–1. Null from older backends. */
     val probability: Double? = null,
     val schedule: SpawnSchedule? = null,
 ) {
     val observed: Boolean get() = basis == "observed_encounter"
-    /** A window at a spawnpoint that only spawns during events; the backend sends these only while one runs. */
+    /** A window at a spawnpoint that only spawns during events. */
     val eventOnly: Boolean get() = activityPattern == "event_only" || "event_only_spawnpoint" in uncertainty
+
+    /** True while no matching event is running, which the backend only sends when asked for those too. */
+    val eventNotRunning: Boolean get() = "event_not_running" in uncertainty
     val evidenceRank: Int get() = when (basis) { "observed_encounter" -> 4; "recurring_schedule" -> 3; "inferred_lifetime" -> 2; "assumed_duration" -> 1; else -> 0 }
 
     /**

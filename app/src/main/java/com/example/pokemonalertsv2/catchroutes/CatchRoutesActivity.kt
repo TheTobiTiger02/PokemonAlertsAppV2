@@ -360,6 +360,26 @@ class CatchRoutesActivity : ComponentActivity() {
             }
             SettingsCard("What") {
                 SwitchRow("Event spawns", "Spawnpoints that only spawn during Spotlight Hours, Community Days and similar events", settings.includeEventSpawns) { model.edit(settings.copy(includeEventSpawns = it)) }
+                if (settings.includeEventSpawns) {
+                    Text("Which events", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
+                        EVENT_SPAWN_TYPES.forEach { type ->
+                            val selected = type in settings.eventSpawnTypes
+                            FilterChip(
+                                selected = selected,
+                                // The last type stays on: with none chosen the switch above would do nothing.
+                                onClick = {
+                                    val next = if (selected) settings.eventSpawnTypes - type else settings.eventSpawnTypes + type
+                                    if (next.isNotEmpty()) model.edit(settings.copy(eventSpawnTypes = next))
+                                },
+                                label = { Text(EVENT_SPAWN_TYPE_LABELS[type] ?: type) },
+                                modifier = Modifier.testTag("event_type_$type")
+                            )
+                        }
+                    }
+                    Text("Planned like any other spawnpoint, even when no event is running.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 SwitchRow("Spacial Rend", "Catch range ${settings.radius.toInt()} m", settings.spacialRend) { model.edit(settings.copy(spacialRend = it)) }
                 TextButton(onClick = onAdvanced, contentPadding = PaddingValues(0.dp)) { Text(if (advanced) "Hide advanced" else "Advanced settings") }
                 if (advanced) {
