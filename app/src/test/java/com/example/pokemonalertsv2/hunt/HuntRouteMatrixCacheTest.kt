@@ -291,7 +291,7 @@ class HuntRouteMatrixCacheTest {
             return handler(request)
         }
 
-        override suspend fun getPokemonAlerts(since: Long?, etag: String?): retrofit2.Response<AlertSyncResponse> =
+        override suspend fun getPokemonAlerts(since: Long?, etag: String?, live: Int): retrofit2.Response<AlertSyncResponse> =
             retrofit2.Response.success(AlertSyncResponse())
 
         override suspend fun getCurrentWeather(area: String): CurrentWeatherResponse = CurrentWeatherResponse()

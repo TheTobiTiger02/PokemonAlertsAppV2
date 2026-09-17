@@ -56,10 +56,10 @@ import com.example.pokemonalertsv2.util.s2CellAt
 import com.example.pokemonalertsv2.util.TravelTime
 
 internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
-    SPAWN("Spawn species", "Spawns"),
+    SPAWN("IV spawn species", "IV spawns"),
     HUNDO("Hundo species", "100%"),
     PVP("PvP species", "PvP"),
-    RARE("Rare species", "Rares"),
+    COMMON("Common species", "Common"),
     NUNDO("Nundo species", "0%"),
     RAID_SPECIES("Raid species", "Raid Bosses"),
     RAID_TIERS("Raid tiers", "Tiers"),
@@ -70,7 +70,7 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.HUNDO,
     MapSelectorTarget.PVP,
     MapSelectorTarget.RAID_SPECIES,
-    MapSelectorTarget.RARE,
+    MapSelectorTarget.COMMON,
     MapSelectorTarget.SPAWN,
     MapSelectorTarget.NUNDO
 )
@@ -288,7 +288,9 @@ private fun MapFilterSheetContent(
                 MapPanelSection(
                     title = "Alert types",
                     summary = definition.alertTypes.typeSummary(),
-                    active = definition.alertTypes.mode != FilterSelectionMode.ALL,
+                    // The default (everything but Common) is not a narrowing the user made.
+                    active = definition.alertTypes.mode != FilterSelectionMode.ALL &&
+                        definition.alertTypes.normalizedValues != DEFAULT_FILTER_ALERT_TYPES.normalizedValues,
                     expanded = isOpen(SECTION_TYPES),
                     onToggle = { toggle(SECTION_TYPES) }
                 ) {
@@ -1483,7 +1485,7 @@ private fun FilterDefinition.speciesSummary(): String {
 
 internal fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSelection = when (target) {
     MapSelectorTarget.SPAWN -> spawnSpecies
-    MapSelectorTarget.RARE -> rareSpecies
+    MapSelectorTarget.COMMON -> commonSpecies
     MapSelectorTarget.HUNDO -> hundoSpecies
     MapSelectorTarget.NUNDO -> nundoSpecies
     MapSelectorTarget.PVP -> pvpSpecies
@@ -1494,7 +1496,7 @@ internal fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSel
 
 internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection: FilterSelection): FilterDefinition = when (target) {
     MapSelectorTarget.SPAWN -> copy(spawnSpecies = selection)
-    MapSelectorTarget.RARE -> copy(rareSpecies = selection)
+    MapSelectorTarget.COMMON -> copy(commonSpecies = selection)
     MapSelectorTarget.HUNDO -> copy(hundoSpecies = selection)
     MapSelectorTarget.NUNDO -> copy(nundoSpecies = selection)
     MapSelectorTarget.PVP -> copy(pvpSpecies = selection)
@@ -1519,7 +1521,7 @@ private fun FilterAlertType.mapCategory(): AlertCategory = when (this) {
     FilterAlertType.HUNDO -> AlertCategory.HUNDO
     FilterAlertType.NUNDO -> AlertCategory.NUNDO
     FilterAlertType.PVP -> AlertCategory.PVP
-    FilterAlertType.RARE -> AlertCategory.RARE
+    FilterAlertType.COMMON -> AlertCategory.COMMON
     FilterAlertType.WEATHER -> AlertCategory.WEATHER
     FilterAlertType.OTHER -> AlertCategory.GENERIC
 }

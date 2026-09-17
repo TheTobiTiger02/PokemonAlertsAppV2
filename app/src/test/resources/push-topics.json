@@ -59,8 +59,8 @@
       "topic": "alerts-t-kecleon"
     },
     {
-      "value": "Rare",
-      "topic": "alerts-t-rare"
+      "value": "Common",
+      "topic": "alerts-t-common"
     },
     {
       "value": "WeatherChange",
@@ -134,8 +134,8 @@
     },
     {
       "area": "Alsbach",
-      "type": "Rare",
-      "topic": "alerts-a-alsbach-t-rare"
+      "type": "Common",
+      "topic": "alerts-a-alsbach-t-common"
     },
     {
       "area": "Alsbach",
@@ -179,8 +179,8 @@
     },
     {
       "area": "Darmstadt",
-      "type": "Rare",
-      "topic": "alerts-a-darmstadt-t-rare"
+      "type": "Common",
+      "topic": "alerts-a-darmstadt-t-common"
     },
     {
       "area": "Darmstadt",
@@ -224,8 +224,8 @@
     },
     {
       "area": "Darmstadt-North",
-      "type": "Rare",
-      "topic": "alerts-a-darmstadt-north-t-rare"
+      "type": "Common",
+      "topic": "alerts-a-darmstadt-north-t-common"
     },
     {
       "area": "Darmstadt-North",
@@ -269,8 +269,8 @@
     },
     {
       "area": "Darmstadt-South",
-      "type": "Rare",
-      "topic": "alerts-a-darmstadt-south-t-rare"
+      "type": "Common",
+      "topic": "alerts-a-darmstadt-south-t-common"
     },
     {
       "area": "Darmstadt-South",
@@ -314,8 +314,8 @@
     },
     {
       "area": "Unknown",
-      "type": "Rare",
-      "topic": "alerts-a-unknown-t-rare"
+      "type": "Common",
+      "topic": "alerts-a-unknown-t-common"
     },
     {
       "area": "Unknown",

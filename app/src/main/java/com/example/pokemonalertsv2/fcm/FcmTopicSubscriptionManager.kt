@@ -7,6 +7,8 @@ import android.util.Log
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.PokemonAlertsApi
+import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
 import com.example.pokemonalertsv2.data.PushTopicsRepository
 import com.example.pokemonalertsv2.data.surfaceDefinitions
 import com.example.pokemonalertsv2.data.unionOf
@@ -39,7 +41,17 @@ object FcmTopicSubscriptionManager {
             val catalog = PushTopicsRepository.getInstance(appContext).refresh()
             val legacyTopic = catalog?.legacyTopic?.takeIf { it.isNotBlank() }
                 ?: PushTopicPlanner.DEFAULT_LEGACY_TOPIC
-            val desired = PushTopicPlanner.plan(catalog, unionDefinition(appContext))
+            val document = AlertPreferences(appContext.alertPreferencesDataStore).filterStateDocument.first()
+            val notifications = document.notifications.resolve(document)
+            val dexNumbers = PokemonSpeciesRepository.getInstance(appContext).getSpeciesDexMap()
+            val liveTopics = PushTopicPlanner.liveSightingTopics(catalog, notifications, dexNumbers)
+            val desired = PushTopicPlanner.plan(catalog, unionDefinition(appContext)) + liveTopics
+            // Renewed on every sync, even when nothing changed: the server lets a registration lapse after a week.
+            if (liveTopics.isNotEmpty()) {
+                runCatching {
+                    PokemonAlertsApi.pushTopicsService.registerLiveSightings(PushTopicPlanner.liveSightingRegistration(liveTopics))
+                }.onFailure { Log.w(TAG, "Could not register live sightings; retrying next sync", it) }
+            }
             apply(appContext, desired, legacyTopic)
         }.onFailure { exception ->
             Log.w(TAG, "FCM topic sync failed; leaving the current subscription in place", exception)

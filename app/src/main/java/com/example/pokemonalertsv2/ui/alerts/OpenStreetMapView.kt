@@ -1262,7 +1262,7 @@ internal fun openStreetMapIconRequest(
             alert.formattedIv == "100%" || alert.iv == "100",
         isNundo = visualStyle.category == AlertCategory.NUNDO || alert.formattedIv == "0%",
         isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty(),
-        isRare = visualStyle.category == AlertCategory.RARE,
+        isRare = visualStyle.category == AlertCategory.COMMON,
         questQuantity = extractQuestQuantity(alert.questReward),
         raidTier = resolveRaidTier(alert, visualStyle.category),
         isRocket = visualStyle.category == AlertCategory.ROCKET ||

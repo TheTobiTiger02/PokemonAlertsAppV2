@@ -97,7 +97,12 @@ data class AlertEntity(
     val alertCreatedAt: String? = null,
     val invalidatedAt: String? = null,
     val invalidationReason: String? = null,
-    val invalidatedByAlertId: Int? = null
+    val invalidatedByAlertId: Int? = null,
+
+    // Live sightings
+    val expiryVerified: Boolean? = null,
+    val replacesAlertId: Int? = null,
+    val live: Boolean? = null
 )
 
 fun AlertEntity.toDomain(): PokemonAlert {
@@ -177,7 +182,10 @@ fun AlertEntity.toDomain(): PokemonAlert {
         createdAt = alertCreatedAt,
         invalidatedAt = invalidatedAt,
         invalidationReason = invalidationReason,
-        invalidatedByAlertId = invalidatedByAlertId
+        invalidatedByAlertId = invalidatedByAlertId,
+        expiryVerified = expiryVerified,
+        replacesAlertId = replacesAlertId,
+        live = live
     )
 }
 
@@ -241,6 +249,9 @@ fun PokemonAlert.toEntity(): AlertEntity {
         alertCreatedAt = createdAt,
         invalidatedAt = invalidatedAt,
         invalidationReason = invalidationReason,
-        invalidatedByAlertId = invalidatedByAlertId
+        invalidatedByAlertId = invalidatedByAlertId,
+        expiryVerified = expiryVerified,
+        replacesAlertId = replacesAlertId,
+        live = live
     )
 }

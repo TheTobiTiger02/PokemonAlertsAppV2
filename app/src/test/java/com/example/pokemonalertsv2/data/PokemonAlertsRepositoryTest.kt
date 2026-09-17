@@ -201,6 +201,18 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun processIncomingAlert_fullAlertReplacesTheLiveSightingItSuperseded() = runTest {
+        val sighting = sampleAlert("Dratini", id = 1_100_000_000).copy(type = listOf("Live"))
+        val neighbour = sampleAlert("Pidgey", id = 7)
+        dao.alerts.value = listOf(sighting.toEntity(), neighbour.toEntity())
+        val hundo = sampleAlert("Dratini 100%", id = 612).copy(type = listOf("Hundo"), replacesAlertId = sighting.id)
+
+        repository.processIncomingAlert(hundo)
+
+        assertEquals(setOf(neighbour.uniqueId, hundo.uniqueId), dao.alerts.value.map { it.uniqueId }.toSet())
+    }
+
+    @Test
     fun fetchAlerts_cachesAllAlertsSharingNameAndEndTimeWithDistinctIds() = runTest {
         val first = sampleAlert("Quest Alert", endTime = "", id = 201)
         val second = sampleAlert("Quest Alert", endTime = "", id = 202)
@@ -282,7 +294,7 @@ class PokemonAlertsRepositoryTest {
             pokemon = "  ZUBAT ",
             pokemonForm = null,
             cp = 239,
-            type = listOf("PvP", "Rare"),
+            type = listOf("PvP", "Common"),
             area = " ALSBACH "
         )
         dao.alerts.value = listOf(affected.toEntity())
@@ -293,7 +305,7 @@ class PokemonAlertsRepositoryTest {
                     pokemon = "zubat",
                     pokemonForm = null,
                     cp = 239,
-                    type = listOf("rare", "pvp"),
+                    type = listOf("common", "pvp"),
                     endTime = " 2026-07-16 20:00:00 ",
                     area = "alsbach"
                 )
@@ -631,7 +643,7 @@ class PokemonAlertsRepositoryTest {
         var syncEtag: String? = null
         val syncRequests = mutableListOf<Pair<Long?, String?>>()
 
-        override suspend fun getPokemonAlerts(since: Long?, etag: String?): Response<AlertSyncResponse> {
+        override suspend fun getPokemonAlerts(since: Long?, etag: String?, live: Int): Response<AlertSyncResponse> {
             fetchGate?.await()
             syncRequests += since to etag
             if (syncStatus == 304) {

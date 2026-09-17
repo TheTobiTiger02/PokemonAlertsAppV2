@@ -147,7 +147,7 @@ class FilterStudioComposeTest {
         var dark by mutableStateOf(false)
         var fontScale by mutableFloatStateOf(1f)
         var title by mutableStateOf("Spawn species")
-        val titles = listOf("Spawn species", "Rare species", "Hundo species", "Nundo species", "PvP species", "Raid species", "Raid tiers", "Rocket types", "Quest rules")
+        val titles = listOf("IV spawn species", "Common species", "Hundo species", "Nundo species", "PvP species", "Raid species", "Raid tiers", "Rocket types", "Quest rules")
         rule.setContent {
             PokemonAlertsV2Theme(darkTheme = dark) {
                 val density = LocalDensity.current

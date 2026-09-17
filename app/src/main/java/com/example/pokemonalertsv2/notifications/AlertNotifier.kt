@@ -378,7 +378,7 @@ object AlertNotifier {
     /** Channel grouping, shared by the posting loop and the burst-cap overflow tally. */
     private fun notificationChannelFor(alert: PokemonAlert): String = when {
         alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
-        alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
+        alert.hasTypeContaining("common") || alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
         alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
         else -> CHANNEL_ID
     }
@@ -558,7 +558,7 @@ object AlertNotifier {
                 alert.hasTypeContaining("raid") -> {
                     raidsEnabled && raidTierAllowed(alert)
                 }
-                alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> {
+                alert.hasTypeContaining("common") || alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> {
                     spawnsEnabled &&
                         !isPokemonTypeExcluded(alert, excludedSpawnTypesLower) &&
                         isSpeciesAllowed(alert, allowedSpawnSpeciesLower)

@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.widget
 import android.content.Context
 import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
 import com.example.pokemonalertsv2.ui.alerts.legacyWidgetTokenToCategory
+import com.example.pokemonalertsv2.data.DEFAULT_FILTER_ALERT_TYPES
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterAssignment
 import com.example.pokemonalertsv2.data.FilterDefinition
@@ -73,7 +74,9 @@ internal fun WidgetConfiguration.legacyFilterDefinition(appArea: String, appDist
     val effectiveArea = when (val mode = area) { WidgetAreaMode.InheritApp -> appArea; is WidgetAreaMode.Fixed -> mode.area }
     val effectiveDistance = when (val mode = distance) { WidgetDistanceMode.InheritApp -> appDistanceMeters; WidgetDistanceMode.Unlimited -> 0; is WidgetDistanceMode.Fixed -> mode.meters }
     return FilterDefinition(
-        alertTypes = if (selectedAlertTypes.isEmpty()) FilterSelection.All else FilterSelection.only(FilterAlertType.entries.filterNot { it.name in selectedAlertTypes }.map { it.name }),
+        // Common is opt-in everywhere, widgets included.
+        alertTypes = if (selectedAlertTypes.isEmpty()) DEFAULT_FILTER_ALERT_TYPES
+            else FilterSelection.only(FilterAlertType.entries.filterNot { it == FilterAlertType.COMMON || it.name in selectedAlertTypes }.map { it.name }),
         areas = if (effectiveArea == "All") FilterSelection.All else FilterSelection.only(listOf(effectiveArea)),
         maxDistanceMeters = effectiveDistance
     )

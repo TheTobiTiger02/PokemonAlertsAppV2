@@ -91,7 +91,7 @@ class HuntDraftTest {
     fun `a definition with every type allowed is still startable as a draft`() {
         // A saved hunt that reached ALL some other way would otherwise load with
         // no chips ticked and a dead Start button.
-        val draft = FilterDefinition().forHuntDraft()
+        val draft = FilterDefinition(alertTypes = FilterSelection.All).forHuntDraft()
 
         assertEquals(FilterAlertType.entries, draft.chosenTypes())
     }

@@ -341,7 +341,8 @@ internal fun AlertHistoryPage(
         fun serverBreakdown(total: Int, today: Int = 0) = emptyStatistics(total, today).apply {
             this["raids"] = byType["Raid"] ?: 0
             this["quests"] = byType["Quest"] ?: 0
-            this["rares"] = byType["Rare"] ?: 0
+            // "Rare" is the old name of Common; the server renamed its rows, older caches may not have.
+            this["rares"] = (byType["Common"] ?: 0) + (byType["Rare"] ?: 0)
             this["hundos"] = byType["Hundo"] ?: 0
             this["pvp"] = byType["PvP"] ?: 0
             this["nundos"] = byType["Nundo"] ?: 0
@@ -352,7 +353,7 @@ internal fun AlertHistoryPage(
         fun serverCountForSelectedType(type: String): Int? = when (type) {
             "Raid" -> byType["Raid"]
             "Quest" -> byType["Quest"]
-            "Rare" -> byType["Rare"]
+            "Common", "Rare" -> (byType["Common"] ?: 0) + (byType["Rare"] ?: 0)
             "Hundo" -> byType["Hundo"]
             "PvP" -> byType["PvP"]
             "Nundo" -> byType["Nundo"]
@@ -366,7 +367,7 @@ internal fun AlertHistoryPage(
             when (type) {
                 "Raid" -> target["raids"] = count
                 "Quest" -> target["quests"] = count
-                "Rare" -> target["rares"] = count
+                "Common", "Rare" -> target["rares"] = count
                 "Hundo" -> target["hundos"] = count
                 "PvP" -> target["pvp"] = count
                 "Nundo" -> target["nundos"] = count
@@ -383,7 +384,7 @@ internal fun AlertHistoryPage(
             var categorized = false
             if (alert.hasType("Raid")) { raids++; categorized = true }
             if (alert.hasType("Quest")) { quests++; categorized = true }
-            if (alert.hasType("Rare") || alert.hasType("Spawn")) { rares++; categorized = true }
+            if (alert.hasType("Common") || alert.hasType("Rare") || alert.hasType("Spawn")) { rares++; categorized = true }
             if (alert.hasType("Hundo")) { hundos++; categorized = true }
             if (alert.hasType("PvP")) { pvp++; categorized = true }
             if (alert.hasType("Nundo")) { nundos++; categorized = true }
@@ -447,7 +448,7 @@ internal fun AlertHistoryPage(
                 AlertFilter.ALL -> null
                 AlertFilter.RAIDS -> "Raid"
                 AlertFilter.QUESTS -> "Quest"
-                AlertFilter.RARES -> "Rare"
+                AlertFilter.RARES -> "Common"
                 AlertFilter.HUNDOS -> "Hundo"
                 AlertFilter.PVP -> "PvP"
                 AlertFilter.NUNDOS -> "Nundo"
@@ -610,7 +611,7 @@ internal fun AlertHistoryPage(
                                     StatRow("Quests", statistics["quests"] ?: 0, Color(AlertCategory.QUEST.accentArgb))
                                 }
                                 if ((statistics["rares"] ?: 0) > 0) {
-                                    StatRow("Rare", statistics["rares"] ?: 0, Color(AlertCategory.RARE.accentArgb))
+                                    StatRow("Common", statistics["rares"] ?: 0, Color(AlertCategory.COMMON.accentArgb))
                                 }
                                 if ((statistics["hundos"] ?: 0) > 0) {
                                     StatRow("Hundos", statistics["hundos"] ?: 0, Color(AlertCategory.HUNDO.accentArgb))

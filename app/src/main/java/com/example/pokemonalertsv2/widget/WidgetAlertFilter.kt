@@ -124,7 +124,9 @@ internal object WidgetAlertFilter {
         if (filterTypes.isEmpty()) return true
         val categories = alert.alertCategories()
         if (categories.isEmpty()) return true
-        return categories.none { it.name in filterTypes }
+        // Widgets configured before the rename stored Common as "RARE".
+        val names = if ("RARE" in filterTypes) filterTypes + "COMMON" else filterTypes
+        return categories.none { it.name in names }
     }
 
     fun directDistanceMeters(origin: Origin, alert: PokemonAlert): Float? {

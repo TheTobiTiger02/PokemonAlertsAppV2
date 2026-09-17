@@ -196,7 +196,15 @@ data class PokemonAlert(
     val createdAt: String? = null,
     val invalidatedAt: String? = null,
     val invalidationReason: String? = null,
-    val invalidatedByAlertId: Int? = null
+    val invalidatedByAlertId: Int? = null,
+
+    // Live sightings from the backend's map collector: species and place only.
+    /** False when the despawn time is only the map's estimate; null for alerts that never say. */
+    val expiryVerified: Boolean? = null,
+    /** The server id of the live sighting this full alert replaced. */
+    val replacesAlertId: Int? = null,
+    /** True for a species-only sighting from the backend's map collector (typed Common, no IV). */
+    val live: Boolean? = null
 ) {
     /**
      * Stable local identity used as the Room primary key. Prefers the server id
@@ -208,6 +216,12 @@ data class PokemonAlert(
      * pipeline pass, thousands of times per sync with 1000+ live alerts.
      */
     val uniqueId: String by lazy { id?.let { "server-$it" } ?: "${name.trim()}|${endTime.trim()}" }
+
+    /**
+     * A species-only sighting from the backend's map collector: no IV, CP or moves, typed Common.
+     * Filtered like any Common alert (Filter Studio's Common type and species).
+     */
+    val isLiveSighting: Boolean get() = live == true
 
     /** Returns true if this is a weather-change alert */
     val isWeatherChange: Boolean get() = hasType("WeatherChange")
@@ -279,7 +293,7 @@ data class PokemonAlert(
             false
         } else {
             hasType("Spawn") || hasType("Hundo") || hasType("Nundo") ||
-                hasType("PvP") || hasType("Rare") || pokemon != null
+                hasType("PvP") || hasType("Common") || hasType("Rare") || pokemon != null
         }
     }
 

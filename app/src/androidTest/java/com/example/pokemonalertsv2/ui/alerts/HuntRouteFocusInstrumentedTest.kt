@@ -32,7 +32,7 @@ class HuntRouteFocusInstrumentedTest {
         val journeys = ArrivalTrackingRepository.getInstance(context)
         assumeTrue(runBlocking { hunts.currentSession() == null && journeys.currentDestination() == null })
         instrumentation.uiAutomation.executeShellCommand("pm grant ${context.packageName} android.permission.ACCESS_FINE_LOCATION").close()
-        val target = PokemonAlert(id = 9_951_001, name = "Focus near", pokemon = "Flamigo", type = listOf("Rare"), latitude = 49.741, longitude = 8.6)
+        val target = PokemonAlert(id = 9_951_001, name = "Focus near", pokemon = "Flamigo", type = listOf("Common"), latitude = 49.741, longitude = 8.6)
         val next = target.copy(id = 9_951_002, name = "Focus far", latitude = 49.80, longitude = 8.68)
         var emit: (MapUserPose) -> Unit = {}
         fun pose(latitude: Double) = MapUserPose(Location("test").apply {
@@ -40,7 +40,7 @@ class HuntRouteFocusInstrumentedTest {
             elapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos()
         }, headingDegrees = 0f, headingFromSensor = true)
         runBlocking {
-            hunts.start("Focus QA", FilterDefinition(alertTypes = FilterSelection.only(listOf("Rare"))))
+            hunts.start("Focus QA", FilterDefinition(alertTypes = FilterSelection.only(listOf("Common"))))
             journeys.startTracking(target)
             hunts.setTarget(target.uniqueId)
         }

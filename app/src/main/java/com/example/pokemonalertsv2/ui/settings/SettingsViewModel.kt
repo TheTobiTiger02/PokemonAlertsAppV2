@@ -440,7 +440,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             preferences.updateSpawnsNotifications(enabled)
             updateUnifiedNotificationType(FilterAlertType.SPAWN, enabled)
-            updateUnifiedNotificationType(FilterAlertType.RARE, enabled)
         }
     }
     

@@ -19,7 +19,7 @@ import org.junit.Test
 class PushTopicPlannerTest {
 
     private val types = listOf(
-        "Hundo", "Nundo", "PvP", "Raid", "Rocket", "Quest", "Kecleon", "Rare", "WeatherChange"
+        "Hundo", "Nundo", "PvP", "Raid", "Rocket", "Quest", "Kecleon", "Common", "WeatherChange"
     ).map { PushTopicType(it, "alerts-t-${it.lowercase()}") }
 
     private val areas = listOf(
@@ -126,7 +126,7 @@ class PushTopicPlannerTest {
     @Test
     fun plan_resolvesSpawnToTheServerSpawnFamily() {
         assertEquals(
-            setOf("alerts-t-hundo", "alerts-t-nundo", "alerts-t-pvp", "alerts-t-rare"),
+            setOf("alerts-t-hundo", "alerts-t-nundo", "alerts-t-pvp"),
             PushTopicPlanner.plan(catalog, typesOnly(FilterAlertType.SPAWN))
         )
     }
@@ -138,7 +138,7 @@ class PushTopicPlannerTest {
     @Test
     fun plan_widensHundoAcrossTheSpawnFamily() {
         assertEquals(
-            setOf("alerts-t-hundo", "alerts-t-nundo", "alerts-t-pvp", "alerts-t-rare"),
+            setOf("alerts-t-hundo", "alerts-t-nundo", "alerts-t-pvp"),
             PushTopicPlanner.plan(catalog, typesOnly(FilterAlertType.HUNDO))
         )
     }

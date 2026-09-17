@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -193,6 +194,29 @@ class AppDatabaseMigrationTest {
                 cursor.moveToFirst()
                 assertEquals("Snow", cursor.getString(0))
                 assertNull(cursor.getType(1).takeIf { it != 0 })
+            }
+            close()
+        }
+    }
+
+    @Test
+    fun migrate23To24_addsLiveSightingColumnsAsUnknown() {
+        helper.createDatabase(TEST_DATABASE, 23).apply {
+            execSQL(
+                """
+                INSERT INTO alerts (uniqueId, name, description, longitude, latitude, endTime, createdAt)
+                VALUES ('active-id', 'Zubat', 'Cached before the upgrade', 8.62, 49.74, '2026-09-16 20:00:00', 1234)
+                """.trimIndent()
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 24, true, AppDatabase.MIGRATION_23_24).apply {
+            query("SELECT name, expiryVerified, replacesAlertId FROM alerts WHERE uniqueId = 'active-id'").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("Zubat", cursor.getString(0))
+                assertTrue(cursor.isNull(1))
+                assertTrue(cursor.isNull(2))
             }
             close()
         }

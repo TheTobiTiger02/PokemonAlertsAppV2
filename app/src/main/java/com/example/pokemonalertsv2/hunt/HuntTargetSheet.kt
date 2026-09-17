@@ -204,10 +204,10 @@ internal fun HuntTargetSheet(
                         onClick = { speciesTarget = MapSelectorTarget.PVP }
                     )
 
-                    FilterAlertType.RARE -> SpeciesLauncher(
-                        label = "Rare species",
-                        selection = draft.rareSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.RARE }
+                    FilterAlertType.COMMON -> SpeciesLauncher(
+                        label = "Common species",
+                        selection = draft.commonSpecies,
+                        onClick = { speciesTarget = MapSelectorTarget.COMMON }
                     )
 
                     // Kecleon, weather and "other" have nothing further to narrow.

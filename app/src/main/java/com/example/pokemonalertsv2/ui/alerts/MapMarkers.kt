@@ -225,7 +225,7 @@ internal fun MapMarker(
     val isNundo = visualStyle.category == AlertCategory.NUNDO ||
         alert.formattedIv == "0%" || alert.iv == "0"
     val isPvp = visualStyle.category == AlertCategory.PVP || !alert.pvpRankings.isNullOrEmpty()
-    val isRare = visualStyle.category == AlertCategory.RARE
+    val isRare = visualStyle.category == AlertCategory.COMMON
     val questQuantity = remember(alert.questReward) { extractQuestQuantity(alert.questReward) }
     val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
     val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true

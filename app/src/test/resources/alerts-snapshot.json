@@ -857,7 +857,7 @@
   "latitude": 49.745508854713904,
   "endTime": "2026-09-08 20:12:59",
   "type": [
-   "Rare"
+   "Common"
   ],
   "thumbnailUrl": "https://files.pogomapper.com/uicons/wwm/pokemon/124.png",
   "createdAt": "2026-09-08 18:05:42",
@@ -1365,17 +1365,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Gligar",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Claydol",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Vibrava",
     "percentage": 15
    }
@@ -2213,7 +2213,7 @@
   "gruntType": "Giovanni",
   "pokemonRewards": [
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Reshiram",
     "percentage": 100
    }
@@ -2893,17 +2893,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Pinsir",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Anorith",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Dewpider",
     "percentage": 15
    }
@@ -3377,7 +3377,7 @@
   "gruntType": "Giovanni",
   "pokemonRewards": [
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Reshiram",
     "percentage": 100
    }
@@ -3440,17 +3440,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Gligar",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Claydol",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Vibrava",
     "percentage": 15
    }
@@ -3498,7 +3498,7 @@
   "gruntType": "Giovanni",
   "pokemonRewards": [
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Reshiram",
     "percentage": 100
    }
@@ -3684,7 +3684,7 @@
   "gruntType": "Giovanni",
   "pokemonRewards": [
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Reshiram",
     "percentage": 100
    }
@@ -5027,17 +5027,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Snubbull",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Weezing Galarian",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Kirlia",
     "percentage": 15
    }
@@ -5236,7 +5236,7 @@
   "latitude": 49.74175009052179,
   "endTime": "2026-09-06 15:21:02",
   "type": [
-   "Rare"
+   "Common"
   ],
   "thumbnailUrl": "https://raw.githubusercontent.com/ReuschelCGN/PkmnHomeMod/main/UICONS_Full_Shiny_Sparkle_128/pokemon/870.png",
   "createdAt": "2026-09-06 13:03:22",
@@ -6655,17 +6655,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Hitmontop",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Hitmonlee",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Hitmonchan",
     "percentage": 15
    }
@@ -7572,7 +7572,7 @@
   "gruntType": "Giovanni",
   "pokemonRewards": [
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Reshiram",
     "percentage": 100
    }
@@ -7944,17 +7944,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Snubbull",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Weezing Galarian",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Kirlia",
     "percentage": 15
    }
@@ -8904,7 +8904,7 @@
   "latitude": 49.74519394614683,
   "endTime": "2026-08-30 23:41:03",
   "type": [
-   "Rare"
+   "Common"
   ],
   "thumbnailUrl": "https://raw.githubusercontent.com/ReuschelCGN/PkmnHomeMod/main/UICONS_Full_Shiny_Sparkle_128/pokemon/619.png",
   "createdAt": "2026-08-30 21:12:23",
@@ -9177,17 +9177,17 @@
     "percentage": 85
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Drowzee",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Duosion",
     "percentage": 15
    },
    {
-    "rarity": "Rare",
+    "rarity": "Common",
     "pokemon": "Wobbuffet",
     "percentage": 15
    }

@@ -18,9 +18,9 @@ class UnifiedFilterNotificationTest {
         val hunts = com.example.pokemonalertsv2.hunt.HuntRepository.getInstance(context)
         org.junit.Assume.assumeTrue(hunts.currentSession() == null)
         val previous = preferences.filterStateDocument.first()
-        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Rare")), rareSpecies = FilterSelection.only(listOf("Flamigo")))
-        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.RARE.name to 300)))
-        val alert = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Rare"))
+        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Common")), commonSpecies = FilterSelection.only(listOf("Flamigo")))
+        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.COMMON.name to 300)))
+        val alert = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Common"))
         try {
             preferences.updateFilterStateDocument { it.copy(notifications = FilterAssignment.local(notifications)) }
             val before = AlertNotifier.NotificationSettings.load(preferences)

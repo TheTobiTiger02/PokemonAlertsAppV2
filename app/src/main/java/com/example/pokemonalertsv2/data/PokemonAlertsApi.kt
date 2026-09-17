@@ -192,7 +192,14 @@ interface PushTopicsService {
     suspend fun getPushTopics(
         @Header("If-None-Match") etag: String? = null
     ): Response<PushTopicCatalog>
+
+    /** Tells the server which live sightings to push at all; unregistered species are never sent. */
+    @POST("api/push-topics/live")
+    suspend fun registerLiveSightings(@Body registration: LiveSightingRegistration): Response<Unit>
 }
+
+@Serializable
+data class LiveSightingRegistration(val all: Boolean = false, val species: List<Int> = emptyList())
 
 /**
  * Identity of an alert the server dropped from the active set.
@@ -236,7 +243,9 @@ interface PokemonAlertsService {
     @GET("api/pokemon")
     suspend fun getPokemonAlerts(
         @Query("since") since: Long? = null,
-        @Header("If-None-Match") etag: String? = null
+        @Header("If-None-Match") etag: String? = null,
+        // Opts in to live sightings; older builds never asked and never see them.
+        @Query("live") live: Int = 1
     ): Response<AlertSyncResponse>
 
     /** Looks up durable weather for one area without requiring an alert. */

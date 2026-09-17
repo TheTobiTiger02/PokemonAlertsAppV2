@@ -374,7 +374,16 @@ class ArrivalTrackingService : Service() {
                             alerts.none { it.uniqueId == destination.uniqueId } &&
                             repository.currentDestination()?.uniqueId == destination.uniqueId
                         ) {
-                            repository.stopTracking()
+                            // A live sighting upgraded to a full alert is the same Pokémon: keep
+                            // walking to it instead of ending the leg. Overwriting the slot keeps
+                            // the service alive, as retargetHuntTo does.
+                            val replacement = liveSightingReplacement(destination.alert, alerts, dismissed)
+                            val followed = replacement != null && runCatching {
+                                repository.startTracking(replacement)
+                                huntRepository.setTarget(replacement.uniqueId)
+                                if (pinnedHuntTargetId == destination.uniqueId) pinnedHuntTargetId = replacement.uniqueId
+                            }.onFailure { Log.w(TAG, "Could not follow the upgraded live sighting", it) }.isSuccess
+                            if (!followed) repository.stopTracking()
                         }
                         requestHuntPlan()
                     }

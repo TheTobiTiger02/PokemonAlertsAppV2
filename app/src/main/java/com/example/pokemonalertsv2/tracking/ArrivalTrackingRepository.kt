@@ -42,6 +42,19 @@ data class TrackedDestination(
     val longitude: Double get() = requireNotNull(alert.longitude)
 }
 
+/**
+ * The full alert that replaced [target] when [target] was a live sighting, if it is still worth
+ * walking to. The backend names the sighting's server id in `replacesAlertId`.
+ */
+internal fun liveSightingReplacement(
+    target: PokemonAlert,
+    alerts: List<PokemonAlert>,
+    dismissedIds: Set<String>
+): PokemonAlert? {
+    val targetId = target.id ?: return null
+    return alerts.firstOrNull { it.replacesAlertId == targetId && it.uniqueId !in dismissedIds }
+}
+
 internal fun PokemonAlert.isEligibleArrivalDestination(
     nowMillis: Long = System.currentTimeMillis()
 ): Boolean {

@@ -5,6 +5,7 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelectionMode
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PushTopicArea
+import com.example.pokemonalertsv2.data.LiveSightingRegistration
 import com.example.pokemonalertsv2.data.PushTopicCatalog
 import com.example.pokemonalertsv2.data.PushTopicType
 import com.example.pokemonalertsv2.data.filterAlertTypes
@@ -30,6 +31,45 @@ object PushTopicPlanner {
 
     /** Used only when the catalog has never been fetched, matching the pre-fanout build. */
     const val DEFAULT_LEGACY_TOPIC = "alerts"
+
+    /**
+     * Live sightings are pushed per species (`{base}-l-{pokedexId}`) and on `{base}-l-all`, never on
+     * the legacy or derived topics, so these join whatever [plan] chose instead of competing with it.
+     *
+     * Driven by the notifications definition only: feed and map receive sightings by polling, and a
+     * subscription made for them would wake the phone for every sighting. Common off means none;
+     * all Common species means the all-sightings topic; a species list means one topic per species
+     * that [dexNumbers] (normalized name to pokedex number) can resolve.
+     */
+    fun liveSightingTopics(
+        catalog: PushTopicCatalog?,
+        notifications: FilterDefinition,
+        dexNumbers: Map<String, Int>
+    ): Set<String> {
+        if (!notifications.alertTypes.contains(FilterAlertType.COMMON.name)) return emptySet()
+        val base = catalog?.baseTopic?.takeIf { it.isNotBlank() }
+            ?: catalog?.legacyTopic?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LEGACY_TOPIC
+        val species = notifications.commonSpecies
+        return when (species.mode) {
+            FilterSelectionMode.NONE -> emptySet()
+            FilterSelectionMode.ALL -> setOf("$base-l-all")
+            FilterSelectionMode.ONLY -> species.normalizedValues
+                .mapNotNull { dexNumbers[it] }
+                .filter { it in 1 until 10_000 }
+                .distinct().sorted().take(MAX_LIVE_SIGHTING_TOPICS)
+                .mapTo(LinkedHashSet()) { "$base-l-$it" }
+        }
+    }
+
+    /** The server-side registration matching [liveSightingTopics]: `-l-all` or the pokedex numbers. */
+    fun liveSightingRegistration(topics: Set<String>): LiveSightingRegistration = LiveSightingRegistration(
+        all = topics.any { it.endsWith("-l-all") },
+        species = topics.mapNotNull { it.substringAfterLast("-l-", "").toIntOrNull() }.sorted()
+    )
+
+    /** FCM allows 2000 topics per install; a hunt list this long is a mistake, not a plan. */
+    const val MAX_LIVE_SIGHTING_TOPICS = 200
 
     fun plan(catalog: PushTopicCatalog?, definition: FilterDefinition): Set<String> {
         val legacy = setOf(catalog?.legacyTopic?.takeIf { it.isNotBlank() } ?: DEFAULT_LEGACY_TOPIC)

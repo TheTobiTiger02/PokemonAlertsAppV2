@@ -28,11 +28,11 @@ class WeatherAlertPresentationTest {
                 pokemon = "Zubat",
                 pokemonForm = "Shadow",
                 cp = 239,
-                type = listOf("PvP", "Rare")
+                type = listOf("PvP", "Common")
             )
         )
 
-        assertEquals("Zubat Shadow • CP 239 • PvP, Rare", summary)
+        assertEquals("Zubat Shadow • CP 239 • PvP, Common", summary)
     }
 
     @Test

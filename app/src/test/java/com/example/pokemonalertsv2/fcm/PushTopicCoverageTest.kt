@@ -179,7 +179,7 @@ class PushTopicCoverageTest {
                 alertTypes = FilterSelection.only(
                     listOf(
                         FilterAlertType.HUNDO.name, FilterAlertType.NUNDO.name,
-                        FilterAlertType.PVP.name, FilterAlertType.RARE.name
+                        FilterAlertType.PVP.name, FilterAlertType.COMMON.name
                     )
                 )
             ),

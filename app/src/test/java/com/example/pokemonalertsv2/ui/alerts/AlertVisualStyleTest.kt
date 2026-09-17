@@ -51,7 +51,7 @@ class AlertVisualStyleTest {
         assertEquals(AlertCategory.HUNDO, resolveAlertVisualStyle("hundo").category)
         assertEquals(AlertCategory.NUNDO, resolveAlertVisualStyle("nundo").category)
         assertEquals(AlertCategory.PVP, resolveAlertVisualStyle("pvp").category)
-        assertEquals(AlertCategory.RARE, resolveAlertVisualStyle("rare").category)
+        assertEquals(AlertCategory.COMMON, resolveAlertVisualStyle("rare").category)
         assertEquals(AlertCategory.SPAWN, resolveAlertVisualStyle("spawn").category)
     }
 }

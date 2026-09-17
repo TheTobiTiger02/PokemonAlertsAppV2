@@ -21,7 +21,7 @@ import com.example.pokemonalertsv2.data.FilterSelectionMode
 internal val EMPTY_HUNT_DRAFT = FilterDefinition(
     alertTypes = FilterSelection.None,
     spawnSpecies = FilterSelection.None,
-    rareSpecies = FilterSelection.None,
+    commonSpecies = FilterSelection.None,
     hundoSpecies = FilterSelection.None,
     nundoSpecies = FilterSelection.None,
     pvpSpecies = FilterSelection.None,
@@ -37,7 +37,7 @@ internal val EMPTY_HUNT_DRAFT = FilterDefinition(
  */
 internal fun FilterDefinition.forHunt(): FilterDefinition = copy(
     spawnSpecies = spawnSpecies.orAny(),
-    rareSpecies = rareSpecies.orAny(),
+    commonSpecies = commonSpecies.orAny(),
     hundoSpecies = hundoSpecies.orAny(),
     nundoSpecies = nundoSpecies.orAny(),
     pvpSpecies = pvpSpecies.orAny(),
@@ -58,7 +58,7 @@ internal fun FilterDefinition.forHunt(): FilterDefinition = copy(
 internal fun FilterDefinition.forHuntDraft(): FilterDefinition = copy(
     alertTypes = alertTypes.orAllTypes(),
     spawnSpecies = spawnSpecies.orNone(),
-    rareSpecies = rareSpecies.orNone(),
+    commonSpecies = commonSpecies.orNone(),
     hundoSpecies = hundoSpecies.orNone(),
     nundoSpecies = nundoSpecies.orNone(),
     pvpSpecies = pvpSpecies.orNone(),

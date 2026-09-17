@@ -317,7 +317,7 @@ class AlertsMapViewportTest {
             AlertCategory.HUNDO,
             AlertCategory.PVP,
             AlertCategory.RAID,
-            AlertCategory.RARE,
+            AlertCategory.COMMON,
             AlertCategory.ROCKET,
             AlertCategory.QUEST
         )

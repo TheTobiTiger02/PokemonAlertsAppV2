@@ -11,9 +11,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 abstract class AlertDao {
+    // Read inside a transaction. With live sightings the table holds thousands of rows, more than one
+    // CursorWindow (2 MB): without a transaction a sync that rewrites the table between two windows
+    // leaves the cursor pointing past the new end and the read throws "Couldn't read row N".
+    @Transaction
     @Query("SELECT * FROM alerts ORDER BY endTime DESC")
     abstract fun observeAllAlerts(): Flow<List<AlertEntity>>
 
+    @Transaction
     @Query("SELECT * FROM alerts ORDER BY endTime DESC")
     abstract suspend fun getAllAlerts(): List<AlertEntity>
 

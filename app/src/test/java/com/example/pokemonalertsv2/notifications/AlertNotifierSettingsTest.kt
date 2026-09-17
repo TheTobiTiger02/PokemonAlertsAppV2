@@ -98,9 +98,9 @@ class AlertNotifierSettingsTest {
     }
 
     @Test fun rareFlamigoDistanceLimitIsIndependentOfHuntMatching() {
-        val flamigo = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Rare"), latitude = 49.7, longitude = 8.6)
-        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Rare")), rareSpecies = FilterSelection.only(listOf("Flamigo")))
-        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.RARE.name to 300)))
+        val flamigo = PokemonAlert(name = "Flamigo", pokemon = "Flamigo", type = listOf("Common"), latitude = 49.7, longitude = 8.6)
+        val hunt = FilterDefinition(alertTypes = FilterSelection.only(listOf("Common")), commonSpecies = FilterSelection.only(listOf("Flamigo")))
+        val notifications = hunt.copy(distanceOverrides = DistanceOverrides(perType = mapOf(FilterAlertType.COMMON.name to 300)))
         val settings = notificationSettings().copy(filterDefinition = notifications)
         assertTrue(isHuntTarget(flamigo, hunt))
         assertTrue(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 299f)))
@@ -109,8 +109,8 @@ class AlertNotifierSettingsTest {
         assertFalse(settings.shouldNotify(flamigo, matchContext = FilterMatchContext(effectiveDistanceMeters = 3000f)))
         // User explicitly retains notification delivery when distance cannot be checked.
         assertTrue(settings.shouldNotify(flamigo, matchContext = FilterMatchContext()))
-        val dualType = flamigo.copy(type = listOf("Rare", "Hundo"), iv = "100")
-        val overlapping = settings.copy(filterDefinition = notifications.copy(alertTypes = FilterSelection.only(listOf("Rare", "Hundo"))))
+        val dualType = flamigo.copy(type = listOf("Common", "Hundo"), iv = "100")
+        val overlapping = settings.copy(filterDefinition = notifications.copy(alertTypes = FilterSelection.only(listOf("Common", "Hundo"))))
         assertTrue(overlapping.shouldNotify(dualType, matchContext = FilterMatchContext(effectiveDistanceMeters = 3000f)))
     }
 

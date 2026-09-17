@@ -11,7 +11,7 @@ class UnifiedFilterMatrixTest {
     private val fixtures = listOf(
         alert(1, listOf("Spawn"), "Pikachu"),
         alert(2, listOf("Spawn", "Hundo"), "Bulbasaur").copy(ivAttack = 15, ivDefense = 15, ivStamina = 15),
-        alert(3, listOf("Rare"), "Gible"),
+        alert(3, listOf("Common"), "Gible"),
         alert(4, listOf("Nundo"), "Eevee").copy(ivAttack = 0, ivDefense = 0, ivStamina = 0),
         alert(5, listOf("PvP"), "Marill"),
         alert(6, listOf("Raid", "5"), "Mewtwo"),

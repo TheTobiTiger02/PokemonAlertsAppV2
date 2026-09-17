@@ -2,10 +2,12 @@ package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -26,7 +28,10 @@ data class FilterSelection(
         FilterSelectionMode.ONLY -> value != null && normalizedValues.contains(normalizeFilterToken(value))
     }
 
-    val normalizedValues: Set<String> by lazy { values.mapNotNull(::normalizeFilterTokenOrNull).toSet() }
+    // "rare" is the pre-rename token of COMMON, still found in saved hunts that picked it explicitly.
+    val normalizedValues: Set<String> by lazy {
+        values.mapNotNull(::normalizeFilterTokenOrNull).map { if (it == LEGACY_RARE_TOKEN) COMMON_TOKEN else it }.toSet()
+    }
 
     val selectedCount: Int get() = if (mode == FilterSelectionMode.ONLY) normalizedValues.size else 0
 
@@ -53,7 +58,8 @@ enum class FilterSelectionMode { ALL, NONE, ONLY }
 
 @Serializable
 enum class FilterAlertType(val label: String) {
-    SPAWN("Spawns"),
+    /** Hundo, Nundo and PvP spawns: the ones that carry IV or ranking data. */
+    SPAWN("IV spawns"),
     RAID("Raids"),
     QUEST("Quests"),
     ROCKET("Rocket"),
@@ -61,7 +67,8 @@ enum class FilterAlertType(val label: String) {
     HUNDO("Hundos"),
     NUNDO("Nundos"),
     PVP("PvP"),
-    RARE("Rare"),
+    /** Every other wild spawn, including the backend's live sightings without IV. Off by default. */
+    COMMON("Common"),
     WEATHER("Weather"),
     OTHER("Other")
 }
@@ -121,15 +128,28 @@ data class DistanceOverrides(
     }
 }
 
+private const val LEGACY_RARE_TOKEN = "rare"
+private const val COMMON_TOKEN = "common"
+
+/**
+ * Every type except Common: those are thousands an hour, so a filter only shows them once asked to.
+ * Lazy because the token normalizer's regexes are declared further down this file.
+ */
+val DEFAULT_FILTER_ALERT_TYPES: FilterSelection by lazy {
+    FilterSelection.only(FilterAlertType.entries.filterNot { it == FilterAlertType.COMMON }.map { it.name })
+}
+
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class FilterDefinition(
-    val alertTypes: FilterSelection = FilterSelection.All,
+    val alertTypes: FilterSelection = DEFAULT_FILTER_ALERT_TYPES,
     val areas: FilterSelection = FilterSelection.All,
     val maxDistanceMeters: Int = 0,
     val maxWalkingMinutes: Int = 0,
     val distanceOverrides: DistanceOverrides = DistanceOverrides.None,
     val spawnSpecies: FilterSelection = FilterSelection.All,
-    val rareSpecies: FilterSelection = FilterSelection.All,
+    @JsonNames("rareSpecies")
+    val commonSpecies: FilterSelection = FilterSelection.All,
     val hundoSpecies: FilterSelection = FilterSelection.All,
     val nundoSpecies: FilterSelection = FilterSelection.All,
     val pvpSpecies: FilterSelection = FilterSelection.All,
@@ -143,7 +163,7 @@ data class FilterDefinition(
 ) {
     val advancedRuleCount: Int
         get() = listOf(
-            spawnSpecies, rareSpecies, hundoSpecies, nundoSpecies, pvpSpecies,
+            spawnSpecies, commonSpecies, hundoSpecies, nundoSpecies, pvpSpecies,
             raidSpecies, raidTiers, rocketTypes
         ).count { it.mode != FilterSelectionMode.ALL } +
             (if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0) +
@@ -231,9 +251,10 @@ enum class FilterSurface(val label: String) {
 
 /**
  * 2 added [FilterDefinition.distanceOverrides]; 3 stores distances in meters (v1/v2 stored
- * kilometers). Older documents still decode: [FilterStateCodec] rewrites distance fields on read.
+ * kilometers); 4 renamed Rare to Common and made Common opt-in. Older documents still decode:
+ * [FilterStateCodec] rewrites them on read.
  */
-const val CURRENT_FILTER_SCHEMA_VERSION = 3
+const val CURRENT_FILTER_SCHEMA_VERSION = 4
 const val MAX_FILTER_PROFILE_NAME = 40
 const val MAX_FILTER_DISTANCE_METERS = 50_000
 
@@ -279,7 +300,7 @@ object FilterStateCodec {
         return runCatching {
             json.decodeFromJsonElement(
                 FilterStateDocument.serializer(),
-                migrateKilometerDistances(json.parseToJsonElement(text))
+                migrate(json.parseToJsonElement(text))
             )
         }.getOrNull()
             ?.takeIf { it.schemaVersion >= 1 }
@@ -293,7 +314,7 @@ object FilterStateCodec {
         return runCatching {
             json.decodeFromJsonElement(
                 FilterAssignment.serializer(),
-                migrateKilometerDistances(json.parseToJsonElement(text))
+                migrate(json.parseToJsonElement(text))
             )
         }.getOrNull()
     }
@@ -307,19 +328,63 @@ object FilterStateCodec {
      * assignments inside their definition — and early v1 payloads may omit it on nested
      * objects entirely, so the rewrite deliberately sweeps the whole tree.
      */
-    private fun migrateKilometerDistances(root: JsonElement): JsonElement {
+    private fun migrate(root: JsonElement): JsonElement {
         val document = root as? JsonObject ?: return root
         val version = (document["schemaVersion"] as? JsonPrimitive)?.intOrNull
             ?: ((document["definition"] as? JsonObject)?.get("schemaVersion") as? JsonPrimitive)?.intOrNull
             ?: CURRENT_FILTER_SCHEMA_VERSION
         if (version >= CURRENT_FILTER_SCHEMA_VERSION) return root
-        return rescaleDistanceNode(document)
+        var migrated: JsonElement = document
+        if (version < 3) migrated = rescaleDistanceNode(migrated)
+        migrated = commonOptInNode(migrated)
+        return stampVersion(migrated)
+    }
+
+    private fun stampVersion(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> JsonObject(element.mapValues { (key, value) ->
+            if (key == "schemaVersion") JsonPrimitive(CURRENT_FILTER_SCHEMA_VERSION) else stampVersion(value)
+        })
+        is JsonArray -> JsonArray(element.map(::stampVersion))
+        else -> element
+    }
+
+    /**
+     * Schema 4: "Rare" became "Common", now opt-in. Every definition (an object with `alertTypes`)
+     * loses the type, whether it was implied by All or listed explicitly, and gets
+     * `commonSpecies = All`, so switching Common on later shows every species. A per-type distance
+     * limit keeps its value under the new key.
+     */
+    private fun commonOptInNode(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> {
+            val children = element.mapValues { (_, value) -> commonOptInNode(value) }.toMutableMap()
+            if ("alertTypes" in children || "rareSpecies" in children) {
+                val types = children["alertTypes"] as? JsonObject
+                val mode = (types?.get("mode") as? JsonPrimitive)?.content ?: FilterSelectionMode.ALL.name
+                children["alertTypes"] = when (mode) {
+                    FilterSelectionMode.ALL.name -> json.encodeToJsonElement(FilterSelection.serializer(), DEFAULT_FILTER_ALERT_TYPES)
+                    FilterSelectionMode.ONLY.name -> {
+                        val kept = (types?.get("values") as? JsonArray).orEmpty()
+                            .mapNotNull { (it as? JsonPrimitive)?.content }
+                            .filterNot { normalizeFilterToken(it) in setOf(LEGACY_RARE_TOKEN, COMMON_TOKEN) }
+                        json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.only(kept))
+                    }
+                    else -> types ?: json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.None)
+                }
+                children.remove("rareSpecies")
+                children["commonSpecies"] = json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.All)
+            }
+            (children["perType"] as? JsonObject)?.let { perType ->
+                children["perType"] = JsonObject(perType.mapKeys { (key, _) -> if (key == "RARE") FilterAlertType.COMMON.name else key })
+            }
+            JsonObject(children)
+        }
+        is JsonArray -> JsonArray(element.map(::commonOptInNode))
+        else -> element
     }
 
     private fun rescaleDistanceNode(element: JsonElement): JsonElement = when (element) {
         is JsonObject -> JsonObject(element.map { (key, value) ->
             when {
-                key == "schemaVersion" -> key to JsonPrimitive(CURRENT_FILTER_SCHEMA_VERSION)
                 key == "maxDistanceKm" ->
                     "maxDistanceMeters" to JsonPrimitive((value as? JsonPrimitive)?.intOrNull?.times(1000) ?: 0)
                 key == "perType" || key == "perSpecies" -> key to rescaleIntValues(value)
@@ -345,7 +410,7 @@ object BuiltInFilterProfiles {
         "High value",
         FilterDefinition(
             alertTypes = FilterSelection.only(
-                listOf(FilterAlertType.HUNDO.name, FilterAlertType.NUNDO.name, FilterAlertType.PVP.name, FilterAlertType.RARE.name)
+                listOf(FilterAlertType.HUNDO.name, FilterAlertType.NUNDO.name, FilterAlertType.PVP.name)
             )
         )
     )
@@ -417,7 +482,7 @@ object AlertFilterMatcher {
 
     private fun matchesAdvanced(type: FilterAlertType, alert: PokemonAlert, definition: FilterDefinition): Boolean = when (type) {
         FilterAlertType.SPAWN -> definition.spawnSpecies.contains(alert.filterSpecies())
-        FilterAlertType.RARE -> definition.rareSpecies.contains(alert.filterSpecies())
+        FilterAlertType.COMMON -> definition.commonSpecies.contains(alert.filterSpecies())
         FilterAlertType.HUNDO -> definition.hundoSpecies.contains(alert.filterSpecies())
         FilterAlertType.NUNDO -> definition.nundoSpecies.contains(alert.filterSpecies())
         FilterAlertType.PVP -> definition.pvpSpecies.contains(alert.filterSpecies())
@@ -453,7 +518,7 @@ fun PokemonAlert.filterAlertTypes(): Set<FilterAlertType> {
             AlertCategory.HUNDO -> FilterAlertType.HUNDO
             AlertCategory.NUNDO -> FilterAlertType.NUNDO
             AlertCategory.PVP -> FilterAlertType.PVP
-            AlertCategory.RARE -> FilterAlertType.RARE
+            AlertCategory.COMMON -> FilterAlertType.COMMON
             AlertCategory.WEATHER -> FilterAlertType.WEATHER
             AlertCategory.GENERIC -> FilterAlertType.OTHER
         }

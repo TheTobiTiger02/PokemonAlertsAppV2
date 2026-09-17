@@ -23,14 +23,14 @@ val FILTERABLE_ALERT_CATEGORIES: List<AlertCategory> = listOf(
     AlertCategory.HUNDO,
     AlertCategory.NUNDO,
     AlertCategory.PVP,
-    AlertCategory.RARE,
+    AlertCategory.COMMON,
     AlertCategory.WEATHER
 )
 
 /** Plural label used by every filter UI that lists categories. */
 val AlertCategory.filterLabel: String
     get() = when (this) {
-        AlertCategory.SPAWN -> "Spawns"
+        AlertCategory.SPAWN -> "IV spawns"
         AlertCategory.RAID -> "Raids"
         AlertCategory.QUEST -> "Quests"
         AlertCategory.ROCKET -> "Rocket"
@@ -38,7 +38,7 @@ val AlertCategory.filterLabel: String
         AlertCategory.HUNDO -> "Hundos"
         AlertCategory.NUNDO -> "Nundos"
         AlertCategory.PVP -> "PvP"
-        AlertCategory.RARE -> "Rare"
+        AlertCategory.COMMON -> "Common"
         AlertCategory.WEATHER -> "Weather"
         AlertCategory.GENERIC -> "Other"
     }
@@ -60,8 +60,12 @@ fun PokemonAlert.alertCategories(): Set<AlertCategory> = buildSet {
     if (hasType("Hundo") || isPerfect) add(AlertCategory.HUNDO)
     if (hasType("Nundo") || isNundo) add(AlertCategory.NUNDO)
     if (hasType("PvP")) add(AlertCategory.PVP)
-    if (hasType("Rare")) add(AlertCategory.RARE)
-    if (isSpawnAlert) add(AlertCategory.SPAWN)
+    // "Rare" is the old name of Common, still stored on alerts cached before the rename.
+    if (hasType("Common") || hasType("Rare")) add(AlertCategory.COMMON)
+    // IV spawns only: plain spawns are Common, so the two filter switches never overlap.
+    if (hasType("Hundo") || hasType("Nundo") || hasType("PvP") || hasType("Spawn") || isPerfect || isNundo) {
+        add(AlertCategory.SPAWN)
+    }
 }
 
 /**
@@ -78,7 +82,7 @@ fun matchesCategorySelection(alert: PokemonAlert, mutedCategories: Set<AlertCate
 
 /** Stored name sets tolerate unknown values so older backups never crash a read. */
 fun Set<String>.toCategorySelection(): Set<AlertCategory> =
-    mapNotNull { name -> runCatching { AlertCategory.valueOf(name) }.getOrNull() }
+    mapNotNull { name -> runCatching { AlertCategory.valueOf(if (name == "RARE") "COMMON" else name) }.getOrNull() }
         .filter(FILTERABLE_ALERT_CATEGORIES::contains)
         .toSet()
 
@@ -110,7 +114,7 @@ fun legacyWidgetTokenToCategory(token: String): AlertCategory? {
         "hundo", "100" -> AlertCategory.HUNDO
         "nundo", "000" -> AlertCategory.NUNDO
         "pvp" -> AlertCategory.PVP
-        "rare" -> AlertCategory.RARE
+        "rare", "common" -> AlertCategory.COMMON
         "weather" -> AlertCategory.WEATHER
         else -> null
     }

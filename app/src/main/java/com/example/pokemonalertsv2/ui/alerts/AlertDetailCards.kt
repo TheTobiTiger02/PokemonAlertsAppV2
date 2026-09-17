@@ -1076,8 +1076,10 @@ fun CountdownAndEndTimeRow(
             )
         }
         Text(
-            text = endMillis?.let { TimeUtils.formatAlertEndTime(it, nowMillis) }
-                ?: stringResource(id = R.string.alert_end_time, alert.endTime),
+            text = (endMillis?.let { TimeUtils.formatAlertEndTime(it, nowMillis) }
+                ?: stringResource(id = R.string.alert_end_time, alert.endTime)) +
+                // The map scanner could not confirm this despawn; it is its best guess.
+                if (alert.expiryVerified == false) " (estimated)" else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

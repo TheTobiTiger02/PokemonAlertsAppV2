@@ -541,7 +541,7 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
         AlertCategory.ROCKET in categories -> AlertCategory.ROCKET
         AlertCategory.KECLEON in categories -> AlertCategory.KECLEON
         AlertCategory.WEATHER in categories -> AlertCategory.WEATHER
-        AlertCategory.RARE in categories -> AlertCategory.RARE
+        AlertCategory.COMMON in categories -> AlertCategory.COMMON
         else -> AlertCategory.SPAWN
     }
 }
@@ -549,7 +549,7 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
 private fun mapAlertCategoryRank(categories: Set<AlertCategory>): Int = when {
     AlertCategory.HUNDO in categories || AlertCategory.NUNDO in categories || AlertCategory.PVP in categories -> 0
     AlertCategory.RAID in categories -> 1
-    AlertCategory.RARE in categories -> 2
+    AlertCategory.COMMON in categories -> 2
     AlertCategory.ROCKET in categories -> 3
     categories.size == 1 && AlertCategory.QUEST in categories -> 5
     else -> 4

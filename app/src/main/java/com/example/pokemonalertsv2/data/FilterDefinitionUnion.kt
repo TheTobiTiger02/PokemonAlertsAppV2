@@ -39,7 +39,7 @@ fun unionOf(definitions: List<FilterDefinition>): FilterDefinition {
             maxDistanceMeters = 0,
             maxWalkingMinutes = 0,
             spawnSpecies = left.spawnSpecies.union(right.spawnSpecies),
-            rareSpecies = left.rareSpecies.union(right.rareSpecies),
+            commonSpecies = left.commonSpecies.union(right.commonSpecies),
             hundoSpecies = left.hundoSpecies.union(right.hundoSpecies),
             nundoSpecies = left.nundoSpecies.union(right.nundoSpecies),
             pvpSpecies = left.pvpSpecies.union(right.pvpSpecies),

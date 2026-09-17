@@ -104,7 +104,7 @@ class MapClusteringOptionsTest {
     }
 
     @Test fun representativeOrderingMatchesPublicPriorityAndRefreshesOnRemoval() = runBlocking {
-        val alerts = listOf("Quest", "Rocket", "Kecleon", "Spawn", "Raid", "Hundo", "Rare", "PvP")
+        val alerts = listOf("Quest", "Rocket", "Kecleon", "Spawn", "Raid", "Hundo", "Common", "PvP")
             .mapIndexed { index, type -> alert(index + 1, type) }
         for (remaining in alerts.indices) {
             val eligible = alerts.drop(remaining)

@@ -85,8 +85,8 @@ class FilterDefinitionUnionTest {
 
         val union = unionOf(document.surfaceDefinitions())
 
-        // The notifications surface is unfiltered, so nothing narrows.
-        assertEquals(FilterSelectionMode.ALL, union.alertTypes.mode)
+        // The notifications surface is unfiltered: its default (every type but Common) is the union.
+        assertEquals(DEFAULT_FILTER_ALERT_TYPES.normalizedValues, union.alertTypes.normalizedValues)
         assertEquals(FilterSelectionMode.ALL, union.areas.mode)
     }
 }

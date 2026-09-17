@@ -111,7 +111,7 @@ private fun SummaryCard(title: String, subtitle: String, icon: androidx.compose.
     }
 }
 
-private enum class SelectorTarget { SPAWN, RARE, HUNDO, NUNDO, PVP, RAID_SPECIES, RAID_TIERS, ROCKET }
+private enum class SelectorTarget { SPAWN, COMMON, HUNDO, NUNDO, PVP, RAID_SPECIES, RAID_TIERS, ROCKET }
 
 private fun FilterSelection.summary(noun: String): String = when (mode) {
     FilterSelectionMode.ALL -> "All $noun"
@@ -204,7 +204,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                             draft = draft.copy(alertTypes = FilterSelection.only(values))
                         }, onAdvanced = {
                             selector = when (type) {
-                                FilterAlertType.SPAWN -> SelectorTarget.SPAWN; FilterAlertType.RARE -> SelectorTarget.RARE; FilterAlertType.HUNDO -> SelectorTarget.HUNDO; FilterAlertType.NUNDO -> SelectorTarget.NUNDO; FilterAlertType.PVP -> SelectorTarget.PVP; FilterAlertType.RAID -> SelectorTarget.RAID_SPECIES; FilterAlertType.ROCKET -> SelectorTarget.ROCKET
+                                FilterAlertType.SPAWN -> SelectorTarget.SPAWN; FilterAlertType.COMMON -> SelectorTarget.COMMON; FilterAlertType.HUNDO -> SelectorTarget.HUNDO; FilterAlertType.NUNDO -> SelectorTarget.NUNDO; FilterAlertType.PVP -> SelectorTarget.PVP; FilterAlertType.RAID -> SelectorTarget.RAID_SPECIES; FilterAlertType.ROCKET -> SelectorTarget.ROCKET
                                 FilterAlertType.QUEST -> { showQuests = true; null }; else -> null
                             }
                         }, onSecondaryAdvanced = if (type == FilterAlertType.RAID) ({ selector = SelectorTarget.RAID_TIERS }) else null)
@@ -216,11 +216,11 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     }
     selector?.let { target ->
         val triple = when (target) {
-            SelectorTarget.SPAWN -> Triple("Spawn species", draft.spawnSpecies, catalog.spawnSpecies); SelectorTarget.RARE -> Triple("Rare species", draft.rareSpecies, catalog.spawnSpecies); SelectorTarget.HUNDO -> Triple("Hundo species", draft.hundoSpecies, catalog.spawnSpecies); SelectorTarget.NUNDO -> Triple("Nundo species", draft.nundoSpecies, catalog.spawnSpecies); SelectorTarget.PVP -> Triple("PvP species", draft.pvpSpecies, catalog.spawnSpecies); SelectorTarget.RAID_SPECIES -> Triple("Raid species", draft.raidSpecies, catalog.raidSpecies); SelectorTarget.RAID_TIERS -> Triple("Raid tiers", draft.raidTiers, catalog.raidTiers); SelectorTarget.ROCKET -> Triple("Rocket types", draft.rocketTypes, catalog.rocketTypes)
+            SelectorTarget.SPAWN -> Triple("IV spawn species", draft.spawnSpecies, catalog.spawnSpecies); SelectorTarget.COMMON -> Triple("Common species", draft.commonSpecies, catalog.spawnSpecies); SelectorTarget.HUNDO -> Triple("Hundo species", draft.hundoSpecies, catalog.spawnSpecies); SelectorTarget.NUNDO -> Triple("Nundo species", draft.nundoSpecies, catalog.spawnSpecies); SelectorTarget.PVP -> Triple("PvP species", draft.pvpSpecies, catalog.spawnSpecies); SelectorTarget.RAID_SPECIES -> Triple("Raid species", draft.raidSpecies, catalog.raidSpecies); SelectorTarget.RAID_TIERS -> Triple("Raid tiers", draft.raidTiers, catalog.raidTiers); SelectorTarget.ROCKET -> Triple("Rocket types", draft.rocketTypes, catalog.rocketTypes)
         }
         SelectionDialog(triple.first, triple.third, triple.second, { selector = null }, artwork = artwork,
             initialQuery = selectorQueries[target].orEmpty(), onQueryChanged = { selectorQueries = selectorQueries + (target to it) }) { selection ->
-            draft = when (target) { SelectorTarget.SPAWN -> draft.copy(spawnSpecies = selection); SelectorTarget.RARE -> draft.copy(rareSpecies = selection); SelectorTarget.HUNDO -> draft.copy(hundoSpecies = selection); SelectorTarget.NUNDO -> draft.copy(nundoSpecies = selection); SelectorTarget.PVP -> draft.copy(pvpSpecies = selection); SelectorTarget.RAID_SPECIES -> draft.copy(raidSpecies = selection); SelectorTarget.RAID_TIERS -> draft.copy(raidTiers = selection); SelectorTarget.ROCKET -> draft.copy(rocketTypes = selection) }; selector = null
+            draft = when (target) { SelectorTarget.SPAWN -> draft.copy(spawnSpecies = selection); SelectorTarget.COMMON -> draft.copy(commonSpecies = selection); SelectorTarget.HUNDO -> draft.copy(hundoSpecies = selection); SelectorTarget.NUNDO -> draft.copy(nundoSpecies = selection); SelectorTarget.PVP -> draft.copy(pvpSpecies = selection); SelectorTarget.RAID_SPECIES -> draft.copy(raidSpecies = selection); SelectorTarget.RAID_TIERS -> draft.copy(raidTiers = selection); SelectorTarget.ROCKET -> draft.copy(rocketTypes = selection) }; selector = null
         }
     }
     if (showQuests) QuestRulesDialog(draft.quests, catalog.quests, artwork, rewardThumbnails, { showQuests = false }) { draft = draft.copy(quests = it); showQuests = false }
@@ -277,7 +277,7 @@ private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onT
     val enabled = definition.alertTypes.contains(type.name)
     val summary = when (type) {
         FilterAlertType.SPAWN -> definition.spawnSpecies.summary("species")
-        FilterAlertType.RARE -> definition.rareSpecies.summary("species")
+        FilterAlertType.COMMON -> definition.commonSpecies.summary("species")
         FilterAlertType.HUNDO -> definition.hundoSpecies.summary("species")
         FilterAlertType.NUNDO -> definition.nundoSpecies.summary("species")
         FilterAlertType.PVP -> definition.pvpSpecies.summary("species")
@@ -299,7 +299,7 @@ private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onT
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (type in setOf(FilterAlertType.SPAWN, FilterAlertType.RARE, FilterAlertType.HUNDO, FilterAlertType.NUNDO, FilterAlertType.PVP, FilterAlertType.RAID, FilterAlertType.ROCKET, FilterAlertType.QUEST)) {
+            if (type in setOf(FilterAlertType.SPAWN, FilterAlertType.COMMON, FilterAlertType.HUNDO, FilterAlertType.NUNDO, FilterAlertType.PVP, FilterAlertType.RAID, FilterAlertType.ROCKET, FilterAlertType.QUEST)) {
                 TextButton(onClick = onAdvanced, enabled = enabled, modifier = Modifier.semantics { contentDescription = "Edit ${type.label} filters" }) { Text(if (type == FilterAlertType.RAID) "Species" else "Edit") }
                 onSecondaryAdvanced?.let { TextButton(onClick = it, enabled = enabled, modifier = Modifier.semantics { contentDescription = "Raid tiers" }) { Text("Tiers") } }
             }
@@ -307,7 +307,7 @@ private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onT
     }
 }
 
-private fun FilterAlertType.category(): AlertCategory = when (this) { FilterAlertType.SPAWN -> AlertCategory.SPAWN; FilterAlertType.RAID -> AlertCategory.RAID; FilterAlertType.QUEST -> AlertCategory.QUEST; FilterAlertType.ROCKET -> AlertCategory.ROCKET; FilterAlertType.KECLEON -> AlertCategory.KECLEON; FilterAlertType.HUNDO -> AlertCategory.HUNDO; FilterAlertType.NUNDO -> AlertCategory.NUNDO; FilterAlertType.PVP -> AlertCategory.PVP; FilterAlertType.RARE -> AlertCategory.RARE; FilterAlertType.WEATHER -> AlertCategory.WEATHER; FilterAlertType.OTHER -> AlertCategory.GENERIC }
+private fun FilterAlertType.category(): AlertCategory = when (this) { FilterAlertType.SPAWN -> AlertCategory.SPAWN; FilterAlertType.RAID -> AlertCategory.RAID; FilterAlertType.QUEST -> AlertCategory.QUEST; FilterAlertType.ROCKET -> AlertCategory.ROCKET; FilterAlertType.KECLEON -> AlertCategory.KECLEON; FilterAlertType.HUNDO -> AlertCategory.HUNDO; FilterAlertType.NUNDO -> AlertCategory.NUNDO; FilterAlertType.PVP -> AlertCategory.PVP; FilterAlertType.COMMON -> AlertCategory.COMMON; FilterAlertType.WEATHER -> AlertCategory.WEATHER; FilterAlertType.OTHER -> AlertCategory.GENERIC }
 
 @Composable
 internal fun SelectionDialog(title: String, candidates: List<String>, current: FilterSelection, onDismiss: () -> Unit, artwork: Map<String, String> = emptyMap(), initialQuery: String = "", onQueryChanged: (String) -> Unit = {}, onSave: (FilterSelection) -> Unit) {

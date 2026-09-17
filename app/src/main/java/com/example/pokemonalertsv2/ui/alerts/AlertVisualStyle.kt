@@ -16,7 +16,7 @@ enum class AlertCategory(val accentArgb: Long) {
     PVP(0xFF9B7BFF),
     RAID(0xFFFF7A45),
     QUEST(0xFF39B975),
-    RARE(0xFFE75AA7),
+    COMMON(0xFFE75AA7),
     SPAWN(0xFF45B8A5),
     ROCKET(0xFFE5484D),
     KECLEON(0xFF22B8A7),
@@ -36,7 +36,7 @@ fun resolveAlertVisualStyle(type: String?): AlertVisualStyle {
         "rocket" in normalized || "shadow" in normalized ->
             AlertVisualStyle("Rocket", "RKT", AlertCategory.ROCKET)
         "kecleon" in normalized -> AlertVisualStyle("Kecleon", "KCL", AlertCategory.KECLEON)
-        "rare" in normalized -> AlertVisualStyle("Rare", "RAR", AlertCategory.RARE)
+        "common" in normalized || "rare" in normalized -> AlertVisualStyle("Common", "COM", AlertCategory.COMMON)
         "spawn" in normalized -> AlertVisualStyle("Spawn", "SPN", AlertCategory.SPAWN)
         else -> AlertVisualStyle("Alert", "ALT", AlertCategory.GENERIC)
     }

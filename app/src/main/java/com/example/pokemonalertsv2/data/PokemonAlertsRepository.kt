@@ -127,6 +127,12 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             return emptySet()
         }
 
+        // A full alert that superseded a live sighting takes its place at once; a poll would
+        // otherwise show both until the next delta carries the removal.
+        alert.replacesAlertId?.takeIf { it != alert.id }?.let { replacedId ->
+            alertDao.deleteAlert("server-$replacedId", replacedId)
+        }
+
         if (!alert.isWeatherChange || alert.affectedAlerts.isEmpty()) {
             alertDao.insertAlerts(listOf(alert.toEntity()))
             return emptySet()

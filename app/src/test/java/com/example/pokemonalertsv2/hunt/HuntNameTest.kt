@@ -117,7 +117,7 @@ class HuntNameTest {
                 listOf(
                     FilterAlertType.HUNDO.name,
                     FilterAlertType.PVP.name,
-                    FilterAlertType.RARE.name
+                    FilterAlertType.COMMON.name
                 )
             )
         )
@@ -127,6 +127,6 @@ class HuntNameTest {
 
     @Test
     fun `an unnarrowed definition is named Everything`() {
-        assertEquals("Everything", huntName(FilterDefinition(), catalog))
+        assertEquals("Everything", huntName(FilterDefinition(alertTypes = FilterSelection.All), catalog))
     }
 }

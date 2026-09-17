@@ -21,7 +21,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PokebattlerMoveEntity::class,
         PokebattlerRaidTierEntity::class
     ],
-    version = 23,
+    version = 24,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -601,6 +601,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Migration 23 -> 24: live sightings (estimated despawn, and the sighting a full alert replaced). */
+        internal val MIGRATION_23_24 = object : Migration(23, 24) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `expiryVerified` INTEGER")
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `replacesAlertId` INTEGER")
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `live` INTEGER")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -637,7 +646,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_19_20,
                     MIGRATION_20_21,
                     MIGRATION_21_22,
-                    MIGRATION_22_23
+                    MIGRATION_22_23,
+                    MIGRATION_23_24
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

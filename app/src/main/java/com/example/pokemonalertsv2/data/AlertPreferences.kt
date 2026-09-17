@@ -63,8 +63,10 @@ private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanP
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
 private val JOURNEY_OVERLAY_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("journey_overlay_enabled")
 private val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
-private val ALERT_SYNC_REVISION_KEY = androidx.datastore.preferences.core.longPreferencesKey("alert_sync_revision")
-private val ALERT_SYNC_ETAG_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_sync_etag")
+// Suffixed since live sightings joined the list: an older cursor never received them, so the first
+// sync after the update must be a full snapshot rather than a delta.
+private val ALERT_SYNC_REVISION_KEY = androidx.datastore.preferences.core.longPreferencesKey("alert_sync_revision_live")
+private val ALERT_SYNC_ETAG_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_sync_etag_live")
 private val LAST_PUSH_RECEIVED_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_push_received_at")
 private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_alert_filter")
 
@@ -79,12 +81,12 @@ private val SHOW_HUNT_PATH_KEY = androidx.datastore.preferences.core.booleanPref
  * One-time read migration from the old single-select feed tab ([SELECTED_ALERT_FILTER_KEY])
  * to the multi-select feed category set. Kept as a plain string table so the data layer does
  * not depend on the UI enum; the names match [com.example.pokemonalertsv2.ui.alerts.AlertCategory].
- * RARES historically matched both the Rare and the plain Spawn tokens, so it widens to both.
+ * RARES historically matched both the Rare (now Common) and the plain Spawn tokens, so it widens to both.
  */
 private val LEGACY_FEED_FILTER_TO_CATEGORIES: Map<String, Set<String>> = mapOf(
     "RAIDS" to setOf("RAID"),
     "QUESTS" to setOf("QUEST"),
-    "RARES" to setOf("RARE", "SPAWN"),
+    "RARES" to setOf("COMMON", "SPAWN"),
     "HUNDOS" to setOf("HUNDO"),
     "PVP" to setOf("PVP"),
     "NUNDOS" to setOf("NUNDO"),
@@ -798,7 +800,7 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             val current = FilterStateCodec.decode(prefs[FILTER_STATE_KEY])
                 ?: migrateLegacyFilterState(prefs)
             val enabled = buildSet {
-                if (categories.spawns) addAll(listOf(FilterAlertType.SPAWN.name, FilterAlertType.RARE.name))
+                if (categories.spawns) add(FilterAlertType.SPAWN.name)
                 if (categories.raids) add(FilterAlertType.RAID.name)
                 if (categories.quests) add(FilterAlertType.QUEST.name)
                 if (categories.hundos) add(FilterAlertType.HUNDO.name)
@@ -1030,9 +1032,10 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 }
 
 internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocument {
-    val allTypes = FilterAlertType.entries.map(FilterAlertType::name).toSet()
+    // Common is opt-in, so a legacy "nothing muted" becomes every other type.
+    val allTypes = FilterAlertType.entries.filterNot { it == FilterAlertType.COMMON }.map(FilterAlertType::name).toSet()
     fun typesFromMuted(muted: Set<String>): FilterSelection {
-        if (muted.isEmpty()) return FilterSelection.All
+        if (muted.isEmpty()) return DEFAULT_FILTER_ALERT_TYPES
         val allowed = allTypes.filterNot { name -> muted.any { it.equals(name, ignoreCase = true) } }
         return if (allowed.isEmpty()) FilterSelection.None else FilterSelection.only(allowed)
     }
@@ -1057,7 +1060,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
 
     val feedSelection = preferences[FEED_CATEGORIES_KEY]?.let(::typesFromMuted)
         ?: LEGACY_FEED_FILTER_TO_CATEGORIES[preferences[SELECTED_ALERT_FILTER_KEY]]?.let(FilterSelection::only)
-        ?: FilterSelection.All
+        ?: DEFAULT_FILTER_ALERT_TYPES
     val mutedMap = preferences[MAP_CATEGORIES_KEY].orEmpty()
     val (areas, maxDistanceMeters, maxWalking) = legacyLocation()
 
@@ -1072,7 +1075,6 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
     val notificationTypes = buildSet {
         if (preferences[SPAWNS_NOTIFICATIONS_KEY] ?: true) {
             add(FilterAlertType.SPAWN.name)
-            add(FilterAlertType.RARE.name)
         }
         if (preferences[RAIDS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.RAID.name)
         if (preferences[QUESTS_NOTIFICATIONS_KEY] ?: true) add(FilterAlertType.QUEST.name)
@@ -1087,7 +1089,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
     }
     val notificationTypeSelection = when (notificationTypes.size) {
         0 -> FilterSelection.None
-        allTypes.size -> FilterSelection.All
+        allTypes.size -> DEFAULT_FILTER_ALERT_TYPES
         else -> FilterSelection.only(notificationTypes)
     }
     val notificationDefinition = FilterDefinition(
@@ -1096,7 +1098,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
         maxDistanceMeters = maxDistanceMeters,
         maxWalkingMinutes = maxWalking,
         spawnSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
-        rareSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
+        commonSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_SPAWN_SPECIES_KEY].orEmpty()),
         hundoSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_HUNDO_SPECIES_KEY].orEmpty()),
         nundoSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_NUNDO_SPECIES_KEY].orEmpty()),
         pvpSpecies = FilterSelection.fromLegacyAllowed(preferences[ALLOWED_PVP_SPECIES_KEY].orEmpty()),
@@ -1113,7 +1115,7 @@ internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocu
     val migratedProfiles = FilterPresets.decode(preferences[FILTER_PRESETS_KEY])
         .mapIndexed { index, preset ->
             val presetSelection = if (preset.categories.isNotEmpty()) typesFromMuted(preset.categories)
-                else LEGACY_FEED_FILTER_TO_CATEGORIES[preset.filter]?.let(FilterSelection::only) ?: FilterSelection.All
+                else LEGACY_FEED_FILTER_TO_CATEGORIES[preset.filter]?.let(FilterSelection::only) ?: DEFAULT_FILTER_ALERT_TYPES
             FilterProfile(
                 id = "legacy-${index}-${preset.name.hashCode().toUInt().toString(16)}",
                 name = FilterPresets.normalizeName(preset.name).take(MAX_FILTER_PROFILE_NAME),

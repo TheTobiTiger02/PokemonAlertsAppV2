@@ -28,7 +28,9 @@ class AlertWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         runCatching {
             val alerts = repository.fetchAlerts()
-            val newAlerts = repository.detectNewAlerts(alerts)
+            // Live sightings never notify from a poll: thousands arrive per hour, they would evict
+            // real alerts from the seen set, and the hunted species are pushed to their own topics.
+            val newAlerts = repository.detectNewAlerts(alerts.filterNot { it.isLiveSighting })
             if (newAlerts.isNotEmpty()) {
                 AlertNotifier.notifyAlerts(applicationContext, newAlerts)
                 repository.markAlertsAsSeen(newAlerts)
