@@ -59,7 +59,8 @@ data class SpawnpointEvent(val name: String, val eventType: String, val startAt:
 @Serializable data class CatchPathResponse(val status: String, val provider: String, val calculatedAt: String,
     val snappedPoints: List<CatchSnappedPoint>, val legs: List<CatchPathLeg>)
 
-class CatchApiException(message: String, val retryAtMillis: Long = 0) : Exception(message)
+/** [status] is the HTTP status behind the failure, or 0 when the call never reached the backend. */
+class CatchApiException(message: String, val retryAtMillis: Long = 0, val status: Int = 0) : Exception(message)
 
 fun <T> Response<T>.catchBody(now: Long = System.currentTimeMillis()): T {
     if (!isSuccessful) {
@@ -70,7 +71,7 @@ fun <T> Response<T>.catchBody(now: Long = System.currentTimeMillis()): T {
             404 -> "The backend does not yet support Catch routes. Deploy the path and spawn windows endpoints."
             429 -> "Routing is busy. Retry after the countdown."
             else -> "Route service unavailable (HTTP ${code()}). Please retry."
-        }, if (code() == 429 || raw != null) retryAt else 0)
+        }, if (code() == 429 || raw != null) retryAt else 0, code())
     }
     return body() ?: throw CatchApiException("Empty backend response.")
 }

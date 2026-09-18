@@ -38,7 +38,7 @@ class CatchRouteBackendUiTest {
                 controller.pause().join()
                 compose.onNodeWithText("Timing needs refreshing before visits resume.").performScrollTo().assertIsDisplayed()
                 assertTrue(controller.session.value!!.remaining.isEmpty())
-                assertEquals(plan.path, controller.session.value!!.displayItinerary.path)
+                assertEquals(plan.path, controller.session.value!!.itinerary.path)
             } finally { controller.stop() }
         }
     }

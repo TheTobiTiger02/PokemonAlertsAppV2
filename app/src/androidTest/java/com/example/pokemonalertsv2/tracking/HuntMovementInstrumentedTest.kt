@@ -23,6 +23,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.hunt.huntInRangeLines
 import com.example.pokemonalertsv2.hunt.undoLastCatch
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import kotlinx.coroutines.runBlocking
@@ -99,12 +100,12 @@ class HuntMovementInstrumentedTest {
         emit(fix(0.0))
         SystemClock.sleep(2100)
         emit(fix(0.0))
-        waitFor("in range") { body().contains("In range") }
+        waitFor("in range") { inRange() }
         assertEquals(target.uniqueId, journeys.currentDestination()?.uniqueId)
         emit(fix(-200.0))
-        waitFor("out of range after passing") { !body().contains("In range") }
+        waitFor("out of range after passing") { !inRange() }
         emit(fix(0.0))
-        waitFor("back in range") { body().contains("In range") }
+        waitFor("back in range") { inRange() }
         assertEquals(target.uniqueId, journeys.currentDestination()?.uniqueId)
     }
 
@@ -125,26 +126,26 @@ class HuntMovementInstrumentedTest {
         val old = fix(500.0)
         SystemClock.sleep(100)
         emit(fix(0.0))
-        waitFor("first in-range fix") { body().contains("In range") }
+        waitFor("first in-range fix") { inRange() }
         emit(old)
         SystemClock.sleep(300)
-        assertTrue("An older batch must not overwrite the current position: ${body()}", body().contains("In range"))
+        assertTrue("An older batch must not overwrite the current position: ${body()}", inRange())
     }
 
     @Test fun staleFixesCannotConfirmArrivalAndRecoveryWorks() = runBlocking<Unit> {
         startHunt()
         emit(fix(500.0))
         emit(fix(0.0).apply { elapsedRealtimeNanos -= 31_000_000_000L; time -= 31_000L })
-        assertFalse(body().contains("In range"))
+        assertFalse(inRange())
         emit(fix(0.0, 250f))
-        assertFalse(body().contains("In range"))
+        assertFalse(inRange())
         emit(fix(0.0, 150f))
-        waitFor("phone-grade position in range") { body().contains("In range") }
+        waitFor("phone-grade position in range") { inRange() }
         gps.availability(false)
-        assertTrue(body().contains("In range"))
+        assertTrue(inRange())
         gps.availability(true)
         emit(fix(200.0))
-        waitFor("recovered outside radius") { !body().contains("In range") }
+        waitFor("recovered outside radius") { !inRange() }
     }
 
     @Test fun notificationStopClearsBothStoresAndAnotherHuntCanStart() = runBlocking<Unit> {
@@ -202,14 +203,14 @@ class HuntMovementInstrumentedTest {
     @Test fun prolongedGpsLossMarksReadoutStaleAndRecovers() = runBlocking<Unit> {
         startHunt()
         emit(fix(0.0))
-        waitFor("in range before loss") { body().contains("In range") }
+        waitFor("in range before loss") { inRange() }
         gps.availability(false)
         // Allow two existing 30-second notification ticks; this tests real elapsed time.
         SystemClock.sleep(65_000)
         assertTrue("Old in-range state must not remain current indefinitely: ${body()}", body().contains("Waiting for precise GPS"))
         gps.availability(true)
         emit(fix(0.0))
-        waitFor("fresh position after recovery") { body().contains("In range") }
+        waitFor("fresh position after recovery") { inRange() }
     }
 
     @Test fun invalidatedHuntTargetIsReleased() = runBlocking<Unit> {
@@ -226,9 +227,9 @@ class HuntMovementInstrumentedTest {
         startHunt()
         emit(fix(400.0))
         emit(fix(0.0).apply { elapsedRealtimeNanos += 60_000_000_000L; time += 60_000 })
-        assertFalse("A future observation is not a usable current fix", body().contains("In range"))
+        assertFalse("A future observation is not a usable current fix", inRange())
         emit(fix(0.0))
-        waitFor("normal clock recovers") { body().contains("In range") }
+        waitFor("normal clock recovers") { inRange() }
     }
 
     @Test fun delayedDeliveryUsesObservationTimeForArrivalDwell() = runBlocking<Unit> {
@@ -261,7 +262,7 @@ class HuntMovementInstrumentedTest {
                 activity.moveToState(Lifecycle.State.RESUMED)
                 instrumentation.waitForIdleSync()
                 emit(fix(0.0))
-                waitFor("arrival after recreation on $style") { body().contains("In range") }
+                waitFor("arrival after recreation on $style") { inRange() }
                 var entered = false
                 activity.onActivity {
                     entered = it.enterPictureInPictureMode(android.app.PictureInPictureParams.Builder()
@@ -282,7 +283,7 @@ class HuntMovementInstrumentedTest {
             ActivityScenario.launch<MainActivity>(MainActivity.createMapIntent(context)).use { reopened ->
                 reopened.onActivity { assertFalse(it.isInPictureInPictureMode) }
                 emit(fix(100.0))
-                waitFor("out of range after PiP close and reopen on $style") { !body().contains("In range") }
+                waitFor("out of range after PiP close and reopen on $style") { !inRange() }
                 assertEquals(session?.startedAtMillis, hunts.currentSession()?.startedAtMillis)
                 assertEquals(target.uniqueId, journeys.currentDestination()?.uniqueId)
             }
@@ -352,6 +353,17 @@ class HuntMovementInstrumentedTest {
     private fun notification(): Notification? = context.getSystemService(NotificationManager::class.java)
         .activeNotifications.firstOrNull { it.id == ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID }?.notification
     private fun body() = notification()?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+    /**
+     * Whether the journey card reads as in range. During a hunt it no longer says "In range": it
+     * swaps in the reason you walked there (for the playback target, "CP 938"), built by
+     * [huntInRangeLines]; only an alert with nothing to add keeps "In range". Checking for the
+     * literal text made every in-range wait time out, and every out-of-range check pass
+     * whatever the state.
+     */
+    private fun inRange(): Boolean {
+        val alert = runBlocking { journeys.currentDestination()?.alert } ?: return false
+        return body().contains(huntInRangeLines(alert).firstOrNull() ?: "In range")
+    }
     private fun main(action: () -> Unit) = instrumentation.runOnMainSync(action)
     private fun shell(command: String) = instrumentation.uiAutomation.executeShellCommand(command).use {
         java.io.FileInputStream(it.fileDescriptor).readBytes()

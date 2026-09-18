@@ -15,6 +15,9 @@ import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterSelection
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.raidwatch.RaidWatchNotifications
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
@@ -62,6 +65,7 @@ class ArrivalTrackingServiceInstrumentedTest {
     @After
     fun cleanUp() {
         runBlocking {
+            HuntRepository.getInstance(context).stop()
             repository.stopTracking()
             alertPreferences.updateSpacialRendEnabled(false)
             RaidWatchController.stop(context)
@@ -359,6 +363,50 @@ class ArrivalTrackingServiceInstrumentedTest {
             ?.toString()
             .orEmpty()
         assertEquals("Mewtwo", title)
+    }
+
+    @Test
+    fun huntHoldsAtARaidItArrivedAtWhileRaidWatchRuns() = runBlocking {
+        // Ending the leg on raid arrival left the raid in the hunt's plan, so the hunt re-picked
+        // it at once, arrived again and looped every second or two, redrawing the floating map on
+        // every pass. In a hunt a raid now holds like any other target, until "Got it".
+        val latitude = 49.86
+        val longitude = 8.65
+        HuntRepository.getInstance(context)
+            .start("Raid hunt", FilterDefinition(areas = FilterSelection.only(listOf("RaidHoldOnly"))))
+        val destination = repository.startTracking(
+            PokemonAlert(
+                name = "Legendary Raid",
+                pokemon = "Mewtwo",
+                type = listOf("Raid"),
+                gym = "Central Gym",
+                hundoCP = HundoCP(level20 = 2387, level25 = 2984),
+                latitude = latitude,
+                longitude = longitude,
+                endTime = (System.currentTimeMillis() + 10 * 60_000L).toString()
+            )
+        )
+        ArrivalTrackingService.start(context)
+        assertTrue(fakeLocationSource.started.await(5, TimeUnit.SECONDS))
+
+        // Raid Watch still takes over the raid's Live Update, on the fixes of someone standing there...
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val deadline = SystemClock.elapsedRealtime() + 8_000L
+        while (manager?.activeNotifications.orEmpty().none { it.id == RaidWatchNotifications.NOTIFICATION_ID } &&
+            SystemClock.elapsedRealtime() < deadline) {
+            fakeLocationSource.emit(location(latitude, longitude))
+            SystemClock.sleep(500L)
+        }
+        assertTrue(manager?.activeNotifications.orEmpty().any { it.id == RaidWatchNotifications.NOTIFICATION_ID })
+
+        // ...but the hunt keeps walking the same leg: not cleared, not restarted.
+        repeat(6) {
+            fakeLocationSource.emit(location(latitude, longitude))
+            SystemClock.sleep(500L)
+            val held = repository.currentDestination()
+            assertEquals(destination.uniqueId, held?.uniqueId)
+            assertEquals("the leg must not be restarted", destination.startedAtMillis, held?.startedAtMillis)
+        }
     }
 
     private fun activeOngoingNotification(): Notification? =

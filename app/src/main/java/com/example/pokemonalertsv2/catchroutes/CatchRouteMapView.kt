@@ -8,8 +8,11 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.view.View
 import android.widget.FrameLayout
+import com.example.pokemonalertsv2.ui.alerts.MAP_PIP_REFIT_METERS
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
+import com.example.pokemonalertsv2.ui.alerts.MapPipFocus
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapStyleJson
+import com.example.pokemonalertsv2.ui.alerts.resolveMapPipFocus
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -40,6 +43,19 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     private var user: CatchPoint? = null
     private var progressMeters: Double? = null
     private var fitted: CatchItinerary? = null
+    /** The stop the trainer is walking to; what Follow frames alongside them. */
+    private var focus: CatchPoint? = null
+    /**
+     * Follow keeps the trainer and the next stop in view as they walk; otherwise the camera shows
+     * the whole route and stays where it is put. Panning or pinching by hand pauses Follow until
+     * [follow] is called again, so the map never fights a trainer who is looking elsewhere.
+     */
+    var following = false
+        private set
+    private var framedUser: CatchPoint? = null
+    private var framedFocus: CatchPoint? = null
+    /** Told when Follow starts or stops, including when a gesture pauses it. */
+    var onFollowChanged: ((Boolean) -> Unit)? = null
     var onPick: ((CatchPoint) -> Unit)? = null
     /** Tapped spawnpoints, by point id; nearest first. Takes precedence over [onPick]. */
     var onSpawnpointTap: ((List<String>) -> Unit)? = null
@@ -139,6 +155,12 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                 mv.getMapAsync { m ->
                     map = m
                     m.addOnCameraMoveListener { overlay.invalidate() }
+                    m.addOnCameraMoveStartedListener { reason ->
+                        if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE && following) {
+                            following = false
+                            onFollowChanged?.invoke(false)
+                        }
+                    }
                     m.addOnCameraIdleListener { overlay.invalidate() }
                     m.cameraPosition = CameraPosition.Builder().target(LatLng(settings.start.latitude, settings.start.longitude)).zoom(16.0).build()
                     m.addOnMapClickListener { p ->
@@ -173,7 +195,8 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                         style.addSource(GeoJsonSource("catch-user"))
                         style.addLayer(CircleLayer("catch-user-dot", "catch-user").withProperties(circleColor("#246BFD"), circleRadius(7f),
                             circleStrokeColor("#FFFFFF"), circleStrokeWidth(3f)))
-                        render(); fit(); onReady?.invoke()
+                        // Follow may have been asked for before the map existed.
+                        render(); if (following) frameWalk(force = true) else fit(); onReady?.invoke()
                     }
                 }
             }
@@ -184,14 +207,20 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     override fun onDetachedFromWindow() { if (started) { view?.onPause(); view?.onStop(); started = false }; super.onDetachedFromWindow() }
     fun destroy() { if (started) { view?.onPause(); view?.onStop(); started = false }; view?.onDestroy(); view = null; map = null }
 
-    /** [progressMeters] is how far along the route a guided session has walked; null for a preview. */
-    fun update(settings: CatchRouteSettings, itinerary: CatchItinerary?, location: CatchPoint?, progressMeters: Double? = null) {
-        if (this.settings == settings && this.itinerary === itinerary && user == location && this.progressMeters == progressMeters) return
+    /**
+     * [progressMeters] is how far along the route a guided session has walked, and [nextStop] where
+     * it is walking to; both null for a preview.
+     */
+    fun update(settings: CatchRouteSettings, itinerary: CatchItinerary?, location: CatchPoint?, progressMeters: Double? = null,
+        nextStop: CatchPoint? = null) {
+        if (this.settings == settings && this.itinerary === itinerary && user == location && this.progressMeters == progressMeters &&
+            focus == nextStop) return
         val movedStart = this.settings.start != settings.start
         val routeChanged = this.itinerary !== itinerary || this.settings.area != settings.area
-        this.settings = settings; this.itinerary = itinerary; user = location; this.progressMeters = progressMeters
+        this.settings = settings; this.itinerary = itinerary; user = location; this.progressMeters = progressMeters; focus = nextStop
         if (routeChanged || itinerary == null) render() else renderProgress()
-        if (itinerary != null && fitted !== itinerary) { fitted = itinerary; fit() }
+        if (following && itinerary != null) { fitted = itinerary; frameWalk(force = false) }
+        else if (itinerary != null && fitted !== itinerary) { fitted = itinerary; fit() }
         else if (itinerary == null && routeChanged && settings.area.isNotEmpty()) fit()
         else if (itinerary == null && movedStart) map?.animateCamera(CameraUpdateFactory.newLatLng(LatLng(settings.start.latitude, settings.start.longitude)))
     }
@@ -205,6 +234,45 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
 
     fun centerOn(point: CatchPoint, zoom: Double = 15.0) {
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), zoom))
+    }
+
+    /** Starts following the trainer and the next stop, and frames them now. */
+    fun follow() {
+        val changed = !following
+        following = true
+        frameWalk(force = true)
+        if (changed) onFollowChanged?.invoke(true)
+    }
+
+    /** Stops following and shows the whole route. */
+    fun overview() {
+        val changed = following
+        following = false
+        fit()
+        if (changed) onFollowChanged?.invoke(false)
+    }
+
+    /**
+     * Frames the trainer and the next stop: centred when they are close, both in view otherwise.
+     * Only redrawn once the trainer has moved [MAP_PIP_REFIT_METERS] or the next stop changed, so
+     * a stream of fixes does not keep the camera twitching.
+     */
+    private fun frameWalk(force: Boolean) {
+        val m = map ?: return
+        val here = user
+        val target = focus
+        if (!force && target == framedFocus && here != null && framedUser?.let { catchDistance(it, here) < MAP_PIP_REFIT_METERS } == true) return
+        framedUser = here; framedFocus = target
+        when {
+            here != null && target != null -> when (val framing = resolveMapPipFocus(here.latitude, here.longitude, target.latitude, target.longitude)) {
+                is MapPipFocus.Centre -> m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(framing.latitude, framing.longitude), framing.zoom))
+                is MapPipFocus.Fit -> m.animateCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder()
+                    .include(LatLng(framing.south, framing.west)).include(LatLng(framing.north, framing.east)).build(), (56 * density).toInt()))
+            }
+            // No stops left, or no fix yet: whichever of the two exists.
+            here != null || target != null -> (here ?: target)!!.let { m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(it.latitude, it.longitude), 17.0)) }
+            else -> fit()
+        }
     }
 
     fun fit() {

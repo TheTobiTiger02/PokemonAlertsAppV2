@@ -60,8 +60,10 @@
                 android:name="android.support.PARENT_ACTIVITY"
                 android:value=".MainActivity" />
         </activity>
+        <!-- No picture-in-picture: the route is followed in a movable, resizable overlay
+             window instead, which a PiP window cannot be. -->
         <activity android:name=".catchroutes.CatchRoutesActivity"
-            android:exported="false" android:supportsPictureInPicture="true"
+            android:exported="false"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
             android:theme="@style/Theme.PokemonAlertsV2" />
         <service android:name=".catchroutes.CatchRouteService" android:exported="false"

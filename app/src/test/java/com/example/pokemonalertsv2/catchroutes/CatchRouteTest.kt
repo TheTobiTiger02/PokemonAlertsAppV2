@@ -61,7 +61,6 @@ class CatchRouteTest {
         assertTrue(session.visits.isEmpty())
         session = progress.accept(session, p(100.0), 5.0, now + 2000, now + 2000)
         assertEquals(1, session.visits.size)
-        assertEquals(0, session.caught)
     }
     @Test fun `GPS gaps paused sessions stale fixes and poor accuracy cannot consume opportunities`() {
         val plan = CatchItinerary(settings(), path(0.0, 200.0), listOf(CatchEncounter(opportunity(), now + 100_000, 100.0)), emptyList())
@@ -246,18 +245,30 @@ class CatchRouteTest {
         assertTrue(error?.message.orEmpty().contains("predictions cannot enable them"))
     }
 
-    @Test fun `stale session hides targets and blocks visits until replacement`() {
+    @Test fun `a guided session keeps its stops on screen and keeps counting visits`() {
+        // Hiding the route while it was being rebuilt, every couple of minutes, is what made
+        // guidance unusable: the stops, the next-stop line and visit counting all stopped.
         val plan = CatchItinerary(settings(), path(0.0, 200.0), listOf(CatchEncounter(opportunity(), now, 100.0)), emptyList())
-        val session = CatchSession(plan, caught = 4, needsRefresh = true)
-        assertTrue(session.remaining.isEmpty())
-        assertTrue(session.displayItinerary.encounters.isEmpty())
-        assertEquals(plan.path, session.displayItinerary.path)
-        assertEquals("Timing needs refresh", session.availabilityReadout)
+        val session = CatchSession(plan)
+        assertEquals(1, session.remaining.size)
+        assertEquals(p(100.0), session.nextStop)
+        assertEquals("1 remaining", session.availabilityReadout)
         val progress = CatchRouteProgress()
         progress.accept(session, p(100.0), 5.0, now, now)
-        assertTrue(progress.accept(session, p(100.0), 5.0, now + 2500, now + 2500).visits.isEmpty())
-        assertEquals(1, session.copy(needsRefresh = false).remaining.size)
-        assertEquals(4, session.caught)
+        assertEquals(1, progress.accept(session, p(100.0), 5.0, now + 2500, now + 2500).visits.size)
+    }
+
+    @Test fun `guidance names the next stop and only advises a replan`() {
+        val plan = CatchItinerary(settings(), path(0.0, 200.0), listOf(CatchEncounter(opportunity(), now, 100.0)), emptyList())
+        val session = CatchSession(plan)
+        val plain = catchGuidance(session, now)
+        assertTrue(plain, plain.startsWith("Stop 1 · 100 m"))
+        assertTrue(plain, "out of date" !in plain)
+        // Out of date adds advice to the guidance; it never replaces the next stop.
+        val stale = catchGuidance(session, now, outOfDate = true)
+        assertTrue(stale, stale.startsWith("Stop 1 · 100 m") && stale.endsWith("Route out of date, tap Replan"))
+        val replanning = catchGuidance(session, now, outOfDate = true, replanning = true)
+        assertTrue(replanning, replanning.startsWith("Stop 1") && replanning.endsWith("Replanning…"))
     }
 
     @Test fun `old serialized settings and opportunities retain compatibility`() {

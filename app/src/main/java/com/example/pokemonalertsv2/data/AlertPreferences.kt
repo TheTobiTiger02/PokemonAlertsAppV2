@@ -26,6 +26,10 @@ private val FLOATING_MAP_X_KEY = androidx.datastore.preferences.core.intPreferen
 private val FLOATING_MAP_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_y")
 private val FLOATING_MAP_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_width")
 private val FLOATING_MAP_HEIGHT_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_height")
+private val CATCH_WINDOW_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("catch_window_x")
+private val CATCH_WINDOW_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("catch_window_y")
+private val CATCH_WINDOW_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("catch_window_width")
+private val CATCH_WINDOW_HEIGHT_KEY = androidx.datastore.preferences.core.intPreferencesKey("catch_window_height")
 private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("use_imperial_units")
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
@@ -266,6 +270,14 @@ interface AlertPreferencesStore {
     suspend fun getFloatingMapGeometry(): FloatingMapGeometry? = null
 
     suspend fun updateFloatingMapGeometry(x: Int, y: Int, width: Int, height: Int) = Unit
+
+    /**
+     * The same, for the catch route's own window. Kept apart from the hunt map's: the two
+     * windows hold different content and a trainer sizes them differently.
+     */
+    suspend fun getCatchRouteWindowGeometry(): FloatingMapGeometry? = null
+
+    suspend fun updateCatchRouteWindowGeometry(x: Int, y: Int, width: Int, height: Int) = Unit
 
     val lastSuccessfulAlertSyncMillis: Flow<Long>
     suspend fun updateLastSuccessfulAlertSyncMillis(timestampMillis: Long)
@@ -732,6 +744,27 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             prefs[FLOATING_MAP_Y_KEY] = y
             prefs[FLOATING_MAP_WIDTH_KEY] = width
             prefs[FLOATING_MAP_HEIGHT_KEY] = height
+        }
+    }
+
+    override suspend fun getCatchRouteWindowGeometry(): FloatingMapGeometry? {
+        val preferences = dataStore.data.first()
+        val width = preferences[CATCH_WINDOW_WIDTH_KEY] ?: return null
+        val height = preferences[CATCH_WINDOW_HEIGHT_KEY] ?: return null
+        return FloatingMapGeometry(
+            x = preferences[CATCH_WINDOW_X_KEY] ?: 0,
+            y = preferences[CATCH_WINDOW_Y_KEY] ?: 0,
+            width = width,
+            height = height
+        )
+    }
+
+    override suspend fun updateCatchRouteWindowGeometry(x: Int, y: Int, width: Int, height: Int) {
+        dataStore.edit { prefs ->
+            prefs[CATCH_WINDOW_X_KEY] = x
+            prefs[CATCH_WINDOW_Y_KEY] = y
+            prefs[CATCH_WINDOW_WIDTH_KEY] = width
+            prefs[CATCH_WINDOW_HEIGHT_KEY] = height
         }
     }
 

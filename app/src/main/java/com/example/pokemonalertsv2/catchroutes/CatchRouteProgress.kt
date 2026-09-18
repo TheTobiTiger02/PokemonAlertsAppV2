@@ -8,7 +8,7 @@ class CatchRouteProgress {
     private var candidates = emptyMap<String, Long>()
     fun reset() { previousAt = 0; candidates = emptyMap() }
     fun accept(session: CatchSession, point: CatchPoint, accuracy: Double, fixAt: Long, now: Long): CatchSession {
-        if (session.paused || session.finished || session.needsRefresh || !point.valid || !accuracy.isFinite() || accuracy !in 0.0..40.0 ||
+        if (session.paused || session.finished || !point.valid || !accuracy.isFinite() || accuracy !in 0.0..40.0 ||
             now - fixAt !in 0..10_000 || fixAt <= previousAt || fixAt < session.itinerary.settings.startAtMillis ||
             fixAt >= session.itinerary.settings.endAtMillis) return session
         val inRange = session.remaining.filter { e ->

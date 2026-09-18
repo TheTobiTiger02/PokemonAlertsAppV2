@@ -3,15 +3,12 @@ package com.example.pokemonalertsv2.catchroutes
 import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.app.PictureInPictureParams
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.net.Uri
-import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -50,7 +47,6 @@ import java.util.Locale
 
 class CatchRoutesActivity : ComponentActivity() {
     internal val model: CatchRoutesViewModel by viewModels()
-    private var pip by mutableStateOf(false)
     private var pendingFollow = false
     private var locating: CancellationTokenSource? = null
     private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -91,14 +87,15 @@ class CatchRoutesActivity : ComponentActivity() {
         }
     }
     override fun onDestroy() { locating?.cancel(); super.onDestroy() }
-    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig); pip = isInPictureInPictureMode
-    }
-    private fun smallMap() {
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-            runCatching { enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(4, 3)).build()) }
-                .onFailure { model.report("Small map is unavailable on this device.") }
-        } else model.report("This device does not support picture-in-picture.")
+
+    /**
+     * The floating window is the one way to follow a route outside the app. Unlike
+     * picture-in-picture it can be moved and resized, and it does not put a visible task on
+     * screen, which is what hides the promoted status-bar chip.
+     */
+    private fun floatingWindow() {
+        if (!Settings.canDrawOverlays(this)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        else startService(Intent(this, CatchRouteService::class.java).setAction("map"))
     }
     private fun pickTime() {
         val current = if (model.useNow) ZonedDateTime.now() else Instant.ofEpochMilli(model.settings.startAtMillis).atZone(ZoneId.systemDefault())
@@ -118,6 +115,7 @@ class CatchRoutesActivity : ComponentActivity() {
         val location by model.controller.location.collectAsStateWithLifecycle()
         val notice by model.controller.message.collectAsStateWithLifecycle()
         val refreshing by model.controller.recalculating.collectAsStateWithLifecycle()
+        val outOfDate by model.controller.outOfDate.collectAsStateWithLifecycle()
         val saved by model.store.setups.collectAsStateWithLifecycle(emptyList())
         var advanced by remember { mutableStateOf(false) }
         var picking by remember { mutableStateOf("start") }
@@ -130,25 +128,27 @@ class CatchRoutesActivity : ComponentActivity() {
         var deleteSetup by remember { mutableStateOf<CatchSetupEntity?>(null) }
         var mapFailed by remember { mutableStateOf(false) }
         var mapView by remember { mutableStateOf<CatchRouteMapView?>(null) }
-        LaunchedEffect(pip) { delay(500); mapView?.fit() }
         var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
         LaunchedEffect(Unit) { while (true) { delay(1000); now = System.currentTimeMillis() } }
-        val plan = active?.displayItinerary ?: model.itinerary
+        val plan = active?.itinerary ?: model.itinerary
         val settings = active?.itinerary?.settings ?: model.settings
         val encounters = active?.remaining ?: plan?.encounters.orEmpty()
         // Same grouping and order as the numbered stops on the map.
         val stops = remember(plan) { catchStops(plan?.encounters.orEmpty()) }
         val formState = rememberLazyListState()
         LaunchedEffect(model.itinerary) { if (model.itinerary != null) { editing = false; formState.scrollToItem(0) } }
+        // While walking a route the map follows the walk; planning shows the whole route.
+        val walking = active != null && active?.finished != true
+        LaunchedEffect(mapView, walking) { if (walking) mapView?.follow() }
         val showSettings = active == null && (plan == null || editing)
         Scaffold { padding ->
-            Column(Modifier.fillMaxSize().padding(if (pip) PaddingValues(0.dp) else padding)) {
-                if (!pip) Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { finish() }) { Text("Back") }
                     Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    TextButton(onClick = ::smallMap, enabled = plan != null) { Text("Small map") }
+                    TextButton(onClick = ::floatingWindow, enabled = active != null) { Text("Floating map") }
                 }
-                Box(Modifier.fillMaxWidth().weight(if (pip) 1f else if (showSettings) 0.8f else 1.25f)) {
+                Box(Modifier.fillMaxWidth().weight(if (showSettings) 0.8f else 1.25f)) {
                     AndroidView(factory = { ctx -> CatchRouteMapView(ctx).also { mapView = it; it.onFailure = { mapFailed = true } } },
                         modifier = Modifier.fillMaxSize().testTag("catch_route_map"),
                         update = { view ->
@@ -159,20 +159,24 @@ class CatchRoutesActivity : ComponentActivity() {
                                 val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
                                 details = ids.mapNotNull { byId[it] }.take(5).ifEmpty { null }
                             }
-                            view.update(settings, plan, location, active?.progressMeters)
+                            view.update(settings, plan, location, active?.progressMeters, active?.nextStop)
                             view.select(details?.map { it.pointId }?.toSet().orEmpty())
                         }, onRelease = { it.destroy() })
-                    if (!pip && plan != null) FilledTonalButton(onClick = { mapView?.fit() }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Fit") }
+                    if (plan != null) Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // Follow frames you and the next stop as you walk; Fit shows the whole route.
+                        if (active != null) FilledTonalButton(onClick = { mapView?.follow() },
+                            contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Follow") }
+                        FilledTonalButton(onClick = { mapView?.overview() },
+                            contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Fit") }
+                    }
                     if (mapFailed) Surface(Modifier.align(Alignment.Center)) { Text("Map unavailable. Check connection.", Modifier.padding(12.dp)) }
-                    if (pip) Surface(Modifier.align(Alignment.TopCenter)) { Text("${active?.availabilityReadout ?: "${encounters.size} potential"} · ${active?.caught ?: 0} caught", Modifier.padding(6.dp), style = MaterialTheme.typography.labelSmall) }
-                    else if (showSettings && !settings.fixed) Surface(Modifier.align(Alignment.BottomCenter).padding(8.dp), tonalElevation = 4.dp, shape = MaterialTheme.shapes.small) {
+                    if (showSettings && !settings.fixed) Surface(Modifier.align(Alignment.BottomCenter).padding(8.dp), tonalElevation = 4.dp, shape = MaterialTheme.shapes.small) {
                         Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                if (!pip) LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
+                LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
                     verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp)) {
-                    if (active != null) item { SessionCard(active!!, settings, refreshing, notice) }
+                    if (active != null) item { SessionCard(active!!, settings, refreshing, outOfDate, notice) }
                     else if (plan != null && !editing) item {
                         RouteSummary(plan, encounters, onStart = {
                             if (!fineLocation() || (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@CatchRoutesActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)) { pendingFollow = true; permissions.launch(permissionNames()) }
@@ -192,7 +196,7 @@ class CatchRoutesActivity : ComponentActivity() {
                         }
                     }
                     if (plan != null && !showSettings) {
-                        item { Text(if (active?.needsRefresh == true) "Timing needs refresh" else "Stops", style = MaterialTheme.typography.titleMedium) }
+                        item { Text("Stops", style = MaterialTheme.typography.titleMedium) }
                         itemsIndexed(stops) { index, group ->
                             val visited = active != null && group.all { e -> active!!.wasVisited(e.opportunity) }
                             val previousMeters = stops.getOrNull(index - 1)?.first()?.meters ?: 0.0
@@ -253,28 +257,25 @@ class CatchRoutesActivity : ComponentActivity() {
     }
 
     @OptIn(ExperimentalLayoutApi::class)
-    @Composable private fun SessionCard(session: CatchSession, settings: CatchRouteSettings, refreshing: Boolean, notice: String?) {
+    @Composable private fun SessionCard(session: CatchSession, settings: CatchRouteSettings, refreshing: Boolean, outOfDate: Boolean, notice: String?) {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(session.itinerary.settings.name, style = MaterialTheme.typography.titleLarge)
                 if (session.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
-                Text("${session.visits.count { !it.skipped }} visited · ${session.caught} caught · ${session.availabilityReadout}")
-                if (session.needsRefresh && !session.finished) Text("Timing needs refreshing before visits resume.", color = MaterialTheme.colorScheme.error)
+                Text("${session.visits.count { !it.skipped }} visited · ${session.availabilityReadout}")
+                // Advice only: the route changes when the trainer taps Recalculate, never on its own.
+                if (outOfDate && !session.finished && !refreshing) Text("Route out of date: a stop has despawned or you left the route. Tap Recalculate for a new one.",
+                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
                 notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { model.controller.caught(1) }, modifier = Modifier.weight(1f)) { Text("+ Catch") }
+                    Button(onClick = ::floatingWindow, modifier = Modifier.weight(1f)) { Text("Floating map") }
                     OutlinedButton(onClick = { model.controller.pause() }, enabled = !session.finished) { Text(if (session.paused) "Resume" else "Pause") }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { model.controller.caught(-1) }) { Text("− Catch") }
                     TextButton(onClick = { model.controller.skip() }) { Text("Skip stop") }
                     TextButton(onClick = { model.controller.undo() }) { Text("Undo") }
                     TextButton(onClick = { model.controller.recalculate() }, enabled = !refreshing && !session.finished) { Text("Recalculate") }
-                    TextButton(onClick = {
-                        if (!Settings.canDrawOverlays(this@CatchRoutesActivity)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                        else startService(Intent(this@CatchRoutesActivity, CatchRouteService::class.java).setAction("map"))
-                    }) { Text("Floating map") }
                     TextButton(onClick = { openInGoogleMaps(session.itinerary) }) { Text("Google Maps") }
                     TextButton(onClick = { lifecycleScope.launch { model.controller.stop() } }) { Text("Stop route") }
                 }

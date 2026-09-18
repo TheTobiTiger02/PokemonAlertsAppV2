@@ -170,18 +170,16 @@ fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchW
 @Serializable data class CatchSession(
     val itinerary: CatchItinerary,
     val visits: List<CatchVisit> = emptyList(),
-    val caught: Int = 0,
     val paused: Boolean = false,
-    val needsRefresh: Boolean = false,
     val progressMeters: Double = 0.0,
     val undoVisits: List<CatchVisit>? = null,
-    val undoCaught: Int? = null,
     val finished: Boolean = false,
 ) {
     fun wasVisited(opportunity: SpawnOpportunity): Boolean = visits.any { sameCycle(it.opportunity, opportunity, it.visitedAt) }
-    val remaining: List<CatchEncounter> get() = if (needsRefresh) emptyList() else itinerary.encounters.filterNot { wasVisited(it.opportunity) }
-    val displayItinerary: CatchItinerary by lazy { if (needsRefresh) itinerary.copy(encounters = emptyList()) else itinerary }
-    val availabilityReadout: String get() = if (needsRefresh) "Timing needs refresh" else "${remaining.size} remaining"
+    val remaining: List<CatchEncounter> get() = itinerary.encounters.filterNot { wasVisited(it.opportunity) }
+    val availabilityReadout: String get() = "${remaining.size} remaining"
+    /** Where the trainer is walking to next: the earliest stop along the route still ahead. */
+    val nextStop: CatchPoint? get() = remaining.minByOrNull { it.meters }?.opportunity?.point
 }
 
 // Use the actual visit instant to reconcile an expiry correction without consuming a later hourly cycle.

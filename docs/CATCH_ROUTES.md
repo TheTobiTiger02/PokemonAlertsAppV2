@@ -10,7 +10,7 @@ An hourly despawn anchor alone does not establish when a spawn starts. Observed 
 
 The optimizer scores time spent within each spawn's 40 m circle, or 80 m with Spacial Rend, along actual pedestrian geometry. Each absolute opportunity ID counts once. Later hourly cycles can count separately. Null matrix edges are unavailable. The optimizer does not subtract radii from successive walking legs or invent straight-line connections.
 
-Generation uses three bounded candidate sets, directed matrices and beam search, then bounded insertion, removal and reordering, geometry validation and detour refinements. All fetched opportunities can score along a path, including opportunities outside candidate anchors. The generation budget is eight routing requests and 30 seconds. This heuristic does not prove a global optimum.
+Generation uses three bounded candidate sets of up to 48 anchors, directed matrices and a width-96 beam search, then bounded insertion, removal and reordering, geometry validation and detour refinements. All fetched opportunities can score along a path, including opportunities outside candidate anchors. The generation budget is eight routing requests and 30 seconds. A backend still limited to 30 matrix points is answered with a 28-anchor pool. This heuristic does not prove a global optimum.
 
 The order search also counts spawns a leg walks past, not only the circle at each stop, and plans to 97 % of the walking budget so the routed path, which rarely equals the matrix sum, still fits. `CatchRouteBenchmarkTest` (opt-in, `-Pcatch.bench.dir`) compares the planner with a slow reference search on recorded windows.
 
@@ -26,15 +26,17 @@ The preview draws one start-to-finish coloured line (walked part grey), screen-s
 
 Starting guidance replaces the active Hunt or arrival journey. Starting a Hunt or arrival journey stops Catch route guidance. Saved setups and session snapshots use their own Room database, `catch_routes.db`.
 
-Fresh, accurate fixes confirm visits after two seconds in range. GPS gaps do not imply visits; visits do not imply catches. Record catches with **+ Catch**, adjust with **− Catch**, or undo the last manual action. Pause keeps the session visible. Resume refreshes timing. Replanning preserves the original finish deadline and reconciles expiry corrections against visited points and times.
+Fresh, accurate fixes confirm visits after two seconds in range. GPS gaps do not imply visits. **Skip stop** retires the next stop and **Undo** restores it. Pause keeps the session visible.
 
-The notification opens the route. **Small map** uses Android picture-in-picture. **Floating map** requires display-over-other-apps permission; drag its header to move it. Stop guidance from the route screen. Every replan marks timing stale until a successful replacement. Network failures or empty availability retain the path with a retryable status, hide remaining opportunities across route surfaces, and pause automatic visits. Restored sessions require refreshed timing before recording visits. A deadline timer ends foreground guidance even without GPS; the finished session keeps its visit and manual catch totals. Session writes and ownership changes are serialized to prevent stale callbacks from restoring stopped routes.
+A route never changes on its own. When a stop still ahead has already despawned, or the trainer has been more than 60 m from the path for 20 seconds, guidance adds "Route out of date, tap Replan"; the stops stay on screen and visits keep counting. The 20-second check runs on a timer because fixes only arrive after 5 m of movement. **Replan** (or **Recalculate**) plans from the current position, keeps the original finish deadline, and leaves the old route in place until the new one exists. Switching Spacial Rend asks for a route planned with the new range. Restored sessions keep their route: stops are timed in absolute instants.
+
+The notification opens the route. **Floating map** requires display-over-other-apps permission; it is a movable, resizable overlay (drag the header, resize from the corner grip) that reopens where it was left. It leads with the next stop, its distance, arrival time, Pokémon count and despawn margin. While walking, the map follows the trainer and the next stop, re-framing every 15 m; panning pauses that, **Follow** resumes it, and **Route**/**Fit** shows the whole route. Stop guidance from the route screen. A deadline timer ends foreground guidance even without GPS. Session writes and ownership changes are serialized to prevent stale callbacks from restoring stopped routes.
 
 ## Backend
 
 The app uses `/api/spawnpoints/windows`, the modern catalogue envelope, `/api/routes/matrix`, and `/api/routes/path` on the configured alerts API host. Windows are not HTTP-cached. Catalogue ETags are query-specific. A revision conflict discards partial pages and permits two automatic restarts.
 
-The path endpoint accepts 2–30 ordered points and explicit pedestrian costing. It returns ordered legs with GeoJSON LineString geometry and snapped endpoints. Starts or finishes more than 25 m from their routed position must be moved onto a nearby walking path.
+The matrix endpoint accepts up to 50 points (Valhalla serves at most 2,500 cells per call). The path endpoint accepts 2–30 ordered points and explicit pedestrian costing. It returns ordered legs with GeoJSON LineString geometry and snapped endpoints. Starts or finishes more than 25 m from their routed position must be moved onto a nearby walking path.
 
 ## Verification
 

@@ -30,6 +30,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -128,7 +129,7 @@ class CatchRouteInstrumentedTest {
     }
 
     @Test
-    fun pipAndFloatingMapKeepGuidanceAlive() = runBlocking<Unit> {
+    fun floatingWindowKeepsGuidanceAlive() = runBlocking<Unit> {
         val oldOp = String(shell("appops get ${context.packageName} SYSTEM_ALERT_WINDOW"))
         val oldMode = Regex("SYSTEM_ALERT_WINDOW: (\\w+)").find(oldOp)?.groupValues?.get(1) ?: "default"
         try {
@@ -137,12 +138,8 @@ class CatchRouteInstrumentedTest {
             ActivityScenario.launch(CatchRoutesActivity::class.java).use { activity ->
                 activity.recreate()
                 instrumentation.waitForIdleSync()
-                var entered = false
-                activity.onActivity { entered = it.enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(4, 3)).build()) }
-                assertTrue(entered)
-                SystemClock.sleep(3000)
-                activity.onActivity { assertTrue(it.isInPictureInPictureMode) }
-                capture("catch-route-pip.png")
+                SystemClock.sleep(1500)
+                capture("catch-route-session.png")
                 assertNotNull(catchNotification())
             }
             shell("appops set ${context.packageName} SYSTEM_ALERT_WINDOW allow")
@@ -208,7 +205,7 @@ class CatchRouteInstrumentedTest {
     }
 
     @Test
-    fun activeSessionSnapshotPersistsVisitedAndCaughtState() = runBlocking<Unit> {
+    fun activeSessionSnapshotPersistsVisitedState() = runBlocking<Unit> {
         val plan = fixtureItinerary()
         controller.begin(plan)
         waitForSession("Catch route session started") { it?.itinerary == plan }
@@ -216,16 +213,11 @@ class CatchRouteInstrumentedTest {
 
         emitTimedFixes(plan.encounters.single().opportunity.point)
         waitForSession("timed fixes record one visit") { it?.visits?.size == 1 }
-        controller.caught(1)
-        waitForSession("manual catch persisted in memory") { it?.caught == 1 }
-        waitForStored("visited and caught snapshot persisted") {
-            it?.visits?.size == 1 && it.caught == 1
-        }
+        waitForStored("visited snapshot persisted") { it?.visits?.size == 1 }
 
         val restored = store.current()
         assertNotNull(restored)
         assertEquals(plan.encounters.single().opportunity.id, restored!!.visits.single().opportunity.id)
-        assertEquals(1, restored.caught)
     }
 
     @Test
@@ -252,33 +244,70 @@ class CatchRouteInstrumentedTest {
     }
 
     @Test
-    fun freshTimedFixesVisitWithoutAutomaticallyCatching() = runBlocking<Unit> {
+    fun freshTimedFixesConfirmTheVisit() = runBlocking<Unit> {
         val plan = fixtureItinerary("Timed fixes")
         controller.begin(plan)
         waitFor("Catch route fake location source started") { gps.callback != null }
         emitTimedFixes(plan.encounters.single().opportunity.point)
 
         waitForSession("fresh fixes confirm visit") { it?.visits?.size == 1 }
-        assertEquals(0, controller.session.value?.caught)
         assertFalse(controller.session.value?.visits?.single()?.skipped == true)
     }
 
     @Test
-    fun manualCatchCountAndUndoLeaveVisitStateIntact() = runBlocking<Unit> {
-        val plan = fixtureItinerary("Manual catch")
+    fun fixesNeverReplanAndLeavingTheRouteOnlyAdvises() = runBlocking<Unit> {
+        // Guidance used to rebuild the whole route on a fix every two minutes, or 30 s after
+        // leaving the path, and blank the stops meanwhile. Now fixes only ever advise.
+        val plan = fixtureItinerary("No automatic replans")
+        controller.begin(plan)
+        waitFor("Catch route fake location source started") { gps.callback != null }
+
+        // Well away from the 0-100 m path, for longer than a stray fix and past the old 30 s trigger.
+        val away = point(500.0)
+        val started = SystemClock.elapsedRealtime()
+        var flaggedAfter: Long? = null
+        while (SystemClock.elapsedRealtime() - started < 34_000L) {
+            main { gps.callback?.invoke(fix(away)) }
+            assertFalse("a fix must never start a replan", controller.recalculating.value)
+            if (flaggedAfter == null && controller.outOfDate.value) flaggedAfter = SystemClock.elapsedRealtime() - started
+            SystemClock.sleep(2_000L)
+        }
+        assertSame("the route must stay the one the trainer started", plan, controller.session.value?.itinerary)
+        assertEquals(1, controller.session.value?.remaining?.size)
+        assertNotNull("sustained time off the route must be flagged", flaggedAfter)
+        assertTrue("one stray fix must not flag the route (flagged after ${flaggedAfter}ms)", flaggedAfter!! >= 18_000L)
+
+        // Walking back onto the route clears the advice.
+        main { gps.callback?.invoke(fix(point(50.0))) }
+        waitFor("back on the route clears out of date") { !controller.outOfDate.value }
+    }
+
+    @Test
+    fun standingStillOffTheRouteIsStillFlagged() = runBlocking<Unit> {
+        // Fixes only arrive after 5 m of movement, so someone standing off the route sends one
+        // and then nothing. Waiting for a second fix meant they were never told.
+        controller.begin(fixtureItinerary("Standing off route"))
+        waitFor("Catch route fake location source started") { gps.callback != null }
+        main { gps.callback?.invoke(fix(point(500.0))) }
+        SystemClock.sleep(15_000L)
+        assertFalse("not flagged before it has lasted", controller.outOfDate.value)
+        waitFor("flagged with no further fixes", timeout = 10_000L) { controller.outOfDate.value }
+        assertFalse(controller.recalculating.value)
+    }
+
+    @Test
+    fun skipAndUndoLeaveVisitStateIntact() = runBlocking<Unit> {
+        val plan = fixtureItinerary("Skip and undo")
         controller.begin(plan)
         waitFor("Catch route notification posted") { catchNotification() != null }
 
-        val catchAction = catchNotification()!!.actions.first { it.title.toString() == "+ Catch" }
-        catchAction.actionIntent.send()
-        waitForSession("manual catch action increments count") { it?.caught == 1 }
-        assertEquals(0, controller.session.value?.visits?.size)
+        // The guidance notification offers only what does not cost play time.
+        assertEquals(listOf("Pause", "Map"), catchNotification()!!.actions.map { it.title.toString() })
 
-        emitTimedFixes(plan.encounters.single().opportunity.point)
-        waitForSession("automatic visit after manual action") { it?.visits?.size == 1 }
+        controller.skip()
+        waitForSession("skip retires the stop") { it?.visits?.size == 1 && it.visits.single().skipped }
         controller.undo()
-        waitForSession("undo removes manual catch") { it?.caught == 0 && it.undoCaught == null }
-        assertEquals(1, controller.session.value?.visits?.size)
+        waitForSession("undo restores the stop") { it?.visits?.isEmpty() == true }
     }
 
     @Test

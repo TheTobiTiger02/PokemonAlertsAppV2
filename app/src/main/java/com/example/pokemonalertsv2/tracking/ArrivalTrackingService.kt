@@ -737,9 +737,11 @@ class ArrivalTrackingService : Service() {
             ) return@launch
             // Arriving is not the end of a hunt — it is the moment the chip starts
             // earning its place, showing the CP or the stop name you came for. Hold
-            // the journey open until "Got it" retires this target. A raid is the
-            // exception: its Live Update has taken over the chip already.
-            if (huntActive && !raidLiveUpdateStarted) {
+            // the journey open until "Got it" retires this target. That includes a
+            // raid: Raid Watch runs alongside, but ending the leg here left the raid
+            // in the hunt's plan, so the hunt re-picked it at once, arrived again and
+            // looped every second or two, redrawing the floating map on each pass.
+            if (huntActive) {
                 lastInRange = true
                 updateOngoing(
                     destination = destination,

@@ -66,27 +66,21 @@ import kotlin.math.roundToInt
  * The floating map, hosted in a `WindowManager` overlay rather than in
  * picture-in-picture.
  *
- * The reason it is not PiP: Android hides a promoted-ongoing status bar chip
- * whenever the posting app's *task* is visible, and a PiP window is a visible
- * task — so the floating map and the live distance chip could never be on
- * screen at the same time. An overlay window is not a task, so both can.
- *
- * Two details are load-bearing and were the whole risk of this approach:
- *  - MapLibre defaults to a **SurfaceView**, which renders black in a
- *    translucent overlay window. [MapLibreMapOptions.textureMode] moves it to a
- *    TextureView, which composites normally, and the window is opaque.
- *  - `MapView` reads styled attributes, so it needs a themed context. The
- *    application context alone throws while inflating.
+ * [FloatingWindow] owns the window itself — why it is an overlay and not PiP, how it moves and
+ * resizes, and the two MapLibre details that make a map render in one. This class owns what is
+ * inside it: the map, the handle bar's controls and the markers.
  */
 internal class FloatingMapOverlay(context: Context) {
 
-    private val appContext = context.applicationContext
-    private val windowManager =
-        appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    private val window = FloatingWindow(context, FloatingWindow.Size(
+        widthDp = WIDTH_DP, heightDp = HEIGHT_DP,
+        minWidthDp = MIN_WIDTH_DP, minHeightDp = MIN_HEIGHT_DP,
+        maxWidthDp = MAX_WIDTH_DP, maxHeightDp = MAX_HEIGHT_DP,
+    ))
 
-    /** MapView inflates from theme attributes; the app context alone is not enough. */
-    private val themedContext =
-        ContextThemeWrapper(appContext, R.style.Theme_PokemonAlertsV2)
+    private val appContext = context.applicationContext
+
+    private val themedContext = window.themedContext
 
     private var root: FrameLayout? = null
     private var undoButton: TextView? = null
@@ -97,24 +91,12 @@ internal class FloatingMapOverlay(context: Context) {
     /** The same controller the in-app map drives; it is plain Kotlin, not Compose. */
     private val controller = OpenStreetMapController()
     private var lifecycle: OpenStreetMapLifecycleGuard? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
-
-    /** Where the trainer last dragged it, kept across shows within a session. */
-    private var savedX: Int? = null
-    private var savedY: Int? = null
-    private var savedWidth: Int? = null
-
     /** Set once the trainer pans or pinches; cleared by recentre and fit. */
     private var cameraAdjustedByHand = false
-    private var savedHeight: Int? = null
 
     /** Restores the geometry the trainer last left the window at. */
-    fun restoreGeometry(x: Int, y: Int, width: Int, height: Int) {
-        if (x >= 0) savedX = x
-        if (y >= 0) savedY = y
-        if (width > 0) savedWidth = width
-        if (height > 0) savedHeight = height
-    }
+    fun restoreGeometry(x: Int, y: Int, width: Int, height: Int) =
+        window.restoreGeometry(x, y, width, height)
 
     val isShowing: Boolean get() = root != null
 
@@ -173,7 +155,9 @@ internal class FloatingMapOverlay(context: Context) {
 
 
     /** Reported after a move or resize so the caller can persist the geometry. */
-    var onGeometryChanged: (x: Int, y: Int, width: Int, height: Int) -> Unit = { _, _, _, _ -> }
+    var onGeometryChanged: (x: Int, y: Int, width: Int, height: Int) -> Unit
+        get() = window.onGeometryChanged
+        set(value) { window.onGeometryChanged = value }
 
     fun show(onMapReady: (MapLibreMap) -> Unit = {}) {
         if (root != null || !canDraw(appContext)) return
@@ -233,7 +217,7 @@ internal class FloatingMapOverlay(context: Context) {
                 gravity = Gravity.BOTTOM or Gravity.START
                 setMargins(dp(6), 0, 0, dp(6))
             })
-            addView(buildResizeGrip(), FrameLayout.LayoutParams(
+            addView(window.buildResizeGrip(), FrameLayout.LayoutParams(
                 dp(GRIP_DP),
                 dp(GRIP_DP)
             ).apply {
@@ -242,20 +226,16 @@ internal class FloatingMapOverlay(context: Context) {
             })
         }
 
-        val params = buildLayoutParams()
-        runCatching { windowManager.addView(container, params) }
-            .onFailure {
-                // A revoked grant must never take the journey down with it.
-                Log.w(TAG, "Could not add the floating map", it)
-                runCatching { view.onDestroy() }
-                return
-            }
+        if (!window.show(container)) {
+            // A revoked grant must never take the journey down with it.
+            runCatching { view.onDestroy() }
+            return
+        }
 
         root = container
         mapView = view
         map = null
         lifecycle = guard
-        layoutParams = params
 
         guard.start()
         guard.resume()
@@ -415,15 +395,13 @@ internal class FloatingMapOverlay(context: Context) {
             guard.stop()
             guard.destroy()
         }
-        runCatching { windowManager.removeView(container) }
-            .onFailure { Log.w(TAG, "Could not remove the floating map", it) }
+        window.hide()
         root = null
         undoButton = null
         pauseButton = null
         mapView = null
         map = null
         lifecycle = null
-        layoutParams = null
     }
 
     /**
@@ -452,7 +430,7 @@ internal class FloatingMapOverlay(context: Context) {
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(6), 0, dp(6), 0)
         setBackgroundColor(0xFFF2F4F8.toInt())
-        setOnTouchListener(MoveListener())
+        window.dragWith(this)
         addView(controlButton("‹") { onPrevious() })
         addView(controlButton("✓") { onGotIt() })
         addView(controlButton("›") { onNext() })
@@ -522,23 +500,6 @@ internal class FloatingMapOverlay(context: Context) {
             isClickable = true
             setOnClickListener { onClick() }
         }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun buildResizeGrip(): View = TextView(themedContext).apply {
-        text = "◢"
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-        setTextColor(0xFF5B6472.toInt())
-        gravity = Gravity.CENTER
-        // Given the same chip as the map controls: a bare glyph over map tiles is
-        // invisible against half the places you might be standing.
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(0xF2FFFFFF.toInt())
-            setStroke(dp(1), 0x22000000)
-        }
-        elevation = dp(2).toFloat()
-        setOnTouchListener(ResizeListener())
-    }
 
     /**
      * Frames the trainer and their target together, reusing the same rule the
@@ -627,110 +588,7 @@ internal class FloatingMapOverlay(context: Context) {
         runCatching { mapView?.onLowMemory() }
     }
 
-    private fun buildLayoutParams(): WindowManager.LayoutParams =
-        WindowManager.LayoutParams(
-            savedWidth ?: dp(WIDTH_DP),
-            savedHeight ?: dp(HEIGHT_DP),
-            overlayType(),
-            // Not focusable so it never steals input from Pokemon GO; touch still
-            // reaches the window, which is what pan and pinch need.
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            // Opaque, not translucent: see the class note about SurfaceView.
-            PixelFormat.OPAQUE
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = savedX ?: dp(12)
-            y = savedY ?: dp(120)
-        }
-
-    /** Moves the window. Lives on the handle bar, never on the map. */
-    private inner class MoveListener : View.OnTouchListener {
-        private var downX = 0f
-        private var downY = 0f
-        private var startX = 0
-        private var startY = 0
-
-        @SuppressLint("ClickableViewAccessibility")
-        override fun onTouch(view: View, event: MotionEvent): Boolean {
-            val params = layoutParams ?: return false
-            return when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX
-                    downY = event.rawY
-                    startX = params.x
-                    startY = params.y
-                    // Claim the gesture: declining here is what broke the old drag.
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    params.x = startX + (event.rawX - downX).roundToInt()
-                    params.y = startY + (event.rawY - downY).roundToInt()
-                    applyLayout(params)
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    onGeometryChanged(params.x, params.y, params.width, params.height)
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    /** Resizes from the bottom-right corner, clamped so it cannot vanish or fill the screen. */
-    private inner class ResizeListener : View.OnTouchListener {
-        private var downX = 0f
-        private var downY = 0f
-        private var startWidth = 0
-        private var startHeight = 0
-
-        @SuppressLint("ClickableViewAccessibility")
-        override fun onTouch(view: View, event: MotionEvent): Boolean {
-            val params = layoutParams ?: return false
-            return when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX
-                    downY = event.rawY
-                    startWidth = params.width
-                    startHeight = params.height
-                    true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    params.width = (startWidth + (event.rawX - downX).roundToInt())
-                        .coerceIn(dp(MIN_WIDTH_DP), dp(MAX_WIDTH_DP))
-                    params.height = (startHeight + (event.rawY - downY).roundToInt())
-                        .coerceIn(dp(MIN_HEIGHT_DP), dp(MAX_HEIGHT_DP))
-                    applyLayout(params)
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    onGeometryChanged(params.x, params.y, params.width, params.height)
-                    true
-                }
-                else -> false
-            }
-        }
-    }
-
-    private fun applyLayout(params: WindowManager.LayoutParams) {
-        val container = root ?: return
-        runCatching { windowManager.updateViewLayout(container, params) }
-    }
-
-
-    @Suppress("DEPRECATION")
-    private fun overlayType(): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-    private fun dp(value: Int): Int = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP,
-        value.toFloat(),
-        appContext.resources.displayMetrics
-    ).roundToInt()
+    private fun dp(value: Int): Int = window.dp(value)
 
     /**
      * The number this pin wears, or null past [HUNT_ORDINAL_MAX].
@@ -797,6 +655,6 @@ internal class FloatingMapOverlay(context: Context) {
             onError = 0xFFFFFFFF.toInt()
         )
 
-        fun canDraw(context: Context): Boolean = Settings.canDrawOverlays(context)
+        fun canDraw(context: Context): Boolean = FloatingWindow.canDraw(context)
     }
 }

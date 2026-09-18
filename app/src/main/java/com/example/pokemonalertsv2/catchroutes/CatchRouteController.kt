@@ -24,15 +24,30 @@ class CatchRouteController private constructor(private val context: Context) {
     val message = MutableStateFlow<String?>(null)
     val location = MutableStateFlow<CatchPoint?>(null)
     val recalculating = MutableStateFlow(false)
+    /**
+     * The route no longer matches the walk: a stop still ahead has already despawned, or the
+     * trainer has been well away from the path for a while. Advice only -- the route changes
+     * when the trainer taps Replan, never on its own, because a guided walk that rebuilt itself
+     * every couple of minutes could not be followed.
+     */
+    val outOfDate = MutableStateFlow(false)
+    private var offPathSince: Long? = null
+    /**
+     * Confirms leaving the route once it has lasted [OFF_PATH_MILLIS]. A timer, not the next fix:
+     * fixes only arrive after 5 m of movement, so a trainer standing still off the route would
+     * otherwise never be told.
+     */
+    private var offPathCheck: Job? = null
     private val evaluator = CatchRouteProgress()
     private val mutex = Mutex()
     private var deadlineJob: Job? = null
     private var refreshJob: Job? = null
-    private var lastRefresh = 0L
     private var retryAfter = 0L
     private var lastPersist = 0L
     private var generation = 0L
-    private val restored = scope.launch { mutable.value = store.current()?.copy(needsRefresh = true); armDeadline() }
+    // Stops are timed in absolute instants, so a restored route is as valid as it was: any stop
+    // that despawned meanwhile shows up as out of date on the next fix.
+    private val restored = scope.launch { mutable.value = store.current(); armDeadline() }
 
     suspend fun ready() = restored.join()
     private suspend fun <T> command(block: suspend () -> T): T {
@@ -45,17 +60,16 @@ class CatchRouteController private constructor(private val context: Context) {
         ArrivalTrackingRepository.getInstance(context).stopTracking()
         context.stopService(Intent(context, ArrivalTrackingService::class.java))
         evaluator.reset()
-        lastRefresh = System.currentTimeMillis()
         retryAfter = 0
-        val stale = System.currentTimeMillis() - itinerary.settings.startAtMillis > 30_000
-        mutable.value = CatchSession(itinerary, needsRefresh = stale)
+        resetOutOfDate()
+        mutable.value = CatchSession(itinerary)
         persist()
         armDeadline()
         ContextCompat.startForegroundService(context, Intent(context, CatchRouteService::class.java))
     } }
     suspend fun stop() = command {
         cancelRefresh(); deadlineJob?.cancel(); deadlineJob = null
-        mutable.value = null; evaluator.reset(); store.clear()
+        mutable.value = null; evaluator.reset(); resetOutOfDate(); store.clear()
         // The service observes null and stops itself after fulfilling Android's foreground start.
         // Stopping a queued startForegroundService here can crash on rapid start/stop.
     }
@@ -63,18 +77,14 @@ class CatchRouteController private constructor(private val context: Context) {
         val s = mutable.value ?: return@command
         if (s.finished) return@command
         cancelRefresh()
-        mutable.value = s.copy(paused = !s.paused, needsRefresh = !s.paused || s.needsRefresh)
-        evaluator.reset(); persist()
-        if (s.paused) recalculateLocked()
-    } }
-    fun caught(delta: Int) = scope.launch { command {
-        mutable.value?.let { s -> mutable.value = s.copy(caught = (s.caught + delta).coerceAtLeast(0), undoCaught = s.caught, undoVisits = null); persist() }
+        mutable.value = s.copy(paused = !s.paused)
+        evaluator.reset(); clearOffPath(); persist()
     } }
     fun skip() = scope.launch { command {
         val s = mutable.value ?: return@command
         val next = s.remaining.firstOrNull() ?: return@command
         val group = s.remaining.takeWhile { it.meters - next.meters < 25 }
-        mutable.value = s.copy(visits = s.visits + group.map { CatchVisit(it.opportunity, it.arrivalMillis, skipped = true) }, undoCaught = s.caught, undoVisits = s.visits)
+        mutable.value = s.copy(visits = s.visits + group.map { CatchVisit(it.opportunity, it.arrivalMillis, skipped = true) }, undoVisits = s.visits)
         persist()
     } }
     fun undo() = scope.launch { command {
@@ -82,14 +92,15 @@ class CatchRouteController private constructor(private val context: Context) {
             val visits = s.undoVisits?.let { previous ->
                 previous + s.visits.filter { !it.skipped && it !in previous }
             } ?: s.visits
-            mutable.value = s.copy(visits = visits, caught = s.undoCaught ?: s.caught, undoVisits = null, undoCaught = null)
+            mutable.value = s.copy(visits = visits, undoVisits = null)
             persist()
         }
     } }
     fun setRadius(enabled: Boolean) = scope.launch { command {
         val s = mutable.value ?: return@command
         cancelRefresh()
-        mutable.value = s.copy(itinerary = s.itinerary.copy(settings = s.itinerary.settings.copy(spacialRend = enabled)), needsRefresh = true)
+        mutable.value = s.copy(itinerary = s.itinerary.copy(settings = s.itinerary.settings.copy(spacialRend = enabled)))
+        // Switching the range is the trainer asking for a route planned with it.
         persist(); evaluator.reset(); recalculateLocked()
     } }
     suspend fun onFix(fix: Location) = command {
@@ -109,8 +120,14 @@ class CatchRouteController private constructor(private val context: Context) {
         }
         if (s.paused || s.finished || now < s.itinerary.settings.startAtMillis) return@command
         val missed = updated.remaining.any { it.opportunity.despawnAt <= now }
-        val offPath = s.itinerary.path.zipWithNext().none { (a, b) -> catchCircleInterval(a.point, b.point, p, 60.0) != null }
-        if (s.needsRefresh || now - lastRefresh > 120_000 || ((missed || offPath) && now - lastRefresh > 30_000)) recalculateLocked()
+        val offPath = s.itinerary.path.zipWithNext().none { (a, b) -> catchCircleInterval(a.point, b.point, p, OFF_PATH_METERS) != null }
+        // One stray fix is not leaving the route; only a sustained stretch away from it is.
+        if (!offPath) clearOffPath()
+        else if (offPathSince == null) {
+            offPathSince = now
+            offPathCheck = scope.launch { delay(OFF_PATH_MILLIS); command { if (offPathSince != null) outOfDate.value = true } }
+        }
+        outOfDate.value = missed || offPathSince?.let { now - it >= OFF_PATH_MILLIS } == true
     }
     fun recalculate() = scope.launch { command { recalculateLocked() } }
     private fun recalculateLocked() {
@@ -120,9 +137,7 @@ class CatchRouteController private constructor(private val context: Context) {
         if (refreshJob?.isActive == true || now < retryAfter || s.paused || s.finished) return
         val remainingMinutes = kotlin.math.ceil((s.itinerary.settings.endAtMillis - now) / 60_000.0).toInt()
         if (remainingMinutes <= 0) return
-        lastRefresh = now
-        mutable.value = s.copy(needsRefresh = true)
-        evaluator.reset()
+        // The current route stays on screen, and keeps counting visits, until the new one exists.
         val epoch = generation
         refreshJob = scope.launch {
             recalculating.value = true
@@ -138,8 +153,8 @@ class CatchRouteController private constructor(private val context: Context) {
                 command {
                     val current = mutable.value
                     if (epoch == generation && current != null) {
-                        mutable.value = current.copy(itinerary = plan, needsRefresh = false, progressMeters = 0.0)
-                        evaluator.reset(); message.value = null; persist()
+                        mutable.value = current.copy(itinerary = plan, progressMeters = 0.0)
+                        evaluator.reset(); resetOutOfDate(); message.value = null; persist()
                     }
                 }
             } catch (e: CancellationException) { throw e }
@@ -154,6 +169,8 @@ class CatchRouteController private constructor(private val context: Context) {
             } finally { withContext(NonCancellable) { command { if (epoch == generation) recalculating.value = false } } }
         }
     }
+    private fun clearOffPath() { offPathSince = null; offPathCheck?.cancel(); offPathCheck = null }
+    private fun resetOutOfDate() { outOfDate.value = false; clearOffPath() }
     private fun cancelRefresh() {
         generation++; refreshJob?.cancel(); refreshJob = null; recalculating.value = false
     }
@@ -172,12 +189,16 @@ class CatchRouteController private constructor(private val context: Context) {
         if (!s.finished && System.currentTimeMillis() >= s.itinerary.settings.endAtMillis) {
             cancelRefresh(); evaluator.reset()
             mutable.value = s.copy(paused = true, finished = true)
-            message.value = "Session time finished. ${s.visits.count { !it.skipped }} visited · ${s.caught} caught."
+            message.value = "Session time finished. ${s.visits.count { !it.skipped }} visited."
             persist()
         }
     }
     private suspend fun persist() { mutable.value?.let { store.write(it) }; lastPersist = System.currentTimeMillis() }
     companion object {
+        /** Further than this from every leg counts as away from the route. */
+        private const val OFF_PATH_METERS = 60.0
+        /** And for this long; GPS jitter near a leg must not call a route out of date. */
+        private const val OFF_PATH_MILLIS = 20_000L
         @Volatile private var instance: CatchRouteController? = null
         fun get(context: Context): CatchRouteController = instance ?: synchronized(this) { instance ?: CatchRouteController(context.applicationContext).also { instance = it } }
     }

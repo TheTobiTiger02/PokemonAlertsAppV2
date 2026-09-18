@@ -7,6 +7,24 @@ import kotlinx.coroutines.*
 import kotlin.coroutines.coroutineContext
 import kotlin.math.*
 
+/**
+ * Points the backend accepts in one `POST /api/routes/matrix`. Every stop candidate the order
+ * search may choose between travels in that one matrix, so this number bounds how many spawn
+ * windows a route can weigh against each other. A backend still on the older limit answers 400,
+ * which the planner treats as a signal to ask again with a smaller pool.
+ */
+internal const val CATCH_MATRIX_MAX_POINTS = 50
+internal const val CATCH_MATRIX_FALLBACK_POINTS = 30
+
+/** Points the backend accepts in one `POST /api/routes/path`; only the chosen stops are routed. */
+internal const val CATCH_PATH_MAX_POINTS = 30
+
+/** Candidate anchors that fit one matrix beside the start and the finish. */
+internal fun catchAnchorCap(matrixPoints: Int) = matrixPoints - 2
+
+/** Stops one routed path can carry beside the start and the finish. */
+internal const val CATCH_MAX_STOPS = CATCH_PATH_MAX_POINTS - 2
+
 class CatchRoutePlanner(private val service: CatchRoutesService) {
     private val availability = SpawnAvailabilityRepository(service)
 
@@ -25,7 +43,7 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
         var requests = 0
         var leftArea = false
         suspend fun path(points: List<CatchPoint>, data: SpawnAvailability): CatchItinerary? {
-            if (requests >= 8 || points.size !in 2..30) return null
+            if (requests >= 8 || points.size !in 2..CATCH_PATH_MAX_POINTS) return null
             requests++
             val request = request(points)
             val response = service.path(request).catchBody()
@@ -51,16 +69,30 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
             val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
             if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) "No usable spawn windows. ${data.restrictedPointCount} spawnpoints require live confirmation; predictions cannot enable them." else "No usable spawn windows in this area and time. Try another start or enable predictions.")
             val groups = candidateGroups(settings, data.opportunities)
+            var matrixPoints = CATCH_MATRIX_MAX_POINTS
             for (seed in 0..2) {
                 coroutineContext.ensureActive()
                 try {
                     progress("Optimizing walking route ${seed + 1} of 3")
-                    val anchors = selectCandidates(groups, settings.start, seed)
-                    val points = listOf(settings.start) + anchors.map { it.point } + listOfNotNull(settings.destination)
+                    var anchors = selectCandidates(groups, settings.start, seed, catchAnchorCap(matrixPoints))
+                    var points = listOf(settings.start) + anchors.map { it.point } + listOfNotNull(settings.destination)
                     if (points.size < 2) continue
                     requests++
-                    val request = request(points)
-                    val matrix = service.matrix(request).catchBody()
+                    var request = request(points)
+                    val matrix = try {
+                        service.matrix(request).catchBody()
+                    } catch (e: CatchApiException) {
+                        // A backend still on the older thirty-point limit rejects the wider pool. Ask
+                        // once more with a pool it accepts, and keep that size for the later seeds.
+                        if (e.status != 400 || matrixPoints <= CATCH_MATRIX_FALLBACK_POINTS || requests >= 8) throw e
+                        matrixPoints = CATCH_MATRIX_FALLBACK_POINTS
+                        anchors = selectCandidates(groups, settings.start, seed, catchAnchorCap(matrixPoints))
+                        points = listOf(settings.start) + anchors.map { it.point } + listOfNotNull(settings.destination)
+                        if (points.size < 2) continue
+                        requests++
+                        request = request(points)
+                        service.matrix(request).catchBody()
+                    }
                     val costs = validateCatchMatrix(matrix, request)
                     val legs = CatchLegCoverage(settings, points, data.opportunities)
                     val budget = settings.walkingBudgetMeters * CATCH_ORDER_BUDGET_SHARE
@@ -130,7 +162,8 @@ internal fun candidateGroups(settings: CatchRouteSettings, opportunities: List<S
         .sortedByDescending { it.opportunities.sumOf { o -> o.expectedCatch } / (1 + catchDistance(settings.start, it.point) / 1000) }
 }
 
-internal fun selectCandidates(groups: List<CatchAnchor>, start: CatchPoint, seed: Int): List<CatchAnchor> {
+internal fun selectCandidates(groups: List<CatchAnchor>, start: CatchPoint, seed: Int,
+    cap: Int = catchAnchorCap(CATCH_MATRIX_MAX_POINTS)): List<CatchAnchor> {
     val ordered = when (seed) {
         1 -> groups.sortedByDescending { it.opportunities.sumOf { o -> o.expectedCatch } / (1 + catchDistance(start, it.point) / 250) }
         2 -> groups.groupBy { floor((atan2(it.point.latitude - start.latitude, it.point.longitude - start.longitude) + PI) / (PI / 4)).toInt() }
@@ -140,7 +173,7 @@ internal fun selectCandidates(groups: List<CatchAnchor>, start: CatchPoint, seed
     val result = mutableListOf<CatchAnchor>()
     for (g in ordered) {
         if (result.none { catchDistance(it.point, g.point) < 30 }) result += g
-        if (result.size == 28) break
+        if (result.size == cap) break
     }
     return result
 }
@@ -220,8 +253,14 @@ internal class CatchLegCoverage(private val settings: CatchRouteSettings, privat
 internal const val CATCH_ORDER_BUDGET_SHARE = 0.97
 
 
+/**
+ * The beam's width is paired with the candidate pool: a wider pool only pays when the beam is
+ * wide enough to keep its better states. Measured on recorded Alsbach and Darmstadt windows,
+ * 48 candidates at width 96 find 2.6% more expected catches than 28 at width 48, and width 128
+ * adds only a further 0.1% for another third of the search time.
+ */
 internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>,
-    width: Int = 48, depth: Int = 28, legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): List<Int> {
+    width: Int = 96, depth: Int = CATCH_MAX_STOPS, legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): List<Int> {
     data class State(val order: List<Int>, val covered: Set<String>, val expected: Double, val meters: Double, val waitMillis: Long = 0)
     val finishIndex = if (settings.destination != null) anchors.size + 1 else null
     fun finishCost(s: State): Double? = finishIndex?.let { costs[s.order.lastOrNull()?.plus(1) ?: 0][it] } ?: if (finishIndex == null) 0.0 else null
@@ -312,7 +351,7 @@ internal suspend fun improveCatchOrder(settings: CatchRouteSettings, anchors: Li
             consider(base.filterIndexed { index, _ -> index != i })
             for (j in i + 1 until base.size) consider(base.take(i) + base.subList(i, j + 1).reversed() + base.drop(j + 1))
         }
-        if (base.size < 28) for (anchor in anchors.indices) for (at in 0..base.size) {
+        if (base.size < CATCH_MAX_STOPS) for (anchor in anchors.indices) for (at in 0..base.size) {
             if (base.getOrNull(at - 1) != anchor && base.getOrNull(at) != anchor)
                 consider(base.take(at) + anchor + base.drop(at))
         }
