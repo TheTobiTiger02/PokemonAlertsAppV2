@@ -45,8 +45,10 @@ fun buildAlertGlanceMetadata(
     distanceText: String? = null,
     walkingText: String? = null,
     includeCategory: Boolean = true,
+    isInRange: Boolean = false,
     separator: String = " • "
 ): String = buildList {
+    if (isInRange) add("In range")
     alert.displayCp?.let { add("CP $it") }
     // Glance lines are single-line, so unconfirmed weather gets the compact caveat rather
     // than a second line of its own.

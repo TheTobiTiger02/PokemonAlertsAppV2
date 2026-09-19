@@ -385,6 +385,13 @@ internal fun AlertCard(
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
+                    if (distanceInfo.isInRange) {
+                        AlertPill(
+                            text = "In range",
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                     val travelText = listOfNotNull(
                         distanceInfo.distanceText?.takeIf { it.isNotBlank() },
                         distanceInfo.walkingText?.takeIf { it.isNotBlank() }

@@ -5,6 +5,7 @@ import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.flow.first
@@ -121,6 +122,8 @@ internal object WidgetAlertLoader {
         // unreachable in time at any plausible walking speed can never match anyway.
         val candidateAlerts = WidgetAlertFilter.filterWithoutDistance(alerts, criteria).filter { alert ->
             val direct = origin?.let { WidgetAlertFilter.directDistanceMeters(it, alert) }
+            val inRange = alert.isDirectlyInRange(direct)
+            if (inRange) return@filter true
             if (criteria.maxDistanceMeters > 0 && direct != null && direct > criteria.maxDistanceMeters) {
                 return@filter false
             }

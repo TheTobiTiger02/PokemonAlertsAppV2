@@ -98,6 +98,27 @@ class WidgetAlertSorterTest {
     }
 
     @Test
+    fun `distance prioritizes in-range alerts before routed alerts`() {
+        val inRangeRaid = PokemonAlert(name = "in-range-raid", type = listOf("Raid"))
+        val routedNear = PokemonAlert(name = "routed-near", type = listOf("Raid"))
+
+        val result = WidgetAlertSorter.sort(
+            alerts = listOf(routedNear, inRangeRaid),
+            preference = SortPreference.DISTANCE,
+            origin = origin,
+            walkingRoutes = mapOf(
+                inRangeRaid.uniqueId to WalkingRouteInfo(300, 240),
+                routedNear.uniqueId to WalkingRouteInfo(150, 120)
+            ),
+            distanceMeters = { _, candidate ->
+                if (candidate.name == "in-range-raid") 75f else 140f
+            }
+        )
+
+        assertEquals(listOf(inRangeRaid, routedNear), result)
+    }
+
+    @Test
     fun `name sorts case insensitively`() {
         val source = listOf(alert("zubat"), alert("Abra"), alert("mew"))
 

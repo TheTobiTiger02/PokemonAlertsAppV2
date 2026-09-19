@@ -560,21 +560,19 @@ fun PokemonAlertsPage(
     ) {
         alertsWithDistance.filter { model ->
             val end = model.endMillis ?: Long.MAX_VALUE
-            // Filter out expired, optionally include dismissed based on toggle
-            val notExpired = end > filterNow
-            val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
-            val notInvalidated = !model.alert.isInvalidated
-            
-            val matchesFilter = AlertFilterMatcher.matches(
+            if (end <= filterNow) return@filter false
+            if (!showDismissed && model.alert.uniqueId in dismissedAlertIds) return@filter false
+            if (model.alert.isInvalidated) return@filter false
+
+            AlertFilterMatcher.matches(
                 alert = model.alert,
                 definition = filterDefinition,
                 context = FilterMatchContext(
                     effectiveDistanceMeters = model.distanceInfo.distanceMeters,
-                    walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds
+                    walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds,
+                    directDistanceMeters = model.distanceInfo.straightLineDistanceMeters
                 )
             )
-
-            notExpired && notDismissed && notInvalidated && matchesFilter
         }
     }
 
@@ -593,13 +591,26 @@ fun PokemonAlertsPage(
             }.thenByDescending { 
                 it.endMillis ?: 0L
             })
-            SortPreference.DISTANCE -> filtered.sortedWith(
-                compareBy<AlertUiModel> {
-                    if (it.distanceInfo.source == DistanceSource.ROUTED) 0 else 1
-                }.thenBy {
-                    it.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+            SortPreference.DISTANCE -> filtered.sortedWith { a, b ->
+                val aInRange = a.distanceInfo.isInRange
+                val bInRange = b.distanceInfo.isInRange
+                if (aInRange != bInRange) return@sortedWith if (aInRange) -1 else 1
+                if (aInRange) {
+                    val aDist = a.distanceInfo.straightLineDistanceMeters ?: Float.MAX_VALUE
+                    val bDist = b.distanceInfo.straightLineDistanceMeters ?: Float.MAX_VALUE
+                    val cmp = aDist.compareTo(bDist)
+                    if (cmp != 0) return@sortedWith cmp
+                    val aEff = a.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+                    val bEff = b.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+                    return@sortedWith aEff.compareTo(bEff)
                 }
-            )
+                val aRouted = a.distanceInfo.source == DistanceSource.ROUTED
+                val bRouted = b.distanceInfo.source == DistanceSource.ROUTED
+                if (aRouted != bRouted) return@sortedWith if (aRouted) -1 else 1
+                val aDist = a.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+                val bDist = b.distanceInfo.distanceMeters ?: Float.MAX_VALUE
+                aDist.compareTo(bDist)
+            }
             SortPreference.TIME_REMAINING -> filtered.sortedBy { 
                 it.endMillis ?: Long.MAX_VALUE
             }

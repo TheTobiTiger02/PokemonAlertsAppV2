@@ -29,6 +29,7 @@ import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
+import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
@@ -64,11 +65,13 @@ object AlertNotifier {
     internal fun buildNotificationContentText(
         alert: PokemonAlert,
         distanceText: String? = null,
-        walkingText: String? = null
+        walkingText: String? = null,
+        isInRange: Boolean = false
     ): String = buildAlertGlanceMetadata(
         alert = alert,
         distanceText = distanceText,
-        walkingText = walkingText
+        walkingText = walkingText,
+        isInRange = isInRange
     )
 
     fun ensureChannel(context: Context) {
@@ -176,14 +179,18 @@ object AlertNotifier {
                 if (!settings.shouldNotify(
                         alert,
                         goDexStatus.status,
-                        FilterMatchContext(effectiveDistanceMeters = straightLineDistanceMeters)
+                        FilterMatchContext(
+                            effectiveDistanceMeters = straightLineDistanceMeters,
+                            directDistanceMeters = straightLineDistanceMeters
+                        )
                     )
                 ) return@forEach
 
                 // Pre-check walking duration upper bound: even at a fast 6.5 km/h (1.8 m/s),
                 // if straightLine > maxWalkingSeconds * 1.8m, it is impossible to walk in time.
+                // Alerts directly in interaction range bypass walking duration.
                 val maxWalkingMinutes = settings.filterDefinition?.maxWalkingMinutes ?: 0
-                if (maxWalkingMinutes > 0 && straightLineDistanceMeters != null) {
+                if (maxWalkingMinutes > 0 && straightLineDistanceMeters != null && !alert.isDirectlyInRange(straightLineDistanceMeters)) {
                     if (straightLineDistanceMeters > maxWalkingMinutes * 60L * 1.8f) return@forEach
                 }
 
@@ -232,7 +239,8 @@ object AlertNotifier {
                         preCandidate.goDexStatus.status,
                         FilterMatchContext(
                             effectiveDistanceMeters = routeDisplayInfo.effectiveDistanceMeters,
-                            walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds
+                            walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
+                            directDistanceMeters = preCandidate.straightLineDistanceMeters
                         )
                     )
                 ) return@forEach
@@ -280,10 +288,12 @@ object AlertNotifier {
 
             val baseText = alert.type?.joinToString(", ")
                 ?: context.getString(R.string.notification_default_body)
+            val isInRange = alert.isDirectlyInRange(candidate.routeDisplayInfo.straightLineDistanceMeters)
             val contentText = buildNotificationContentText(
                 alert = alert,
                 distanceText = distanceText,
-                walkingText = walkingText
+                walkingText = walkingText,
+                isInRange = isInRange
             ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
             val expandedText = buildString {
                 append(contentText)

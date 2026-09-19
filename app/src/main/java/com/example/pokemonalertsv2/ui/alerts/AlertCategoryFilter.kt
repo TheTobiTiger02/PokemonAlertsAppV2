@@ -51,22 +51,7 @@ val AlertCategory.filterLabel: String
  * vary between "WeatherChange" and "Weather Change", and rockets hide behind spellings like
  * "Team Rocket", so those two match by substring.
  */
-fun PokemonAlert.alertCategories(): Set<AlertCategory> = buildSet {
-    if (hasType("Raid")) add(AlertCategory.RAID)
-    if (hasType("Quest")) add(AlertCategory.QUEST)
-    if (hasTypeContaining("Rocket") || gruntType != null) add(AlertCategory.ROCKET)
-    if (hasType("Kecleon")) add(AlertCategory.KECLEON)
-    if (hasTypeContaining("Weather")) add(AlertCategory.WEATHER)
-    if (hasType("Hundo") || isPerfect) add(AlertCategory.HUNDO)
-    if (hasType("Nundo") || isNundo) add(AlertCategory.NUNDO)
-    if (hasType("PvP")) add(AlertCategory.PVP)
-    // "Rare" is the old name of Common, still stored on alerts cached before the rename.
-    if (hasType("Common") || hasType("Rare")) add(AlertCategory.COMMON)
-    // IV spawns only: plain spawns are Common, so the two filter switches never overlap.
-    if (hasType("Hundo") || hasType("Nundo") || hasType("PvP") || hasType("Spawn") || isPerfect || isNundo) {
-        add(AlertCategory.SPAWN)
-    }
-}
+fun PokemonAlert.alertCategories(): Set<AlertCategory> = cachedAlertCategories
 
 /**
  * The set of *muted* categories, as stored by every surface. An empty set means "no

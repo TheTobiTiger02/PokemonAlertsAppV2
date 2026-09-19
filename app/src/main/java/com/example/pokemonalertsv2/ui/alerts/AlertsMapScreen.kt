@@ -2627,30 +2627,35 @@ internal fun visibleMapAlerts(
     walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 ): List<PokemonAlert> =
     alerts.filter { alert ->
+        val coordinates = alert.mapCoordinatesOrNull() ?: return@filter false
+        if (alert.isInvalidated) return@filter false
+        if (!showDismissed && alert.uniqueId in dismissedAlertIds) return@filter false
+        val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
+        if (end <= nowMillis) return@filter false
+        if (!matchesCategorySelection(alert, selectedCategories)) return@filter false
+        if (filterDefinition == null) return@filter true
+
         val distance = if (userLatitude != null && userLongitude != null) {
-            alert.mapCoordinatesOrNull()?.let { coordinates ->
-                val result = FloatArray(1)
-                Location.distanceBetween(
-                    userLatitude,
-                    userLongitude,
-                    coordinates.latitude,
-                    coordinates.longitude,
-                    result
-                )
-                result.firstOrNull()?.takeUnless(Float::isNaN)
-            }
+            val result = FloatArray(1)
+            Location.distanceBetween(
+                userLatitude,
+                userLongitude,
+                coordinates.latitude,
+                coordinates.longitude,
+                result
+            )
+            result.firstOrNull()?.takeUnless(Float::isNaN)
         } else null
-        alert.mapCoordinatesOrNull() != null &&
-            !alert.isInvalidated &&
-            (showDismissed || alert.uniqueId !in dismissedAlertIds) &&
-            (TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE) > nowMillis &&
-            matchesCategorySelection(alert, selectedCategories) &&
-            if (filterDefinition != null) {
-                val route = walkingRoutes[alert.uniqueId]
-                AlertFilterMatcher.matches(alert, filterDefinition, FilterMatchContext(route?.distanceMeters?.toFloat() ?: distance, route?.durationSeconds))
-            } else {
-                true
-            }
+        val route = walkingRoutes[alert.uniqueId]
+        AlertFilterMatcher.matches(
+            alert,
+            filterDefinition,
+            FilterMatchContext(
+                effectiveDistanceMeters = route?.distanceMeters?.toFloat() ?: distance,
+                walkingDurationSeconds = route?.durationSeconds,
+                directDistanceMeters = distance
+            )
+        )
     }
 
 internal enum class MapLoadState {

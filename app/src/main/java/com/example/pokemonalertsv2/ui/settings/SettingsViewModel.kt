@@ -168,7 +168,7 @@ class SettingsViewModel(
                             WalkingRouteUtils.straightLineDistanceMeters(origin.latitude, origin.longitude, lat, lon)
                         }
                         val info = WalkingRouteUtils.buildRouteDisplayInfo(direct, routes[alert.uniqueId])
-                        alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds)
+                        alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds, direct)
                     }
                 }
                 _filterCatalog.value = withContext(Dispatchers.Default) {
