@@ -34,16 +34,24 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 
 ## Navigation and layout
 
-- Primary destinations are **Alerts**, **Map**, and **Settings**.
+- Primary destinations are **Alerts**, **Map**, **Events**, and **Tools**. Settings opens from the toolbar and returns to the originating destination.
 - **Live** and **History** are persistent sections inside Alerts.
 - Below 600dp use bottom navigation; from 600dp use a rail; from 840dp feeds may use two columns and map details use a side panel.
 - Root destinations do not show back buttons. Preserve destination, section, filter, and scroll state.
-- Phone headers use a large, bottom-aligned title area that collapses toward a compact toolbar as content scrolls.
+- Keep root headers compact. Tools groups Hunting, Raids, and Collection & research; search includes settings and familiar feature names. Up to four shortcuts use stable tool IDs.
+- Navigation rails and feed controls scroll when space is limited, including landscape at 200% text. Avoid reserving all available height for fixed controls.
+- An active activity bar reopens existing Hunt, route, or tracked-alert sessions. It uses the existing session owners.
 
 ## Content patterns
 
 - Keep filter summaries compact and move detailed controls into bottom sheets or focused subpages.
-- Alert cards use a 144dp preview, overlaid type/countdown badges, concise location and distance metadata, and 48dp actions.
+- Visual alert cards use a 144dp preview; Compact rows use 64dp artwork. Both preserve identity, expiry, real routed distance, essential category information, and 48dp actions. Existing users retain Visual.
+- Map exposes Hunt, Routes, and location directly. Filters edit alert rules; Map display groups presentation controls. Marker-budget feedback flows below the filter summary.
+- Hunt and Routes remain available while map tiles load or fail. Activity-bar titles reopen the corresponding Hunt controls, route guidance, or tracked-alert details.
+- Raid counters starts with boss selection and opens recommendations without starting a notification session. Starting a Raid Live Update remains a separate explicit action.
+- Permissions has its own Settings destination and search entry. Notification preferences show when Android blocks delivery.
+- Filters edit a draft with fixed matching counts and Apply. Advanced rules and profiles remain accessible. Widget configuration stages rules until Save widget.
+- Catch routes use Setup, Preview, and Guidance, with a fixed Generate route action. Predictions remain distinct from observations.
 - Use localized, friendly date/time text rather than exposing server timestamp strings.
 - Loading, empty, error, dismissed, image-fallback, and permission-denied states use the same semantic roles and clear recovery actions.
 

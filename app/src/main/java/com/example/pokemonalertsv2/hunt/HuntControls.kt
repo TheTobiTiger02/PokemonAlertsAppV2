@@ -68,6 +68,7 @@ fun HuntControls(
     val batterySaverEnabled by huntRepository.batterySaverEnabled.collectAsStateWithLifecycle(initialValue = false)
     var batterySaverProblem by remember { mutableStateOf<String?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
+    var showSettings by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     val panelOpenedAt = remember { System.currentTimeMillis() }
     val lastCaught by remember(context) {
         AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
@@ -145,6 +146,11 @@ fun HuntControls(
             }
         }
 
+        TextButton(onClick = { showSettings = !showSettings }) {
+            Text(if (showSettings) "Hide Hunt settings" else "Hunt settings")
+        }
+        androidx.compose.animation.AnimatedVisibility(showSettings) {
+            Column {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Battery Saver", modifier = Modifier.weight(1f))
             androidx.compose.material3.Switch(
@@ -164,6 +170,8 @@ fun HuntControls(
                     context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:${context.packageName}")))
                 }) { Text("Allow display over other apps") }
+            }
+        }
             }
         }
 

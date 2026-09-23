@@ -50,4 +50,25 @@ class ManualRaidPickerComposeTest {
             pokedexId = null,
             spriteUrls = emptyList()
         )
+
+    @Test
+    fun countersCanBeViewedWithoutCatchCpOrStartingALiveUpdate() {
+        val candidate = boss("MEWTWO", "Mewtwo", "5", 2387, 2984).copy(hundoCP = null)
+        var selected: ManualRaidBoss? = null
+        var liveUpdateStarted = false
+        composeRule.setContent {
+            PokemonAlertsV2Theme {
+                ManualRaidBossPickerScreen(
+                    countersOnly = true,
+                    onStartLiveUpdate = { liveUpdateStarted = true },
+                    state = ManualRaidPickerUiState(loading = false, bosses = listOf(candidate)),
+                    onBack = {}, onRetry = {}, onBossSelected = { selected = it }
+                )
+            }
+        }
+        composeRule.onNodeWithText("Raid counters").assertIsDisplayed()
+        composeRule.onNodeWithTag("manual_raid_boss_MEWTWO").performClick()
+        assertEquals(candidate, selected)
+        assertEquals(false, liveUpdateStarted)
+    }
 }

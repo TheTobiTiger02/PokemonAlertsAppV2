@@ -615,22 +615,24 @@ class SettingsViewModel(
     }
 
     fun saveFilterProfile(name: String, definition: FilterDefinition, existingId: String? = null) {
+        viewModelScope.launch { persistFilterProfile(name, definition, existingId) }
+    }
+
+    suspend fun persistFilterProfile(name: String, definition: FilterDefinition, existingId: String? = null) {
         val cleanName = name.trim().take(MAX_FILTER_PROFILE_NAME)
         if (cleanName.isBlank()) return
-        viewModelScope.launch {
-            preferences.updateFilterStateDocument { document ->
-                val id = existingId ?: java.util.UUID.randomUUID().toString()
-                val uniqueName = uniqueProfileName(cleanName, document.profiles, id)
-                val profile = FilterProfile(
-                    id = id,
-                    name = uniqueName,
-                    definition = definition,
-                    updatedAtMillis = System.currentTimeMillis()
-                )
-                document.copy(profiles = document.profiles.filterNot { it.id == id } + profile)
-            }
-            AlertsWidgetProvider.requestUpdate(getApplication())
+        preferences.updateFilterStateDocument { document ->
+            val id = existingId ?: java.util.UUID.randomUUID().toString()
+            val uniqueName = uniqueProfileName(cleanName, document.profiles, id)
+            val profile = FilterProfile(
+                id = id,
+                name = uniqueName,
+                definition = definition,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+            document.copy(profiles = document.profiles.filterNot { it.id == id } + profile)
         }
+        AlertsWidgetProvider.requestUpdate(getApplication())
     }
 
     fun deleteFilterProfile(profileId: String) {

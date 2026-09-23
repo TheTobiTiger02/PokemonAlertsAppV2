@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Context
@@ -483,6 +485,9 @@ internal fun AlertHistoryPage(
         modifier = Modifier.fillMaxSize(),
         state = rememberPullToRefreshState()
     ) {
+        val presentationContext = androidx.compose.ui.platform.LocalContext.current
+        val presentation = remember(presentationContext) { com.example.pokemonalertsv2.data.PresentationPreferences(presentationContext.alertPreferencesDataStore) }
+        val feedLayout by presentation.feedLayout.collectAsStateWithLifecycle(com.example.pokemonalertsv2.data.FeedLayout.VISUAL)
         val countdownClock = rememberCountdownClock()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
         Column(modifier = Modifier.fillMaxSize()) {
@@ -571,6 +576,7 @@ internal fun AlertHistoryPage(
                     shape = MaterialTheme.shapes.large
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text("${uiState.alerts.size} loaded · ${uiState.totalServerCount} total", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -674,6 +680,7 @@ internal fun AlertHistoryPage(
                 }
                 item(key = alert.uniqueId, contentType = "alert_card") {
                     AlertCard(
+                        compact = feedLayout == com.example.pokemonalertsv2.data.FeedLayout.COMPACT,
                         alert = alert,
                         distanceInfo = AlertDistanceInfo(null, null, null),
                         goDexStatus = goDexMatches[alert.uniqueId]

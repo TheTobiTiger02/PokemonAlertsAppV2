@@ -181,6 +181,7 @@ import com.example.pokemonalertsv2.ui.theme.AppAccents
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun AlertCard(
+    compact: Boolean = false,
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo,
     goDexStatus: GoDexMatchResult = NoGoDexMatch,
@@ -203,6 +204,42 @@ internal fun AlertCard(
     val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     val resolvedCp = alert.displayCp
+    if (compact) {
+        LinearModernCard(modifier = modifier.fillMaxWidth(), onClick = onShowDetails) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AlertImage(alert = alert, modifier = Modifier.size(64.dp), contentScale = ContentScale.Crop)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(formattedTitle, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(visualStyle.label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        (alert.venueName ?: alert.locationDisplay)?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        GoDexStatusPill(goDexStatus)
+                        if (huntTarget) Text("Hunt target", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                    AlertActionsOverflow(context = cardContext, endTime = alert.endTime, countdownClock = countdownClock,
+                        snoozeEnabled = snoozeEnabled, hasGoingAction = onGoingClick != null, onAction = onSecondaryAction)
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (cardContext == AlertCardContext.HISTORY) {
+                        cardEndMillis?.let { Text("Ended ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(it))}", style = MaterialTheme.typography.labelSmall) }
+                    } else AlertCountdownBadge(alert.endTime, categoryAccent, categoryOnAccent, countdownClock)
+                    distanceInfo.distanceText?.let { Text(it, style = MaterialTheme.typography.labelMedium) }
+                    distanceInfo.walkingText?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                    resolvedCp?.let { Text("CP $it", style = MaterialTheme.typography.labelSmall) }
+                    displayIv?.let { Text("IV $it", style = MaterialTheme.typography.labelSmall) }
+                    invalidationBadgeText(alert)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                }
+                if (cardContext == AlertCardContext.HISTORY) {
+                    alert.createdAt?.let(TimeUtils::parseEndTimeToMillis)?.let {
+                        Text("Observed ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(it))}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                questPresentation?.reward?.let { Text(it, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                AlertCardPrimaryActions(alert, goDexStatus, cardContext, snoozeEnabled, countdownClock, isGoing, onGoingClick, onOpenMaps, categoryAccent)
+            }
+        }
+        return
+    }
     LinearModernCard(
         modifier = modifier.fillMaxWidth(),
         containerColor = MaterialTheme.colorScheme.surfaceContainer,
@@ -239,7 +276,13 @@ internal fun AlertCard(
                     }
                 }
                 Box(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)) {
-                    AlertCountdownBadge(
+                    if (cardContext == AlertCardContext.HISTORY) {
+                        cardEndMillis?.let {
+                            Surface(shape = MaterialTheme.shapes.small) {
+                                Text("Ended ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(it))}", Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    } else AlertCountdownBadge(
                         endTime = alert.endTime,
                         categoryAccent = categoryAccent,
                         categoryOnAccent = categoryOnAccent,
@@ -254,6 +297,11 @@ internal fun AlertCard(
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                if (cardContext == AlertCardContext.HISTORY) {
+                    alert.createdAt?.let(TimeUtils::parseEndTimeToMillis)?.let {
+                        Text("Observed ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(it))}", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.Top,
@@ -573,18 +621,18 @@ internal fun AlertCardPrimaryActions(
         if (policy.showGoing && onGoingClick != null) {
             FilledTonalButton(
                 onClick = onGoingClick,
-                modifier = Modifier.weight(1f).height(48.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp),
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = if (isGoing) {
                         MaterialTheme.colorScheme.errorContainer
                     } else {
-                        MaterialTheme.colorScheme.secondaryContainer
+                        MaterialTheme.colorScheme.primaryContainer
                     },
                     contentColor = if (isGoing) {
                         MaterialTheme.colorScheme.onErrorContainer
                     } else {
-                        MaterialTheme.colorScheme.onSecondaryContainer
+                        MaterialTheme.colorScheme.onPrimaryContainer
                     }
                 )
             ) {
@@ -605,11 +653,11 @@ internal fun AlertCardPrimaryActions(
         if (policy.showNavigate) {
             FilledTonalButton(
                 onClick = onOpenMaps,
-                modifier = Modifier.weight(1.15f).height(48.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp),
+                modifier = Modifier.weight(1.15f).heightIn(min = 48.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = categoryAccent.copy(alpha = 0.22f),
-                    contentColor = categoryAccent
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
                 Icon(
@@ -617,7 +665,7 @@ internal fun AlertCardPrimaryActions(
                     contentDescription = stringResource(id = R.string.open_in_maps)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Navigate", style = MaterialTheme.typography.labelLarge)
+                Text("Google Maps", style = MaterialTheme.typography.labelLarge)
             }
         }
     }

@@ -75,7 +75,7 @@ class FilterStudioComposeTest {
             ProfilePickerDialog(document, {}, { _, _ -> }, { deleted = it }, { _, _, _ -> }, { listOf("Widget #42") })
         } }
         rule.onNodeWithText("Delete").performScrollTo().performClick()
-        rule.onNodeWithText("Feed, Map, Widget #42 will keep independent copies of these rules before the profile is deleted.").assertIsDisplayed()
+        rule.onNodeWithText("Alerts, Map, Widget #42 will keep independent copies of these rules before the profile is deleted.").assertIsDisplayed()
         capture("profile-delete-warning")
         rule.onNodeWithText("Delete profile").performClick()
         assertEquals(profile.id, deleted)
@@ -104,6 +104,37 @@ class FilterStudioComposeTest {
             rule.onNodeWithText("Apply").performClick()
             rule.waitUntil(5000) { runBlocking { preferences.filterStateDocument.first().feed.definition.areas.mode == FilterSelectionMode.NONE } }
             assertEquals(FilterSelection.All, runBlocking { preferences.filterStateDocument.first().map.definition.areas })
+        } finally {
+            store.clear()
+            runBlocking { preferences.updateFilterStateDocument { original } }
+        }
+    }
+
+    @Test fun widgetApplyStagesLinkedChangesWithoutSavingSharedRules() {
+        val context = instrumentation.targetContext
+        val preferences = AlertPreferences(context.alertPreferencesDataStore)
+        val original = runBlocking { preferences.filterStateDocument.first() }
+        val profile = FilterProfile("qa-widget-draft", "Widget shared", FilterDefinition())
+        val document = FilterStateDocument(profiles = listOf(profile), map = FilterAssignment.linked(profile))
+        runBlocking { preferences.updateFilterStateDocument { document } }
+        val store = ViewModelStore()
+        val viewModel = SettingsViewModel(context.applicationContext as Application, SavedStateHandle())
+        store.put("widget-draft-qa", viewModel)
+        var assignment: FilterAssignment? = null
+        var stagedProfile: FilterProfile? = null
+        try {
+            rule.setContent { PokemonAlertsV2Theme {
+                FilterStudioDialog(FilterSurface.FEED, viewModel, widgetId = 987654,
+                    widgetDraft = FilterAssignment.linked(profile),
+                    onWidgetDraft = { draft, changed -> assignment = draft; stagedProfile = changed }, onDismiss = {})
+            } }
+            rule.waitUntil(5000) { viewModel.filterStateDocument.value.profiles.any { it.id == profile.id } }
+            rule.onNodeWithText("None").performScrollTo().performClick()
+            rule.onNodeWithText("Apply").performClick()
+            rule.onNodeWithText("Apply to all").performClick()
+            assertEquals(FilterSelectionMode.NONE, assignment!!.definition.areas.mode)
+            assertEquals(assignment!!.definition, stagedProfile!!.definition)
+            assertEquals(document, runBlocking { preferences.filterStateDocument.first() })
         } finally {
             store.clear()
             runBlocking { preferences.updateFilterStateDocument { original } }

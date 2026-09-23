@@ -2,6 +2,9 @@ package com.example.pokemonalertsv2.ui.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +51,7 @@ import java.util.Date
  * Split out of `SettingsScreen.kt`, which is already very large, following the same
  * pattern as the GoDex collection screen.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun RaidCountersSettingsContent(
     settings: RaidCounterSettings,
@@ -58,7 +61,8 @@ fun RaidCountersSettingsContent(
     onConfirmImport: () -> Unit,
     onCancelImport: () -> Unit,
     onClearPokeGenie: () -> Unit,
-    importStatus: String?
+    importStatus: String?,
+    openDefaultsInitially: Boolean = false
 ) {
     val options = settings.options
     val context = LocalContext.current
@@ -74,6 +78,12 @@ fun RaidCountersSettingsContent(
         uri?.let(onPrepareCsv)
     }
 
+    var defaultsOpen by rememberSaveable { mutableStateOf(openDefaultsInitially) }
+    Button(onClick = { context.startActivity(com.example.pokemonalertsv2.ui.counters.ManualRaidActivity.countersIntent(context)) }, modifier = Modifier.fillMaxWidth()) { Text("Choose raid boss") }
+    OutlinedButton(onClick = { defaultsOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("Counter options · Level ${options.attackerLevel}") }
+    if (defaultsOpen) androidx.compose.material3.ModalBottomSheet(onDismissRequest = { defaultsOpen = false }, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp)) {
+            Text("Estimator estimates how many trainers are needed; lower is better. Weather, friendship and Party Power affect damage.", style = MaterialTheme.typography.bodyMedium)
     SettingsSection(title = "Counter defaults") {
         Text(
             text = "Used when a raid opens. You can still change them on the raid itself.",
@@ -128,6 +138,9 @@ fun RaidCountersSettingsContent(
         )
     }
 
+            TextButton(onClick = { defaultsOpen = false }) { Text("Done") }
+        }
+    }
     SettingsSection(title = "My Pokémon") {
         Text(
             text = if (settings.pokeGenieCount > 0) {
@@ -212,6 +225,7 @@ fun RaidCountersSettingsContent(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(candidate.fileName ?: "Poké Genie export")
                     Text("${candidate.summary.importedCount} Pokémon rows are ready to import.")
+                    Text("Confirming replaces your current ${settings.pokeGenieCount} imported Pokémon. Cancel keeps your roster unchanged.")
                     if (candidate.summary.synthesizedBaseCount > 0) {
                         Text(
                             "${candidate.summary.synthesizedBaseCount} base forms were added " +

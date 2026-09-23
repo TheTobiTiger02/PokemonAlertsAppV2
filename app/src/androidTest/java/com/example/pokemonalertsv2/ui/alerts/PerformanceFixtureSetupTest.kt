@@ -16,6 +16,11 @@ class PerformanceFixtureSetupTest {
         val arguments = InstrumentationRegistry.getArguments()
         assumeTrue(arguments.getString("seedPerformanceFixture") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
+        check(android.os.Build.MODEL.contains("sdk_gphone")) { "Performance fixtures are emulator-only" }
+        com.example.pokemonalertsv2.hunt.HuntRepository.getInstance(context).stop()
+        com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository.getInstance(context).stopTracking()
+        com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(context).stop()
+        com.example.pokemonalertsv2.raidwatch.RaidWatchController.stop(context)
         val count = arguments.getString("fixtureCount", "200").toInt()
         val image = File(context.filesDir, "performance-fixture.png")
         val bitmap = Bitmap.createBitmap(512, 512, Bitmap.Config.ARGB_8888)
@@ -38,6 +43,9 @@ class PerformanceFixtureSetupTest {
         // Original preferences are restored by the driver after the before/after runs.
         context.alertPreferencesDataStore.edit { it.clear() }
         AlertPreferences(context.alertPreferencesDataStore).setOnboardingCompleted(true)
+        // The benchmark is offline. Google Maps may never report loaded without network;
+        // use the same local-style renderer for both APKs and measure provider checks separately.
+        AlertPreferences(context.alertPreferencesDataStore).updateMapStylePreference(MapStylePreference.OPENSTREETMAP)
         com.example.pokemonalertsv2.data.godex.GoDexPreferences(context.alertPreferencesDataStore)
             .saveSuccessfulSync("https://example.invalid/public-collection/performance", "Performance fixture", System.currentTimeMillis())
     }

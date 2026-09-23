@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -117,10 +118,10 @@ class CatchRoutesActivity : ComponentActivity() {
         val refreshing by model.controller.recalculating.collectAsStateWithLifecycle()
         val outOfDate by model.controller.outOfDate.collectAsStateWithLifecycle()
         val saved by model.store.setups.collectAsStateWithLifecycle(emptyList())
-        var advanced by remember { mutableStateOf(false) }
-        var picking by remember { mutableStateOf("start") }
-        var showSaved by remember { mutableStateOf(false) }
-        var editing by remember { mutableStateOf(false) }
+        var advanced by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+        var picking by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+        var showSaved by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+        var editing by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
         var areaOpen by remember { mutableStateOf(false) }
         var goRoutesOpen by remember { mutableStateOf(false) }
         var details by remember { mutableStateOf<List<SpawnpointSelection>?>(null) }
@@ -141,19 +142,49 @@ class CatchRoutesActivity : ComponentActivity() {
         val walking = active != null && active?.finished != true
         LaunchedEffect(mapView, walking) { if (walking) mapView?.follow() }
         val showSettings = active == null && (plan == null || editing)
-        Scaffold { padding ->
+        BackHandler(enabled = picking.isNotEmpty() || editing) {
+            if (picking.isNotEmpty()) picking = "" else editing = false
+        }
+        Scaffold(bottomBar = {
+            if (showSettings && picking.isEmpty()) Surface(tonalElevation = 3.dp) {
+                Column(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    model.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("catch_route_error")) }
+                    if (model.busy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        Text(model.progress, style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = model::cancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel planning") }
+                    } else {
+                        val retrySeconds = ((model.retryAt - now) / 1000 + 1).coerceAtLeast(0)
+                        Text(when {
+                            !model.hasStart -> "Choose a starting point to continue."
+                            settings.durationMinutes !in 10..360 -> "Choose a duration from 10 to 360 minutes."
+                            settings.finish == CatchFinish.PIN && settings.end == null -> "Choose a finish pin to continue."
+                            retrySeconds > 0 -> "Try again in ${retrySeconds}s"
+                            else -> "Preview the walk before starting guidance."
+                        }, style = MaterialTheme.typography.bodySmall)
+                        Button(onClick = model::generate, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag("generate_catch_route"),
+                            enabled = model.hasStart && settings.durationMinutes in 10..360 && model.retryAt <= now &&
+                                (settings.finish != CatchFinish.PIN || settings.end != null)) {
+                            Text(if (model.error != null) "Try generating again" else "Generate route")
+                        }
+                    }
+                }
+            }
+        }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { finish() }) { Text("Back") }
+                    TextButton(onClick = { if (picking.isNotEmpty()) picking = "" else if (editing) editing = false else finish() }) { Text("Back") }
                     Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     TextButton(onClick = ::floatingWindow, enabled = active != null) { Text("Floating map") }
                 }
-                Box(Modifier.fillMaxWidth().weight(if (showSettings) 0.8f else 1.25f)) {
+                Text(if (picking.isNotEmpty()) "Choose ${if (picking == "end") "finish" else "start"}" else if (active != null) "3 · Guidance" else if (showSettings) "1 · Setup" else "2 · Preview",
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                if (!showSettings || picking.isNotEmpty()) Box(Modifier.fillMaxWidth().weight(if (showSettings) 1f else 1.25f)) {
                     AndroidView(factory = { ctx -> CatchRouteMapView(ctx).also { mapView = it; it.onFailure = { mapFailed = true } } },
                         modifier = Modifier.fillMaxSize().testTag("catch_route_map"),
                         update = { view ->
                             // A route walked as drawn fixes its start; only its finish-free walk is left to tap.
-                            view.onPick = if (active == null && showSettings && !settings.fixed) { p -> if (picking == "end") model.edit(model.settings.copy(end = p)) else model.startPoint(p) } else null
+                            view.onPick = if (active == null && showSettings && picking.isNotEmpty() && !settings.fixed) { p -> if (picking == "end") model.edit(model.settings.copy(end = p)) else model.startPoint(p); picking = "" } else null
                             // A tap on a spawnpoint opens its details; up to five when they overlap.
                             view.onSpawnpointTap = { ids ->
                                 val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
@@ -174,7 +205,7 @@ class CatchRoutesActivity : ComponentActivity() {
                         Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
+                if (picking.isEmpty()) LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
                     verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp)) {
                     if (active != null) item { SessionCard(active!!, settings, refreshing, outOfDate, notice) }
                     else if (plan != null && !editing) item {
@@ -261,7 +292,15 @@ class CatchRoutesActivity : ComponentActivity() {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(session.itinerary.settings.name, style = MaterialTheme.typography.titleLarge)
-                if (session.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
+                val next = session.remaining.minByOrNull { it.meters }
+                Text(when {
+                    session.finished -> "Session finished"
+                    session.paused -> "Guidance paused"
+                    next != null -> "Next stop · ${(next.meters - session.progressMeters).coerceAtLeast(0.0).toInt()} m along route"
+                    else -> "All stops visited"
+                }, style = MaterialTheme.typography.titleMedium)
+                if (!session.finished && next != null) Text("Planned arrival ${time(next.arrivalMillis)} · ${if (next.opportunity.observed) "seen live" else "predicted spawn"}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("${session.visits.count { !it.skipped }} visited · ${session.availabilityReadout}")
                 // Advice only: the route changes when the trainer taps Recalculate, never on its own.
                 if (outOfDate && !session.finished && !refreshing) Text("Route out of date: a stop has despawned or you left the route. Tap Recalculate for a new one.",
@@ -273,8 +312,8 @@ class CatchRoutesActivity : ComponentActivity() {
                     OutlinedButton(onClick = { model.controller.pause() }, enabled = !session.finished) { Text(if (session.paused) "Resume" else "Pause") }
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { model.controller.skip() }) { Text("Skip stop") }
-                    TextButton(onClick = { model.controller.undo() }) { Text("Undo") }
+                    TextButton(onClick = { model.controller.skip() }, enabled = !session.finished && next != null) { Text("Skip stop") }
+                    TextButton(onClick = { model.controller.undo() }, enabled = session.undoVisits != null) { Text("Undo") }
                     TextButton(onClick = { model.controller.recalculate() }, enabled = !refreshing && !session.finished) { Text("Recalculate") }
                     TextButton(onClick = { openInGoogleMaps(session.itinerary) }) { Text("Google Maps") }
                     TextButton(onClick = { lifecycleScope.launch { model.controller.stop() } }) { Text("Stop route") }
@@ -334,7 +373,7 @@ class CatchRoutesActivity : ComponentActivity() {
                 Text(if (model.hasStart) "Start ${coordinate(settings.start)}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "start") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
+                    CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
                 }
                 if (settings.finish == CatchFinish.PIN) Text("Finish ${settings.end?.let(::coordinate) ?: "· tap the map"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!settings.fixed) Row(verticalAlignment = Alignment.CenterVertically) {
@@ -402,10 +441,6 @@ class CatchRoutesActivity : ComponentActivity() {
                     OutlinedTextField(value = settings.name, onValueChange = { model.edit(settings.copy(name = it.take(80))) }, label = { Text("Route name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             }
-            model.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("catch_route_error")) }
-            if (model.retryAt > now()) Text("Retry in ${(model.retryAt - now()) / 1000 + 1}s")
-            if (model.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(model.progress, style = MaterialTheme.typography.bodySmall); TextButton(onClick = model::cancel) { Text("Cancel") } }
-            else Button(onClick = model::generate, modifier = Modifier.fillMaxWidth().height(52.dp).testTag("generate_catch_route"), enabled = model.retryAt <= now()) { Text("Generate route") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TextButton(onClick = { model.save() }, enabled = model.hasStart) { Text("Save setup") }
                 TextButton(onClick = { model.save(true) }, enabled = model.hasStart) { Text("Duplicate") }

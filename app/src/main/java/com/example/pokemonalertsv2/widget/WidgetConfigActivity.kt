@@ -35,6 +35,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import com.example.pokemonalertsv2.data.FilterAssignment
+import com.example.pokemonalertsv2.data.FilterProfile
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -121,17 +128,33 @@ class WidgetConfigActivity : ComponentActivity() {
                 }
             }.collectAsStateWithLifecycle(initialValue = emptyMap())
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
-                var showFilterEditor by remember { mutableStateOf(false) }
+                var showFilterEditor by rememberSaveable { mutableStateOf(false) }
+                var assignmentEdited by rememberSaveable { mutableStateOf(false) }
+                var assignmentJson by rememberSaveable { mutableStateOf(existing.filterAssignment?.let { Json.encodeToString(it) }) }
+                var profileJson by rememberSaveable { mutableStateOf<String?>(null) }
+                val draftAssignment = remember(assignmentJson) { assignmentJson?.let { Json.decodeFromString<FilterAssignment>(it) } }
+                val pendingProfile = remember(profileJson) { profileJson?.let { Json.decodeFromString<FilterProfile>(it) } }
+                var saving by remember { mutableStateOf(false) }
                 WidgetStudioConfiguration(
-                    initialConfiguration = existing,
+                    initialConfiguration = existing.copy(filterAssignment = draftAssignment),
+                    saving = saving,
+                    onCancel = { if (!saving) finish() },
                     onOpenEditor = { showFilterEditor = true },
                     onConfirm = { configuration ->
-                        val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
-                        WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, latest.copy(priority = configuration.priority))
-                        if (needsExactAlarmAccess()) {
-                            showExactAlarmDialog.value = true
-                        } else {
-                            completeWidgetConfiguration()
+                        if (!saving) {
+                            saving = true
+                            lifecycleScope.launch {
+                                try {
+                                    pendingProfile?.let { filterViewModel.persistFilterProfile(it.name, it.definition, it.id) }
+                                    val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
+                                    WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, latest.copy(priority = configuration.priority, filterAssignment = draftAssignment))
+                                    if (needsExactAlarmAccess()) showExactAlarmDialog.value = true
+                                    else completeWidgetConfiguration()
+                                } catch (error: Exception) {
+                                    if (error is kotlinx.coroutines.CancellationException) throw error
+                                    android.widget.Toast.makeText(this@WidgetConfigActivity, "Could not save widget. Try again.", android.widget.Toast.LENGTH_LONG).show()
+                                } finally { saving = false }
+                            }
                         }
                     }
                 )
@@ -140,6 +163,13 @@ class WidgetConfigActivity : ComponentActivity() {
                     surface = com.example.pokemonalertsv2.data.FilterSurface.FEED,
                     viewModel = filterViewModel,
                     widgetId = appWidgetId,
+                    widgetDraft = draftAssignment.takeIf { assignmentEdited },
+                    onWidgetDraft = { assignment, profile ->
+                        assignmentEdited = true
+                        assignmentJson = Json.encodeToString(assignment)
+                        val retained = profile ?: pendingProfile?.takeIf { it.id == assignment.profileId && it.definition == assignment.definition }
+                        profileJson = retained?.let { Json.encodeToString(it) }
+                    },
                     onDismiss = { showFilterEditor = false }
                 )
 
@@ -207,21 +237,33 @@ private val WIDGET_AREA_OPTIONS = listOf("All", "Alsbach", "Darmstadt")
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun WidgetStudioConfiguration(
+    saving: Boolean,
+    onCancel: () -> Unit,
     initialConfiguration: WidgetConfiguration,
     onOpenEditor: () -> Unit,
     onConfirm: (WidgetConfiguration) -> Unit
 ) {
-    var priority by remember { mutableStateOf(initialConfiguration.priority) }
+    var priority by rememberSaveable { mutableStateOf(initialConfiguration.priority) }
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Widget configuration") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text("Widget configuration") }, navigationIcon = { TextButton(onClick = onCancel) { Text("Cancel") } }) },
         bottomBar = {
-            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).heightIn(min = 52.dp)) { Text("Save widget") }
+            Button(enabled = !saving, onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).heightIn(min = 52.dp)) { Text(if (saving) "Saving…" else "Save widget") }
         }
     ) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("A view of your own", style = MaterialTheme.typography.headlineSmall)
-            Text("This widget has independent alert rules. Link a reusable profile or keep a local copy.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Open Filter Studio") }
+            Text("Widget preview", style = MaterialTheme.typography.headlineSmall)
+            androidx.compose.material3.Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Nearby alerts", style = MaterialTheme.typography.titleMedium)
+                    Text("Pikachu · 250 m · 12 min left", style = MaterialTheme.typography.bodyMedium)
+                    Text("Example preview · adapts to widget size", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Text(initialConfiguration.filterAssignment?.let {
+                if (it.mode == com.example.pokemonalertsv2.data.FilterAssignmentMode.LINKED) "Linked profile: shares future rule changes" else "Custom alert rules for this widget"
+            } ?: "Current app rules", style = MaterialTheme.typography.bodyMedium)
+            Text("Choose alerts independently, or share a saved profile. Save widget applies your changes.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Choose alerts") }
             Text("Display priority", style = MaterialTheme.typography.titleMedium)
             Text("Sorting only changes the order, never which alerts qualify.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -252,7 +294,7 @@ internal fun WidgetConfigScreen(
     }
     val shownCount = shownCategories.count { it.value }
     val allShown = shownCount == FILTERABLE_ALERT_CATEGORIES.size
-    var priority by remember { mutableStateOf(initialConfiguration.priority) }
+    var priority by rememberSaveable { mutableStateOf(initialConfiguration.priority) }
     var distanceMode by remember { mutableStateOf(initialConfiguration.distance) }
     var fixedDistance by remember {
         mutableStateOf((initialConfiguration.distance as? WidgetDistanceMode.Fixed)?.meters ?: 10_000)

@@ -457,6 +457,7 @@ internal fun SettingsOverview(
     selectedArea: String,
     maxDistance: Int,
     notificationsEnabled: Boolean,
+    systemNotificationsGranted: Boolean = true,
     foregroundLocationGranted: Boolean,
     backgroundLocationGranted: Boolean,
     goDexSummary: String,
@@ -473,6 +474,7 @@ internal fun SettingsOverview(
     }
     val distanceSummary = if (maxDistance == 0) "Unlimited distance" else "${distanceLabel(maxDistance)} maximum"
     val notificationSummary = when {
+        notificationsEnabled && !systemNotificationsGranted -> "Blocked by Android - enable notification permission"
         !notificationsEnabled -> "Off"
         !foregroundLocationGranted -> "On - location access needed"
         !backgroundLocationGranted -> "On - background location off"
@@ -502,6 +504,27 @@ internal fun SettingsOverview(
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
         SettingsOverviewRow(
+            icon = Icons.Default.Notifications,
+            title = "Notifications",
+            summary = notificationSummary,
+            statusBadge = when {
+                notificationsEnabled && !systemNotificationsGranted -> "Permission needed"
+                notificationsEnabled && !foregroundLocationGranted -> "Location needed"
+                notificationsEnabled && !backgroundLocationGranted -> "Background off"
+                else -> null
+            },
+            onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        SettingsOverviewRow(
+            icon = Icons.Default.CheckCircle,
+            title = "Permissions",
+            summary = "Android notifications, location and background access",
+            onClick = { onDestinationSelected(SettingsDestination.PERMISSIONS) }
+        )
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        Text("Integrations", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall)
+        SettingsOverviewRow(
             icon = Icons.Default.AccountCircle,
             title = "GoDex checklist",
             summary = goDexSummary,
@@ -516,18 +539,7 @@ internal fun SettingsOverview(
             onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
         )
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.Notifications,
-            title = "Notifications",
-            summary = notificationSummary,
-            statusBadge = when {
-                notificationsEnabled && !foregroundLocationGranted -> "Location needed"
-                notificationsEnabled && !backgroundLocationGranted -> "Background off"
-                else -> null
-            },
-            onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+        Text("Backup & updates", Modifier.padding(horizontal = 20.dp, vertical = 12.dp), style = MaterialTheme.typography.titleSmall)
         SettingsOverviewRow(
             icon = Icons.Default.Info,
             title = "About & updates",

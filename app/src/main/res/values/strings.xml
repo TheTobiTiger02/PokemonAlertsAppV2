@@ -104,7 +104,7 @@
     <string name="map_legend_title">What the colours mean</string>
     <string name="map_filter_show_count">Show %1$d alerts</string>
     <string name="map_filter_reset">Reset</string>
-    <string name="map_filter_studio">Filter Studio</string>
+    <string name="map_filter_studio">Filters</string>
     <string name="map_no_matches_title">Nothing matches</string>
     <string name="map_no_matches_message">No active alerts match the filters you have set.</string>
     <string name="map_no_matches_cta">Clear filters</string>
@@ -113,7 +113,7 @@
     <string name="open_alert_in_pip">Open alert in picture-in-picture</string>
     <string name="open_map">Open map</string>
     <string name="tap_for_details">Tap for details</string>
-    <string name="notification_action_directions">Directions</string>
+    <string name="notification_action_directions">Google Maps</string>
     <string name="notification_action_dismiss">Dismiss</string>
     <string name="notification_action_dismiss_all">Dismiss all</string>
     <string name="notification_action_snooze">Snooze</string>
@@ -188,4 +188,5 @@
     <string name="widget_radar_next_default_cd">Next alert</string>
     <string name="widget_radar_next_cd">Next alert. Showing %1$d of %2$d.</string>
     <string name="widget_alert_image_cd">Alert image</string>
+    <string name="navigation_tools">Tools</string>
 </resources>

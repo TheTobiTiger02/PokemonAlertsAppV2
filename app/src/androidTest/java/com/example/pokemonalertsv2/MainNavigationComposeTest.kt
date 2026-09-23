@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.MapStylePreference
@@ -40,29 +41,58 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "History", "Map", "Events", "Settings").forEach { label ->
-            composeRule.onNodeWithText(label)
+        listOf("ALERTS", "MAP", "EVENTS", "TOOLS").forEach { label ->
+            composeRule.onNodeWithTag("navigation_$label")
                 .assertIsDisplayed()
                 .assertHasClickAction()
         }
     }
 
     @Test
-    fun historyIsAnIndependentRootDestination() {
+    fun toolsSearchOpensPermissionsAndBackRetainsSearch() {
+        waitForMainNavigation()
+        composeRule.onNodeWithTag("navigation_TOOLS").performClick()
+        composeRule.onNodeWithText("Search tools and settings").performTextInput("gps blocked")
+        composeRule.onNodeWithText("Permissions").performClick()
+        composeRule.onNodeWithText("Permission status").assertIsDisplayed()
+        composeRule.activityRule.scenario.recreate()
+        composeRule.onNodeWithText("Permission status").assertIsDisplayed()
+        repeat(2) {
+            composeRule.onNodeWithContentDescription("Back").performClick()
+        }
+        composeRule.onNodeWithTag("navigation_TOOLS").assertIsSelected()
+        composeRule.onNodeWithText("gps blocked").assertIsDisplayed()
+    }
+
+    @Test
+    fun huntControlsOpenWithoutWaitingForMapTiles() {
+        val originalStyle = runBlocking { preferences.mapStylePreference.first() }
+        try {
+            runBlocking { preferences.updateMapStylePreference(MapStylePreference.GOOGLE_STANDARD) }
+            openMapFromIntent()
+            composeRule.onNodeWithTag("open_hunt").assertIsDisplayed().performClick()
+            composeRule.onNodeWithText("Start a hunt").assertIsDisplayed()
+        } finally {
+            runBlocking { preferences.updateMapStylePreference(originalStyle) }
+        }
+    }
+
+    @Test
+    fun historyIsPreservedInsideAlerts() {
         waitForMainNavigation()
 
         composeRule.onAllNodesWithText("History").onFirst().performClick()
         composeRule.onNodeWithText("Alert History").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Alerts").performClick()
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").performClick()
+        composeRule.onNodeWithText("Live").assertIsSelected()
     }
 
     @Test
     fun alertsIntentSwitchesExistingTaskToAlertsRoot() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Map").performClick()
+        composeRule.onNodeWithTag("navigation_MAP").performClick()
         composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
 
         composeRule.runOnIdle {
@@ -71,10 +101,22 @@ class MainNavigationComposeTest {
             )
         }
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+            runCatching { composeRule.onNodeWithText("Live").fetchSemanticsNode() }.isSuccess
         }
 
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
+    }
+
+    @Test
+    fun mapFiltersCancelReturnsToMapWithoutChangingRules() {
+        openMapFromIntent()
+        val original = runBlocking { preferences.filterStateDocument.first() }
+        composeRule.onNodeWithText("Filters").performClick()
+        composeRule.onNodeWithText("Alert categories").assertIsDisplayed()
+        composeRule.onNodeWithText("None").performScrollTo().performClick()
+        composeRule.onNodeWithContentDescription("Cancel").performClick()
+        composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
+        assertEquals(original, runBlocking { preferences.filterStateDocument.first() })
     }
 
     @Test
@@ -83,7 +125,7 @@ class MainNavigationComposeTest {
 
         composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
-        composeRule.onNodeWithText("Map").assertIsSelected()
+        composeRule.onNodeWithTag("navigation_MAP").assertIsSelected()
     }
 
     @Test
@@ -122,7 +164,7 @@ class MainNavigationComposeTest {
     fun settingsUsesOverviewAndFocusedSubpages() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
         listOf(
             "Appearance & behavior",
             "Filters",
@@ -133,12 +175,12 @@ class MainNavigationComposeTest {
             composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed().assertHasClickAction()
         }
         composeRule.onNodeWithText("Theme").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed()
 
         composeRule.onNodeWithText("Filters").performScrollTo().performClick()
-        composeRule.onNodeWithText("Filter Studio").assertIsDisplayed()
-        composeRule.onNodeWithText("Feed").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Basic rules").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Filters").onFirst().assertIsDisplayed()
+        composeRule.onNodeWithTag("filter_target_FEED").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithText("Basic rules").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Apply").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Cancel").performClick()
         composeRule.onNodeWithText("GoDex Hundo checklist").assertDoesNotExist()
@@ -185,7 +227,7 @@ class MainNavigationComposeTest {
     fun settingsSubpageSurvivesActivityRecreation() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithContentDescription("Settings").performClick()
         composeRule.onNodeWithText("Appearance & behavior").performClick()
         composeRule.onNodeWithText("Theme").assertIsDisplayed()
 
@@ -271,7 +313,7 @@ class MainNavigationComposeTest {
     private fun waitForMainNavigation() {
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
             runCatching {
-                composeRule.onNodeWithText("Alerts").fetchSemanticsNode()
+                composeRule.onNodeWithTag("navigation_ALERTS").fetchSemanticsNode()
             }.isSuccess
         }
     }
@@ -289,9 +331,9 @@ class MainNavigationComposeTest {
 
     private fun waitForAlertsScreen() {
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+            runCatching { composeRule.onNodeWithText("Live").fetchSemanticsNode() }.isSuccess
         }
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
     }
 
     private companion object {

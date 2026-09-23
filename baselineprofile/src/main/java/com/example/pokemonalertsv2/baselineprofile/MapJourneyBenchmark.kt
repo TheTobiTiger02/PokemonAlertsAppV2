@@ -24,11 +24,15 @@ class MapJourneyBenchmark {
             device.prepareBenchmarkPermissions()
             startActivityAndWait()
             device.completeOnboardingIfNeeded()
-            device.requireClick(By.text("Map"))
-            device.requireVisible(By.desc("Show all visible alerts"))
+            device.requireRootTab("Map")
+            device.requireVisible(if (device.hasToolsNavigation()) By.text("Map display") else By.desc("Show all visible alerts"))
         }
     ) {
-        device.requireClick(By.desc("Show all visible alerts"))
+        val modernNavigation = device.hasToolsNavigation()
+        if (modernNavigation) {
+            device.requireClick(By.text("Map display"))
+            device.requireClick(By.text("Fit alerts"))
+        } else device.requireClick(By.desc("Show all visible alerts"))
         val map = device.findObject(By.desc("Google Map"))
         val x = device.displayWidth / 2
         val y = device.displayHeight / 2
@@ -40,10 +44,10 @@ class MapJourneyBenchmark {
             SystemClock.sleep(80)
             device.click(x, y)
         }
-        device.requireClick(By.desc("Map settings and filters"))
-        device.requireVisible(By.desc("Open map in picture-in-picture"))
+        device.requireClick(if (modernNavigation) By.text("Map display") else By.desc("Map settings and filters"))
+        device.requireVisible(if (modernNavigation) By.text("Picture-in-picture") else By.desc("Open map in picture-in-picture"))
         val start = SystemClock.elapsedRealtimeNanos()
-        device.requireClick(By.desc("Open map in picture-in-picture"))
+        device.requireClick(if (modernNavigation) By.text("Picture-in-picture") else By.desc("Open map in picture-in-picture"))
         val deadline = SystemClock.uptimeMillis() + 10_000
         var pinned = false
         while (!pinned && SystemClock.uptimeMillis() < deadline) {

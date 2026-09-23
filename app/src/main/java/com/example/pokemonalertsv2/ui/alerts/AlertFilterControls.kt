@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.example.pokemonalertsv2.ui.alerts
 
@@ -205,67 +205,14 @@ internal fun AlertListControls(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AnimatedContent(
-                    targetState = visibleCount,
-                    transitionSpec = { appFadeThrough() },
-                    label = "active_alert_count"
-                ) { count ->
-                    Text(
-                        text = pluralStringResource(R.plurals.alerts_active_count, count, count),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+            Text(pluralStringResource(R.plurals.alerts_active_count, visibleCount, visibleCount), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
+                    Text(if (searchExpanded) "Close search" else "Search")
                 }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                ) {
-                    IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
-                        Icon(
-                            imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = if (searchExpanded) "Close search" else "Search alerts"
-                        )
-                    }
-                    IconButton(onClick = { onShowDismissedChanged(!showDismissed) }) {
-                        Icon(Icons.Filled.Refresh,
-                            tint = if (showDismissed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            contentDescription = if (showDismissed) "Hide dismissed alerts" else "Show dismissed alerts")
-                    }
-                    SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
-                    Box {
-                        IconButton(onClick = onOpenFilters) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_filter),
-                                contentDescription = "Filter alerts"
-                            )
-                        }
-                        AnimatedContent(
-                            targetState = activeFilterCount,
-                            transitionSpec = { appFadeThrough() },
-                            modifier = Modifier.align(Alignment.TopEnd),
-                            label = "active_filter_count"
-                        ) { count ->
-                            if (count > 0) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                ) {
-                                    Text(
-                                        text = count.toString(),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged, showLabel = true)
+                TextButton(onClick = onOpenFilters) { Text(if (activeFilterCount > 0) "Filters · $activeFilterCount" else "Filters") }
+                FilterChip(selected = showDismissed, onClick = { onShowDismissedChanged(!showDismissed) }, label = { Text("Dismissed") })
             }
             AnimatedVisibility(
                 visible = searchExpanded,
@@ -637,12 +584,20 @@ internal fun AlertSearchBar(
 internal fun SortingButton(
     currentSort: SortPreference,
     onSortChanged: (SortPreference) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showLabel: Boolean = false
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
-        IconButton(onClick = { expanded = true }) {
+        if (showLabel) TextButton(onClick = { expanded = true }) {
+            Text("Sort: " + when (currentSort) {
+                SortPreference.POSTED_TIME -> "Newest"
+                SortPreference.DISTANCE -> "Nearest"
+                SortPreference.TIME_REMAINING -> "Ending soon"
+                SortPreference.NAME -> "Name"
+            })
+        } else IconButton(onClick = { expanded = true }) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowDown,
                 contentDescription = "Sort alerts, current: ${

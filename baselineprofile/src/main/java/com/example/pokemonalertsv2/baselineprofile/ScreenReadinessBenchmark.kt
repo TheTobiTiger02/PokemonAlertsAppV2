@@ -26,10 +26,11 @@ class ScreenReadinessBenchmark {
             device.prepareBenchmarkPermissions()
             startActivityAndWait()
             device.completeOnboardingIfNeeded()
-            device.requireClick(By.text("Alerts"))
-            device.requireVisible(By.text("Pokémon Alerts"))
+            device.requireRootTab("Alerts")
+            device.requireVisible(By.text(if (device.hasToolsNavigation()) "Live" else "Pokémon Alerts"))
         }
     ) {
+        val modernNavigation = device.hasToolsNavigation()
         val oldIdleTimeout = Configurator.getInstance().waitForIdleTimeout
         Configurator.getInstance().waitForIdleTimeout = 0
         try {
@@ -44,13 +45,15 @@ class ScreenReadinessBenchmark {
                 "screen-readiness-$label.csv").appendText("$name,$elapsed\n")
         }
         repeat(2) { visit ->
-            measure("history-$visit", { device.requireClick(By.text("History")) }, By.text("Alert History"))
+            measure("history-$visit", { if (modernNavigation) device.requireRootTab("Alerts"); device.requireClick(By.text("History")) }, By.text("Alert History"))
             device.swipe(device.displayWidth / 2, device.displayHeight * 3 / 4,
                 device.displayWidth / 2, device.displayHeight / 3, 24)
-            measure("settings-$visit", { device.requireClick(By.text("Settings")) }, By.text("Appearance & behavior"))
+            measure("settings-$visit", { device.openSettings() }, By.text("Appearance & behavior"))
             measure("appearance-$visit", { device.requireClick(By.text("Appearance & behavior")) }, By.text("Display and sorting"))
             device.pressBack()
-            measure("filters-$visit", { device.requireClick(By.text("Filters")) }, By.text("Filter Studio"))
+            measure("filters-$visit", { device.requireClick(By.text("Filters")) },
+                if (modernNavigation) By.text("Choose what appears in Alerts, Map, notifications and each widget. Their rules can differ.")
+                else By.text("Widgets"))
             device.pressBack()
             measure("godex-settings-$visit", { device.requireClick(By.text("GoDex checklist")) }, By.text("Performance fixture"))
             measure("godex-collection-$visit", { device.requireClick(By.text("1000 still needed")) }, By.text("Search Pokémon, form, number, or key"))
@@ -59,10 +62,10 @@ class ScreenReadinessBenchmark {
             measure("godex-search-$visit", { search.text = "Fixture Pokemon 99" }, By.text("Fixture Pokemon 99"))
             device.pressBack()
             device.pressBack()
-            measure("map-$visit", { device.requireClick(By.text("Map")) }, By.desc("Map settings and filters"))
-            measure("map-filters-$visit", { device.requireClick(By.desc("Map settings and filters")) }, By.textContains("alerts visible"))
+            measure("map-$visit", { device.requireRootTab("Map") }, if (modernNavigation) By.text("Map display") else By.desc("Map settings and filters"))
+            measure("map-filters-$visit", { device.requireClick(if (modernNavigation) By.text("Map display") else By.desc("Map settings and filters")) }, if (modernNavigation) By.text("Appearance, layers and map controls") else By.textContains("alerts visible"))
             device.pressBack()
-            measure("feed-$visit", { device.requireClick(By.text("Alerts")) }, By.text("Pokémon Alerts"))
+            measure("feed-$visit", { device.requireRootTab("Alerts"); if (modernNavigation) device.requireClick(By.text("Live")) }, By.text(if (modernNavigation) "Live" else "Pokémon Alerts"))
             measure("detail-$visit", { device.requireClick(By.text("Pikachu")) }, By.desc("Back"))
             device.pressBack()
         }

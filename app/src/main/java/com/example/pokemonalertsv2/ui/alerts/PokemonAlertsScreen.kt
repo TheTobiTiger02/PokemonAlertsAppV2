@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Context
@@ -327,6 +329,8 @@ fun PokemonAlertsRoute(
  */
 @Composable
 fun AlertHistoryRoute(
+    openInsightsRequested: Boolean = false,
+    onInsightsRequestConsumed: () -> Unit = {},
     uiState: com.example.pokemonalertsv2.ui.history.HistoryUiState,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onRefresh: () -> Unit,
@@ -344,6 +348,7 @@ fun AlertHistoryRoute(
     // An in-place sub-screen rather than a fifth tab or a new Activity, the way
     // Settings already navigates within itself.
     var showInsights by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openInsightsRequested) { if (openInsightsRequested) { showInsights = true; onInsightsRequestConsumed() } }
     val insightsState by insightsViewModel.uiState.collectAsStateWithLifecycle()
     BackHandler(enabled = showInsights) { showInsights = false }
 
@@ -627,7 +632,7 @@ fun PokemonAlertsPage(
         status = uiState.toSyncStatus(),
         onRetry = onRefresh
     )
-    ManualRaidQuickAction(onClick = onStartManualRaid)
+
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -825,7 +830,12 @@ internal fun SyncStatusBanner(
                 ) {
                     Text(animatedMessage, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                     if (animatedProblem) {
-                        TextButton(onClick = onRetry) { Text("Retry") }
+                        TextButton(
+                            onClick = onRetry,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        ) { Text("Retry") }
                     }
                 }
             }
@@ -871,6 +881,9 @@ internal fun AlertsList(
     onOpenFilterStudio: () -> Unit = {},
     unifiedDefinition: FilterDefinition? = null
 ) {
+    val presentationContext = LocalContext.current
+    val presentation = remember(presentationContext) { com.example.pokemonalertsv2.data.PresentationPreferences(presentationContext.alertPreferencesDataStore) }
+    val feedLayout by presentation.feedLayout.collectAsStateWithLifecycle(com.example.pokemonalertsv2.data.FeedLayout.VISUAL)
     val arrivalTracking = rememberArrivalTrackingUiController()
     // A hunt walks you to one alert at a time; the feed marks which one so the row
     // and the map agree without having to compare coordinates.
@@ -900,7 +913,9 @@ internal fun AlertsList(
         ).count { it }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    val feedControls = @Composable {
+        Column {
+        com.example.pokemonalertsv2.ui.components.FeedLayoutPicker()
         AlertListControls(
             visibleCount = filteredAlerts.size,
             activeFilterCount = activeFilterCount,
@@ -926,7 +941,9 @@ internal fun AlertsList(
             maxWalkingMinutes = if (unifiedDefinition == null) maxWalkingMinutes else 0,
             onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) }
         )
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+        }
+    }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
@@ -936,6 +953,7 @@ internal fun AlertsList(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item(key = "feed_controls", span = { GridItemSpan(maxLineSpan) }) { feedControls() }
             if (filteredAlerts.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(
@@ -1075,6 +1093,7 @@ internal fun AlertsList(
                 
                 Box {
                     AlertCard(
+                        compact = feedLayout == com.example.pokemonalertsv2.data.FeedLayout.COMPACT,
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
                         goDexStatus = goDexMatches[model.alert.uniqueId]
@@ -1118,7 +1137,6 @@ internal fun AlertsList(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
-    }
     }
 
 }

@@ -25,6 +25,7 @@ internal fun UiDevice.completeOnboardingIfNeeded() {
         clickIfPresent(By.text("Continue"), timeoutMillis = 1_000)
     }
     clickIfPresent(By.text("Enable & finish"), timeoutMillis = 1_000)
+    clickIfPresent(By.text("Start exploring"), timeoutMillis = 1_000)
     clickIfPresent(By.text("Not Now"), timeoutMillis = 500)
     check(wait(Until.hasObject(By.text("Alerts")), 10_000)) { "Onboarding did not reach Alerts" }
     waitForIdle()
@@ -54,15 +55,30 @@ internal fun UiDevice.clickIfPresent(
     selector: BySelector,
     timeoutMillis: Long = 2_000
 ): Boolean {
-    repeat(3) {
-        val target = wait(Until.findObject(selector), timeoutMillis) ?: return false
+    val deadline = android.os.SystemClock.uptimeMillis() + timeoutMillis
+    while (android.os.SystemClock.uptimeMillis() < deadline) {
+        val remaining = deadline - android.os.SystemClock.uptimeMillis()
+        val target = wait(Until.findObject(selector), remaining.coerceAtLeast(1)) ?: return false
         try {
             target.click()
             waitForIdle()
             return true
         } catch (_: StaleObjectException) {
             // Compose may replace semantics nodes during animation; retry with a fresh node.
+            android.os.SystemClock.sleep(50)
         }
     }
     return false
+}
+
+/** Choose the navigation label, not an identically named toolbar title. Works on both APKs. */
+internal fun UiDevice.requireRootTab(label: String) {
+    requireVisible(By.text(label))
+    findObjects(By.text(label)).last().click()
+    waitForIdle()
+}
+
+internal fun UiDevice.hasToolsNavigation() = hasObject(By.text("Tools"))
+internal fun UiDevice.openSettings() {
+    if (hasToolsNavigation()) requireClick(By.desc("Settings")) else requireClick(By.text("Settings"))
 }

@@ -340,40 +340,7 @@ fun AlertDetailScreen(
                                 )
                             }
 
-                            if (onEnterPictureInPicture != null) {
-                                Surface(
-                                    onClick = { onEnterPictureInPicture() },
-                                    modifier = Modifier.height(36.dp),
-                                    shape = MaterialTheme.shapes.medium,
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outlineVariant
-                                    ),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    tonalElevation = 2.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_pip),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(id = R.string.enter_pip_short),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
+
                         }
 
                         // Shiny indicator in top right
@@ -489,6 +456,36 @@ fun AlertDetailScreen(
                             }
                         }
 
+                        // Time & Status
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                val statusClock = rememberCountdownClock()
+                                Text(
+                                    text = "Status",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
+
+                                // Created at timestamp
+                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = posted,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         if (alert.isInvalidated) {
                             InvalidationBanner(alert = alert)
                         }
@@ -541,8 +538,8 @@ fun AlertDetailScreen(
                             AlertPill(
                                 text = "Arrival tracking active",
                                 icon = Icons.Filled.LocationOn,
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
 
@@ -557,36 +554,6 @@ fun AlertDetailScreen(
                                 gruntType = alert.gruntType,
                                 pokemonRewards = alert.pokemonRewards
                             )
-                        }
-
-                        // Time & Status
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            ),
-                            shape = MaterialTheme.shapes.large,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                val statusClock = rememberCountdownClock()
-                                Text(
-                                    text = "Status",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
-
-                                // Created at timestamp
-                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = posted,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
                         }
 
                         Spacer(modifier = Modifier.height(actionBarClearance))
@@ -874,12 +841,12 @@ internal fun AlertDetailActionBar(
                         containerColor = if (isGoing) {
                             MaterialTheme.colorScheme.errorContainer
                         } else {
-                            MaterialTheme.colorScheme.secondaryContainer
+                            MaterialTheme.colorScheme.primaryContainer
                         },
                         contentColor = if (isGoing) {
                             MaterialTheme.colorScheme.onErrorContainer
                         } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
+                            MaterialTheme.colorScheme.onPrimaryContainer
                         }
                     )
                 ) {
@@ -913,12 +880,8 @@ internal fun AlertDetailActionBar(
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = accent,
-                        contentColor = if (accent.luminance() > 0.55f) {
-                            Color(0xFF171A20)
-                        } else {
-                            Color.White
-                        }
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurface
                     )
                 ) {
                     Column(
@@ -932,7 +895,7 @@ internal fun AlertDetailActionBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Navigate",
+                            text = "Google Maps",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1

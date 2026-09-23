@@ -55,12 +55,13 @@ class WholeAppUxComposeTest {
             }
         }
 
-        composeRule.onNodeWithText("Continue").performClick()
         composeRule.onNodeWithText("Darmstadt").performClick()
         composeRule.onNodeWithText("Continue").performClick()
         composeRule.onNodeWithText("Quiet essentials").performClick()
         composeRule.onNodeWithText("Continue").performClick()
-        composeRule.onNodeWithText("Enable & finish").performClick()
+        assertEquals("All", savedArea)
+        assertEquals(NotificationPreset.EVERYTHING, savedPreset)
+        composeRule.onNodeWithText("Start exploring").performClick()
 
         assertEquals("Darmstadt", savedArea)
         assertEquals(0, savedDistance)
@@ -166,6 +167,7 @@ class WholeAppUxComposeTest {
             PokemonAlertsV2Theme {
                 Box(modifier = androidx.compose.ui.Modifier.width(360.dp)) {
                     AlertCard(
+                        compact = true,
                         alert = PokemonAlert(
                             name = "100% Au\u00dfergew\u00f6hnlich langes Pok\u00e9mon",
                             pokemon = "Au\u00dfergew\u00f6hnlich langes Pok\u00e9mon",
@@ -189,7 +191,7 @@ class WholeAppUxComposeTest {
         }
 
         composeRule.onNodeWithText("I\u2019m going").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithText("Navigate").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Google Maps").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Snooze").assertDoesNotExist()
         composeRule.onNodeWithText("Share").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("More alert actions")
@@ -282,7 +284,7 @@ class WholeAppUxComposeTest {
             .assertIsDisplayed()
             .assertHasClickAction()
         composeRule.onNodeWithText("I’m going").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithText("Directions").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Google Maps").assertIsDisplayed().assertHasClickAction()
         composeRule.onNodeWithText("Task: Make 3 Great Throws in a row").assertIsDisplayed()
         composeRule.onNodeWithText("Reward: Rare Candy").assertIsDisplayed()
         composeRule.onNodeWithText("Snooze").assertDoesNotExist()
@@ -361,6 +363,6 @@ class WholeAppUxComposeTest {
             .assertIsDisplayed()
             .assertHasClickAction()
         composeRule.onNodeWithText("I’m going").assertIsDisplayed().assertHasClickAction()
-        composeRule.onNodeWithText("Directions").assertIsDisplayed().assertHasClickAction()
+        composeRule.onNodeWithText("Google Maps").assertIsDisplayed().assertHasClickAction()
     }
 }

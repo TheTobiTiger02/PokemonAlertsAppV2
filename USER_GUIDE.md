@@ -1,9 +1,37 @@
-# Quick Start Guide - New Features
+# Pokémon Alerts user guide
+
+Use **Alerts**, **Map**, **Events**, and **Tools** along the bottom (or side on wider screens). Open **Settings** from the toolbar; Back returns to where you came from.
+
+## Find tools quickly
+
+Tools groups Hunt and Catch routes, raid counters and imported Pokémon, and GoDex and spawn insights. Search also finds settings: try “CSV”, “battery saver”, “dark”, or “backup”. Pin up to four tools for quick access.
+
+## Map, Hunt, and routes
+
+**Hunt** follows matching live targets. **Routes** plans a walk through spawn opportunities. Both open directly from Map. **Filters** changes which alerts qualify; **Map display** changes layers, clustering, countdowns, provider, refresh, and fit-all. Existing map choices are retained.
+
+Route setup leads to a preview before guidance starts. Check distance, duration, return time, warnings, and predicted opportunities before starting. During an activity, use the activity bar to reopen it or expand its controls to stop.
+
+## Choose your feed layout
+
+Choose **Compact** for smaller artwork and denser rows, or **Visual** for larger cards. The choice is shared by Live and History and included in settings backups. Existing users keep Visual until switching.
+
+Feed controls scroll with the alerts. Scroll back to the top to change layout, search, sorting, or filters. In landscape with large text, scroll the navigation rail to reach every tab.
+
+## Raid tools
+
+Open **Tools → Raid counters**, choose a boss, and review recommended counters. Browsing counters does not start tracking or require notification permission. Choose **Start Raid Live Update** separately when you want an ongoing notification. **Tools → My Pokémon** opens your imported roster; **Counter defaults** in tool search opens the options sheet.
+
+## Filters and profiles
+
+Choose the destination you are editing: Alerts, Map, Notifications, or a widget. Start with categories, area, distance, and walking time. **Unlimited** is separate from numeric distances. Expand **Advanced** for species, quest combinations, overrides, and saved profiles. **Apply** saves the draft; Cancel discards it. Copying a profile creates independent rules; linking shares future changes and warns which destinations will be affected.
+
+Widget configuration previews its layout and stages its rules and sorting until **Save widget**. Cancel leaves the widget configuration unchanged. Create, rename, or delete saved profiles in Settings → Filters.
 
 ## 🎯 Sorting Your Alerts
 
-1. Open the **Active Alerts** tab
-2. Look for the "Sort & Filter" section at the top of the list
+1. Open **Alerts → Live**
+2. Use the labeled controls above the list
 3. Tap the **Sort button** (shows current sort method)
 4. Choose from:
    - **Distance** - Nearest alerts first (requires location permission)
@@ -70,7 +98,7 @@ The widget shows:
 
 ## 📜 Viewing History
 
-1. Swipe to the **History** tab
+1. Open **Alerts → History**
 2. Use filters to find specific alert types
 3. **Pull down to refresh** the history
 4. Tap any past alert to see details
@@ -78,7 +106,7 @@ The widget shows:
 ## 🖼️ Picture-in-Picture (PiP) for Alert Images
 
 1. Tap any alert to open the detail screen
-2. On the image header, tap the **PiP** button near the back button
+2. Use the **PiP** action below the alert details
 3. The app enters Picture-in-Picture with a compact, image-focused view
 
 Tip: You can keep the alert image visible while using other apps.
@@ -119,7 +147,7 @@ Tip: You can keep the alert image visible while using other apps.
 
 ### Pull to Refresh
 
-- Works on Active Alerts and History
+- Works in Alerts → Live and History
 - Smooth animation with haptic feedback
 - Shows loading indicator while refreshing
 
@@ -150,20 +178,14 @@ Tip: You can keep the alert image visible while using other apps.
 2. Check that the app has permission to run in background
 3. Ensure battery optimization is disabled for the app
 
-## 🚀 Coming Soon
+## Events and collection
 
-These features are on the roadmap:
+Events separates **Happening now** and **Coming next**. Open **Categories** to choose event types and **Reminders** to control timing. Dates use local time; event pages retain their source links.
 
-- Custom notification sounds per alert type
-- Advanced filtering options
-- Export alert history
-- Alert sharing with friends
-- More widget size options
+Open **Tools → GoDex checklist** to see collection progress and matching live alerts. Direct, evolution, and form-change matches remain distinct. Check sync freshness and pending changes before assuming a remote collection has updated. Read-only collections cannot write caught changes.
 
-Already shipped since this list was written: a dark/light theme toggle (Settings →
-Appearance), quiet hours with configurable start and end times, saved filter presets,
-travel-time filtering, offline map tiles, and settings backup and restore.
+## Permissions and recovery
 
----
+Enabling a notification preference does not grant Android notification permission. **Settings → Permissions** shows Android access and links to its controls. Search for “GPS” or “permissions” in Tools to open it directly. Location, floating-map, and battery-saver permissions are requested when those features need them. Offline and stale-data screens keep cached content and offer refresh or retry where available. Hunt and Routes remain available while the map loads.
 
-Enjoy your enhanced Pokémon hunting experience! 🎮✨
+Hundo means perfect IVs (15/15/15); Nundo means zero IVs (0/0/0). Spacial Rend uses the expanded 80 m Pokémon interaction range. It does not remove species, category, or other matching rules.

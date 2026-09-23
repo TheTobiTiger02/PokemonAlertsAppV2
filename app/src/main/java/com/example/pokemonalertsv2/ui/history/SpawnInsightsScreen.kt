@@ -42,6 +42,7 @@ import java.time.format.DateTimeFormatter
  * for a complete count.
  */
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 fun SpawnInsightsScreen(
     state: SpawnInsightsUiState,
     onQueryChange: (String) -> Unit,
@@ -59,12 +60,13 @@ fun SpawnInsightsScreen(
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            label = { Text("Species or search") },
+            label = { Text("Pokémon species or search") },
+            supportingText = { Text("Enter a species such as Pikachu. Leave blank to include all observed alerts.") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             InsightsRange.entries.forEach { range ->
                 FilterChip(
                     selected = state.range == range,
@@ -72,12 +74,13 @@ fun SpawnInsightsScreen(
                     label = { Text(range.label) }
                 )
             }
-            Spacer(Modifier.weight(1f))
             FilledTonalButton(onClick = onRun, enabled = !state.isLoading) {
                 Text(if (state.hasRun) "Refresh" else "Look back")
             }
         }
 
+        Text("Observed history · ${state.range.label} · ${state.query.ifBlank { "All species" }}", style = MaterialTheme.typography.bodySmall)
+        Text("Coverage includes recorded alerts, not every spawn. Predictions are not included.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         state.coverageNote?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -86,7 +89,10 @@ fun SpawnInsightsScreen(
             state.isLoading -> Box(
                 modifier = Modifier.fillMaxWidth().height(180.dp),
                 contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            ) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                CircularProgressIndicator()
+                Text("Loading observed history…")
+            } }
 
             state.errorMessage != null -> Text(
                 state.errorMessage,

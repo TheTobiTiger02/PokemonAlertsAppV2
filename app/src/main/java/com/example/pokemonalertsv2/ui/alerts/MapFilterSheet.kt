@@ -102,6 +102,8 @@ private const val SECTION_BEHAVIOUR = 7
  */
 @Composable
 internal fun MapFilterSheet(
+    displayOnly: Boolean = false,
+    onFitAlerts: () -> Unit = {},
     definition: FilterDefinition,
     catalog: FilterCatalog,
     artwork: Map<String, String>,
@@ -139,6 +141,8 @@ internal fun MapFilterSheet(
 ) {
     val content = @Composable { contentModifier: Modifier ->
         MapFilterSheetContent(
+            displayOnly = displayOnly,
+            onFitAlerts = onFitAlerts,
             definition = definition,
             catalog = catalog,
             artwork = artwork,
@@ -206,6 +210,8 @@ internal fun MapFilterSheet(
 
 @Composable
 private fun MapFilterSheetContent(
+    displayOnly: Boolean = false,
+    onFitAlerts: () -> Unit = {},
     definition: FilterDefinition,
     catalog: FilterCatalog,
     artwork: Map<String, String>,
@@ -255,7 +261,15 @@ private fun MapFilterSheetContent(
     val isDefault = definition == FilterDefinition()
 
     Column(modifier = modifier.fillMaxWidth()) {
-        MapPanelHeader(
+        if (displayOnly) {
+            Text("Map display", style = MaterialTheme.typography.headlineSmall)
+            Text("Appearance, layers and map controls", style = MaterialTheme.typography.bodyMedium)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onFitAlerts) { Text("Fit alerts") }
+                TextButton(onClick = onRefresh, enabled = !refreshing) { Text("Refresh") }
+                onEnterPictureInPicture?.let { action -> TextButton(onClick = action) { Text("Picture-in-picture") } }
+            }
+        } else MapPanelHeader(
             visibleCount = visibleCount,
             totalCount = totalCount,
             isDefault = isDefault,
@@ -282,6 +296,7 @@ private fun MapFilterSheetContent(
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             contentPadding = PaddingValues(bottom = Spacing.md)
         ) {
+            if (!displayOnly) {
             item("group_what") { MapGroupHeading("What's on the map") }
 
             item("types") {
@@ -380,6 +395,7 @@ private fun MapFilterSheetContent(
                 )
             }
 
+            }
             item("group_looks") { MapGroupHeading("How it looks") }
 
             item("style") {
@@ -454,7 +470,7 @@ private fun MapFilterSheetContent(
                             checked = showSpawnRadius,
                             onCheckedChange = { onToggleSpawnRadius() }
                         )
-                        SwitchSetting(
+                        if (!displayOnly) SwitchSetting(
                             title = "Spacial Rend",
                             subtitle = "Widen that circle to 80m",
                             checked = spacialRendEnabled,
@@ -504,7 +520,7 @@ private fun MapFilterSheetContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onOpenFilterStudio) {
+            if (!displayOnly) TextButton(onClick = onOpenFilterStudio) {
                 Text(stringResource(R.string.map_filter_studio))
             }
             // The button says what closing the panel will leave on the map, so the count is

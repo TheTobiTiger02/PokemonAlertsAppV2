@@ -1,9 +1,14 @@
 package com.example.pokemonalertsv2.events
 
+import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,6 +27,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.work.EventReminderWorker
@@ -43,39 +51,76 @@ data class EventsUiState(
     val nowMillis: Long = System.currentTimeMillis(),
 )
 
-/** The tab as the app shows it: cached events at once, a refresh on open, reminders re-planned on change. */
+/** Activity-scoped calendar data survives tab switches without restarting a network request. */
+class EventsViewModel(application: Application, private val savedState: androidx.lifecycle.SavedStateHandle) : AndroidViewModel(application) {
+    val repository = EventsRepository(application)
+    val preferences = EventPreferences(application)
+    val listState = LazyListState(savedState["events.index"] ?: 0, savedState["events.offset"] ?: 0)
+    private var selected by mutableStateOf<String?>(savedState["events.selected"])
+    var selectedId: String?
+        get() = selected
+        set(value) { selected = value; savedState["events.selected"] = value }
+    var events by mutableStateOf<List<GameEvent>>(emptyList())
+        private set
+    var loading by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+
+    init {
+        viewModelScope.launch {
+            snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { (index, offset) ->
+                savedState["events.index"] = index
+                savedState["events.offset"] = offset
+            }
+        }
+        viewModelScope.launch {
+            events = repository.cached()
+            refresh()
+        }
+    }
+
+    fun refresh() {
+        if (loading) return
+        loading = true
+        error = null
+        viewModelScope.launch {
+            try { events = repository.refresh() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = "Couldn't refresh events. Check your connection and try again." }
+            finally { loading = false }
+        }
+    }
+
+    fun change(replan: Boolean = true, block: suspend EventPreferences.() -> Unit) {
+        viewModelScope.launch {
+            try {
+                preferences.block()
+                if (replan) EventReminderWorker.replan(getApplication())
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { error = "Couldn't save your event preferences. Please try again." }
+        }
+    }
+}
+
 @Composable
-fun EventsRoute() {
+fun EventsRoute(model: EventsViewModel) {
     val context = LocalContext.current
-    val repository = remember { EventsRepository(context) }
-    val preferences = remember { EventPreferences(context) }
-    val scope = rememberCoroutineScope()
-    val settings by preferences.settings.collectAsStateWithLifecycle(EventSettings())
-    var events by remember { mutableStateOf<List<GameEvent>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val settings by model.preferences.settings.collectAsStateWithLifecycle(EventSettings())
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    fun refresh() = scope.launch {
-        loading = true; error = null
-        try { events = repository.refresh() } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            error = e.message ?: "Events could not be loaded."
-        } finally { loading = false }
-    }
-    LaunchedEffect(Unit) {
-        events = repository.cached()
-        refresh()
-    }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
-    fun changed(block: suspend () -> Unit) = scope.launch { block(); EventReminderWorker.replan(context) }
     EventsContent(
-        loadPage = repository::page,
-        rememberedPage = repository::remembered,
-        state = EventsUiState(events, settings, loading, error, now),
-        onRefresh = { refresh() },
-        onToggleHidden = { type -> scope.launch { preferences.toggleHidden(type) } },
-        onToggleStar = { id -> changed { preferences.toggleStar(id) } },
-        onToggleReminderType = { type -> changed { preferences.toggleReminderType(type) } },
-        onLeadMinutes = { minutes -> changed { preferences.setLeadMinutes(minutes) } },
+        loadPage = model.repository::page,
+        rememberedPage = model.repository::remembered,
+        state = EventsUiState(model.events, settings, model.loading, model.error, now),
+        listState = model.listState,
+        selectedEventId = model.selectedId,
+        onSelectEvent = { model.selectedId = it },
+        onRefresh = model::refresh,
+        onToggleHidden = { type -> model.change(replan = false) { toggleHidden(type) } },
+        onToggleStar = { id -> model.change { toggleStar(id) } },
+        onToggleReminderType = { type -> model.change { toggleReminderType(type) } },
+        onLeadMinutes = { minutes -> model.change { setLeadMinutes(minutes) } },
         onOpenLink = { link -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) } },
     )
 }
@@ -92,15 +137,21 @@ fun EventsContent(
     onOpenLink: (String) -> Unit,
     loadPage: suspend (String) -> EventPage? = { null },
     rememberedPage: (String) -> EventPage? = { null },
+    listState: LazyListState = rememberLazyListState(),
+    selectedEventId: String? = null,
+    onSelectEvent: ((String?) -> Unit)? = null,
 ) {
     val sections = remember(state.events, state.nowMillis, state.settings.hiddenTypes) {
         groupEvents(state.events, state.nowMillis, state.settings.hiddenTypes)
     }
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
+    val currentSelection = if (onSelectEvent != null) state.events.firstOrNull { it.id == selectedEventId } else selected
+    fun select(event: GameEvent?) { if (onSelectEvent != null) onSelectEvent(event?.id) else selected = event }
+    var filtersOpen by remember { mutableStateOf(false) }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
@@ -108,35 +159,56 @@ fun EventsContent(
                 }
                 Text("From LeekDuck. Times are local.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
+            state.error?.let { message -> item {
+                Column {
+                    Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error"))
+                    if (state.events.isNotEmpty()) Text("Showing saved events.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = onRefresh, enabled = !state.loading) { Text("Try again") }
+                }
+            } }
             if (types.isNotEmpty()) item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    types.forEach { type ->
-                        FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
-                            label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
-                    }
+                val visibleTypes = types.count { it !in state.settings.hiddenTypes }
+                OutlinedButton(onClick = { filtersOpen = true }, modifier = Modifier.testTag("events_filters")) {
+                    Text(if (visibleTypes == types.size) "Categories · All" else "Categories · $visibleTypes of ${types.size}")
                 }
             }
             if (sections.now.isEmpty() && sections.upcoming.isEmpty() && !state.loading) item {
-                Text("No events to show.", style = MaterialTheme.typography.bodyMedium)
+                Text(if (state.settings.hiddenTypes.isNotEmpty()) "No matching events. Try showing more categories." else "No upcoming events. Pull down to refresh.", style = MaterialTheme.typography.bodyMedium)
             }
             if (sections.now.isNotEmpty()) {
                 item { SectionTitle("Happening now") }
                 items(sections.now, key = { "now-${it.id}" }) { event ->
-                    EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
+                    EventCard(event, state, onClick = { select(event) }, onToggleStar = onToggleStar)
                 }
             }
+            if (sections.upcoming.isNotEmpty()) item { SectionTitle("Coming next") }
             sections.upcoming.forEach { (day, events) ->
                 item(key = "day-$day") { SectionTitle(dayLabel(day, state.nowMillis)) }
                 items(events, key = { it.id }) { event ->
-                    EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
+                    EventCard(event, state, onClick = { select(event) }, onToggleStar = onToggleStar)
                 }
             }
         }
     }
-    selected?.let { event ->
-        EventDetailScreen(event, state, onDismiss = { selected = null }, onToggleStar = onToggleStar, onOpenLink = onOpenLink,
+    currentSelection?.let { event ->
+        EventDetailScreen(event, state, onDismiss = { select(null) }, onToggleStar = onToggleStar, onOpenLink = onOpenLink,
             loadPage = loadPage, rememberedPage = rememberedPage)
+    }
+    if (filtersOpen) ModalBottomSheet(onDismissRequest = { filtersOpen = false }) {
+        LazyColumn(contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
+            item {
+                Text("Event categories", style = MaterialTheme.typography.headlineSmall)
+                Text("Choose which events appear in your calendar.", style = MaterialTheme.typography.bodyMedium)
+            }
+            items(types, key = { it }) { type ->
+                Row(Modifier.fillMaxWidth().clickable(role = Role.Checkbox) { onToggleHidden(type) }
+                    .heightIn(min = 48.dp).testTag("events_type_$type"), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = type !in state.settings.hiddenTypes, onCheckedChange = null)
+                    Text(eventTypeName(type), modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+            item { TextButton(onClick = { filtersOpen = false }, modifier = Modifier.fillMaxWidth()) { Text("Done") } }
+        }
     }
     if (reminderSettingsOpen) ModalBottomSheet(onDismissRequest = { reminderSettingsOpen = false }) {
         ReminderSettings(state.settings, (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
@@ -161,8 +233,10 @@ private fun EventCard(event: GameEvent, state: EventsUiState, onClick: () -> Uni
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(event.heading ?: eventTypeName(event.eventType), style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary)
+                        val category = event.heading ?: eventTypeName(event.eventType)
+                        if (!event.name.contains(category, ignoreCase = true)) {
+                            Text(category, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        }
                         Text(event.name, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     StarButton(event, state.settings, onToggleStar)
@@ -173,6 +247,10 @@ private fun EventCard(event: GameEvent, state: EventsUiState, onClick: () -> Uni
                     Text("${durationLabel(event.endMillis - state.nowMillis)} left", style = MaterialTheme.typography.labelMedium)
                 } else {
                     Text("Starts in ${durationLabel(event.startMillis - state.nowMillis)}", style = MaterialTheme.typography.labelMedium)
+                }
+                if (event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes) {
+                    Text("Reminder · ${state.settings.leadMinutes} min before start", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary)
                 }
                 val pokemon = event.featured.ifEmpty { event.raidBosses }
                 if (pokemon.isNotEmpty()) PokemonRow(pokemon)
@@ -209,7 +287,7 @@ internal fun PokemonRow(pokemon: List<EventPokemon>) {
 @Composable
 @OptIn(ExperimentalLayoutApi::class)
 private fun ReminderSettings(settings: EventSettings, types: List<String>, onToggleReminderType: (String) -> Unit, onLeadMinutes: (Int) -> Unit) {
-    Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Event reminders", style = MaterialTheme.typography.headlineSmall)
         Text("Get a notification before every event of these types. Star single events to be reminded of them too.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -220,7 +298,7 @@ private fun ReminderSettings(settings: EventSettings, types: List<String>, onTog
             }
         }
         Text("How long before", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             REMINDER_LEAD_CHOICES.forEach { minutes ->
                 FilterChip(selected = settings.leadMinutes == minutes, onClick = { onLeadMinutes(minutes) }, label = { Text("$minutes min") })
             }

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 
 package com.example.pokemonalertsv2.ui.alerts
 
@@ -197,6 +197,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.TextButton
 import com.example.pokemonalertsv2.BuildConfig
 
 // The pose tracker fires up to 2 Hz; the route repository would answer unchanged for
@@ -345,6 +349,8 @@ internal fun mapPictureInPictureZoom(
 
 @Composable
 fun AlertsMapRoute(
+    openHuntRequested: Boolean = false,
+    onHuntRequestConsumed: () -> Unit = {},
     viewModel: PokemonAlertsViewModel,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
@@ -390,6 +396,8 @@ fun AlertsMapRoute(
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     AlertsMapScreen(
+        openHuntRequested = openHuntRequested,
+        onHuntRequestConsumed = onHuntRequestConsumed,
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
@@ -451,6 +459,8 @@ fun AlertsMapRoute(
 
 @Composable
 fun AlertsMapScreen(
+    openHuntRequested: Boolean = false,
+    onHuntRequestConsumed: () -> Unit = {},
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -493,6 +503,8 @@ fun AlertsMapScreen(
     onPipStateChanged: ((MapPipUiState) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
+        openHuntRequested = openHuntRequested,
+        onHuntRequestConsumed = onHuntRequestConsumed,
         alerts = alerts,
         onBack = onBack,
         onRefresh = onRefresh,
@@ -539,6 +551,8 @@ fun AlertsMapScreen(
 
 @Composable
 internal fun AlertsMapScreenContent(
+    openHuntRequested: Boolean = false,
+    onHuntRequestConsumed: () -> Unit = {},
     alerts: List<PokemonAlert>,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -630,6 +644,10 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showHuntSheet by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openHuntRequested) {
+        if (openHuntRequested) { showHuntSheet = true; onHuntRequestConsumed() }
+    }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
@@ -2274,28 +2292,33 @@ internal fun AlertsMapScreenContent(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                MapCategoryRail(
-                    mutedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    visibleAlertCount = filteredAlerts.size,
-                    showBackButton = showBackButton,
-                    onBack = onBack,
-                    onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail now owns the full width. Reserving the end for a pinned button
-                    // only ever kept the *last* chip clear of it: scrolled back to the start,
-                    // the leading chips still ran underneath it, so the button moved down to
-                    // the control column where the map's other actions already live.
-                    contentPadding = PaddingValues(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = 2.dp,
-                        bottom = Spacing.xxs
-                    )
-                )
+                Surface(shape = RoundedCornerShape(24.dp), modifier = Modifier.padding(horizontal = 16.dp), tonalElevation = 3.dp) {
+                    androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("${filteredAlerts.size} alerts", Modifier.padding(horizontal = 8.dp, vertical = 16.dp), style = MaterialTheme.typography.labelLarge)
+                        TextButton(onClick = onOpenFilterStudio) { Text("Filters") }
+                        TextButton(onClick = { showFilterSheet = true }) { Text("Map display") }
+                    }
+                }
+
+                if (selectedCategories.isNotEmpty()) {
+                    LazyRow(contentPadding = PaddingValues(horizontal = Spacing.lg), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        selectedCategories.sortedBy { it.ordinal }.forEach { category ->
+                            item(key = category.name) {
+                                androidx.compose.material3.InputChip(selected = true,
+                                    onClick = { onSelectedCategoriesChange(selectedCategories - category) },
+                                    label = { Text("${category.filterLabel} hidden · show") })
+                            }
+                        }
+                    }
+                }
+                if (preparedMarkers.markerLimitActive) {
+                    Surface(modifier = Modifier.padding(horizontal = Spacing.lg), shape = MaterialTheme.shapes.small) {
+                        Text("Marker limit active · zoom in to see more alerts", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
 
                 Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
@@ -2339,10 +2362,23 @@ internal fun AlertsMapScreenContent(
             )
         }
 
-        if (!compactPictureInPicture && preparedMarkers.markerLimitActive) {
-            Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
-                shape = MaterialTheme.shapes.small) {
-                Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+        if (!compactPictureInPicture && showHuntSheet) {
+            ModalBottomSheet(onDismissRequest = { showHuntSheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Hunt", style = MaterialTheme.typography.headlineSmall)
+                    Text("Follow live alerts that match what you want to catch. For a planned walk through spawnpoints, choose Routes.")
+                    com.example.pokemonalertsv2.hunt.HuntControls(
+                        catalog = filterCatalog, artwork = filterArtwork,
+                        questRewardThumbnails = questRewardThumbnails, categoryCounts = categoryCounts,
+                        userLocation = userLocation,
+                        onHuntStarted = { showHuntSheet = false; onEnterPictureInPicture?.invoke() }
+                    )
+                    com.example.pokemonalertsv2.ui.settings.SwitchSetting(
+                        title = "Spacial Rend", subtitle = "Use the expanded 80 m Pokémon interaction range.",
+                        checked = spacialRendEnabled, onCheckedChange = { onToggleSpacialRend() }
+                    )
+                    TextButton(onClick = { showHuntSheet = false; showMegaBoost = true }) { Text("Mega evolution bonuses") }
+                }
             }
         }
         if (!compactPictureInPicture && showMegaBoost) {
@@ -2352,6 +2388,8 @@ internal fun AlertsMapScreenContent(
         // Only one of the filter sheet and the alert detail sheet is ever open.
         if (!compactPictureInPicture && showFilterSheet && selectedAlert == null) {
             MapFilterSheet(
+                displayOnly = true,
+                onFitAlerts = { fitVisibleAlerts(); showFilterSheet = false },
                 definition = filterDefinition,
                 catalog = filterCatalog,
                 artwork = filterArtwork,
@@ -2447,7 +2485,7 @@ internal fun AlertsMapScreenContent(
 
         AnimatedVisibility(
             visible = !compactPictureInPicture &&
-                currentMapLoaded && (useSidePanel || selectedAlert == null),
+                (useSidePanel || selectedAlert == null),
             enter = appFadeIn(),
             exit = appFadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -2463,34 +2501,13 @@ internal fun AlertsMapScreenContent(
             ) {
                 // One column for everything the map does, ordered by how often it is reached
                 // for, with the most frequent lowest and nearest the thumb.
-                MapSettingsButton(
-                    activeRuleCount = advancedFilterRuleCount,
-                    onClick = { showFilterSheet = true }
-                )
-                SmallFloatingActionButton(
-                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_catch_routes")
-                ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
-                SmallFloatingActionButton(
-                    onClick = { showMegaBoost = true },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_mega_boost")
-                ) { Text("Mega", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp)) }
-                // Secondary: framing the alerts is occasional, finding yourself is constant.
-                SmallFloatingActionButton(
-                    onClick = ::fitVisibleAlerts,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_fit_map),
-                        contentDescription = if (huntSession != null) {
-                            if (huntFocus == HuntMapFocus.TARGET) "Show Hunt route" else "Focus Hunt target"
-                        } else stringResource(R.string.map_show_all_alerts)
-                    )
+                FilledTonalButton(onClick = { showHuntSheet = true }, modifier = Modifier.testTag("open_hunt")) {
+                    Text(if (huntSession == null) "Hunt" else "Hunt active")
                 }
+                FilledTonalButton(
+                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
+                    modifier = Modifier.testTag("open_catch_routes")
+                ) { Text("Routes") }
                 FloatingActionButton(
                     onClick = {
                         if (hasLocationPermissionNow()) {

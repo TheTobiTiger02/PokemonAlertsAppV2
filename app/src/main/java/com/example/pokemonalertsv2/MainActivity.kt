@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import androidx.compose.material3.IconButton
 import android.Manifest
 import android.app.PictureInPictureParams
 import android.content.BroadcastReceiver
@@ -23,6 +24,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
 import com.example.pokemonalertsv2.ui.theme.Alphas
@@ -77,6 +81,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -139,6 +146,7 @@ import com.example.pokemonalertsv2.util.UpdateState
  * Onboarding is handled separately and is not part of the nav bar.
  */
 private data class NavDestination(
+    val destination: AppDestination,
     @StringRes val labelRes: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
@@ -150,11 +158,10 @@ internal fun navigationLayoutModeForWidth(width: Dp): NavigationLayoutMode =
     if (width >= 600.dp) NavigationLayoutMode.RAIL else NavigationLayoutMode.BOTTOM_BAR
 
 private val NAV_DESTINATIONS = listOf(
-    NavDestination(R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
-    NavDestination(R.string.alerts_section_history, Icons.Filled.DateRange, Icons.Outlined.DateRange),
-    NavDestination(R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
-    NavDestination(R.string.navigation_events, Icons.Filled.Star, Icons.Outlined.Star),
-    NavDestination(R.string.navigation_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
+    NavDestination(AppDestination.ALERTS, R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
+    NavDestination(AppDestination.MAP, R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
+    NavDestination(AppDestination.EVENTS, R.string.navigation_events, Icons.Filled.Star, Icons.Outlined.Star),
+    NavDestination(AppDestination.TOOLS, R.string.navigation_tools, Icons.Filled.Build, Icons.Outlined.Build)
 )
 
 internal const val ALERTS_TAB_INDEX = 0
@@ -163,11 +170,12 @@ internal const val EVENTS_TAB_INDEX = 3
 internal const val SETTINGS_TAB_INDEX = 4
 
 internal fun rootTabIndexOrNull(index: Int): Int? =
-    index.takeIf { it in NAV_DESTINATIONS.indices }
+    index.takeIf { AppDestination.fromLegacy(it) != null }
 
 class MainActivity : ComponentActivity() {
 
     private val alertsViewModel: PokemonAlertsViewModel by viewModels()
+    private val eventsViewModel: com.example.pokemonalertsv2.events.EventsViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val historyViewModel: AlertHistoryViewModel by viewModels()
     private val insightsViewModel: SpawnInsightsViewModel by viewModels()
@@ -410,11 +418,6 @@ class MainActivity : ComponentActivity() {
                 showOnboarding = onboardingCompleted != true
             }
 
-            LaunchedEffect(showOnboarding) {
-                if (showOnboarding == false) {
-                    startPermissionFlow()
-                }
-            }
 
             // A pending CSV URI is restored by SettingsViewModel after process recreation.
             // Re-open the same destination so the user never has to hunt for the preview.
@@ -455,6 +458,7 @@ class MainActivity : ComponentActivity() {
                             historyViewModelProvider = { historyViewModel },
                             insightsViewModelProvider = { insightsViewModel },
                             settingsViewModel = settingsViewModel,
+                            eventsViewModelProvider = { eventsViewModel },
                             requestedTab = requestedTab,
                             onRequestedTabConsumed = { requestedRootTab.value = null },
                             requestedSettingsDestination = requestedSettings,
@@ -755,12 +759,14 @@ private fun NavDestinationLabel(destination: NavDestination, selected: Boolean) 
 }
 
 @Composable
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 private fun MainScaffold(
     messages: SharedFlow<String>,
     alertsViewModel: PokemonAlertsViewModel,
     historyViewModelProvider: () -> AlertHistoryViewModel,
     insightsViewModelProvider: () -> SpawnInsightsViewModel,
     settingsViewModel: SettingsViewModel,
+    eventsViewModelProvider: () -> com.example.pokemonalertsv2.events.EventsViewModel,
     requestedTab: Int?,
     onRequestedTabConsumed: () -> Unit,
     requestedSettingsDestination: SettingsDestination?,
@@ -773,8 +779,16 @@ private fun MainScaffold(
     onMapPipAvailabilityChanged: (Boolean, Boolean) -> Unit = { _, _ -> },
     onEnterPictureInPicture: (() -> Unit)? = null
 ) {
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    var localSettingsDestination by remember { mutableStateOf<SettingsDestination?>(null) }
+    var selectedTab by rememberSaveable { mutableStateOf(AppDestination.ALERTS) }
+    var settingsOrigin by rememberSaveable { mutableStateOf(AppDestination.ALERTS) }
+    var lastAlertsSection by rememberSaveable { mutableStateOf(AppDestination.ALERTS) }
+    var openHuntRequested by rememberSaveable { mutableStateOf(false) }
+    var openInsightsRequested by rememberSaveable { mutableStateOf(false) }
+    var localSettingsDestination by rememberSaveable { mutableStateOf<SettingsDestination?>(null) }
+    var editingFilters by rememberSaveable { mutableStateOf<com.example.pokemonalertsv2.data.FilterSurface?>(null) }
+    editingFilters?.let { surface ->
+        com.example.pokemonalertsv2.ui.settings.FilterStudioDialog(surface, settingsViewModel, onDismiss = { editingFilters = null })
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val saveableStateHolder = rememberSaveableStateHolder()
@@ -784,13 +798,42 @@ private fun MainScaffold(
 
     LaunchedEffect(requestedTab) {
         requestedTab?.let {
-            selectedTab = it
+            selectedTab = AppDestination.fromLegacy(it) ?: AppDestination.ALERTS
             onRequestedTabConsumed()
         }
     }
 
-    BackHandler(enabled = selectedTab == MAP_TAB_INDEX) {
-        selectedTab = ALERTS_TAB_INDEX
+    BackHandler(enabled = selectedTab == AppDestination.MAP) {
+        selectedTab = AppDestination.ALERTS
+    }
+
+    BackHandler(enabled = selectedTab == AppDestination.SETTINGS) {
+        selectedTab = settingsOrigin
+        localSettingsDestination = null
+    }
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == AppDestination.ALERTS || selectedTab == AppDestination.HISTORY) lastAlertsSection = selectedTab
+    }
+    fun openSettings(destination: SettingsDestination = SettingsDestination.OVERVIEW) {
+        if (selectedTab != AppDestination.SETTINGS) settingsOrigin = selectedTab
+        localSettingsDestination = destination
+        selectedTab = AppDestination.SETTINGS
+    }
+    fun openTool(id: String) {
+        when (id) {
+            "hunt" -> { openHuntRequested = true; selectedTab = AppDestination.MAP }
+            "routes" -> context.startActivity(Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java))
+            "raids" -> context.startActivity(com.example.pokemonalertsv2.ui.counters.ManualRaidActivity.countersIntent(context))
+            "roster" -> context.startActivity(Intent(context, com.example.pokemonalertsv2.ui.settings.PokeGenieRosterActivity::class.java))
+            "godex" -> openSettings(SettingsDestination.GODEX)
+            "insights" -> { openInsightsRequested = true; selectedTab = AppDestination.HISTORY }
+            "filters" -> openSettings(SettingsDestination.ALERT_FILTERS)
+            "appearance" -> openSettings(SettingsDestination.APPEARANCE_BEHAVIOR)
+            "notifications" -> openSettings(SettingsDestination.NOTIFICATIONS)
+            "permissions" -> openSettings(SettingsDestination.PERMISSIONS)
+            "raid_defaults" -> openSettings(SettingsDestination.RAID_DEFAULTS)
+            "about" -> openSettings(SettingsDestination.ABOUT_UPDATES)
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -841,13 +884,13 @@ private fun MainScaffold(
 
     val autoEnterMapPip by alertsViewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     LaunchedEffect(selectedTab, autoEnterMapPip) {
-        onMapPipAvailabilityChanged(selectedTab == MAP_TAB_INDEX, autoEnterMapPip)
+        onMapPipAvailabilityChanged(selectedTab == AppDestination.MAP, autoEnterMapPip)
     }
 
     if (pictureInPictureMode) {
         // The window shows the map and nothing else, but composed under the same saveable
         // key as the tab, so camera, zoom, mode and selection carry both ways.
-        saveableStateHolder.SaveableStateProvider(MAP_TAB_INDEX) {
+        saveableStateHolder.SaveableStateProvider(AppDestination.MAP.name) {
             AlertsMapRoute(
                 viewModel = alertsViewModel,
                 onBack = {},
@@ -873,7 +916,27 @@ private fun MainScaffold(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            topBar = {
+                if (selectedTab != AppDestination.SETTINGS) Column {
+                    androidx.compose.material3.TopAppBar(
+                        title = { Text(selectedTab.root.title) },
+                        actions = {
+                            if (selectedTab == AppDestination.ALERTS) TextButton(onClick = alertsViewModel::refreshAlerts) { Text("Refresh") }
+                            IconButton(onClick = { openSettings() }) { Icon(Icons.Outlined.Settings, contentDescription = "Settings") }
+                        }
+                    )
+                    if (selectedTab.root == AppDestination.ALERTS) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.material3.FilterChip(selected = selectedTab == AppDestination.ALERTS, onClick = { selectedTab = AppDestination.ALERTS }, label = { Text("Live") })
+                        androidx.compose.material3.FilterChip(selected = selectedTab == AppDestination.HISTORY, onClick = { selectedTab = AppDestination.HISTORY }, label = { Text("History") })
+                    }
+                }
+            },
             bottomBar = {
+                Column {
+                com.example.pokemonalertsv2.ui.components.ActiveActivityBar(
+                    onOpenMap = { selectedTab = AppDestination.MAP },
+                    onOpenHunt = { openHuntRequested = true; selectedTab = AppDestination.MAP }
+                )
                 if (layoutMode == NavigationLayoutMode.BOTTOM_BAR) {
                     NavigationBar(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = Alphas.Elevated),
@@ -884,12 +947,13 @@ private fun MainScaffold(
                         ),
                         tonalElevation = 0.dp
                     ) {
-                        NAV_DESTINATIONS.forEachIndexed { index, destination ->
+                        NAV_DESTINATIONS.forEach { destination ->
                             NavigationBarItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { NavDestinationIcon(destination, selectedTab == index) },
-                                label = { NavDestinationLabel(destination, selectedTab == index) },
+                                modifier = Modifier.testTag("navigation_${destination.destination.name}"),
+                                selected = selectedTab.root == destination.destination,
+                                onClick = { selectedTab = if (destination.destination == AppDestination.ALERTS) lastAlertsSection else destination.destination },
+                                icon = { NavDestinationIcon(destination, selectedTab.root == destination.destination) },
+                                label = { NavDestinationLabel(destination, selectedTab.root == destination.destination) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                                     selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -901,24 +965,27 @@ private fun MainScaffold(
                         }
                     }
                 }
+                }
             }
         ) { paddingValues ->
             Row(modifier = Modifier.padding(paddingValues)) {
                 if (layoutMode == NavigationLayoutMode.RAIL) {
                     NavigationRail(
+                        windowInsets = WindowInsets(0, 0, 0, 0),
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = Alphas.Elevated),
-                        modifier = Modifier.border(
+                        modifier = Modifier.verticalScroll(rememberScrollState()).border(
                             1.dp,
                             Brush.horizontalGradient(listOf(MaterialTheme.colorScheme.outline, Color.Transparent)),
                             RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
                         )
                     ) {
-                        NAV_DESTINATIONS.forEachIndexed { index, destination ->
+                        NAV_DESTINATIONS.forEach { destination ->
                             NavigationRailItem(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                icon = { NavDestinationIcon(destination, selectedTab == index) },
-                                label = { NavDestinationLabel(destination, selectedTab == index) },
+                                modifier = Modifier.testTag("navigation_${destination.destination.name}"),
+                                selected = selectedTab.root == destination.destination,
+                                onClick = { selectedTab = if (destination.destination == AppDestination.ALERTS) lastAlertsSection else destination.destination },
+                                icon = { NavDestinationIcon(destination, selectedTab.root == destination.destination) },
+                                label = { NavDestinationLabel(destination, selectedTab.root == destination.destination) },
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                                     selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -932,20 +999,19 @@ private fun MainScaffold(
                 }
                 AnimatedContent(
                     targetState = selectedTab,
-                    transitionSpec = { appSharedAxisX(forward = targetState > initialState) },
+                    transitionSpec = { appSharedAxisX(forward = targetState.ordinal > initialState.ordinal) },
                     contentKey = { it },
                     label = "root_destination"
                 ) { destinationIndex ->
-                saveableStateHolder.SaveableStateProvider(destinationIndex) {
+                saveableStateHolder.SaveableStateProvider(destinationIndex.name) {
                     when (destinationIndex) {
-                        0 -> {
+                        AppDestination.ALERTS -> {
                             PokemonAlertsRoute(
                                 viewModel = alertsViewModel,
+                                showTopBar = false,
                                 snackbarHostState = snackbarHostState,
                                 onOpenFilterStudio = {
-                                    settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.FEED)
-                                    localSettingsDestination = SettingsDestination.ALERT_FILTERS
-                                    selectedTab = SETTINGS_TAB_INDEX
+                                    editingFilters = com.example.pokemonalertsv2.data.FilterSurface.FEED
                                 },
                                 onStartManualRaid = {
                                     context.startActivity(
@@ -957,11 +1023,13 @@ private fun MainScaffold(
                                 }
                             )
                         }
-                        1 -> {
+                        AppDestination.HISTORY -> {
                             val historyViewModel = historyViewModelProvider()
                             LaunchedEffect(historyViewModel) { historyViewModel.ensureInitialLoad() }
                             val historyUiState by historyViewModel.uiState.collectAsStateWithLifecycle()
                             com.example.pokemonalertsv2.ui.alerts.AlertHistoryRoute(
+                                openInsightsRequested = openInsightsRequested,
+                                onInsightsRequestConsumed = { openInsightsRequested = false },
                                 uiState = historyUiState,
                                 snackbarHostState = snackbarHostState,
                                 onRefresh = historyViewModel::refreshHistoryAndStats,
@@ -973,25 +1041,27 @@ private fun MainScaffold(
                                 insightsViewModel = insightsViewModelProvider()
                             )
                         }
-                        2 -> {
+                        AppDestination.MAP -> {
                             AlertsMapRoute(
+                                openHuntRequested = openHuntRequested,
+                                onHuntRequestConsumed = { openHuntRequested = false },
                                 viewModel = alertsViewModel,
-                                onBack = { selectedTab = ALERTS_TAB_INDEX },
+                                onBack = { selectedTab = AppDestination.ALERTS },
                                 onOpenFilterStudio = {
-                                    settingsViewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.MAP)
-                                    localSettingsDestination = SettingsDestination.ALERT_FILTERS
-                                    selectedTab = SETTINGS_TAB_INDEX
+                                    editingFilters = com.example.pokemonalertsv2.data.FilterSurface.MAP
                                 },
                                 showBackButton = false,
                                 onEnterPictureInPicture = onEnterPictureInPicture
                             )
                         }
-                        EVENTS_TAB_INDEX -> {
-                            com.example.pokemonalertsv2.events.EventsRoute()
+                        AppDestination.TOOLS -> { com.example.pokemonalertsv2.ui.tools.ToolsScreen(onOpen = ::openTool) }
+                        AppDestination.EVENTS -> {
+                            com.example.pokemonalertsv2.events.EventsRoute(eventsViewModelProvider())
                         }
-                        SETTINGS_TAB_INDEX -> {
+                        AppDestination.SETTINGS -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
+                                onClose = { selectedTab = settingsOrigin },
                                 onManageLocationPermissions = onManageLocationPermissions,
                                 requestedDestination = localSettingsDestination ?: requestedSettingsDestination,
                                 onRequestedDestinationConsumed = {

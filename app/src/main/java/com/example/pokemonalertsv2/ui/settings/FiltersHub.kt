@@ -22,8 +22,12 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -62,8 +66,8 @@ internal fun FiltersHubContent(
         requestedEditor?.let { editing = it.name; viewModel.consumeRequestedFilterEditor() }
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Filter Studio", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Each surface has its own rules. Start simple, then tune only the alert types that matter.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Filters", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Choose what appears in Alerts, Map, notifications and each widget. Their rules can differ.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilterSurface.entries.forEach { surface ->
             val assignment = document.assignment(surface)
             val profileName = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == assignment.profileId }?.name
@@ -93,13 +97,13 @@ private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignm
     SummaryCard(
         surface.label, "$typeSummary • $location",
         when (surface) { FilterSurface.FEED -> Icons.Default.List; FilterSurface.MAP -> Icons.Default.LocationOn; FilterSurface.NOTIFICATIONS -> Icons.Default.Notifications },
-        "$matchCount live" + (if (definition.advancedRuleCount > 0) " • ${definition.advancedRuleCount} advanced" else "") + (if (assignment.mode == FilterAssignmentMode.LINKED) " • Linked: ${profileName ?: "profile"}" else " • Custom rules"), onClick
+        "$matchCount live" + (if (definition.advancedRuleCount > 0) " • ${definition.advancedRuleCount} advanced" else "") + (if (assignment.mode == FilterAssignmentMode.LINKED) " • Linked: ${profileName ?: "profile"}" else " • Custom rules"), modifier = Modifier.testTag("filter_target_${surface.name}"), onClick = onClick
     )
 }
 
 @Composable
-private fun SummaryCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, badge: String?, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+private fun SummaryCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, badge: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    ElevatedCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) { Icon(icon, null, Modifier.padding(12.dp).size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -120,7 +124,7 @@ private fun FilterSelection.summary(noun: String): String = when (mode) {
 }
 
 @Composable
-internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewModel, widgetId: Int? = null, onDismiss: () -> Unit) {
+internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewModel, widgetId: Int? = null, widgetDraft: FilterAssignment? = null, onWidgetDraft: ((FilterAssignment, FilterProfile?) -> Unit)? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val document by viewModel.filterStateDocument.collectAsStateWithLifecycle()
     val catalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
@@ -132,15 +136,18 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val legacyArea by viewModel.selectedArea.collectAsStateWithLifecycle()
     val legacyDistance by viewModel.maxDistance.collectAsStateWithLifecycle()
     val widgetConfiguration = remember(widgetId) { widgetId?.let { WidgetConfigurationStore.get(context, it) } }
-    val assignment = widgetConfiguration?.let {
+    val assignment = widgetDraft ?: widgetConfiguration?.let {
         it.filterAssignment ?: FilterAssignment.local(it.legacyFilterDefinition(legacyArea, legacyDistance))
     } ?: document.assignment(surface)
-    val editorTitle = widgetId?.let { "Widget #$it" } ?: surface.label
-    var draft by remember(surface, assignment) { mutableStateOf(assignment.resolve(document)) }
-    var linkedProfileId by remember(surface, assignment) { mutableStateOf(assignment.profileId.takeIf { assignment.mode == FilterAssignmentMode.LINKED }) }
+    val editorTitle = widgetId?.let { "Widget alerts" } ?: if (surface == FilterSurface.FEED) "Alerts" else surface.label
+    var draft by rememberSaveable(surface, assignment, stateSaver = Saver<FilterDefinition, String>(
+        save = { Json.encodeToString(it) }, restore = { Json.decodeFromString<FilterDefinition>(it) }
+    )) { mutableStateOf(widgetDraft?.definition ?: assignment.resolve(document)) }
+    var linkedProfileId by rememberSaveable(surface, assignment) { mutableStateOf(assignment.profileId.takeIf { assignment.mode == FilterAssignmentMode.LINKED }) }
     var showLinkedWarning by remember { mutableStateOf(false) }
     var selector by remember { mutableStateOf<SelectorTarget?>(null) }
     var selectorQueries by remember { mutableStateOf(emptyMap<SelectorTarget, String>()) }
+    var advanced by remember { mutableStateOf(false) }
     var showProfiles by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     var showQuests by remember { mutableStateOf(false) }
@@ -148,14 +155,18 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val matchCount = remember(alerts, draft, contexts) { alerts.count { AlertFilterMatcher.matches(it, draft, contexts[it.uniqueId] ?: FilterMatchContext()) } }
     val linkedProfile = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == linkedProfileId }
     val applyLocal: () -> Unit = {
-        if (widgetId != null && widgetConfiguration != null) {
+        if (onWidgetDraft != null) {
+            onWidgetDraft(FilterAssignment.local(draft), null)
+        } else if (widgetId != null && widgetConfiguration != null) {
             WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.local(draft)))
             AlertsWidgetProvider.requestUpdate(context)
         } else viewModel.applySurfaceFilter(surface, draft)
         onDismiss()
     }
     val applyLink: (FilterProfile) -> Unit = { profile ->
-        if (widgetId != null && widgetConfiguration != null) {
+        if (onWidgetDraft != null) {
+            onWidgetDraft(FilterAssignment.linked(profile), null)
+        } else if (widgetId != null && widgetConfiguration != null) {
             WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.linked(profile)))
             AlertsWidgetProvider.requestUpdate(context)
         } else viewModel.applyProfile(surface, profile, true)
@@ -185,17 +196,30 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
         Surface(Modifier.fillMaxWidth().height(viewportHeight), color = MaterialTheme.colorScheme.background) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0),
-                topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text("Filter Studio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text("Copy from") } }) },
+                topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text("Filters", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text("Copy from") } }) },
                 bottomBar = { Surface(shadowElevation = 8.dp) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text("$matchCount of ${alerts.size} live alerts match", style = MaterialTheme.typography.labelLarge); Text("Draft changes apply together", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Button(onClick = applyDraft) { Text("Apply") } } } }
             ) { padding ->
                 Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { showProfiles = true }, modifier = Modifier.weight(1f)) { Text(if (assignment.mode == FilterAssignmentMode.LINKED) "Linked profile" else "Profiles") }
-                        OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("Save as profile") }
+                    Text("Alert categories", style = MaterialTheme.typography.titleLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterAlertType.entries.forEach { type ->
+                            FilterChip(selected = draft.alertTypes.contains(type.name), onClick = {
+                                val selected = if (draft.alertTypes.mode == FilterSelectionMode.ALL) FilterAlertType.entries.map { normalizeFilterToken(it.name) }.toMutableSet() else draft.alertTypes.normalizedValues.toMutableSet()
+                                val key = normalizeFilterToken(type.name)
+                                if (!selected.add(key)) selected.remove(key)
+                                draft = draft.copy(alertTypes = FilterSelection.only(selected))
+                            }, label = { Text(type.label) })
+                        }
                     }
                     BasicRules(draft, catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } }, onEditDistanceOverrides = { showDistanceOverrides = true }) { draft = it }
-                    Text("Advanced by alert type", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Enabled branches are alternatives. Rules inside a branch all need to match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced rules" else "Advanced rules & saved profiles") }
+                    if (advanced) {
+                    Text("Hundo means perfect IVs (15/15/15); Nundo means 0/0/0. Rules below refine each enabled category.", style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { showProfiles = true }, modifier = Modifier.weight(1f)) { Text("Saved profiles") }
+                        if (onWidgetDraft == null) OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("Save profile") }
+                    }
+                    OutlinedButton(onClick = { showDistanceOverrides = true }) { Text("Custom distance limits (${draft.distanceOverrides.ruleCount})") }
                     FilterAlertType.entries.forEach { type ->
                         TypeRuleRow(type, draft, onToggle = { enabled ->
                             val values = draft.alertTypes.normalizedValues.toMutableSet()
@@ -208,6 +232,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                                 FilterAlertType.QUEST -> { showQuests = true; null }; else -> null
                             }
                         }, onSecondaryAdvanced = if (type == FilterAlertType.RAID) ({ selector = SelectorTarget.RAID_TIERS }) else null)
+                    }
                     }
                     Spacer(Modifier.height(12.dp))
                 }
@@ -230,17 +255,21 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
         artwork = artwork,
         onDismiss = { showDistanceOverrides = false }
     ) { draft = draft.copy(distanceOverrides = it); showDistanceOverrides = false }
-    if (showProfiles) ProfilePickerDialog(document, { showProfiles = false }, onChoose = { profile, linked -> draft = profile.definition; linkedProfileId = profile.id.takeIf { linked }; showProfiles = false }, onDelete = viewModel::deleteFilterProfile, onSave = viewModel::saveFilterProfile, widgetConsumers = viewModel::linkedWidgetConsumers)
+    if (showProfiles) ProfilePickerDialog(document, { showProfiles = false }, onChoose = { profile, linked -> draft = profile.definition; linkedProfileId = profile.id.takeIf { linked }; showProfiles = false }, onDelete = viewModel::deleteFilterProfile, onSave = viewModel::saveFilterProfile, widgetConsumers = viewModel::linkedWidgetConsumers, allowManagement = onWidgetDraft == null)
     if (showSave) NameDialog("Save profile", { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
         title = { Text("Update linked profile?") },
-        text = { Text("Editing ${linkedProfile.name} also changes: ${(document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString()}. These consumers stay linked.") },
+        text = { Text("Editing ${linkedProfile.name} also changes: ${(document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString()}. These destinations will keep sharing future changes.") },
         confirmButton = { Button(onClick = {
-            if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
+            if (onWidgetDraft != null) {
+                val updated = linkedProfile.copy(definition = draft)
+                onWidgetDraft(FilterAssignment.linked(updated), updated)
+                onDismiss()
+            } else if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
             else { viewModel.applyLinkedFilter(surface, linkedProfile, draft); onDismiss() }
         }) { Text("Apply to all") } },
-        dismissButton = { TextButton(onClick = applyLocal) { Text("Only this surface") } }
+        dismissButton = { TextButton(onClick = applyLocal) { Text("Only $editorTitle") } }
     )
 }
 
@@ -253,19 +282,7 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
             FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
             (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
         }
-        Text("Default distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
-        Slider(
-            value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
-            onValueChange = {
-                onChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
-            },
-            valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-            steps = ALERT_DISTANCE_STEPS_METERS.size - 2
-        )
-        val overrideCount = definition.distanceOverrides.ruleCount
-        OutlinedButton(onClick = onEditDistanceOverrides, modifier = Modifier.fillMaxWidth()) {
-            Text(if (overrideCount == 0) "Per-type and per-species limits" else "Per-type and per-species limits ($overrideCount)")
-        }
+        com.example.pokemonalertsv2.ui.components.DistanceLimitControl(definition.maxDistanceMeters) { onChange(definition.copy(maxDistanceMeters = it)) }
         Text("Reachable on foot — ${TravelTime.label(definition.maxWalkingMinutes)}", style = MaterialTheme.typography.titleSmall)
         Text("Missing route or coordinates never hide an alert.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { TravelTime.PRESET_MINUTES.forEach { minutes -> FilterChip(definition.maxWalkingMinutes == minutes, { onChange(definition.copy(maxWalkingMinutes = minutes)) }, label = { Text(TravelTime.label(minutes)) }) } }
@@ -283,7 +300,7 @@ private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onT
         FilterAlertType.PVP -> definition.pvpSpecies.summary("species")
         FilterAlertType.RAID -> "${definition.raidSpecies.summary("species")} • ${definition.raidTiers.summary("tiers") }"
         FilterAlertType.ROCKET -> definition.rocketTypes.summary("Rocket types")
-        FilterAlertType.QUEST -> if (definition.quests.exactMode == FilterSelectionMode.ALL) "All quests" else "${definition.quests.exactPairs.size} exact • ${if (definition.quests.facetEnabled) "task + reward rule" else "no facets"}"
+        FilterAlertType.QUEST -> if (definition.quests.exactMode == FilterSelectionMode.ALL) "All quests" else "${definition.quests.exactPairs.size} exact • ${if (definition.quests.facetEnabled) "task + reward rule" else "no task or reward rule"}"
         else -> "All in this type"
     }
     Surface(shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), color = MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -434,7 +451,7 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
                 }
             }
             if (tab != 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Text("Use task + reward rule", Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = "Use task and reward facets" }) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Text("Choose tasks and rewards", Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = "Match selected tasks and rewards" }) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterSelectionMode.entries.forEach { mode ->
                         FilterChip(selected = (if (tab == 1) taskMode else rewardMode) == mode, onClick = { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; if (tab == 1) taskMode = mode else rewardMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> "Selected" }) })
@@ -470,7 +487,7 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
                 1 -> items(taskOptions.filter { it.contains(query, true) }) { task -> val key = normalizeFilterToken(task); ChoiceRow(task, taskMode == FilterSelectionMode.ALL || (taskMode == FilterSelectionMode.ONLY && key in tasks)) { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; taskMode = FilterSelectionMode.ONLY; tasks = if (key in tasks) tasks - key else tasks + key } }
                 else -> items(rewardOptions.filter { it.contains(query, true) }) { reward -> val key = normalizeFilterToken(reward); ChoiceRow(reward, rewardMode == FilterSelectionMode.ALL || (rewardMode == FilterSelectionMode.ONLY && key in rewards)) { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; rewardMode = FilterSelectionMode.ONLY; rewards = if (key in rewards) rewards - key else rewards + key } }
             } }
-            Text("Exact pairs are alternatives to the task + reward facet rule.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("A quest matches either a selected task/reward pair or the task and reward choices above.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { onSave(QuestFilterRules(exact, facetEnabled, FilterSelection(taskMode, tasks), FilterSelection(rewardMode, rewards), exactMode)) }) { Text("Done") } }
         } }
     }
@@ -596,7 +613,8 @@ internal fun ProfilePickerDialog(
     onChoose: (FilterProfile, Boolean) -> Unit,
     onDelete: (String) -> Unit,
     onSave: (String, FilterDefinition, String?) -> Unit,
-    widgetConsumers: (String) -> List<String>
+    widgetConsumers: (String) -> List<String>,
+    allowManagement: Boolean = true
 ) {
     val profiles = BuiltInFilterProfiles.all + document.profiles
     var renaming by remember { mutableStateOf<FilterProfile?>(null) }
@@ -606,17 +624,18 @@ internal fun ProfilePickerDialog(
         title = { Text("Profiles") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (!allowManagement) Text("Choose a profile here. Create, rename, or delete profiles in Settings > Filters.", style = MaterialTheme.typography.bodySmall)
                 profiles.forEach { profile ->
                     val builtIn = BuiltInFilterProfiles.all.any { it.id == profile.id }
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Text(profile.name, fontWeight = FontWeight.SemiBold)
                         Text(if (builtIn) "Read-only starter • duplicate to edit" else "${profile.definition.advancedRuleCount} advanced rules", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row {
-                            TextButton(onClick = { onChoose(profile, true) }) { Text("Link") }
-                            TextButton(onClick = { onChoose(profile, false) }) { Text("Copy") }
-                            TextButton(onClick = { onSave("${profile.name} copy", profile.definition, null) }) { Text("Duplicate") }
+                            TextButton(onClick = { onChoose(profile, true) }) { Text("Link changes") }
+                            TextButton(onClick = { onChoose(profile, false) }) { Text("Copy once") }
+                            if (allowManagement) TextButton(onClick = { onSave("${profile.name} copy", profile.definition, null) }) { Text("Duplicate") }
                         }
-                        if (!builtIn) Row {
+                        if (!builtIn && allowManagement) Row {
                             TextButton(onClick = { renaming = profile }) { Text("Rename") }
                             TextButton(onClick = { deleting = profile }) { Text("Delete") }
                         }
@@ -630,7 +649,7 @@ internal fun ProfilePickerDialog(
     renaming?.let { profile -> NameDialog("Rename profile", { renaming = null }, initialValue = profile.name) { name -> onSave(name, profile.definition, profile.id); renaming = null } }
     deleting?.let { profile ->
         val consumers = document.consumersOf(profile.id).map { it.label } + widgetConsumers(profile.id)
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${profile.name}?") }, text = { Text(if (consumers.isEmpty()) "This profile is not linked to any surface." else "${consumers.joinToString()} will keep independent copies of these rules before the profile is deleted.") }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text("Delete profile") } })
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${profile.name}?") }, text = { Text(if (consumers.isEmpty()) "This profile is not linked to any destination." else "${consumers.joinToString()} will keep independent copies of these rules before the profile is deleted.") }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text("Delete profile") } })
     }
 }
 
@@ -652,6 +671,6 @@ private fun WidgetFiltersSection() {
     }
     SettingsSection("Widget instances") {
         if (placed.isEmpty()) Text("No widgets placed. Add one from the home screen to give it an independent filter.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) "Legacy rules • migrates when edited" else "Unified filter • instance #$id", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Customize") } } } }
+        placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) "Custom rules" else "Custom rules", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Customize") } } } }
     }
 }

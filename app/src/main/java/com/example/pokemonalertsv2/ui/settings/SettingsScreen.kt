@@ -137,7 +137,9 @@ internal enum class SettingsDestination(val title: String) {
     GODEX("GoDex checklist"),
     GODEX_COLLECTION("GoDex collection"),
     RAID_COUNTERS("Raid counters"),
+    RAID_DEFAULTS("Counter defaults"),
     NOTIFICATIONS("Notifications"),
+    PERMISSIONS("Permissions"),
     ABOUT_UPDATES("About & updates")
 }
 
@@ -157,6 +159,7 @@ internal fun goDexDisconnectMessage(pendingCount: Int): String =
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun SettingsScreen(
+    onClose: () -> Unit = {},
     viewModel: SettingsViewModel,
     onManageLocationPermissions: () -> Unit,
     requestedDestination: SettingsDestination? = null,
@@ -208,8 +211,7 @@ internal fun SettingsScreen(
                 context,
                 Manifest.permission.ACCESS_BACKGROUND_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
-        systemNotificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        systemNotificationsGranted = androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
     DisposableEffect(lifecycleOwner) {
         refreshLocationPermissionStatus()
@@ -308,13 +310,13 @@ internal fun SettingsScreen(
                     },
                     navigationIcon = {
                         AnimatedContent(
-                            targetState = destination != SettingsDestination.OVERVIEW,
+                            targetState = true,
                             transitionSpec = { appFadeThrough() },
                             label = "settings_back"
                         ) { showBack ->
                             if (showBack) {
                                 FilledIconButton(
-                                    onClick = { navigateTo(parentDestination) },
+                                    onClick = { if (destination == SettingsDestination.OVERVIEW) onClose() else navigateTo(parentDestination) },
                                     shape = CircleShape
                                 ) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -376,6 +378,7 @@ internal fun SettingsScreen(
                         selectedArea = selectedArea,
                         maxDistance = maxDistance,
                         notificationsEnabled = notificationsEnabled,
+                        systemNotificationsGranted = systemNotificationsGranted,
                         foregroundLocationGranted = foregroundLocationGranted,
                         backgroundLocationGranted = backgroundLocationGranted,
                         goDexSummary = when {
@@ -407,8 +410,9 @@ internal fun SettingsScreen(
                     )
                 }
 
-                if (animatedDestination == SettingsDestination.RAID_COUNTERS) {
+                if (animatedDestination == SettingsDestination.RAID_COUNTERS || animatedDestination == SettingsDestination.RAID_DEFAULTS) {
                     RaidCountersSettingsContent(
+                        openDefaultsInitially = animatedDestination == SettingsDestination.RAID_DEFAULTS,
                         settings = raidCounterSettings,
                         onOptionsChanged = viewModel::updateRaidCounterDefaults,
                         onPrepareCsv = viewModel::preparePokeGenieImport,
@@ -421,6 +425,7 @@ internal fun SettingsScreen(
                 }
 
                 if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
+                SettingsSection(title = "Alert layout") { com.example.pokemonalertsv2.ui.components.FeedLayoutPicker(preview = true) }
                 SettingsSection(title = "Display and sorting") {
                     com.example.pokemonalertsv2.ui.alerts.MapClusteringSettingsSection()
                     Text(
@@ -610,6 +615,8 @@ internal fun SettingsScreen(
                             totalCount = totalCount,
                             onOpenCollection = { navigateTo(SettingsDestination.GODEX_COLLECTION) }
                         )
+                        val liveAlerts by viewModel.filterableAlerts.collectAsStateWithLifecycle()
+                        GoDexNearbyMatches(liveAlerts)
                         GoDexSyncStatusCard(
                             config = goDexConfig,
                             syncState = goDexSyncUiState,
@@ -775,7 +782,7 @@ internal fun SettingsScreen(
                 }
                 }
                 
-                if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
+                if (animatedDestination == SettingsDestination.PERMISSIONS) {
                 SettingsSection(title = "Permission status") {
                     PermissionStatusRow(
                         title = "Notifications",
@@ -810,11 +817,16 @@ internal fun SettingsScreen(
                     // this is the only row that shows delivery actually working.
                     PushLivenessRow(lastPushReceivedMillis = lastPushReceived)
                 }
+                }
+                if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
+                OutlinedButton(onClick = { navigateTo(SettingsDestination.PERMISSIONS) }, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (systemNotificationsGranted) "Manage Android permissions" else "Notifications blocked by Android · enable permission")
+                }
                 SettingsSection(title = "Notification preferences") {
                     OutlinedButton(onClick = {
                         viewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.NOTIFICATIONS)
                         navigateTo(SettingsDestination.ALERT_FILTERS)
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Choose eligible alerts in Filter Studio") }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Choose eligible alerts in Filters") }
                     SwitchSetting(
                         title = "Enable Notifications",
                         subtitle = "Receive alerts for new Pokemon nearby",

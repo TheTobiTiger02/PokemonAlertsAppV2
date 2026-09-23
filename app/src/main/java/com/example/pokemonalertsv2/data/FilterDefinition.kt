@@ -264,7 +264,7 @@ data class FilterStateDocument(
 
 @Serializable
 enum class FilterSurface(val label: String) {
-    FEED("Feed"), MAP("Map"), NOTIFICATIONS("Notifications")
+    FEED("Alerts"), MAP("Map"), NOTIFICATIONS("Notifications")
 }
 
 /**

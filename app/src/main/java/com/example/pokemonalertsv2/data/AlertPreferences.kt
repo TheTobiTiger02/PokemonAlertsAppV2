@@ -458,6 +458,9 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 
     override suspend fun setOnboardingCompleted(completed: Boolean) {
         dataStore.edit { prefs ->
+            if (completed && prefs[ONBOARDING_COMPLETED_KEY] != true && prefs[MapClusteringPreferences.KEY] == null) {
+                prefs[MapClusteringPreferences.KEY] = "{\"preset\":\"PERFORMANCE\"}"
+            }
             prefs[ONBOARDING_COMPLETED_KEY] = completed
         }
     }

@@ -387,20 +387,46 @@ internal fun MapAlertDetailContent(
             }
         }
 
+        MapAlertCountdown(
+            endTime = alert.endTime,
+            categoryAccent = categoryAccent,
+            countdownClock = countdownClock
+        )
+
+        Surface(
+            shape = MaterialTheme.shapes.small,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        ) {
+            val distanceText = distanceInfo?.distanceText
+            val walkingText = distanceInfo?.walkingText
+            Text(
+                text = when {
+                    distanceText != null && walkingText != null -> {
+                        "$distanceText · ${stringResource(R.string.map_estimated_walk, walkingText)}"
+                    }
+                    distanceText != null -> distanceText
+                    else -> stringResource(R.string.map_distance_unavailable)
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            FilledTonalButton(
+            Button(
                 onClick = onGoing,
                 enabled = isGoing || alert.isEligibleArrivalDestination(),
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
             ) {
                 Text(if (isGoing) "Stop" else "I’m going")
             }
-            Button(
+            FilledTonalButton(
                 onClick = onOpenMaps,
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp)
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_map),
@@ -408,7 +434,7 @@ internal fun MapAlertDetailContent(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Directions")
+                Text("Google Maps")
             }
         }
 
@@ -422,7 +448,7 @@ internal fun MapAlertDetailContent(
                 onClick = onOpenFullDetail,
                 modifier = Modifier
                     .weight(1f)
-                    .height(52.dp)
+                    .heightIn(min = 52.dp)
                     .testTag("map_open_details")
             ) {
                 Text("Open details", maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -536,25 +562,6 @@ internal fun MapAlertDetailContent(
             }
         }
 
-        Surface(
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-        ) {
-            val distanceText = distanceInfo?.distanceText
-            val walkingText = distanceInfo?.walkingText
-            Text(
-                text = when {
-                    distanceText != null && walkingText != null -> {
-                        "$distanceText · ${stringResource(R.string.map_estimated_walk, walkingText)}"
-                    }
-                    distanceText != null -> distanceText
-                    else -> stringResource(R.string.map_distance_unavailable)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
-            )
-        }
 
         if (isGoing) {
             Surface(
@@ -585,11 +592,6 @@ internal fun MapAlertDetailContent(
             }
         }
 
-        MapAlertCountdown(
-            endTime = alert.endTime,
-            categoryAccent = categoryAccent,
-            countdownClock = countdownClock
-        )
 
         }
     }

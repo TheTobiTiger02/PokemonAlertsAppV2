@@ -93,13 +93,13 @@ fun OnboardingScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "${step + 1} / 4",
+                        "${step + 1} / 3",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 LinearProgressIndicator(
-                    progress = { (step + 1) / 4f },
+                    progress = { (step + 1) / 3f },
                     modifier = Modifier.fillMaxWidth()
                 )
                 AnimatedContent(
@@ -109,10 +109,12 @@ fun OnboardingScreen(
                 ) { currentStep ->
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         when (currentStep) {
-                            0 -> SetupIntro()
-                            1 -> AreaSetup(area, distance, { area = it }, { distance = it })
-                            2 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
-                            else -> PermissionSetup()
+                            0 -> AreaSetup(area, distance, { area = it }, { distance = it })
+                            1 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
+                            else -> {
+                                SetupHeader(Icons.Filled.Notifications, "Your alert layout", "Choose how you like to browse. Change this anytime above the feed or in Settings.")
+                                com.example.pokemonalertsv2.ui.components.FeedLayoutPicker(preview = true)
+                            }
                         }
                     }
                 }
@@ -129,7 +131,7 @@ fun OnboardingScreen(
                     }
                     Button(
                         onClick = {
-                            if (step < 3) step++ else {
+                            if (step < 2) step++ else {
                                 onAreaChanged(area)
                                 onMaxDistanceChanged(distance)
                                 onPresetSelected(NotificationPreset.valueOf(presetName))
@@ -139,21 +141,21 @@ fun OnboardingScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         AnimatedContent(
-                            targetState = step == 3,
+                            targetState = step == 2,
                             transitionSpec = { appFadeThrough() },
                             label = "onboarding_primary_action"
                         ) { finishing ->
-                            Text(if (finishing) "Enable & finish" else "Continue")
+                            Text(if (finishing) "Start exploring" else "Continue")
                         }
                     }
                 }
                 AnimatedVisibility(
-                    visible = step == 3,
+                    visible = step == 2,
                     enter = appRiseIn(),
                     exit = appSinkOut()
                 ) {
                     Text(
-                        "Android will ask for notification and location access next. You can decline and change these later in Settings.",
+                        "Location and notification access are optional. Enable them when you need them, or later in Settings.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -173,30 +175,22 @@ private fun SetupIntro() = SetupHeader(
 )
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onDistance: (Int) -> Unit) {
     SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Filters.")
     Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AREA_FILTER_OPTIONS.forEach { value ->
             FilterChip(selected = area == value, onClick = { onArea(value) }, label = { Text(value) })
         }
     }
-    Text(
-        "Distance: ${distanceLabel(distance)}",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurface
-    )
-    Slider(
-        value = distanceStepIndex(distance).toFloat(),
-        onValueChange = { onDistance(ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]) },
-        valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-        steps = ALERT_DISTANCE_STEPS_METERS.size - 2
-    )
+    com.example.pokemonalertsv2.ui.components.DistanceLimitControl(distance, onDistance)
 }
 
 @Composable
 private fun PresetSetup(selected: NotificationPreset, onSelected: (NotificationPreset) -> Unit) {
     SetupHeader(Icons.Filled.Notifications, "Choose notification intensity", "Presets only set alert categories. Fine-grained species and raid filters remain available in Settings.")
+    Text("Hundo means perfect IVs (15/15/15). Nundo means zero IVs (0/0/0).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     listOf(
         NotificationPreset.EVERYTHING to "Every supported alert category",
         NotificationPreset.HIGH_VALUE to "Spawns, Hundos, PvP, Nundos, and Kecleon",
