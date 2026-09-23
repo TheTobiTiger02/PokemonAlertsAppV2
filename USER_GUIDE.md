@@ -2,9 +2,8 @@
 
 ## 🎯 Sorting Your Alerts
 
-1. Open the **Active Alerts** tab
-2. Look for the "Sort & Filter" section at the top of the list
-3. Tap the **Sort button** (shows current sort method)
+1. Open the **Alerts** tab (the **Live** section)
+2. Tap the sort chip next to the search icon (it shows the current order, e.g. "Newest")
 4. Choose from:
    - **Distance** - Nearest alerts first (requires location permission)
    - **Time** - Ending soonest first
@@ -70,7 +69,7 @@ The widget shows:
 
 ## 📜 Viewing History
 
-1. Swipe to the **History** tab
+1. Open the **Alerts** tab and choose **History** at the top
 2. Use filters to find specific alert types
 3. **Pull down to refresh** the history
 4. Tap any past alert to see details

@@ -631,6 +631,7 @@ internal fun AlertsMapScreenContent(
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
+    var showMapTools by rememberSaveable { mutableStateOf(false) }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -2345,6 +2346,47 @@ internal fun AlertsMapScreenContent(
                 Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
             }
         }
+        if (!compactPictureInPicture && showMapTools) {
+            MapToolsSheet(onDismiss = { showMapTools = false }) {
+                MapToolsContent(
+                    refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
+                    onRefresh = onRefresh,
+                    onEnterPictureInPicture = onEnterPictureInPicture?.let {
+                        {
+                            showMapTools = false
+                            if (hasLocationPermissionNow()) {
+                                hasLocationPermission = true
+                                showPreciseLocationGuidanceIfNeeded()
+                                launchPictureInPicture()
+                            } else {
+                                pendingPictureInPictureLaunch = true
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    catalog = filterCatalog,
+                    artwork = filterArtwork,
+                    questRewardThumbnails = questRewardThumbnails,
+                    categoryCounts = categoryCounts,
+                    userLocation = userLocation,
+                    onOpenCatchRoutes = {
+                        showMapTools = false
+                        context.startActivity(
+                            android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)
+                        )
+                    },
+                    onOpenMegaBoost = {
+                        showMapTools = false
+                        showMegaBoost = true
+                    }
+                )
+            }
+        }
         if (!compactPictureInPicture && showMegaBoost) {
             com.example.pokemonalertsv2.megaboost.MegaBoostSheet(onDismiss = { showMegaBoost = false })
         }
@@ -2468,15 +2510,15 @@ internal fun AlertsMapScreenContent(
                     onClick = { showFilterSheet = true }
                 )
                 SmallFloatingActionButton(
-                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_catch_routes")
-                ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
-                SmallFloatingActionButton(
-                    onClick = { showMegaBoost = true },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_mega_boost")
-                ) { Text("Mega", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp)) }
+                    onClick = { showMapTools = true },
+                    containerColor = if (huntSession != null) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surface,
+                    contentColor = if (huntSession != null) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.testTag("open_map_tools")
+                ) {
+                    Icon(painter = painterResource(id = R.drawable.ic_tools), contentDescription = "Map tools")
+                }
                 // Secondary: framing the alerts is occasional, finding yourself is constant.
                 SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,

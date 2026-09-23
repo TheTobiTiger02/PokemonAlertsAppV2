@@ -156,7 +156,11 @@ fun HuntControls(
                 modifier = Modifier.semantics { contentDescription = "Hunt Battery Saver" }
             )
         }
-        Text("During a hunt, turn the phone upside down to black out the screen. Turn upright to restore it; long press the black screen to disable.", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "Face down during a hunt blacks out the screen. Long press it to turn off.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         batterySaverProblem?.let { problem ->
             Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             if (!android.provider.Settings.canDrawOverlays(context)) {

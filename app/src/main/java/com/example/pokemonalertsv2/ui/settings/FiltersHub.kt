@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
@@ -195,7 +197,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                     }
                     BasicRules(draft, catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } }, onEditDistanceOverrides = { showDistanceOverrides = true }) { draft = it }
                     Text("Advanced by alert type", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Enabled branches are alternatives. Rules inside a branch all need to match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("An alert shows if it matches any switched-on type. Inside a type, every rule must match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilterAlertType.entries.forEach { type ->
                         TypeRuleRow(type, draft, onToggle = { enabled ->
                             val values = draft.alertTypes.normalizedValues.toMutableSet()
@@ -253,14 +255,10 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
             FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
             (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
         }
-        Text("Default distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
-        Slider(
-            value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
-            onValueChange = {
-                onChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
-            },
-            valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-            steps = ALERT_DISTANCE_STEPS_METERS.size - 2
+        Text("Distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
+        com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
+            meters = definition.maxDistanceMeters,
+            onChange = { onChange(definition.copy(maxDistanceMeters = it)) }
         )
         val overrideCount = definition.distanceOverrides.ruleCount
         OutlinedButton(onClick = onEditDistanceOverrides, modifier = Modifier.fillMaxWidth()) {
@@ -288,11 +286,13 @@ private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onT
     }
     Surface(shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Surface(Modifier.width(5.dp).height(52.dp), color = type.category().accentColor()) {}
-            Switch(enabled, onToggle, modifier = Modifier.padding(horizontal = 12.dp).semantics { contentDescription = "Enable ${type.label}" })
+            Switch(enabled, onToggle, modifier = Modifier.padding(start = 12.dp, end = 12.dp).semantics { contentDescription = "Enable ${type.label}" })
             val typeLimit = definition.distanceOverrides.perType[type.name]
             Column(Modifier.weight(1f)) {
-                Text(type.label, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(Modifier.size(8.dp), shape = CircleShape, color = type.category().accentColor()) {}
+                    Text(type.label, fontWeight = FontWeight.SemiBold)
+                }
                 Text(
                     if (!enabled) "Disabled" else if (typeLimit != null) "$summary • ${distanceLabel(typeLimit)}" else summary,
                     style = MaterialTheme.typography.bodySmall,

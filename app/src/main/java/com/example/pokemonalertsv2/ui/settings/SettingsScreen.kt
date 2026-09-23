@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import androidx.compose.material3.IconButton
+import com.example.pokemonalertsv2.ui.alerts.shortLabel
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.Manifest
@@ -130,15 +132,17 @@ import com.example.pokemonalertsv2.data.backup.SettingsBackupRepository
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 
+// Names are part of the pokemonalerts://settings/<name> deep-link contract; titles are free.
 internal enum class SettingsDestination(val title: String) {
     OVERVIEW("Settings"),
-    APPEARANCE_BEHAVIOR("Appearance & behavior"),
+    APPEARANCE_BEHAVIOR("Appearance"),
+    MAP_TRACKING("Map & tracking"),
     ALERT_FILTERS("Filters"),
     GODEX("GoDex checklist"),
     GODEX_COLLECTION("GoDex collection"),
     RAID_COUNTERS("Raid counters"),
-    NOTIFICATIONS("Notifications"),
-    ABOUT_UPDATES("About & updates")
+    NOTIFICATIONS("Notifications & permissions"),
+    ABOUT_UPDATES("Backup & about")
 }
 
 internal fun goDexDisconnectMessage(pendingCount: Int): String =
@@ -253,6 +257,7 @@ internal fun SettingsScreen(
     val savedSortPreference by viewModel.sortPreference.collectAsStateWithLifecycle(
         initialValue = SortPreference.POSTED_TIME
     )
+    val cardStyle by viewModel.cardStyle.collectAsStateWithLifecycle()
     
     // Excluded types for granular filtering
     val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -313,10 +318,7 @@ internal fun SettingsScreen(
                             label = "settings_back"
                         ) { showBack ->
                             if (showBack) {
-                                FilledIconButton(
-                                    onClick = { navigateTo(parentDestination) },
-                                    shape = CircleShape
-                                ) {
+                                IconButton(onClick = { navigateTo(parentDestination) }) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                 }
                             }
@@ -378,13 +380,15 @@ internal fun SettingsScreen(
                         notificationsEnabled = notificationsEnabled,
                         foregroundLocationGranted = foregroundLocationGranted,
                         backgroundLocationGranted = backgroundLocationGranted,
+                        systemNotificationsGranted = systemNotificationsGranted,
+                        cardStyle = cardStyle,
                         goDexSummary = when {
                             !goDexConfig.isConnected -> "Not connected"
                             goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-                                "${goDexEntries.count { it.needed }} still needed - sign in again"
+                                "${goDexEntries.count { it.needed }} still needed · sign in again"
                             goDexConfig.hasWriteBackUrl ->
-                                "${goDexEntries.count { it.needed }} still needed - two-way sync"
-                            else -> "${goDexEntries.count { it.needed }} still needed - read-only"
+                                "${goDexEntries.count { it.needed }} still needed · two-way sync"
+                            else -> "${goDexEntries.count { it.needed }} still needed · read-only"
                         },
                         goDexBadge = when {
                             !goDexConfig.isConnected -> "Connect"
@@ -394,7 +398,7 @@ internal fun SettingsScreen(
                         },
                         raidCountersSummary = buildString {
                             append("Level ${raidCounterSettings.options.attackerLevel}")
-                            append(" - ")
+                            append(" · ")
                             append(
                                 if (raidCounterSettings.pokeGenieCount > 0) {
                                     "${raidCounterSettings.pokeGenieCount} of yours imported"
@@ -421,52 +425,47 @@ internal fun SettingsScreen(
                 }
 
                 if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
-                SettingsSection(title = "Display and sorting") {
-                    com.example.pokemonalertsv2.ui.alerts.MapClusteringSettingsSection()
+                SettingsSection(title = "Theme") {
+                    SegmentedSetting(
+                        options = listOf("System", "Light", "Dark"),
+                        selectedIndex = themeMode.coerceIn(0, 2),
+                        onSelected = { viewModel.updateThemeMode(it) }
+                    )
+                }
+                SettingsSection(title = "Alert list") {
                     Text(
-                        text = "Theme",
+                        text = "Row style",
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    listOf(0 to "System", 1 to "Light", 2 to "Dark").forEach { (mode, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.updateThemeMode(mode) },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = themeMode == mode,
-                                onClick = { viewModel.updateThemeMode(mode) }
-                            )
-                            Text(text = label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    SegmentedSetting(
+                        options = com.example.pokemonalertsv2.data.AlertCardStyle.entries.map { it.label },
+                        selectedIndex = cardStyle.ordinal,
+                        onSelected = { viewModel.updateCardStyle(com.example.pokemonalertsv2.data.AlertCardStyle.entries[it]) }
+                    )
+                    Text(
+                        text = "Compact fits about six alerts on screen. Large adds a map preview and buttons to every alert.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     HorizontalDivider()
                     Text(
                         text = "Default sort",
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    listOf(
-                        SortPreference.POSTED_TIME to "Newest",
-                        SortPreference.TIME_REMAINING to "Time remaining",
-                        SortPreference.DISTANCE to "Distance",
-                        SortPreference.NAME to "Name"
-                    ).forEach { (preference, label) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.updateSortPreference(preference) },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = savedSortPreference == preference,
-                                onClick = { viewModel.updateSortPreference(preference) }
-                            )
-                            Text(text = label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    val sortOptions = listOf(
+                        SortPreference.POSTED_TIME,
+                        SortPreference.DISTANCE,
+                        SortPreference.TIME_REMAINING,
+                        SortPreference.NAME
+                    )
+                    SegmentedSetting(
+                        // Four equal segments on a phone: "Ending soon" would not fit.
+                        options = sortOptions.map { if (it == SortPreference.TIME_REMAINING) "Ending" else it.shortLabel },
+                        selectedIndex = sortOptions.indexOf(savedSortPreference).coerceAtLeast(0),
+                        onSelected = { viewModel.updateSortPreference(sortOptions[it]) }
+                    )
                 }
                 }
 
@@ -477,7 +476,10 @@ internal fun SettingsScreen(
                 )
                 }
 
-                if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
+                if (animatedDestination == SettingsDestination.MAP_TRACKING) {
+                    SettingsSection(title = "Map markers") {
+                        com.example.pokemonalertsv2.ui.alerts.MapClusteringSettingsSection()
+                    }
                     SettingsSection(title = "Arrival tracking") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -497,9 +499,8 @@ internal fun SettingsScreen(
                         )
                     }
                     Text(
-                        text = "Gyms and PokéStops always use 80 m. Pokémon spawns use 40 m, " +
-                            "or 80 m when Spacial Rend is enabled. This setting is only for " +
-                            "other free-coordinate alerts. Arrival requires two precise fixes.",
+                        text = "How close counts as arrived for alerts without a stop or spawn. " +
+                            "Gyms and PokéStops use 80 m; Pokémon spawns use 40 m (80 m with Spacial Rend).",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -516,8 +517,7 @@ internal fun SettingsScreen(
                             }
                         },
                         valueRange = ArrivalTrackingRepository.MIN_RADIUS_METERS.toFloat()..
-                            ArrivalTrackingRepository.MAX_RADIUS_METERS.toFloat(),
-                        steps = 35
+                            ArrivalTrackingRepository.MAX_RADIUS_METERS.toFloat()
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),

@@ -8,6 +8,39 @@ import org.junit.Test
 
 class AlertPresentationPolicyTest {
     @Test
+    fun itemQuestIsTitledByItsReward() {
+        val quest = PokemonAlert(
+            name = "Razz Berry ×6 at Vogel Graffiti",
+            type = listOf("Quest"),
+            pokestop = "Vogel Graffiti",
+            questReward = "Razz Berry ×6"
+        )
+
+        assertEquals("Razz Berry ×6", formatAlertTitle(quest))
+        assertEquals("Quest \u00B7 Vogel Graffiti", formatAlertSubtitle(quest))
+    }
+
+    @Test
+    fun questWithoutRewardFallsBackToTheNameBeforeTheStop() {
+        val quest = PokemonAlert(name = "Sceptile Mega Energy ×10 at Partner-Gemeinde", type = listOf("Quest"))
+
+        assertEquals("Sceptile Mega Energy ×10", formatAlertTitle(quest))
+    }
+
+    @Test
+    fun subtitleDropsTheCategoryWhenTheTitleAlreadyNamesIt() {
+        val rocket = PokemonAlert(
+            name = "Rocket",
+            type = listOf("Rocket"),
+            gruntType = "Water",
+            pokestop = "Mit Gott mittendrin"
+        )
+
+        assertEquals("Water Rocket", formatAlertTitle(rocket))
+        assertEquals("Mit Gott mittendrin", formatAlertSubtitle(rocket))
+    }
+
+    @Test
     fun genericRocketUsesTeamRocketTitleAndSuppressesDuplicateCategory() {
         val title = formatAlertTitle(PokemonAlert(name = "Rocket", type = listOf("Rocket")))
 

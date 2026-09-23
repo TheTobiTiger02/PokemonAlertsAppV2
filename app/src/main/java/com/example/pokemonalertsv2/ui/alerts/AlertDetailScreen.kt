@@ -200,7 +200,7 @@ fun AlertDetailScreen(
     val arrivalTracking = rememberArrivalTrackingUiController()
     val isGoing = arrivalTracking.isTracking(alert)
     val goDexStatus = rememberGoDexStatus(alert)
-    val actionBarClearance = 132.dp +
+    val actionBarClearance = 84.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -341,47 +341,52 @@ fun AlertDetailScreen(
                             }
 
                             if (onEnterPictureInPicture != null) {
-                                Surface(
+                                FilledIconButton(
                                     onClick = { onEnterPictureInPicture() },
-                                    modifier = Modifier.height(36.dp),
-                                    shape = MaterialTheme.shapes.medium,
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outlineVariant
-                                    ),
-                                    contentColor = MaterialTheme.colorScheme.onSurface,
-                                    tonalElevation = 2.dp
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_pip),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(id = R.string.enter_pip_short),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_pip),
+                                        contentDescription = "Open in picture-in-picture"
+                                    )
                                 }
                             }
                         }
 
-                        // Shiny indicator in top right
+                        // Snooze and share sit with the other window-level actions, so the
+                        // bottom bar only carries the two things you do next.
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .statusBarsPadding()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            val overlayColors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (!alert.isExpiredAt(System.currentTimeMillis())) {
+                                FilledIconButton(onClick = { showSnoozeDialog = true }, colors = overlayColors) {
+                                    Icon(Icons.Filled.Notifications, contentDescription = "Snooze alert")
+                                }
+                            }
+                            FilledIconButton(
+                                onClick = { scope.launch { AlertShareCard.share(context, alert) } },
+                                colors = overlayColors
+                            ) {
+                                Icon(Icons.Filled.Share, contentDescription = "Share alert")
+                            }
+                        }
+
+                        // Shiny indicator, bottom left of the picture
                             if (alert.isShiny == true) {
                             Surface(
                                 modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .statusBarsPadding()
+                                    .align(Alignment.BottomStart)
                                     .padding(16.dp),
                                 shape = MaterialTheme.shapes.small,
                                 color = Color(0xFFFFB300).copy(alpha = 0.20f)
@@ -493,6 +498,36 @@ fun AlertDetailScreen(
                             InvalidationBanner(alert = alert)
                         }
 
+                        // Time & Status
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                val statusClock = rememberCountdownClock()
+                                Text(
+                                    text = "Status",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
+
+                                // Created at timestamp
+                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = posted,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         if (alert.isWeatherChange &&
                             (weatherTransitionLabel(alert) != null || alert.affectedAlerts.isNotEmpty())
                         ) {
@@ -559,53 +594,16 @@ fun AlertDetailScreen(
                             )
                         }
 
-                        // Time & Status
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            ),
-                            shape = MaterialTheme.shapes.large,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                val statusClock = rememberCountdownClock()
-                                Text(
-                                    text = "Status",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
-
-                                // Created at timestamp
-                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = posted,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-
                         Spacer(modifier = Modifier.height(actionBarClearance))
                     }
                 }
                 AlertDetailActionBar(
                     modifier = Modifier.align(Alignment.BottomCenter),
                     accent = categoryAccent,
-                    onSnoozeClick = { showSnoozeDialog = true },
                     isGoing = isGoing,
                     goingEnabled = alert.isEligibleArrivalDestination(),
                     onGoingClick = { arrivalTracking.onToggle(alert) },
-                    onNavigateClick = { openMapForAlert(context, alert) },
-                    onPipClick = onEnterPictureInPicture,
-                    onShareClick = {
-                        scope.launch {
-                            AlertShareCard.share(context, alert)
-                        }
-                    }
+                    onNavigateClick = { openMapForAlert(context, alert) }
                 )
                 SnackbarHost(
                     hostState = snackbarHostState,
@@ -838,13 +836,10 @@ internal fun ExpandedAlertImageViewer(
 internal fun AlertDetailActionBar(
     modifier: Modifier = Modifier,
     accent: Color,
-    onSnoozeClick: () -> Unit,
     isGoing: Boolean,
     goingEnabled: Boolean,
     onGoingClick: () -> Unit,
-    onNavigateClick: () -> Unit,
-    onPipClick: (() -> Unit)?,
-    onShareClick: () -> Unit
+    onNavigateClick: () -> Unit
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -939,53 +934,6 @@ internal fun AlertDetailActionBar(
                         )
                     }
                 }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                CompactAlertActionButton(
-                    text = "Snooze",
-                    accessibilityLabel = "Snooze alert",
-                    onClick = onSnoozeClick,
-                    modifier = Modifier.weight(1f),
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Filled.Notifications,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-                if (onPipClick != null) {
-                    CompactAlertActionButton(
-                        text = "PiP",
-                        accessibilityLabel = "Open alert in picture-in-picture",
-                        onClick = onPipClick,
-                        modifier = Modifier.weight(1f),
-                        icon = {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_pip),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    )
-                }
-                CompactAlertActionButton(
-                    text = "Share",
-                    accessibilityLabel = "Share alert",
-                    onClick = onShareClick,
-                    modifier = Modifier.weight(1f),
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Filled.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
             }
         }
     }

@@ -34,8 +34,12 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 
 ## Navigation and layout
 
-- Primary destinations are **Alerts**, **Map**, and **Settings**.
-- **Live** and **History** are persistent sections inside Alerts.
+- Primary destinations are **Alerts**, **Map**, **Events**, and **Settings**.
+- **Live**, **History** and **Insights** are sections of Alerts, switched by one segmented control
+  in the tab header. The old History screen id (1) is kept for widget and notification intents.
+- Tabs stay composed once opened (`ui/components/KeepAlive.kt`): a hidden tab is unplaced and its
+  lifecycle is capped at CREATED, so switching back is instant and nothing hidden keeps working.
+- Filter Studio opens over the tab that asked for it; closing it returns there.
 - Below 600dp use bottom navigation; from 600dp use a rail; from 840dp feeds may use two columns and map details use a side panel.
 - Root destinations do not show back buttons. Preserve destination, section, filter, and scroll state.
 - Phone headers use a large, bottom-aligned title area that collapses toward a compact toolbar as content scrolls.
@@ -43,7 +47,14 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 ## Content patterns
 
 - Keep filter summaries compact and move detailed controls into bottom sheets or focused subpages.
-- Alert cards use a 144dp preview, overlaid type/countdown badges, concise location and distance metadata, and 48dp actions.
+- Alert rows default to **compact** (`CompactAlertCard`): sprite, title, "type · place", one line of
+  numbers, countdown and a navigate button. Long press holds the other actions. The large card
+  (144dp map preview, 48dp actions) remains as a choice in Settings › Appearance.
+- Titles come from `formatAlertTitle` everywhere (cards, notifications, widgets, map): quests are
+  named by their reward, and the subtitle carries the category and place.
+- Alert type colours appear only as a small dot or marker; selection and emphasis use the blue primary.
+- Alert detail keeps two bottom actions (I'm going, Navigate); window actions sit on the hero.
+- Permissions are asked only in onboarding; afterwards a missing one shows as a card in Settings.
 - Use localized, friendly date/time text rather than exposing server timestamp strings.
 - Loading, empty, error, dismissed, image-fallback, and permission-denied states use the same semantic roles and clear recovery actions.
 

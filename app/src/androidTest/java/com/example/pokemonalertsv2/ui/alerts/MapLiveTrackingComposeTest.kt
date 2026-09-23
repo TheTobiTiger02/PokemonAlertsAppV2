@@ -292,7 +292,7 @@ class MapLiveTrackingComposeTest {
         var selected = false
         composeRule.setContent {
             PokemonAlertsV2Theme {
-                MapQuickActions(
+                MapToolsContent(
                     refreshing = false,
                     onRefresh = {},
                     onEnterPictureInPicture = { selected = true },

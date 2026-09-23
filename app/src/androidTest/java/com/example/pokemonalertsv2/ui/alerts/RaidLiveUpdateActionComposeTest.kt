@@ -19,25 +19,6 @@ class RaidLiveUpdateActionComposeTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun labeledActionCardOpensBossPicker() {
-        var launches = 0
-        composeRule.setContent {
-            PokemonAlertsV2Theme {
-                ManualRaidQuickAction(onClick = { launches++ })
-            }
-        }
-
-        composeRule.onNodeWithText("Raid Live Update").assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "Choose a raid boss for hundo CP and recommended counters."
-        ).assertIsDisplayed()
-        composeRule.onNodeWithText("Choose boss").assertIsDisplayed()
-        composeRule.onNodeWithTag("raid_live_update_action").performClick()
-
-        composeRule.runOnIdle { assertEquals(1, launches) }
-    }
-
-    @Test
     @OptIn(ExperimentalMaterial3Api::class)
     fun alertsToolbarDoesNotContainManualRaidBell() {
         composeRule.setContent {

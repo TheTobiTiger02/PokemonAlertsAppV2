@@ -24,6 +24,9 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var hasStart by mutableStateOf(false)
         private set
+    /** How the start was chosen, in words; raw coordinates meant nothing to anyone reading them. */
+    var startLabel by mutableStateOf("Pinned on the map")
+        private set
     var retryAt by mutableLongStateOf(0)
         private set
     var useNow by mutableStateOf(true)
@@ -32,7 +35,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
     private var generation = 0L
     fun edit(value: CatchRouteSettings) { generation++; job?.cancel(); busy = false; settings = value; itinerary = null; error = null; recommendation = null }
     /** A new start leaves a route walked as drawn, which has to start at its own first point. */
-    fun startPoint(value: CatchPoint) { hasStart = true; edit((if (settings.fixed) settings.withoutImport() else settings).copy(start = value)) }
+    fun startPoint(value: CatchPoint, label: String = "Pinned on the map") { hasStart = true; startLabel = label; edit((if (settings.fixed) settings.withoutImport() else settings).copy(start = value)) }
     val goRoutes = GoRouteRepository(PokemonAlertsApi.goRoutesService)
     /** Walk [record] exactly as drawn. */
     fun importFixed(record: GoRouteRecord, reverse: Boolean) { hasStart = true; edit(settings.walking(record, reverse)) }
@@ -42,7 +45,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
     fun schedule(at: Long?) { useNow = at == null; edit(settings.copy(startAtMillis = at ?: 0)) }
     fun load(entity: CatchSetupEntity) {
         runCatching { store.decodeSetup(entity) }.onSuccess {
-            edit(it.copy(startAtMillis = 0)); selectedId = entity.id; hasStart = true; useNow = true
+            edit(it.copy(startAtMillis = 0)); selectedId = entity.id; hasStart = true; useNow = true; startLabel = "From saved setup"
         }.onFailure { error = "This saved setup could not be read." }
     }
     fun save(duplicate: Boolean = false) = viewModelScope.launch {
@@ -79,7 +82,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Picks the start position with the most expected catches for the chosen departure. */
     fun recommendStart() = recommend("start spots") { service, resolved, progress ->
-        CatchRouteRecommender(service).recommendStart(resolved, progress = progress).also { hasStart = true }
+        CatchRouteRecommender(service).recommendStart(resolved, progress = progress).also { hasStart = true; startLabel = "Best start spot" }
     }
 
     /** Picks the departure in the next six hours with the most expected catches from the chosen start. */

@@ -23,7 +23,8 @@ import java.time.format.DateTimeFormatter
 /** How far back to look. Kept short: these are the windows worth walking on. */
 enum class InsightsRange(val label: String, val days: Long) {
     LAST_7("7 days", 7),
-    LAST_30("30 days", 30)
+    LAST_30("30 days", 30),
+    LAST_90("90 days", 90)
 }
 
 @Immutable
@@ -64,7 +65,7 @@ class SpawnInsightsViewModel(application: Application) : AndroidViewModel(applic
 
     fun setRange(range: InsightsRange) {
         _uiState.update { it.copy(range = range) }
-        if (_uiState.value.hasRun) run()
+        if (_uiState.value.hasRun || _uiState.value.query.isNotBlank()) run()
     }
 
     /** Seeds from whatever the History tab was already looking at. */

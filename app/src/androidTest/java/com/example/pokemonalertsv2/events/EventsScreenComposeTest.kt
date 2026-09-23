@@ -63,7 +63,9 @@ class EventsScreenComposeTest {
         composeRule.onNodeWithText("Today").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("event_gbl").fetchSemanticsNodes().size)
 
+        composeRule.onNodeWithTag("events_types").performClick()
         composeRule.onNodeWithTag("events_type_go-battle-league").performClick()
+        androidx.test.espresso.Espresso.pressBack()
         composeRule.onNodeWithTag("event_gbl").assertIsDisplayed()
 
         composeRule.onNodeWithTag("event_star_spotlight").performClick()

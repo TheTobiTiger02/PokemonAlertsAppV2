@@ -1,5 +1,10 @@
 package com.example.pokemonalertsv2.events
 
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
@@ -34,6 +39,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+private const val EVENTS_REFRESH_INTERVAL_MS = 10 * 60 * 1000L
+
 /** Everything the Events tab draws; kept separate from loading so it can be tested with fixed data. */
 data class EventsUiState(
     val events: List<GameEvent> = emptyList(),
@@ -61,9 +68,19 @@ fun EventsRoute() {
             error = e.message ?: "Events could not be loaded."
         } finally { loading = false }
     }
-    LaunchedEffect(Unit) {
-        events = repository.cached()
-        refresh()
+    LaunchedEffect(Unit) { events = repository.cached() }
+    // The tab stays composed between visits, so "refresh on open" follows the lifecycle,
+    // which is RESUMED exactly while the tab is showing. Throttled: a quick look back at the
+    // tab should not refetch the whole calendar.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var lastRefresh by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            if (System.currentTimeMillis() - lastRefresh > EVENTS_REFRESH_INTERVAL_MS) {
+                lastRefresh = System.currentTimeMillis()
+                refresh()
+            }
+        }
     }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
     fun changed(block: suspend () -> Unit) = scope.launch { block(); EventReminderWorker.replan(context) }
@@ -99,6 +116,13 @@ fun EventsContent(
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
+    var typesOpen by remember { mutableStateOf(false) }
+    var view by rememberSaveable { mutableStateOf(EventView.ALL) }
+    val starred = state.settings.starredIds
+    fun List<GameEvent>.inView() = if (view == EventView.STARRED) filter { it.id in starred } else this
+    val nowEvents = if (view == EventView.UPCOMING) emptyList() else sections.now.inView()
+    val upcomingDays = if (view == EventView.NOW) emptyList()
+    else sections.upcoming.map { (day, events) -> day to events.inView() }.filter { it.second.isNotEmpty() }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
@@ -106,30 +130,70 @@ fun EventsContent(
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
                 }
-                Text("From LeekDuck. Times are local.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
-            if (types.isNotEmpty()) item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    types.forEach { type ->
-                        FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
-                            label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
+            // One row: what to look at, then which event types to leave out. The type list
+            // used to fill half the screen before the first event.
+            item {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    EventView.entries.forEach { option ->
+                        FilterChip(selected = view == option, onClick = { view = option }, label = { Text(option.label) },
+                            modifier = Modifier.testTag("events_view_${option.name.lowercase()}"))
+                    }
+                    if (types.isNotEmpty()) {
+                        val hidden = types.count { it in state.settings.hiddenTypes }
+                        AssistChip(
+                            onClick = { typesOpen = true },
+                            label = { Text(if (hidden == 0) "All types" else "$hidden types hidden") },
+                            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+                            modifier = Modifier.testTag("events_types")
+                        )
                     }
                 }
             }
-            if (sections.now.isEmpty() && sections.upcoming.isEmpty() && !state.loading) item {
-                Text("No events to show.", style = MaterialTheme.typography.bodyMedium)
+            state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
+            if (nowEvents.isEmpty() && upcomingDays.isEmpty() && !state.loading) item {
+                Text(
+                    if (view == EventView.STARRED) "No starred events. Tap the star on an event to be reminded of it."
+                    else "No events to show.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            if (sections.now.isNotEmpty()) {
+            if (nowEvents.isNotEmpty()) {
                 item { SectionTitle("Happening now") }
-                items(sections.now, key = { "now-${it.id}" }) { event ->
+                items(nowEvents, key = { "now-${it.id}" }) { event ->
                     EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
                 }
             }
-            sections.upcoming.forEach { (day, events) ->
+            upcomingDays.forEach { (day, events) ->
                 item(key = "day-$day") { SectionTitle(dayLabel(day, state.nowMillis)) }
                 items(events, key = { it.id }) { event ->
                     EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
+                }
+            }
+            item {
+                Text(
+                    "Event data from LeekDuck. Times are shown in your time zone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+    if (typesOpen) ModalBottomSheet(onDismissRequest = { typesOpen = false }) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Event types", style = MaterialTheme.typography.headlineSmall)
+            Text("Switched-off types are hidden from the list.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                types.forEach { type ->
+                    FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
+                        label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
                 }
             }
         }
@@ -142,6 +206,14 @@ fun EventsContent(
         ReminderSettings(state.settings, (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
             onToggleReminderType, onLeadMinutes)
     }
+}
+
+/** Which slice of the event list is showing. Not persisted: it is a way of looking, not a setting. */
+private enum class EventView(val label: String) {
+    ALL("All"),
+    NOW("Now"),
+    UPCOMING("Upcoming"),
+    STARRED("Starred")
 }
 
 @Composable

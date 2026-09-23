@@ -81,8 +81,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 77
-        versionName = "1.15.3"
+        versionCode = 78
+        versionName = "1.16.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -114,6 +114,16 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Release optimisations (R8, resource shrinking, baseline profile) signed with the
+        // debug key, so it installs over a debug build on a test phone without losing data.
+        create("staging") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
+    }
+    sourceSets {
+        getByName("staging").baselineProfiles.srcDir("src/release/generated/baselineProfiles")
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

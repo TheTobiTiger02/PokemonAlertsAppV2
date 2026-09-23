@@ -40,7 +40,7 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "History", "Map", "Events", "Settings").forEach { label ->
+        listOf("Alerts", "Map", "Events", "Settings").forEach { label ->
             composeRule.onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
@@ -48,14 +48,14 @@ class MainNavigationComposeTest {
     }
 
     @Test
-    fun historyIsAnIndependentRootDestination() {
+    fun historyIsASectionOfTheAlertsTab() {
         waitForMainNavigation()
 
         composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
+        composeRule.onNodeWithText("History").assertIsSelected()
 
-        composeRule.onNodeWithText("Alerts").performClick()
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").performClick()
+        composeRule.onNodeWithText("Live").assertIsSelected()
     }
 
     @Test
@@ -71,10 +71,10 @@ class MainNavigationComposeTest {
             )
         }
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+            runCatching { composeRule.onNodeWithText("Live").fetchSemanticsNode() }.isSuccess
         }
 
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
     }
 
     @Test
@@ -124,11 +124,11 @@ class MainNavigationComposeTest {
 
         composeRule.onNodeWithText("Settings").performClick()
         listOf(
-            "Appearance & behavior",
+            "Appearance",
             "Filters",
             "GoDex checklist",
-            "Notifications",
-            "About & updates"
+            "Notifications & permissions",
+            "Backup & about"
         ).forEach { label ->
             composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed().assertHasClickAction()
         }
@@ -178,7 +178,7 @@ class MainNavigationComposeTest {
         composeRule.activity.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
-        composeRule.onNodeWithText("Appearance & behavior").assertIsDisplayed()
+        composeRule.onNodeWithText("Appearance").assertIsDisplayed()
     }
 
     @Test
@@ -186,7 +186,7 @@ class MainNavigationComposeTest {
         waitForMainNavigation()
 
         composeRule.onNodeWithText("Settings").performClick()
-        composeRule.onNodeWithText("Appearance & behavior").performClick()
+        composeRule.onNodeWithText("Appearance").performClick()
         composeRule.onNodeWithText("Theme").assertIsDisplayed()
 
         composeRule.activityRule.scenario.recreate()
@@ -289,9 +289,9 @@ class MainNavigationComposeTest {
 
     private fun waitForAlertsScreen() {
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            runCatching { composeRule.onNodeWithText("Pokémon Alerts").fetchSemanticsNode() }.isSuccess
+            runCatching { composeRule.onNodeWithText("Live").fetchSemanticsNode() }.isSuccess
         }
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
+        composeRule.onNodeWithText("Live").assertIsDisplayed()
     }
 
     private companion object {

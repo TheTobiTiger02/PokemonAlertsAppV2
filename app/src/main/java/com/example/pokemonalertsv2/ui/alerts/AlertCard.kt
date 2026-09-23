@@ -277,14 +277,22 @@ internal fun AlertCard(
                             )
                         }
                     }
-                    AlertActionsOverflow(
-                        context = cardContext,
-                        endTime = alert.endTime,
-                        countdownClock = countdownClock,
-                        snoozeEnabled = snoozeEnabled,
-                        hasGoingAction = onGoingClick != null,
-                        onAction = onSecondaryAction
-                    )
+                    // Let the 48dp touch target hang past a one-line title instead of
+                    // leaving a blank band under it.
+                    Box(
+                        modifier = Modifier
+                            .height(24.dp)
+                            .wrapContentHeight(align = Alignment.CenterVertically, unbounded = true)
+                    ) {
+                        AlertActionsOverflow(
+                            context = cardContext,
+                            endTime = alert.endTime,
+                            countdownClock = countdownClock,
+                            snoozeEnabled = snoozeEnabled,
+                            hasGoingAction = onGoingClick != null,
+                            onAction = onSecondaryAction
+                        )
+                    }
                 }
 
                 val cardLocationText = alert.venueName ?: alert.locationDisplay

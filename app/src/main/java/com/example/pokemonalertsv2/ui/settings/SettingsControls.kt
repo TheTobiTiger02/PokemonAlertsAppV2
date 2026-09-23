@@ -1,5 +1,9 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.alerts.shortLabel
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -462,84 +466,145 @@ internal fun SettingsOverview(
     goDexSummary: String,
     goDexBadge: String?,
     raidCountersSummary: String,
-    onDestinationSelected: (SettingsDestination) -> Unit
+    onDestinationSelected: (SettingsDestination) -> Unit,
+    systemNotificationsGranted: Boolean = true,
+    cardStyle: com.example.pokemonalertsv2.data.AlertCardStyle = com.example.pokemonalertsv2.data.AlertCardStyle.COMPACT
 ) {
     val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
-    val sortLabel = when (sortPreference) {
-        SortPreference.POSTED_TIME -> "Newest"
-        SortPreference.TIME_REMAINING -> "Time remaining"
-        SortPreference.DISTANCE -> "Distance"
-        SortPreference.NAME -> "Name"
-    }
-    val distanceSummary = if (maxDistance == 0) "Unlimited distance" else "${distanceLabel(maxDistance)} maximum"
-    val notificationSummary = when {
-        !notificationsEnabled -> "Off"
-        !foregroundLocationGranted -> "On - location access needed"
-        !backgroundLocationGranted -> "On - background location off"
-        else -> "On - background location granted"
+    val notificationSummary = if (notificationsEnabled) "On" else "Off"
+    val missingPermissions = buildList {
+        if (!systemNotificationsGranted) add("notifications")
+        if (!foregroundLocationGranted) add("location")
+        else if (!backgroundLocationGranted) add("background location")
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.surfaceContainer,
-                RoundedCornerShape(28.dp)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // One place that says what is missing, instead of a dialog on every launch.
+        if (missingPermissions.isNotEmpty()) {
+            Surface(
+                onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) },
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Default.Warning, contentDescription = null)
+                    Column(Modifier.weight(1f)) {
+                        Text("Permissions needed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Allow ${missingPermissions.joinToString(" and ")} for alerts and distances to work.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                }
+            }
+        }
+
+        SettingsOverviewGroup("Alerts") {
+            SettingsOverviewRow(
+                icon = rememberVectorPainter(Icons.Default.Notifications),
+                title = "Notifications & permissions",
+                summary = notificationSummary,
+                onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
             )
+            OverviewDivider()
+            SettingsOverviewRow(
+                icon = painterResource(R.drawable.ic_filter),
+                title = "Filters",
+                summary = "What the feed, map, widgets and notifications show",
+                onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
+            )
+        }
+        SettingsOverviewGroup("Display") {
+            SettingsOverviewRow(
+                icon = painterResource(R.drawable.ic_theme),
+                title = "Appearance",
+                summary = "$themeLabel theme · ${cardStyle.label} rows · ${sortPreference.shortLabel} first",
+                onClick = { onDestinationSelected(SettingsDestination.APPEARANCE_BEHAVIOR) }
+            )
+            OverviewDivider()
+            SettingsOverviewRow(
+                icon = painterResource(R.drawable.ic_map),
+                title = "Map & tracking",
+                summary = "Marker grouping and arrival radius",
+                onClick = { onDestinationSelected(SettingsDestination.MAP_TRACKING) }
+            )
+        }
+        SettingsOverviewGroup("Accounts") {
+            SettingsOverviewRow(
+                icon = rememberVectorPainter(Icons.Default.AccountCircle),
+                title = "GoDex checklist",
+                summary = goDexSummary,
+                statusBadge = goDexBadge,
+                onClick = { onDestinationSelected(SettingsDestination.GODEX) }
+            )
+            OverviewDivider()
+            SettingsOverviewRow(
+                icon = painterResource(R.drawable.ic_insights),
+                title = "Raid counters",
+                summary = raidCountersSummary,
+                onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
+            )
+        }
+        SettingsOverviewGroup("App") {
+            SettingsOverviewRow(
+                icon = rememberVectorPainter(Icons.Default.Info),
+                title = "Backup & about",
+                summary = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME} · export or restore settings",
+                onClick = { onDestinationSelected(SettingsDestination.ABOUT_UPDATES) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsOverviewGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 12.dp)
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(24.dp))
+        ) { content() }
+    }
+}
+
+@Composable
+private fun OverviewDivider() = HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
+
+/** A setting with a handful of options, as one segmented control instead of a radio list. */
+@Composable
+internal fun SegmentedSetting(options: List<String>, selectedIndex: Int, onSelected: (Int) -> Unit) {
+    com.example.pokemonalertsv2.ui.components.SpringSegmentedRow(
+        selectedIndex = selectedIndex,
+        segmentCount = options.size
     ) {
-        SettingsOverviewRow(
-            icon = Icons.Default.Settings,
-            title = "Appearance & behavior",
-            summary = "$themeLabel theme - $sortLabel sort",
-            onClick = { onDestinationSelected(SettingsDestination.APPEARANCE_BEHAVIOR) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.DateRange,
-            title = "Filters",
-            summary = "Feed, map, widgets and notifications",
-            onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.AccountCircle,
-            title = "GoDex checklist",
-            summary = goDexSummary,
-            statusBadge = goDexBadge,
-            onClick = { onDestinationSelected(SettingsDestination.GODEX) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.Star,
-            title = "Raid counters",
-            summary = raidCountersSummary,
-            onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.Notifications,
-            title = "Notifications",
-            summary = notificationSummary,
-            statusBadge = when {
-                notificationsEnabled && !foregroundLocationGranted -> "Location needed"
-                notificationsEnabled && !backgroundLocationGranted -> "Background off"
-                else -> null
-            },
-            onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
-        )
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp))
-        SettingsOverviewRow(
-            icon = Icons.Default.Info,
-            title = "About & updates",
-            summary = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME}",
-            onClick = { onDestinationSelected(SettingsDestination.ABOUT_UPDATES) }
-        )
+        options.forEachIndexed { index, label ->
+            com.example.pokemonalertsv2.ui.components.SegmentedChoice(
+                label = label,
+                selected = index == selectedIndex,
+                transparent = true,
+                modifier = Modifier.weight(1f),
+                onClick = { onSelected(index) }
+            )
+        }
     }
 }
 
 @Composable
 internal fun SettingsOverviewRow(
-    icon: ImageVector,
+    icon: androidx.compose.ui.graphics.painter.Painter,
     title: String,
     summary: String,
     statusBadge: String? = null,
@@ -559,9 +624,9 @@ internal fun SettingsOverviewRow(
             shape = CircleShape
         ) {
             Icon(
-                imageVector = icon,
+                painter = icon,
                 contentDescription = null,
-                modifier = Modifier.padding(12.dp).size(24.dp)
+                modifier = Modifier.padding(10.dp).size(22.dp)
             )
         }
         Column(

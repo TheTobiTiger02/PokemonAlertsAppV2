@@ -143,8 +143,8 @@
     <string name="widget_open_map_cd">Open alerts map</string>
     <string name="widget_active_alerts_label">Active alerts</string>
     <plurals name="widget_compact_count">
-        <item quantity="one">%1$d active alert</item>
-        <item quantity="other">%1$d active alerts</item>
+        <item quantity="one">%1$d alert</item>
+        <item quantity="other">%1$d alerts</item>
     </plurals>
 
     <string name="widget_config_title">Select Alert Types</string>
@@ -157,12 +157,12 @@
         <item quantity="other">%1$d of %2$d selected</item>
     </plurals>
     <plurals name="alerts_active_count">
-        <item quantity="one">%1$d active alert</item>
-        <item quantity="other">%1$d active alerts</item>
+        <item quantity="one">%1$d alert</item>
+        <item quantity="other">%1$d alerts</item>
     </plurals>
     <plurals name="history_loaded_count">
-        <item quantity="one">%1$d loaded</item>
-        <item quantity="other">%1$d loaded</item>
+        <item quantity="one">%1$d shown</item>
+        <item quantity="other">%1$d shown</item>
     </plurals>
     <string name="widget_config_confirm">Done</string>
     <string name="widget_filter_hundo">Hundos (100% IV)</string>

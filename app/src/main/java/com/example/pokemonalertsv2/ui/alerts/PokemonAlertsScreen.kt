@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.data.AlertCardStyle
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Context
@@ -322,110 +323,28 @@ fun PokemonAlertsRoute(
         }
     }
 }
-/**
- * Standalone route for the History tab, used by the bottom navigation bar.
- */
+/** The History section of the Alerts tab; [AlertsTab] owns the header and refresh. */
 @Composable
 fun AlertHistoryRoute(
     uiState: com.example.pokemonalertsv2.ui.history.HistoryUiState,
-    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
-    onSearchChanged: (String) -> Unit,
-    consumeError: () -> Unit,
-    insightsViewModel: SpawnInsightsViewModel,
-    showTopBar: Boolean = true
+    onSearchChanged: (String) -> Unit
 ) {
     val context = LocalContext.current
-    val haptic = LocalHapticFeedback.current
-
-    // An in-place sub-screen rather than a fifth tab or a new Activity, the way
-    // Settings already navigates within itself.
-    var showInsights by rememberSaveable { mutableStateOf(false) }
-    val insightsState by insightsViewModel.uiState.collectAsStateWithLifecycle()
-    BackHandler(enabled = showInsights) { showInsights = false }
-
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground,
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            if (showTopBar) {
-                TopAppBar(
-                    windowInsets = WindowInsets(0),
-                    title = {
-                        Text(
-                            text = if (showInsights) "Spawn insights" else "Alert History",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = {
-                                if (!showInsights) {
-                                    insightsViewModel.seed(
-                                        query = uiState.searchQuery,
-                                        type = uiState.selectedType
-                                    )
-                                }
-                                showInsights = !showInsights
-                            }
-                        ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_insights),
-                                contentDescription = if (showInsights) {
-                                    "Back to history"
-                                } else {
-                                    "Spawn insights"
-                                }
-                            )
-                        }
-                        IconButton(onClick = onRefresh) {
-                            AnimatedRefreshIcon(
-                                refreshing = uiState.isLoading,
-                                contentDescription = stringResource(id = R.string.refresh_alerts)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                        actionIconContentColor = MaterialTheme.colorScheme.primary,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-                    ),
-                    scrollBehavior = scrollBehavior
-                )
-            }
+    AlertHistoryPage(
+        uiState = uiState,
+        onRefresh = onRefresh,
+        onLoadMore = onLoadMore,
+        onDateChanged = onDateChanged,
+        onTypeChanged = onTypeChanged,
+        onSearchChanged = onSearchChanged,
+        onAlertClick = { alert ->
+            context.startActivity(AlertDetailActivity.createIntent(context, alert))
         }
-    ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
-            if (showInsights) {
-                SpawnInsightsScreen(
-                    state = insightsState,
-                    onQueryChange = insightsViewModel::setQuery,
-                    onRangeChange = insightsViewModel::setRange,
-                    onRun = insightsViewModel::run
-                )
-            } else {
-                AlertHistoryPage(
-                    uiState = uiState,
-                    onRefresh = onRefresh,
-                    onLoadMore = onLoadMore,
-                    onDateChanged = onDateChanged,
-                    onTypeChanged = onTypeChanged,
-                    onSearchChanged = onSearchChanged,
-                    onAlertClick = { alert ->
-                        val intent = AlertDetailActivity.createIntent(context, alert)
-                        context.startActivity(intent)
-                    }
-                )
-            }
-        }
-    }
+    )
 }
 
 internal fun PokemonAlert.typeKeys(): Set<String> {
@@ -627,7 +546,6 @@ fun PokemonAlertsPage(
         status = uiState.toSyncStatus(),
         onRetry = onRefresh
     )
-    ManualRaidQuickAction(onClick = onStartManualRaid)
     PullToRefreshBox(
         isRefreshing = uiState.isLoading,
         onRefresh = {
@@ -733,7 +651,8 @@ fun PokemonAlertsPage(
                 maxWalkingMinutes = maxWalkingMinutes,
                 onMaxWalkingMinutesChange = onMaxWalkingMinutesChange,
                 onOpenFilterStudio = onOpenFilterStudio,
-                unifiedDefinition = filterDefinition
+                unifiedDefinition = filterDefinition,
+                onStartManualRaid = onStartManualRaid
             )
         }
         }
@@ -749,52 +668,6 @@ fun PokemonAlertsPage(
                 onSnoozeAlert(alert, minutes)
             }
         )
-    }
-}
-
-@Composable
-internal fun ManualRaidQuickAction(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .testTag("raid_live_update_action"),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Text(
-                    text = "Raid Live Update",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Choose a raid boss for hundo CP and recommended counters.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-            Text(
-                text = "Choose boss",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
     }
 }
 
@@ -869,7 +742,8 @@ internal fun AlertsList(
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
     onMaxWalkingMinutesChange: (Int) -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
-    unifiedDefinition: FilterDefinition? = null
+    unifiedDefinition: FilterDefinition? = null,
+    onStartManualRaid: (() -> Unit)? = null
 ) {
     val arrivalTracking = rememberArrivalTrackingUiController()
     // A hunt walks you to one alert at a time; the feed marks which one so the row
@@ -879,6 +753,7 @@ internal fun AlertsList(
         HuntRepository.getInstance(huntContext).activeHunt
     }.collectAsStateWithLifecycle()
     val countdownClock = rememberCountdownClock()
+    val cardStyle = rememberAlertCardStyle()
     var searchExpanded by rememberSaveable { mutableStateOf(searchQuery.isNotBlank()) }
     val activeFilterCount = if (unifiedDefinition != null) {
         listOf(unifiedDefinition != FilterDefinition(), showDismissed, searchQuery.isNotBlank()).count { it }
@@ -924,7 +799,8 @@ internal fun AlertsList(
             maxDistance = if (unifiedDefinition == null) maxDistance else 0,
             onClearDistanceFilter = onClearDistanceFilter,
             maxWalkingMinutes = if (unifiedDefinition == null) maxWalkingMinutes else 0,
-            onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) }
+            onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) },
+            onStartManualRaid = onStartManualRaid
         )
         BoxWithConstraints(modifier = Modifier.weight(1f)) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
@@ -932,8 +808,8 @@ internal fun AlertsList(
             columns = GridCells.Fixed(columns),
             state = gridState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(if (cardStyle == AlertCardStyle.COMPACT) 8.dp else 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (filteredAlerts.isEmpty()) {
@@ -1074,7 +950,8 @@ internal fun AlertsList(
                 }
                 
                 Box {
-                    AlertCard(
+                    AlertListItem(
+                        style = cardStyle,
                         alert = model.alert,
                         distanceInfo = model.distanceInfo,
                         goDexStatus = goDexMatches[model.alert.uniqueId]

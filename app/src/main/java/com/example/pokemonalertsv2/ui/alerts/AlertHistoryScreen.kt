@@ -484,6 +484,7 @@ internal fun AlertHistoryPage(
         state = rememberPullToRefreshState()
     ) {
         val countdownClock = rememberCountdownClock()
+        val cardStyle = rememberAlertCardStyle()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
         Column(modifier = Modifier.fillMaxSize()) {
             HistoryListControls(
@@ -673,7 +674,8 @@ internal fun AlertHistoryPage(
                     }
                 }
                 item(key = alert.uniqueId, contentType = "alert_card") {
-                    AlertCard(
+                    AlertListItem(
+                        style = cardStyle,
                         alert = alert,
                         distanceInfo = AlertDistanceInfo(null, null, null),
                         goDexStatus = goDexMatches[alert.uniqueId]

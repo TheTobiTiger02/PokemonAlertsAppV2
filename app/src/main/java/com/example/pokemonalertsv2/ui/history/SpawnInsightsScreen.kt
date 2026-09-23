@@ -1,5 +1,14 @@
 package com.example.pokemonalertsv2.ui.history
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +56,9 @@ fun SpawnInsightsScreen(
     onQueryChange: (String) -> Unit,
     onRangeChange: (InsightsRange) -> Unit,
     onRun: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Species seen in the live feed right now: one tap to look one up. */
+    suggestions: List<String> = emptyList()
 ) {
     Column(
         modifier = modifier
@@ -56,27 +67,44 @@ fun SpawnInsightsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        Text(
+            "When and where a Pokémon has turned up recently.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            label = { Text("Species or search") },
+            label = { Text("Species") },
+            placeholder = { Text("e.g. Dratini") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { if (state.query.isNotBlank()) onRun() }),
+            trailingIcon = {
+                IconButton(onClick = onRun, enabled = !state.isLoading && state.query.isNotBlank()) {
+                    Icon(Icons.Filled.Search, contentDescription = "Look back")
+                }
+            },
             modifier = Modifier.fillMaxWidth()
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            InsightsRange.entries.forEach { range ->
-                FilterChip(
-                    selected = state.range == range,
-                    onClick = { onRangeChange(range) },
-                    label = { Text(range.label) }
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            FilledTonalButton(onClick = onRun, enabled = !state.isLoading) {
-                Text(if (state.hasRun) "Refresh" else "Look back")
+        if (suggestions.isNotEmpty() && !state.hasRun) {
+            Text("Seen today", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                suggestions.forEach { species ->
+                    AssistChip(onClick = { onQueryChange(species); onRun() }, label = { Text(species) })
+                }
             }
         }
+
+        com.example.pokemonalertsv2.ui.settings.SegmentedSetting(
+            options = InsightsRange.entries.map { it.label },
+            selectedIndex = state.range.ordinal,
+            onSelected = { onRangeChange(InsightsRange.entries[it]) }
+        )
 
         state.coverageNote?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -94,7 +122,7 @@ fun SpawnInsightsScreen(
             )
 
             state.insights == null -> Text(
-                "Pick a species and a window, then look back over the history.",
+                "Type a species, or pick one seen today, to see its busiest hours and places.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

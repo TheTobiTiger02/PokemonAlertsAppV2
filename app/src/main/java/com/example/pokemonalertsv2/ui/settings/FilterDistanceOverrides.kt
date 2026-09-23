@@ -139,14 +139,10 @@ private fun DistanceLimitRow(
                 }
             }
             if (meters != null) {
-                Slider(
-                    value = distanceStepIndex(meters).toFloat(),
-                    onValueChange = {
-                        onChange(ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)])
-                    },
-                    valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-                    steps = ALERT_DISTANCE_STEPS_METERS.size - 2,
-                    modifier = Modifier.semantics { contentDescription = "$label distance limit" }
+                com.example.pokemonalertsv2.ui.components.DistanceStepSlider(
+                    meters = meters,
+                    onChange = { onChange(it) },
+                    contentDescription = "$label distance limit"
                 )
             }
         }

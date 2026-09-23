@@ -17,6 +17,16 @@ class MainNavigationTest {
     }
 
     @Test
+    fun historyScreenLivesOnTheAlertsTab() {
+        // Widgets and notifications already on the device still send History's old id.
+        assertEquals(HISTORY_SCREEN_INDEX, rootTabIndexOrNull(HISTORY_SCREEN_INDEX))
+        assertEquals(ALERTS_TAB_INDEX, tabForScreen(HISTORY_SCREEN_INDEX))
+        assertEquals(ALERTS_TAB_INDEX, tabForScreen(ALERTS_TAB_INDEX))
+        assertEquals(MAP_TAB_INDEX, tabForScreen(MAP_TAB_INDEX))
+        assertEquals(SETTINGS_TAB_INDEX, tabForScreen(SETTINGS_TAB_INDEX))
+    }
+
+    @Test
     fun navigationLayoutModeUsesBottomBarOnCompactAndRailFromMediumWidths() {
         assertEquals(
             NavigationLayoutMode.BOTTOM_BAR,

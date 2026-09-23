@@ -167,12 +167,13 @@ private fun MapFilterPill(
     val scheme = MaterialTheme.colorScheme
     // Composited, not translucent: a see-through chip over map tiles reads as muddy rather
     // than as glass, and the label stops being legible over dark satellite imagery.
+    // Selection reads in the app's blue; the type colour lives in the dot only.
     val container = if (selected) {
-        accent.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
+        scheme.primary.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
     } else {
         scheme.surface
     }
-    val border = if (selected) accent.copy(alpha = 0.7f) else scheme.outlineVariant
+    val border = if (selected) scheme.primary.copy(alpha = 0.6f) else scheme.outlineVariant
     val labelColor = if (selected) scheme.onSurface else scheme.onSurfaceVariant
 
     Surface(

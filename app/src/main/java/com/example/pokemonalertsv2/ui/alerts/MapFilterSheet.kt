@@ -602,17 +602,6 @@ private fun MapPanelHeader(
         }
 
         MapPanelWeatherLine(userLocation = userLocation, weatherCells = weatherCells)
-
-        MapQuickActions(
-            refreshing = refreshing,
-            onRefresh = onRefresh,
-            onEnterPictureInPicture = onEnterPictureInPicture,
-            catalog = catalog,
-            artwork = artwork,
-            questRewardThumbnails = questRewardThumbnails,
-            categoryCounts = categoryCounts,
-            userLocation = userLocation
-        )
     }
 }
 
@@ -748,74 +737,6 @@ private fun MapGroupHeading(title: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = Spacing.xxs, top = Spacing.md, bottom = Spacing.xxs)
     )
-}
-
-/**
- * The two actions the header bar used to hold.
- *
- * Neither earns permanent space on the map: the feed already polls every 30s, so refresh is a
- * "now, please" rather than the only way to get data, and picture-in-picture is a once-a-session
- * gesture.
- */
-@Composable
-internal fun MapQuickActions(
-    refreshing: Boolean,
-    onRefresh: () -> Unit,
-    onEnterPictureInPicture: (() -> Unit)?,
-    catalog: FilterCatalog,
-    artwork: Map<String, String>,
-    questRewardThumbnails: Map<String, String>,
-    categoryCounts: Map<AlertCategory, Int>,
-    userLocation: android.location.Location? = null,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-    ) {
-    if (onEnterPictureInPicture != null) {
-        HuntControls(
-            catalog = catalog,
-            artwork = artwork,
-            questRewardThumbnails = questRewardThumbnails,
-            categoryCounts = categoryCounts,
-            userLocation = userLocation,
-            onHuntStarted = onEnterPictureInPicture
-        )
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-    ) {
-        FilledTonalButton(
-            onClick = onRefresh,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            AnimatedRefreshIcon(
-                refreshing = refreshing,
-                contentDescription = stringResource(R.string.refresh_alerts)
-            )
-            Spacer(Modifier.width(Spacing.sm))
-            Text("Refresh", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (onEnterPictureInPicture != null) {
-            FilledTonalButton(
-                onClick = onEnterPictureInPicture,
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_pip),
-                    contentDescription = "Open map in picture-in-picture",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(Spacing.sm))
-                Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-    }
 }
 
 /**
@@ -1028,11 +949,13 @@ private fun MapToggleTile(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(14.dp),
-        color = if (selected) accent.copy(alpha = 0.16f) else scheme.surface,
+        // Selection is the app's one blue; the type colour stays in the dot, where it helps
+        // match the tile to its markers without turning the grid into a paint chart.
+        color = if (selected) scheme.primary.copy(alpha = 0.12f) else scheme.surface,
         contentColor = if (selected) scheme.onSurface else scheme.onSurfaceVariant,
         border = BorderStroke(
-            if (selected) 2.dp else 1.dp,
-            if (selected) accent else scheme.outlineVariant
+            if (selected) 1.5.dp else 1.dp,
+            if (selected) scheme.primary else scheme.outlineVariant
         )
     ) {
         Column(
@@ -1086,14 +1009,9 @@ private fun DistanceSection(
                     fontWeight = FontWeight.Bold
                 )
             }
-            Slider(
-                value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
-                onValueChange = {
-                    onDefinitionChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
-                },
-                valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-                steps = ALERT_DISTANCE_STEPS_METERS.size - 2,
-                modifier = Modifier.semantics { contentDescription = "Maximum distance" }
+            com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
+                meters = definition.maxDistanceMeters,
+                onChange = { onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
             )
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
