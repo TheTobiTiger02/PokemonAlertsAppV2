@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.baselineprofile
 
+import android.os.SystemClock
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.StaleObjectException
@@ -41,7 +42,14 @@ internal fun UiDevice.requireClick(selector: BySelector) {
 }
 
 internal fun UiDevice.requireVisible(selector: BySelector) {
-    val ready = wait(Until.hasObject(selector), 10_000)
+    val deadline = SystemClock.uptimeMillis() + 10_000L
+    var ready = false
+    while (!ready && SystemClock.uptimeMillis() < deadline) {
+        // Poll the current hierarchy. Until.hasObject can miss Compose semantics updates
+        // while UiAutomator's idle timeout is disabled for readiness measurements.
+        ready = findObject(selector) != null
+        if (!ready) SystemClock.sleep(100)
+    }
     if (!ready) {
         val directory = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.getExternalFilesDir(null)
         dumpWindowHierarchy(java.io.File(directory, "benchmark-failure.xml"))
@@ -50,18 +58,31 @@ internal fun UiDevice.requireVisible(selector: BySelector) {
     check(ready) { "Screen did not become ready: $selector" }
 }
 
+internal fun UiDevice.requireVisibleAny(vararg selectors: BySelector) {
+    val deadline = SystemClock.uptimeMillis() + 10_000L
+    while (SystemClock.uptimeMillis() < deadline) {
+        if (selectors.any(::hasObject)) return
+        SystemClock.sleep(100)
+    }
+    error("Screen did not become ready: ${selectors.joinToString()}")
+}
+
 internal fun UiDevice.clickIfPresent(
     selector: BySelector,
     timeoutMillis: Long = 2_000
 ): Boolean {
-    repeat(3) {
-        val target = wait(Until.findObject(selector), timeoutMillis) ?: return false
+    val deadline = SystemClock.uptimeMillis() + timeoutMillis
+    while (SystemClock.uptimeMillis() < deadline) {
+        val target = findObject(selector)
+        if (target == null) {
+            SystemClock.sleep(100)
+            continue
+        }
         try {
             target.click()
-            waitForIdle()
             return true
         } catch (_: StaleObjectException) {
-            // Compose may replace semantics nodes during animation; retry with a fresh node.
+            // Compose may replace semantics nodes during animation; reacquire until deadline.
         }
     }
     return false

@@ -289,13 +289,20 @@ internal fun ManualRaidBossPickerScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(visible, key = { "${it.catalogue.raidLevel}|${it.catalogue.pokemonId}" }) { boss ->
-                        ManualRaidBossRow(
-                            boss = boss,
-                            starting = state.startingPokemonId == boss.catalogue.pokemonId,
-                            enabled = state.startingPokemonId == null && boss.hundoCP != null,
-                            onClick = { onBossSelected(boss) }
-                        )
+                    visible.groupBy { it.tierLabel }.forEach { (tier, bosses) ->
+                        item(key = "tier-$tier") {
+                            Text(tier, style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 2.dp))
+                        }
+                        items(bosses, key = { "${it.catalogue.raidLevel}|${it.catalogue.pokemonId}" }) { boss ->
+                            ManualRaidBossRow(
+                                boss = boss,
+                                starting = state.startingPokemonId == boss.catalogue.pokemonId,
+                                enabled = state.startingPokemonId == null && boss.hundoCP != null,
+                                onClick = { onBossSelected(boss) }
+                            )
+                        }
                     }
                 }
             }

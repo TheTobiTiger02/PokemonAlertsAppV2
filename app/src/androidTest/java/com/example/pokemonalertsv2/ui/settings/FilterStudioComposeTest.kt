@@ -128,10 +128,10 @@ class FilterStudioComposeTest {
             rule.waitUntil(5000) { viewModel.filterStateDocument.value.feed.profileId == profile.id }
             rule.onNodeWithText("None").performClick()
             rule.onNodeWithText("Apply").performClick()
-            rule.onNodeWithText("Update linked profile?").assertIsDisplayed()
+            rule.onNodeWithText("Edit shared rules?").assertIsDisplayed()
             capture("profile-linked-apply-warning")
             assertEquals(FilterSelection.All, runBlocking { preferences.filterStateDocument.first().map.resolve(linked).areas })
-            rule.onNodeWithText("Apply to all").performClick()
+            rule.onNodeWithText("Edit shared").performClick()
             rule.waitUntil(5000) {
                 val document = runBlocking { preferences.filterStateDocument.first() }
                 document.feed.resolve(document).areas.mode == FilterSelectionMode.NONE &&

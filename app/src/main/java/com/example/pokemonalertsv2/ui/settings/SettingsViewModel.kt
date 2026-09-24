@@ -403,9 +403,11 @@ class SettingsViewModel(
     val excludedRaidTiers: StateFlow<Set<String>> = preferences.excludedRaidTiers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    fun completeOnboarding() {
+    fun completeOnboarding(area: String, distanceMeters: Int, preset: NotificationPreset, onComplete: (Boolean) -> Unit) {
         viewModelScope.launch {
-            preferences.setOnboardingCompleted(true)
+            val saved = runCatching { preferences.completeOnboardingSetup(area, distanceMeters, preset) }.isSuccess
+            if (saved) AlertsWidgetProvider.requestUpdate(getApplication())
+            onComplete(saved)
         }
     }
 

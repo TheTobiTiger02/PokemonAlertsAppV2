@@ -56,10 +56,7 @@ import com.example.pokemonalertsv2.ui.motion.appSinkOut
 fun OnboardingScreen(
     initialArea: String,
     initialMaxDistance: Int,
-    onAreaChanged: (String) -> Unit,
-    onMaxDistanceChanged: (Int) -> Unit,
-    onPresetSelected: (NotificationPreset) -> Unit,
-    onFinish: () -> Unit
+    onFinish: (String, Int, NotificationPreset) -> Unit
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var area by rememberSaveable(initialArea) { mutableStateOf(initialArea) }
@@ -130,10 +127,7 @@ fun OnboardingScreen(
                     Button(
                         onClick = {
                             if (step < 3) step++ else {
-                                onAreaChanged(area)
-                                onMaxDistanceChanged(distance)
-                                onPresetSelected(NotificationPreset.valueOf(presetName))
-                                onFinish()
+                                onFinish(area, distance, NotificationPreset.valueOf(presetName))
                             }
                         },
                         modifier = Modifier.weight(1f)

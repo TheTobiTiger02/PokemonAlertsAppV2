@@ -38,19 +38,14 @@ class WholeAppUxComposeTest {
 
     @Test
     fun onboardingSavesSetupOnlyWhenFinished() {
-        var savedArea = "All"
-        var savedDistance = 0
-        var savedPreset = NotificationPreset.EVERYTHING
+        var saved: Triple<String, Int, NotificationPreset>? = null
 
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 OnboardingScreen(
                     initialArea = "All",
                     initialMaxDistance = 0,
-                    onAreaChanged = { savedArea = it },
-                    onMaxDistanceChanged = { savedDistance = it },
-                    onPresetSelected = { savedPreset = it },
-                    onFinish = {}
+                    onFinish = { area, distance, preset -> saved = Triple(area, distance, preset) }
                 )
             }
         }
@@ -60,11 +55,10 @@ class WholeAppUxComposeTest {
         composeRule.onNodeWithText("Continue").performClick()
         composeRule.onNodeWithText("Quiet essentials").performClick()
         composeRule.onNodeWithText("Continue").performClick()
+        assertEquals(null, saved)
         composeRule.onNodeWithText("Enable & finish").performClick()
 
-        assertEquals("Darmstadt", savedArea)
-        assertEquals(0, savedDistance)
-        assertEquals(NotificationPreset.QUIET_ESSENTIALS, savedPreset)
+        assertEquals(Triple("Darmstadt", 0, NotificationPreset.QUIET_ESSENTIALS), saved)
     }
 
     @Test

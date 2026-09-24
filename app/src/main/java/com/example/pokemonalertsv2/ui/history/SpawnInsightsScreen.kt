@@ -56,6 +56,10 @@ fun SpawnInsightsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        Text("Spawn Insights", style = MaterialTheme.typography.headlineSmall)
+        Text("Explore when and where a Pokémon appeared in your alert history.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
@@ -94,13 +98,13 @@ fun SpawnInsightsScreen(
             )
 
             state.insights == null -> Text(
-                "Pick a species and a window, then look back over the history.",
+                "Enter a species such as Pikachu, choose a time window, then tap Look back. Results use saved alert history.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             state.insights.isEmpty -> Text(
-                "Nothing matching turned up in the last ${state.range.label}.",
+                "No matching sightings in the last ${state.range.label}. Try a longer window or another species. Only alerts saved on this device appear here.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

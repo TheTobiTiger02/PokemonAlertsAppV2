@@ -26,9 +26,6 @@ import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.ui.theme.typeColor
 import kotlinx.coroutines.launch
 
-/** Sections shown collapsed at first: useful now and then, but long and not about playing the event. */
-private val COLLAPSED_SECTIONS = setOf("sales", "graphic", "go-pass")
-
 /**
  * An event as LeekDuck describes it, full screen: the header with times and the reminder star, chips that
  * jump to each section, then every section of the LeekDuck page. Until the page arrives (or when the event
@@ -55,8 +52,8 @@ fun EventDetailScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val expanded = remember(event.id) { mutableStateMapOf<String, Boolean>() }
-    // Items before the first section: header, reminder row, chips, and the loading/feed fallback.
-    val headerItems = 4
+    // Items before the first section: header, highlights, reminder, chips, and loading.
+    val headerItems = 5
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize().testTag("event_detail")) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
@@ -83,6 +80,7 @@ fun EventDetailScreen(
                                 color = MaterialTheme.colorScheme.tertiary)
                         }
                     }
+                    item(key = "highlights") { FeedDetails(event) }
                     item(key = "reminder") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(if (event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes)
@@ -102,13 +100,10 @@ fun EventDetailScreen(
                         }
                     }
                     item(key = "fallback") {
-                        when {
-                            loading && sections.isEmpty() -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                            sections.isEmpty() -> FeedDetails(event)
-                        }
+                        if (loading && sections.isEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
                     itemsIndexed(sections, key = { index, section -> "section-$index-${section.key}" }) { _, section ->
-                        val open = expanded[section.key] ?: (section.key !in COLLAPSED_SECTIONS)
+                        val open = expanded[section.key] ?: false
                         SectionCard(section, open, onToggle = { expanded[section.key] = !open })
                     }
                 }
@@ -139,7 +134,7 @@ private fun FeedDetails(event: GameEvent) {
 private fun SectionCard(section: EventSection, open: Boolean, onToggle: () -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth().testTag("event_section_${section.key}")) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onToggle), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onToggle), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 section.icon?.let { AsyncImage(model = it, contentDescription = null, modifier = Modifier.size(24.dp)) }
                 Text(section.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
@@ -245,7 +240,7 @@ private fun ResearchStep(step: EventResearchStep) {
     var open by remember(step) { mutableStateOf(false) }
     Surface(color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { open = !open }.testTag("event_step_${step.number}"),
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button) { open = !open }.testTag("event_step_${step.number}"),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(listOfNotNull(step.number?.let { "Step $it" }, step.name).joinToString(" · "),
                     style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))

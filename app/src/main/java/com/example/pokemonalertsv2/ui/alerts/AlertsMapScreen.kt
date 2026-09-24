@@ -630,6 +630,8 @@ internal fun AlertsMapScreenContent(
         MapType.NORMAL
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showRoutesSheet by rememberSaveable { mutableStateOf(false) }
+    var showHuntSetup by rememberSaveable { mutableStateOf(false) }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
@@ -1772,6 +1774,18 @@ internal fun AlertsMapScreenContent(
             config = clusteringConfigOverride ?: clusteringSettings.config,
             screenBounds = screenBounds
         )
+        val alertsInViewport = remember(preparedMarkers.alerts, screenBounds, currentMapLoaded) {
+            screenBounds?.takeIf { currentMapLoaded }?.let { bounds ->
+                preparedMarkers.alerts.count { alert ->
+                    alert.mapCoordinatesOrNull()?.let { point ->
+                        bounds.contains(point.latitude, point.longitude)
+                    } == true
+                }
+            }
+        }
+        val viewportStatus = remember(filteredAlerts.size, alertsInViewport) {
+            mapViewportStatus(filteredAlerts.size, alertsInViewport)
+        }
         val markerItems by rememberBatchedMapItems(preparedMarkers.items) { item ->
             when (item) {
                 is MapMarkerItem.Alert -> item.alert.uniqueId
@@ -2265,10 +2279,7 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        // The whole of the map's chrome: a chip rail, and a status pill when something is
-        // wrong. The bar that used to sit above this held one number and three icons, none of
-        // which needed to be visible at all times - they live in the panel behind the rail's
-        // trailing chip now, and the map got the space back.
+        // Keep counts visible without covering the map with a long category rail.
         if (!compactPictureInPicture) {
             Column(
                 modifier = Modifier
@@ -2278,24 +2289,27 @@ internal fun AlertsMapScreenContent(
                     .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                MapCategoryRail(
-                    mutedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    visibleAlertCount = filteredAlerts.size,
-                    showBackButton = showBackButton,
-                    onBack = onBack,
-                    onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail now owns the full width. Reserving the end for a pinned button
-                    // only ever kept the *last* chip clear of it: scrolled back to the start,
-                    // the leading chips still ran underneath it, so the button moved down to
-                    // the control column where the map's other actions already live.
-                    contentPadding = PaddingValues(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = 2.dp,
-                        bottom = Spacing.xxs
-                    )
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(
+                            viewportStatus.label,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                    if (viewportStatus.showAlertsAction) {
+                        Button(onClick = ::fitVisibleAlerts, modifier = Modifier.testTag("map_show_alerts")) {
+                            Text("Show alerts")
+                        }
+                    }
+                }
 
                 Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
@@ -2358,9 +2372,12 @@ internal fun AlertsMapScreenContent(
                 rewardThumbnails = questRewardThumbnails,
                 visibleCount = filteredAlerts.size,
                 totalCount = alerts.size,
+                mutedCategories = selectedCategories,
+                onMutedCategoriesChange = onSelectedCategoriesChange,
                 categoryCounts = categoryCounts,
                 onDefinitionChange = onFilterDefinitionChange,
                 onOpenFilterStudio = { showFilterSheet = false; onOpenFilterStudio() },
+                onOpenMegaBoost = { showFilterSheet = false; showMegaBoost = true },
                 onDismiss = { showFilterSheet = false },
                 useSidePanel = useSidePanel,
                 modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier,
@@ -2414,6 +2431,61 @@ internal fun AlertsMapScreenContent(
             )
         }
 
+        if (!compactPictureInPicture && showRoutesSheet) {
+            val catchSession by remember(context) {
+                com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(context).session
+            }.collectAsStateWithLifecycle()
+            ModalBottomSheet(onDismissRequest = { showRoutesSheet = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (showHuntSetup) {
+                        TextButton(onClick = { showHuntSetup = false }) { Text("Back to routes") }
+                        Text("Hunt", style = MaterialTheme.typography.headlineSmall)
+                        com.example.pokemonalertsv2.hunt.HuntControls(
+                            catalog = filterCatalog,
+                            artwork = filterArtwork,
+                            questRewardThumbnails = questRewardThumbnails,
+                            categoryCounts = categoryCounts,
+                            userLocation = userLocation,
+                            onHuntStarted = {
+                                showRoutesSheet = false
+                                onEnterPictureInPicture?.invoke()
+                            }
+                        )
+                    } else {
+                        Text("Routes", style = MaterialTheme.typography.headlineSmall)
+                        Text("Choose how you want to walk.", style = MaterialTheme.typography.bodyMedium)
+                        huntSession?.let { hunt ->
+                            Text("Hunt active: ${hunt.name}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        catchSession?.let { session ->
+                            Text("Catch Route active: ${session.itinerary.settings.name}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        FilledTonalButton(
+                            onClick = { showHuntSetup = true },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) { Text(if (huntSession != null) "Manage Hunt" else "Start Hunt") }
+                        FilledTonalButton(
+                            onClick = {
+                                showRoutesSheet = false
+                                context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java))
+                            },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        ) {
+                            Text(if (catchSession != null) "Continue Catch Route" else "Plan Catch Route")
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+            }
+        }
+
 
         // One sheet at a time: the weather sheet yields to an alert or a cluster the way
         // those two already yield to each other.
@@ -2445,9 +2517,10 @@ internal fun AlertsMapScreenContent(
             }
         }
 
+        // Routes and filters remain usable while the tile provider loads or reports an error.
         AnimatedVisibility(
             visible = !compactPictureInPicture &&
-                currentMapLoaded && (useSidePanel || selectedAlert == null),
+                (useSidePanel || selectedAlert == null),
             enter = appFadeIn(),
             exit = appFadeOut(),
             modifier = Modifier.align(Alignment.BottomEnd)
@@ -2468,29 +2541,10 @@ internal fun AlertsMapScreenContent(
                     onClick = { showFilterSheet = true }
                 )
                 SmallFloatingActionButton(
-                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
+                    onClick = { showHuntSetup = false; showRoutesSheet = true },
                     containerColor = MaterialTheme.colorScheme.surface,
                     modifier = Modifier.testTag("open_catch_routes")
-                ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
-                SmallFloatingActionButton(
-                    onClick = { showMegaBoost = true },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_mega_boost")
-                ) { Text("Mega", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp)) }
-                // Secondary: framing the alerts is occasional, finding yourself is constant.
-                SmallFloatingActionButton(
-                    onClick = ::fitVisibleAlerts,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_fit_map),
-                        contentDescription = if (huntSession != null) {
-                            if (huntFocus == HuntMapFocus.TARGET) "Show Hunt route" else "Focus Hunt target"
-                        } else stringResource(R.string.map_show_all_alerts)
-                    )
-                }
+                ) { Text("Routes", style = MaterialTheme.typography.labelMedium) }
                 FloatingActionButton(
                     onClick = {
                         if (hasLocationPermissionNow()) {
@@ -2609,6 +2663,14 @@ internal fun AlertsMapScreenContent(
         }
     }
 }
+
+internal data class MapViewportStatus(val label: String, val showAlertsAction: Boolean)
+
+internal fun mapViewportStatus(matchingCount: Int, inViewCount: Int?): MapViewportStatus =
+    MapViewportStatus(
+        label = "$matchingCount matching · ${inViewCount?.let { "$it in view" } ?: "view loading"}",
+        showAlertsAction = matchingCount > 0 && inViewCount == 0
+    )
 
 /**
  * The markers the map should draw: mappable, still valid and unexpired alerts, minus the ones

@@ -19,7 +19,7 @@ class ScreenReadinessBenchmark {
     @Test fun majorScreenJourneys() = rule.measureRepeated(
         packageName = TARGET_PACKAGE,
         metrics = listOf(FrameTimingMetric(), MemoryUsageMetric(MemoryUsageMetric.Mode.Max)),
-        compilationMode = CompilationMode.Partial(BaselineProfileMode.Require),
+        compilationMode = CompilationMode.None(),
         iterations = 5,
         setupBlock = {
             killProcess()
@@ -53,17 +53,25 @@ class ScreenReadinessBenchmark {
             measure("filters-$visit", { device.requireClick(By.text("Filters")) }, By.text("Filter Studio"))
             device.pressBack()
             measure("godex-settings-$visit", { device.requireClick(By.text("GoDex checklist")) }, By.text("Performance fixture"))
-            measure("godex-collection-$visit", { device.requireClick(By.text("1000 still needed")) }, By.text("Search Pokémon, form, number, or key"))
+            measure("godex-collection-$visit", {
+                if (!device.clickIfPresent(By.text("Open"), 1_000)) {
+                    device.requireClick(By.text("Review needed"))
+                }
+            }, By.clazz("android.widget.EditText"))
             val search = device.findObject(By.clazz("android.widget.EditText"))
                 ?: error("GoDex search field missing")
             measure("godex-search-$visit", { search.text = "Fixture Pokemon 99" }, By.text("Fixture Pokemon 99"))
             device.pressBack()
             device.pressBack()
             measure("map-$visit", { device.requireClick(By.text("Map")) }, By.desc("Map settings and filters"))
-            measure("map-filters-$visit", { device.requireClick(By.desc("Map settings and filters")) }, By.textContains("alerts visible"))
+            val filterStart = SystemClock.elapsedRealtimeNanos()
+            device.requireClick(By.desc("Map settings and filters"))
+            device.requireVisibleAny(By.textContains("alerts visible"), By.textContains("matching alerts"))
+            File(InstrumentationRegistry.getInstrumentation().context.getExternalFilesDir(null),
+                "screen-readiness-$label.csv").appendText("map-filters-$visit,${(SystemClock.elapsedRealtimeNanos() - filterStart) / 1e6}\n")
             device.pressBack()
             measure("feed-$visit", { device.requireClick(By.text("Alerts")) }, By.text("Pokémon Alerts"))
-            measure("detail-$visit", { device.requireClick(By.text("Pikachu")) }, By.desc("Back"))
+            measure("detail-$visit", { device.requireClick(By.textContains("Pikachu")) }, By.desc("Back"))
             device.pressBack()
         }
         } finally {

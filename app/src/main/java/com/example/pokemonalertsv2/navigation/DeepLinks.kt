@@ -5,13 +5,10 @@ import com.example.pokemonalertsv2.ui.settings.SettingsDestination
 /**
  * Where a `pokemonalerts://` link wants to land.
  *
- * Notifications and widgets navigate with an `EXTRA_INITIAL_TAB` int, which works but is
- * only reachable from inside the app's own PendingIntents. These links are an additional
- * entry path onto the same state, so nothing about the existing extras changes.
+ * Links and intents resolve to stable destinations. Old numeric extras remain readable.
  */
 internal sealed interface DeepLinkTarget {
-    /** A root tab, by its index in `NAV_DESTINATIONS`. */
-    data class RootTab(val tabIndex: Int) : DeepLinkTarget
+    data class RootTab(val request: AppNavigationRequest) : DeepLinkTarget
 
     /** A settings sub-page. Also selects the Settings tab. */
     data class Settings(val destination: SettingsDestination) : DeepLinkTarget
@@ -21,12 +18,6 @@ internal sealed interface DeepLinkTarget {
 }
 
 internal const val DEEP_LINK_SCHEME = "pokemonalerts"
-
-private const val TAB_ALERTS = 0
-private const val TAB_HISTORY = 1
-private const val TAB_MAP = 2
-private const val TAB_EVENTS = 3
-private const val TAB_SETTINGS = 4
 
 /**
  * Parses a deep link into a target, or null if it is not one of ours.
@@ -57,16 +48,16 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
     val tail = segments.drop(1)
 
     return when (head) {
-        "alerts" -> DeepLinkTarget.RootTab(TAB_ALERTS)
-        "history" -> DeepLinkTarget.RootTab(TAB_HISTORY)
-        "map" -> DeepLinkTarget.RootTab(TAB_MAP)
-        "events" -> DeepLinkTarget.RootTab(TAB_EVENTS)
+        "alerts" -> DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.ALERTS))
+        "history" -> DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.ALERTS, AlertsView.HISTORY))
+        "map" -> DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP))
+        "events" -> DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.EVENTS))
         "settings" -> {
             val name = tail.firstOrNull()
-                ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
+                ?: return DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.SETTINGS))
             val destination = SettingsDestination.entries
                 .firstOrNull { it.name.equals(name, ignoreCase = true) }
-                ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
+                ?: return DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.SETTINGS))
             DeepLinkTarget.Settings(destination)
         }
         // The id is the rest of the path, so an id containing a slash still round-trips.

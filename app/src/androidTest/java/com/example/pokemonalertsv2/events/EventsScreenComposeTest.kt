@@ -10,6 +10,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -63,7 +66,9 @@ class EventsScreenComposeTest {
         composeRule.onNodeWithText("Today").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("event_gbl").fetchSemanticsNodes().size)
 
+        composeRule.onNodeWithTag("events_filter_button").performClick()
         composeRule.onNodeWithTag("events_type_go-battle-league").performClick()
+        composeRule.onNodeWithText("Show events").performClick()
         composeRule.onNodeWithTag("event_gbl").assertIsDisplayed()
 
         composeRule.onNodeWithTag("event_star_spotlight").performClick()
@@ -72,10 +77,13 @@ class EventsScreenComposeTest {
         composeRule.onNodeWithTag("event_spotlight").performClick()
         composeRule.onNodeWithTag("event_detail").assertIsDisplayed()
         composeRule.onNodeWithText("You'll be reminded 15 min before").assertIsDisplayed()
-        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText("Rattata appears more often.").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithTag("event_section_about").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag("event_section_about").performClick()
+        composeRule.onNodeWithText("Rattata appears more often.").assertIsDisplayed()
         composeRule.onNodeWithTag("event_chip_research").performClick()
         composeRule.onNodeWithText("CP 389–422").assertIsDisplayed()
         composeRule.onNodeWithTag("event_step_1").performClick()
+        composeRule.onNodeWithTag("event_detail").performTouchInput { swipeUp() }
         composeRule.onNodeWithText("×20").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithText("Web store box.").fetchSemanticsNodes().size)
         composeRule.onNodeWithTag("event_open_link").performClick()

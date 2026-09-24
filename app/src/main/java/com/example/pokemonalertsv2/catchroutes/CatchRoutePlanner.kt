@@ -64,7 +64,7 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
                 listOf("Predictions include uncertain timing. Open a spawnpoint for evidence.") else emptyList()
             return CatchItinerary(settings, positions, encounters, points, warnings, data.version, data.sources, waits)
         }
-        withTimeoutOrNull(30_000) {
+        val completed = withTimeoutOrNull(30_000) {
             val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
             val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
             if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) "No usable spawn windows. ${data.restrictedPointCount} spawnpoints require live confirmation; predictions cannot enable them." else "No usable spawn windows in this area and time. Try another start or enable predictions.")
@@ -142,11 +142,13 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { lastError = e }
             }
-        }
+            true
+        } == true
         coroutineContext.ensureActive()
         best?.takeIf { it.encounters.isNotEmpty() }
             ?: throw (lastError ?: CatchApiException(if (leftArea) "Every walking route found leaves the area. Draw a larger area or move the start."
-                else "No complete walking route found within 30 seconds. Try a shorter session or a nearby start."))
+                else if (!completed) "Route planning took too long. Try a shorter session or a nearby start."
+                else "No walking route fits this start and time. Try a longer session or a nearby start."))
     }
     private fun Long?.orZero() = this ?: 0L
     private fun request(points: List<CatchPoint>) = RouteMatrixRequest.pedestrian(points.mapIndexed { i, p -> RouteMatrixPoint("p$i", p.latitude, p.longitude) })

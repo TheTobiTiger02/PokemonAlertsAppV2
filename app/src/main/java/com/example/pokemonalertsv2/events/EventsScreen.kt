@@ -3,6 +3,8 @@ package com.example.pokemonalertsv2.events
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -99,6 +101,7 @@ fun EventsContent(
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
+    var filtersOpen by remember { mutableStateOf(false) }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
@@ -110,11 +113,13 @@ fun EventsContent(
             }
             state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
             if (types.isNotEmpty()) item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    types.forEach { type ->
-                        FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
-                            label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = { filtersOpen = true }, modifier = Modifier.testTag("events_filter_button")) {
+                        Text("Event filters")
                     }
+                    val shown = types.count { it !in state.settings.hiddenTypes }
+                    Text("$shown of ${types.size} types shown", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                 }
             }
             if (sections.now.isEmpty() && sections.upcoming.isEmpty() && !state.loading) item {
@@ -141,6 +146,24 @@ fun EventsContent(
     if (reminderSettingsOpen) ModalBottomSheet(onDismissRequest = { reminderSettingsOpen = false }) {
         ReminderSettings(state.settings, (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
             onToggleReminderType, onLeadMinutes)
+    }
+    if (filtersOpen) ModalBottomSheet(onDismissRequest = { filtersOpen = false }) {
+        Column(
+            Modifier.fillMaxWidth().fillMaxHeight(0.75f).verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Event types", style = MaterialTheme.typography.headlineSmall)
+            Text("Select the events you want to see. Reminder choices stay separate.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                types.forEach { type ->
+                    FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
+                        label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
+                }
+            }
+            Button(onClick = { filtersOpen = false }, modifier = Modifier.fillMaxWidth()) { Text("Show events") }
+        }
     }
 }
 

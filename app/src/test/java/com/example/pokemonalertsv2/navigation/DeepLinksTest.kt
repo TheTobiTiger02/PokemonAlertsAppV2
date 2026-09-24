@@ -8,24 +8,34 @@ import org.junit.Test
 class DeepLinksTest {
 
     @Test
-    fun `root hosts map to their tab indices`() {
-        assertEquals(DeepLinkTarget.RootTab(0), parseDeepLink("pokemonalerts://alerts"))
-        assertEquals(DeepLinkTarget.RootTab(1), parseDeepLink("pokemonalerts://history"))
-        assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("pokemonalerts://map"))
-        assertEquals(DeepLinkTarget.RootTab(3), parseDeepLink("pokemonalerts://events"))
-        assertEquals(DeepLinkTarget.RootTab(4), parseDeepLink("pokemonalerts://settings"))
+    fun `root hosts map to stable destinations`() {
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.ALERTS)), parseDeepLink("pokemonalerts://alerts"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.ALERTS, AlertsView.HISTORY)), parseDeepLink("pokemonalerts://history"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP)), parseDeepLink("pokemonalerts://map"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.EVENTS)), parseDeepLink("pokemonalerts://events"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.SETTINGS)), parseDeepLink("pokemonalerts://settings"))
+    }
+
+    @Test
+    fun `old numeric extras keep their original destinations`() {
+        assertEquals(AppNavigationRequest(AppDestination.ALERTS), legacyNavigationRequestOrNull(0))
+        assertEquals(AppNavigationRequest(AppDestination.ALERTS, AlertsView.HISTORY), legacyNavigationRequestOrNull(1))
+        assertEquals(AppNavigationRequest(AppDestination.MAP), legacyNavigationRequestOrNull(2))
+        assertEquals(AppNavigationRequest(AppDestination.EVENTS), legacyNavigationRequestOrNull(3))
+        assertEquals(AppNavigationRequest(AppDestination.SETTINGS), legacyNavigationRequestOrNull(4))
+        assertNull(legacyNavigationRequestOrNull(5))
     }
 
     @Test
     fun `scheme and host are case insensitive`() {
-        assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("PokemonAlerts://MAP"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP)), parseDeepLink("PokemonAlerts://MAP"))
     }
 
     @Test
     fun `trailing slash and query are ignored`() {
-        assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("pokemonalerts://map/"))
-        assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("pokemonalerts://map?from=widget"))
-        assertEquals(DeepLinkTarget.RootTab(2), parseDeepLink("pokemonalerts://map#top"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP)), parseDeepLink("pokemonalerts://map/"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP)), parseDeepLink("pokemonalerts://map?from=widget"))
+        assertEquals(DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.MAP)), parseDeepLink("pokemonalerts://map#top"))
     }
 
     @Test
@@ -43,7 +53,7 @@ class DeepLinksTest {
     @Test
     fun `unknown settings page falls back to the settings tab rather than failing`() {
         assertEquals(
-            DeepLinkTarget.RootTab(4),
+            DeepLinkTarget.RootTab(AppNavigationRequest(AppDestination.SETTINGS)),
             parseDeepLink("pokemonalerts://settings/not_a_page")
         )
     }

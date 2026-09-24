@@ -31,6 +31,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -145,6 +147,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     var showSave by remember { mutableStateOf(false) }
     var showQuests by remember { mutableStateOf(false) }
     var showDistanceOverrides by remember { mutableStateOf(false) }
+    var advancedOpen by rememberSaveable { mutableStateOf(false) }
     val matchCount = remember(alerts, draft, contexts) { alerts.count { AlertFilterMatcher.matches(it, draft, contexts[it.uniqueId] ?: FilterMatchContext()) } }
     val linkedProfile = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == linkedProfileId }
     val applyLocal: () -> Unit = {
@@ -194,8 +197,11 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                         OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("Save as profile") }
                     }
                     BasicRules(draft, catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } }, onEditDistanceOverrides = { showDistanceOverrides = true }) { draft = it }
-                    Text("Advanced by alert type", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Enabled branches are alternatives. Rules inside a branch all need to match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = { advancedOpen = !advancedOpen }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (advancedOpen) "Hide advanced rules" else "Advanced rules by alert type")
+                    }
+                    if (advancedOpen) {
+                        Text("Enabled branches are alternatives. Rules inside a branch all need to match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilterAlertType.entries.forEach { type ->
                         TypeRuleRow(type, draft, onToggle = { enabled ->
                             val values = draft.alertTypes.normalizedValues.toMutableSet()
@@ -208,6 +214,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                                 FilterAlertType.QUEST -> { showQuests = true; null }; else -> null
                             }
                         }, onSecondaryAdvanced = if (type == FilterAlertType.RAID) ({ selector = SelectorTarget.RAID_TIERS }) else null)
+                    }
                     }
                     Spacer(Modifier.height(12.dp))
                 }
@@ -234,13 +241,13 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     if (showSave) NameDialog("Save profile", { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
-        title = { Text("Update linked profile?") },
+        title = { Text("Edit shared rules?") },
         text = { Text("Editing ${linkedProfile.name} also changes: ${(document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString()}. These consumers stay linked.") },
         confirmButton = { Button(onClick = {
             if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
             else { viewModel.applyLinkedFilter(surface, linkedProfile, draft); onDismiss() }
-        }) { Text("Apply to all") } },
-        dismissButton = { TextButton(onClick = applyLocal) { Text("Only this surface") } }
+        }) { Text("Edit shared") } },
+        dismissButton = { TextButton(onClick = applyLocal) { Text("Customize only this") } }
     )
 }
 
@@ -254,14 +261,35 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
             (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
         }
         Text("Default distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
-        Slider(
-            value = distanceStepIndex(definition.maxDistanceMeters).toFloat(),
-            onValueChange = {
-                onChange(definition.copy(maxDistanceMeters = ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]))
-            },
-            valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-            steps = ALERT_DISTANCE_STEPS_METERS.size - 2
-        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(0, 500, 1_000, 3_000, 5_000, 10_000, 25_000).forEach { metres ->
+                FilterChip(
+                    selected = definition.maxDistanceMeters == metres,
+                    onClick = { onChange(definition.copy(maxDistanceMeters = metres)) },
+                    label = { Text(distanceLabel(metres)) }
+                )
+            }
+        }
+        var customMetres by rememberSaveable { mutableStateOf("") }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = customMetres,
+                onValueChange = { customMetres = it.filter(Char::isDigit).take(5) },
+                label = { Text("Custom metres") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = {
+                    customMetres.toIntOrNull()?.let { metres ->
+                        onChange(definition.copy(maxDistanceMeters = metres))
+                        customMetres = ""
+                    }
+                },
+                enabled = customMetres.toIntOrNull()?.let { it in 100..MAX_FILTER_DISTANCE_METERS } == true
+            ) { Text("Set") }
+        }
         val overrideCount = definition.distanceOverrides.ruleCount
         OutlinedButton(onClick = onEditDistanceOverrides, modifier = Modifier.fillMaxWidth()) {
             Text(if (overrideCount == 0) "Per-type and per-species limits" else "Per-type and per-species limits ($overrideCount)")

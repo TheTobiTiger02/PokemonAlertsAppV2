@@ -162,6 +162,17 @@ class CatchRouteTest {
         assertTrue(plan.distanceMeters > 50)
         assertTrue(plan.finishAtMillis <= plan.settings.endAtMillis)
     }
+    @Test fun `round trip outside walking budget explains the limit`() = runTest {
+        val far = JsonObject(Json.parseToJsonElement(row("far")).jsonObject + ("longitude" to JsonPrimitive(0.0032)))
+        val body = JsonObject(page(emptyList()) + ("data" to JsonArray(listOf(far))))
+        val fake = Fake().apply { pages += Response.success(body) }
+        val error = runCatching {
+            CatchRoutePlanner(fake).generate(settings().copy(finish = CatchFinish.ROUND_TRIP))
+        }.exceptionOrNull()
+        assertTrue(error is CatchApiException)
+        assertTrue(error?.message.orEmpty().contains("No walking route fits this start and time"))
+        assertEquals(3, fake.routingCalls)
+    }
     @Test fun `small beam result matches exhaustive optimum through greedy trap`() = runTest {
         val opts = listOf(opportunity("near", 10.0, until = now + 500_000), opportunity("urgent", 80.0, until = now + 90_000), opportunity("last", 150.0, until = now + 300_000))
         val anchors = opts.map { CatchAnchor(it.point, listOf(it)) }

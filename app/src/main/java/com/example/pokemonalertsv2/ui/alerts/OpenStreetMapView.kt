@@ -878,7 +878,9 @@ internal fun OpenStreetMapView(
     clusterMarkerSizeDp: Float = MAP_FULL_CLUSTER_SIZE_DP
 ) {
     val context = LocalContext.current
-    val mapLibreReady = remember(context) { MapLibreInitializer.ensureInitialized(context) }
+    val mapLibreReady = remember(context) {
+        MapPerfLog.timed("osm.initialize") { MapLibreInitializer.ensureInitialized(context) }
+    }
     LaunchedEffect(mapLibreReady) {
         if (!mapLibreReady) onLoadError()
     }
@@ -917,7 +919,9 @@ internal fun OpenStreetMapView(
         )
     }
     val mapView = remember(context) {
-        MapView(context).apply { onCreate(null) }
+        MapPerfLog.timed("osm.view.create") {
+            MapView(context).apply { onCreate(null) }
+        }
     }
     val lifecycleGuard = remember(mapView) {
         OpenStreetMapLifecycleGuard(

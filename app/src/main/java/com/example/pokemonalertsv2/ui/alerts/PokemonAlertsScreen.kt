@@ -154,6 +154,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.CardDisplayMode
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
@@ -193,6 +194,7 @@ fun PokemonAlertsRoute(
     val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
     val feedFilterDefinition by viewModel.feedFilterDefinition.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
+    val cardDisplayMode by viewModel.cardDisplayMode.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
@@ -254,6 +256,7 @@ fun PokemonAlertsRoute(
                     maxDistance = maxDistance,
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
                     sortPreference = savedSortPreference,
+                    cardDisplayMode = cardDisplayMode,
                     selectedCategories = selectedFeedCategories,
                     filterDefinition = feedFilterDefinition,
                     categoryCounts = categoryCounts,
@@ -261,6 +264,7 @@ fun PokemonAlertsRoute(
                     onSelectedAreaChange = viewModel::updateSelectedArea,
                     onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
+                    onCardDisplayModeChange = viewModel::updateCardDisplayMode,
                     onStartManualRaid = onStartManualRaid,
                     onOpenFilterStudio = onOpenFilterStudio,
                     onRefresh = viewModel::refreshAlerts,
@@ -497,6 +501,7 @@ fun PokemonAlertsPage(
     maxDistance: Int,
     defaultSnoozeMinutes: Int,
     sortPreference: SortPreference,
+    cardDisplayMode: CardDisplayMode = CardDisplayMode.RICH,
     selectedCategories: Set<AlertCategory>,
     filterDefinition: FilterDefinition = FilterDefinition(),
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit,
@@ -504,6 +509,7 @@ fun PokemonAlertsPage(
     onSelectedAreaChange: (String) -> Unit,
     onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
+    onCardDisplayModeChange: (CardDisplayMode) -> Unit = {},
     onStartManualRaid: () -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -663,6 +669,8 @@ fun PokemonAlertsPage(
                 selectedCategories = selectedCategories,
                 categoryCounts = categoryCounts,
                 sortPreference = sortPreference,
+                cardDisplayMode = cardDisplayMode,
+                onCardDisplayModeChange = onCardDisplayModeChange,
                 showDismissed = showDismissed,
                 dismissedAlertIds = dismissedAlertIds,
                 onCategoryToggled = { category, shownAfter ->
@@ -841,6 +849,8 @@ internal fun AlertsList(
     selectedCategories: Set<AlertCategory>,
     categoryCounts: Map<AlertCategory, Int>,
     sortPreference: SortPreference,
+    cardDisplayMode: CardDisplayMode = CardDisplayMode.RICH,
+    onCardDisplayModeChange: (CardDisplayMode) -> Unit = {},
     showDismissed: Boolean,
     dismissedAlertIds: Set<String>,
     onCategoryToggled: (AlertCategory, Boolean) -> Unit,
@@ -909,6 +919,8 @@ internal fun AlertsList(
             searchQuery = searchQuery,
             onSearchQueryChanged = onSearchQueryChanged,
             sortPreference = sortPreference,
+            cardDisplayMode = cardDisplayMode,
+            onCardDisplayModeChange = onCardDisplayModeChange,
             onSortChanged = onSortChanged,
             onOpenFilters = onOpenFilterStudio,
             locationPrecisionInsufficient = locationPrecisionInsufficient,
@@ -1076,6 +1088,7 @@ internal fun AlertsList(
                 Box {
                     AlertCard(
                         alert = model.alert,
+                        displayMode = cardDisplayMode,
                         distanceInfo = model.distanceInfo,
                         goDexStatus = goDexMatches[model.alert.uniqueId]
                             ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),

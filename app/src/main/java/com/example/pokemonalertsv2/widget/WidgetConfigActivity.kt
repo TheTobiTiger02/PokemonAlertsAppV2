@@ -45,9 +45,14 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.ALERT_DISTANCE_STEPS_METERS
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.FilterAssignment
+import com.example.pokemonalertsv2.data.STARTER_PROFILE_ID
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.distanceLabel
 import com.example.pokemonalertsv2.data.distanceStepIndex
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
@@ -60,6 +65,8 @@ import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * Configuration activity shown when a widget is first placed.
@@ -102,6 +109,7 @@ class WidgetConfigActivity : ComponentActivity() {
 
         // Load existing prefs for this widget (if reconfiguring)
         val existing = WidgetConfigurationStore.get(this, appWidgetId)
+        val newWidget = !WidgetConfigurationStore.hasSavedConfiguration(this, appWidgetId)
 
         setContent {
             val themeMode by repository.observeThemeMode()
@@ -126,12 +134,22 @@ class WidgetConfigActivity : ComponentActivity() {
                     initialConfiguration = existing,
                     onOpenEditor = { showFilterEditor = true },
                     onConfirm = { configuration ->
-                        val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
-                        WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, latest.copy(priority = configuration.priority))
-                        if (needsExactAlarmAccess()) {
-                            showExactAlarmDialog.value = true
-                        } else {
-                            completeWidgetConfiguration()
+                        lifecycleScope.launch {
+                            val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
+                            val starter = if (newWidget && latest.filterAssignment == null) {
+                                AlertPreferences(alertPreferencesDataStore).filterStateDocument.first()
+                                    .profiles.firstOrNull { it.id == STARTER_PROFILE_ID }
+                            } else null
+                            WidgetConfigurationStore.save(
+                                this@WidgetConfigActivity,
+                                appWidgetId,
+                                latest.copy(
+                                    priority = configuration.priority,
+                                    filterAssignment = latest.filterAssignment ?: starter?.let(FilterAssignment::linked)
+                                )
+                            )
+                            if (needsExactAlarmAccess()) showExactAlarmDialog.value = true
+                            else completeWidgetConfiguration()
                         }
                     }
                 )
