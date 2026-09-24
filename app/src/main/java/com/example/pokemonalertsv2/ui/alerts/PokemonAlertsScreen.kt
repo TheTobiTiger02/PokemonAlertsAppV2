@@ -564,7 +564,7 @@ fun PokemonAlertsPage(
             val notExpired = end > filterNow
             val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
             val notInvalidated = !model.alert.isInvalidated
-
+            
             val matchesFilter = AlertFilterMatcher.matches(
                 alert = model.alert,
                 definition = filterDefinition,
