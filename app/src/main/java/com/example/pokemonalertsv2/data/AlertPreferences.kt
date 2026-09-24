@@ -33,8 +33,6 @@ private val CATCH_WINDOW_HEIGHT_KEY = androidx.datastore.preferences.core.intPre
 private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("use_imperial_units")
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
-private val CARD_DISPLAY_MODE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("card_display_mode")
-internal const val STARTER_PROFILE_ID = "starter-shared"
 private val MAP_STYLE_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("map_style_preference")
 private val SHOW_MAP_COUNTDOWNS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_map_countdowns")
 private val AUTO_ENTER_MAP_PIP_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("auto_enter_map_pip")
@@ -122,8 +120,6 @@ enum class SortPreference {
     POSTED_TIME, TIME_REMAINING, DISTANCE, NAME
 }
 
-enum class CardDisplayMode { RICH, COMPACT }
-
 enum class MapStylePreference {
     GOOGLE_STANDARD,
     GOOGLE_SATELLITE,
@@ -176,10 +172,6 @@ interface AlertPreferencesStore {
     
     val sortPreference: Flow<SortPreference>
     suspend fun updateSortPreference(preference: SortPreference)
-
-    val cardDisplayMode: Flow<CardDisplayMode>
-        get() = flowOf(CardDisplayMode.RICH)
-    suspend fun updateCardDisplayMode(mode: CardDisplayMode) = Unit
 
     val mapStylePreference: Flow<MapStylePreference>
     suspend fun updateMapStylePreference(preference: MapStylePreference)
@@ -468,68 +460,6 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         dataStore.edit { prefs ->
             prefs[ONBOARDING_COMPLETED_KEY] = completed
         }
-    }
-
-    /** One durable commit for first-use choices. Existing completed users never enter this path. */
-    suspend fun completeOnboardingSetup(area: String, distanceMeters: Int, preset: NotificationPreset) {
-        val categories = preset.categories() ?: NotificationPreset.EVERYTHING.categories()!!
-        dataStore.edit { prefs ->
-            if (prefs[ONBOARDING_COMPLETED_KEY] == true) return@edit
-            val current = FilterStateCodec.decode(prefs[FILTER_STATE_KEY])
-                ?: migrateLegacyFilterState(prefs)
-            val pristine = prefs[FILTER_STATE_KEY] == null && current.profiles.isEmpty() &&
-                current.feed.definition == FilterDefinition() &&
-                current.map.definition == FilterDefinition() &&
-                current.notifications.definition == FilterDefinition()
-            val boundedDistance = distanceMeters.coerceIn(0, MAX_FILTER_DISTANCE_METERS)
-            val normalizedArea = area.takeIf { it.isNotBlank() } ?: "All"
-            prefs[SELECTED_AREA_KEY] = normalizedArea
-            prefs[MAX_DISTANCE_METERS_KEY] = boundedDistance
-            prefs[NOTIFICATIONS_ENABLED_KEY] = true
-            prefs[RAIDS_NOTIFICATIONS_KEY] = categories.raids
-            prefs[SPAWNS_NOTIFICATIONS_KEY] = categories.spawns
-            prefs[QUESTS_NOTIFICATIONS_KEY] = categories.quests
-            prefs[HUNDOS_NOTIFICATIONS_KEY] = categories.hundos
-            prefs[PVP_NOTIFICATIONS_KEY] = categories.pvp
-            prefs[NUNDOS_NOTIFICATIONS_KEY] = categories.nundos
-            prefs[KECLEON_NOTIFICATIONS_KEY] = categories.kecleon
-            prefs[ROCKET_NOTIFICATIONS_KEY] = categories.rocket
-
-            val starter = FilterProfile(
-                id = STARTER_PROFILE_ID,
-                name = "My alerts",
-                definition = FilterDefinition(
-                    areas = if (normalizedArea.equals("All", ignoreCase = true)) FilterSelection.All
-                        else FilterSelection.only(listOf(normalizedArea)),
-                    maxDistanceMeters = boundedDistance
-                )
-            )
-            val linked = FilterAssignment.linked(starter)
-            val notificationAssignment = if (preset == NotificationPreset.EVERYTHING) linked else {
-                FilterAssignment.local(starter.definition.copy(alertTypes = notificationSelection(categories)))
-            }
-            // Onboarding may reopen after interrupted setup; preserve any non-default rules.
-            if (pristine) {
-                prefs[FILTER_STATE_KEY] = FilterStateCodec.encode(
-                    FilterStateDocument(
-                        profiles = listOf(starter),
-                        feed = linked,
-                        map = linked,
-                        notifications = notificationAssignment
-                    )
-                )
-            }
-            prefs[ONBOARDING_COMPLETED_KEY] = true
-        }
-    }
-
-    override val cardDisplayMode: Flow<CardDisplayMode> = dataStore.data.map { preferences ->
-        runCatching { CardDisplayMode.valueOf(preferences[CARD_DISPLAY_MODE_KEY].orEmpty()) }
-            .getOrDefault(CardDisplayMode.RICH)
-    }
-
-    override suspend fun updateCardDisplayMode(mode: CardDisplayMode) {
-        dataStore.edit { it[CARD_DISPLAY_MODE_KEY] = mode.name }
     }
     
     override val sortPreference: Flow<SortPreference> = dataStore.data.map { preferences ->
@@ -902,7 +832,24 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 
             val current = FilterStateCodec.decode(prefs[FILTER_STATE_KEY])
                 ?: migrateLegacyFilterState(prefs)
-            val resolved = current.notifications.resolve(current).copy(alertTypes = notificationSelection(categories))
+            val enabled = buildSet {
+                if (categories.spawns) add(FilterAlertType.SPAWN.name)
+                if (categories.raids) add(FilterAlertType.RAID.name)
+                if (categories.quests) add(FilterAlertType.QUEST.name)
+                if (categories.hundos) add(FilterAlertType.HUNDO.name)
+                if (categories.nundos) add(FilterAlertType.NUNDO.name)
+                if (categories.pvp) add(FilterAlertType.PVP.name)
+                if (categories.kecleon) add(FilterAlertType.KECLEON.name)
+                if (categories.rocket) add(FilterAlertType.ROCKET.name)
+                add(FilterAlertType.WEATHER.name)
+                add(FilterAlertType.OTHER.name)
+            }
+            val selection = if (enabled.size == FilterAlertType.entries.size) {
+                FilterSelection.All
+            } else {
+                FilterSelection.only(enabled)
+            }
+            val resolved = current.notifications.resolve(current).copy(alertTypes = selection)
             prefs[FILTER_STATE_KEY] = FilterStateCodec.encode(
                 current.withAssignment(FilterSurface.NOTIFICATIONS, FilterAssignment.local(resolved))
             )
@@ -1115,23 +1062,6 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     companion object {
         private const val MAX_SEEN_ALERTS = 200
     }
-}
-
-internal fun notificationSelection(categories: NotificationCategoryState): FilterSelection {
-    val enabled = buildSet {
-        if (categories.spawns) add(FilterAlertType.SPAWN.name)
-        if (categories.raids) add(FilterAlertType.RAID.name)
-        if (categories.quests) add(FilterAlertType.QUEST.name)
-        if (categories.hundos) add(FilterAlertType.HUNDO.name)
-        if (categories.nundos) add(FilterAlertType.NUNDO.name)
-        if (categories.pvp) add(FilterAlertType.PVP.name)
-        if (categories.kecleon) add(FilterAlertType.KECLEON.name)
-        if (categories.rocket) add(FilterAlertType.ROCKET.name)
-        add(FilterAlertType.WEATHER.name)
-        add(FilterAlertType.OTHER.name)
-    }
-    return if (enabled.size == FilterAlertType.entries.size) FilterSelection.All
-        else FilterSelection.only(enabled)
 }
 
 internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocument {

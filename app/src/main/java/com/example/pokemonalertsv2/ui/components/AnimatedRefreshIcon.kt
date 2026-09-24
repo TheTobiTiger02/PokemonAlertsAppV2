@@ -20,11 +20,6 @@ internal fun AnimatedRefreshIcon(
     contentDescription: String,
     modifier: Modifier = Modifier
 ) {
-    val painter = painterResource(id = R.drawable.ic_refresh)
-    if (!refreshing) {
-        Icon(painter = painter, contentDescription = contentDescription, modifier = modifier)
-        return
-    }
     val transition = rememberInfiniteTransition(label = "refresh")
     val angle by transition.animateFloat(
         initialValue = 0f,
@@ -35,10 +30,10 @@ internal fun AnimatedRefreshIcon(
         label = "refresh_rotation"
     )
     Icon(
-        painter = painter,
+        painter = painterResource(id = R.drawable.ic_refresh),
         contentDescription = contentDescription,
         // Read in the draw phase: reading the animated float in composition recomposed
         // the icon on every frame of the spin.
-        modifier = modifier.graphicsLayer { rotationZ = angle }
+        modifier = modifier.graphicsLayer { rotationZ = if (refreshing) angle else 0f }
     )
 }

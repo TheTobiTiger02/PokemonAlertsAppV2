@@ -11,14 +11,6 @@ import java.util.Locale
 class AlertsMapViewportTest {
 
     @Test
-    fun `empty viewport offers to show matching alerts only after bounds are known`() {
-        assertEquals(MapViewportStatus("3 matching · view loading", false), mapViewportStatus(3, null))
-        assertEquals(MapViewportStatus("3 matching · 0 in view", true), mapViewportStatus(3, 0))
-        assertEquals(MapViewportStatus("0 matching · 0 in view", false), mapViewportStatus(0, 0))
-        assertEquals(MapViewportStatus("3 matching · 2 in view", false), mapViewportStatus(3, 2))
-    }
-
-    @Test
     fun `coordinates reject missing non finite out of range and zero origin values`() {
         assertNull(validMapCoordinates(null, 8.0))
         assertNull(validMapCoordinates(49.0, null))

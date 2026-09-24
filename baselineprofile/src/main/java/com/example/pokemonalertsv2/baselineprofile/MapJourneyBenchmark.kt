@@ -17,7 +17,7 @@ class MapJourneyBenchmark {
     @Test fun gesturesAndPictureInPicture() = rule.measureRepeated(
         packageName = TARGET_PACKAGE,
         metrics = listOf(FrameTimingMetric(), MemoryUsageMetric(MemoryUsageMetric.Mode.Max)),
-        compilationMode = CompilationMode.None(),
+        compilationMode = CompilationMode.Partial(BaselineProfileMode.Require),
         iterations = 5,
         setupBlock = {
             killProcess()
@@ -25,11 +25,10 @@ class MapJourneyBenchmark {
             startActivityAndWait()
             device.completeOnboardingIfNeeded()
             device.requireClick(By.text("Map"))
-            device.requireVisible(By.desc("Map settings and filters"))
+            device.requireVisible(By.desc("Show all visible alerts"))
         }
     ) {
-        // The fit action appears only when matching alerts are outside the viewport.
-        device.clickIfPresent(By.text("Show alerts"), 1_000)
+        device.requireClick(By.desc("Show all visible alerts"))
         val map = device.findObject(By.desc("Google Map"))
         val x = device.displayWidth / 2
         val y = device.displayHeight / 2
@@ -41,9 +40,6 @@ class MapJourneyBenchmark {
             SystemClock.sleep(80)
             device.click(x, y)
         }
-        // A gesture can land on a marker and open its alert sheet. Close that sheet
-        // before measuring the map tools action.
-        device.clickIfPresent(By.desc("Close sheet"), 500)
         device.requireClick(By.desc("Map settings and filters"))
         device.requireVisible(By.desc("Open map in picture-in-picture"))
         val start = SystemClock.elapsedRealtimeNanos()

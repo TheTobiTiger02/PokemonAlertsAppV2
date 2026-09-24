@@ -9,13 +9,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.AlertPreferences
@@ -42,83 +40,22 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "Map", "Events", "Settings").forEach { label ->
+        listOf("Alerts", "History", "Map", "Events", "Settings").forEach { label ->
             composeRule.onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
         }
-        composeRule.onNodeWithText("History").assertIsDisplayed().assertHasClickAction()
     }
 
     @Test
-    fun historyLivesInsideAlertsAndBackReturnsToActive() {
+    fun historyIsAnIndependentRootDestination() {
         waitForMainNavigation()
 
         composeRule.onAllNodesWithText("History").onFirst().performClick()
         composeRule.onNodeWithText("Alert History").assertIsDisplayed()
 
-        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
-    }
-
-    @Test
-    fun historySelectionSurvivesActivityRecreation() {
-        waitForMainNavigation()
-        composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
-
-        composeRule.activityRule.scenario.recreate()
-        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText("Alert History").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
-        composeRule.onNodeWithText("Active").performClick()
-        composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
-    }
-
-    @Test
-    fun explicitAlertsNavigationReturnsToActiveWithoutClearingHistory() {
-        waitForMainNavigation()
-        composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
-        composeRule.onNodeWithText("Map").performClick()
         composeRule.onNodeWithText("Alerts").performClick()
         composeRule.onNodeWithText("Pokémon Alerts").assertIsDisplayed()
-        composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
-    }
-
-    @Test
-    fun oldHistoryIntentExtraOpensHistoryInsideAlerts() {
-        waitForMainNavigation()
-        composeRule.runOnIdle {
-            composeRule.activity.handleNavigationIntent(
-                Intent(composeRule.activity, MainActivity::class.java)
-                    .putExtra("extra_initial_tab", 1)
-            )
-        }
-        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText("Alert History").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithText("Alert History").assertIsDisplayed()
-    }
-
-    @Test
-    fun activeAndHistoryKeepIndependentSearches() {
-        waitForMainNavigation()
-        composeRule.onNodeWithContentDescription("Search alerts").performClick()
-        composeRule.onNodeWithTag("alert_search_input").performTextInput("active-test")
-        composeRule.onNodeWithText("“active-test”").assertIsDisplayed()
-
-        composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithContentDescription("Search history").performClick()
-        composeRule.onNodeWithTag("alert_search_input").performTextInput("history-test")
-        composeRule.onNodeWithText("“history-test”").assertIsDisplayed()
-
-        composeRule.onNodeWithText("Active").performClick()
-        composeRule.onNodeWithText("“active-test”").assertIsDisplayed()
-        composeRule.onAllNodesWithText("History").onFirst().performClick()
-        composeRule.onNodeWithText("“history-test”").assertIsDisplayed()
     }
 
     @Test
@@ -158,31 +95,6 @@ class MainNavigationComposeTest {
         }
         waitForAlertsScreen()
         assertFalse(composeRule.activity.isFinishing)
-    }
-
-    @Test
-    fun routesOffersChoiceBeforeShowingHuntControls() {
-        val originalStyle = runBlocking { preferences.mapStylePreference.first() }
-        try {
-            runBlocking { preferences.updateMapStylePreference(MapStylePreference.OPENSTREETMAP) }
-            openMapFromIntent()
-            composeRule.waitUntil(timeoutMillis = 30_000) {
-                composeRule.onAllNodesWithTag("open_catch_routes").fetchSemanticsNodes().isNotEmpty()
-            }
-            composeRule.onNodeWithTag("open_catch_routes").performClick()
-            composeRule.onNodeWithText("Choose how you want to walk.").assertIsDisplayed()
-            composeRule.onNodeWithText("Battery Saver").assertDoesNotExist()
-            val huntAction = if (composeRule.onAllNodesWithText("Start Hunt").fetchSemanticsNodes().isNotEmpty()) {
-                "Start Hunt"
-            } else {
-                "Manage Hunt"
-            }
-            composeRule.onNodeWithText(huntAction).performClick()
-            composeRule.onNodeWithText("Back to routes").assertIsDisplayed()
-            composeRule.onNodeWithText("Battery Saver").assertIsDisplayed()
-        } finally {
-            runBlocking { preferences.updateMapStylePreference(originalStyle) }
-        }
     }
 
     @Test

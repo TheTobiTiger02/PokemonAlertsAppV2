@@ -29,10 +29,8 @@ import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
-import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
-import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.CachedLocationProvider
@@ -41,12 +39,7 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -71,31 +64,12 @@ object AlertNotifier {
     internal fun buildNotificationContentText(
         alert: PokemonAlert,
         distanceText: String? = null,
-        walkingText: String? = null,
-        isInRange: Boolean = false
+        walkingText: String? = null
     ): String = buildAlertGlanceMetadata(
         alert = alert,
         distanceText = distanceText,
-        walkingText = walkingText,
-        isInRange = isInRange
+        walkingText = walkingText
     )
-
-    internal fun compactNotificationText(
-        alert: PokemonAlert,
-        distanceText: String?,
-        isInRange: Boolean,
-        nowMillis: Long = System.currentTimeMillis()
-    ): String {
-        val remainingMinutes = TimeUtils.parseEndTimeToMillis(alert.endTime)
-            ?.minus(nowMillis)
-            ?.takeIf { it > 0 }
-            ?.let { (it + 59_999L) / 60_000L }
-        return listOfNotNull(
-            remainingMinutes?.let { "$it min left" },
-            if (isInRange) "In range" else distanceText?.takeIf { it.isNotBlank() },
-            alert.displayCp?.let { "CP $it" }
-        ).take(3).joinToString(" • ").ifBlank { resolveAlertVisualStyle(alert).label }
-    }
 
     fun ensureChannel(context: Context) {
         val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
@@ -202,18 +176,14 @@ object AlertNotifier {
                 if (!settings.shouldNotify(
                         alert,
                         goDexStatus.status,
-                        FilterMatchContext(
-                            effectiveDistanceMeters = straightLineDistanceMeters,
-                            directDistanceMeters = straightLineDistanceMeters
-                        )
+                        FilterMatchContext(effectiveDistanceMeters = straightLineDistanceMeters)
                     )
                 ) return@forEach
 
                 // Pre-check walking duration upper bound: even at a fast 6.5 km/h (1.8 m/s),
                 // if straightLine > maxWalkingSeconds * 1.8m, it is impossible to walk in time.
-                // Alerts directly in interaction range bypass walking duration.
                 val maxWalkingMinutes = settings.filterDefinition?.maxWalkingMinutes ?: 0
-                if (maxWalkingMinutes > 0 && straightLineDistanceMeters != null && !alert.isDirectlyInRange(straightLineDistanceMeters)) {
+                if (maxWalkingMinutes > 0 && straightLineDistanceMeters != null) {
                     if (straightLineDistanceMeters > maxWalkingMinutes * 60L * 1.8f) return@forEach
                 }
 
@@ -262,8 +232,7 @@ object AlertNotifier {
                         preCandidate.goDexStatus.status,
                         FilterMatchContext(
                             effectiveDistanceMeters = routeDisplayInfo.effectiveDistanceMeters,
-                            walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds,
-                            directDistanceMeters = preCandidate.straightLineDistanceMeters
+                            walkingDurationSeconds = routeDisplayInfo.walkingDurationSeconds
                         )
                     )
                 ) return@forEach
@@ -273,16 +242,16 @@ object AlertNotifier {
 
         // Soonest-ending first: the alerts about to vanish are the ones worth the buzz.
         // Alerts without an end time sort last and never win the cap race.
-        val byUrgency = candidates.sortedBy { candidate ->
-            TimeUtils.parseEndTimeToMillis(candidate.alert.endTime) ?: Long.MAX_VALUE
-        }
-        val selected = byUrgency.take(MAX_NOTIFICATIONS_PER_BURST)
-        val overflowByChannel = byUrgency
+        val selected = candidates
+            .sortedBy { candidate ->
+                TimeUtils.parseEndTimeToMillis(candidate.alert.endTime) ?: Long.MAX_VALUE
+            }
+            .take(MAX_NOTIFICATIONS_PER_BURST)
+        val overflowByChannel = candidates
             .drop(MAX_NOTIFICATIONS_PER_BURST)
             .groupingBy { candidate -> notificationChannelFor(candidate.alert) }
             .eachCount()
 
-        val artworkUpdates = mutableListOf<suspend () -> Unit>()
         selected.forEach { candidate ->
             val alert = candidate.alert
             val notificationIntent = AlertDetailActivity.createIntent(
@@ -311,14 +280,11 @@ object AlertNotifier {
 
             val baseText = alert.type?.joinToString(", ")
                 ?: context.getString(R.string.notification_default_body)
-            val isInRange = alert.isDirectlyInRange(candidate.routeDisplayInfo.straightLineDistanceMeters)
             val contentText = buildNotificationContentText(
                 alert = alert,
                 distanceText = distanceText,
-                walkingText = walkingText,
-                isInRange = isInRange
+                walkingText = walkingText
             ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
-            val compactText = compactNotificationText(alert, distanceText, isInRange)
             val expandedText = buildString {
                 append(contentText)
                 if (alert.description.isNotBlank() && alert.description != baseText) {
@@ -327,17 +293,33 @@ object AlertNotifier {
                 }
             }
 
+            // Fully prepare the image before posting so the first notification already
+            // contains its map fallback. A bounded wait keeps delivery reliable offline.
+            val bitmap = resolveAlertNotificationImage(
+                alert = alert,
+                loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
+                generateMapFallback = { coordinates, thumbnailUrl ->
+                    MapFallbackImageGenerator.generate(
+                        context = context,
+                        latitude = coordinates.latitude,
+                        longitude = coordinates.longitude,
+                        thumbnailUrl = thumbnailUrl,
+                        outputWidth = 512,
+                        outputHeight = 256
+                    )
+                }
+            )
+
             val channelId = notificationChannelFor(alert)
 
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
                 .setContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
-                .setContentText(compactText)
+                .setContentText(contentText)
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(expandedText)
                 )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setOnlyAlertOnce(true)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
@@ -363,36 +345,22 @@ object AlertNotifier {
                     createPipPendingIntent(context, alert)
                 )
 
+            // Add the image as large icon and big picture if available
+            bitmap?.let {
+                notificationBuilder.setLargeIcon(it)
+                // Use BigPictureStyle if we have an image
+                notificationBuilder.setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(it)
+                        .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
+                        .setBigContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
+                        .setSummaryText(contentText)
+                )
+            }
+
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                val notificationId = AlertNotificationIds.forAlert(alert.uniqueId)
-                notificationManager.notify(notificationId, notificationBuilder.build())
+                notificationManager.notify(AlertNotificationIds.forAlert(alert.uniqueId), notificationBuilder.build())
                 postedByChannel.getOrPut(channelId) { mutableListOf() }.add(alert)
-                artworkUpdates += suspend {
-                    enrichActiveNotification(
-                        context = context,
-                        manager = notificationManager,
-                        notificationId = notificationId,
-                        builder = notificationBuilder,
-                        title = formatAlertTitle(alert, candidate.goDexStatus.status),
-                        contentText = contentText,
-                        image = {
-                            resolveAlertNotificationImage(
-                                alert = alert,
-                                loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
-                                generateMapFallback = { coordinates, thumbnailUrl ->
-                                    MapFallbackImageGenerator.generate(
-                                        context = context,
-                                        latitude = coordinates.latitude,
-                                        longitude = coordinates.longitude,
-                                        thumbnailUrl = thumbnailUrl,
-                                        outputWidth = 512,
-                                        outputHeight = 256
-                                    )
-                                }
-                            )
-                        }
-                    )
-                }
             }
         }
 
@@ -404,44 +372,6 @@ object AlertNotifier {
                 posted = posted,
                 overflowCount = overflowByChannel[channelId] ?: 0
             )
-        }
-        // Images start only after every text/action notification and group summary is visible.
-        // Bound bitmap work so a large push wave does not exhaust memory.
-        val artworkSlots = Semaphore(3)
-        coroutineScope {
-            artworkUpdates.map { update ->
-                async(Dispatchers.IO) { artworkSlots.withPermit { update() } }
-            }.awaitAll()
-        }
-    }
-
-    internal suspend fun enrichActiveNotification(
-        context: Context,
-        manager: NotificationManagerCompat,
-        notificationId: Int,
-        builder: NotificationCompat.Builder,
-        title: String,
-        contentText: String,
-        image: suspend () -> Bitmap?
-    ) {
-        val bitmap = image() ?: return
-        // Dismissal or auto-cancel during image loading must not resurrect an alert.
-        if (!manager.areNotificationsEnabled() || manager.activeNotifications.none { it.id == notificationId }) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) !=
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) return
-        builder.setLargeIcon(bitmap).setOnlyAlertOnce(true).setStyle(
-            NotificationCompat.BigPictureStyle()
-                .bigPicture(bitmap)
-                .bigLargeIcon(null as Bitmap?)
-                .setBigContentTitle(title)
-                .setSummaryText(contentText)
-        )
-        try {
-            manager.notify(notificationId, builder.build())
-        } catch (_: SecurityException) {
-            // Notification access can be revoked while artwork is loading.
         }
     }
 

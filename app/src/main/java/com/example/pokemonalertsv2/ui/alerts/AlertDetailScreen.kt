@@ -163,9 +163,6 @@ import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import com.example.pokemonalertsv2.util.DistanceSource
-import com.example.pokemonalertsv2.util.CachedLocationProvider
-import com.example.pokemonalertsv2.util.RouteDisplayInfo
-import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import com.example.pokemonalertsv2.util.validAlertCoordinates
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -210,18 +207,6 @@ fun AlertDetailScreen(
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
     val darkTheme = LocalAppDarkTheme.current
-    val routeDistance by produceState<RouteDisplayInfo?>(initialValue = null, alert.uniqueId) {
-        val coordinates = validAlertCoordinates(alert) ?: return@produceState
-        val origin = CachedLocationProvider.get(context, timeoutMs = 2_500L) ?: return@produceState
-        val direct = WalkingRouteUtils.straightLineDistanceMeters(
-            origin.latitude, origin.longitude, coordinates.latitude, coordinates.longitude
-        )
-        value = WalkingRouteUtils.buildRouteDisplayInfo(direct, null, fallbackToEstimate = false)
-        val route = runCatching {
-            WalkingRouteRepository.getInstance().getWalkingRoutes(origin, listOf(alert))[alert.uniqueId]
-        }.getOrNull()
-        if (route != null) value = WalkingRouteUtils.buildRouteDisplayInfo(direct, route)
-    }
     var isMapFallback by remember(alert.uniqueId) {
         mutableStateOf(alert.imageUrl.isNullOrBlank() && validAlertCoordinates(alert) != null)
     }
@@ -272,7 +257,7 @@ fun AlertDetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
+                            .height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
                     ) {
                         AlertImage(
                             alert = alert,
@@ -504,29 +489,6 @@ fun AlertDetailScreen(
                             }
                         }
 
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                CountdownAndEndTimeRow(alert = alert)
-                                routeDistance?.let { distance ->
-                                    distance.distanceText?.let { label ->
-                                        Text(
-                                            text = when (distance.source) {
-                                                DistanceSource.ROUTED -> "Walking route: $label"
-                                                else -> "Straight-line distance: $label"
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
                         if (alert.isInvalidated) {
                             InvalidationBanner(alert = alert)
                         }
@@ -595,6 +557,36 @@ fun AlertDetailScreen(
                                 gruntType = alert.gruntType,
                                 pokemonRewards = alert.pokemonRewards
                             )
+                        }
+
+                        // Time & Status
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ),
+                            shape = MaterialTheme.shapes.large,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                val statusClock = rememberCountdownClock()
+                                Text(
+                                    text = "Status",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CountdownAndEndTimeRow(alert = alert, countdownClock = statusClock)
+
+                                // Created at timestamp
+                                TimeUtils.formatPostedTime(alert.createdAt)?.let { posted ->
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = posted,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(modifier = Modifier.height(actionBarClearance))

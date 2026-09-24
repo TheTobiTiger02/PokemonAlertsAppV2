@@ -15,7 +15,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
@@ -27,7 +26,6 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -80,15 +78,6 @@ class DenseMapInteractionTest {
                 }
             }
             google != null || osm != null
-        }
-        if (style == MapStylePreference.GOOGLE_STANDARD) {
-            composeRule.waitUntil(20_000) {
-                composeRule.onAllNodesWithText("Loading Google Maps…").fetchSemanticsNodes().isEmpty()
-            }
-            assumeTrue(
-                "Google Maps provider unavailable on the offline fixture",
-                composeRule.onAllNodesWithText("Map couldn’t be loaded").fetchSemanticsNodes().isEmpty()
-            )
         }
         // Let initial location/camera positioning finish before fixing the common starting camera.
         settle(6_000)
@@ -144,20 +133,20 @@ class DenseMapInteractionTest {
             var y = 0f
             instrumentation.runOnMainSync {
                 nativeView!!.getLocationOnScreen(screen)
-                val cameraLatitude = google?.cameraPosition?.target?.latitude ?: osm!!.cameraPosition.target!!.latitude
-                val cameraLongitude = google?.cameraPosition?.target?.longitude ?: osm!!.cameraPosition.target!!.longitude
-                val cluster = clusterMapAlerts(alerts, 12.0)
-                    .filterIsInstance<MapMarkerItem.Cluster>()
-                    .minBy { (it.latitude - cameraLatitude) * (it.latitude - cameraLatitude) +
-                        (it.longitude - cameraLongitude) * (it.longitude - cameraLongitude) }
                 if (google != null) {
                     val point = google!!.projection.toScreenLocation(
-                        com.google.android.gms.maps.model.LatLng(cluster.latitude, cluster.longitude))
+                        com.google.android.gms.maps.model.LatLng(49.87, 8.65))
                     x = point.x.toFloat() + screen[0]
                     y = point.y.toFloat() + screen[1]
                 } else {
-                    val point = osm!!.projection.toScreenLocation(
-                        org.maplibre.android.geometry.LatLng(cluster.latitude, cluster.longitude))
+                    // Tap the marker the map actually drew rather than the middle of the
+                    // fixture. A stack marker is anchored on its *top* alert - the winner of
+                    // compareAlertPriority, which for uniform fixtures is the lexicographically
+                    // first id - so it sits at a corner of the cluster, far enough from the
+                    // centre at this zoom for a centre tap to miss the icon.
+                    val target = osm!!.markers.firstOrNull()?.position
+                        ?: org.maplibre.android.geometry.LatLng(49.87, 8.65)
+                    val point = osm!!.projection.toScreenLocation(target)
                     x = point.x + screen[0]
                     y = point.y + screen[1] - 12f
                 }
@@ -176,9 +165,9 @@ class DenseMapInteractionTest {
             capture("${style.name}-after")
             instrumentation.runOnMainSync {
                 val zoom = google?.cameraPosition?.zoom?.toDouble() ?: osm!!.cameraPosition.zoom
-                Log.i("DenseMapQA", "$style zoom=$zoom osmFeatures=${osm?.let(::osmFeatureCount)}")
+                Log.i("DenseMapQA", "$style zoom=$zoom osmMarkers=${osm?.markers?.size}")
                 assertEquals("Cluster tap should zoom progressively", 14.0, zoom, 0.05)
-                osm?.let { assertTrue("Markers must stay capped", osmFeatureCount(it) in 1..MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
+                osm?.let { assertTrue("Markers must stay capped", it.markers.size in 1..MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
             }
         } finally {
             heartbeat.removeCallbacks(pulse)
@@ -192,6 +181,7 @@ class DenseMapInteractionTest {
             }
             thread.quitSafely()
             val sorted = synchronized(frames) { frames.toList().sorted() }
+            assertTrue("Profiling must capture actual frames", sorted.isNotEmpty())
             Log.i("DenseMapQA", "$style frames=${sorted.size} " +
                 "p95Ms=${sorted.getOrNull((sorted.size * .95).toInt())?.div(1_000_000.0)} " +
                 "maxMs=${sorted.lastOrNull()?.div(1_000_000.0)} " +
@@ -226,14 +216,14 @@ class DenseMapInteractionTest {
             instrumentation.runOnMainSync {
                 val zoom = google?.cameraPosition?.zoom?.toDouble() ?: osm!!.cameraPosition.zoom
                 assertEquals(zoomBefore + 2.0, zoom, 0.05)
-                osm?.let { assertTrue(osmFeatureCount(it) <= MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
+                osm?.let { assertTrue(it.markers.size <= MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
             }
         }
         instrumentation.runOnMainSync {
             osm?.style?.layers?.map { it.id }?.let { layers ->
-                val pinIndex = layers.indexOf("alert-pin-layer")
-                assertTrue("Alert symbol layer should exist", pinIndex >= 0)
-                assertTrue("Spawn circles must be below alert markers", layers.indexOf("spawn-radius-layer") < pinIndex)
+                val annotationIndex = layers.indexOf("org.maplibre.annotations.points")
+                assertTrue("Native marker layer should exist", annotationIndex >= 0)
+                assertTrue("Spawn circles must be below alert markers", layers.indexOf("spawn-radius-layer") < annotationIndex)
             }
         }
         capture("${style.name}-zoomed-in")
@@ -246,16 +236,16 @@ class DenseMapInteractionTest {
                 center + Offset(80f, 0f), center + Offset(240f, 0f), durationMillis = 400)
         }
         settle(1_000)
+        composeRule.onNodeWithContentDescription(
+            instrumentation.targetContext.getString(R.string.map_show_all_alerts)
+        ).performClick()
+        settle(2_000)
         instrumentation.runOnMainSync {
-            osm?.let { assertTrue(osmFeatureCount(it) <= MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
+            osm?.let { assertTrue(it.markers.size in 1..MAX_RENDERED_MAP_MARKERS_ZOOMED_IN) }
         }
-        capture("${style.name}-after-gestures")
+        capture("${style.name}-fit-all")
 
     }
-
-    private fun osmFeatureCount(map: org.maplibre.android.maps.MapLibreMap): Int =
-        map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("alert-source")
-            ?.querySourceFeatures(null)?.size ?: 0
 
     private fun tap(x: Float, y: Float) {
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation

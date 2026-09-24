@@ -129,8 +129,6 @@ internal class FloatingWindow(
     @SuppressLint("ClickableViewAccessibility")
     fun buildResizeGrip(): View = TextView(themedContext).apply {
         text = "◢"
-        contentDescription = "Resize floating map"
-        tooltipText = contentDescription
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         setTextColor(0xFF5B6472.toInt())
         gravity = Gravity.CENTER

@@ -19,21 +19,6 @@ class AlertGlanceMetadataTest {
     }
 
     @Test
-    fun inRangeIsPlacedFirstInGlanceMetadata() {
-        val alert = PokemonAlert(name = "Rayquaza", type = listOf("Raid"))
-
-        assertEquals(
-            "In range • 300 m • 4 min walk • Raid",
-            buildAlertGlanceMetadata(
-                alert = alert,
-                distanceText = "300 m",
-                walkingText = "4 min walk",
-                isInRange = true
-            )
-        )
-    }
-
-    @Test
     fun weatherSitsBetweenCpAndDistance() {
         val alert = PokemonAlert(
             name = "Perfect Trubbish",

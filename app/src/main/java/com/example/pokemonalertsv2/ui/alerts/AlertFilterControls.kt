@@ -46,7 +46,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -150,7 +149,6 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
-import com.example.pokemonalertsv2.data.CardDisplayMode
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
@@ -183,8 +181,6 @@ internal fun AlertListControls(
     searchQuery: String,
     onSearchQueryChanged: (String) -> Unit,
     sortPreference: SortPreference,
-    cardDisplayMode: CardDisplayMode = CardDisplayMode.RICH,
-    onCardDisplayModeChange: (CardDisplayMode) -> Unit = {},
     onSortChanged: (SortPreference) -> Unit,
     onOpenFilters: () -> Unit,
     locationPrecisionInsufficient: Boolean,
@@ -269,15 +265,6 @@ internal fun AlertListControls(
                             }
                         }
                     }
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CardDisplayMode.entries.forEach { mode ->
-                    FilterChip(
-                        selected = cardDisplayMode == mode,
-                        onClick = { onCardDisplayModeChange(mode) },
-                        label = { Text(if (mode == CardDisplayMode.RICH) "Rich cards" else "Compact cards") }
-                    )
                 }
             }
             AnimatedVisibility(
@@ -601,10 +588,9 @@ internal fun AlertSearchBar(
     OutlinedTextField(
         value = query,
         onValueChange = onQueryChanged,
-          modifier = modifier
-              .fillMaxWidth()
-              .testTag("alert_search_input")
-              .focusRequester(focusRequester),
+        modifier = modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester),
         placeholder = {
             Text(
                 text = placeholder,

@@ -16,7 +16,6 @@ import android.widget.RemoteViewsService
 import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
-import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
@@ -175,7 +174,6 @@ private class AlertsFactory(
             distanceText = distanceText,
             walkingText = walkingText,
             includeCategory = false,
-            isInRange = alert.isDirectlyInRange(distanceMeters),
             separator = " | "
         )
         if (metadata.isBlank()) {

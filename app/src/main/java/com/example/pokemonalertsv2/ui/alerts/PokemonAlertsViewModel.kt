@@ -25,8 +25,6 @@ import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterStateDocument
 import com.example.pokemonalertsv2.data.FilterSurface
 import com.example.pokemonalertsv2.data.SortPreference
-import com.example.pokemonalertsv2.data.CardDisplayMode
-import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
@@ -175,7 +173,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 }
             }
             val display = WalkingRouteUtils.buildRouteDisplayInfo(straightLine, routes[alert.uniqueId])
-            val isInRange = alert.isDirectlyInRange(display.straightLineDistanceMeters)
             AlertUiModel(
                 alert = alert,
                 distanceInfo = AlertDistanceInfo(
@@ -185,8 +182,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                     straightLineDistanceMeters = display.straightLineDistanceMeters,
                     routedWalkingDistanceMeters = display.routedDistanceMeters,
                     walkingDurationSeconds = display.walkingDurationSeconds,
-                    source = display.source,
-                    isInRange = isInRange
+                    source = display.source
                 ),
                 endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
                 typeKeys = alert.typeKeys()
@@ -465,8 +461,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .asPreferenceState(emptySet())
     val sortPreference = repository.alertPreferences.sortPreference
         .asPreferenceState(SortPreference.POSTED_TIME)
-    val cardDisplayMode = repository.alertPreferences.cardDisplayMode
-        .asPreferenceState(CardDisplayMode.RICH)
     val mapStylePreference = repository.alertPreferences.mapStylePreference
         .asPreferenceState(MapStylePreference.fromStoredValue(null))
     val showMapCountdowns = repository.alertPreferences.showMapCountdowns
@@ -508,10 +502,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             repository.alertPreferences.updateSortPreference(preference)
             AlertsWidgetProvider.requestUpdate(getApplication())
         }
-    }
-
-    fun updateCardDisplayMode(mode: CardDisplayMode) {
-        viewModelScope.launch { repository.alertPreferences.updateCardDisplayMode(mode) }
     }
 
     fun updateMapStylePreference(preference: MapStylePreference) {

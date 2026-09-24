@@ -206,28 +206,6 @@ class CatchRoutesActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (showSettings) Surface(tonalElevation = 4.dp) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        model.error?.let {
-                            Text(it, color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.testTag("catch_route_error"))
-                        }
-                        if (model.retryAt > now()) Text("Retry in ${(model.retryAt - now()) / 1000 + 1}s")
-                        if (model.busy) {
-                            LinearProgressIndicator(Modifier.fillMaxWidth())
-                            Text(model.progress, style = MaterialTheme.typography.bodySmall)
-                            TextButton(onClick = model::cancel) { Text("Cancel") }
-                        } else Button(
-                            onClick = model::generate,
-                            modifier = Modifier.fillMaxWidth().height(52.dp).testTag("generate_catch_route"),
-                            enabled = model.retryAt <= now()
-                        ) { Text("Generate route") }
-                    }
-                }
             }
         }
         details?.let { selections ->
@@ -339,7 +317,7 @@ class CatchRoutesActivity : ComponentActivity() {
         onAdvanced: () -> Unit, onPicking: (String) -> Unit, onShowSaved: () -> Unit, onArea: () -> Unit, onGoRoutes: () -> Unit, onBack: (() -> Unit)?) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (onBack != null) TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) { Text("‹ Back to route") }
-            SettingsCard("1. Where") {
+            SettingsCard("Where") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(when {
                         settings.fixed -> "Walking ${settings.sourceRouteName ?: "an imported route"} as drawn"
@@ -355,13 +333,17 @@ class CatchRoutesActivity : ComponentActivity() {
                 }
                 Text(if (model.hasStart) "Start ${coordinate(settings.start)}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "start") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
+                }
+                if (settings.finish == CatchFinish.PIN) Text("Finish ${settings.end?.let(::coordinate) ?: "· tap the map"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!settings.fixed) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (settings.area.isArea()) "Stays inside your area (${settings.area.size} corners)" else "No area limit", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     if (settings.area.isArea()) TextButton(onClick = { model.edit(settings.copy(area = emptyList())) }) { Text("Remove") }
                     OutlinedButton(onClick = onArea) { Text(if (settings.area.isArea()) "Edit area" else "Limit to area") }
                 }
             }
-            SettingsCard("2. When and duration") {
+            SettingsCard("When") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = model.useNow, onClick = { model.schedule(null) }, label = { Text("Now") })
                     FilterChip(selected = !model.useNow, onClick = ::pickTime, label = { Text(if (model.useNow) "Later…" else time(settings.startAtMillis)) })
@@ -377,18 +359,7 @@ class CatchRoutesActivity : ComponentActivity() {
                     OutlinedButton(onClick = model::recommendTime, enabled = !model.busy && model.hasStart, modifier = Modifier.weight(1f).testTag("recommend_time")) { Text("Best start time") }
                 }
             }
-            SettingsCard("3. Finish goal") {
-                Text("Where should this walk end?", style = MaterialTheme.typography.bodyMedium)
-                if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "start") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
-                }
-                if (settings.finish == CatchFinish.PIN) Text("Finish ${settings.end?.let(::coordinate) ?: "· tap the map"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            SettingsCard("Advanced route options") {
-                TextButton(onClick = onAdvanced, contentPadding = PaddingValues(0.dp)) {
-                    Text(if (advanced) "Hide advanced options" else "Show advanced options")
-                }
-                if (advanced) {
+            SettingsCard("What") {
                 SwitchRow("Event spawns", "Spawnpoints that only spawn during Spotlight Hours, Community Days and similar events", settings.includeEventSpawns) { model.edit(settings.copy(includeEventSpawns = it)) }
                 if (settings.includeEventSpawns) {
                     Text("Which events", style = MaterialTheme.typography.titleSmall)
@@ -411,6 +382,8 @@ class CatchRoutesActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 SwitchRow("Spacial Rend", "Catch range ${settings.radius.toInt()} m", settings.spacialRend) { model.edit(settings.copy(spacialRend = it)) }
+                TextButton(onClick = onAdvanced, contentPadding = PaddingValues(0.dp)) { Text(if (advanced) "Hide advanced" else "Advanced settings") }
+                if (advanced) {
                     Text("Walking pace: ${String.format(Locale.getDefault(), "%.1f", settings.speedMps * 3.6)} km/h")
                     Slider(value = settings.speedMps.toFloat(), onValueChange = { model.edit(settings.copy(speedMps = it.toDouble())) }, valueRange = 0.5f..2.5f)
                     CatchPrediction.entries.forEach { prediction ->
@@ -429,6 +402,10 @@ class CatchRoutesActivity : ComponentActivity() {
                     OutlinedTextField(value = settings.name, onValueChange = { model.edit(settings.copy(name = it.take(80))) }, label = { Text("Route name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             }
+            model.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("catch_route_error")) }
+            if (model.retryAt > now()) Text("Retry in ${(model.retryAt - now()) / 1000 + 1}s")
+            if (model.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(model.progress, style = MaterialTheme.typography.bodySmall); TextButton(onClick = model::cancel) { Text("Cancel") } }
+            else Button(onClick = model::generate, modifier = Modifier.fillMaxWidth().height(52.dp).testTag("generate_catch_route"), enabled = model.retryAt <= now()) { Text("Generate route") }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 TextButton(onClick = { model.save() }, enabled = model.hasStart) { Text("Save setup") }
                 TextButton(onClick = { model.save(true) }, enabled = model.hasStart) { Text("Duplicate") }

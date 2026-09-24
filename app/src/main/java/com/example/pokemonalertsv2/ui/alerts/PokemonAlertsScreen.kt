@@ -154,7 +154,6 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
-import com.example.pokemonalertsv2.data.CardDisplayMode
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
@@ -194,7 +193,6 @@ fun PokemonAlertsRoute(
     val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
     val feedFilterDefinition by viewModel.feedFilterDefinition.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
-    val cardDisplayMode by viewModel.cardDisplayMode.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
@@ -256,7 +254,6 @@ fun PokemonAlertsRoute(
                     maxDistance = maxDistance,
                     defaultSnoozeMinutes = defaultSnoozeMinutes,
                     sortPreference = savedSortPreference,
-                    cardDisplayMode = cardDisplayMode,
                     selectedCategories = selectedFeedCategories,
                     filterDefinition = feedFilterDefinition,
                     categoryCounts = categoryCounts,
@@ -264,7 +261,6 @@ fun PokemonAlertsRoute(
                     onSelectedAreaChange = viewModel::updateSelectedArea,
                     onMaxDistanceChange = viewModel::updateMaxDistance,
                     onSortPreferenceChange = viewModel::updateSortPreference,
-                    onCardDisplayModeChange = viewModel::updateCardDisplayMode,
                     onStartManualRaid = onStartManualRaid,
                     onOpenFilterStudio = onOpenFilterStudio,
                     onRefresh = viewModel::refreshAlerts,
@@ -501,7 +497,6 @@ fun PokemonAlertsPage(
     maxDistance: Int,
     defaultSnoozeMinutes: Int,
     sortPreference: SortPreference,
-    cardDisplayMode: CardDisplayMode = CardDisplayMode.RICH,
     selectedCategories: Set<AlertCategory>,
     filterDefinition: FilterDefinition = FilterDefinition(),
     onSelectedCategoriesChange: (Set<AlertCategory>) -> Unit,
@@ -509,7 +504,6 @@ fun PokemonAlertsPage(
     onSelectedAreaChange: (String) -> Unit,
     onMaxDistanceChange: (Int) -> Unit,
     onSortPreferenceChange: (SortPreference) -> Unit,
-    onCardDisplayModeChange: (CardDisplayMode) -> Unit = {},
     onStartManualRaid: () -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -566,19 +560,21 @@ fun PokemonAlertsPage(
     ) {
         alertsWithDistance.filter { model ->
             val end = model.endMillis ?: Long.MAX_VALUE
-            if (end <= filterNow) return@filter false
-            if (!showDismissed && model.alert.uniqueId in dismissedAlertIds) return@filter false
-            if (model.alert.isInvalidated) return@filter false
+            // Filter out expired, optionally include dismissed based on toggle
+            val notExpired = end > filterNow
+            val notDismissed = showDismissed || model.alert.uniqueId !in dismissedAlertIds
+            val notInvalidated = !model.alert.isInvalidated
 
-            AlertFilterMatcher.matches(
+            val matchesFilter = AlertFilterMatcher.matches(
                 alert = model.alert,
                 definition = filterDefinition,
                 context = FilterMatchContext(
                     effectiveDistanceMeters = model.distanceInfo.distanceMeters,
-                    walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds,
-                    directDistanceMeters = model.distanceInfo.straightLineDistanceMeters
+                    walkingDurationSeconds = model.distanceInfo.walkingDurationSeconds
                 )
             )
+
+            notExpired && notDismissed && notInvalidated && matchesFilter
         }
     }
 
@@ -597,26 +593,13 @@ fun PokemonAlertsPage(
             }.thenByDescending { 
                 it.endMillis ?: 0L
             })
-            SortPreference.DISTANCE -> filtered.sortedWith { a, b ->
-                val aInRange = a.distanceInfo.isInRange
-                val bInRange = b.distanceInfo.isInRange
-                if (aInRange != bInRange) return@sortedWith if (aInRange) -1 else 1
-                if (aInRange) {
-                    val aDist = a.distanceInfo.straightLineDistanceMeters ?: Float.MAX_VALUE
-                    val bDist = b.distanceInfo.straightLineDistanceMeters ?: Float.MAX_VALUE
-                    val cmp = aDist.compareTo(bDist)
-                    if (cmp != 0) return@sortedWith cmp
-                    val aEff = a.distanceInfo.distanceMeters ?: Float.MAX_VALUE
-                    val bEff = b.distanceInfo.distanceMeters ?: Float.MAX_VALUE
-                    return@sortedWith aEff.compareTo(bEff)
+            SortPreference.DISTANCE -> filtered.sortedWith(
+                compareBy<AlertUiModel> {
+                    if (it.distanceInfo.source == DistanceSource.ROUTED) 0 else 1
+                }.thenBy {
+                    it.distanceInfo.distanceMeters ?: Float.MAX_VALUE
                 }
-                val aRouted = a.distanceInfo.source == DistanceSource.ROUTED
-                val bRouted = b.distanceInfo.source == DistanceSource.ROUTED
-                if (aRouted != bRouted) return@sortedWith if (aRouted) -1 else 1
-                val aDist = a.distanceInfo.distanceMeters ?: Float.MAX_VALUE
-                val bDist = b.distanceInfo.distanceMeters ?: Float.MAX_VALUE
-                aDist.compareTo(bDist)
-            }
+            )
             SortPreference.TIME_REMAINING -> filtered.sortedBy { 
                 it.endMillis ?: Long.MAX_VALUE
             }
@@ -669,8 +652,6 @@ fun PokemonAlertsPage(
                 selectedCategories = selectedCategories,
                 categoryCounts = categoryCounts,
                 sortPreference = sortPreference,
-                cardDisplayMode = cardDisplayMode,
-                onCardDisplayModeChange = onCardDisplayModeChange,
                 showDismissed = showDismissed,
                 dismissedAlertIds = dismissedAlertIds,
                 onCategoryToggled = { category, shownAfter ->
@@ -849,8 +830,6 @@ internal fun AlertsList(
     selectedCategories: Set<AlertCategory>,
     categoryCounts: Map<AlertCategory, Int>,
     sortPreference: SortPreference,
-    cardDisplayMode: CardDisplayMode = CardDisplayMode.RICH,
-    onCardDisplayModeChange: (CardDisplayMode) -> Unit = {},
     showDismissed: Boolean,
     dismissedAlertIds: Set<String>,
     onCategoryToggled: (AlertCategory, Boolean) -> Unit,
@@ -919,8 +898,6 @@ internal fun AlertsList(
             searchQuery = searchQuery,
             onSearchQueryChanged = onSearchQueryChanged,
             sortPreference = sortPreference,
-            cardDisplayMode = cardDisplayMode,
-            onCardDisplayModeChange = onCardDisplayModeChange,
             onSortChanged = onSortChanged,
             onOpenFilters = onOpenFilterStudio,
             locationPrecisionInsufficient = locationPrecisionInsufficient,
@@ -1088,7 +1065,6 @@ internal fun AlertsList(
                 Box {
                     AlertCard(
                         alert = model.alert,
-                        displayMode = cardDisplayMode,
                         distanceInfo = model.distanceInfo,
                         goDexStatus = goDexMatches[model.alert.uniqueId]
                             ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),

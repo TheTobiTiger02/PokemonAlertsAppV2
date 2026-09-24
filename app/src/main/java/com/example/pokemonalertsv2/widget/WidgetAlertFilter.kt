@@ -5,7 +5,6 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
-import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.TimeUtils
 
@@ -91,14 +90,11 @@ internal object WidgetAlertFilter {
         if (criteria.selectedArea != "All" && alert.area != criteria.selectedArea) return false
         if (criteria.filterDefinition == null && !matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
 
-        val directMeters = if (origin != null) directDistanceMeters(origin, alert) else null
-        val inRange = alert.isDirectlyInRange(directMeters)
-
         var effectiveDistance: Float? = null
         if (applyDistance && criteria.maxDistanceMeters > 0 && origin != null) {
             val meters = distanceMeters(origin, alert)
             effectiveDistance = meters
-            if (!inRange && meters != null && !meters.isNaN() && meters > criteria.maxDistanceMeters) {
+            if (meters != null && !meters.isNaN() && meters > criteria.maxDistanceMeters) {
                 return false
             }
         }
@@ -110,11 +106,7 @@ internal object WidgetAlertFilter {
             if (!AlertFilterMatcher.matches(
                     alert,
                     definition,
-                    FilterMatchContext(
-                        effectiveDistanceMeters = effectiveDistance,
-                        walkingDurationSeconds = walkingDurationSeconds(alert),
-                        directDistanceMeters = directMeters
-                    )
+                    FilterMatchContext(effectiveDistance, walkingDurationSeconds(alert))
                 )
             ) {
                 return false

@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.data
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
-import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.Locale
@@ -296,53 +295,6 @@ data class PokemonAlert(
             hasType("Spawn") || hasType("Hundo") || hasType("Nundo") ||
                 hasType("PvP") || hasType("Common") || hasType("Rare") || pokemon != null
         }
-    }
-
-    val isStopOrGymAlert: Boolean by lazy {
-        hasType("Raid") ||
-            hasType("Quest") ||
-            hasType("Kecleon") ||
-            hasTypeContaining("Rocket") ||
-            gruntType != null
-    }
-
-    val interactionRadiusMeters: Float by lazy {
-        if (isStopOrGymAlert) STOP_OR_GYM_INTERACTION_RANGE_METERS else SPAWN_INTERACTION_RANGE_METERS
-    }
-
-    val cachedFilterAlertTypes: Set<FilterAlertType> by lazy {
-        val set = java.util.EnumSet.noneOf(FilterAlertType::class.java)
-        if (hasType("Raid")) set.add(FilterAlertType.RAID)
-        if (hasType("Quest")) set.add(FilterAlertType.QUEST)
-        if (hasTypeContaining("Rocket") || gruntType != null) set.add(FilterAlertType.ROCKET)
-        if (hasType("Kecleon")) set.add(FilterAlertType.KECLEON)
-        if (hasTypeContaining("Weather")) set.add(FilterAlertType.WEATHER)
-        if (hasType("Hundo") || isPerfect) set.add(FilterAlertType.HUNDO)
-        if (hasType("Nundo") || isNundo) set.add(FilterAlertType.NUNDO)
-        if (hasType("PvP")) set.add(FilterAlertType.PVP)
-        if (hasType("Common") || hasType("Rare")) set.add(FilterAlertType.COMMON)
-        if (hasType("Hundo") || hasType("Nundo") || hasType("PvP") || hasType("Spawn") || isPerfect || isNundo) {
-            set.add(FilterAlertType.SPAWN)
-        }
-        if (set.isEmpty()) set.add(FilterAlertType.OTHER)
-        set
-    }
-
-    val cachedAlertCategories: Set<AlertCategory> by lazy {
-        val set = java.util.EnumSet.noneOf(AlertCategory::class.java)
-        if (hasType("Raid")) set.add(AlertCategory.RAID)
-        if (hasType("Quest")) set.add(AlertCategory.QUEST)
-        if (hasTypeContaining("Rocket") || gruntType != null) set.add(AlertCategory.ROCKET)
-        if (hasType("Kecleon")) set.add(AlertCategory.KECLEON)
-        if (hasTypeContaining("Weather")) set.add(AlertCategory.WEATHER)
-        if (hasType("Hundo") || isPerfect) set.add(AlertCategory.HUNDO)
-        if (hasType("Nundo") || isNundo) set.add(AlertCategory.NUNDO)
-        if (hasType("PvP")) set.add(AlertCategory.PVP)
-        if (hasType("Common") || hasType("Rare")) set.add(AlertCategory.COMMON)
-        if (hasType("Hundo") || hasType("Nundo") || hasType("PvP") || hasType("Spawn") || isPerfect || isNundo) {
-            set.add(AlertCategory.SPAWN)
-        }
-        set
     }
 
     /** Check if alert has a specific type (case-insensitive) */

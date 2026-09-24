@@ -73,24 +73,6 @@ enum class FilterAlertType(val label: String) {
     OTHER("Other")
 }
 
-const val SPAWN_INTERACTION_RANGE_METERS = 40f
-const val STOP_OR_GYM_INTERACTION_RANGE_METERS = 80f
-
-val FilterAlertType.interactionRadiusMeters: Float
-    get() = when (this) {
-        FilterAlertType.SPAWN,
-        FilterAlertType.COMMON,
-        FilterAlertType.HUNDO,
-        FilterAlertType.NUNDO,
-        FilterAlertType.PVP -> SPAWN_INTERACTION_RANGE_METERS
-        FilterAlertType.RAID,
-        FilterAlertType.ROCKET,
-        FilterAlertType.KECLEON,
-        FilterAlertType.QUEST -> STOP_OR_GYM_INTERACTION_RANGE_METERS
-        FilterAlertType.WEATHER,
-        FilterAlertType.OTHER -> SPAWN_INTERACTION_RANGE_METERS
-    }
-
 @Serializable
 data class QuestPairRule(
     val taskKey: String,
@@ -442,8 +424,7 @@ object BuiltInFilterProfiles {
 
 data class FilterMatchContext(
     val effectiveDistanceMeters: Float? = null,
-    val walkingDurationSeconds: Long? = null,
-    val directDistanceMeters: Float? = null
+    val walkingDurationSeconds: Long? = null
 )
 
 object AlertFilterMatcher {
@@ -453,27 +434,17 @@ object AlertFilterMatcher {
         context: FilterMatchContext = FilterMatchContext()
     ): Boolean {
         if (!definition.areas.contains(alert.area)) return false
+        if (definition.maxWalkingMinutes > 0) {
+            val walkingSeconds = context.walkingDurationSeconds
+            if (walkingSeconds != null && walkingSeconds > definition.maxWalkingMinutes * 60L) return false
+        }
 
         // The distance limit is resolved per matched type: one alert can be several types at once
         // (a 100% spawn is both SPAWN and HUNDO) and each may carry a different override.
         return alert.filterAlertTypes().any { type ->
-            if (!definition.alertTypes.contains(type.name)) return@any false
-            if (!matchesAdvanced(type, alert, definition)) return@any false
-
-            val isInRange = context.directDistanceMeters != null &&
-                context.directDistanceMeters.isFinite() &&
-                context.directDistanceMeters >= 0f &&
-                context.directDistanceMeters <= type.interactionRadiusMeters
-
-            if (!isInRange) {
-                if (definition.maxWalkingMinutes > 0) {
-                    val walkingSeconds = context.walkingDurationSeconds
-                    if (walkingSeconds != null && walkingSeconds > definition.maxWalkingMinutes * 60L) return@any false
-                }
-                if (!withinDistance(type, alert, definition, context)) return@any false
-            }
-
-            true
+            definition.alertTypes.contains(type.name) &&
+                matchesAdvanced(type, alert, definition) &&
+                withinDistance(type, alert, definition, context)
         }
     }
 
@@ -488,13 +459,9 @@ object AlertFilterMatcher {
     ): Int {
         val overrides = definition.distanceOverrides
         if (overrides.ruleCount > 0) {
-            if (overrides.perSpecies.isNotEmpty()) {
-                val token = normalizeFilterTokenOrNull(type.matchTokenFor(alert))
-                if (token != null) overrides.perSpecies[token]?.let { return it }
-            }
-            if (overrides.perType.isNotEmpty()) {
-                overrides.perType[type.name]?.let { return it }
-            }
+            val token = normalizeFilterTokenOrNull(type.matchTokenFor(alert))
+            if (token != null) overrides.perSpecies[token]?.let { return it }
+            overrides.perType[type.name]?.let { return it }
         }
         return definition.maxDistanceMeters
     }
@@ -540,13 +507,24 @@ object AlertFilterMatcher {
     }
 }
 
-fun PokemonAlert.filterAlertTypes(): Set<FilterAlertType> = cachedFilterAlertTypes
-
-fun PokemonAlert.interactionRadiusMeters(): Float = this.interactionRadiusMeters
-
-fun PokemonAlert.isDirectlyInRange(directDistanceMeters: Float?): Boolean {
-    if (directDistanceMeters == null || !directDistanceMeters.isFinite() || directDistanceMeters < 0f) return false
-    return directDistanceMeters <= interactionRadiusMeters
+fun PokemonAlert.filterAlertTypes(): Set<FilterAlertType> {
+    val mapped = alertCategories().mapTo(linkedSetOf()) { category ->
+        when (category) {
+            AlertCategory.SPAWN -> FilterAlertType.SPAWN
+            AlertCategory.RAID -> FilterAlertType.RAID
+            AlertCategory.QUEST -> FilterAlertType.QUEST
+            AlertCategory.ROCKET -> FilterAlertType.ROCKET
+            AlertCategory.KECLEON -> FilterAlertType.KECLEON
+            AlertCategory.HUNDO -> FilterAlertType.HUNDO
+            AlertCategory.NUNDO -> FilterAlertType.NUNDO
+            AlertCategory.PVP -> FilterAlertType.PVP
+            AlertCategory.COMMON -> FilterAlertType.COMMON
+            AlertCategory.WEATHER -> FilterAlertType.WEATHER
+            AlertCategory.GENERIC -> FilterAlertType.OTHER
+        }
+    }
+    if (mapped.isEmpty()) mapped += FilterAlertType.OTHER
+    return mapped
 }
 
 /**

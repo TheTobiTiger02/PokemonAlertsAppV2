@@ -108,11 +108,8 @@ internal fun MapFilterSheet(
     rewardThumbnails: Map<String, String>,
     visibleCount: Int,
     totalCount: Int,
-    mutedCategories: Set<AlertCategory> = emptySet(),
-    onMutedCategoriesChange: (Set<AlertCategory>) -> Unit = {},
     onDefinitionChange: (FilterDefinition) -> Unit,
     onOpenFilterStudio: () -> Unit,
-    onOpenMegaBoost: () -> Unit = {},
     onDismiss: () -> Unit,
     refreshing: Boolean,
     onRefresh: () -> Unit,
@@ -148,12 +145,9 @@ internal fun MapFilterSheet(
             rewardThumbnails = rewardThumbnails,
             visibleCount = visibleCount,
             totalCount = totalCount,
-            mutedCategories = mutedCategories,
-            onMutedCategoriesChange = onMutedCategoriesChange,
             categoryCounts = categoryCounts,
             onDefinitionChange = onDefinitionChange,
             onOpenFilterStudio = onOpenFilterStudio,
-            onOpenMegaBoost = onOpenMegaBoost,
             onDismiss = onDismiss,
             refreshing = refreshing,
             onRefresh = onRefresh,
@@ -218,12 +212,9 @@ private fun MapFilterSheetContent(
     rewardThumbnails: Map<String, String>,
     visibleCount: Int,
     totalCount: Int,
-    mutedCategories: Set<AlertCategory>,
-    onMutedCategoriesChange: (Set<AlertCategory>) -> Unit,
     categoryCounts: Map<AlertCategory, Int>,
     onDefinitionChange: (FilterDefinition) -> Unit,
     onOpenFilterStudio: () -> Unit,
-    onOpenMegaBoost: () -> Unit,
     onDismiss: () -> Unit,
     refreshing: Boolean,
     onRefresh: () -> Unit,
@@ -291,18 +282,6 @@ private fun MapFilterSheetContent(
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             contentPadding = PaddingValues(bottom = Spacing.md)
         ) {
-            item("quick_categories") {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Quick categories", style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(horizontal = Spacing.md))
-                    MapCategoryRail(
-                        mutedCategories = mutedCategories,
-                        categoryCounts = categoryCounts,
-                        visibleAlertCount = visibleCount,
-                        onMutedCategoriesChange = onMutedCategoriesChange
-                    )
-                }
-            }
             item("group_what") { MapGroupHeading("What's on the map") }
 
             item("types") {
@@ -516,14 +495,6 @@ private fun MapFilterSheetContent(
                     }
                 }
             }
-            item("mega_boost") {
-                MapPanelLauncherRow(
-                    title = "Mega Boost",
-                    summary = "View active Mega bonuses",
-                    active = false,
-                    onClick = onOpenMegaBoost
-                )
-            }
         }
 
         Row(
@@ -617,7 +588,7 @@ private fun MapPanelHeader(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "$visibleCount matching alerts · $totalCount active",
+                    text = "$visibleCount of $totalCount alerts visible",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -802,6 +773,16 @@ internal fun MapQuickActions(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {
+    if (onEnterPictureInPicture != null) {
+        HuntControls(
+            catalog = catalog,
+            artwork = artwork,
+            questRewardThumbnails = questRewardThumbnails,
+            categoryCounts = categoryCounts,
+            userLocation = userLocation,
+            onHuntStarted = onEnterPictureInPicture
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm)

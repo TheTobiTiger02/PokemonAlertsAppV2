@@ -168,7 +168,7 @@ class SettingsViewModel(
                             WalkingRouteUtils.straightLineDistanceMeters(origin.latitude, origin.longitude, lat, lon)
                         }
                         val info = WalkingRouteUtils.buildRouteDisplayInfo(direct, routes[alert.uniqueId])
-                        alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds, direct)
+                        alert.uniqueId to FilterMatchContext(info.effectiveDistanceMeters, info.walkingDurationSeconds)
                     }
                 }
                 _filterCatalog.value = withContext(Dispatchers.Default) {
@@ -403,11 +403,9 @@ class SettingsViewModel(
     val excludedRaidTiers: StateFlow<Set<String>> = preferences.excludedRaidTiers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
-    fun completeOnboarding(area: String, distanceMeters: Int, preset: NotificationPreset, onComplete: (Boolean) -> Unit) {
+    fun completeOnboarding() {
         viewModelScope.launch {
-            val saved = runCatching { preferences.completeOnboardingSetup(area, distanceMeters, preset) }.isSuccess
-            if (saved) AlertsWidgetProvider.requestUpdate(getApplication())
-            onComplete(saved)
+            preferences.setOnboardingCompleted(true)
         }
     }
 

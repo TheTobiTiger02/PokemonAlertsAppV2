@@ -192,8 +192,7 @@ data class AlertDistanceInfo(
         routedWalkingDistanceMeters != null -> DistanceSource.ROUTED
         distanceMeters != null -> DistanceSource.DIRECT
         else -> DistanceSource.UNAVAILABLE
-    },
-    val isInRange: Boolean = false
+    }
 )
 
 @Immutable

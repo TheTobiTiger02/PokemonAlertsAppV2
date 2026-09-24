@@ -67,7 +67,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -132,7 +131,6 @@ import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.AffectedAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
-import com.example.pokemonalertsv2.data.CardDisplayMode
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.ui.counters.RaidCountersActions
 import androidx.activity.compose.BackHandler
@@ -185,7 +183,6 @@ import com.example.pokemonalertsv2.ui.theme.AppAccents
 internal fun AlertCard(
     alert: PokemonAlert,
     distanceInfo: AlertDistanceInfo,
-    displayMode: CardDisplayMode = CardDisplayMode.RICH,
     goDexStatus: GoDexMatchResult = NoGoDexMatch,
     onOpenMaps: () -> Unit,
     onShowDetails: () -> Unit,
@@ -198,22 +195,6 @@ internal fun AlertCard(
     countdownClock: State<Long> = rememberCountdownClock(),
     modifier: Modifier = Modifier
 ) {
-    if (displayMode == CardDisplayMode.COMPACT) {
-        CompactAlertCard(
-            alert = alert,
-            distanceInfo = distanceInfo,
-            onOpenMaps = onOpenMaps,
-            onShowDetails = onShowDetails,
-            onSecondaryAction = onSecondaryAction,
-            cardContext = cardContext,
-            snoozeEnabled = snoozeEnabled,
-            isGoing = isGoing,
-            onGoingClick = onGoingClick,
-            countdownClock = countdownClock,
-            modifier = modifier
-        )
-        return
-    }
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val formattedTitle = remember(alert) { formatAlertTitle(alert) }
     val cardEndMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
@@ -404,13 +385,6 @@ internal fun AlertCard(
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
-                    if (distanceInfo.isInRange) {
-                        AlertPill(
-                            text = "In range",
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
                     val travelText = listOfNotNull(
                         distanceInfo.distanceText?.takeIf { it.isNotBlank() },
                         distanceInfo.walkingText?.takeIf { it.isNotBlank() }
@@ -450,85 +424,6 @@ internal fun AlertCard(
                     onOpenMaps = onOpenMaps,
                     categoryAccent = categoryAccent
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactAlertCard(
-    alert: PokemonAlert,
-    distanceInfo: AlertDistanceInfo,
-    onOpenMaps: () -> Unit,
-    onShowDetails: () -> Unit,
-    onSecondaryAction: (AlertSecondaryAction) -> Unit,
-    cardContext: AlertCardContext,
-    snoozeEnabled: Boolean,
-    isGoing: Boolean,
-    onGoingClick: (() -> Unit)?,
-    countdownClock: State<Long>,
-    modifier: Modifier = Modifier
-) {
-    val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
-    val accent = Color(visualStyle.category.accentArgb)
-    val onAccent = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
-    LinearModernCard(
-        modifier = modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
-        borderColor = MaterialTheme.colorScheme.outlineVariant,
-        onClick = onShowDetails
-    ) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                val image = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
-                    ?: alert.imageUrl?.takeIf { it.isNotBlank() }
-                if (image != null) {
-                    AsyncImage(
-                        model = image,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(68.dp).clip(MaterialTheme.shapes.medium)
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.size(68.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Filled.Notifications, contentDescription = null, tint = accent)
-                        }
-                    }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(formatAlertTitle(alert), style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        text = listOfNotNull(
-                            distanceInfo.distanceText?.takeIf { it.isNotBlank() },
-                            distanceInfo.walkingText?.takeIf { it.isNotBlank() }
-                        ).joinToString(" · ").ifBlank { alert.venueName ?: alert.locationDisplay ?: "Distance unavailable" },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                AlertCountdownBadge(alert.endTime, accent, onAccent, countdownClock)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (onGoingClick != null) {
-                    TextButton(onClick = onGoingClick) { Text(if (isGoing) "Stop tracking" else "Track arrival") }
-                }
-                AlertActionsOverflow(cardContext, alert.endTime, countdownClock, snoozeEnabled,
-                    onGoingClick != null, onSecondaryAction)
-                Button(onClick = onOpenMaps, modifier = Modifier.defaultMinSize(minHeight = 48.dp)) {
-                    Text("Navigate")
-                }
             }
         }
     }

@@ -1220,7 +1220,7 @@ class ArrivalTrackingService : Service() {
      * rest nearest first, and the target being walked to emphasised.
      */
     private fun refreshFloatingMapAlerts() {
-        if (!floatingMap.isMapReady) return
+        if (!floatingMap.isShowing) return
         // A broad hunt matches hundreds of alerts -- 837 on a live Quest hunt -- and
         // every one of them is a Canvas-drawn pin. Beyond the nearest few dozen they
         // are neither reachable on foot nor distinguishable in a window this small,
@@ -1283,7 +1283,7 @@ class ArrivalTrackingService : Service() {
             return
         }
         val destination = currentDestination ?: return
-        if (!floatingMap.isMapReady) return
+        if (!floatingMap.isShowing) return
         // A changed target overrides both of the rules below: the move gate is about a
         // camera that is already on the right pair of points, and a hand-panned camera
         // was panned to look at the leg you are no longer walking.

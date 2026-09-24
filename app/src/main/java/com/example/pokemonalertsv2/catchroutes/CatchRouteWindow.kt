@@ -55,12 +55,10 @@ internal class CatchRouteWindow(context: Context) {
         val context = window.themedContext
 
         val handle = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF16181D.toInt())
             setBackgroundColor(0xFFF2F4F8.toInt())
             setPadding(dp(10), dp(6), dp(10), dp(6))
-            minimumHeight = dp(48)
-            contentDescription = "Drag Catch Route window. ${catchGuidance(session, System.currentTimeMillis())}"
             window.dragWith(this)
         }
         guidance = handle
@@ -75,23 +73,17 @@ internal class CatchRouteWindow(context: Context) {
         fun control(label: String, action: () -> Unit): TextView = TextView(context).apply {
             text = label
             gravity = Gravity.CENTER
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTextColor(0xFF16181D.toInt())
-            contentDescription = label + " Catch Route"
             isClickable = true
             setOnClickListener { action() }
-            controls.addView(this, LinearLayout.LayoutParams(0, dp(48), 1f))
+            controls.addView(this, LinearLayout.LayoutParams(0, dp(40), 1f))
         }
         pause = control(if (session.paused) "Resume" else "Pause") { onPause() }
         control("Replan") { onReplan() }
         // Follow frames you and the next stop as you walk; Route shows the whole walk.
         camera = control("Route") { if (routeMap.following) routeMap.overview() else routeMap.follow() }
-        routeMap.onFollowChanged = { following ->
-            camera?.apply {
-                text = if (following) "Route" else "Follow"
-                contentDescription = "$text Catch Route"
-            }
-        }
+        routeMap.onFollowChanged = { following -> camera?.text = if (following) "Route" else "Follow" }
         control("Close") { onClose() }
 
         val column = LinearLayout(context).apply {
@@ -110,9 +102,9 @@ internal class CatchRouteWindow(context: Context) {
             clipToOutline = true
             addView(column, FrameLayout.LayoutParams(-1, -1))
             // Over the map's bottom-right corner, where it cannot cover the guidance line.
-            addView(window.buildResizeGrip(), FrameLayout.LayoutParams(dp(48), dp(48)).apply {
+            addView(window.buildResizeGrip(), FrameLayout.LayoutParams(dp(26), dp(26)).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, dp(6), dp(54))
+                setMargins(0, 0, dp(6), dp(46))
             })
         }
 
@@ -135,11 +127,7 @@ internal class CatchRouteWindow(context: Context) {
         if (root == null) return
         map?.update(session.itinerary.settings, session.itinerary, location, session.progressMeters, session.nextStop)
         guidance?.text = catchGuidance(session, System.currentTimeMillis(), outOfDate, replanning)
-        guidance?.contentDescription = "Drag Catch Route window. ${guidance?.text}"
-        pause?.apply {
-            text = if (session.paused) "Resume" else "Pause"
-            contentDescription = "$text Catch Route"
-        }
+        pause?.text = if (session.paused) "Resume" else "Pause"
     }
 
     fun hide() {

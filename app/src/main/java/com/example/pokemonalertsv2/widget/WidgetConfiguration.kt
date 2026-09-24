@@ -90,12 +90,6 @@ internal object WidgetConfigurationStore {
     private const val AREA_PREFIX = "widget_area_"
     private const val ASSIGNMENT_PREFIX = "widget_filter_assignment_"
 
-    fun hasSavedConfiguration(context: Context, appWidgetId: Int): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return listOf(FILTER_PREFIX, PRIORITY_PREFIX, DISTANCE_PREFIX, AREA_PREFIX, ASSIGNMENT_PREFIX)
-            .any { prefs.contains("$it$appWidgetId") }
-    }
-
     fun get(context: Context, appWidgetId: Int): WidgetConfiguration {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val rawFilters = prefs.getStringSet("$FILTER_PREFIX$appWidgetId", emptySet())?.toSet().orEmpty()

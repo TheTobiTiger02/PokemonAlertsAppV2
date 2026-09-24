@@ -111,14 +111,4 @@ class SettingsBackupTest {
         assertTrue(name.startsWith("pokemon-alerts-settings-"))
         assertTrue(name.endsWith(".json"))
     }
-
-    @Test
-    fun `card display mode survives settings export and restore`() {
-        val saved = mutablePreferencesOf(stringPreferencesKey("card_display_mode") to "COMPACT")
-        val backup = SettingsBackup.parse(SettingsBackup.export(saved, 1L)).getOrThrow()
-        val restored = mutablePreferencesOf()
-
-        assertEquals(1, SettingsBackup.apply(backup, restored))
-        assertEquals("COMPACT", restored[stringPreferencesKey("card_display_mode")])
-    }
 }

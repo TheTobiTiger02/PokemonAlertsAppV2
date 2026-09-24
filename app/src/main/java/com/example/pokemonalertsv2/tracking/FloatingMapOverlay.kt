@@ -99,7 +99,6 @@ internal class FloatingMapOverlay(context: Context) {
         window.restoreGeometry(x, y, width, height)
 
     val isShowing: Boolean get() = root != null
-    val isMapReady: Boolean get() = map != null
 
     /**
      * What the buttons do. An overlay window receives real touch events, so these
@@ -432,20 +431,20 @@ internal class FloatingMapOverlay(context: Context) {
         setPadding(dp(6), 0, dp(6), 0)
         setBackgroundColor(0xFFF2F4F8.toInt())
         window.dragWith(this)
-        addView(controlButton("‹", "Previous Hunt target") { onPrevious() })
-        addView(controlButton("✓", "Mark Hunt target caught") { onGotIt() })
-        addView(controlButton("›", "Next Hunt target") { onNext() })
+        addView(controlButton("‹") { onPrevious() })
+        addView(controlButton("✓") { onGotIt() })
+        addView(controlButton("›") { onNext() })
         // Built always, hidden until there is something to undo. Never replaces the
         // tick: the next target can be caught inside the undo window.
-        addView(controlButton("↺", "Undo caught target") { onUndo() }.also { undoButton = it; it.isVisible = false })
+        addView(controlButton("↺") { onUndo() }.also { undoButton = it; it.isVisible = false })
         // The two route controls, after the ones that act on a single target: "this
         // plan is wrong" and "I am not walking it right now" are a different kind of
         // press from "caught it" and "next".
-        addView(controlButton("⟳", "Recalculate Hunt route") { onRecalculate() })
-        addView(controlButton(PAUSE_GLYPH, "Pause or resume Hunt") { onPauseToggle() }.also { pauseButton = it })
+        addView(controlButton("⟳") { onRecalculate() })
+        addView(controlButton(PAUSE_GLYPH) { onPauseToggle() }.also { pauseButton = it })
         // Spacer: the buttons sit left, the grab area is everything right of them.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(controlButton("×", "End Hunt and close floating map") { onClose() })
+        addView(controlButton("×") { onClose() })
     }
 
     /**
@@ -488,11 +487,9 @@ internal class FloatingMapOverlay(context: Context) {
             }
         }
 
-    private fun controlButton(label: String, description: String, onClick: () -> Unit): TextView =
+    private fun controlButton(label: String, onClick: () -> Unit): TextView =
         TextView(themedContext).apply {
             text = label
-            contentDescription = description
-            tooltipText = description
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(0xFF16181D.toInt())
             // Tightened from 9dp when the bar went from five controls to seven: at the
