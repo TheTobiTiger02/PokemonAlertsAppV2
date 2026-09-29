@@ -54,9 +54,12 @@ import com.example.pokemonalertsv2.ui.theme.Spacing
  *
  * The chrome above the map used to be a 56dp bar with the rail on top of it, and the insets
  * hardcoded 72dp to clear that while ignoring the status bar entirely. There is only the rail
- * now, and callers add the real status bar height to this.
+ * now. It excludes the status bar: the hosting tab is laid out below it.
  */
 internal val MAP_TOP_CHROME_HEIGHT = 52.dp
+
+/** The Settings gear's own row above the rail: the 40dp button plus the gap under it. */
+internal val MAP_SETTINGS_ROW_HEIGHT = 48.dp
 
 /** Footprint the pinned settings button reserves at the end of the rail. */
 internal val MAP_SETTINGS_BUTTON_SIZE = 40.dp

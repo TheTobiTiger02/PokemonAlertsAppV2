@@ -256,7 +256,7 @@ internal fun MapAlertSidePanel(
 ) {
     Surface(
         modifier = modifier
-            .padding(WindowInsets.statusBars.asPaddingValues())
+            .windowInsetsPadding(WindowInsets.statusBars)
             .padding(top = 12.dp, end = 16.dp)
             .width(360.dp)
             .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(28.dp)),

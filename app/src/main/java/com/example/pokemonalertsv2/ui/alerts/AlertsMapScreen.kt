@@ -1697,8 +1697,10 @@ internal fun AlertsMapScreenContent(
         // Measured rather than assumed: the chrome above the map is now the chip rail alone,
         // and the old hardcoded 72dp both overshot it and ignored the status bar, which pushed
         // the Google logo and the OpenStreetMap attribution further down than they needed.
-        val topChromeInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-            MAP_TOP_CHROME_HEIGHT
+        // The hosting tab already sits below the status bar (MainScaffold consumes that inset), so
+        // only the chrome itself is reserved: the rail, plus the gear's row when it is shown.
+        val topChromeInset = MAP_TOP_CHROME_HEIGHT +
+            if (onOpenSettings != null) MAP_SETTINGS_ROW_HEIGHT else 0.dp
         val mapContentPadding = if (compactPictureInPicture) {
             PaddingValues(0.dp)
         } else {

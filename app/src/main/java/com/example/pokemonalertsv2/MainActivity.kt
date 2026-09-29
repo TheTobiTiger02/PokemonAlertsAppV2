@@ -35,6 +35,7 @@ import com.example.pokemonalertsv2.ui.theme.Alphas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -937,7 +938,10 @@ private fun MainScaffold(
                 }
             }
         ) { paddingValues ->
-            Row(modifier = Modifier.padding(paddingValues)) {
+            // The Scaffold's padding already clears the system bars. Consuming it tells the tabs so:
+            // a screen that asks for the status-bar inset itself (the map's chips and gear did)
+            // would otherwise be pushed down by a second, empty status-bar-high gap.
+            Row(modifier = Modifier.padding(paddingValues).consumeWindowInsets(paddingValues)) {
                 if (layoutMode == NavigationLayoutMode.RAIL) {
                     NavigationRail(
                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = Alphas.Elevated),
