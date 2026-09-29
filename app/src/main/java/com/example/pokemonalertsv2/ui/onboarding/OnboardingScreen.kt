@@ -1,5 +1,19 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.Lifecycle
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -67,6 +81,7 @@ fun OnboardingScreen(
     var presetName by rememberSaveable { mutableStateOf(NotificationPreset.EVERYTHING.name) }
 
     BackHandler(enabled = step > 0) { step-- }
+    val lastStep = STEP_PERMISSIONS
 
     LinearModernBackground(Modifier.fillMaxSize()) {
         Column(
@@ -93,13 +108,13 @@ fun OnboardingScreen(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        "${step + 1} / 4",
+                        "${step + 1} / ${lastStep + 1}",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 LinearProgressIndicator(
-                    progress = { (step + 1) / 4f },
+                    progress = { (step + 1) / (lastStep + 1f) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 AnimatedContent(
@@ -110,8 +125,35 @@ fun OnboardingScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         when (currentStep) {
                             0 -> SetupIntro()
-                            1 -> AreaSetup(area, distance, { area = it }, { distance = it })
-                            2 -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
+                            1 -> TourCard(
+                                icon = Icons.Filled.Notifications,
+                                title = "Alerts: live, history and insights",
+                                points = listOf(
+                                    "Live lists every active alert, newest first. Tap one for details and directions.",
+                                    "Long press an alert for I’m going, snooze, share or dismiss. Swipe left to dismiss.",
+                                    "History and Insights show what spawned before, and when a species tends to appear."
+                                )
+                            )
+                            2 -> TourCard(
+                                icon = Icons.Filled.LocationOn,
+                                title = "The map",
+                                points = listOf(
+                                    "The chips along the top show or hide each alert type.",
+                                    "The gear button holds filters, map style and overlays.",
+                                    "The tools button starts a hunt, plans a catch route or opens the floating map."
+                                )
+                            )
+                            3 -> TourCard(
+                                icon = Icons.Filled.Settings,
+                                title = "Filters, per place",
+                                points = listOf(
+                                    "The feed, the map, notifications and each widget keep their own filter.",
+                                    "The filter button on the feed or the map edits that one in place.",
+                                    "Save a filter as a profile to reuse it somewhere else."
+                                )
+                            )
+                            STEP_AREA -> AreaSetup(area, distance, { area = it }, { distance = it })
+                            STEP_PRESET -> PresetSetup(NotificationPreset.valueOf(presetName)) { presetName = it.name }
                             else -> PermissionSetup()
                         }
                     }
@@ -125,11 +167,16 @@ fun OnboardingScreen(
                         exit = appSinkOut(),
                         modifier = Modifier.weight(1f)
                     ) {
-                        OutlinedButton(onClick = { step-- }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+                        // The tour is optional; everything after it is setup.
+                        if (step in 1 until STEP_AREA) {
+                            OutlinedButton(onClick = { step = STEP_AREA }, modifier = Modifier.fillMaxWidth()) { Text("Skip tour") }
+                        } else {
+                            OutlinedButton(onClick = { step-- }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+                        }
                     }
                     Button(
                         onClick = {
-                            if (step < 3) step++ else {
+                            if (step < lastStep) step++ else {
                                 onAreaChanged(area)
                                 onMaxDistanceChanged(distance)
                                 onPresetSelected(NotificationPreset.valueOf(presetName))
@@ -139,21 +186,21 @@ fun OnboardingScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         AnimatedContent(
-                            targetState = step == 3,
+                            targetState = step == lastStep,
                             transitionSpec = { appFadeThrough() },
                             label = "onboarding_primary_action"
                         ) { finishing ->
-                            Text(if (finishing) "Enable & finish" else "Continue")
+                            Text(if (finishing) "Finish" else "Continue")
                         }
                     }
                 }
                 AnimatedVisibility(
-                    visible = step == 3,
+                    visible = step == lastStep,
                     enter = appRiseIn(),
                     exit = appSinkOut()
                 ) {
                     Text(
-                        "Android will ask for notification and location access next. You can decline and change these later in Settings.",
+                        "You can change any of these later in Settings › Notifications & permissions.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -167,7 +214,7 @@ fun OnboardingScreen(
 
 @Composable
 private fun SetupIntro() = SetupHeader(
-    Icons.Filled.Warning,
+    Icons.Filled.Star,
     "Catch the alerts that matter",
     "Pokémon Alerts shows live nearby activity, remaining time, distance, and navigation. Background updates keep notifications and widgets useful when the app is closed."
 )
@@ -186,12 +233,7 @@ private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onD
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface
     )
-    Slider(
-        value = distanceStepIndex(distance).toFloat(),
-        onValueChange = { onDistance(ALERT_DISTANCE_STEPS_METERS[kotlin.math.round(it).toInt().coerceIn(ALERT_DISTANCE_STEPS_METERS.indices)]) },
-        valueRange = 0f..ALERT_DISTANCE_STEPS_METERS.lastIndex.toFloat(),
-        steps = ALERT_DISTANCE_STEPS_METERS.size - 2
-    )
+    com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(meters = distance, onChange = onDistance)
 }
 
 @Composable
@@ -216,12 +258,114 @@ private fun PresetSetup(selected: NotificationPreset, onSelected: (NotificationP
     }
 }
 
+private const val STEP_AREA = 4
+private const val STEP_PRESET = 5
+private const val STEP_PERMISSIONS = 6
+
 @Composable
-private fun PermissionSetup() = SetupHeader(
-    Icons.Filled.Notifications,
-    "Stay informed",
-    "Notifications deliver new alerts. Location calculates distance and powers map tracking. Background location keeps location-based features accurate when the app is not open."
-)
+private fun TourCard(icon: ImageVector, title: String, points: List<String>) {
+    SetupHeader(icon, title, "")
+    points.forEach { point ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("•", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+            Text(point, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+/**
+ * Every permission the app wants, asked here and only here. The app used to fire the
+ * notification prompt and a background-location dialog back to back on every launch until
+ * they were granted; now a missing permission shows as one card in Settings instead.
+ */
+@Composable
+private fun PermissionSetup() {
+    val context = LocalContext.current
+    fun granted(permission: String) =
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    fun notificationsGranted() = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        granted(Manifest.permission.POST_NOTIFICATIONS)
+    fun locationGranted() = granted(Manifest.permission.ACCESS_FINE_LOCATION) ||
+        granted(Manifest.permission.ACCESS_COARSE_LOCATION)
+    fun backgroundGranted() = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+
+    var notifications by remember { mutableStateOf(notificationsGranted()) }
+    var location by remember { mutableStateOf(locationGranted()) }
+    var background by remember { mutableStateOf(backgroundGranted()) }
+    fun refresh() {
+        notifications = notificationsGranted(); location = locationGranted(); background = backgroundGranted()
+    }
+    // Background location is granted on a system settings page, so re-check on return.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) refresh() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refresh() }
+    val backgroundLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh() }
+
+    SetupHeader(
+        Icons.Filled.Notifications,
+        "Allow access",
+        "Each one is optional. The app works without them, with fewer features."
+    )
+    PermissionRow(
+        title = "Notifications",
+        description = "Get new alerts even when the app is closed.",
+        granted = notifications,
+        onAllow = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    )
+    PermissionRow(
+        title = "Location",
+        description = "Show distances and walking times, and find you on the map.",
+        granted = location,
+        onAllow = {
+            locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        }
+    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        PermissionRow(
+            title = "Location all the time",
+            description = if (location) "Keeps distances right in notifications and widgets. Choose \u201CAllow all the time\u201D."
+            else "Allow location first.",
+            granted = background,
+            enabled = location,
+            onAllow = { backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }
+        )
+    }
+}
+
+@Composable
+private fun PermissionRow(title: String, description: String, granted: Boolean, enabled: Boolean = true, onAllow: () -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.SemiBold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (granted) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = "Allowed", tint = MaterialTheme.colorScheme.primary)
+            } else {
+                Button(onClick = onAllow, enabled = enabled) { Text("Allow") }
+            }
+        }
+    }
+}
 
 @Composable
 private fun SetupHeader(icon: ImageVector, title: String, description: String) {
@@ -232,6 +376,8 @@ private fun SetupHeader(icon: ImageVector, title: String, description: String) {
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.onSurface
     )
-    Text(description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (description.isNotEmpty()) {
+        Text(description, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
     Spacer(Modifier.height(4.dp))
 }

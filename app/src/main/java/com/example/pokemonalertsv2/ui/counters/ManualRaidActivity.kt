@@ -135,6 +135,12 @@ class ManualRaidViewModel(application: Application) : AndroidViewModel(applicati
 }
 
 class ManualRaidActivity : ComponentActivity() {
+    companion object {
+        private const val EXTRA_COUNTERS_ONLY = "counters_only"
+        fun countersIntent(context: android.content.Context) =
+            android.content.Intent(context, ManualRaidActivity::class.java).putExtra(EXTRA_COUNTERS_ONLY, true)
+    }
+    private val countersOnly get() = intent.getBooleanExtra(EXTRA_COUNTERS_ONLY, false)
     private val viewModel: ManualRaidViewModel by viewModels()
     private val themeRepository by lazy { PokemonAlertsRepository.create(applicationContext) }
     private var pendingBoss: ManualRaidBoss? = null
@@ -166,6 +172,8 @@ class ManualRaidActivity : ComponentActivity() {
             ) {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 ManualRaidBossPickerScreen(
+                    countersOnly = countersOnly,
+                    onStartLiveUpdate = { startActivity(android.content.Intent(this, ManualRaidActivity::class.java)) },
                     state = state,
                     onBack = { finish() },
                     onRetry = { viewModel.refresh(force = true) },
@@ -176,6 +184,14 @@ class ManualRaidActivity : ComponentActivity() {
     }
 
     private fun requestStart(boss: ManualRaidBoss) {
+        if (countersOnly) {
+            startActivity(
+                AlertDetailActivity.createIntent(this, createManualRaidAlert(boss))
+                    .putExtra(AlertDetailActivity.EXTRA_OPEN_COUNTERS, true)
+                    .putExtra(AlertDetailActivity.EXTRA_PREFER_PERSONAL_TEAM, true)
+            )
+            return
+        }
         if (viewModel.uiState.value.startingPokemonId != null) return
         viewModel.setStarting(boss.catalogue.pokemonId)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -210,12 +226,14 @@ class ManualRaidActivity : ComponentActivity() {
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun ManualRaidBossPickerScreen(
+    countersOnly: Boolean = false,
+    onStartLiveUpdate: (() -> Unit)? = null,
     state: ManualRaidPickerUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onBossSelected: (ManualRaidBoss) -> Unit
 ) {
-    var search by remember { mutableStateOf(TextFieldValue()) }
+    var search by androidx.compose.runtime.saveable.rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     val query = search.text.trim()
     val visible = remember(state.bosses, query) {
         if (query.isBlank()) state.bosses else state.bosses.filter {
@@ -228,9 +246,9 @@ internal fun ManualRaidBossPickerScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Start Raid Live Update", fontWeight = FontWeight.SemiBold)
+                        Text(if (countersOnly) "Raid counters" else "Start Raid Live Update", fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Choose a current raid boss",
+                            if (countersOnly) "Choose a boss to see recommended counters" else "Choose a current raid boss",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -260,6 +278,11 @@ internal fun ManualRaidBossPickerScreen(
                 label = { Text("Search boss or tier") },
                 singleLine = true
             )
+            if (countersOnly && onStartLiveUpdate != null) {
+                androidx.compose.material3.TextButton(onClick = onStartLiveUpdate, modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text("Start Raid Live Update")
+                }
+            }
             when {
                 state.loading && state.bosses.isEmpty() -> {
                     Column(
@@ -293,7 +316,8 @@ internal fun ManualRaidBossPickerScreen(
                         ManualRaidBossRow(
                             boss = boss,
                             starting = state.startingPokemonId == boss.catalogue.pokemonId,
-                            enabled = state.startingPokemonId == null && boss.hundoCP != null,
+                            enabled = state.startingPokemonId == null && (countersOnly || boss.hundoCP != null),
+                            countersOnly = countersOnly,
                             onClick = { onBossSelected(boss) }
                         )
                     }
@@ -308,6 +332,7 @@ private fun ManualRaidBossRow(
     boss: ManualRaidBoss,
     starting: Boolean,
     enabled: Boolean,
+    countersOnly: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -339,7 +364,7 @@ private fun ManualRaidBossRow(
                 )
                 Text(
                     boss.hundoCP?.formatted()?.let { "100% catch CP · $it" }
-                        ?: "Catch CP unavailable · can't start",
+                        ?: if (countersOnly) "View recommended counters" else "Catch CP unavailable · can't start",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )

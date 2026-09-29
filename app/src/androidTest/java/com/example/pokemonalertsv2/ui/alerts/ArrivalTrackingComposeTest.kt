@@ -59,13 +59,10 @@ class ArrivalTrackingComposeTest {
             PokemonAlertsV2Theme {
                 AlertDetailActionBar(
                     accent = Color(0xFF7FA7FF),
-                    onSnoozeClick = {},
                     isGoing = false,
                     goingEnabled = true,
                     onGoingClick = {},
-                    onNavigateClick = {},
-                    onPipClick = null,
-                    onShareClick = {}
+                    onNavigateClick = {}
                 )
             }
         }

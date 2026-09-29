@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
@@ -203,43 +204,6 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
                 modifier = Modifier.weight(1f),
                 transparent = true,
                 onClick = { actions.onSourceChanged(CounterSourceId.POKEBATTLER_POKEBOX) }
-            )
-        }
-    }
-}
-
-@Composable
-internal fun SegmentedChoice(
-    label: String,
-    selected: Boolean,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    // Set when the choice sits inside a SpringSegmentedRow, which paints the track and
-    // the travelling selection pill itself.
-    transparent: Boolean = false,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = modifier
-            .height(40.dp)
-            .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = onClick),
-        color = when {
-            transparent -> Color.Transparent
-            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
-        },
-        contentColor = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
     }

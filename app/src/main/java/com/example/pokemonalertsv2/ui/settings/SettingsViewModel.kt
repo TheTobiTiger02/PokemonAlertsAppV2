@@ -313,6 +313,13 @@ class SettingsViewModel(
 
     val sortPreference: StateFlow<SortPreference> = preferences.sortPreference
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SortPreference.POSTED_TIME)
+
+    val cardStyle: StateFlow<com.example.pokemonalertsv2.data.AlertCardStyle> = preferences.cardStyle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.example.pokemonalertsv2.data.AlertCardStyle.COMPACT)
+
+    fun updateCardStyle(style: com.example.pokemonalertsv2.data.AlertCardStyle) {
+        viewModelScope.launch { preferences.updateCardStyle(style) }
+    }
     
     val notificationsEnabled: StateFlow<Boolean> = preferences.notificationsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)

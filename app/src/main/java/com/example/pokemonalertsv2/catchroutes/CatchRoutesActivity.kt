@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
@@ -70,7 +72,7 @@ class CatchRoutesActivity : ComponentActivity() {
             LocationServices.getFusedLocationProviderClient(this).getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, token.token)
                 .addOnSuccessListener { l ->
                     if (automatic && model.hasStart) return@addOnSuccessListener
-                    if (l != null && l.accuracy <= 50) model.startPoint(CatchPoint(l.latitude, l.longitude)) else model.report("Location unavailable. Pick a start on the map.")
+                    if (l != null && l.accuracy <= 50) model.startPoint(CatchPoint(l.latitude, l.longitude), "Your location") else model.report("Location unavailable. Pick a start on the map.")
                 }
                 .addOnFailureListener { model.report("Location unavailable. Pick a start on the map.") }
         } catch (_: SecurityException) { model.report("Location permission changed. Pick a start on the map.") }
@@ -144,9 +146,14 @@ class CatchRoutesActivity : ComponentActivity() {
         Scaffold { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { finish() }) { Text("Back") }
+                    IconButton(onClick = { finish() }) {
+                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                     Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    TextButton(onClick = ::floatingWindow, enabled = active != null) { Text("Floating map") }
+                    // Only useful while walking a route, so it only appears then.
+                    if (active != null) IconButton(onClick = ::floatingWindow) {
+                        Icon(androidx.compose.ui.res.painterResource(com.example.pokemonalertsv2.R.drawable.ic_pip), contentDescription = "Floating map")
+                    }
                 }
                 Box(Modifier.fillMaxWidth().weight(if (showSettings) 0.8f else 1.25f)) {
                     AndroidView(factory = { ctx -> CatchRouteMapView(ctx).also { mapView = it; it.onFailure = { mapFailed = true } } },
@@ -331,12 +338,12 @@ class CatchRoutesActivity : ComponentActivity() {
                     AssistChip(onClick = { useLocation() }, label = { Text("Use my location") })
                     FilterChip(selected = picking == "start", onClick = { onPicking("start") }, label = { Text("Pick start on map") })
                 }
-                Text(if (model.hasStart) "Start ${coordinate(settings.start)}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
+                Text(if (model.hasStart) "Start: ${model.startLabel}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "start") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
                 }
-                if (settings.finish == CatchFinish.PIN) Text("Finish ${settings.end?.let(::coordinate) ?: "· tap the map"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (settings.finish == CatchFinish.PIN) Text(if (settings.end != null) "Finish: pinned on the map" else "Finish: tap the map", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!settings.fixed) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(if (settings.area.isArea()) "Stays inside your area (${settings.area.size} corners)" else "No area limit", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     if (settings.area.isArea()) TextButton(onClick = { model.edit(settings.copy(area = emptyList())) }) { Text("Remove") }
@@ -406,10 +413,20 @@ class CatchRoutesActivity : ComponentActivity() {
             if (model.retryAt > now()) Text("Retry in ${(model.retryAt - now()) / 1000 + 1}s")
             if (model.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(model.progress, style = MaterialTheme.typography.bodySmall); TextButton(onClick = model::cancel) { Text("Cancel") } }
             else Button(onClick = model::generate, modifier = Modifier.fillMaxWidth().height(52.dp).testTag("generate_catch_route"), enabled = model.retryAt <= now()) { Text("Generate route") }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                TextButton(onClick = { model.save() }, enabled = model.hasStart) { Text("Save setup") }
-                TextButton(onClick = { model.save(true) }, enabled = model.hasStart) { Text("Duplicate") }
-                TextButton(onClick = onShowSaved) { Text(if (showSaved) "Hide saved" else "Saved ($savedCount)") }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = onShowSaved, modifier = Modifier.weight(1f)) {
+                    Text(if (showSaved) "Hide saved routes" else "Saved routes ($savedCount)")
+                }
+                var setupMenu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { setupMenu = true }, enabled = model.hasStart) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Setup options")
+                    }
+                    DropdownMenu(expanded = setupMenu, onDismissRequest = { setupMenu = false }) {
+                        DropdownMenuItem(text = { Text("Save this setup") }, onClick = { setupMenu = false; model.save() })
+                        DropdownMenuItem(text = { Text("Save as a copy") }, onClick = { setupMenu = false; model.save(true) })
+                    }
+                }
             }
             if (!model.busy && model.progress.isNotBlank()) Text(model.progress, style = MaterialTheme.typography.bodySmall)
         }

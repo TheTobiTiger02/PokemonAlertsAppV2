@@ -116,7 +116,7 @@ private fun CategoryFilterCard(
         },
         border = BorderStroke(
             width = 1.dp,
-            color = if (shown) accent.copy(alpha = 0.55f) else MaterialTheme.colorScheme.outlineVariant
+            color = if (shown) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant
         ),
         tonalElevation = if (shown) 1.dp else 0.dp
     ) {
@@ -152,13 +152,13 @@ private fun CategoryFilterCard(
                 Box(
                     modifier = Modifier
                         .size(22.dp)
-                        .background(color = accent, shape = CircleShape),
+                        .background(color = MaterialTheme.colorScheme.primary, shape = CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Check,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(14.dp)
                     )
                 }

@@ -428,9 +428,11 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
         return "Kecleon"
     }
     
-    // Handle Quests - show "Pokemon Quest" or task info
+    // Quests lead with what you get; the category badge and the stop name carry the rest.
+    // The server name reads "Razz Berry ×6 at Vogel Graffiti", so fall back to its first half.
     if (alert.hasTypeContaining("quest")) {
-        return "$baseName Quest"
+        return alert.questReward?.trim()?.takeIf { it.isNotEmpty() }
+            ?: baseName.substringBefore(" at ").trim().ifEmpty { baseName }
     }
     
     // Build prefix parts for spawns (IV%, PvP rank)
@@ -463,6 +465,19 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     } else {
         baseName
     }
+}
+
+/**
+ * The second line under an alert title: its category and where it is, e.g.
+ * "Quest · Vogel Graffiti". The category is left out when the title already names it.
+ */
+internal fun formatAlertSubtitle(alert: PokemonAlert, title: String = formatAlertTitle(alert)): String {
+    val category = resolveAlertVisualStyle(alert).label
+    val place = alert.venueName ?: alert.locationDisplay
+    return listOfNotNull(
+        category.takeIf { shouldShowAlertCategoryLabel(title, it) },
+        place?.trim()?.takeIf { it.isNotEmpty() }
+    ).joinToString(" \u00B7 ")
 }
 
 internal fun shouldShowAlertCategoryLabel(title: String, categoryLabel: String): Boolean {

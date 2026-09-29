@@ -54,9 +54,12 @@ import com.example.pokemonalertsv2.ui.theme.Spacing
  *
  * The chrome above the map used to be a 56dp bar with the rail on top of it, and the insets
  * hardcoded 72dp to clear that while ignoring the status bar entirely. There is only the rail
- * now, and callers add the real status bar height to this.
+ * now. It excludes the status bar: the hosting tab is laid out below it.
  */
 internal val MAP_TOP_CHROME_HEIGHT = 52.dp
+
+/** The Settings gear's own row above the rail: the 40dp button plus the gap under it. */
+internal val MAP_SETTINGS_ROW_HEIGHT = 48.dp
 
 /** Footprint the pinned settings button reserves at the end of the rail. */
 internal val MAP_SETTINGS_BUTTON_SIZE = 40.dp
@@ -167,12 +170,13 @@ private fun MapFilterPill(
     val scheme = MaterialTheme.colorScheme
     // Composited, not translucent: a see-through chip over map tiles reads as muddy rather
     // than as glass, and the label stops being legible over dark satellite imagery.
+    // Selection reads in the app's blue; the type colour lives in the dot only.
     val container = if (selected) {
-        accent.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
+        scheme.primary.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
     } else {
         scheme.surface
     }
-    val border = if (selected) accent.copy(alpha = 0.7f) else scheme.outlineVariant
+    val border = if (selected) scheme.primary.copy(alpha = 0.6f) else scheme.outlineVariant
     val labelColor = if (selected) scheme.onSurface else scheme.onSurfaceVariant
 
     Surface(
@@ -262,8 +266,9 @@ internal fun MapSettingsButton(
                     .semantics { contentDescription = "Map settings and filters" },
                 contentAlignment = Alignment.Center
             ) {
+                // A funnel, not a gear: the gear on the map's top edge is the app's Settings.
                 Icon(
-                    imageVector = Icons.Filled.Settings,
+                    painter = painterResource(R.drawable.ic_filter),
                     contentDescription = null,
                     modifier = Modifier.size(20.dp)
                 )

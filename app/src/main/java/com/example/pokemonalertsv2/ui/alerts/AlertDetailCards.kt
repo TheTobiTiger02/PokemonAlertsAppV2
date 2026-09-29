@@ -401,78 +401,31 @@ internal fun IvBar(label: String, value: Int, maxValue: Int) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun WeatherAndGenderCard(alert: PokemonAlert) {
     val accent = Color(resolveAlertVisualStyle(alert).category.accentArgb)
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier.fillMaxWidth()
+    val weather = currentWeatherDisplay(alert)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Weather. Shown whenever the alert reports it, boosted or not.
-            val weather = currentWeatherDisplay(alert)
-            if (weather != null || alert.isWeatherBoosted == true) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (weather != null) {
-                        Text(
-                            text = weather.glyph,
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                        Text(
-                            text = weather.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    if (alert.isWeatherBoosted == true) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Star,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = accent
-                            )
-                            Text(
-                                text = "Weather Boosted",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = accent
-                            )
-                        }
-                    }
-                    // Unconfirmed weather is still used as reported; it is only labelled.
-                    if (weather?.confirmed == false) {
-                        Text(
-                            text = UNCONFIRMED_WEATHER_NOTE,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // Gender
-            alert.gender?.takeIf { it.isNotBlank() }?.let { gender ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "Gender",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = gender.replaceFirstChar { it.uppercase() },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
+        weather?.let {
+            AlertPill(
+                // Unconfirmed weather is still used as reported; it is only labelled.
+                text = if (it.confirmed) it.labelWithGlyph else "${it.labelWithGlyph} · $UNCONFIRMED_WEATHER_NOTE"
+            )
+        }
+        if (alert.isWeatherBoosted == true) {
+            AlertPill(
+                text = "Weather boosted",
+                icon = Icons.Filled.Star,
+                containerColor = accent.copy(alpha = 0.16f),
+                contentColor = accent
+            )
+        }
+        alert.gender?.takeIf { it.isNotBlank() }?.let { gender ->
+            AlertPill(text = gender.replaceFirstChar { it.uppercase() })
         }
     }
 }
@@ -617,13 +570,30 @@ internal fun LocationCard(alert: PokemonAlert) {
                 )
             }
 
-            // Coordinates
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "${String.format("%.6f", alert.latitude)}, ${String.format("%.6f", alert.longitude)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
+            // Coordinates are for pasting elsewhere, not for reading.
+            if (alert.latitude != null && alert.longitude != null) {
+                val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                val context = androidx.compose.ui.platform.LocalContext.current
+                TextButton(
+                    onClick = {
+                        clipboard.setText(
+                            androidx.compose.ui.text.AnnotatedString(
+                                String.format(java.util.Locale.ROOT, "%.6f, %.6f", alert.latitude, alert.longitude)
+                            )
+                        )
+                        android.widget.Toast.makeText(context, "Coordinates copied", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    contentPadding = PaddingValues(horizontal = 0.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_content_copy),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copy coordinates", style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
 }

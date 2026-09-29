@@ -103,8 +103,8 @@ fun cardSectionBadges(keys: List<String>): List<String> =
 }
 @Serializable data class EventBonus(val text: String, val image: String? = null)
 
-/** Battle League weeks and far-away Wild Area events are noise for most trainers; one chip away. */
-val DEFAULT_HIDDEN_EVENT_TYPES: Set<String> = setOf("go-battle-league", "wild-area")
+/** Every event type shows until the trainer switches some off in the Events filter. */
+val DEFAULT_HIDDEN_EVENT_TYPES: Set<String> = emptySet()
 
 /** Types a new install reminds about. */
 val DEFAULT_REMINDER_EVENT_TYPES: Set<String> = setOf("community-day", "pokemon-spotlight-hour")

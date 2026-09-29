@@ -70,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -346,6 +347,9 @@ internal fun mapPictureInPictureZoom(
 @Composable
 fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
     onOpenFilterStudio: () -> Unit = {},
@@ -390,6 +394,9 @@ fun AlertsMapRoute(
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     AlertsMapScreen(
+        openMapToolsRequested = openMapToolsRequested,
+        onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        onOpenSettings = onOpenSettings,
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
@@ -452,6 +459,9 @@ fun AlertsMapRoute(
 @Composable
 fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
@@ -493,6 +503,9 @@ fun AlertsMapScreen(
     onPipStateChanged: ((MapPipUiState) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
+        openMapToolsRequested = openMapToolsRequested,
+        onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        onOpenSettings = onOpenSettings,
         alerts = alerts,
         onBack = onBack,
         onRefresh = onRefresh,
@@ -540,6 +553,9 @@ fun AlertsMapScreen(
 @Composable
 internal fun AlertsMapScreenContent(
     alerts: List<PokemonAlert>,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
@@ -631,6 +647,14 @@ internal fun AlertsMapScreenContent(
     }
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
+    var showMapTools by rememberSaveable { mutableStateOf(false) }
+    // The Tools tab opens the map straight onto its tools sheet (hunt, routes, Mega boost...).
+    LaunchedEffect(openMapToolsRequested) {
+        if (openMapToolsRequested) {
+            showMapTools = true
+            onMapToolsRequestConsumed()
+        }
+    }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -1673,8 +1697,10 @@ internal fun AlertsMapScreenContent(
         // Measured rather than assumed: the chrome above the map is now the chip rail alone,
         // and the old hardcoded 72dp both overshot it and ignored the status bar, which pushed
         // the Google logo and the OpenStreetMap attribution further down than they needed.
-        val topChromeInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() +
-            MAP_TOP_CHROME_HEIGHT
+        // The hosting tab already sits below the status bar (MainScaffold consumes that inset), so
+        // only the chrome itself is reserved: the rail, plus the gear's row when it is shown.
+        val topChromeInset = MAP_TOP_CHROME_HEIGHT +
+            if (onOpenSettings != null) MAP_SETTINGS_ROW_HEIGHT else 0.dp
         val mapContentPadding = if (compactPictureInPicture) {
             PaddingValues(0.dp)
         } else {
@@ -2278,6 +2304,30 @@ internal fun AlertsMapScreenContent(
                     .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
+                // The Settings gear has its own row above the chip rail, at the end, so it never
+                // shares a row with (or runs over) the chips.
+                if (onOpenSettings != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(end = Spacing.lg),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            shadowElevation = 3.dp
+                        ) {
+                            IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = "Settings",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 MapCategoryRail(
                     mutedCategories = selectedCategories,
                     categoryCounts = categoryCounts,
@@ -2285,10 +2335,7 @@ internal fun AlertsMapScreenContent(
                     showBackButton = showBackButton,
                     onBack = onBack,
                     onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail now owns the full width. Reserving the end for a pinned button
-                    // only ever kept the *last* chip clear of it: scrolled back to the start,
-                    // the leading chips still ran underneath it, so the button moved down to
-                    // the control column where the map's other actions already live.
+                    // The rail owns the full width again.
                     contentPadding = PaddingValues(
                         start = Spacing.lg,
                         end = Spacing.lg,
@@ -2343,6 +2390,53 @@ internal fun AlertsMapScreenContent(
             Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
                 shape = MaterialTheme.shapes.small) {
                 Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        if (!compactPictureInPicture && showMapTools) {
+            MapToolsSheet(onDismiss = { showMapTools = false }) {
+                MapToolsContent(
+                    refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
+                    onRefresh = onRefresh,
+                    onEnterPictureInPicture = onEnterPictureInPicture?.let {
+                        {
+                            showMapTools = false
+                            if (hasLocationPermissionNow()) {
+                                hasLocationPermission = true
+                                showPreciseLocationGuidanceIfNeeded()
+                                launchPictureInPicture()
+                            } else {
+                                pendingPictureInPictureLaunch = true
+                                locationPermissionLauncher.launch(
+                                    arrayOf(
+                                        Manifest.permission.ACCESS_FINE_LOCATION,
+                                        Manifest.permission.ACCESS_COARSE_LOCATION
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    catalog = filterCatalog,
+                    artwork = filterArtwork,
+                    questRewardThumbnails = questRewardThumbnails,
+                    categoryCounts = categoryCounts,
+                    userLocation = userLocation,
+                    onOpenCatchRoutes = {
+                        showMapTools = false
+                        context.startActivity(
+                            android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)
+                        )
+                    },
+                    onOpenMegaBoost = {
+                        showMapTools = false
+                        showMegaBoost = true
+                    },
+                    onOpenSettings = onOpenSettings?.let {
+                        {
+                            showMapTools = false
+                            it()
+                        }
+                    }
+                )
             }
         }
         if (!compactPictureInPicture && showMegaBoost) {
@@ -2468,15 +2562,15 @@ internal fun AlertsMapScreenContent(
                     onClick = { showFilterSheet = true }
                 )
                 SmallFloatingActionButton(
-                    onClick = { context.startActivity(android.content.Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)) },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_catch_routes")
-                ) { Text("Route", style = MaterialTheme.typography.labelMedium) }
-                SmallFloatingActionButton(
-                    onClick = { showMegaBoost = true },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.testTag("open_mega_boost")
-                ) { Text("Mega", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 4.dp)) }
+                    onClick = { showMapTools = true },
+                    containerColor = if (huntSession != null) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surface,
+                    contentColor = if (huntSession != null) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.testTag("open_map_tools")
+                ) {
+                    Icon(painter = painterResource(id = R.drawable.ic_tools), contentDescription = "Map tools")
+                }
                 // Secondary: framing the alerts is occasional, finding yourself is constant.
                 SmallFloatingActionButton(
                     onClick = ::fitVisibleAlerts,

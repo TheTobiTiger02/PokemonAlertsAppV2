@@ -188,7 +188,6 @@ private fun ClusterSlider(
                 onChange((kotlin.math.round(pending / step) * step).toInt().coerceIn(range))
             },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first) / step - 1,
             modifier = Modifier.testTag("clustering_$label")
         )
     }

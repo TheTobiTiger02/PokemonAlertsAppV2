@@ -179,7 +179,8 @@ internal fun AlertHistoryPage(
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
-    onAlertClick: (PokemonAlert) -> Unit
+    onAlertClick: (PokemonAlert) -> Unit,
+    onOpenInsights: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -484,6 +485,7 @@ internal fun AlertHistoryPage(
         state = rememberPullToRefreshState()
     ) {
         val countdownClock = rememberCountdownClock()
+        val cardStyle = rememberAlertCardStyle()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
         Column(modifier = Modifier.fillMaxSize()) {
             HistoryListControls(
@@ -508,7 +510,8 @@ internal fun AlertHistoryPage(
                 onClearDateFilter = {
                     selectedDateMillis = null
                     onDateChanged(null)
-                }
+                },
+                onOpenInsights = onOpenInsights
             )
             BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val columns = if (maxWidth >= 840.dp) 2 else 1
@@ -673,7 +676,8 @@ internal fun AlertHistoryPage(
                     }
                 }
                 item(key = alert.uniqueId, contentType = "alert_card") {
-                    AlertCard(
+                    AlertListItem(
+                        style = cardStyle,
                         alert = alert,
                         distanceInfo = AlertDistanceInfo(null, null, null),
                         goDexStatus = goDexMatches[alert.uniqueId]

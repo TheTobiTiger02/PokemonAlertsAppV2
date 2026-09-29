@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup

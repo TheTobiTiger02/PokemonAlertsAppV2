@@ -22,7 +22,9 @@ import com.example.pokemonalertsv2.util.WalkingRouteUtils
  */
 internal fun huntTargetTitle(alert: PokemonAlert): String =
     alert.pokemon?.takeIf { it.isNotBlank() }
-        ?: alert.name.substringBefore(" @ ").trim().takeIf { it.isNotBlank() }
+        // Item quests read "Razz Berry ×6 at <stop>"; the reward is the name.
+        ?: alert.questReward?.trim()?.takeIf { it.isNotBlank() && alert.hasTypeContaining("quest") }
+        ?: alert.name.substringBefore(" @ ").substringBefore(" at ").trim().takeIf { it.isNotBlank() }
         ?: "that one"
 
 /**

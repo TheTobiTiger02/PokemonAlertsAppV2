@@ -1,6 +1,14 @@
 package com.example.pokemonalertsv2.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -86,5 +94,43 @@ fun SpringSegmentedRow(
             horizontalArrangement = Arrangement.Start,
             content = content
         )
+    }
+}
+
+/** One option inside a [SpringSegmentedRow] (with `transparent = true`), or standalone. */
+@Composable
+fun SegmentedChoice(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    // Set when the choice sits inside a SpringSegmentedRow, which paints the track and
+    // the travelling selection pill itself.
+    transparent: Boolean = false,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .height(40.dp)
+            .selectable(selected = selected, enabled = enabled, role = Role.Tab, onClick = onClick),
+        color = when {
+            transparent -> Color.Transparent
+            selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
+        },
+        contentColor = if (selected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
     }
 }

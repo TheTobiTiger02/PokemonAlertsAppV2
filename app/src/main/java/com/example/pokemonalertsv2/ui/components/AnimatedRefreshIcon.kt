@@ -20,6 +20,13 @@ internal fun AnimatedRefreshIcon(
     contentDescription: String,
     modifier: Modifier = Modifier
 ) {
+    val painter = painterResource(id = R.drawable.ic_refresh)
+    if (!refreshing) {
+        // No transition at all while idle: an infinite transition keeps requesting frames
+        // even when its value is ignored, which redrew the whole screen at 60 fps.
+        Icon(painter = painter, contentDescription = contentDescription, modifier = modifier)
+        return
+    }
     val transition = rememberInfiniteTransition(label = "refresh")
     val angle by transition.animateFloat(
         initialValue = 0f,
@@ -30,10 +37,10 @@ internal fun AnimatedRefreshIcon(
         label = "refresh_rotation"
     )
     Icon(
-        painter = painterResource(id = R.drawable.ic_refresh),
+        painter = painter,
         contentDescription = contentDescription,
         // Read in the draw phase: reading the animated float in composition recomposed
         // the icon on every frame of the spin.
-        modifier = modifier.graphicsLayer { rotationZ = if (refreshing) angle else 0f }
+        modifier = modifier.graphicsLayer { rotationZ = angle }
     )
 }

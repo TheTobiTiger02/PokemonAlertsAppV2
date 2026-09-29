@@ -33,6 +33,8 @@ private val CATCH_WINDOW_HEIGHT_KEY = androidx.datastore.preferences.core.intPre
 private val USE_IMPERIAL_UNITS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("use_imperial_units")
 private val ONBOARDING_COMPLETED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("onboarding_completed")
 private val SORT_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("sort_preference")
+private val CARD_STYLE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_card_style")
+private val WHATS_NEW_SEEN_KEY = androidx.datastore.preferences.core.stringPreferencesKey("whats_new_seen")
 private val MAP_STYLE_PREFERENCE_KEY = androidx.datastore.preferences.core.stringPreferencesKey("map_style_preference")
 private val SHOW_MAP_COUNTDOWNS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_map_countdowns")
 private val AUTO_ENTER_MAP_PIP_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("auto_enter_map_pip")
@@ -120,6 +122,16 @@ enum class SortPreference {
     POSTED_TIME, TIME_REMAINING, DISTANCE, NAME
 }
 
+/** How feed and history rows are drawn: dense rows, or the original cards with a map preview. */
+enum class AlertCardStyle(val label: String) {
+    COMPACT("Compact"),
+    LARGE("Large with map");
+
+    companion object {
+        fun fromStored(value: String?): AlertCardStyle = entries.firstOrNull { it.name == value } ?: COMPACT
+    }
+}
+
 enum class MapStylePreference {
     GOOGLE_STANDARD,
     GOOGLE_SATELLITE,
@@ -172,6 +184,10 @@ interface AlertPreferencesStore {
     
     val sortPreference: Flow<SortPreference>
     suspend fun updateSortPreference(preference: SortPreference)
+
+    // Defaulted so test fakes that predate the setting keep compiling.
+    val cardStyle: Flow<AlertCardStyle> get() = kotlinx.coroutines.flow.flowOf(AlertCardStyle.COMPACT)
+    suspend fun updateCardStyle(style: AlertCardStyle) {}
 
     val mapStylePreference: Flow<MapStylePreference>
     suspend fun updateMapStylePreference(preference: MapStylePreference)
@@ -475,6 +491,21 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         dataStore.edit { prefs ->
             prefs[SORT_PREFERENCE_KEY] = preference.name
         }
+    }
+
+    override val cardStyle: Flow<AlertCardStyle> = dataStore.data.map { preferences ->
+        AlertCardStyle.fromStored(preferences[CARD_STYLE_KEY])
+    }
+
+    override suspend fun updateCardStyle(style: AlertCardStyle) {
+        dataStore.edit { prefs -> prefs[CARD_STYLE_KEY] = style.name }
+    }
+
+    /** The release whose "What's new" sheet was last dismissed; empty before any. */
+    val lastSeenWhatsNew: Flow<String> = dataStore.data.map { it[WHATS_NEW_SEEN_KEY].orEmpty() }
+
+    suspend fun markWhatsNewSeen(release: String) {
+        dataStore.edit { prefs -> prefs[WHATS_NEW_SEEN_KEY] = release }
     }
 
     override val mapStylePreference: Flow<MapStylePreference> = dataStore.data.map { preferences ->

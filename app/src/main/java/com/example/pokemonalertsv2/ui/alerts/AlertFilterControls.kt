@@ -2,6 +2,12 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ArrowDropDown
 import android.Manifest
 import android.app.DatePickerDialog
 import android.content.Context
@@ -130,6 +136,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -194,7 +201,8 @@ internal fun AlertListControls(
     maxDistance: Int,
     onClearDistanceFilter: () -> Unit,
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
-    onClearWalkingFilter: () -> Unit = {}
+    onClearWalkingFilter: () -> Unit = {},
+    onStartManualRaid: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -231,11 +239,6 @@ internal fun AlertListControls(
                             contentDescription = if (searchExpanded) "Close search" else "Search alerts"
                         )
                     }
-                    IconButton(onClick = { onShowDismissedChanged(!showDismissed) }) {
-                        Icon(Icons.Filled.Refresh,
-                            tint = if (showDismissed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            contentDescription = if (showDismissed) "Hide dismissed alerts" else "Show dismissed alerts")
-                    }
                     SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
                     Box {
                         IconButton(onClick = onOpenFilters) {
@@ -265,6 +268,11 @@ internal fun AlertListControls(
                             }
                         }
                     }
+                    FeedOverflowMenu(
+                        showDismissed = showDismissed,
+                        onShowDismissedChanged = onShowDismissedChanged,
+                        onStartManualRaid = onStartManualRaid
+                    )
                 }
             }
             AnimatedVisibility(
@@ -408,7 +416,8 @@ internal fun HistoryListControls(
     onClearAreaFilter: () -> Unit,
     selectedDateLabel: String?,
     onOpenDateFilter: () -> Unit,
-    onClearDateFilter: () -> Unit
+    onClearDateFilter: () -> Unit,
+    onOpenInsights: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -439,6 +448,17 @@ internal fun HistoryListControls(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onOpenInsights != null) {
+                        IconButton(
+                            onClick = onOpenInsights,
+                            modifier = Modifier.testTag("open_spawn_insights")
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_insights),
+                                contentDescription = "Spawn insights"
+                            )
+                        }
+                    }
                     IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
                         Icon(
                             imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
@@ -633,6 +653,19 @@ internal fun AlertSearchBar(
     )
 }
 
+/** Short name for each sort order, shown on the sort chip itself. */
+internal val SortPreference.shortLabel: String
+    get() = when (this) {
+        SortPreference.POSTED_TIME -> "Newest"
+        SortPreference.DISTANCE -> "Nearest"
+        SortPreference.TIME_REMAINING -> "Ending soon"
+        SortPreference.NAME -> "A–Z"
+    }
+
+/**
+ * The sort order as a labelled chip. A bare chevron gave no hint of what it did or which
+ * order was active, so the current order is now the label.
+ */
 @Composable
 internal fun SortingButton(
     currentSort: SortPreference,
@@ -642,62 +675,77 @@ internal fun SortingButton(
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = modifier) {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
-                contentDescription = "Sort alerts, current: ${
-                    when (currentSort) {
-                        SortPreference.POSTED_TIME -> "posted time"
-                        SortPreference.DISTANCE -> "distance"
-                        SortPreference.TIME_REMAINING -> "time remaining"
-                        SortPreference.NAME -> "name"
-                    }
-                }"
-            )
+        TextButton(
+            onClick = { expanded = true },
+            contentPadding = PaddingValues(start = 10.dp, end = 4.dp),
+            modifier = Modifier.semantics {
+                contentDescription = "Sort alerts, current: ${currentSort.shortLabel}"
+            }
+        ) {
+            Text(currentSort.shortLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
 
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false }
         ) {
+            SortPreference.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.shortLabel) },
+                    onClick = {
+                        onSortChanged(option)
+                        expanded = false
+                    },
+                    leadingIcon = {
+                        when (option) {
+                            SortPreference.POSTED_TIME -> Icon(Icons.Filled.DateRange, contentDescription = null)
+                            SortPreference.DISTANCE -> Icon(Icons.Filled.LocationOn, contentDescription = null)
+                            SortPreference.TIME_REMAINING -> Icon(painterResource(R.drawable.ic_timer), contentDescription = null)
+                            SortPreference.NAME -> Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+                        }
+                    },
+                    trailingIcon = if (option == currentSort) {
+                        { Icon(Icons.Filled.Check, contentDescription = "Selected") }
+                    } else null
+                )
+            }
+        }
+    }
+}
+
+/** Less-used feed actions: showing dismissed alerts and the raid counters shortcut. */
+@Composable
+private fun FeedOverflowMenu(
+    showDismissed: Boolean,
+    onShowDismissedChanged: (Boolean) -> Unit,
+    onStartManualRaid: (() -> Unit)?
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More feed options")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (onStartManualRaid != null) {
+                DropdownMenuItem(
+                    text = { Text("Raid counters & hundo CP") },
+                    leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null) },
+                    onClick = {
+                        expanded = false
+                        onStartManualRaid()
+                    }
+                )
+            }
             DropdownMenuItem(
-                text = { Text("Sort by Posted Time") },
+                text = { Text("Show dismissed alerts") },
+                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+                trailingIcon = if (showDismissed) {
+                    { Icon(Icons.Filled.Check, contentDescription = "On") }
+                } else null,
                 onClick = {
-                    onSortChanged(SortPreference.POSTED_TIME)
                     expanded = false
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.DateRange, contentDescription = null)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Sort by Distance") },
-                onClick = {
-                    onSortChanged(SortPreference.DISTANCE)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.LocationOn, contentDescription = null)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Sort by Time Remaining") },
-                onClick = {
-                    onSortChanged(SortPreference.TIME_REMAINING)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.Warning, contentDescription = null)
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Sort by Name") },
-                onClick = {
-                    onSortChanged(SortPreference.NAME)
-                    expanded = false
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.Star, contentDescription = null)
+                    onShowDismissedChanged(!showDismissed)
                 }
             )
         }
