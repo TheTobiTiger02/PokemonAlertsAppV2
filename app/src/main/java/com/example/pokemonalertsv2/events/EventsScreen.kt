@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -52,7 +53,7 @@ data class EventsUiState(
 
 /** The tab as the app shows it: cached events at once, a refresh on open, reminders re-planned on change. */
 @Composable
-fun EventsRoute() {
+fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
     val context = LocalContext.current
     val repository = remember { EventsRepository(context) }
     val preferences = remember { EventPreferences(context) }
@@ -89,7 +90,7 @@ fun EventsRoute() {
         rememberedPage = repository::remembered,
         state = EventsUiState(events, settings, loading, error, now),
         onRefresh = { refresh() },
-        onToggleHidden = { type -> scope.launch { preferences.toggleHidden(type) } },
+        onOpenSettings = onOpenSettings,
         onToggleStar = { id -> changed { preferences.toggleStar(id) } },
         onToggleReminderType = { type -> changed { preferences.toggleReminderType(type) } },
         onLeadMinutes = { minutes -> changed { preferences.setLeadMinutes(minutes) } },
@@ -102,13 +103,13 @@ fun EventsRoute() {
 fun EventsContent(
     state: EventsUiState,
     onRefresh: () -> Unit,
-    onToggleHidden: (String) -> Unit,
     onToggleStar: (String) -> Unit,
     onToggleReminderType: (String) -> Unit,
     onLeadMinutes: (Int) -> Unit,
     onOpenLink: (String) -> Unit,
     loadPage: suspend (String) -> EventPage? = { null },
     rememberedPage: (String) -> EventPage? = { null },
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     val sections = remember(state.events, state.nowMillis, state.settings.hiddenTypes) {
         groupEvents(state.events, state.nowMillis, state.settings.hiddenTypes)
@@ -116,7 +117,6 @@ fun EventsContent(
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
-    var typesOpen by remember { mutableStateOf(false) }
     var view by rememberSaveable { mutableStateOf(EventView.ALL) }
     val starred = state.settings.starredIds
     fun List<GameEvent>.inView() = if (view == EventView.STARRED) filter { it.id in starred } else this
@@ -129,10 +129,14 @@ fun EventsContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
+                    if (onOpenSettings != null) {
+                        IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
+                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                        }
+                    }
                 }
             }
-            // One row: what to look at, then which event types to leave out. The type list
-            // used to fill half the screen before the first event.
+            // One row of quick views. Event types no longer have a picker on this screen.
             item {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -142,15 +146,6 @@ fun EventsContent(
                     EventView.entries.forEach { option ->
                         FilterChip(selected = view == option, onClick = { view = option }, label = { Text(option.label) },
                             modifier = Modifier.testTag("events_view_${option.name.lowercase()}"))
-                    }
-                    if (types.isNotEmpty()) {
-                        val hidden = types.count { it in state.settings.hiddenTypes }
-                        AssistChip(
-                            onClick = { typesOpen = true },
-                            label = { Text(if (hidden == 0) "All types" else "$hidden types hidden") },
-                            trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                            modifier = Modifier.testTag("events_types")
-                        )
                     }
                 }
             }
@@ -182,19 +177,6 @@ fun EventsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )
-            }
-        }
-    }
-    if (typesOpen) ModalBottomSheet(onDismissRequest = { typesOpen = false }) {
-        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Event types", style = MaterialTheme.typography.headlineSmall)
-            Text("Switched-off types are hidden from the list.", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                types.forEach { type ->
-                    FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
-                        label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
-                }
             }
         }
     }

@@ -13,7 +13,7 @@ Your choice is saved automatically!
 
 ## 🔔 Customizing Notifications
 
-1. Tap the **Settings** icon (⚙️) in the top right
+1. Tap the **Settings** gear (⚙️) in the top right of Alerts, Events or Tools
 2. Scroll to the **Notifications** section
 3. Configure your preferences:
 

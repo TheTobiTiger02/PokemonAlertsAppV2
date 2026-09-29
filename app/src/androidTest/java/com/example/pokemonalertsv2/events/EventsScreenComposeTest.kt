@@ -40,8 +40,8 @@ class EventsScreenComposeTest {
         {"key":"sales","title":"Sales","blocks":[{"type":"text","text":"Web store box."}]}]}""")
 
     @Test
-    fun runningAndUpcomingShowHiddenTypesToggleAndDetailOpens() {
-        var settings by mutableStateOf(EventSettings())
+    fun runningAndUpcomingShowHiddenTypesAndDetailOpens() {
+        val settings = EventSettings()
         var opened: String? = null
         var starred: String? = null
         composeRule.setContent {
@@ -49,7 +49,6 @@ class EventsScreenComposeTest {
                 EventsContent(
                     state = EventsUiState(events = events, settings = settings, nowMillis = now),
                     onRefresh = {},
-                    onToggleHidden = { type -> settings = settings.copy(hiddenTypes = settings.hiddenTypes.let { if (type in it) it - type else it + type }) },
                     onToggleStar = { starred = it },
                     onToggleReminderType = {},
                     onLeadMinutes = {},
@@ -63,10 +62,8 @@ class EventsScreenComposeTest {
         composeRule.onNodeWithText("Today").assertIsDisplayed()
         assertEquals(0, composeRule.onAllNodesWithTag("event_gbl").fetchSemanticsNodes().size)
 
-        composeRule.onNodeWithTag("events_types").performClick()
-        composeRule.onNodeWithTag("events_type_go-battle-league").performClick()
-        androidx.test.espresso.Espresso.pressBack()
-        composeRule.onNodeWithTag("event_gbl").assertIsDisplayed()
+        // Event types have no picker on this screen any more; types hidden by default stay hidden.
+        assertEquals(0, composeRule.onAllNodesWithTag("events_types").fetchSemanticsNodes().size)
 
         composeRule.onNodeWithTag("event_star_spotlight").performClick()
         assertEquals("spotlight", starred)

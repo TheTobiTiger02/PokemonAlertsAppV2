@@ -346,6 +346,9 @@ internal fun mapPictureInPictureZoom(
 @Composable
 fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
     onOpenFilterStudio: () -> Unit = {},
@@ -390,6 +393,9 @@ fun AlertsMapRoute(
     val dismissedAlertIds by viewModel.dismissedAlertIds.collectAsStateWithLifecycle()
 
     AlertsMapScreen(
+        openMapToolsRequested = openMapToolsRequested,
+        onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        onOpenSettings = onOpenSettings,
         alerts = uiState.alerts,
         onBack = onBack,
         onRefresh = viewModel::refreshAlerts,
@@ -452,6 +458,9 @@ fun AlertsMapRoute(
 @Composable
 fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
@@ -493,6 +502,9 @@ fun AlertsMapScreen(
     onPipStateChanged: ((MapPipUiState) -> Unit)? = null
 ) {
     AlertsMapScreenContent(
+        openMapToolsRequested = openMapToolsRequested,
+        onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        onOpenSettings = onOpenSettings,
         alerts = alerts,
         onBack = onBack,
         onRefresh = onRefresh,
@@ -540,6 +552,9 @@ fun AlertsMapScreen(
 @Composable
 internal fun AlertsMapScreenContent(
     alerts: List<PokemonAlert>,
+    openMapToolsRequested: Boolean = false,
+    onMapToolsRequestConsumed: () -> Unit = {},
+    onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     syncStatus: SyncStatus = SyncStatus.Live(null),
@@ -632,6 +647,13 @@ internal fun AlertsMapScreenContent(
     var showFilterSheet by rememberSaveable { mutableStateOf(false) }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
     var showMapTools by rememberSaveable { mutableStateOf(false) }
+    // The Tools tab opens the map straight onto its tools sheet (hunt, routes, Mega boost...).
+    LaunchedEffect(openMapToolsRequested) {
+        if (openMapToolsRequested) {
+            showMapTools = true
+            onMapToolsRequestConsumed()
+        }
+    }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
@@ -2383,6 +2405,12 @@ internal fun AlertsMapScreenContent(
                     onOpenMegaBoost = {
                         showMapTools = false
                         showMegaBoost = true
+                    },
+                    onOpenSettings = onOpenSettings?.let {
+                        {
+                            showMapTools = false
+                            it()
+                        }
                     }
                 )
             }

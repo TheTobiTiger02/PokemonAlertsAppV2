@@ -33,11 +33,13 @@ internal const val WHATS_NEW_RELEASE = "1.16"
 
 private val WHATS_NEW_POINTS = listOf(
     "Compact alert rows fit about six alerts on screen. Prefer the map cards? Settings › Appearance.",
-    "History and Insights now live inside the Alerts tab: Live, History, Insights.",
+    "History lives inside the Alerts tab (Live | History), and Spawn insights is a button on the history screen.",
     "The feed and map filter buttons edit in place and bring you straight back.",
     "The map’s new tools button holds hunts, catch routes, Mega boost and the floating map.",
     "Alert pages keep only I’m going and Navigate at the bottom; snooze and share moved to the top.",
-    "Settings are regrouped, and missing permissions show as one card instead of pop-ups."
+    "The new Tools tab collects hunts, catch routes, raid counters and your collection tools; star up to four for quick access.",
+    "Settings moved behind the gear at the top of each screen, regrouped, with missing permissions shown as one card.",
+    "Alert notifications now show the distance right in the collapsed line."
 )
 
 /**

@@ -164,7 +164,9 @@ internal fun SettingsScreen(
     viewModel: SettingsViewModel,
     onManageLocationPermissions: () -> Unit,
     requestedDestination: SettingsDestination? = null,
-    onRequestedDestinationConsumed: () -> Unit = {}
+    onRequestedDestinationConsumed: () -> Unit = {},
+    /** Set when Settings opens from a gear: the overview then has a back arrow to where it came from. */
+    onClose: (() -> Unit)? = null
 ) {
     var destinationName by rememberSaveable { mutableStateOf(SettingsDestination.OVERVIEW.name) }
     val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
@@ -313,12 +315,15 @@ internal fun SettingsScreen(
                     },
                     navigationIcon = {
                         AnimatedContent(
-                            targetState = destination != SettingsDestination.OVERVIEW,
+                            targetState = destination != SettingsDestination.OVERVIEW || onClose != null,
                             transitionSpec = { appFadeThrough() },
                             label = "settings_back"
                         ) { showBack ->
                             if (showBack) {
-                                IconButton(onClick = { navigateTo(parentDestination) }) {
+                                IconButton(onClick = {
+                                    if (destination != SettingsDestination.OVERVIEW) navigateTo(parentDestination)
+                                    else onClose?.invoke()
+                                }) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                                 }
                             }

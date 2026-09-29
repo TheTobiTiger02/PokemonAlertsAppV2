@@ -564,7 +564,7 @@ internal fun SettingsOverview(
 }
 
 @Composable
-private fun SettingsOverviewGroup(title: String, content: @Composable () -> Unit) {
+internal fun SettingsOverviewGroup(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = title,
@@ -608,6 +608,7 @@ internal fun SettingsOverviewRow(
     title: String,
     summary: String,
     statusBadge: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
     Row(
@@ -669,11 +670,15 @@ internal fun SettingsOverviewRow(
                 }
             }
         }
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (trailing != null) {
+            trailing()
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

@@ -331,7 +331,8 @@ fun AlertHistoryRoute(
     onLoadMore: () -> Unit,
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
-    onSearchChanged: (String) -> Unit
+    onSearchChanged: (String) -> Unit,
+    onOpenInsights: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     AlertHistoryPage(
@@ -343,7 +344,8 @@ fun AlertHistoryRoute(
         onSearchChanged = onSearchChanged,
         onAlertClick = { alert ->
             context.startActivity(AlertDetailActivity.createIntent(context, alert))
-        }
+        },
+        onOpenInsights = onOpenInsights
     )
 }
 

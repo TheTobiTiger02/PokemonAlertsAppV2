@@ -47,11 +47,13 @@ import androidx.annotation.StringRes
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
@@ -163,17 +165,32 @@ internal const val ALERTS_TAB_INDEX = 0
 internal const val HISTORY_SCREEN_INDEX = 1
 internal const val MAP_TAB_INDEX = 2
 internal const val EVENTS_TAB_INDEX = 3
+/** Settings is a full-screen destination the gear opens, not a bottom-bar tab. */
 internal const val SETTINGS_TAB_INDEX = 4
+internal const val TOOLS_TAB_INDEX = 5
 
 private val NAV_DESTINATIONS = listOf(
     NavDestination(ALERTS_TAB_INDEX, R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
     NavDestination(MAP_TAB_INDEX, R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
     NavDestination(EVENTS_TAB_INDEX, R.string.navigation_events, Icons.Filled.Star, Icons.Outlined.Star),
-    NavDestination(SETTINGS_TAB_INDEX, R.string.navigation_settings, Icons.Filled.Settings, Icons.Outlined.Settings)
+    NavDestination(TOOLS_TAB_INDEX, R.string.navigation_tools, Icons.Filled.Build, Icons.Outlined.Build)
 )
 
+/** Everything MainScaffold can show as a root: the bottom-bar tabs plus Settings. */
+private val ROOT_ROUTE_INDICES = NAV_DESTINATIONS.map { it.screen } + SETTINGS_TAB_INDEX
+
 internal fun rootTabIndexOrNull(index: Int): Int? =
-    index.takeIf { it in ALERTS_TAB_INDEX..SETTINGS_TAB_INDEX }
+    index.takeIf { it in ALERTS_TAB_INDEX..TOOLS_TAB_INDEX }
+
+/**
+ * Whether a bottom-bar item shows as selected. Settings is not a tab, so while it is open the
+ * tab it was opened from stays highlighted.
+ */
+internal fun isNavTabSelected(tabScreen: Int, selectedScreen: Int, settingsOrigin: Int): Boolean =
+    tabScreen == if (selectedScreen == SETTINGS_TAB_INDEX) settingsOrigin else selectedScreen
+
+private fun isNavDestinationSelected(destination: NavDestination, selectedScreen: Int, settingsOrigin: Int) =
+    isNavTabSelected(destination.screen, selectedScreen, settingsOrigin)
 
 /** The tab a screen id lives on: History is a section of the Alerts tab. */
 internal fun tabForScreen(screen: Int): Int =
@@ -759,6 +776,9 @@ private fun MainScaffold(
     onEnterPictureInPicture: (() -> Unit)? = null
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(ALERTS_TAB_INDEX) }
+    // Where the gear was pressed, so Settings' back arrow returns there.
+    var settingsOrigin by rememberSaveable { mutableIntStateOf(ALERTS_TAB_INDEX) }
+    var openMapToolsRequested by rememberSaveable { mutableStateOf(false) }
     var alertsSection by rememberSaveable { mutableStateOf(AlertsSection.LIVE) }
     val visitedTabs = remember { mutableStateListOf<Int>() }
     var localSettingsDestination by remember { mutableStateOf<SettingsDestination?>(null) }
@@ -780,9 +800,17 @@ private fun MainScaffold(
     val context = LocalContext.current
     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
+    fun openSettings(destination: SettingsDestination = SettingsDestination.OVERVIEW) {
+        if (selectedTab != SETTINGS_TAB_INDEX) settingsOrigin = selectedTab
+        localSettingsDestination = destination
+        selectedTab = SETTINGS_TAB_INDEX
+    }
+
     LaunchedEffect(requestedTab) {
         requestedTab?.let {
-            selectedTab = tabForScreen(it)
+            val target = tabForScreen(it)
+            if (target == SETTINGS_TAB_INDEX && selectedTab != SETTINGS_TAB_INDEX) settingsOrigin = selectedTab
+            selectedTab = target
             when (it) {
                 ALERTS_TAB_INDEX -> alertsSection = AlertsSection.LIVE
                 HISTORY_SCREEN_INDEX -> alertsSection = AlertsSection.HISTORY
@@ -793,6 +821,9 @@ private fun MainScaffold(
 
     BackHandler(enabled = selectedTab == MAP_TAB_INDEX) {
         selectedTab = ALERTS_TAB_INDEX
+    }
+    BackHandler(enabled = selectedTab == SETTINGS_TAB_INDEX) {
+        selectedTab = settingsOrigin
     }
 
     LaunchedEffect(Unit) {
@@ -887,7 +918,7 @@ private fun MainScaffold(
                         tonalElevation = 0.dp
                     ) {
                         NAV_DESTINATIONS.forEach { destination ->
-                            val selected = selectedTab == destination.screen
+                            val selected = isNavDestinationSelected(destination, selectedTab, settingsOrigin)
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = { selectedTab = destination.screen },
@@ -917,7 +948,7 @@ private fun MainScaffold(
                         )
                     ) {
                         NAV_DESTINATIONS.forEach { destination ->
-                            val selected = selectedTab == destination.screen
+                            val selected = isNavDestinationSelected(destination, selectedTab, settingsOrigin)
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = { selectedTab = destination.screen },
@@ -939,8 +970,7 @@ private fun MainScaffold(
                 // and the feed two, on every visit; a hidden tab is unplaced and its lifecycle is
                 // held at CREATED, so its refresh loops, location updates and map view all stop.
                 if (selectedTab !in visitedTabs) visitedTabs.add(selectedTab)
-                NAV_DESTINATIONS.forEach { destination ->
-                val destinationIndex = destination.screen
+                ROOT_ROUTE_INDICES.forEach { destinationIndex ->
                 if (destinationIndex in visitedTabs) {
                 KeepAlive(visible = selectedTab == destinationIndex, modifier = Modifier.fillMaxSize()) {
                 saveableStateHolder.SaveableStateProvider(destinationIndex) {
@@ -953,6 +983,9 @@ private fun MainScaffold(
                                     filterStudioSurface = com.example.pokemonalertsv2.data.FilterSurface.MAP
                                 },
                                 showBackButton = false,
+                                openMapToolsRequested = openMapToolsRequested,
+                                onMapToolsRequestConsumed = { openMapToolsRequested = false },
+                                onOpenSettings = { openSettings() },
                                 onEnterPictureInPicture = onEnterPictureInPicture
                             )
                         }
@@ -964,18 +997,20 @@ private fun MainScaffold(
                             LaunchedEffect(alertsSection) {
                                 if (alertsSection == AlertsSection.HISTORY) historyViewModel.ensureInitialLoad()
                             }
+                            val changeSection: (AlertsSection) -> Unit = { next ->
+                                // Insights starts from whatever the history list was showing.
+                                if (next == AlertsSection.INSIGHTS && alertsSection == AlertsSection.HISTORY) {
+                                    insightsViewModel.seed(
+                                        query = historyUiState.searchQuery,
+                                        type = historyUiState.selectedType
+                                    )
+                                }
+                                alertsSection = next
+                            }
                             AlertsTab(
                                 section = alertsSection,
-                                onSectionChange = { next ->
-                                    // Insights starts from whatever the history list was showing.
-                                    if (next == AlertsSection.INSIGHTS && alertsSection == AlertsSection.HISTORY) {
-                                        insightsViewModel.seed(
-                                            query = historyUiState.searchQuery,
-                                            type = historyUiState.selectedType
-                                        )
-                                    }
-                                    alertsSection = next
-                                },
+                                onSectionChange = changeSection,
+                                onOpenSettings = { openSettings() },
                                 refreshing = when (alertsSection) {
                                     AlertsSection.LIVE -> liveUiState.isLoading
                                     AlertsSection.HISTORY -> historyUiState.isLoading
@@ -1013,7 +1048,8 @@ private fun MainScaffold(
                                         onLoadMore = historyViewModel::loadMore,
                                         onDateChanged = historyViewModel::setDateFilter,
                                         onTypeChanged = historyViewModel::setTypeFilter,
-                                        onSearchChanged = historyViewModel::setSearchQuery
+                                        onSearchChanged = historyViewModel::setSearchQuery,
+                                        onOpenInsights = { changeSection(AlertsSection.INSIGHTS) }
                                     )
                                 },
                                 insights = {
@@ -1037,11 +1073,40 @@ private fun MainScaffold(
                             )
                         }
                         EVENTS_TAB_INDEX -> {
-                            com.example.pokemonalertsv2.events.EventsRoute()
+                            com.example.pokemonalertsv2.events.EventsRoute(onOpenSettings = { openSettings() })
+                        }
+                        TOOLS_TAB_INDEX -> {
+                            com.example.pokemonalertsv2.ui.tools.ToolsScreen(
+                                onOpen = { id ->
+                                    when (id) {
+                                        "hunt" -> {
+                                            openMapToolsRequested = true
+                                            selectedTab = MAP_TAB_INDEX
+                                        }
+                                        "routes" -> context.startActivity(
+                                            Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)
+                                        )
+                                        "raids" -> context.startActivity(
+                                            com.example.pokemonalertsv2.ui.counters.ManualRaidActivity.countersIntent(context)
+                                        )
+                                        "roster" -> context.startActivity(
+                                            Intent(context, com.example.pokemonalertsv2.ui.settings.PokeGenieRosterActivity::class.java)
+                                        )
+                                        "godex" -> openSettings(SettingsDestination.GODEX)
+                                        "insights" -> {
+                                            insightsViewModelProvider().seed(query = "", type = null)
+                                            alertsSection = AlertsSection.INSIGHTS
+                                            selectedTab = ALERTS_TAB_INDEX
+                                        }
+                                    }
+                                },
+                                onOpenSettings = { openSettings() }
+                            )
                         }
                         SETTINGS_TAB_INDEX -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
+                                onClose = { selectedTab = settingsOrigin },
                                 onManageLocationPermissions = onManageLocationPermissions,
                                 requestedDestination = localSettingsDestination ?: requestedSettingsDestination,
                                 onRequestedDestinationConsumed = {

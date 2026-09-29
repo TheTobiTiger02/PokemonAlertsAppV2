@@ -32,6 +32,7 @@ import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
+import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.CachedLocationProvider
@@ -73,6 +74,31 @@ object AlertNotifier {
         walkingText = walkingText,
         isInRange = isInRange
     )
+
+    /**
+     * The one line a collapsed notification shows. Distance leads, so it is never the part the
+     * shade cuts off: distance and walking time first, then time left and CP. The category label
+     * only stands in when nothing else is known.
+     */
+    internal fun buildCollapsedNotificationText(
+        alert: PokemonAlert,
+        distanceText: String?,
+        walkingText: String?,
+        isInRange: Boolean,
+        nowMillis: Long = System.currentTimeMillis()
+    ): String {
+        val minutesLeft = TimeUtils.parseEndTimeToMillis(alert.endTime)
+            ?.minus(nowMillis)
+            ?.takeIf { it > 0 }
+            ?.let { (it + 59_999L) / 60_000L }
+        return listOfNotNull(
+            if (isInRange) "In range" else null,
+            distanceText?.takeIf { it.isNotBlank() },
+            walkingText?.takeIf { it.isNotBlank() },
+            minutesLeft?.let { "$it min left" },
+            alert.displayCp?.let { "CP $it" }
+        ).joinToString(" \u2022 ").ifBlank { resolveAlertVisualStyle(alert).label }
+    }
 
     fun ensureChannel(context: Context) {
         val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
@@ -295,6 +321,12 @@ object AlertNotifier {
                 walkingText = walkingText,
                 isInRange = isInRange
             ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
+            val collapsedText = buildCollapsedNotificationText(
+                alert = alert,
+                distanceText = distanceText,
+                walkingText = walkingText,
+                isInRange = isInRange
+            ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
             val expandedText = buildString {
                 append(contentText)
                 if (alert.description.isNotBlank() && alert.description != baseText) {
@@ -325,7 +357,7 @@ object AlertNotifier {
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
                 .setContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
-                .setContentText(contentText)
+                .setContentText(collapsedText)
                 .setStyle(
                     NotificationCompat.BigTextStyle().bigText(expandedText)
                 )

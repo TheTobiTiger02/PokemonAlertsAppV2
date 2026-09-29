@@ -136,6 +136,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -415,7 +416,8 @@ internal fun HistoryListControls(
     onClearAreaFilter: () -> Unit,
     selectedDateLabel: String?,
     onOpenDateFilter: () -> Unit,
-    onClearDateFilter: () -> Unit
+    onClearDateFilter: () -> Unit,
+    onOpenInsights: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -446,6 +448,17 @@ internal fun HistoryListControls(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onOpenInsights != null) {
+                        IconButton(
+                            onClick = onOpenInsights,
+                            modifier = Modifier.testTag("open_spawn_insights")
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_insights),
+                                contentDescription = "Spawn insights"
+                            )
+                        }
+                    }
                     IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
                         Icon(
                             imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,

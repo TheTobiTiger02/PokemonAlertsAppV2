@@ -179,7 +179,8 @@ internal fun AlertHistoryPage(
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
-    onAlertClick: (PokemonAlert) -> Unit
+    onAlertClick: (PokemonAlert) -> Unit,
+    onOpenInsights: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -509,7 +510,8 @@ internal fun AlertHistoryPage(
                 onClearDateFilter = {
                     selectedDateMillis = null
                     onDateChanged(null)
-                }
+                },
+                onOpenInsights = onOpenInsights
             )
             BoxWithConstraints(modifier = Modifier.weight(1f)) {
             val columns = if (maxWidth >= 840.dp) 2 else 1

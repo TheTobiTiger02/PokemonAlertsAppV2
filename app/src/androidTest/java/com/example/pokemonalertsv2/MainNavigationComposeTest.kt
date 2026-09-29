@@ -40,7 +40,7 @@ class MainNavigationComposeTest {
     fun primaryDestinationsAreVisibleAndClickable() {
         waitForMainNavigation()
 
-        listOf("Alerts", "Map", "Events", "Settings").forEach { label ->
+        listOf("Alerts", "Map", "Events", "Tools").forEach { label ->
             composeRule.onNodeWithText(label)
                 .assertIsDisplayed()
                 .assertHasClickAction()
@@ -122,7 +122,7 @@ class MainNavigationComposeTest {
     fun settingsUsesOverviewAndFocusedSubpages() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithTag("open_settings").performClick()
         listOf(
             "Appearance",
             "Filters",
@@ -185,7 +185,7 @@ class MainNavigationComposeTest {
     fun settingsSubpageSurvivesActivityRecreation() {
         waitForMainNavigation()
 
-        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithTag("open_settings").performClick()
         composeRule.onNodeWithText("Appearance").performClick()
         composeRule.onNodeWithText("Theme").assertIsDisplayed()
 

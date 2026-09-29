@@ -34,9 +34,16 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 
 ## Navigation and layout
 
-- Primary destinations are **Alerts**, **Map**, **Events**, and **Settings**.
-- **Live**, **History** and **Insights** are sections of Alerts, switched by one segmented control
-  in the tab header. The old History screen id (1) is kept for widget and notification intents.
+- Primary destinations are **Alerts**, **Map**, **Events**, and **Tools**.
+- **Settings** is not a tab: the gear in the header of Alerts, Events and Tools (and a row in the
+  map's tools sheet) opens it full screen, and its back arrow returns to where the gear was pressed.
+  The old Settings screen id (4) is kept for notification, widget and deep-link intents.
+- **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
+  header. **Spawn insights** opens from the chart button on the History screen and has its own back
+  arrow. The old History screen id (1) is kept for widget and notification intents.
+- **Tools** groups what the app does beyond the feed (hunt, catch routes, raid counters, My Pokémon,
+  GoDex checklist, spawn insights). Up to four tools can be starred into a quick-access row.
+  Settings pages are not repeated there.
 - Tabs stay composed once opened (`ui/components/KeepAlive.kt`): a hidden tab is unplaced and its
   lifecycle is capped at CREATED, so switching back is instant and nothing hidden keeps working.
 - Filter Studio opens over the tab that asked for it; closing it returns there.
