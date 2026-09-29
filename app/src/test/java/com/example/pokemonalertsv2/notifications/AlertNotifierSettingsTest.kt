@@ -114,6 +114,39 @@ class AlertNotifierSettingsTest {
         assertTrue(overlapping.shouldNotify(dualType, matchContext = FilterMatchContext(effectiveDistanceMeters = 3000f)))
     }
 
+    @Test
+    fun inRangeAlertNotifiesDespiteWalkingDetour() {
+        val raid = PokemonAlert(
+            name = "Rayquaza",
+            pokemon = "Rayquaza",
+            type = listOf("Raid"),
+            latitude = 49.7,
+            longitude = 8.6
+        )
+        val notifications = FilterDefinition(
+            alertTypes = FilterSelection.only(listOf("Raid")),
+            maxDistanceMeters = 100,
+            maxWalkingMinutes = 2
+        )
+        val settings = notificationSettings().copy(filterDefinition = notifications)
+
+        // Walking distance 300m and 4 min walk, but direct distance is 75m (<= 80m gym radius) -> should notify
+        val inRangeContext = FilterMatchContext(
+            effectiveDistanceMeters = 300f,
+            walkingDurationSeconds = 240L,
+            directDistanceMeters = 75f
+        )
+        assertTrue(settings.shouldNotify(raid, matchContext = inRangeContext))
+
+        // Walking distance 300m, direct distance 85m (> 80m gym radius) -> should NOT notify
+        val outOfRangeContext = FilterMatchContext(
+            effectiveDistanceMeters = 300f,
+            walkingDurationSeconds = 240L,
+            directDistanceMeters = 85f
+        )
+        assertFalse(settings.shouldNotify(raid, matchContext = outOfRangeContext))
+    }
+
     private fun notificationSettings(
         notificationsEnabled: Boolean = true,
         rocketEnabled: Boolean = true,
