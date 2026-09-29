@@ -2302,27 +2302,15 @@ internal fun AlertsMapScreenContent(
                     .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    MapCategoryRail(
-                        mutedCategories = selectedCategories,
-                        categoryCounts = categoryCounts,
-                        visibleAlertCount = filteredAlerts.size,
-                        showBackButton = showBackButton,
-                        onBack = onBack,
-                        onMutedCategoriesChange = onSelectedCategoriesChange,
-                        modifier = Modifier.weight(1f),
-                        // The gear sits after the rail, not over it, so no chip ever runs
-                        // underneath it; the rail simply scrolls in the width that is left.
-                        contentPadding = PaddingValues(
-                            start = Spacing.lg,
-                            end = Spacing.sm,
-                            top = 2.dp,
-                            bottom = Spacing.xxs
-                        )
-                    )
-                    if (onOpenSettings != null) {
+                // The Settings gear has its own row above the chip rail, at the end, so it never
+                // shares a row with (or runs over) the chips.
+                if (onOpenSettings != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(end = Spacing.lg),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         Surface(
-                            modifier = Modifier.padding(end = Spacing.lg).size(40.dp),
+                            modifier = Modifier.size(40.dp),
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.surface,
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -2338,6 +2326,21 @@ internal fun AlertsMapScreenContent(
                         }
                     }
                 }
+                MapCategoryRail(
+                    mutedCategories = selectedCategories,
+                    categoryCounts = categoryCounts,
+                    visibleAlertCount = filteredAlerts.size,
+                    showBackButton = showBackButton,
+                    onBack = onBack,
+                    onMutedCategoriesChange = onSelectedCategoriesChange,
+                    // The rail owns the full width again.
+                    contentPadding = PaddingValues(
+                        start = Spacing.lg,
+                        end = Spacing.lg,
+                        top = 2.dp,
+                        bottom = Spacing.xxs
+                    )
+                )
 
                 Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)
