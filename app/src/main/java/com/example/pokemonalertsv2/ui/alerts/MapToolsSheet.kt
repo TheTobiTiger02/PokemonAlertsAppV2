@@ -110,7 +110,7 @@ internal fun MapToolsContent(
                 subtitle = "Filters, notifications, appearance and more",
                 icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
                 onClick = onOpenSettings,
-                modifier = Modifier.testTag("open_settings")
+                modifier = Modifier.testTag("open_settings_from_map_tools")
             )
         }
     }

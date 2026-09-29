@@ -263,8 +263,9 @@ internal fun MapSettingsButton(
                     .semantics { contentDescription = "Map settings and filters" },
                 contentAlignment = Alignment.Center
             ) {
+                // A funnel, not a gear: the gear on the map's top edge is the app's Settings.
                 Icon(
-                    imageVector = Icons.Filled.Settings,
+                    painter = painterResource(R.drawable.ic_filter),
                     contentDescription = null,
                     modifier = Modifier.size(20.dp)
                 )

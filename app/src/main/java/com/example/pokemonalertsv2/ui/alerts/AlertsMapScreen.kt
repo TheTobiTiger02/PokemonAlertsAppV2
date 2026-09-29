@@ -70,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -2301,24 +2302,42 @@ internal fun AlertsMapScreenContent(
                     .padding(top = Spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                MapCategoryRail(
-                    mutedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    visibleAlertCount = filteredAlerts.size,
-                    showBackButton = showBackButton,
-                    onBack = onBack,
-                    onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail now owns the full width. Reserving the end for a pinned button
-                    // only ever kept the *last* chip clear of it: scrolled back to the start,
-                    // the leading chips still ran underneath it, so the button moved down to
-                    // the control column where the map's other actions already live.
-                    contentPadding = PaddingValues(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = 2.dp,
-                        bottom = Spacing.xxs
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    MapCategoryRail(
+                        mutedCategories = selectedCategories,
+                        categoryCounts = categoryCounts,
+                        visibleAlertCount = filteredAlerts.size,
+                        showBackButton = showBackButton,
+                        onBack = onBack,
+                        onMutedCategoriesChange = onSelectedCategoriesChange,
+                        modifier = Modifier.weight(1f),
+                        // The gear sits after the rail, not over it, so no chip ever runs
+                        // underneath it; the rail simply scrolls in the width that is left.
+                        contentPadding = PaddingValues(
+                            start = Spacing.lg,
+                            end = Spacing.sm,
+                            top = 2.dp,
+                            bottom = Spacing.xxs
+                        )
                     )
-                )
+                    if (onOpenSettings != null) {
+                        Surface(
+                            modifier = Modifier.padding(end = Spacing.lg).size(40.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            shadowElevation = 3.dp
+                        ) {
+                            IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Settings,
+                                    contentDescription = "Settings",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
 
                 Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     MapSyncStatus(status = syncStatus, onRetry = onRefresh)

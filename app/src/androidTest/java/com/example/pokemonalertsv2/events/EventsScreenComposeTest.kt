@@ -40,8 +40,8 @@ class EventsScreenComposeTest {
         {"key":"sales","title":"Sales","blocks":[{"type":"text","text":"Web store box."}]}]}""")
 
     @Test
-    fun runningAndUpcomingShowHiddenTypesAndDetailOpens() {
-        val settings = EventSettings()
+    fun runningAndUpcomingShowTypeFilterAndDetailOpens() {
+        var settings by mutableStateOf(EventSettings())
         var opened: String? = null
         var starred: String? = null
         composeRule.setContent {
@@ -49,6 +49,8 @@ class EventsScreenComposeTest {
                 EventsContent(
                     state = EventsUiState(events = events, settings = settings, nowMillis = now),
                     onRefresh = {},
+                    onToggleHidden = { type -> settings = settings.copy(hiddenTypes = settings.hiddenTypes.let { if (type in it) it - type else it + type }) },
+                    onShowAllTypes = { settings = settings.copy(hiddenTypes = emptySet()) },
                     onToggleStar = { starred = it },
                     onToggleReminderType = {},
                     onLeadMinutes = {},
@@ -60,10 +62,16 @@ class EventsScreenComposeTest {
         composeRule.onNodeWithText("Happening now").assertIsDisplayed()
         composeRule.onNodeWithTag("event_raids").assertIsDisplayed()
         composeRule.onNodeWithText("Today").assertIsDisplayed()
+        // Every type shows by default; the filter button hides some and "Show all" brings them back.
+        composeRule.onNodeWithTag("event_gbl").assertIsDisplayed()
+        composeRule.onNodeWithTag("events_filter").performClick()
+        composeRule.onNodeWithTag("events_type_go-battle-league").performClick()
+        androidx.test.espresso.Espresso.pressBack()
         assertEquals(0, composeRule.onAllNodesWithTag("event_gbl").fetchSemanticsNodes().size)
-
-        // Event types have no picker on this screen any more; types hidden by default stay hidden.
-        assertEquals(0, composeRule.onAllNodesWithTag("events_types").fetchSemanticsNodes().size)
+        composeRule.onNodeWithTag("events_filter").performClick()
+        composeRule.onNodeWithTag("events_types_all").performClick()
+        androidx.test.espresso.Espresso.pressBack()
+        composeRule.onNodeWithTag("event_gbl").assertIsDisplayed()
 
         composeRule.onNodeWithTag("event_star_spotlight").performClick()
         assertEquals("spotlight", starred)

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -183,7 +182,11 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                                     modifier = Modifier.testTag("pin_${tool.id}")
                                 ) {
                                     Icon(
-                                        imageVector = if (isPinned) Icons.Filled.Star else Icons.Outlined.Star,
+                                        painter = if (isPinned) {
+                                            rememberVectorPainter(Icons.Filled.Star)
+                                        } else {
+                                            painterResource(R.drawable.ic_star_border)
+                                        },
                                         contentDescription = if (isPinned) {
                                             "Remove ${tool.title} from quick access"
                                         } else {

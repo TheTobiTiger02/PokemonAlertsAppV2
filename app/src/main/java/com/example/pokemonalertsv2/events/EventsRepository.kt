@@ -89,6 +89,9 @@ class EventPreferences(context: Context) {
         prefs[HIDDEN_TYPES] = if (type in current) current - type else current + type
     }
 
+    /** Clears every hidden type: an empty set is a real choice, distinct from "never changed". */
+    suspend fun showAllTypes() = dataStore.edit { prefs -> prefs[HIDDEN_TYPES] = emptySet() }
+
     suspend fun toggleReminderType(type: String) = dataStore.edit { prefs ->
         val current = prefs[REMINDER_TYPES] ?: DEFAULT_REMINDER_EVENT_TYPES
         prefs[REMINDER_TYPES] = if (type in current) current - type else current + type

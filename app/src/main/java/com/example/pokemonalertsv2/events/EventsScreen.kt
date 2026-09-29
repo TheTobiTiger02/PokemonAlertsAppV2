@@ -25,6 +25,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import com.example.pokemonalertsv2.R
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -91,6 +93,8 @@ fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
         state = EventsUiState(events, settings, loading, error, now),
         onRefresh = { refresh() },
         onOpenSettings = onOpenSettings,
+        onToggleHidden = { type -> scope.launch { preferences.toggleHidden(type) } },
+        onShowAllTypes = { scope.launch { preferences.showAllTypes() } },
         onToggleStar = { id -> changed { preferences.toggleStar(id) } },
         onToggleReminderType = { type -> changed { preferences.toggleReminderType(type) } },
         onLeadMinutes = { minutes -> changed { preferences.setLeadMinutes(minutes) } },
@@ -103,6 +107,8 @@ fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
 fun EventsContent(
     state: EventsUiState,
     onRefresh: () -> Unit,
+    onToggleHidden: (String) -> Unit,
+    onShowAllTypes: () -> Unit,
     onToggleStar: (String) -> Unit,
     onToggleReminderType: (String) -> Unit,
     onLeadMinutes: (Int) -> Unit,
@@ -117,6 +123,8 @@ fun EventsContent(
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
+    var typesOpen by remember { mutableStateOf(false) }
+    val hiddenTypeCount = types.count { it in state.settings.hiddenTypes }
     var view by rememberSaveable { mutableStateOf(EventView.ALL) }
     val starred = state.settings.starredIds
     fun List<GameEvent>.inView() = if (view == EventView.STARRED) filter { it.id in starred } else this
@@ -129,6 +137,20 @@ fun EventsContent(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
+                    if (types.isNotEmpty()) {
+                        IconButton(onClick = { typesOpen = true }, modifier = Modifier.testTag("events_filter")) {
+                            BadgedBox(badge = { if (hiddenTypeCount > 0) Badge() }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_filter),
+                                    contentDescription = if (hiddenTypeCount == 0) {
+                                        "Filter event types"
+                                    } else {
+                                        "Filter event types, $hiddenTypeCount hidden"
+                                    }
+                                )
+                            }
+                        }
+                    }
                     if (onOpenSettings != null) {
                         IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
                             Icon(Icons.Outlined.Settings, contentDescription = "Settings")
@@ -136,7 +158,7 @@ fun EventsContent(
                     }
                 }
             }
-            // One row of quick views. Event types no longer have a picker on this screen.
+            // One row of quick views; which event types show is the filter button above.
             item {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -177,6 +199,24 @@ fun EventsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+            }
+        }
+    }
+    if (typesOpen) ModalBottomSheet(onDismissRequest = { typesOpen = false }) {
+        Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Event types", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = onShowAllTypes, enabled = hiddenTypeCount > 0, modifier = Modifier.testTag("events_types_all")) {
+                    Text("Show all")
+                }
+            }
+            Text("Untick a type to hide it from the list.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                types.forEach { type ->
+                    FilterChip(selected = type !in state.settings.hiddenTypes, onClick = { onToggleHidden(type) },
+                        label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_type_$type"))
+                }
             }
         }
     }

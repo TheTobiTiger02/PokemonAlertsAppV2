@@ -72,13 +72,22 @@ class GameEventsTest {
             // 23:30 UTC is already the next day in Berlin.
             event("late", "event", "2026-09-23T22:30:00Z", "2026-09-24T02:00:00Z"),
         )
-        val sections = groupEvents(events, now, DEFAULT_HIDDEN_EVENT_TYPES, berlin)
+        val sections = groupEvents(events, now, setOf("go-battle-league"), berlin)
         assertEquals(listOf("raids", "season"), sections.now.map { it.id })
         assertEquals(
             listOf(LocalDate.of(2026, 9, 17) to listOf("spotlight"), LocalDate.of(2026, 9, 23) to listOf("raid-hour"), LocalDate.of(2026, 9, 24) to listOf("late")),
             sections.upcoming.map { (day, list) -> day to list.map { it.id } },
         )
         assertTrue(groupEvents(events, now, emptySet(), berlin).now.any { it.id == "gbl" })
+    }
+
+    @Test fun `every event type shows by default`() {
+        val events = listOf(
+            event("gbl", "go-battle-league", "2026-09-15T20:00:00Z", "2026-09-22T20:00:00Z", localTime = false),
+            event("wild", "wild-area", "2026-09-15T20:00:00Z", "2026-09-22T20:00:00Z", localTime = false),
+        )
+        assertTrue(DEFAULT_HIDDEN_EVENT_TYPES.isEmpty())
+        assertEquals(setOf("gbl", "wild"), groupEvents(events, now, DEFAULT_HIDDEN_EVENT_TYPES, berlin).now.map { it.id }.toSet())
     }
 
     @Test fun `labels read naturally`() {
