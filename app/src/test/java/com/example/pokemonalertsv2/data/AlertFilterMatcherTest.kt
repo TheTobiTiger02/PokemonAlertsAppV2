@@ -277,6 +277,48 @@ class AlertFilterMatcherTest {
         assertTrue(decoded.definition.maxDistanceMeters == 4_000)
     }
 
+    @Test
+    fun inRangeAlertsBypassDistanceLimitAndWalkingDuration() {
+        val raidAlert = alert(type = listOf("Raid"), pokemon = "Rayquaza")
+        val spawnAlert = alert(type = listOf("Spawn"), pokemon = "Dratini")
+        val definition = FilterDefinition(
+            maxDistanceMeters = 100,
+            maxWalkingMinutes = 2
+        )
+
+        // Raid: 300m walking distance, 4 min walk (exceeds both limits), but direct distance is 75m (<= 80m gym radius)
+        val inRangeRaidContext = FilterMatchContext(
+            effectiveDistanceMeters = 300f,
+            walkingDurationSeconds = 240L,
+            directDistanceMeters = 75f
+        )
+        assertTrue(AlertFilterMatcher.matches(raidAlert, definition, inRangeRaidContext))
+
+        // Raid: 300m walking distance, but direct distance is 85m (> 80m gym radius) -> fails distance limit
+        val outOfRangeRaidContext = FilterMatchContext(
+            effectiveDistanceMeters = 300f,
+            walkingDurationSeconds = 240L,
+            directDistanceMeters = 85f
+        )
+        assertFalse(AlertFilterMatcher.matches(raidAlert, definition, outOfRangeRaidContext))
+
+        // Spawn: 200m walking distance, but direct distance is 35m (<= 40m spawn radius) -> passes
+        val inRangeSpawnContext = FilterMatchContext(
+            effectiveDistanceMeters = 200f,
+            walkingDurationSeconds = 180L,
+            directDistanceMeters = 35f
+        )
+        assertTrue(AlertFilterMatcher.matches(spawnAlert, definition, inRangeSpawnContext))
+
+        // Spawn: 200m walking distance, but direct distance is 45m (> 40m spawn radius) -> fails
+        val outOfRangeSpawnContext = FilterMatchContext(
+            effectiveDistanceMeters = 200f,
+            walkingDurationSeconds = 180L,
+            directDistanceMeters = 45f
+        )
+        assertFalse(AlertFilterMatcher.matches(spawnAlert, definition, outOfRangeSpawnContext))
+    }
+
     private fun alert(
         type: List<String> = listOf("Spawn"),
         pokemon: String? = "Pikachu",

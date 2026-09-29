@@ -25,6 +25,7 @@ import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterStateDocument
 import com.example.pokemonalertsv2.data.FilterSurface
 import com.example.pokemonalertsv2.data.SortPreference
+import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
@@ -173,6 +174,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 }
             }
             val display = WalkingRouteUtils.buildRouteDisplayInfo(straightLine, routes[alert.uniqueId])
+            val isInRange = alert.isDirectlyInRange(display.straightLineDistanceMeters)
             AlertUiModel(
                 alert = alert,
                 distanceInfo = AlertDistanceInfo(
@@ -182,7 +184,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                     straightLineDistanceMeters = display.straightLineDistanceMeters,
                     routedWalkingDistanceMeters = display.routedDistanceMeters,
                     walkingDurationSeconds = display.walkingDurationSeconds,
-                    source = display.source
+                    source = display.source,
+                    isInRange = isInRange
                 ),
                 endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime),
                 typeKeys = alert.typeKeys()
