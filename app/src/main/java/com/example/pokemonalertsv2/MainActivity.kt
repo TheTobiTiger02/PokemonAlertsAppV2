@@ -404,7 +404,10 @@ class MainActivity : ComponentActivity() {
         // Re-prepare the URI after process recreation; preparation is read-only and the
         // candidate remains uncommitted until the user confirms it.
         lastExternalCsvUri = null
-        handleNavigationIntent(intent)
+        // On recreation (theme, font size, rotation, process restore) the launch intent is
+        // the same one already handled, and re-applying its tab or deep link would yank the
+        // user off the screen they had navigated to since. Only the CSV import re-prepares.
+        if (savedInstanceState == null) handleNavigationIntent(intent) else handleExternalCsvIntent(intent)
 
         lifecycleScope.launch(Dispatchers.IO) {
             PokemonSpeciesRepository.getInstance(applicationContext).syncIfNeeded()
