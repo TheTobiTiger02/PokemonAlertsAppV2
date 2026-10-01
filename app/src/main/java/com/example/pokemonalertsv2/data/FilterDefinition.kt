@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -479,8 +480,16 @@ object AlertFilterMatcher {
 
             if (!isInRange) {
                 if (definition.maxWalkingMinutes > 0) {
+                    val limitSeconds = definition.maxWalkingMinutes * 60L
                     val walkingSeconds = context.walkingDurationSeconds
-                    if (walkingSeconds != null && walkingSeconds > definition.maxWalkingMinutes * 60L) return@any false
+                    if (walkingSeconds != null && walkingSeconds > limitSeconds) return@any false
+                    // Without a route the alert is normally kept, but the straight line is a lower
+                    // bound on any walk: an alert too far even as the crow flies (often one beyond
+                    // the routed radius, so never routed) cannot be reachable, outage or not.
+                    val direct = context.directDistanceMeters
+                    if (walkingSeconds == null && direct != null && direct.isFinite() &&
+                        direct / WalkingRouteUtils.AVERAGE_WALKING_SPEED_MPS > limitSeconds
+                    ) return@any false
                 }
                 if (!withinDistance(type, alert, definition, context)) return@any false
             }

@@ -100,6 +100,26 @@ class AlertFilterMatcherTest {
     }
 
     @Test
+    fun walkingLimitDropsUnroutedAlertsTooFarAsTheCrowFlies() {
+        val tenMinutes = FilterDefinition(maxWalkingMinutes = 10)
+        // 10 min at 1.36 m/s is 816 m; 15 km can never be reached, route or not.
+        assertFalse(
+            AlertFilterMatcher.matches(alert(), tenMinutes, FilterMatchContext(directDistanceMeters = 15_000f))
+        )
+        // Close enough that it might be reachable: without a route it is kept, as before.
+        assertTrue(
+            AlertFilterMatcher.matches(alert(), tenMinutes, FilterMatchContext(directDistanceMeters = 600f))
+        )
+        // A real route still decides when there is one.
+        assertFalse(
+            AlertFilterMatcher.matches(
+                alert(), tenMinutes,
+                FilterMatchContext(directDistanceMeters = 600f, walkingDurationSeconds = 900L)
+            )
+        )
+    }
+
+    @Test
     fun cityAreaIncludesItsZonesButZoneExcludesBareCityLabel() {
         val city = FilterDefinition(areas = FilterSelection.only(listOf("Darmstadt")))
         assertTrue(AlertFilterMatcher.matches(alert(area = "Darmstadt"), city))
