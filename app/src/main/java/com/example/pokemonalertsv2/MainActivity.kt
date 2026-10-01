@@ -1056,6 +1056,7 @@ private fun MainScaffold(
                                         onDateChanged = historyViewModel::setDateFilter,
                                         onTypeChanged = historyViewModel::setTypeFilter,
                                         onSearchChanged = historyViewModel::setSearchQuery,
+                                        onAreaChanged = historyViewModel::setAreaFilter,
                                         onOpenInsights = { changeSection(AlertsSection.INSIGHTS) }
                                     )
                                 },

@@ -31,6 +31,14 @@ data class HistoryUiState(
     val selectedType: String? = null,
     /** Current server-side text search. Blank = no search. */
     val searchQuery: String = "",
+    /** Area filter sent to the server ("Darmstadt" also covers its zones); null = every area. */
+    val selectedArea: String? = null,
+    /**
+     * The area the server says it applied to [totalServerCount]. Null from a server that
+     * predates the filter, in which case the count spans every area and must not be shown
+     * as an area total.
+     */
+    val appliedArea: String? = null,
     /** Stats from /api/stats/total, scoped by [totalStatsDate] when it is not null. */
     val totalStats: TotalStatsResponse? = null,
     /** Date used to load [totalStats]; null means all time. */
@@ -112,6 +120,13 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
         refreshHistory()
     }
 
+    /** Sets (or clears) the server-side area filter and refreshes when it changed. */
+    fun setAreaFilter(area: String?) {
+        if (_uiState.value.selectedArea == area) return
+        _uiState.update { it.copy(selectedArea = area) }
+        refreshHistory()
+    }
+
     /**
      * Updates the server-side text search query. The visible query updates
      * immediately, while the refresh is debounced to avoid one request per key.
@@ -144,7 +159,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
             Log.d(TAG, "Refreshing history… date=$date, type=$type")
             val query = state.searchQuery.trim().takeIf { it.isNotEmpty() }
             runCatching {
-                repository.refreshHistory(PAGE_SIZE, date = date, type = type, q = query)
+                repository.refreshHistory(PAGE_SIZE, date = date, type = type, q = query, area = state.selectedArea)
             }.onSuccess { response ->
                 val total = response.total ?: response.data.size
                 val progress = historyPageProgress(response, requestedOffset = 0, total = total)
@@ -155,6 +170,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
                         isLoading = false,
                         errorMessage = null,
                         totalServerCount = total,
+                        appliedArea = response.area,
                         canLoadMore = progress.canLoadMore
                     )
                 }
@@ -191,7 +207,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
             Log.d(TAG, "Loading more – offset=$requestedOffset, date=$date, type=$type")
             val query = state.searchQuery.trim().takeIf { it.isNotEmpty() }
             runCatching {
-                repository.fetchHistoryPage(PAGE_SIZE, requestedOffset, date = date, type = type, q = query)
+                repository.fetchHistoryPage(PAGE_SIZE, requestedOffset, date = date, type = type, q = query, area = state.selectedArea)
             }.onSuccess { response ->
                 val total = response.total ?: _uiState.value.totalServerCount
                 val progress = historyPageProgress(response, requestedOffset, total)

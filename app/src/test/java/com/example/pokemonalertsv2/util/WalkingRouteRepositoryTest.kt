@@ -400,7 +400,8 @@ class WalkingRouteRepositoryTest {
             date: String?,
             startDate: String?,
             endDate: String?,
-            q: String?
+            q: String?,
+            area: String?
         ): HistoryResponse = HistoryResponse()
 
         override suspend fun getSpawnActivityDays(days: Int, area: String?) =

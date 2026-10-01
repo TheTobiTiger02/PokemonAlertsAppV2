@@ -176,14 +176,16 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         pageSize: Int,
         date: String? = null,
         type: String? = null,
-        q: String? = null
+        q: String? = null,
+        area: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = pageSize,
             offset = 0,
             date = date,
             type = type,
-            q = normalizedHistoryQuery(q)
+            q = normalizedHistoryQuery(q),
+            area = area
         )
         historyAlertDao.replaceAll(response.data.map { it.toHistoryEntity() })
         return response
@@ -198,14 +200,16 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         offset: Int,
         date: String? = null,
         type: String? = null,
-        q: String? = null
+        q: String? = null,
+        area: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = limit,
             offset = offset,
             date = date,
             type = type,
-            q = normalizedHistoryQuery(q)
+            q = normalizedHistoryQuery(q),
+            area = area
         )
         historyAlertDao.insertAll(response.data.map { it.toHistoryEntity() })
         return response

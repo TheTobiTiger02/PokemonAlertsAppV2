@@ -704,7 +704,8 @@ class PokemonAlertsRepositoryTest {
             date: String?,
             startDate: String?,
             endDate: String?,
-            q: String?
+            q: String?,
+            area: String?
         ): HistoryResponse {
             pagedHistoryRequests += HistoryPagedRequest(limit, offset, type, date, startDate, endDate, q)
             return historyResponse
