@@ -83,11 +83,11 @@ internal fun FiltersHubContent(
 @Composable
 private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignment, definition: FilterDefinition, matchCount: Int, profileName: String?, onClick: () -> Unit) {
     val typeSummary = when (definition.alertTypes.mode) {
-        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> "${definition.alertTypes.selectedCount} alert types"
+        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) "1 alert type" else "$it alert types" }
     }
     val location = buildList {
         if (definition.areas.mode == FilterSelectionMode.NONE) add("No areas")
-        if (definition.areas.mode == FilterSelectionMode.ONLY) add("${definition.areas.selectedCount} areas")
+        if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) "1 area" else "$it areas" })
         if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
         definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 distance override" else "$it distance overrides") }
         if (definition.maxWalkingMinutes > 0) add("${definition.maxWalkingMinutes} min walk")

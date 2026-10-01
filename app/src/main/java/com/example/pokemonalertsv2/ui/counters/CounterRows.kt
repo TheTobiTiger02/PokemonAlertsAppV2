@@ -138,7 +138,7 @@ internal fun TeamSection(
                 if (activeMegaId == null) {
                     Text(
                         text = "No mega active, so none is suggested. " +
-                            "Set yours in Battle setup.",
+                            "Pick yours under Active mega.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
