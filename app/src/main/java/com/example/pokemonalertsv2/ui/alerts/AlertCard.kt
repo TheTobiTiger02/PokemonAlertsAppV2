@@ -488,34 +488,9 @@ internal fun AlertSecondaryActionsMenu(
             onDismissRequest = { expanded = false }
         ) {
             actions.forEach { action ->
-                val label = when (action) {
-                    AlertSecondaryAction.SNOOZE -> "Snooze"
-                    AlertSecondaryAction.PICTURE_IN_PICTURE -> "Open in picture-in-picture"
-                    AlertSecondaryAction.SHARE -> "Share"
-                    AlertSecondaryAction.DISMISS -> "Dismiss"
-                    AlertSecondaryAction.RESTORE -> "Restore"
-                }
                 DropdownMenuItem(
-                    text = { Text(label) },
-                    leadingIcon = {
-                        when (action) {
-                            AlertSecondaryAction.SNOOZE -> {
-                                Icon(Icons.Filled.Notifications, contentDescription = null)
-                            }
-                            AlertSecondaryAction.PICTURE_IN_PICTURE -> {
-                                Icon(painterResource(R.drawable.ic_pip), contentDescription = null)
-                            }
-                            AlertSecondaryAction.SHARE -> {
-                                Icon(Icons.Filled.Share, contentDescription = null)
-                            }
-                            AlertSecondaryAction.DISMISS -> {
-                                Icon(Icons.Filled.Close, contentDescription = null)
-                            }
-                            AlertSecondaryAction.RESTORE -> {
-                                Icon(Icons.Filled.Refresh, contentDescription = null)
-                            }
-                        }
-                    },
+                    text = { Text(action.menuLabel) },
+                    leadingIcon = { AlertSecondaryActionIcon(action) },
                     onClick = {
                         expanded = false
                         onAction(action)
