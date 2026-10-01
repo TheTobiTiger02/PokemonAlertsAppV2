@@ -701,7 +701,11 @@ internal fun SyncStatusBanner(
                 ) {
                     Text(animatedMessage, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                     if (animatedProblem) {
-                        TextButton(onClick = onRetry) { Text("Retry") }
+                        // The default primary label was light blue on the dark-theme error red.
+                        TextButton(
+                            onClick = onRetry,
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        ) { Text("Retry", fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
