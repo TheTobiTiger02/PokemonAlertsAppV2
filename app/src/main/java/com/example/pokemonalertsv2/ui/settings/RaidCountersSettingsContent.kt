@@ -223,9 +223,6 @@ fun RaidCountersSettingsContent(
                     if (candidate.summary.skippedCount > 0) {
                         Text("${candidate.summary.skippedCount} rows will be skipped.")
                     }
-                    if (candidate.summary.ignoredColumnCount > 0) {
-                        Text("${candidate.summary.ignoredColumnCount} columns are not used.")
-                    }
                     // Named, not just counted: an unrecognised form is almost always a
                     // spelling this app has not learned yet, and the pair is what makes it
                     // reportable.
@@ -269,7 +266,9 @@ fun RaidCountersSettingsContent(
                 }
             },
             confirmButton = {
-                Button(onClick = onConfirmImport) { Text("Replace roster") }
+                Button(onClick = onConfirmImport) {
+                    Text(if (settings.pokeGenieCount > 0) "Replace roster" else "Import")
+                }
             },
             dismissButton = {
                 TextButton(onClick = onCancelImport) { Text("Cancel") }
