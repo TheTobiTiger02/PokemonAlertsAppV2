@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
+import com.example.pokemonalertsv2.data.speciesArtwork
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterAlertType
@@ -389,7 +390,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     val filterArtwork: StateFlow<Map<String, String>> =
         PokemonSpeciesRepository.getInstance(application).searchSpecies("")
-            .map { species -> species.associate { normalizeFilterToken(it.name) to it.imageUrl } }
+            .map(::speciesArtwork)
             .flowOn(Dispatchers.Default)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 

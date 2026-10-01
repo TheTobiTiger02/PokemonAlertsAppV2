@@ -127,7 +127,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val document by viewModel.filterStateDocument.collectAsStateWithLifecycle()
     val catalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
     val species by viewModel.filterSpecies.collectAsStateWithLifecycle()
-    val artwork = remember(species) { species.associate { normalizeFilterToken(it.name) to it.imageUrl } }
+    val artwork = remember(species) { speciesArtwork(species) }
     val alerts by viewModel.filterableAlerts.collectAsStateWithLifecycle()
     val rewardThumbnails by viewModel.questRewardThumbnails.collectAsStateWithLifecycle()
     val contexts by viewModel.filterPreviewContexts.collectAsStateWithLifecycle()
