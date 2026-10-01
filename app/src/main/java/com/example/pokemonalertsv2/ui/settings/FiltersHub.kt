@@ -253,7 +253,22 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text("All") })
             FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
-            (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
+            (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area ->
+                val only = definition.areas.mode == FilterSelectionMode.ONLY
+                val picked = only && definition.areas.contains(area)
+                // A zone is already covered when its city is picked ("Darmstadt" includes
+                // "Darmstadt-North"), so it shows as included and cannot be toggled on its own.
+                val impliedByCity = only && !picked && AlertFilterMatcher.matchesArea(definition.areas, area)
+                FilterChip(
+                    selected = picked || impliedByCity,
+                    enabled = !impliedByCity,
+                    onClick = { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) },
+                    label = { Text(area) },
+                    leadingIcon = if (picked || impliedByCity) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
+                )
+            }
         }
         Text("Distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
         com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
