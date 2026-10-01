@@ -85,8 +85,13 @@ fun EventDetailScreen(
                     }
                     item(key = "reminder") {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes)
-                                "You'll be reminded ${state.settings.leadMinutes} min before" else "No reminder",
+                            val reminded = event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes
+                            // Reminders only fire before the start (eventsToRemind), so a running event gets none.
+                            Text(when {
+                                    !reminded -> "No reminder"
+                                    event.startMillis <= System.currentTimeMillis() -> "Already started, so no reminder"
+                                    else -> "You'll be reminded ${state.settings.leadMinutes} min before it starts"
+                                },
                                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                             StarButton(event, state.settings, onToggleStar)
                         }
