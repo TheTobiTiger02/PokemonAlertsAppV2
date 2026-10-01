@@ -895,7 +895,7 @@ internal fun QuietHoursCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Hold notifications every night between these times",
+                        text = "Mute alert notifications between these times every day",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
