@@ -100,6 +100,20 @@ class AlertFilterMatcherTest {
     }
 
     @Test
+    fun cityAreaIncludesItsZonesButZoneExcludesBareCityLabel() {
+        val city = FilterDefinition(areas = FilterSelection.only(listOf("Darmstadt")))
+        assertTrue(AlertFilterMatcher.matches(alert(area = "Darmstadt"), city))
+        assertTrue(AlertFilterMatcher.matches(alert(area = "Darmstadt-North"), city))
+        assertTrue(AlertFilterMatcher.matches(alert(area = "Darmstadt-South"), city))
+        assertFalse(AlertFilterMatcher.matches(alert(area = "Alsbach"), city))
+
+        val zone = FilterDefinition(areas = FilterSelection.only(listOf("Darmstadt-North")))
+        assertTrue(AlertFilterMatcher.matches(alert(area = "Darmstadt-North"), zone))
+        assertFalse(AlertFilterMatcher.matches(alert(area = "Darmstadt"), zone))
+        assertFalse(AlertFilterMatcher.matches(alert(area = "Darmstadt-South"), zone))
+    }
+
+    @Test
     fun subKilometerLimitsMatchAtHundredMeterPrecision() {
         val definition = FilterDefinition(maxDistanceMeters = 500)
         assertTrue(AlertFilterMatcher.matches(alert(), definition, FilterMatchContext(effectiveDistanceMeters = 500f)))

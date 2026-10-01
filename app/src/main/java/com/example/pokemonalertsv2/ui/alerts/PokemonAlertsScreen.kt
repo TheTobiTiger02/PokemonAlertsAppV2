@@ -174,6 +174,7 @@ import androidx.compose.material3.InputChip
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
@@ -375,10 +376,8 @@ internal enum class HistoryAreaFilter(val label: String, val area: String?) {
     ALSBACH("Alsbach", "Alsbach"),
     DARMSTADT("Darmstadt", "Darmstadt");
 
-    fun includes(alert: PokemonAlert): Boolean {
-        val alertArea = alert.area?.trim()
-        return area == null || alertArea.equals(area, ignoreCase = true)
-    }
+    fun includes(alert: PokemonAlert): Boolean =
+        area == null || AlertFilterMatcher.matchesArea(FilterSelection.only(listOf(area)), alert.area)
 }
 
 internal enum class FeedContentState { LOADING, EMPTY, CONTENT }

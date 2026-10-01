@@ -447,12 +447,24 @@ data class FilterMatchContext(
 )
 
 object AlertFilterMatcher {
+    /**
+     * A weather zone such as "Darmstadt-North" rolls up into its group "Darmstadt", the same way
+     * the backend publishes a zone alert to the group's push topic too. Picking the city must not
+     * hide most of its alerts. The roll-up runs zone to group only: an older alert labelled with
+     * the bare group never lands in a zone selection, because it may belong to the other zone.
+     */
+    internal fun matchesArea(areas: FilterSelection, area: String?): Boolean {
+        if (areas.contains(area)) return true
+        val group = area?.substringBefore('-', missingDelimiterValue = "")?.trim().orEmpty()
+        return group.isNotEmpty() && areas.contains(group)
+    }
+
     fun matches(
         alert: PokemonAlert,
         definition: FilterDefinition,
         context: FilterMatchContext = FilterMatchContext()
     ): Boolean {
-        if (!definition.areas.contains(alert.area)) return false
+        if (!matchesArea(definition.areas, alert.area)) return false
 
         // The distance limit is resolved per matched type: one alert can be several types at once
         // (a 100% spawn is both SPAWN and HUNDO) and each may carry a different override.
