@@ -127,6 +127,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -917,12 +918,16 @@ internal fun HistoryTypeFilterRow(
             }
     ) {
         items(AlertFilter.entries, key = { it.name }) { filter ->
-            val chipAccent = Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
+            // "All" has no alert category; its fallback accent is a neutral grey that made the
+            // selected chip read as disabled.
+            val chipAccent = if (filter == AlertFilter.ALL) MaterialTheme.colorScheme.primary
+                else Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
             ElevatedAssistChip(
                 onClick = { onFilterChanged(filter) },
                 label = { Text(text = filter.label) },
                 colors = AssistChipDefaults.elevatedAssistChipColors(
-                    containerColor = if (selectedFilter == filter) chipAccent.copy(alpha = 0.24f) else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
+                    // Opaque: a translucent fill on an elevated chip lets its shadow show through as a grey box.
+                    containerColor = if (selectedFilter == filter) chipAccent.copy(alpha = 0.24f).compositeOver(MaterialTheme.colorScheme.surface) else MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp),
                     labelColor = if (selectedFilter == filter) chipAccent else MaterialTheme.colorScheme.onSurface
                 ),
                 border = BorderStroke(
