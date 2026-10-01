@@ -53,9 +53,17 @@ class GoDexCollectionContentTest {
 
     @Test
     fun compactGridVariantLabelsPreserveExactFormAndGenderIdentity() {
-        assertEquals("alola \u2022 female", goDexEntryVariantLabel(entries[1]))
-        assertEquals("hisui", goDexEntryVariantLabel(entries[2]))
+        // The name already says Alolan / Hisuian, so the form is not repeated underneath.
+        assertEquals("Female", goDexEntryVariantLabel(entries[1]))
+        assertEquals("", goDexEntryVariantLabel(entries[2]))
+        assertEquals("Alternate form", goDexEntryVariantLine(entries[2]))
         assertEquals("", goDexEntryVariantLabel(entries[0]))
+        assertEquals("Base form", goDexEntryVariantLine(entries[0]))
+        // A form the name does not state is shown, title-cased.
+        assertEquals(
+            "Rapid Strike",
+            goDexEntryVariantLabel(entry("0892_rapid_strike-none", 892, "rapid_strike", "none", "Urshifu", needed = true))
+        )
     }
 
     @Test

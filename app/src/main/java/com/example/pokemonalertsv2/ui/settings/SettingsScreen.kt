@@ -775,6 +775,13 @@ internal fun SettingsScreen(
                         ) {
                             Text("Disconnect GoDex")
                         }
+                        // Two similar actions sat side by side with nothing to tell them apart.
+                        Text(
+                            "Sign out stops syncing changes back but keeps your checklist here. " +
+                                "Disconnect removes the checklist from this app.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                 }
