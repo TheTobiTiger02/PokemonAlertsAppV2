@@ -82,7 +82,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 78
-        versionName = "1.16.0"
+        versionName = "1.16.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)

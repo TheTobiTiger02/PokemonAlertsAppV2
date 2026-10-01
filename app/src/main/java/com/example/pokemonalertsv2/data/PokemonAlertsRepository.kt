@@ -10,7 +10,11 @@ import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.data.insights.InsightsHistory
+import com.example.pokemonalertsv2.data.insights.SpawnActivity
+import com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -210,6 +214,17 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
      * — a month of quests is tens of thousands of rows — and a cap the caller can
      * see beats an unbounded response it cannot.
      */
+    /** The Spawns insights tab: daily active spawnpoints and species counts, fetched in parallel. */
+    suspend fun fetchSpawnActivity(days: Int, area: String?): SpawnActivity = coroutineScope {
+        val activity = async { service.getSpawnActivityDays(days = days, area = area) }
+        val species = async { service.getSpawnSpecies(days = days, area = area) }
+        SpawnActivity(days = activity.await(), species = species.await())
+    }
+
+    /** Species for one day and/or matching a search; either may be null, not both. */
+    suspend fun searchSpawnSpecies(days: Int, area: String?, query: String?, day: String?): SpawnSpeciesResponse =
+        service.getSpawnSpecies(days = days, area = area, q = query, day = day)
+
     suspend fun fetchInsightsHistory(
         startDate: String,
         endDate: String,

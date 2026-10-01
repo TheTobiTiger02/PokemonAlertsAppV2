@@ -277,6 +277,24 @@ interface PokemonAlertsService {
         @Query("date") date: String? = null
     ): TotalStatsResponse
 
+    /** Active spawnpoints per Berlin day, with unexplained surges; the server caches it for five minutes. */
+    @GET("api/spawnpoints/activity-days")
+    suspend fun getSpawnActivityDays(
+        @Query("days") days: Int,
+        @Query("area") area: String? = null
+    ): com.example.pokemonalertsv2.data.insights.SpawnActivityDaysResponse
+
+    /** Wild sightings per species over the same days; kept 30 days on the server. */
+    @GET("api/spawnpoints/species")
+    suspend fun getSpawnSpecies(
+        @Query("days") days: Int,
+        @Query("area") area: String? = null,
+        /** Part of a name or a Pokédex number; matches come with their rank and per-day counts. */
+        @Query("q") q: String? = null,
+        /** One Berlin day (yyyy-MM-dd) of the last 30 in place of the range. */
+        @Query("day") day: String? = null
+    ): com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
+
     @POST("api/routes/walking")
     suspend fun getWalkingRoutes(
         @Body request: WalkingRouteRequest

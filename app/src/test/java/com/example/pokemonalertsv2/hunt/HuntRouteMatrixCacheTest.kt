@@ -314,6 +314,12 @@ class HuntRouteMatrixCacheTest {
             q: String?
         ): HistoryResponse = HistoryResponse()
 
+        override suspend fun getSpawnActivityDays(days: Int, area: String?) =
+            com.example.pokemonalertsv2.data.insights.SpawnActivityDaysResponse()
+
+        override suspend fun getSpawnSpecies(days: Int, area: String?, q: String?, day: String?) =
+            com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse()
+
         override suspend fun getTotalStats(date: String?): TotalStatsResponse = TotalStatsResponse()
 
         override suspend fun getWalkingRoutes(request: WalkingRouteRequest): WalkingRoutesResponse =

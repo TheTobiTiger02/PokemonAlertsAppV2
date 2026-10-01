@@ -1071,7 +1071,13 @@ private fun MainScaffold(
                                         onQueryChange = insightsViewModel::setQuery,
                                         onRangeChange = insightsViewModel::setRange,
                                         onRun = insightsViewModel::run,
-                                        suggestions = suggestions
+                                        suggestions = suggestions,
+                                        onTabChange = insightsViewModel::setTab,
+                                        onSpawnRangeChange = insightsViewModel::setSpawnRange,
+                                        onSpawnAreaChange = insightsViewModel::setSpawnArea,
+                                        onSpawnRetry = insightsViewModel::loadSpawns,
+                                        onSpawnSearchChange = insightsViewModel::setSpawnSearch,
+                                        onSpawnDayChange = insightsViewModel::setSpawnDay
                                     )
                                 }
                             )
