@@ -335,7 +335,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
     val display = remember(normalizedCandidates, current.normalizedValues, queryKey, isSpecies, sortOrder, artwork) {
         normalizedCandidates
             .filter { (key, _) ->
-                key.contains(queryKey) || (isSpecies && extractDex(key).toString().contains(queryKey))
+                key.contains(queryKey) || (isSpecies && extractDex(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) })
             }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in current.normalizedValues }

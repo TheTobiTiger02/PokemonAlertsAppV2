@@ -75,7 +75,6 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.NUNDO
 )
 
-private val DISTANCE_PRESETS = listOf(0, 500, 1_000, 3_000, 5_000, 10_000, 25_000) // meters
 
 /**
  * Section ids, kept as bits of one Int so several sections can be open at once and the set
@@ -1013,19 +1012,6 @@ private fun DistanceSection(
                 meters = definition.maxDistanceMeters,
                 onChange = { onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-            ) {
-                DISTANCE_PRESETS.forEach { meters ->
-                    FilterChip(
-                        selected = definition.maxDistanceMeters == meters,
-                        onClick = { onDefinitionChange(definition.copy(maxDistanceMeters = meters)) },
-                        label = { Text(distanceLabel(meters)) },
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                }
-            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -1137,7 +1123,7 @@ internal fun SpeciesPickerSheet(
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
     val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, artwork) {
         normalizedCandidates
-            .filter { (key, _) -> key.contains(queryKey) || extractDex(key).toString().contains(queryKey) }
+            .filter { (key, _) -> key.contains(queryKey) || extractDex(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
                     .thenComparing { (key, _) ->
