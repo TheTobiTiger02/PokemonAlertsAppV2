@@ -193,6 +193,7 @@ internal fun AlertCard(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
@@ -290,6 +291,7 @@ internal fun AlertCard(
                             countdownClock = countdownClock,
                             snoozeEnabled = snoozeEnabled,
                             hasGoingAction = onGoingClick != null,
+                            isDismissed = isDismissed,
                             onAction = onSecondaryAction
                         )
                     }
@@ -451,13 +453,15 @@ internal fun AlertActionsOverflow(
     countdownClock: State<Long>,
     snoozeEnabled: Boolean,
     hasGoingAction: Boolean,
+    isDismissed: Boolean = false,
     onAction: (AlertSecondaryAction) -> Unit
 ) {
     val policy = alertActionPolicy(
         context = context,
         isExpired = TimeUtils.parseEndTimeToMillis(endTime)?.let { it <= countdownClock.value } ?: false,
         snoozeEnabled = snoozeEnabled,
-        hasGoingAction = hasGoingAction
+        hasGoingAction = hasGoingAction,
+        isDismissed = isDismissed
     )
     AlertSecondaryActionsMenu(
         actions = policy.overflowActions,

@@ -74,6 +74,7 @@ internal fun CompactAlertCard(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
@@ -87,7 +88,8 @@ internal fun CompactAlertCard(
         context = cardContext,
         isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
-        hasGoingAction = onGoingClick != null
+        hasGoingAction = onGoingClick != null,
+        isDismissed = isDismissed
     )
     val lateWarning = TravelTime.expiresBeforeArrival(
         walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
@@ -319,6 +321,7 @@ internal fun AlertListItem(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     when (style) {
@@ -326,13 +329,15 @@ internal fun AlertListItem(
             alert = alert, distanceInfo = distanceInfo, goDexStatus = goDexStatus,
             onOpenMaps = onOpenMaps, onShowDetails = onShowDetails, onSecondaryAction = onSecondaryAction,
             cardContext = cardContext, isGoing = isGoing, huntTarget = huntTarget,
-            onGoingClick = onGoingClick, countdownClock = countdownClock, modifier = modifier
+            onGoingClick = onGoingClick, countdownClock = countdownClock, isDismissed = isDismissed,
+            modifier = modifier
         )
         AlertCardStyle.LARGE -> AlertCard(
             alert = alert, distanceInfo = distanceInfo, goDexStatus = goDexStatus,
             onOpenMaps = onOpenMaps, onShowDetails = onShowDetails, onSecondaryAction = onSecondaryAction,
             cardContext = cardContext, isGoing = isGoing, huntTarget = huntTarget,
-            onGoingClick = onGoingClick, countdownClock = countdownClock, modifier = modifier
+            onGoingClick = onGoingClick, countdownClock = countdownClock, isDismissed = isDismissed,
+            modifier = modifier
         )
     }
 }

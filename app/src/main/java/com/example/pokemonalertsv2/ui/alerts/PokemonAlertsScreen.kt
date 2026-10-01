@@ -969,6 +969,7 @@ internal fun AlertsList(
                                 AlertSecondaryAction.RESTORE -> onRestoreClick(model.alert.uniqueId)
                             }
                         },
+                        isDismissed = isDismissed,
                         isGoing = arrivalTracking.isTracking(model.alert),
                         huntTarget = huntSession?.targetUniqueId == model.alert.uniqueId,
                         onGoingClick = if (model.alert.isEligibleArrivalDestination()) {
