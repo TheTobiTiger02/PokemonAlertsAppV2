@@ -335,8 +335,11 @@ class CatchRoutesActivity : ComponentActivity() {
                     OutlinedButton(onClick = onGoRoutes, modifier = Modifier.testTag("open_go_routes")) { Text(if (settings.sourceRouteId != null) "Change" else "Choose") }
                 }
                 if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AssistChip(onClick = { useLocation() }, label = { Text("Use my location") })
-                    FilterChip(selected = picking == "start", onClick = { onPicking("start") }, label = { Text("Pick start on map") })
+                    // Selected by where the start came from. The map-tap mode is on by default, so
+                    // keying "Pick start on map" off it lit that chip while the text said
+                    // "Start: Your location".
+                    FilterChip(selected = model.hasStart && model.startLabel == "Your location", onClick = { useLocation() }, label = { Text("Use my location") })
+                    FilterChip(selected = model.hasStart && model.startLabel == "Pinned on the map", onClick = { onPicking("start") }, label = { Text("Pick start on map") })
                 }
                 Text(if (model.hasStart) "Start: ${model.startLabel}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)

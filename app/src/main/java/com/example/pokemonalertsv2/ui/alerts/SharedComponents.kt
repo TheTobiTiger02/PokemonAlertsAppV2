@@ -271,7 +271,8 @@ internal fun alertActionPolicy(
     context: AlertCardContext,
     isExpired: Boolean,
     snoozeEnabled: Boolean,
-    hasGoingAction: Boolean
+    hasGoingAction: Boolean,
+    isDismissed: Boolean = false
 ): AlertActionPolicy {
     val isLiveAndActive = context == AlertCardContext.LIVE && !isExpired
     return AlertActionPolicy(
@@ -281,6 +282,11 @@ internal fun alertActionPolicy(
             if (isLiveAndActive && snoozeEnabled) add(AlertSecondaryAction.SNOOZE)
             if (!isExpired) add(AlertSecondaryAction.PICTURE_IN_PICTURE)
             add(AlertSecondaryAction.SHARE)
+            // Swiping is not the only way: a menu entry is the path for anyone who cannot or
+            // does not swipe, and it is what onboarding promises for a long press.
+            if (context == AlertCardContext.LIVE) {
+                add(if (isDismissed) AlertSecondaryAction.RESTORE else AlertSecondaryAction.DISMISS)
+            }
         }
     )
 }

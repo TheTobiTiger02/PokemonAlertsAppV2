@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
@@ -75,7 +77,6 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.NUNDO
 )
 
-private val DISTANCE_PRESETS = listOf(0, 500, 1_000, 3_000, 5_000, 10_000, 25_000) // meters
 
 /**
  * Section ids, kept as bits of one Int so several sections can be open at once and the set
@@ -271,10 +272,19 @@ private fun MapFilterSheetContent(
             categoryCounts = categoryCounts
         )
 
+        // Without an edge, the clipped bottoms of scrolled cards sat right under the weather
+        // line and read as part of the header.
+        val listState = rememberLazyListState()
+        HorizontalDivider(
+            modifier = Modifier.padding(top = Spacing.xs),
+            color = if (listState.canScrollBackward) MaterialTheme.colorScheme.outlineVariant else Color.Transparent
+        )
+
         // One scroller, and nothing scrollable inside it. The species grid used to live here as
         // a height-capped LazyVerticalGrid, which meant a drag starting over the grid could
         // never reach the panel; it has its own full-height sheet now.
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .weight(1f, fill = false)
                 .fillMaxWidth()
@@ -1013,19 +1023,6 @@ private fun DistanceSection(
                 meters = definition.maxDistanceMeters,
                 onChange = { onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
             )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-            ) {
-                DISTANCE_PRESETS.forEach { meters ->
-                    FilterChip(
-                        selected = definition.maxDistanceMeters == meters,
-                        onClick = { onDefinitionChange(definition.copy(maxDistanceMeters = meters)) },
-                        label = { Text(distanceLabel(meters)) },
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                }
-            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
@@ -1137,7 +1134,7 @@ internal fun SpeciesPickerSheet(
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
     val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, artwork) {
         normalizedCandidates
-            .filter { (key, _) -> key.contains(queryKey) || extractDex(key).toString().contains(queryKey) }
+            .filter { (key, _) -> key.contains(queryKey) || extractDex(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
                     .thenComparing { (key, _) ->

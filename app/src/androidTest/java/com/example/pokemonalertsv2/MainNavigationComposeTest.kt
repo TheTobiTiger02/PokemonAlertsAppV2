@@ -133,7 +133,9 @@ class MainNavigationComposeTest {
             composeRule.onNodeWithText(label).performScrollTo().assertIsDisplayed().assertHasClickAction()
         }
         composeRule.onNodeWithText("Theme").assertDoesNotExist()
-        composeRule.onNodeWithContentDescription("Back").assertDoesNotExist()
+        // Settings opens from a gear on top of the current tab, so its overview has a Back
+        // that returns there.
+        composeRule.onNodeWithContentDescription("Back").assertIsDisplayed().assertHasClickAction()
 
         composeRule.onNodeWithText("Filters").performScrollTo().performClick()
         composeRule.onNodeWithText("Filter Studio").assertIsDisplayed()
@@ -243,10 +245,12 @@ class MainNavigationComposeTest {
             composeRule.runOnIdle {
                 assertTrue(activity.handleExternalCsvIntent(confirmIntent))
             }
+            // "Import" when there is no roster yet, "Replace roster" when one would be overwritten.
+            val confirmLabel = if (originalSettings.pokeGenieCount > 0) "Replace roster" else "Import"
             composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-                composeRule.onAllNodesWithText("Replace roster").fetchSemanticsNodes().isNotEmpty()
+                composeRule.onAllNodesWithText(confirmLabel).fetchSemanticsNodes().isNotEmpty()
             }
-            composeRule.onNodeWithText("Replace roster").performClick()
+            composeRule.onNodeWithText(confirmLabel).performClick()
             composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
                 runBlocking { database.pokeGenieDao().count() } == 1
             }

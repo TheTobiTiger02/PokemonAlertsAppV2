@@ -179,6 +179,7 @@ internal fun AlertHistoryPage(
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
+    onAreaChanged: (String?) -> Unit = {},
     onAlertClick: (PokemonAlert) -> Unit,
     onOpenInsights: (() -> Unit)? = null
 ) {
@@ -186,6 +187,9 @@ internal fun AlertHistoryPage(
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var selectedAreaFilter by rememberSaveable { mutableStateOf(HistoryAreaFilter.BOTH) }
+    // The server filters by area so totals and paging cover all of history, not just loaded
+    // pages. The local filter below stays as a fallback for servers that ignore the parameter.
+    LaunchedEffect(selectedAreaFilter) { onAreaChanged(selectedAreaFilter.area) }
     var selectedDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortPreference by rememberSaveable { mutableStateOf(SortPreference.POSTED_TIME) }
     var showHistoryFilterSheet by rememberSaveable { mutableStateOf(false) }
@@ -323,6 +327,8 @@ internal fun AlertHistoryPage(
         val serverTotal = uiState.totalServerCount
         val byType = stats?.byType ?: emptyMap()
         val isAreaScoped = selectedAreaFilter != HistoryAreaFilter.BOTH
+        val serverCountsArea = isAreaScoped &&
+            uiState.appliedArea.equals(selectedAreaFilter.area, ignoreCase = true)
         val canUseServerStats = stats != null && !isAreaScoped && uiState.searchQuery.isBlank() && byType.isNotEmpty()
 
         fun emptyStatistics(total: Int, today: Int = 0) = mutableMapOf(
@@ -410,7 +416,7 @@ internal fun AlertHistoryPage(
             }
             else -> {
                 mapOf(
-                    "total" to if (!isAreaScoped && serverTotal > 0) serverTotal else filteredAlerts.size,
+                    "total" to if ((!isAreaScoped || serverCountsArea) && serverTotal > 0) serverTotal else filteredAlerts.size,
                     "today" to 0,
                     "raids" to raids,
                     "quests" to quests,

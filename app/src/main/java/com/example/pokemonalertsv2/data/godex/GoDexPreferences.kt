@@ -100,7 +100,7 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    private companion object {
+    internal companion object {
         val URL_KEY = stringPreferencesKey("godex_hundo_collection_url")
         val TITLE_KEY = stringPreferencesKey("godex_hundo_collection_title")
         val LAST_SYNC_KEY = longPreferencesKey("godex_hundo_last_successful_sync")

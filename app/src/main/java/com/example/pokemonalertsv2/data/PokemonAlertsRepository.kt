@@ -92,6 +92,14 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             }
 
             clearExpiredAlertsLocked()
+            // A fresh install's first sync returns everything already live. Those alerts
+            // were there before the user arrived, so they are the baseline rather than news:
+            // without this the first poll posted a notification for every one of them.
+            // Only when nothing was ever seen, so a cursor reset on a used install still
+            // notifies what it genuinely missed.
+            if (firstSync && preferences.getSeenAlertIds().isEmpty()) {
+                markAlertsAsSeen(upserts.filterNot { it.isLiveSighting })
+            }
             // Written only after the cache has actually been updated: a crash
             // between the two would otherwise advance the cursor past changes
             // that were never applied.
@@ -168,14 +176,16 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         pageSize: Int,
         date: String? = null,
         type: String? = null,
-        q: String? = null
+        q: String? = null,
+        area: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = pageSize,
             offset = 0,
             date = date,
             type = type,
-            q = normalizedHistoryQuery(q)
+            q = normalizedHistoryQuery(q),
+            area = area
         )
         historyAlertDao.replaceAll(response.data.map { it.toHistoryEntity() })
         return response
@@ -190,14 +200,16 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         offset: Int,
         date: String? = null,
         type: String? = null,
-        q: String? = null
+        q: String? = null,
+        area: String? = null
     ): HistoryResponse {
         val response = service.getHistoryPaged(
             limit = limit,
             offset = offset,
             date = date,
             type = type,
-            q = normalizedHistoryQuery(q)
+            q = normalizedHistoryQuery(q),
+            area = area
         )
         historyAlertDao.insertAll(response.data.map { it.toHistoryEntity() })
         return response

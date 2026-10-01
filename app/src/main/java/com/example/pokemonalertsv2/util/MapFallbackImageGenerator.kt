@@ -74,7 +74,9 @@ object MapFallbackImageGenerator {
         outputWidth: Int = 512,
         outputHeight: Int = 256,
         zoom: Int = DEFAULT_ZOOM,
-        drawCenterMarker: Boolean = true
+        drawCenterMarker: Boolean = true,
+        // Off where the caller shows its own attribution, or the credit appears twice.
+        drawAttribution: Boolean = true
     ): Bitmap? = withContext(Dispatchers.IO) {
         try {
             // Validate coordinates
@@ -83,7 +85,7 @@ object MapFallbackImageGenerator {
             if (abs(latitude) < 0.0001 && abs(longitude) < 0.0001) return@withContext null
 
             val cacheKey =
-                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom|$drawCenterMarker"
+                "$STYLE_VERSION|$latitude|$longitude|${thumbnailUrl.orEmpty()}|$outputWidth|$outputHeight|$zoom|$drawCenterMarker|$drawAttribution"
             bitmapCache.get(cacheKey)
                 ?.takeUnless { it.isRecycled }
                 ?.let { return@withContext it.copy(Bitmap.Config.ARGB_8888, false) }
@@ -170,7 +172,7 @@ object MapFallbackImageGenerator {
             if (drawCenterMarker) {
                 drawPokemonAtCoordinate(canvas, cx, cy, minDimension, spriteBmp)
             }
-            drawOpenStreetMapAttribution(canvas, context, outputWidth, outputHeight)
+            if (drawAttribution) drawOpenStreetMapAttribution(canvas, context, outputWidth, outputHeight)
 
             // Recycle tile bitmaps
             tiles.forEach { it.bitmap?.recycle() }

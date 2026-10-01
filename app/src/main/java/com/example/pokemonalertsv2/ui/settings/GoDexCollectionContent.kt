@@ -92,10 +92,20 @@ internal data class GoDexCollectionSelection(
     val neededAtSelection: Boolean
 )
 
+/**
+ * Form and gender under the name, title-cased. A form the name already states ("Alolan Raichu",
+ * "Raichu (Alola)") is left out rather than repeated in lowercase underneath.
+ */
 internal fun goDexEntryVariantLabel(entry: GoDexEntryEntity): String = buildList {
-    entry.formSlug?.let { add(it.replace('_', ' ')) }
-    entry.gender.takeUnless { it == "none" }?.let(::add)
+    entry.formSlug?.replace('_', ' ')
+        ?.takeUnless { entry.displayName.contains(it, ignoreCase = true) }
+        ?.let { add(it.split(' ').joinToString(" ") { word -> word.replaceFirstChar(Char::uppercaseChar) }) }
+    entry.gender.takeUnless { it == "none" }?.let { add(it.replaceFirstChar(Char::uppercaseChar)) }
 }.joinToString(" \u2022 ")
+
+/** The variant line, never blank: a form named only in the title still reads as one. */
+internal fun goDexEntryVariantLine(entry: GoDexEntryEntity): String =
+    goDexEntryVariantLabel(entry).ifBlank { if (entry.formSlug == null) "Base form" else "Alternate form" }
 
 internal fun toggleGoDexCollectionSelection(
     current: GoDexCollectionSelection?,
@@ -468,7 +478,7 @@ private fun GoDexCollectionEntryTile(
     modifier: Modifier = Modifier
 ) {
     val caught = !entry.needed
-    val variant = goDexEntryVariantLabel(entry).ifBlank { "Base form" }
+    val variant = goDexEntryVariantLine(entry)
     val actionDescription = if (caught) {
         "Mark ${entry.displayName} as needed"
     } else {
@@ -709,7 +719,7 @@ private fun GoDexCollectionConfirmationBar(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = 8.dp
     ) {
-        val variant = goDexEntryVariantLabel(entry).ifBlank { "Base form" }
+        val variant = goDexEntryVariantLine(entry)
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)

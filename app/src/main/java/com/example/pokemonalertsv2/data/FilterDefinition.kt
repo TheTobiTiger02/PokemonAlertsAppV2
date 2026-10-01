@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
+import com.example.pokemonalertsv2.util.WalkingRouteUtils
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -447,12 +448,24 @@ data class FilterMatchContext(
 )
 
 object AlertFilterMatcher {
+    /**
+     * A weather zone such as "Darmstadt-North" rolls up into its group "Darmstadt", the same way
+     * the backend publishes a zone alert to the group's push topic too. Picking the city must not
+     * hide most of its alerts. The roll-up runs zone to group only: an older alert labelled with
+     * the bare group never lands in a zone selection, because it may belong to the other zone.
+     */
+    internal fun matchesArea(areas: FilterSelection, area: String?): Boolean {
+        if (areas.contains(area)) return true
+        val group = area?.substringBefore('-', missingDelimiterValue = "")?.trim().orEmpty()
+        return group.isNotEmpty() && areas.contains(group)
+    }
+
     fun matches(
         alert: PokemonAlert,
         definition: FilterDefinition,
         context: FilterMatchContext = FilterMatchContext()
     ): Boolean {
-        if (!definition.areas.contains(alert.area)) return false
+        if (!matchesArea(definition.areas, alert.area)) return false
 
         // The distance limit is resolved per matched type: one alert can be several types at once
         // (a 100% spawn is both SPAWN and HUNDO) and each may carry a different override.
@@ -467,8 +480,16 @@ object AlertFilterMatcher {
 
             if (!isInRange) {
                 if (definition.maxWalkingMinutes > 0) {
+                    val limitSeconds = definition.maxWalkingMinutes * 60L
                     val walkingSeconds = context.walkingDurationSeconds
-                    if (walkingSeconds != null && walkingSeconds > definition.maxWalkingMinutes * 60L) return@any false
+                    if (walkingSeconds != null && walkingSeconds > limitSeconds) return@any false
+                    // Without a route the alert is normally kept, but the straight line is a lower
+                    // bound on any walk: an alert too far even as the crow flies (often one beyond
+                    // the routed radius, so never routed) cannot be reachable, outage or not.
+                    val direct = context.directDistanceMeters
+                    if (walkingSeconds == null && direct != null && direct.isFinite() &&
+                        direct / WalkingRouteUtils.AVERAGE_WALKING_SPEED_MPS > limitSeconds
+                    ) return@any false
                 }
                 if (!withinDistance(type, alert, definition, context)) return@any false
             }

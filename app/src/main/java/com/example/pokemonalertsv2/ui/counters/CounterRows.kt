@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.counters
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,7 +139,7 @@ internal fun TeamSection(
                 if (activeMegaId == null) {
                     Text(
                         text = "No mega active, so none is suggested. " +
-                            "Set yours in Battle setup.",
+                            "Pick yours under Active mega.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -241,11 +242,15 @@ internal fun PersonalRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             RankBadge(rank)
-            CounterSprite(
-                urls = spriteUrls[counter.pokemonId].orEmpty(),
-                size = spriteSize(rank),
-                type = types[counter.pokemonId]?.firstOrNull()
-            )
+            // A fixed slot: the podium's larger sprite must not push its name out of line
+            // with the rows below.
+            Box(Modifier.width(SPRITE_SLOT), contentAlignment = Alignment.TopCenter) {
+                CounterSprite(
+                    urls = spriteUrls[counter.pokemonId].orEmpty(),
+                    size = spriteSize(rank),
+                    type = types[counter.pokemonId]?.firstOrNull()
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -311,11 +316,15 @@ internal fun GeneralRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             RankBadge(counter.rank, highlighted = entry.isOwned)
-            CounterSprite(
-                urls = spriteUrls[counter.pokemonId].orEmpty(),
-                size = spriteSize(counter.rank),
-                type = types[counter.pokemonId]?.firstOrNull()
-            )
+            // A fixed slot: the podium's larger sprite must not push its name out of line
+            // with the rows below.
+            Box(Modifier.width(SPRITE_SLOT), contentAlignment = Alignment.TopCenter) {
+                CounterSprite(
+                    urls = spriteUrls[counter.pokemonId].orEmpty(),
+                    size = spriteSize(counter.rank),
+                    type = types[counter.pokemonId]?.firstOrNull()
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -467,6 +476,9 @@ internal fun headlineMetric(counter: RaidCounter, metric: CounterMetric): String
 
 /** The podium gets a larger sprite; it is the only size difference in the list. */
 internal fun spriteSize(rank: Int): Dp = if (rank <= 3) 40.dp else 32.dp
+
+/** Width every row reserves for its sprite, the larger podium size. */
+private val SPRITE_SLOT: Dp = 40.dp
 
 /** Name on the left, the sorted-by value and the expand affordance on the right. */
 @Composable

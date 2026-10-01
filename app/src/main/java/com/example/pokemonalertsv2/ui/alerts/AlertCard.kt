@@ -193,6 +193,7 @@ internal fun AlertCard(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
@@ -290,6 +291,7 @@ internal fun AlertCard(
                             countdownClock = countdownClock,
                             snoozeEnabled = snoozeEnabled,
                             hasGoingAction = onGoingClick != null,
+                            isDismissed = isDismissed,
                             onAction = onSecondaryAction
                         )
                     }
@@ -451,13 +453,15 @@ internal fun AlertActionsOverflow(
     countdownClock: State<Long>,
     snoozeEnabled: Boolean,
     hasGoingAction: Boolean,
+    isDismissed: Boolean = false,
     onAction: (AlertSecondaryAction) -> Unit
 ) {
     val policy = alertActionPolicy(
         context = context,
         isExpired = TimeUtils.parseEndTimeToMillis(endTime)?.let { it <= countdownClock.value } ?: false,
         snoozeEnabled = snoozeEnabled,
-        hasGoingAction = hasGoingAction
+        hasGoingAction = hasGoingAction,
+        isDismissed = isDismissed
     )
     AlertSecondaryActionsMenu(
         actions = policy.overflowActions,
@@ -484,34 +488,9 @@ internal fun AlertSecondaryActionsMenu(
             onDismissRequest = { expanded = false }
         ) {
             actions.forEach { action ->
-                val label = when (action) {
-                    AlertSecondaryAction.SNOOZE -> "Snooze"
-                    AlertSecondaryAction.PICTURE_IN_PICTURE -> "Open in picture-in-picture"
-                    AlertSecondaryAction.SHARE -> "Share"
-                    AlertSecondaryAction.DISMISS -> "Dismiss"
-                    AlertSecondaryAction.RESTORE -> "Restore"
-                }
                 DropdownMenuItem(
-                    text = { Text(label) },
-                    leadingIcon = {
-                        when (action) {
-                            AlertSecondaryAction.SNOOZE -> {
-                                Icon(Icons.Filled.Notifications, contentDescription = null)
-                            }
-                            AlertSecondaryAction.PICTURE_IN_PICTURE -> {
-                                Icon(painterResource(R.drawable.ic_pip), contentDescription = null)
-                            }
-                            AlertSecondaryAction.SHARE -> {
-                                Icon(Icons.Filled.Share, contentDescription = null)
-                            }
-                            AlertSecondaryAction.DISMISS -> {
-                                Icon(Icons.Filled.Close, contentDescription = null)
-                            }
-                            AlertSecondaryAction.RESTORE -> {
-                                Icon(Icons.Filled.Refresh, contentDescription = null)
-                            }
-                        }
-                    },
+                    text = { Text(action.menuLabel) },
+                    leadingIcon = { AlertSecondaryActionIcon(action) },
                     onClick = {
                         expanded = false
                         onAction(action)

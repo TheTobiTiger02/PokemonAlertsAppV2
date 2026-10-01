@@ -197,13 +197,15 @@ fun AlertDetailScreen(
     }
 
     val context = LocalContext.current
-    val arrivalTracking = rememberArrivalTrackingUiController()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val arrivalTracking = rememberArrivalTrackingUiController(
+        onMessage = { text -> scope.launch { snackbarHostState.showSnackbar(text) } }
+    )
     val isGoing = arrivalTracking.isTracking(alert)
     val goDexStatus = rememberGoDexStatus(alert)
     val actionBarClearance = 84.dp +
         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
     val darkTheme = LocalAppDarkTheme.current

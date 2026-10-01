@@ -160,6 +160,7 @@ class WidgetConfigActivity : ComponentActivity() {
                             TextButton(
                                 onClick = {
                                     showExactAlarmDialog.value = false
+                                    rememberExactAlarmDeclined()
                                     completeWidgetConfiguration()
                                 }
                             ) {
@@ -172,8 +173,14 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
+    // "Maybe later" is remembered: adding a second widget asked the same question again.
     private fun needsExactAlarmAccess(): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExactWidgetAlarms()
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExactWidgetAlarms() &&
+            !getSharedPreferences(PROMPT_PREFS, MODE_PRIVATE).getBoolean(KEY_EXACT_ALARM_DECLINED, false)
+
+    private fun rememberExactAlarmDeclined() {
+        getSharedPreferences(PROMPT_PREFS, MODE_PRIVATE).edit().putBoolean(KEY_EXACT_ALARM_DECLINED, true).apply()
+    }
 
     private fun canScheduleExactWidgetAlarms(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
@@ -521,3 +528,6 @@ object WidgetFilterPrefs {
         WidgetConfigurationStore.remove(context, appWidgetId)
     }
 }
+
+private const val PROMPT_PREFS = "widget_config_prompts"
+private const val KEY_EXACT_ALARM_DECLINED = "exact_alarm_declined"

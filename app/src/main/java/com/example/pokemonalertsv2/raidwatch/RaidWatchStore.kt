@@ -81,10 +81,10 @@ class RaidWatchStore(private val context: Context) {
         runCatching { json.decodeFromString(RaidTeamSnapshot.serializer(), teamJson) }.getOrNull()
 
     companion object {
-        private val KEY_ALERT_JSON = stringPreferencesKey("raid_watch_alert_json")
-        private val KEY_STARTED_AT = longPreferencesKey("raid_watch_started_at")
-        private val KEY_END_AT = longPreferencesKey("raid_watch_end_at")
-        private val KEY_TEAM_JSON = stringPreferencesKey("raid_watch_team_json")
+        internal val KEY_ALERT_JSON = stringPreferencesKey("raid_watch_alert_json")
+        internal val KEY_STARTED_AT = longPreferencesKey("raid_watch_started_at")
+        internal val KEY_END_AT = longPreferencesKey("raid_watch_end_at")
+        internal val KEY_TEAM_JSON = stringPreferencesKey("raid_watch_team_json")
 
         private val json = Json { ignoreUnknownKeys = true }
     }

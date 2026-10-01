@@ -9,6 +9,9 @@ import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.layout.size
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.os.Build
@@ -139,7 +142,7 @@ fun OnboardingScreen(
                                 title = "The map",
                                 points = listOf(
                                     "The chips along the top show or hide each alert type.",
-                                    "The gear button holds filters, map style and overlays.",
+                                    "The filter button holds filters, map style and overlays; the gear opens Settings.",
                                     "The tools button starts a hunt, plans a catch route or opens the floating map."
                                 )
                             )
@@ -213,11 +216,30 @@ fun OnboardingScreen(
 }
 
 @Composable
-private fun SetupIntro() = SetupHeader(
-    Icons.Filled.Star,
-    "Catch the alerts that matter",
-    "Pokémon Alerts shows live nearby activity, remaining time, distance, and navigation. Background updates keep notifications and widgets useful when the app is closed."
-)
+private fun SetupIntro() {
+    SetupHeader(
+        Icons.Filled.Star,
+        "Catch the alerts that matter",
+        "Pokémon Alerts shows live nearby activity, remaining time, distance, and navigation. Background updates keep notifications and widgets useful when the app is closed."
+    )
+    // Says what the next minute holds, rather than leaving most of the first page empty.
+    Text(
+        "In the next steps",
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+    listOf(
+        Icons.Filled.Notifications to "A short tour of the feed, the map and filters",
+        Icons.Filled.LocationOn to "Your area and how far you will walk",
+        Icons.Filled.Settings to "How many notifications you want, and the permissions behind them"
+    ).forEach { (icon, text) ->
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
 
 @Composable
 private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onDistance: (Int) -> Unit) {
@@ -225,7 +247,14 @@ private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onD
     Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AREA_FILTER_OPTIONS.forEach { value ->
-            FilterChip(selected = area == value, onClick = { onArea(value) }, label = { Text(value) })
+            FilterChip(
+                selected = area == value,
+                onClick = { onArea(value) },
+                label = { Text(value) },
+                leadingIcon = if (area == value) {
+                    { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null
+            )
         }
     }
     Text(
@@ -241,7 +270,7 @@ private fun PresetSetup(selected: NotificationPreset, onSelected: (NotificationP
     SetupHeader(Icons.Filled.Notifications, "Choose notification intensity", "Presets only set alert categories. Fine-grained species and raid filters remain available in Settings.")
     listOf(
         NotificationPreset.EVERYTHING to "Every supported alert category",
-        NotificationPreset.HIGH_VALUE to "Spawns, Hundos, PvP, Nundos, and Kecleon",
+        NotificationPreset.HIGH_VALUE to "IV spawns, Hundos, PvP, Nundos, and Kecleon",
         NotificationPreset.QUIET_ESSENTIALS to "Only Hundos, Nundos, and Kecleon"
     ).forEach { (preset, description) ->
         Surface(
@@ -358,10 +387,11 @@ private fun PermissionRow(title: String, description: String, granted: Boolean, 
                 Text(title, fontWeight = FontWeight.SemiBold)
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (granted) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = "Allowed", tint = MaterialTheme.colorScheme.primary)
-            } else {
-                Button(onClick = onAllow, enabled = enabled) { Text("Allow") }
+            when {
+                granted -> Icon(Icons.Filled.CheckCircle, contentDescription = "Allowed", tint = MaterialTheme.colorScheme.primary)
+                // A greyed-out button still read as tappable; the description says what comes first.
+                !enabled -> Unit
+                else -> Button(onClick = onAllow) { Text("Allow") }
             }
         }
     }

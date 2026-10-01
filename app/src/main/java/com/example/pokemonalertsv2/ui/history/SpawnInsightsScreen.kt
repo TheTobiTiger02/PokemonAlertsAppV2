@@ -84,7 +84,13 @@ fun SpawnInsightsScreen(
     Column(modifier = modifier.fillMaxSize()) {
         PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
             InsightsTab.entries.forEach { tab ->
-                Tab(selected = state.tab == tab, onClick = { onTabChange(tab) }, text = { Text(tab.label) })
+                Tab(
+                    selected = state.tab == tab,
+                    onClick = { onTabChange(tab) },
+                    text = { Text(tab.label) },
+                    // Without this the unselected label took the same primary colour as the selected one.
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         when (state.tab) {
@@ -217,7 +223,9 @@ private fun SpawnActivityPane(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
                 areas.forEach { area ->
-                    FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(area) })
+                    // "Unknown" is the server's bucket for spawnpoints outside every named area.
+                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
+                    FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
                 }
             }
         }
@@ -264,7 +272,8 @@ private fun SpawnActivityBody(
             BarRow(
                 values = days.map { it.active },
                 labels = dayLabels(days.map { it.day }),
-                highlighted = summary.flagged
+                highlighted = summary.flagged,
+                partial = todayIndex(days.map { it.day })
             )
         }
         val flagged = summary.flagged.sorted().map { shortDay(days[it].day) }
@@ -273,7 +282,7 @@ private fun SpawnActivityBody(
                 if (flagged.isEmpty()) {
                     "No unusual days in range."
                 } else {
-                    "Highlighted: ${flagged.joinToString()} — more than ${(UNUSUAL_SHARE * 100).toInt()}% off a usual day, or an unexplained surge."
+                    "Highlighted: ${flagged.joinToString()} — more than ${(UNUSUAL_SHARE * 100).toInt()}% above or below a usual day, or an unexplained surge."
                 },
                 if (summary.unscanned > 0) "${summary.unscanned} day(s) before live scanning are left out." else null
             ).joinToString(" "),
@@ -293,7 +302,8 @@ private fun SpawnActivityBody(
             BarRow(
                 values = species.perDay.map { it.total },
                 labels = dayLabels(species.perDay.map { it.day }),
-                highlighted = if (picked >= 0) setOf(picked) else emptySet()
+                highlighted = if (picked >= 0) setOf(picked) else emptySet(),
+                partial = todayIndex(species.perDay.map { it.day })
             )
             // Newest first: the day people usually want is today or yesterday.
             Row(
@@ -434,6 +444,10 @@ internal fun dayLabels(days: List<String>): List<String> {
 
 private val SHORT_DAY = DateTimeFormatter.ofPattern("d.M.")
 
+/** Index of today's still-running day in [days] (yyyy-MM-dd), or null. */
+internal fun todayIndex(days: List<String>, today: LocalDate = LocalDate.now()): Int? =
+    days.indexOf(today.toString()).takeIf { it >= 0 }
+
 private fun shortDay(day: String): String = runCatching { LocalDate.parse(day).format(SHORT_DAY) }.getOrDefault(day)
 
 @Composable
@@ -535,7 +549,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * none, and a bar chart does not justify adding one.
  */
 @Composable
-private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int> = emptySet()) {
+private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int> = emptySet(), partial: Int? = null) {
     val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
     Column {
         Row(
@@ -557,6 +571,9 @@ private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int
                             } else if (index in highlighted) {
                                 // The theme's tertiary is its primary, so an unusual day borrows the error tone to stand out.
                                 MaterialTheme.colorScheme.error
+                            } else if (index == partial) {
+                                // Today is still running; a full-strength bar read as a slump.
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
                             } else {
                                 MaterialTheme.colorScheme.primary
                             }

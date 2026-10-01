@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.Dispatchers
@@ -152,7 +153,9 @@ class SettingsViewModel(
             filterCatalogRepository.cached()?.let { cached -> _filterCatalog.value = cached }
         }
         viewModelScope.launch {
-            filterableAlerts.collect { alerts ->
+            // Latest wins: each pass may wait on routing, and the Filter Studio counts must
+            // follow the newest alerts rather than work through a backlog of old ones.
+            filterableAlerts.collectLatest { alerts ->
                 // Distance contexts for 1000+ alerts are derived off the main thread: the
                 // per-alert route join and straight-line math used to run here on Main and
                 // stalled every screen that collected this flow while alerts were arriving.

@@ -72,7 +72,8 @@ class AlertPresentationPolicyTest {
                 overflowActions = listOf(
                     AlertSecondaryAction.SNOOZE,
                     AlertSecondaryAction.PICTURE_IN_PICTURE,
-                    AlertSecondaryAction.SHARE
+                    AlertSecondaryAction.SHARE,
+                    AlertSecondaryAction.DISMISS
                 )
             ),
             alertActionPolicy(

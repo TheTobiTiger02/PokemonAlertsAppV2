@@ -18,4 +18,10 @@ class SpawnDayLabelsTest {
     fun `a week or less labels every day`() {
         assertEquals(7, dayLabels(days(7)).size)
     }
+
+    @Test
+    fun `today is marked only when it is in the range`() {
+        assertEquals(6, todayIndex(days(7), today = LocalDate.of(2026, 9, 7)))
+        assertEquals(null, todayIndex(days(7), today = LocalDate.of(2026, 9, 20)))
+    }
 }

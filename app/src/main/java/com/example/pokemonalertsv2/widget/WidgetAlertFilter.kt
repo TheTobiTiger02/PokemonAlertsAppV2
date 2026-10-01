@@ -5,6 +5,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
+import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -88,7 +89,9 @@ internal object WidgetAlertFilter {
         if (end <= criteria.nowMillis) return false
         if (alert.isInvalidated) return false
         if (alert.uniqueId in criteria.dismissedAlertIds) return false
-        if (criteria.selectedArea != "All" && alert.area != criteria.selectedArea) return false
+        if (criteria.selectedArea != "All" &&
+            !AlertFilterMatcher.matchesArea(FilterSelection.only(listOf(criteria.selectedArea)), alert.area)
+        ) return false
         if (criteria.filterDefinition == null && !matchesWidgetTypes(alert, criteria.widgetFilterTypes)) return false
 
         val directMeters = if (origin != null) directDistanceMeters(origin, alert) else null

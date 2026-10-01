@@ -26,6 +26,8 @@ data class HistoryResponse(
     @SerialName("offset") val offset: Int? = null,
     @SerialName("count") val count: Int? = null,
     @SerialName("unlimited") val unlimited: Boolean? = null,
+    /** The area filter the server applied; absent from servers that predate it. */
+    @SerialName("area") val area: String? = null,
     @SerialName("data") val data: List<PokemonAlert> = emptyList()
 )
 
@@ -269,7 +271,8 @@ interface PokemonAlertsService {
         @Query("date") date: String? = null,
         @Query("startDate") startDate: String? = null,
         @Query("endDate") endDate: String? = null,
-        @Query("q") q: String? = null
+        @Query("q") q: String? = null,
+        @Query("area") area: String? = null
     ): HistoryResponse
 
     @GET("api/stats/total")

@@ -70,8 +70,9 @@ internal fun MegaBoostContent(
             items(totals, key = { it.first }) { (type, count) -> TypeChip(type, "$count") }
         }
         val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
-        // Without live data every mega would read "0 of 0"; the ranking only means something once it loads.
-        if (state.live != null) LazyColumn(Modifier.heightIn(max = maxHeight).testTag("mega_boost_list"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Without live data, or with nothing live, every mega would read "0 of 0 (0%)"; the ranking
+        // only means something once there is something to boost.
+        if (state.live != null && live > 0) LazyColumn(Modifier.heightIn(max = maxHeight).testTag("mega_boost_list"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(ranking, key = { it.mega.pokemonId }) { row ->
                 MegaBoostRowItem(row, active = row.mega.pokemonId == state.activeMegaId,
                     urls = state.spriteUrls[row.mega.pokemonId].orEmpty(), onClick = { onSelect(row.mega) })

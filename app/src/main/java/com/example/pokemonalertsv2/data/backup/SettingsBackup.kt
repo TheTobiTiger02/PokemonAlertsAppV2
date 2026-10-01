@@ -8,6 +8,15 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.example.pokemonalertsv2.data.ALERT_SYNC_ETAG_KEY
+import com.example.pokemonalertsv2.data.ALERT_SYNC_REVISION_KEY
+import com.example.pokemonalertsv2.data.LAST_PUSH_RECEIVED_KEY
+import com.example.pokemonalertsv2.data.LAST_SUCCESSFUL_ALERT_SYNC_KEY
+import com.example.pokemonalertsv2.data.SEEN_ALERTS_KEY
+import com.example.pokemonalertsv2.data.SILENCE_UNTIL_KEY
+import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
+import com.example.pokemonalertsv2.data.godex.GoDexPreferences
+import com.example.pokemonalertsv2.raidwatch.RaidWatchStore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -34,19 +43,38 @@ object SettingsBackup {
      * not listed because it never enters this store at all -- it lives encrypted in its own
      * SharedPreferences (see [com.example.pokemonalertsv2.data.counters.PokebattlerAuth]).
      *
-     * And per-device sync state, which describes one install rather than the user's
-     * choices: restoring another device's alert-sync cursor would make this device skip
-     * changes it never received, and restoring its push receipt time would report delivery
-     * that never happened here.
+     * And per-device state, which describes one install rather than the user's choices:
+     * restoring another device's alert-sync cursor would make this device skip changes it
+     * never received, its push receipt time would report delivery that never happened here,
+     * and a restored Raid Watch or silence would resurrect something that ended long ago.
+     * The Poke Genie roster itself lives in the database and is not exported, so its import
+     * summary would claim Pokemon the restored install does not have. The Pokebattler
+     * trainer number belongs to a sign-in, and sign-ins are not part of a backup.
+     *
+     * Names come from the key constants themselves: these keys were once renamed and the
+     * literal copies here silently stopped excluding anything.
      */
     val EXCLUDED_KEYS: Set<String> = setOf(
-        "godex_session_cookies",
-        "godex_session_state",
-        "godex_write_back_url",
-        "alert_sync_revision",
-        "alert_sync_etag",
-        "last_push_received_at"
-    )
+        GoDexPreferences.COOKIES_KEY,
+        GoDexPreferences.SESSION_STATE_KEY,
+        GoDexPreferences.WRITE_BACK_URL_KEY,
+        ALERT_SYNC_REVISION_KEY,
+        ALERT_SYNC_ETAG_KEY,
+        LAST_SUCCESSFUL_ALERT_SYNC_KEY,
+        LAST_PUSH_RECEIVED_KEY,
+        SEEN_ALERTS_KEY,
+        SILENCE_UNTIL_KEY,
+        RaidWatchStore.KEY_ALERT_JSON,
+        RaidWatchStore.KEY_STARTED_AT,
+        RaidWatchStore.KEY_END_AT,
+        RaidWatchStore.KEY_TEAM_JSON,
+        RaidCounterPreferences.PG_COUNT_KEY,
+        RaidCounterPreferences.PG_MATCHED_KEY,
+        RaidCounterPreferences.PG_FILE_KEY,
+        RaidCounterPreferences.PG_IMPORTED_AT_KEY,
+        RaidCounterPreferences.PG_EXPANSION_KEY,
+        RaidCounterPreferences.PB_TRAINER_KEY
+    ).mapTo(mutableSetOf()) { it.name }
 
     private val json = Json {
         prettyPrint = true

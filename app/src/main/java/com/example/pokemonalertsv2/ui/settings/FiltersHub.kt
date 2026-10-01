@@ -83,11 +83,11 @@ internal fun FiltersHubContent(
 @Composable
 private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignment, definition: FilterDefinition, matchCount: Int, profileName: String?, onClick: () -> Unit) {
     val typeSummary = when (definition.alertTypes.mode) {
-        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> "${definition.alertTypes.selectedCount} alert types"
+        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) "1 alert type" else "$it alert types" }
     }
     val location = buildList {
         if (definition.areas.mode == FilterSelectionMode.NONE) add("No areas")
-        if (definition.areas.mode == FilterSelectionMode.ONLY) add("${definition.areas.selectedCount} areas")
+        if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) "1 area" else "$it areas" })
         if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
         definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 distance override" else "$it distance overrides") }
         if (definition.maxWalkingMinutes > 0) add("${definition.maxWalkingMinutes} min walk")
@@ -127,7 +127,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val document by viewModel.filterStateDocument.collectAsStateWithLifecycle()
     val catalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
     val species by viewModel.filterSpecies.collectAsStateWithLifecycle()
-    val artwork = remember(species) { species.associate { normalizeFilterToken(it.name) to it.imageUrl } }
+    val artwork = remember(species) { speciesArtwork(species) }
     val alerts by viewModel.filterableAlerts.collectAsStateWithLifecycle()
     val rewardThumbnails by viewModel.questRewardThumbnails.collectAsStateWithLifecycle()
     val contexts by viewModel.filterPreviewContexts.collectAsStateWithLifecycle()
@@ -253,7 +253,22 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text("All") })
             FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
-            (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area -> FilterChip(definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area), { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) }, label = { Text(area) }) }
+            (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area ->
+                val only = definition.areas.mode == FilterSelectionMode.ONLY
+                val picked = only && definition.areas.contains(area)
+                // A zone is already covered when its city is picked ("Darmstadt" includes
+                // "Darmstadt-North"), so it shows as included and cannot be toggled on its own.
+                val impliedByCity = only && !picked && AlertFilterMatcher.matchesArea(definition.areas, area)
+                FilterChip(
+                    selected = picked || impliedByCity,
+                    enabled = !impliedByCity,
+                    onClick = { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) },
+                    label = { Text(area) },
+                    leadingIcon = if (picked || impliedByCity) {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
+                )
+            }
         }
         Text("Distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
         com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
@@ -335,7 +350,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
     val display = remember(normalizedCandidates, current.normalizedValues, queryKey, isSpecies, sortOrder, artwork) {
         normalizedCandidates
             .filter { (key, _) ->
-                key.contains(queryKey) || (isSpecies && extractDex(key).toString().contains(queryKey))
+                key.contains(queryKey) || (isSpecies && extractDex(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) })
             }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in current.normalizedValues }

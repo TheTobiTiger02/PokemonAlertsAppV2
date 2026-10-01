@@ -152,6 +152,7 @@ internal fun BossFacts(state: RaidCountersUiState) {
 
 @Composable
 internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersActions) {
+    val hasPersonalSource = state.pokeGenieCount > 0 || !state.pokebattlerUserId.isNullOrBlank()
     SpringSegmentedRow(
         selectedIndex = if (state.showingPersonal) 1 else 0,
         segmentCount = 2
@@ -166,7 +167,7 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
         SegmentedChoice(
             label = "My Pokémon",
             selected = state.showingPersonal,
-            enabled = state.pokeGenieCount > 0 || !state.pokebattlerUserId.isNullOrBlank(),
+            enabled = hasPersonalSource,
             modifier = Modifier.weight(1f),
             transparent = true,
             onClick = {
@@ -175,6 +176,16 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
                     else CounterSourceId.POKEBATTLER_POKEBOX
                 )
             }
+        )
+    }
+    if (!hasPersonalSource) {
+        // The disabled segment looked like any unselected tab and gave no reason.
+        Text(
+            text = "To rank your own Pokémon, import a Poké Genie CSV or sign in to Pokébattler " +
+                "in Settings › Raid counters.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp)
         )
     }
     if (state.showingPersonal &&

@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -74,6 +78,7 @@ internal fun CompactAlertCard(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val visualStyle = remember(alert) { resolveAlertVisualStyle(alert) }
@@ -87,7 +92,8 @@ internal fun CompactAlertCard(
         context = cardContext,
         isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
-        hasGoingAction = onGoingClick != null
+        hasGoingAction = onGoingClick != null,
+        isDismissed = isDismissed
     )
     val lateWarning = TravelTime.expiresBeforeArrival(
         walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
@@ -101,9 +107,11 @@ internal fun CompactAlertCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surfaceContainer,
+        // The long-press menu opens wherever it fits, often over the neighbouring cards, so
+        // the card it belongs to is outlined while it is open.
         border = BorderStroke(
-            width = if (huntTarget || isGoing) 2.dp else 1.dp,
-            color = if (huntTarget || isGoing) MaterialTheme.colorScheme.primary
+            width = if (huntTarget || isGoing || menuOpen) 2.dp else 1.dp,
+            color = if (huntTarget || isGoing || menuOpen) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
@@ -225,6 +233,7 @@ internal fun CompactAlertCard(
                 policy.overflowActions.forEach { action ->
                     DropdownMenuItem(
                         text = { Text(action.menuLabel) },
+                        leadingIcon = { AlertSecondaryActionIcon(action) },
                         onClick = {
                             menuOpen = false
                             onSecondaryAction(action)
@@ -245,16 +254,30 @@ internal val AlertSecondaryAction.menuLabel: String
         AlertSecondaryAction.RESTORE -> "Restore"
     }
 
+/** The leading icon both alert menus use, so every entry carries one. */
+@Composable
+internal fun AlertSecondaryActionIcon(action: AlertSecondaryAction) {
+    when (action) {
+        AlertSecondaryAction.SNOOZE -> Icon(Icons.Filled.Notifications, contentDescription = null)
+        AlertSecondaryAction.PICTURE_IN_PICTURE -> Icon(painterResource(R.drawable.ic_pip), contentDescription = null)
+        AlertSecondaryAction.SHARE -> Icon(Icons.Filled.Share, contentDescription = null)
+        AlertSecondaryAction.DISMISS -> Icon(Icons.Filled.Close, contentDescription = null)
+        AlertSecondaryAction.RESTORE -> Icon(Icons.Filled.Refresh, contentDescription = null)
+    }
+}
+
 /**
- * The numbers worth reading at a glance: IV and CP, then how far away it is. Anything missing
- * drops out. A quest's task gets its own line, and weather stays on the detail page.
+ * The numbers worth reading at a glance: how far away it is, then IV and CP. Distance leads
+ * because a status prefix ("Ends before you arrive") used to push it off the end of the line
+ * exactly when it mattered most. Anything missing drops out. A quest's task gets its own
+ * line, and weather stays on the detail page.
  */
 internal fun compactDetailLine(alert: PokemonAlert, distanceInfo: AlertDistanceInfo): String = buildList {
+    distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let(::add)
+    distanceInfo.walkingText?.takeIf { it.isNotBlank() }?.let(::add)
     val iv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     iv?.let { add("IV $it") }
     alert.displayCp?.let { add("CP $it") }
-    distanceInfo.distanceText?.takeIf { it.isNotBlank() }?.let(::add)
-    distanceInfo.walkingText?.takeIf { it.isNotBlank() }?.let(::add)
 }.joinToString(" · ")
 
 @Composable
@@ -319,6 +342,7 @@ internal fun AlertListItem(
     huntTarget: Boolean = false,
     onGoingClick: (() -> Unit)? = null,
     countdownClock: State<Long> = rememberCountdownClock(),
+    isDismissed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     when (style) {
@@ -326,13 +350,15 @@ internal fun AlertListItem(
             alert = alert, distanceInfo = distanceInfo, goDexStatus = goDexStatus,
             onOpenMaps = onOpenMaps, onShowDetails = onShowDetails, onSecondaryAction = onSecondaryAction,
             cardContext = cardContext, isGoing = isGoing, huntTarget = huntTarget,
-            onGoingClick = onGoingClick, countdownClock = countdownClock, modifier = modifier
+            onGoingClick = onGoingClick, countdownClock = countdownClock, isDismissed = isDismissed,
+            modifier = modifier
         )
         AlertCardStyle.LARGE -> AlertCard(
             alert = alert, distanceInfo = distanceInfo, goDexStatus = goDexStatus,
             onOpenMaps = onOpenMaps, onShowDetails = onShowDetails, onSecondaryAction = onSecondaryAction,
             cardContext = cardContext, isGoing = isGoing, huntTarget = huntTarget,
-            onGoingClick = onGoingClick, countdownClock = countdownClock, modifier = modifier
+            onGoingClick = onGoingClick, countdownClock = countdownClock, isDismissed = isDismissed,
+            modifier = modifier
         )
     }
 }

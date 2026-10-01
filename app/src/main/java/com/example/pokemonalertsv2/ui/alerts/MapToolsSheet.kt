@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
@@ -127,7 +129,8 @@ private fun ToolRow(
     ListItem(
         headlineContent = { Text(title, fontWeight = FontWeight.SemiBold) },
         supportingContent = { Text(subtitle) },
-        leadingContent = icon,
+        // A fixed slot: the drawables differ in intrinsic size, which shifted each row's text.
+        leadingContent = { Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) { icon() } },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = modifier
             .fillMaxWidth()

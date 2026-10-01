@@ -16,7 +16,7 @@ import com.example.pokemonalertsv2.notifications.QuietHours
 import com.example.pokemonalertsv2.util.TravelTime
 
 private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
-private val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
+internal val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
 private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
 private val LAST_CAUGHT_ID_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_id")
@@ -48,7 +48,7 @@ private val NUNDOS_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.boole
 private val KECLEON_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("kecleon_notifications")
 private val ROCKET_NOTIFICATIONS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("rocket_notifications")
 private val NOTIFICATION_VIBRATE_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("notification_vibrate")
-private val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
+internal val SILENCE_UNTIL_KEY = androidx.datastore.preferences.core.longPreferencesKey("silence_until") // Timestamp in millis when silence ends
 // A standing nightly window, distinct from the one-off SILENCE_UNTIL above.
 /** 22:00 local. */
 const val DEFAULT_QUIET_HOURS_START = 22 * 60
@@ -68,12 +68,12 @@ private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPrefere
 private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
 private val JOURNEY_OVERLAY_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("journey_overlay_enabled")
-private val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
+internal val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
 // Suffixed since live sightings joined the list: an older cursor never received them, so the first
 // sync after the update must be a full snapshot rather than a delta.
-private val ALERT_SYNC_REVISION_KEY = androidx.datastore.preferences.core.longPreferencesKey("alert_sync_revision_live")
-private val ALERT_SYNC_ETAG_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_sync_etag_live")
-private val LAST_PUSH_RECEIVED_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_push_received_at")
+internal val ALERT_SYNC_REVISION_KEY = androidx.datastore.preferences.core.longPreferencesKey("alert_sync_revision_live")
+internal val ALERT_SYNC_ETAG_KEY = androidx.datastore.preferences.core.stringPreferencesKey("alert_sync_etag_live")
+internal val LAST_PUSH_RECEIVED_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_push_received_at")
 private val SELECTED_ALERT_FILTER_KEY = androidx.datastore.preferences.core.stringPreferencesKey("selected_alert_filter")
 
 // Per-surface category selections. An empty set means "no narrowing" — every category shows.

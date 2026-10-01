@@ -174,6 +174,7 @@ import androidx.compose.material3.InputChip
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
+import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
@@ -332,6 +333,7 @@ fun AlertHistoryRoute(
     onDateChanged: (String?) -> Unit,
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
+    onAreaChanged: (String?) -> Unit = {},
     onOpenInsights: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -342,6 +344,7 @@ fun AlertHistoryRoute(
         onDateChanged = onDateChanged,
         onTypeChanged = onTypeChanged,
         onSearchChanged = onSearchChanged,
+        onAreaChanged = onAreaChanged,
         onAlertClick = { alert ->
             context.startActivity(AlertDetailActivity.createIntent(context, alert))
         },
@@ -375,10 +378,8 @@ internal enum class HistoryAreaFilter(val label: String, val area: String?) {
     ALSBACH("Alsbach", "Alsbach"),
     DARMSTADT("Darmstadt", "Darmstadt");
 
-    fun includes(alert: PokemonAlert): Boolean {
-        val alertArea = alert.area?.trim()
-        return area == null || alertArea.equals(area, ignoreCase = true)
-    }
+    fun includes(alert: PokemonAlert): Boolean =
+        area == null || AlertFilterMatcher.matchesArea(FilterSelection.only(listOf(area)), alert.area)
 }
 
 internal enum class FeedContentState { LOADING, EMPTY, CONTENT }
@@ -700,7 +701,11 @@ internal fun SyncStatusBanner(
                 ) {
                     Text(animatedMessage, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
                     if (animatedProblem) {
-                        TextButton(onClick = onRetry) { Text("Retry") }
+                        // The default primary label was light blue on the dark-theme error red.
+                        TextButton(
+                            onClick = onRetry,
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        ) { Text("Retry", fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
@@ -970,6 +975,7 @@ internal fun AlertsList(
                                 AlertSecondaryAction.RESTORE -> onRestoreClick(model.alert.uniqueId)
                             }
                         },
+                        isDismissed = isDismissed,
                         isGoing = arrivalTracking.isTracking(model.alert),
                         huntTarget = huntSession?.targetUniqueId == model.alert.uniqueId,
                         onGoingClick = if (model.alert.isEligibleArrivalDestination()) {

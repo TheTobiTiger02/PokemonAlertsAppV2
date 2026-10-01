@@ -238,6 +238,9 @@ class PokebattlerMapperTest {
         assertEquals("X-Scissor", prettifyMoveName("X_SCISSOR"))
         assertEquals("Power-Up Punch", prettifyMoveName("POWER_UP_PUNCH"))
         assertEquals("Hydro Pump", prettifyMoveName("HYDRO_PUMP_BLASTOISE"))
+        // Pokébox rows arrive already formatted.
+        assertEquals("Bullet Punch", prettifyMoveName("Bullet Punch"))
+        assertEquals("Power-Up Punch", prettifyMoveName("Power-Up Punch"))
         assertNull(prettifyMoveName(null))
         assertNull(prettifyMoveName(" "))
     }
