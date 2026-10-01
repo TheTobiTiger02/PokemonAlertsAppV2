@@ -75,6 +75,8 @@ import com.example.pokemonalertsv2.data.counters.toCounterMetric
 @Composable
 internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) {
     val options = state.options
+    // My Pokémon ranks each copy at its own level, so the attacker level does not apply there.
+    val levelLabel = if (state.showingPersonal) "Your levels" else "L${options.attackerLevel}"
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -84,7 +86,8 @@ internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) 
                 onClick = onOpen
             )
             .semantics {
-                contentDescription = "Battle setup: level ${options.attackerLevel}, " +
+                contentDescription = "Battle setup: " +
+                    (if (state.showingPersonal) "your own levels, " else "level ${options.attackerLevel}, ") +
                     "${options.weather.label}, ${options.friendship.label}, ${options.sort.label}, " +
                     "Party Power ${if (options.partyPower) "on" else "off"}"
             },
@@ -100,7 +103,7 @@ internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) 
                 Text("Battle setup", style = MaterialTheme.typography.labelLarge)
                 Text(
                     text = buildString {
-                        append("L${options.attackerLevel} · ${options.weather.label} · ")
+                        append("$levelLabel · ${options.weather.label} · ")
                         append(options.friendship.label)
                         if (options.partyPower) append(" · Party Power")
                         append(" · ${options.sort.label}")

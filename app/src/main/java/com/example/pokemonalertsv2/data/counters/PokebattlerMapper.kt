@@ -227,6 +227,9 @@ internal fun selectBestByMove(defender: PbDefender, sort: PokebattlerSort): PbBy
 /** `SHADOW_CLAW_FAST` -> "Shadow Claw". Saves fetching the 196 KB move list. */
 fun prettifyMoveName(raw: String?): String? {
     val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    // Ids are upper snake case. Pokébox rows already carry display names ("Bullet Punch"),
+    // which re-casing turned into "Bullet punch".
+    if (value.any(Char::isLowerCase)) return value
     parsePlusMove(value)?.let {
         val baseId = it.baseName.replace(' ', '_').uppercase(Locale.ROOT)
         return prettifyMoveName(baseId) + "+".repeat(it.count)
