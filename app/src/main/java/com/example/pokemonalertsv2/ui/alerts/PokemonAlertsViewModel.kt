@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -81,7 +83,9 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
         refreshAlerts()
         viewModelScope.launch {
-            repository.alerts.collect { alerts ->
+            // Latest wins: Room re-emits on every write, and a burst of pushes must not queue
+            // up behind one another while the list on screen goes stale.
+            repository.alerts.collectLatest { alerts ->
                 val now = System.currentTimeMillis()
                 // Parse once per alert and sort on the parsed value: endTime is an ISO string,
                 // so sorting it directly ordered lexicographically, not chronologically.
@@ -147,10 +151,14 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         _locationLookupComplete.value = false
     }
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val walkingRoutes: StateFlow<Map<String, WalkingRouteInfo>> =
         combine(_uiState.map { it.alerts }.distinctUntilChanged(), _userLocation) { alerts, location ->
             alerts to location
-        }.map { (alerts, location) ->
+        }.mapLatest { (alerts, location) ->
+            // mapLatest, not map: a routing call can wait seconds, and with plain map every new
+            // alert list or fix queued behind it, so the distances (and with a walking-time
+            // filter, the whole feed and map) fell further and further behind the database.
             if (location == null) emptyMap() else WalkingRouteRepository.getInstance()
                 .getWalkingRoutes(location, alerts.filter { it.mapCoordinatesOrNull() != null })
         }
