@@ -25,31 +25,40 @@ verified on the emulator with the original repro. Unit tests pass.
 | Low | Event detail promised a reminder for events that had already started. | `f406883` |
 | Low | Copy: "1 areas", "1 alert types", mega hint pointed at the wrong card, onboarding said the gear holds map filters, quiet hours said notifications are "held" though they are dropped, "Pokemon". | `215538e`, `f403c24`, `15fe2bf`, `dbc8463` |
 
-### Backend change (AlsbachScanner, not committed, not deployed)
+### Backend change (AlsbachScanner, deployed 2026-10-01)
 
-`GET /api/history?area=Darmstadt` now matches the city and its zones (`Darmstadt-*`), the same
+`GET /api/history?area=Darmstadt` matches the city and its zones (`Darmstadt-*`), the same
 roll-up the push topics use, and echoes `area` back so the app can tell an old server from a new
-one. The dashboard's exact `area` filter on `/api/admin/history` is unchanged.
+one. The dashboard's exact `area` filter on `/api/admin/history` is unchanged. Files:
+`src/database.js` (`areaGroup`, LIKE wildcards escaped), `src/http_app.js`, new
+`src/history_area_group.test.js` and its `package.json` entry. Deployed with `npm run deploy`;
+the dry run showed only these four files differed from production. Still uncommitted in that
+repo's working tree.
 
-- `src/database.js`: `areaGroup` option in `buildHistoryFilters` (LIKE wildcards escaped).
-- `src/http_app.js`: public `historyResult` maps `?area=` to it and echoes it.
-- `src/history_area_group.test.js` (new) and its entry in `package.json`'s `test` script.
+## Follow-up round
 
-`npm test` passes. These sit in a working tree that already had other uncommitted changes, so
-they were left uncommitted rather than mixed into an unrelated commit.
+- **Feed/map freeze:** the walking-route stage and the alert/Filter Studio collectors now keep only
+  the latest input (`mapLatest` / `collectLatest`), so a slow routing call can no longer leave the
+  feed and map behind the database.
+- **Stale instrumented test** updated for the Settings Back button; the Poké Genie confirm step
+  follows the new "Import" / "Replace roster" label. 24/24 instrumented tests in the touched areas pass.
+- **Polish notes, all addressed:** onboarding intro steps, check marks on selected chips, no fake
+  Allow button for background location, "IV spawns" in the preset; feed cards lead with distance;
+  long-press menu icons and an outline on the card it belongs to; arrival messages use the detail
+  page's snackbar; counters rows align, My Pokémon explains how to enable it, Pokébox moves keep
+  their casing, Battle setup says "Your levels"; Poké Genie dialog says "Import" with no roster and
+  drops the column count; Filter Studio shows zones covered by their city; Spawn insights tab
+  colours, lighter partial "today" bar, "Outside named areas", clearer surge wording; map tools
+  rows aligned and the filter sheet header gets an edge; Mega boost hides "0 of 0" rows; catch
+  route start chips reflect the start source; species pickers find sprites for form species
+  (Shaymin, Thundurus, Urshifu...); GoDex form labels title-cased and not repeated, Sign out vs
+  Disconnect explained; Nearby Radar credits OSM once and the alarm prompt asks once; readable
+  Retry on the offline banner.
+- The GoDex "no back button" note was wrong: the header is there, the earlier screenshot was scrolled.
+  Sprite size differences in the GoDex grid come from the artwork itself and were left alone.
 
-## Worth a look
+## Still open
 
-- **Feed and map froze on a stale list once (not reproduced).** After about five hours and a
-  burst of 300 injected alerts, the feed showed "0 alerts" and the map a pool of 13 old alerts
-  while the database held 32 live raids, 57 rockets and two hundos 50 m away. A force-stop fixed
-  it; a second burst did not reproduce it. The distance pipeline in `PokemonAlertsViewModel`
-  (`combine` into a suspending `getWalkingRoutes` that can wait 6 s) can back up; `mapLatest`
-  would let the newest alert list always win. The local backend rejected every routing request
-  (50-destination cap; production allows 500), so routing was failing throughout.
-- **Stale instrumented test.** `MainNavigationComposeTest.settingsUsesOverviewAndFocusedSubpages`
-  expects no Back button on the Settings overview, but the Settings-gear redesign (`fad0a36`)
-  added one. This branch does not touch that screen's header.
 - **Widgets** log `RemoteViews: Possibly notifying updates for nonexistent view Id` on every refresh.
 - **Compact widget** never shows the nearest alert's distance, even when sorted by Nearest; at
   2×2 the navigate button is clipped.
@@ -60,33 +69,6 @@ they were left uncommitted rather than mixed into an unrelated commit.
 - **Dark theme:** the alert detail header map stays light, and the white status bar icons over
   it are unreadable.
 - **About** credits openrouteservice; routing is Valhalla.
-
-## Smaller polish notes
-
-- Onboarding: a lot of empty space on page 1; selected chips are a faint grey with no check;
-  "Location all the time → Allow" looks enabled before location is granted but does nothing;
-  "High-value catches" includes all spawns.
-- Feed cards put distance last, so "Ends before you arrive · IV · CP" pushes it off screen
-  exactly when it matters. The long-press menu opens well above the pressed card, and only
-  "I'm going" has an icon.
-- Detail: the "Arrival alert set" message covers the Stop/Navigate buttons.
-- Counters: top three rows use larger sprites so names don't line up; "My Pokémon" is disabled
-  without a roster but looks like a normal tab and gives no hint; with Pokébox, moves are
-  lowercase ("Bullet punch") and "Battle setup: L40" shows while the L40 chip is disabled.
-- Poké Genie import: "Replace roster" with no roster yet; "30 columns are not used" is noise.
-- Filter Studio: with zones now rolled up, picking a zone next to its city is redundant;
-  nesting zones under the city chip would show it.
-- Spawn insights: zone area names differ from the rest of the app; partial "today" bar is not
-  marked; the unselected tab label has the selected colour.
-- Map tools sheet: the "Catch route" row is ~9 px left of the others. Map filter sheet: scrolled
-  content shows under the sticky header.
-- Mega boost with no data still lists every mega as "0 of 0 (0%)".
-- Catch routes: "Pick start on map" is highlighted while the text says "Start: Your location".
-- Species pickers: ~38 form species (Shaymin, Thundurus, Urshifu, Zygarde…) have no sprite or Dex #.
-- GoDex: no top bar/back; "Sign out" and "Disconnect GoDex" sit together unexplained; form
-  subtitles repeat the title in lowercase ("alola").
-- Nearby Radar: OSM attribution shown twice; a second widget re-asks for Alarms & reminders.
-- Offline banner (dark): light-blue "Retry" on dark red is low contrast.
 
 ## Checked and fine
 
