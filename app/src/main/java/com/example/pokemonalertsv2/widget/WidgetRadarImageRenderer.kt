@@ -268,7 +268,9 @@ internal object WidgetRadarImageRenderer {
                 outputWidth = input.widthPx,
                 outputHeight = input.heightPx,
                 zoom = viewport.zoom,
-                drawCenterMarker = false
+                drawCenterMarker = false,
+                // The radar layout has its own attribution chip.
+                drawAttribution = false
             )
             val mapAvailable = baseMap != null
             val output = baseMap?.copy(Bitmap.Config.ARGB_8888, true)
