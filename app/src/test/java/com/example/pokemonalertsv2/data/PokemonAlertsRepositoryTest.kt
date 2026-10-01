@@ -184,6 +184,31 @@ class PokemonAlertsRepositoryTest {
     }
 
     @Test
+    fun fetchAlerts_freshInstallTreatsAlreadyLiveAlertsAsSeen() = runTest {
+        val live = sampleAlert("Already live", id = 2)
+        service.alerts = listOf(live)
+        service.syncRevision = 3L
+
+        repository.fetchAlerts()
+
+        assertEquals(emptyList<PokemonAlert>(), repository.detectNewAlerts(listOf(live)))
+        val later = sampleAlert("Arrived later", id = 4)
+        assertEquals(listOf(later), repository.detectNewAlerts(listOf(later)))
+    }
+
+    @Test
+    fun fetchAlerts_cursorResetOnAUsedInstallStillNotifiesWhatItMissed() = runTest {
+        preferences.updateSeenAlertIds(setOf("server:1"))
+        val missed = sampleAlert("Missed", id = 2)
+        service.alerts = listOf(missed)
+        service.syncRevision = 3L
+
+        repository.fetchAlerts()
+
+        assertEquals(listOf(missed), repository.detectNewAlerts(listOf(missed)))
+    }
+
+    @Test
     fun processIncomingAlert_insertsSingleAlertWithoutClearingCache() = runTest {
         val existing = sampleAlert("Existing", id = 1)
         dao.alerts.value = listOf(existing.toEntity())
