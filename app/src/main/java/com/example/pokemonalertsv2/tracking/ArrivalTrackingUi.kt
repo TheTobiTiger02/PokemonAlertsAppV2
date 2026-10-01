@@ -41,8 +41,13 @@ private enum class ArrivalRequirement {
     LOCATION_SERVICES
 }
 
+/**
+ * [onMessage] shows the start/failure confirmations; null falls back to a toast. A screen with
+ * its own snackbar passes one, because a toast sits over whatever is at the bottom of the
+ * screen, which on the alert detail page is the Stop/Navigate bar.
+ */
 @Composable
-fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
+fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): ArrivalTrackingUiController {
     val context = LocalContext.current
     val repository = remember(context) { ArrivalTrackingRepository.getInstance(context) }
     val activeDestination by repository.activeDestination.collectAsStateWithLifecycle()
@@ -50,6 +55,9 @@ fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
     var pendingAlert by remember { mutableStateOf<PokemonAlert?>(null) }
     var replacementAlert by remember { mutableStateOf<PokemonAlert?>(null) }
     var requirement by remember { mutableStateOf<ArrivalRequirement?>(null) }
+    fun message(text: String) {
+        onMessage?.invoke(text) ?: Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    }
 
     fun start(alert: PokemonAlert) {
         scope.launch {
@@ -58,13 +66,9 @@ fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
                 ArrivalTrackingService.start(context)
                 destination
             }.onSuccess {
-                Toast.makeText(
-                    context,
-                    "Arrival alert set for ${it.radiusMeters} m",
-                    Toast.LENGTH_SHORT
-                ).show()
+                message("Arrival alert set for ${it.radiusMeters} m")
             }.onFailure {
-                Toast.makeText(context, "Could not start arrival tracking", Toast.LENGTH_SHORT).show()
+                message("Could not start arrival tracking")
             }
         }
     }
@@ -210,15 +214,11 @@ fun rememberArrivalTrackingUiController(): ArrivalTrackingUiController {
                 activeDestination?.uniqueId == alert.uniqueId -> {
                     scope.launch {
                         repository.stopTracking()
-                        Toast.makeText(context, "Arrival tracking stopped", Toast.LENGTH_SHORT).show()
+                        message("Arrival tracking stopped")
                     }
                 }
                 !alert.isEligibleArrivalDestination() -> {
-                    Toast.makeText(
-                        context,
-                        "This alert is expired or has no valid destination",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    message("This alert is expired or has no valid destination")
                 }
                 activeDestination != null -> replacementAlert = alert
                 else -> requestStart(alert)
