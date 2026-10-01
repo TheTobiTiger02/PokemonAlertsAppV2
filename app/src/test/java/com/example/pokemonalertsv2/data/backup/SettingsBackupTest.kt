@@ -17,7 +17,7 @@ class SettingsBackupTest {
     private fun sample() = mutablePreferencesOf(
         booleanPreferencesKey("notifications_enabled") to true,
         intPreferencesKey("max_distance") to 12,
-        longPreferencesKey("silence_until") to 1_700_000_000_000L,
+        longPreferencesKey("whats_new_seen_at") to 1_700_000_000_000L,
         stringPreferencesKey("selected_area") to "Alsbach",
         stringSetPreferencesKey("allowed_hundo_species") to setOf("Mewtwo", "Rayquaza")
     )
@@ -33,7 +33,7 @@ class SettingsBackupTest {
         assertEquals(5, applied)
         assertEquals(true, restored[booleanPreferencesKey("notifications_enabled")])
         assertEquals(12, restored[intPreferencesKey("max_distance")])
-        assertEquals(1_700_000_000_000L, restored[longPreferencesKey("silence_until")])
+        assertEquals(1_700_000_000_000L, restored[longPreferencesKey("whats_new_seen_at")])
         assertEquals("Alsbach", restored[stringPreferencesKey("selected_area")])
         assertEquals(
             setOf("Mewtwo", "Rayquaza"),
@@ -57,6 +57,27 @@ class SettingsBackupTest {
         assertFalse(text.contains("godex_write_back_url"))
         // The non-secret GoDex settings are still worth backing up.
         assertTrue(SettingsBackup.parse(text).getOrThrow().entries.containsKey("selected_area"))
+    }
+
+    @Test
+    fun `per device sync and session state stays out of the export`() {
+        val prefs = sample().apply {
+            this[longPreferencesKey("alert_sync_revision_live")] = 5507L
+            this[stringPreferencesKey("alert_sync_etag_live")] = "\"etag\""
+            this[longPreferencesKey("silence_until")] = 1_700_000_000_000L
+            this[stringPreferencesKey("raid_watch_alert_json")] = "{}"
+            this[intPreferencesKey("poke_genie_count")] = 2451
+            this[stringPreferencesKey("pokebattler_trainer_number")] = "123"
+        }
+
+        val entries = SettingsBackup.parse(SettingsBackup.export(prefs, exportedAtMillis = 1L))
+            .getOrThrow().entries
+
+        listOf(
+            "alert_sync_revision_live", "alert_sync_etag_live", "silence_until",
+            "raid_watch_alert_json", "poke_genie_count", "pokebattler_trainer_number"
+        ).forEach { assertFalse(it, entries.containsKey(it)) }
+        assertTrue(entries.containsKey("selected_area"))
     }
 
     @Test

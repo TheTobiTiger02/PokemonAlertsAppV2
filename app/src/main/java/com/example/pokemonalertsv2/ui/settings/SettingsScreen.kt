@@ -822,7 +822,7 @@ internal fun SettingsScreen(
                     }, modifier = Modifier.fillMaxWidth()) { Text("Choose eligible alerts in Filter Studio") }
                     SwitchSetting(
                         title = "Enable Notifications",
-                        subtitle = "Receive alerts for new Pokemon nearby",
+                        subtitle = "Receive alerts for new Pokémon nearby",
                         checked = notificationsEnabled,
                         onCheckedChange = { viewModel.updateNotificationsEnabled(it) }
                     )

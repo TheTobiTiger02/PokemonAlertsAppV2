@@ -154,7 +154,7 @@ class RaidCounterPreferences(private val dataStore: DataStore<Preferences>) {
     private inline fun <reified T : Enum<T>> String?.toEnum(default: T): T =
         this?.let { name -> enumValues<T>().firstOrNull { it.name == name } } ?: default
 
-    private companion object {
+    internal companion object {
         val PARTY_POWER_KEY = booleanPreferencesKey("raid_counters_party_power")
         val LEVEL_KEY = intPreferencesKey("raid_counters_attacker_level")
         val WEATHER_KEY = stringPreferencesKey("raid_counters_weather")
