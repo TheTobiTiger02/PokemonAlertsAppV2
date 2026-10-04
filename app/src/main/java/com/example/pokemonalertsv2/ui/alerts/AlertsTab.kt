@@ -61,9 +61,11 @@ fun AlertsTab(
     live: @Composable () -> Unit,
     history: @Composable () -> Unit,
     insights: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Where Back leaves insights for. History, unless insights was opened from somewhere else. */
+    onInsightsBack: () -> Unit = { onSectionChange(AlertsSection.HISTORY) }
 ) {
-    BackHandler(enabled = section == AlertsSection.INSIGHTS) { onSectionChange(AlertsSection.HISTORY) }
+    BackHandler(enabled = section == AlertsSection.INSIGHTS) { onInsightsBack() }
     Column(modifier = modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -73,7 +75,7 @@ fun AlertsTab(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (section == AlertsSection.INSIGHTS) {
-                IconButton(onClick = { onSectionChange(AlertsSection.HISTORY) }) {
+                IconButton(onClick = onInsightsBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to history")
                 }
                 Text(

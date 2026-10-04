@@ -68,6 +68,24 @@ object RaidWatchController {
     }
 
     /**
+     * Stops the watch only when it is watching [alertUniqueId], and says whether it did.
+     *
+     * "Got it" retires one target. If a different raid is being watched -- the trainer
+     * walked on and is now standing at another one -- that watch is still the right
+     * thing on screen and must survive the catch.
+     */
+    suspend fun stopIfWatching(context: Context, alertUniqueId: String): Boolean {
+        val appContext = context.applicationContext
+        val watched = RaidWatchStore(appContext).current() ?: return false
+        if (!isWatching(watched, alertUniqueId)) return false
+        stop(appContext)
+        return true
+    }
+
+    internal fun isWatching(watched: WatchedRaid?, alertUniqueId: String): Boolean =
+        watched?.alert?.uniqueId == alertUniqueId
+
+    /**
      * Re-posts the notification for the currently watched raid and schedules the next tick,
      * or tears the watch down if the raid has ended. Safe to call with no watch active.
      */

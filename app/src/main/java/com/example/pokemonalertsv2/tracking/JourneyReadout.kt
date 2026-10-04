@@ -140,3 +140,20 @@ fun formatJourneyDistance(distanceMeters: Float): String =
     } else {
         String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
     }
+
+/**
+ * The line under the minimized map's bubble. Short enough for an 80dp window: a distance,
+ * "In range", or what a hunt without a target is doing.
+ */
+fun floatingBubbleReadout(
+    hasTarget: Boolean,
+    distanceMeters: Float?,
+    inRange: Boolean,
+    waiting: Boolean,
+    paused: Boolean
+): String = when {
+    !hasTarget -> if (paused) "Paused" else "Searching"
+    inRange -> "In range"
+    waiting || distanceMeters == null -> "Locating"
+    else -> formatJourneyDistance(distanceMeters)
+}

@@ -53,4 +53,84 @@ class FloatingHuntMapInstrumentedTest {
             instrumentation.runOnMainSync { assertEquals(targetZoom, map!!.cameraPosition.zoom, 0.1) }
         } finally { instrumentation.runOnMainSync { overlay.hide() } }
     }
+
+    @Test fun minimizeFoldsIntoTheBubbleAndExpandRestoresTheMap() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        assumeTrue(FloatingMapOverlay.canDraw(context))
+        lateinit var overlay: FloatingMapOverlay
+        val reported = mutableListOf<Boolean>()
+        instrumentation.runOnMainSync {
+            overlay = FloatingMapOverlay(context)
+            overlay.onMinimizedChanged = { reported += it }
+            overlay.show()
+        }
+        try {
+            instrumentation.runOnMainSync {
+                assertTrue(overlay.isShowing)
+                assertFalse(overlay.isMinimized)
+                overlay.minimize()
+                assertTrue(overlay.isMinimized)
+                overlay.setBubbleReadout("120 m")
+                overlay.pulseBubble()
+                overlay.expand()
+                assertFalse(overlay.isMinimized)
+            }
+            assertEquals(listOf(true, false), reported)
+        } finally { instrumentation.runOnMainSync { overlay.hide() } }
+    }
+
+    @Test fun aWindowHiddenWhileMinimizedReopensMinimized() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        assumeTrue(FloatingMapOverlay.canDraw(context))
+        lateinit var overlay: FloatingMapOverlay
+        instrumentation.runOnMainSync {
+            overlay = FloatingMapOverlay(context)
+            overlay.restoreLook(com.example.pokemonalertsv2.data.FloatingMapLook(opacity = 0.5f, minimized = true))
+            overlay.show()
+        }
+        try {
+            instrumentation.runOnMainSync { assertTrue(overlay.isMinimized) }
+        } finally { instrumentation.runOnMainSync { overlay.hide() } }
+    }
+
+    @Test fun followingKeepsTheTrainersZoom() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        assumeTrue(FloatingMapOverlay.canDraw(context))
+        lateinit var overlay: FloatingMapOverlay
+        var map: MapLibreMap? = null
+        instrumentation.runOnMainSync {
+            overlay = FloatingMapOverlay(context)
+            overlay.show { map = it }
+        }
+        try {
+            val deadline = SystemClock.elapsedRealtime() + 30_000
+            var ready = false
+            while (!ready && SystemClock.elapsedRealtime() < deadline) {
+                instrumentation.runOnMainSync { ready = map?.style?.isFullyLoaded == true }
+                SystemClock.sleep(100)
+            }
+            assertTrue("Floating map must load", ready)
+            // Engaging from far out comes down to walking zoom.
+            instrumentation.runOnMainSync { overlay.follow(49.740, 8.6, engage = true) }
+            SystemClock.sleep(1_500)
+            var zoom = 0.0
+            instrumentation.runOnMainSync { zoom = map!!.cameraPosition.zoom }
+            assertEquals(com.example.pokemonalertsv2.ui.alerts.MAP_PIP_CLOSE_ZOOM, zoom, 0.1)
+            // The trainer zooms out; following the next fix keeps their zoom and centres.
+            instrumentation.runOnMainSync {
+                map!!.moveCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomTo(15.5))
+                overlay.follow(49.741, 8.601)
+            }
+            SystemClock.sleep(1_500)
+            instrumentation.runOnMainSync {
+                val camera = map!!.cameraPosition
+                assertEquals(15.5, camera.zoom, 0.1)
+                assertEquals(49.741, camera.target!!.latitude, 0.0005)
+                assertEquals(8.601, camera.target!!.longitude, 0.0005)
+            }
+        } finally { instrumentation.runOnMainSync { overlay.hide() } }
+    }
 }

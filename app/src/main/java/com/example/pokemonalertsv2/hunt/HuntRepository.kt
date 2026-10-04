@@ -63,7 +63,21 @@ data class HuntSession(
     val paused: Boolean = false,
     /** Optional polygon the hunt is limited to; alerts outside it are never suggested. */
     val area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint> = emptyList()
-)
+) {
+    /** The same trip, looking for something else. See [HuntRepository.updateTargets]. */
+    fun withTargets(
+        name: String,
+        definition: FilterDefinition,
+        savedHuntId: String?,
+        area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint>
+    ): HuntSession = copy(
+        name = name,
+        definition = definition,
+        savedHuntId = savedHuntId,
+        area = area,
+        paused = false
+    )
+}
 
 /**
  * Stores the active hunt. One at a time, deliberately: a hunt owns the arrival
@@ -132,12 +146,100 @@ class HuntRepository private constructor(context: Context) {
             startedAtMillis = nowMillis,
             area = area
         )
-        write(session)
+        dataStore.edit { preferences ->
+            preferences[ACTIVE_HUNT_KEY] = json.encodeToString(HuntSession.serializer(), session)
+            preferences.remove(HUNT_STATS_KEY)
+        }
         session
     }
 
     suspend fun stop() {
-        dataStore.edit { preferences -> preferences.remove(ACTIVE_HUNT_KEY) }
+        dataStore.edit { preferences ->
+            preferences.remove(ACTIVE_HUNT_KEY)
+            preferences.remove(HUNT_STATS_KEY)
+        }
+    }
+
+    /**
+     * Ends the hunt and keeps a summary of it for the trainer to see.
+     *
+     * One edit, so the summary is built from exactly the session and stats being cleared.
+     * Returns the summary when it was worth keeping, null otherwise.
+     */
+    suspend fun finish(nowMillis: Long = System.currentTimeMillis()): HuntSummary? {
+        var summary: HuntSummary? = null
+        dataStore.edit { preferences ->
+            val session = preferences[ACTIVE_HUNT_KEY]?.decodeSession()
+            if (session != null) {
+                val stats = preferences[HUNT_STATS_KEY]?.decodeStats() ?: HuntStats()
+                summary = huntSummary(session, stats, nowMillis).takeIf { it.isWorthShowing() }
+            }
+            summary?.let { preferences[LAST_SUMMARY_KEY] = json.encodeToString(HuntSummary.serializer(), it) }
+            preferences.remove(ACTIVE_HUNT_KEY)
+            preferences.remove(HUNT_STATS_KEY)
+        }
+        return summary
+    }
+
+    /**
+     * Swaps what the running hunt is looking for without ending it.
+     *
+     * Everything that belongs to the trip -- when it started, what has been caught, the
+     * distance walked, the leg being walked -- carries over. The route is the tracking
+     * service's business: it sees the definition change and plans again.
+     */
+    suspend fun updateTargets(
+        name: String,
+        definition: FilterDefinition,
+        savedHuntId: String?,
+        area: List<com.example.pokemonalertsv2.catchroutes.CatchPoint>
+    ) {
+        dataStore.edit { preferences ->
+            val session = preferences[ACTIVE_HUNT_KEY]?.decodeSession() ?: return@edit
+            preferences[ACTIVE_HUNT_KEY] = json.encodeToString(
+                HuntSession.serializer(),
+                session.withTargets(name, definition, savedHuntId, area)
+            )
+            // A new search is a reason to walk again, not a reason to stay parked.
+            preferences[HUNT_STATS_KEY]?.decodeStats()?.let { stats ->
+                preferences[HUNT_STATS_KEY] = stats.resumed(System.currentTimeMillis()).encode()
+            }
+        }
+    }
+
+    /** What the running hunt has done so far. */
+    val statsFlow: Flow<HuntStats> = dataStore.data
+        .map { preferences -> preferences[HUNT_STATS_KEY]?.decodeStats() ?: HuntStats() }
+        .distinctUntilChanged()
+
+    suspend fun recordCatch(catch: HuntCatch) = editStats { it.withCatch(catch) }
+
+    suspend fun forgetCatch(id: String) = editStats { it.withoutCatch(id) }
+
+    /** Feeds one accepted fix into the distance walked. */
+    suspend fun recordFix(latitude: Double, longitude: Double, accuracyMeters: Float) =
+        editStats { it.withFix(latitude, longitude, accuracyMeters) }
+
+    private suspend fun editStats(transform: (HuntStats) -> HuntStats) {
+        dataStore.edit { preferences ->
+            if (preferences[ACTIVE_HUNT_KEY] == null) return@edit
+            val current = preferences[HUNT_STATS_KEY]?.decodeStats() ?: HuntStats()
+            val updated = transform(current)
+            if (updated != current) preferences[HUNT_STATS_KEY] = updated.encode()
+        }
+    }
+
+    /** The last finished hunt, until the trainer has looked at it. */
+    val lastSummary: Flow<HuntSummary?> = dataStore.data
+        .map { preferences ->
+            preferences[LAST_SUMMARY_KEY]?.let { raw ->
+                runCatching { json.decodeFromString(HuntSummary.serializer(), raw) }.getOrNull()
+            }
+        }
+        .distinctUntilChanged()
+
+    suspend fun clearLastSummary() {
+        dataStore.edit { preferences -> preferences.remove(LAST_SUMMARY_KEY) }
     }
 
     /**
@@ -162,6 +264,9 @@ class HuntRepository private constructor(context: Context) {
             if (session.paused == paused) return@edit
             preferences[ACTIVE_HUNT_KEY] =
                 json.encodeToString(HuntSession.serializer(), session.copy(paused = paused))
+            val stats = preferences[HUNT_STATS_KEY]?.decodeStats() ?: HuntStats()
+            val now = System.currentTimeMillis()
+            preferences[HUNT_STATS_KEY] = (if (paused) stats.paused(now) else stats.resumed(now)).encode()
         }
     }
 
@@ -230,18 +335,19 @@ class HuntRepository private constructor(context: Context) {
     private fun List<SavedHunt>.encode(): String =
         json.encodeToString(ListSerializer(SavedHunt.serializer()), this)
 
-    private suspend fun write(session: HuntSession) {
-        dataStore.edit { preferences ->
-            preferences[ACTIVE_HUNT_KEY] = json.encodeToString(HuntSession.serializer(), session)
-        }
-    }
-
     private fun String.decodeSession(): HuntSession? =
         runCatching { json.decodeFromString(HuntSession.serializer(), this) }.getOrNull()
+
+    private fun String.decodeStats(): HuntStats? =
+        runCatching { json.decodeFromString(HuntStats.serializer(), this) }.getOrNull()
+
+    private fun HuntStats.encode(): String = json.encodeToString(HuntStats.serializer(), this)
 
     companion object {
         private val ACTIVE_HUNT_KEY = stringPreferencesKey("active_hunt")
         private val SAVED_HUNTS_KEY = stringPreferencesKey("saved_hunts")
+        private val HUNT_STATS_KEY = stringPreferencesKey("active_hunt_stats")
+        private val LAST_SUMMARY_KEY = stringPreferencesKey("last_hunt_summary")
 
         @Volatile
         private var instance: HuntRepository? = null

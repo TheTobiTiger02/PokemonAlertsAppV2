@@ -115,6 +115,10 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.hunt.HuntMapFocus
+import com.example.pokemonalertsv2.hunt.recordHuntCatch
+import com.example.pokemonalertsv2.hunt.HuntTargetSheet
+import com.example.pokemonalertsv2.hunt.startHunt
+import com.example.pokemonalertsv2.hunt.updateHunt
 import com.example.pokemonalertsv2.hunt.huntRouteFocusCoordinates
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.HuntPlan
@@ -131,7 +135,6 @@ import com.example.pokemonalertsv2.tracking.JourneyReadoutSurface
 import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
 import com.example.pokemonalertsv2.tracking.shouldLabelJourneyOnMap
 import com.example.pokemonalertsv2.tracking.journeyDetailText
-import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
@@ -349,6 +352,9 @@ fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
     openMapToolsRequested: Boolean = false,
     onMapToolsRequestConsumed: () -> Unit = {},
+    openHuntSetupRequested: Boolean = false,
+    onHuntSetupRequestConsumed: () -> Unit = {},
+    onHuntSetupClosed: (started: Boolean) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     showBackButton: Boolean = true,
@@ -396,6 +402,9 @@ fun AlertsMapRoute(
     AlertsMapScreen(
         openMapToolsRequested = openMapToolsRequested,
         onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        openHuntSetupRequested = openHuntSetupRequested,
+        onHuntSetupRequestConsumed = onHuntSetupRequestConsumed,
+        onHuntSetupClosed = onHuntSetupClosed,
         onOpenSettings = onOpenSettings,
         alerts = uiState.alerts,
         onBack = onBack,
@@ -461,6 +470,9 @@ fun AlertsMapScreen(
     alerts: List<PokemonAlert>,
     openMapToolsRequested: Boolean = false,
     onMapToolsRequestConsumed: () -> Unit = {},
+    openHuntSetupRequested: Boolean = false,
+    onHuntSetupRequestConsumed: () -> Unit = {},
+    onHuntSetupClosed: (started: Boolean) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -505,6 +517,9 @@ fun AlertsMapScreen(
     AlertsMapScreenContent(
         openMapToolsRequested = openMapToolsRequested,
         onMapToolsRequestConsumed = onMapToolsRequestConsumed,
+        openHuntSetupRequested = openHuntSetupRequested,
+        onHuntSetupRequestConsumed = onHuntSetupRequestConsumed,
+        onHuntSetupClosed = onHuntSetupClosed,
         onOpenSettings = onOpenSettings,
         alerts = alerts,
         onBack = onBack,
@@ -555,6 +570,9 @@ internal fun AlertsMapScreenContent(
     alerts: List<PokemonAlert>,
     openMapToolsRequested: Boolean = false,
     onMapToolsRequestConsumed: () -> Unit = {},
+    openHuntSetupRequested: Boolean = false,
+    onHuntSetupRequestConsumed: () -> Unit = {},
+    onHuntSetupClosed: (started: Boolean) -> Unit = {},
     onOpenSettings: (() -> Unit)? = null,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -653,6 +671,16 @@ internal fun AlertsMapScreenContent(
         if (openMapToolsRequested) {
             showMapTools = true
             onMapToolsRequestConsumed()
+        }
+    }
+    // The hunt's target picker, to start a hunt or change the running one. Hosted here so
+    // the tools sheet, the Tools tab and the floating map's "Edit targets" share one sheet.
+    var showHuntSetup by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openHuntSetupRequested) {
+        if (openHuntSetupRequested) {
+            showMapTools = false
+            showHuntSetup = true
+            onHuntSetupRequestConsumed()
         }
     }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1289,20 +1317,14 @@ internal fun AlertsMapScreenContent(
                 val caught = renderedAlerts.firstOrNull { it.uniqueId == selectedAlertId }
                 if (caught != null) {
                     scope.launch {
+                        recordHuntCatch(context, caught, huntTargetTitle(caught))
                         runCatching {
-                            alertPreferences.addDismissedAlert(caught.uniqueId)
-                            // Without this the window's tick was the one catch with
-                            // no way back: nothing recorded the offer.
-                            alertPreferences.rememberCaughtAlert(
-                                caught.uniqueId,
-                                huntTargetTitle(caught)
-                            )
-                            AlertsWidgetProvider.requestUpdate(context)
                             huntRepository.setTarget(null)
                             arrivalTrackingRepository.stopTracking()
                         }
                     }
-                    selectedAlertId = null
+                    // Stepped from the caught alert, not from nothing: from nothing the
+                    // step lands on the nearest alert, which is the one just caught.
                     stepBrowseSelection(forward = true)
                 }
             }
@@ -2415,10 +2437,10 @@ internal fun AlertsMapScreenContent(
                             }
                         }
                     },
-                    catalog = filterCatalog,
-                    artwork = filterArtwork,
-                    questRewardThumbnails = questRewardThumbnails,
-                    categoryCounts = categoryCounts,
+                    onOpenHuntSetup = {
+                        showMapTools = false
+                        showHuntSetup = true
+                    },
                     userLocation = userLocation,
                     onOpenCatchRoutes = {
                         showMapTools = false
@@ -2438,6 +2460,31 @@ internal fun AlertsMapScreenContent(
                     }
                 )
             }
+        }
+        if (!compactPictureInPicture && showHuntSetup) {
+            HuntTargetSheet(
+                catalog = filterCatalog,
+                artwork = filterArtwork,
+                questRewardThumbnails = questRewardThumbnails,
+                categoryCounts = categoryCounts,
+                editing = huntSession,
+                onDismiss = {
+                    showHuntSetup = false
+                    onHuntSetupClosed(false)
+                },
+                onStart = { name, definition, savedHuntId, area ->
+                    val editing = huntSession != null
+                    showHuntSetup = false
+                    scope.launch {
+                        if (editing) {
+                            updateHunt(context, name, definition, savedHuntId, area)
+                        } else {
+                            startHunt(context, name, definition, savedHuntId, area)
+                        }
+                    }
+                    onHuntSetupClosed(true)
+                }
+            )
         }
         if (!compactPictureInPicture && showMegaBoost) {
             com.example.pokemonalertsv2.megaboost.MegaBoostSheet(onDismiss = { showMegaBoost = false })

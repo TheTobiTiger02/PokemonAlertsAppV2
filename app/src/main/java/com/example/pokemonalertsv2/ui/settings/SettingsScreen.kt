@@ -166,7 +166,12 @@ internal fun SettingsScreen(
     requestedDestination: SettingsDestination? = null,
     onRequestedDestinationConsumed: () -> Unit = {},
     /** Set when Settings opens from a gear: the overview then has a back arrow to where it came from. */
-    onClose: (() -> Unit)? = null
+    onClose: (() -> Unit)? = null,
+    /**
+     * A page Settings was opened straight onto from outside, such as GoDex from the Tools tab.
+     * Back from that page closes Settings rather than detouring through the overview.
+     */
+    closeFrom: SettingsDestination? = null
 ) {
     var destinationName by rememberSaveable { mutableStateOf(SettingsDestination.OVERVIEW.name) }
     val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
@@ -184,9 +189,11 @@ internal fun SettingsScreen(
         SettingsDestination.OVERVIEW
     }
 
-    BackHandler(enabled = destination != SettingsDestination.OVERVIEW) {
-        navigateTo(parentDestination)
+    val closesSettings = onClose != null && destination == closeFrom
+    val goBack: () -> Unit = {
+        if (closesSettings) onClose?.invoke() else navigateTo(parentDestination)
     }
+    BackHandler(enabled = destination != SettingsDestination.OVERVIEW) { goBack() }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
@@ -321,7 +328,7 @@ internal fun SettingsScreen(
                         ) { showBack ->
                             if (showBack) {
                                 IconButton(onClick = {
-                                    if (destination != SettingsDestination.OVERVIEW) navigateTo(parentDestination)
+                                    if (destination != SettingsDestination.OVERVIEW) goBack()
                                     else onClose?.invoke()
                                 }) {
                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

@@ -1,6 +1,5 @@
 package com.example.pokemonalertsv2.hunt
 
-import android.os.Build
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -30,30 +30,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.data.FilterCatalog
-import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
-import com.example.pokemonalertsv2.tracking.JourneyOverlay
-import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
-import com.example.pokemonalertsv2.tracking.shouldOpenHuntPictureInPicture
 import kotlinx.coroutines.launch
 
 /**
- * Start or stop a hunt from the map's control panel.
+ * Start, edit or stop a hunt from the map's control panel.
  *
- * The target is chosen in place — see [HuntTargetSheet]. There is no step where
- * the trainer has to have prepared a saved profile first.
+ * The target is chosen in [HuntTargetSheet], which the map hosts so the Tools tab and the
+ * floating map's "Edit targets" can open the very same sheet: [onOpenHuntSetup] opens it,
+ * to start a hunt or, while one runs, to change what it looks for.
  */
 @Composable
 fun HuntControls(
-    catalog: FilterCatalog,
-    artwork: Map<String, String>,
-    questRewardThumbnails: Map<String, String>,
-    categoryCounts: Map<AlertCategory, Int>,
-    onHuntStarted: () -> Unit,
+    onOpenHuntSetup: () -> Unit,
     userLocation: android.location.Location? = null,
     modifier: Modifier = Modifier
 ) {
@@ -67,25 +59,16 @@ fun HuntControls(
 
     val batterySaverEnabled by huntRepository.batterySaverEnabled.collectAsStateWithLifecycle(initialValue = false)
     var batterySaverProblem by remember { mutableStateOf<String?>(null) }
-    var pickerOpen by remember { mutableStateOf(false) }
     val panelOpenedAt = remember { System.currentTimeMillis() }
     val lastCaught by remember(context) {
         AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
     }.collectAsStateWithLifecycle(initialValue = null)
-    val overlayAllowed by remember(context) {
-        AlertPreferences(context.alertPreferencesDataStore).journeyOverlayEnabled
-    }.collectAsStateWithLifecycle(initialValue = false)
-    val readoutSurface = resolveJourneyReadoutSurface(
-        sdkInt = Build.VERSION.SDK_INT,
-        canDrawOverlays = JourneyOverlay.canDraw(context),
-        overlayAllowed = overlayAllowed
-    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         val active = session
         if (active == null) {
             FilledTonalButton(
-                onClick = { pickerOpen = true },
+                onClick = onOpenHuntSetup,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -98,11 +81,11 @@ fun HuntControls(
                 Text("Start a hunt", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = "Hunting ${active.name}",
                         style = MaterialTheme.typography.titleSmall,
@@ -130,17 +113,32 @@ fun HuntControls(
                         )
                     }
                 }
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            // One path for every stop button -- this one, the
-                            // window's, and the notification's -- so they cannot
-                            // end up ending different amounts of the hunt.
-                            ArrivalTrackingService.stopEverything(context)
-                        }
-                    }
+                // Changing what you hunt is the everyday action, stopping the rare one.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Stop hunt")
+                    FilledTonalButton(
+                        onClick = onOpenHuntSetup,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Edit targets", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                // One path for every stop button -- this one, the
+                                // window's, and the notification's -- so they cannot
+                                // end up ending different amounts of the hunt.
+                                ArrivalTrackingService.stopEverything(context, fromApp = true)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text("Stop hunt", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
@@ -196,49 +194,5 @@ fun HuntControls(
                 )
             }
         }
-    }
-
-    if (pickerOpen) {
-        HuntTargetSheet(
-            catalog = catalog,
-            artwork = artwork,
-            questRewardThumbnails = questRewardThumbnails,
-            categoryCounts = categoryCounts,
-            onDismiss = { pickerOpen = false },
-            onStart = { name, definition, savedHuntId, area ->
-                scope.launch {
-                    // Remembered before the hunt starts, so the row exists to point
-                    // the session at. Re-running an identical hunt touches that row
-                    // rather than leaving a second copy beside it.
-                    val saved = huntRepository.recordStart(
-                        name = name,
-                        definition = definition,
-                        replacingId = savedHuntId,
-                        area = area
-                    )
-                    // The hunt is written first, then the old journey is cleared.
-                    // The other order leaves a moment with neither a destination nor
-                    // a hunt, and a service running for the old journey reads that as
-                    // "nothing to do" and stops itself mid-start.
-                    huntRepository.start(
-                        name = name,
-                        definition = definition,
-                        savedHuntId = saved.id,
-                        area = area
-                    )
-                    // A new hunt supersedes whatever you were walking to. Without
-                    // this the old journey simply carries on under the new hunt's
-                    // name, which is how a raid hunt ended up pointing at a spawn.
-                    ArrivalTrackingRepository.getInstance(context).stopTracking()
-                    pickerOpen = false
-                    // Start the service even with nothing to walk to yet: it is
-                    // what waits for the first match to arrive.
-                    ArrivalTrackingService.startHunt(context)
-                    // Only where the floating map is the readout. On a device with the
-                    // status bar chip, opening it would hide the chip for the whole hunt.
-                    if (shouldOpenHuntPictureInPicture(readoutSurface)) onHuntStarted()
-                }
-            }
-        )
     }
 }

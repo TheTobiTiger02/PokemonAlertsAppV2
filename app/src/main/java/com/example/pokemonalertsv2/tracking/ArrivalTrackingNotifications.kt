@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.CaughtAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.hunt.headline
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.hunt.huntInRangeLines
 import com.example.pokemonalertsv2.hunt.huntInRangeTitle
@@ -40,6 +41,8 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_GOT_IT = 40_044
     private const val REQUEST_OVERLAY = 40_045
     private const val REQUEST_UNDO = 40_046
+    private const val REQUEST_SUMMARY = 40_047
+    const val HUNT_SUMMARY_NOTIFICATION_ID = 40_048
 
     /** Assumed max journey distance for the progress bar, in meters. */
     private const val PROGRESS_MAX_METERS = 10_000f
@@ -404,6 +407,46 @@ internal object ArrivalTrackingNotifications {
                 .invoke(this, true)
         }
         return this
+    }
+
+    /**
+     * "Hunt finished", for a hunt ended away from the app -- the window's close button or
+     * the notification's Stop. Tapping it opens the app, which shows the summary sheet for
+     * as long as the summary is waiting to be seen. Quiet: the trainer just pressed stop.
+     */
+    fun postHuntSummary(context: Context, summary: com.example.pokemonalertsv2.hunt.HuntSummary) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val caught = summary.catches.joinToString(", ") { it.name }
+        val headline = summary.headline()
+        val body = if (caught.isEmpty()) headline else "$headline\n$caught"
+        val open = PendingIntent.getActivity(
+            context,
+            REQUEST_SUMMARY,
+            Intent(context, com.example.pokemonalertsv2.MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_ONGOING)
+            .setSmallIcon(R.drawable.ic_poke_notification)
+            .setContentTitle("Hunt finished: ${summary.name}")
+            .setContentText(headline)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(HUNT_SUMMARY_NOTIFICATION_ID, notification) }
+    }
+
+    fun cancelHuntSummary(context: Context) {
+        NotificationManagerCompat.from(context).cancel(HUNT_SUMMARY_NOTIFICATION_ID)
     }
 
     fun postArrival(context: Context, destination: TrackedDestination) {

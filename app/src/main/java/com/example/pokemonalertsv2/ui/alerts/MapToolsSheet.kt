@@ -32,7 +32,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.hunt.HuntControls
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 
@@ -48,10 +47,7 @@ internal fun MapToolsContent(
     refreshing: Boolean,
     onRefresh: () -> Unit,
     onEnterPictureInPicture: (() -> Unit)?,
-    catalog: FilterCatalog,
-    artwork: Map<String, String>,
-    questRewardThumbnails: Map<String, String>,
-    categoryCounts: Map<AlertCategory, Int>,
+    onOpenHuntSetup: () -> Unit,
     userLocation: android.location.Location? = null,
     onOpenCatchRoutes: () -> Unit = {},
     onOpenMegaBoost: () -> Unit = {},
@@ -59,23 +55,19 @@ internal fun MapToolsContent(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (onEnterPictureInPicture != null) {
-            Text(
-                text = "Hunt",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            HuntControls(
-                catalog = catalog,
-                artwork = artwork,
-                questRewardThumbnails = questRewardThumbnails,
-                categoryCounts = categoryCounts,
-                userLocation = userLocation,
-                onHuntStarted = onEnterPictureInPicture
-            )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        }
+        // Every device can hunt: the hunt's floating map is an overlay window, not
+        // picture-in-picture, so it no longer waits on PiP support.
+        Text(
+            text = "Hunt",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        HuntControls(
+            onOpenHuntSetup = onOpenHuntSetup,
+            userLocation = userLocation
+        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         ToolRow(
             title = "Catch route",
             subtitle = "Plan a walk past the most spawnpoints",
