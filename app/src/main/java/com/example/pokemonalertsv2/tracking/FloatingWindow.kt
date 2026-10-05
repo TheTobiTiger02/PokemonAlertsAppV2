@@ -12,6 +12,7 @@ import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
 import com.example.pokemonalertsv2.R
@@ -30,7 +31,8 @@ import kotlin.math.roundToInt
  * Two details are load-bearing for anything that hosts a MapLibre `MapView` in here:
  *  - MapLibre defaults to a **SurfaceView**, which renders black in a translucent overlay
  *    window. `MapLibreMapOptions.textureMode` moves it to a TextureView, which composites
- *    normally, and this window is opaque.
+ *    normally. The window is translucent so rounded corners and the round bubble stay round,
+ *    and so [setOpacity] can let the game show through.
  *  - `MapView` reads styled attributes, so it needs [themedContext]. The application context
  *    alone throws while inflating.
  */
@@ -65,8 +67,24 @@ internal class FloatingWindow(
     private var savedWidth: Int? = null
     private var savedHeight: Int? = null
 
+    /**
+     * While compact the window is a small bubble: its own size, its own position, and none of
+     * it written over the geometry the full window returns to.
+     */
+    var isCompact: Boolean = false
+        private set
+    private var bubbleX: Int? = null
+    private var bubbleY: Int? = null
+    private var compactWidth = 0
+    private var compactHeight = 0
+
+    private var opacity = 1f
+
     /** Reported on every drag and resize so a service can persist the geometry. */
     var onGeometryChanged: (x: Int, y: Int, width: Int, height: Int) -> Unit = { _, _, _, _ -> }
+
+    /** Reported when the compact bubble is dragged; its position is kept apart from the window's. */
+    var onCompactMoved: (x: Int, y: Int) -> Unit = { _, _ -> }
 
     /**
      * Keeps the geometry a drag or resize just produced, so hiding and showing the window again
@@ -91,6 +109,12 @@ internal class FloatingWindow(
         if (height > 0) savedHeight = height
     }
 
+    /** Where the bubble was last left. Negative values are ignored. */
+    fun restoreCompactPosition(x: Int, y: Int) {
+        if (x >= 0) bubbleX = x
+        if (y >= 0) bubbleY = y
+    }
+
     fun dp(value: Int): Int = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
         value.toFloat(),
@@ -103,6 +127,7 @@ internal class FloatingWindow(
      */
     fun show(content: View): Boolean {
         if (root != null) return true
+        content.alpha = opacity
         val params = buildLayoutParams()
         val added = runCatching { windowManager.addView(content, params) }
             .onFailure { Log.w(TAG, "Could not add the floating window", it) }
@@ -121,9 +146,61 @@ internal class FloatingWindow(
         layoutParams = null
     }
 
+    /**
+     * The content's opacity, 0..1: the map, the controls and the bubble fade alike.
+     *
+     * Deliberately the content view's alpha, not `LayoutParams.alpha`. Android stops sending
+     * touches to an overlay window whose *window* alpha is below its occlusion threshold
+     * (logged as "window opacity ... is below the threshold"), so a faded window would also
+     * be a dead one. A view's alpha leaves the window fully opaque as far as input knows.
+     */
+    fun setOpacity(alpha: Float) {
+        opacity = alpha
+        root?.alpha = alpha
+    }
+
+    /**
+     * Folds the window into a [widthPx] x [heightPx] bubble. The full window's geometry is kept
+     * so [exitCompact] puts it back exactly where it was.
+     */
+    fun enterCompact(widthPx: Int, heightPx: Int) {
+        compactWidth = widthPx
+        compactHeight = heightPx
+        if (isCompact) return
+        isCompact = true
+        val params = layoutParams ?: return
+        savedX = params.x
+        savedY = params.y
+        savedWidth = params.width
+        savedHeight = params.height
+        params.width = widthPx
+        params.height = heightPx
+        params.x = bubbleX ?: params.x
+        params.y = bubbleY ?: params.y
+        applyLayout(params)
+    }
+
+    fun exitCompact() {
+        if (!isCompact) return
+        isCompact = false
+        val params = layoutParams ?: return
+        params.x = savedX ?: dp(size.xDp)
+        params.y = savedY ?: dp(size.yDp)
+        params.width = savedWidth ?: dp(size.widthDp)
+        params.height = savedHeight ?: dp(size.heightDp)
+        applyLayout(params)
+    }
+
     /** Makes [view] the handle the window is dragged by. Never the map, which needs its own touches. */
     @SuppressLint("ClickableViewAccessibility")
     fun dragWith(view: View) = view.setOnTouchListener(MoveListener())
+
+    /**
+     * Makes [view] drag the window, and a press that never travels past the touch slop a tap.
+     * For the bubble, which is all handle and still has to open on a tap.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    fun dragOrTapWith(view: View, onTap: () -> Unit) = view.setOnTouchListener(MoveListener(onTap))
 
     /** The corner grip that resizes the window, sized [gripDp] square by the caller's layout. */
     @SuppressLint("ClickableViewAccessibility")
@@ -139,31 +216,37 @@ internal class FloatingWindow(
             setStroke(dp(1), 0x22000000)
         }
         elevation = dp(2).toFloat()
+        contentDescription = "Resize map"
         setOnTouchListener(ResizeListener())
     }
 
     private fun buildLayoutParams(): WindowManager.LayoutParams =
         WindowManager.LayoutParams(
-            savedWidth ?: dp(size.widthDp),
-            savedHeight ?: dp(size.heightDp),
+            if (isCompact) compactWidth else savedWidth ?: dp(size.widthDp),
+            if (isCompact) compactHeight else savedHeight ?: dp(size.heightDp),
             overlayType(),
             // Not focusable so it never steals input from Pokémon GO; touch still reaches the
             // window, which is what dragging, panning and pinching need.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            // Opaque, not translucent: see the class note about SurfaceView.
-            PixelFormat.OPAQUE
+            // Translucent: see the class note about SurfaceView and TextureView.
+            PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = savedX ?: dp(size.xDp)
-            y = savedY ?: dp(size.yDp)
+            x = (if (isCompact) bubbleX else null) ?: savedX ?: dp(size.xDp)
+            y = (if (isCompact) bubbleY else null) ?: savedY ?: dp(size.yDp)
         }
 
-    /** Moves the window. Lives on the handle, never on the content. */
-    private inner class MoveListener : View.OnTouchListener {
+    /**
+     * Moves the window. Lives on the handle, never on the content. With [onTap] it also
+     * tells a tap from a drag by the system touch slop.
+     */
+    private inner class MoveListener(private val onTap: (() -> Unit)? = null) : View.OnTouchListener {
         private var downX = 0f
         private var downY = 0f
         private var startX = 0
         private var startY = 0
+        private var dragging = false
+        private val touchSlop = ViewConfiguration.get(appContext).scaledTouchSlop
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(view: View, event: MotionEvent): Boolean {
@@ -174,17 +257,31 @@ internal class FloatingWindow(
                     downY = event.rawY
                     startX = params.x
                     startY = params.y
+                    dragging = false
                     // Claim the gesture: declining here is what breaks dragging.
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    params.x = startX + (event.rawX - downX).roundToInt()
-                    params.y = startY + (event.rawY - downY).roundToInt()
+                    val dx = event.rawX - downX
+                    val dy = event.rawY - downY
+                    if (!dragging && dx * dx + dy * dy < touchSlop * touchSlop) return true
+                    dragging = true
+                    params.x = startX + dx.roundToInt()
+                    params.y = startY + dy.roundToInt()
                     applyLayout(params)
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    rememberGeometry(params)
+                    when {
+                        !dragging && event.action == MotionEvent.ACTION_UP && onTap != null -> onTap()
+                        !dragging -> Unit
+                        isCompact -> {
+                            bubbleX = params.x
+                            bubbleY = params.y
+                            onCompactMoved(params.x, params.y)
+                        }
+                        else -> rememberGeometry(params)
+                    }
                     true
                 }
                 else -> false

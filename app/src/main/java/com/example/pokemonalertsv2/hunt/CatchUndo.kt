@@ -4,8 +4,10 @@ import android.content.Context
 import android.util.Log
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.CaughtAlert
+import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
@@ -36,6 +38,42 @@ internal fun isUndoOfferLive(
 internal fun undoOfferLabel(caught: CaughtAlert): String = "Undo catching ${caught.displayName}"
 
 /**
+ * The single way a target is retired with "Got it", wherever the tick was pressed.
+ *
+ * Dismisses it like a swipe on the feed would, remembers it for [undoLastCatch], adds it
+ * to the hunt's catch list, and ends its Raid Watch: the hundo CP and counters belong to
+ * the raid you were standing at, and once it is caught the chip has to make way for the
+ * next target rather than keep counting down a raid you have finished with.
+ */
+suspend fun recordHuntCatch(
+    context: Context,
+    alert: PokemonAlert,
+    displayName: String,
+    nowMillis: Long = System.currentTimeMillis()
+) {
+    val applicationContext = context.applicationContext
+    val raidWatched = runCatching { RaidWatchController.stopIfWatching(applicationContext, alert.uniqueId) }
+        .onFailure { Log.w(TAG, "Could not end the caught raid's watch", it) }
+        .getOrDefault(false)
+    runCatching {
+        val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
+        preferences.addDismissedAlert(alert.uniqueId)
+        preferences.rememberCaughtAlert(alert.uniqueId, displayName, nowMillis, raidWatched)
+        AlertsWidgetProvider.requestUpdate(applicationContext)
+    }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
+    runCatching {
+        HuntRepository.getInstance(applicationContext).recordCatch(
+            HuntCatch(
+                id = alert.uniqueId,
+                name = displayName,
+                imageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() } ?: alert.imageUrl?.takeIf { it.isNotBlank() },
+                atMillis = nowMillis
+            )
+        )
+    }.onFailure { Log.w(TAG, "Could not add the catch to the hunt", it) }
+}
+
+/**
  * The single way back from a catch, wherever the tick was pressed.
  *
  * There are four of those — the notification action, the floating window, the
@@ -62,7 +100,13 @@ suspend fun undoLastCatch(
         // and a second tap arriving from another surface must find nothing to do.
         preferences.forgetCaughtAlert()
         AlertsWidgetProvider.requestUpdate(applicationContext)
-        retargetHunt(applicationContext, record.id, nowMillis)
+        HuntRepository.getInstance(applicationContext).forgetCatch(record.id)
+        val alert = PokemonAlertsRepository.create(applicationContext).alerts.first()
+            .firstOrNull { it.uniqueId == record.id }
+        // The catch took the raid's hundo CP and counters away; taking it back returns them.
+        // start() refuses a raid that has ended in the meantime.
+        if (record.raidWatched && alert != null) RaidWatchController.start(applicationContext, alert, nowMillis)
+        retargetHunt(applicationContext, alert, nowMillis)
         true
     }.getOrElse {
         Log.w(TAG, "Could not undo the last catch", it)
@@ -78,13 +122,10 @@ suspend fun undoLastCatch(
  * somewhere else. Silently skipped once the alert has expired — restoring it to
  * the list is still right, walking to it is not.
  */
-private suspend fun retargetHunt(context: Context, alertId: String, nowMillis: Long) {
+private suspend fun retargetHunt(context: Context, restored: PokemonAlert?, nowMillis: Long) {
     val huntRepository = HuntRepository.getInstance(context)
     if (!huntRepository.isHunting()) return
-    val alert = PokemonAlertsRepository.create(context).alerts.first()
-        .firstOrNull { it.uniqueId == alertId }
-        ?.takeIf { it.isEligibleArrivalDestination(nowMillis) }
-        ?: return
+    val alert = restored?.takeIf { it.isEligibleArrivalDestination(nowMillis) } ?: return
     ArrivalTrackingRepository.getInstance(context).startTracking(alert, nowMillis)
     huntRepository.setTarget(alert.uniqueId)
 }

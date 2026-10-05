@@ -81,7 +81,13 @@ internal fun HuntTargetSheet(
     questRewardThumbnails: Map<String, String>,
     categoryCounts: Map<AlertCategory, Int>,
     onDismiss: () -> Unit,
-    onStart: (name: String, definition: FilterDefinition, savedHuntId: String?, area: List<CatchPoint>) -> Unit
+    onStart: (name: String, definition: FilterDefinition, savedHuntId: String?, area: List<CatchPoint>) -> Unit,
+    /**
+     * The running hunt, when the sheet is opened to change it rather than to start one.
+     * Its choices are filled in, the saved-hunt list is left out (picking one of those would
+     * be a different hunt), and the button updates the hunt in place.
+     */
+    editing: HuntSession? = null
 ) {
     val context = LocalContext.current
     val huntRepository = remember(context) { HuntRepository.getInstance(context) }
@@ -89,7 +95,7 @@ internal fun HuntTargetSheet(
     val savedHunts by huntRepository.savedHunts.collectAsStateWithLifecycle()
     // Set when a saved hunt is opened for editing, so starting writes back to that
     // row instead of leaving a near-duplicate beside it.
-    var editingId by remember { mutableStateOf<String?>(null) }
+    var editingId by remember { mutableStateOf(editing?.savedHuntId) }
     var renaming by remember { mutableStateOf<SavedHunt?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Every selection starts empty, not "all".
@@ -99,11 +105,11 @@ internal fun HuntTargetSheet(
     // wrong one for a hunt, where tapping Dragon has to mean "I want Dragon". Starting
     // from None makes the first tap additive. Nothing picked is then translated back
     // to "any" by [forHunt] on the way out, so an untouched section still means all.
-    var draft by remember { mutableStateOf(EMPTY_HUNT_DRAFT) }
+    var draft by remember { mutableStateOf(editing?.definition?.forHuntDraft() ?: EMPTY_HUNT_DRAFT) }
     var speciesTarget by remember { mutableStateOf<MapSelectorTarget?>(null) }
     var questsOpen by remember { mutableStateOf(false) }
     // Optional walking area: matches outside it are never suggested.
-    var area by remember { mutableStateOf<List<CatchPoint>>(emptyList()) }
+    var area by remember { mutableStateOf(editing?.area.orEmpty()) }
     var areaOpen by remember { mutableStateOf(false) }
 
     val chosenTypes = remember(draft) { draft.chosenTypes() }
@@ -118,9 +124,20 @@ internal fun HuntTargetSheet(
                 .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("What are you hunting?", style = MaterialTheme.typography.titleLarge)
+            Text(
+                if (editing != null) "Edit hunt targets" else "What are you hunting?",
+                style = MaterialTheme.typography.titleLarge
+            )
+            if (editing != null) {
+                Text(
+                    "The hunt keeps running. Your catches and the target you are walking to stay, " +
+                        "unless it no longer matches.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
-            if (savedHunts.isNotEmpty()) {
+            if (editing == null && savedHunts.isNotEmpty()) {
                 Section("Hunted before") {
                     savedHunts.forEach { saved ->
                         SavedHuntRow(
@@ -233,7 +250,13 @@ internal fun HuntTargetSheet(
                 enabled = ready,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (ready) "Hunt ${huntName(hunt, catalog)}" else "Pick something to hunt")
+                Text(
+                    when {
+                        !ready -> "Pick something to hunt"
+                        editing != null -> "Update hunt"
+                        else -> "Hunt ${huntName(hunt, catalog)}"
+                    }
+                )
             }
         }
     }

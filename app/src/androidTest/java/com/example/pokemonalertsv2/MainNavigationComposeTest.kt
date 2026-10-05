@@ -9,6 +9,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.test.espresso.Espresso
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -184,6 +186,45 @@ class MainNavigationComposeTest {
     }
 
     @Test
+    fun toolsHuntOpensThePickerAndBackReturnsToTools() {
+        openTools()
+        composeRule.onAllNodesWithText("Hunt").onFirst().performClick()
+        // Straight to the picker: "What are you hunting?", or editing a hunt already running.
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            listOf("What are you hunting?", "Edit hunt targets").any { title ->
+                composeRule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
+            }
+        }
+        Espresso.pressBack()
+        waitForToolsScreen()
+        assertFalse(composeRule.activity.isFinishing)
+    }
+
+    @Test
+    fun toolsInsightsBackReturnsToTools() {
+        openTools()
+        composeRule.onNodeWithText("Spawn insights").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            // Tools stays composed behind the Alerts tab, so wait for insights itself.
+            composeRule.onAllNodesWithContentDescription("Back to history").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        waitForToolsScreen()
+    }
+
+    @Test
+    fun toolsGoDexBackReturnsToTools() {
+        openTools()
+        composeRule.onNodeWithText("GoDex checklist").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithText("GoDex Hundo checklist").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
+        waitForToolsScreen()
+        composeRule.onNodeWithText("Appearance").assertDoesNotExist()
+    }
+
+    @Test
     fun settingsSubpageSurvivesActivityRecreation() {
         waitForMainNavigation()
 
@@ -289,6 +330,19 @@ class MainNavigationComposeTest {
             runCatching { composeRule.onNodeWithTag("map_full_content").fetchSemanticsNode() }.isSuccess
         }
         composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
+    }
+
+    private fun openTools() {
+        waitForMainNavigation()
+        composeRule.onAllNodesWithText("Tools").onFirst().performClick()
+        waitForToolsScreen()
+    }
+
+    private fun waitForToolsScreen() {
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
+            runCatching { composeRule.onNodeWithTag("tools_screen").fetchSemanticsNode() }.isSuccess
+        }
+        composeRule.onNodeWithTag("tools_screen").assertIsDisplayed()
     }
 
     private fun waitForAlertsScreen() {

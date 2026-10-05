@@ -31,7 +31,13 @@ class HuntEmulatorFixtureInstrumentedTest {
         val target = PokemonAlert(name = "Playback Pikachu", pokemon = "Pikachu", type = listOf("Hundo"),
             cp = 938, latitude = 49.738, longitude = 8.603, area = "HuntPlaybackFixture")
         val next = target.copy(name = "Playback Eevee", pokemon = "Eevee", latitude = 49.7392, longitude = 8.6055)
-        listOf(target, next).forEach {
+        // A raid a few metres from the first target, for checking Raid Watch against "Got it".
+        val raid = PokemonAlert(name = "Playback Mewtwo Raid", pokemon = "Mewtwo", type = listOf("Raid"),
+            gym = "Playback Gym", hundoCP = HundoCP(level20 = 2387, level25 = 2984),
+            endTime = java.time.Instant.now().plusSeconds(45 * 60).toString(),
+            latitude = 49.73805, longitude = 8.60305, area = "HuntPlaybackFixture")
+        val seeded = if (args.getString("raid") == "true") listOf(target, next, raid) else listOf(target, next)
+        seeded.forEach {
             preferences.removeDismissedAlert(it.uniqueId)
             repository.processIncomingAlert(it)
         }

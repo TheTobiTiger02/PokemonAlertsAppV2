@@ -22,6 +22,11 @@ private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesK
 private val LAST_CAUGHT_ID_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_id")
 private val LAST_CAUGHT_NAME_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_name")
 private val LAST_CAUGHT_AT_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_caught_alert_at")
+private val LAST_CAUGHT_RAID_WATCHED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("last_caught_alert_raid_watched")
+private val FLOATING_MAP_OPACITY_KEY = androidx.datastore.preferences.core.floatPreferencesKey("floating_map_opacity")
+private val FLOATING_MAP_MINIMIZED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("floating_map_minimized")
+private val FLOATING_BUBBLE_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_bubble_x")
+private val FLOATING_BUBBLE_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_bubble_y")
 private val FLOATING_MAP_X_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_x")
 private val FLOATING_MAP_Y_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_y")
 private val FLOATING_MAP_WIDTH_KEY = androidx.datastore.preferences.core.intPreferencesKey("floating_map_width")
@@ -288,6 +293,18 @@ interface AlertPreferencesStore {
     suspend fun updateFloatingMapGeometry(x: Int, y: Int, width: Int, height: Int) = Unit
 
     /**
+     * How the floating hunt map looks when it opens: its opacity, whether it is folded into
+     * the bubble, and where the bubble was left. Read once when the window opens.
+     */
+    suspend fun getFloatingMapLook(): FloatingMapLook = FloatingMapLook()
+
+    suspend fun updateFloatingMapOpacity(opacity: Float) = Unit
+
+    suspend fun updateFloatingMapMinimized(minimized: Boolean) = Unit
+
+    suspend fun updateFloatingBubblePosition(x: Int, y: Int) = Unit
+
+    /**
      * The same, for the catch route's own window. Kept apart from the hunt map's: the two
      * windows hold different content and a trainer sizes them differently.
      */
@@ -371,7 +388,8 @@ interface AlertPreferencesStore {
     suspend fun rememberCaughtAlert(
         alertId: String,
         displayName: String,
-        nowMillis: Long = System.currentTimeMillis()
+        nowMillis: Long = System.currentTimeMillis(),
+        raidWatched: Boolean = false
     ) = Unit
 
     suspend fun forgetCaughtAlert() = Unit
@@ -778,6 +796,31 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         }
     }
 
+    override suspend fun getFloatingMapLook(): FloatingMapLook {
+        val preferences = dataStore.data.first()
+        return FloatingMapLook(
+            opacity = clampFloatingMapOpacity(preferences[FLOATING_MAP_OPACITY_KEY] ?: 1f),
+            minimized = preferences[FLOATING_MAP_MINIMIZED_KEY] ?: false,
+            bubbleX = preferences[FLOATING_BUBBLE_X_KEY],
+            bubbleY = preferences[FLOATING_BUBBLE_Y_KEY]
+        )
+    }
+
+    override suspend fun updateFloatingMapOpacity(opacity: Float) {
+        dataStore.edit { prefs -> prefs[FLOATING_MAP_OPACITY_KEY] = clampFloatingMapOpacity(opacity) }
+    }
+
+    override suspend fun updateFloatingMapMinimized(minimized: Boolean) {
+        dataStore.edit { prefs -> prefs[FLOATING_MAP_MINIMIZED_KEY] = minimized }
+    }
+
+    override suspend fun updateFloatingBubblePosition(x: Int, y: Int) {
+        dataStore.edit { prefs ->
+            prefs[FLOATING_BUBBLE_X_KEY] = x
+            prefs[FLOATING_BUBBLE_Y_KEY] = y
+        }
+    }
+
     override suspend fun getCatchRouteWindowGeometry(): FloatingMapGeometry? {
         val preferences = dataStore.data.first()
         val width = preferences[CATCH_WINDOW_WIDTH_KEY] ?: return null
@@ -1007,16 +1050,23 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
                 // A record written before the offer had a clock reads as 0, which
                 // every liveness check treats as long expired. That is the point:
                 // the old offer lingered forever.
-                caughtAtMillis = preferences[LAST_CAUGHT_AT_KEY] ?: 0L
+                caughtAtMillis = preferences[LAST_CAUGHT_AT_KEY] ?: 0L,
+                raidWatched = preferences[LAST_CAUGHT_RAID_WATCHED_KEY] ?: false
             )
         }
     }
 
-    override suspend fun rememberCaughtAlert(alertId: String, displayName: String, nowMillis: Long) {
+    override suspend fun rememberCaughtAlert(
+        alertId: String,
+        displayName: String,
+        nowMillis: Long,
+        raidWatched: Boolean
+    ) {
         dataStore.edit { prefs ->
             prefs[LAST_CAUGHT_ID_KEY] = alertId
             prefs[LAST_CAUGHT_NAME_KEY] = displayName
             prefs[LAST_CAUGHT_AT_KEY] = nowMillis
+            prefs[LAST_CAUGHT_RAID_WATCHED_KEY] = raidWatched
         }
     }
 
@@ -1025,6 +1075,7 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             prefs.remove(LAST_CAUGHT_ID_KEY)
             prefs.remove(LAST_CAUGHT_NAME_KEY)
             prefs.remove(LAST_CAUGHT_AT_KEY)
+            prefs.remove(LAST_CAUGHT_RAID_WATCHED_KEY)
         }
     }
 
@@ -1224,5 +1275,21 @@ data class FloatingMapGeometry(
 data class CaughtAlert(
     val id: String,
     val displayName: String,
-    val caughtAtMillis: Long = 0L
+    val caughtAtMillis: Long = 0L,
+    /** The catch also ended this raid's Raid Watch, so undoing it brings the watch back. */
+    val raidWatched: Boolean = false
 )
+
+/** The floating hunt map's opacity and bubble state. Bubble coordinates are raw pixels. */
+data class FloatingMapLook(
+    val opacity: Float = 1f,
+    val minimized: Boolean = false,
+    val bubbleX: Int? = null,
+    val bubbleY: Int? = null
+)
+
+/** Faint enough to read the game through, never so faint the window is lost. */
+const val FLOATING_MAP_MIN_OPACITY = 0.3f
+
+fun clampFloatingMapOpacity(opacity: Float): Float =
+    if (opacity.isNaN()) 1f else opacity.coerceIn(FLOATING_MAP_MIN_OPACITY, 1f)

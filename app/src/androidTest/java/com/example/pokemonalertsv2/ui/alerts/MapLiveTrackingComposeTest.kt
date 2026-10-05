@@ -13,7 +13,6 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
-import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.MapPipArrivalTracker
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
@@ -296,12 +295,7 @@ class MapLiveTrackingComposeTest {
                     refreshing = false,
                     onRefresh = {},
                     onEnterPictureInPicture = { selected = true },
-                    // The row carries the hunt controls now, and the hunt picker is built
-                    // from these. Empty is enough: this test only reaches the PiP button.
-                    catalog = FilterCatalog(),
-                    artwork = emptyMap(),
-                    questRewardThumbnails = emptyMap(),
-                    categoryCounts = emptyMap()
+                    onOpenHuntSetup = {}
                 )
             }
         }

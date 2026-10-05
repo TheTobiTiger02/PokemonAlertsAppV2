@@ -206,6 +206,8 @@ class MainActivity : ComponentActivity() {
     private val backgroundLocationPermissionNeeded = MutableStateFlow(false)
     private val requestedRootTab = MutableStateFlow<Int?>(null)
     private val requestedSettingsDestination = MutableStateFlow<SettingsDestination?>(null)
+    /** Set by the floating map's "Edit targets": open the map on the hunt's target picker. */
+    private val requestedHuntSetup = MutableStateFlow(false)
     private var lastExternalCsvUri: String? = null
     private var permissionStep = PermissionStep.IDLE
 
@@ -422,6 +424,7 @@ class MainActivity : ComponentActivity() {
             val onboardingCompleted by settingsViewModel.onboardingCompleted.collectAsStateWithLifecycle()
             val requestedTab by requestedRootTab.collectAsStateWithLifecycle()
             val requestedSettings by requestedSettingsDestination.collectAsStateWithLifecycle()
+            val huntSetupRequested by requestedHuntSetup.collectAsStateWithLifecycle()
             val pendingPokeGenieImport by settingsViewModel.pendingPokeGenieImport
                 .collectAsStateWithLifecycle(initialValue = null)
             
@@ -488,6 +491,8 @@ class MainActivity : ComponentActivity() {
                             onRequestedSettingsDestinationConsumed = {
                                 requestedSettingsDestination.value = null
                             },
+                            requestedHuntSetup = huntSetupRequested,
+                            onRequestedHuntSetupConsumed = { requestedHuntSetup.value = false },
                             onManageLocationPermissions = ::restartLocationPermissionFlow,
                             onOpenUnknownSourcesSettings = {
                                 unknownSourcesSettingsLauncher.launch(
@@ -533,6 +538,11 @@ class MainActivity : ComponentActivity() {
 
     internal fun handleNavigationIntent(intent: Intent) {
         requestedTab(intent)?.let { requestedRootTab.value = it }
+        if (intent.getBooleanExtra(EXTRA_OPEN_HUNT_EDITOR, false)) {
+            // Consumed here, so a recreation that re-reads this intent opens nothing twice.
+            intent.removeExtra(EXTRA_OPEN_HUNT_EDITOR)
+            requestedHuntSetup.value = true
+        }
         if (intent.action == Intent.ACTION_VIEW) {
             intent.data?.let { uri ->
                 if (handleDeepLink(uri.toString())) return
@@ -671,6 +681,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val EXTRA_INITIAL_TAB = "extra_initial_tab"
+        private const val EXTRA_OPEN_HUNT_EDITOR = "extra_open_hunt_editor"
         private const val NAV_SETTINGS_TAB_INDEX = SETTINGS_TAB_INDEX
 
         internal fun createAlertsIntent(context: Context): Intent =
@@ -689,6 +700,13 @@ class MainActivity : ComponentActivity() {
             Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                 putExtra(EXTRA_INITIAL_TAB, MAP_TAB_INDEX)
+            }
+
+        /** The map with the running hunt's target picker open: the floating map's "Edit targets". */
+        internal fun createHuntEditorIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                putExtra(EXTRA_INITIAL_TAB, MAP_TAB_INDEX)
+                putExtra(EXTRA_OPEN_HUNT_EDITOR, true)
             }
 
         internal fun requestedTab(intent: Intent?): Int? =
@@ -772,6 +790,8 @@ private fun MainScaffold(
     requestedSettingsDestination: SettingsDestination?,
     onRequestedSettingsDestinationConsumed: () -> Unit,
     onManageLocationPermissions: () -> Unit,
+    requestedHuntSetup: Boolean = false,
+    onRequestedHuntSetupConsumed: () -> Unit = {},
     onOpenUnknownSourcesSettings: () -> Unit,
     pictureInPictureMode: Boolean = false,
     pipCommands: Flow<MapPipCommand>? = null,
@@ -783,6 +803,12 @@ private fun MainScaffold(
     // Where the gear was pressed, so Settings' back arrow returns there.
     var settingsOrigin by rememberSaveable { mutableIntStateOf(ALERTS_TAB_INDEX) }
     var openMapToolsRequested by rememberSaveable { mutableStateOf(false) }
+    var openHuntSetupRequested by rememberSaveable { mutableStateOf(false) }
+    // Set while a screen opened from the Tools tab is showing, so Back returns to Tools
+    // instead of wherever that screen's own tab would send it. Any bar tap clears it.
+    var toolsReturn by rememberSaveable { mutableStateOf(false) }
+    // The Settings page Tools opened directly; Back from it closes Settings.
+    var settingsCloseFrom by rememberSaveable { mutableStateOf<SettingsDestination?>(null) }
     var alertsSection by rememberSaveable { mutableStateOf(AlertsSection.LIVE) }
     val visitedTabs = remember { mutableStateListOf<Int>() }
     var localSettingsDestination by remember { mutableStateOf<SettingsDestination?>(null) }
@@ -804,10 +830,34 @@ private fun MainScaffold(
     val context = LocalContext.current
     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
-    fun openSettings(destination: SettingsDestination = SettingsDestination.OVERVIEW) {
+    fun openSettings(
+        destination: SettingsDestination = SettingsDestination.OVERVIEW,
+        fromTools: Boolean = false
+    ) {
         if (selectedTab != SETTINGS_TAB_INDEX) settingsOrigin = selectedTab
+        settingsCloseFrom = destination.takeIf { fromTools && it != SettingsDestination.OVERVIEW }
         localSettingsDestination = destination
         selectedTab = SETTINGS_TAB_INDEX
+    }
+
+    fun selectFromBar(screen: Int) {
+        toolsReturn = false
+        settingsCloseFrom = null
+        selectedTab = screen
+    }
+
+    fun returnToTools() {
+        toolsReturn = false
+        selectedTab = TOOLS_TAB_INDEX
+    }
+
+    LaunchedEffect(requestedHuntSetup) {
+        if (requestedHuntSetup) {
+            toolsReturn = false
+            openHuntSetupRequested = true
+            selectedTab = MAP_TAB_INDEX
+            onRequestedHuntSetupConsumed()
+        }
     }
 
     LaunchedEffect(requestedTab) {
@@ -824,9 +874,10 @@ private fun MainScaffold(
     }
 
     BackHandler(enabled = selectedTab == MAP_TAB_INDEX) {
-        selectedTab = ALERTS_TAB_INDEX
+        if (toolsReturn) returnToTools() else selectedTab = ALERTS_TAB_INDEX
     }
     BackHandler(enabled = selectedTab == SETTINGS_TAB_INDEX) {
+        settingsCloseFrom = null
         selectedTab = settingsOrigin
     }
 
@@ -874,6 +925,16 @@ private fun MainScaffold(
             duration = SnackbarDuration.Long
         )
         if (result == SnackbarResult.ActionPerformed) undoLastCatch(context)
+    }
+
+    // The hunt that just ended, until it has been looked at: straight after a stop in the
+    // app, or on the next open after one from the floating map.
+    val lastHuntSummary by huntRepository.lastSummary.collectAsStateWithLifecycle(initialValue = null)
+    if (!pictureInPictureMode) lastHuntSummary?.let { summary ->
+        com.example.pokemonalertsv2.hunt.HuntSummarySheet(summary) {
+            com.example.pokemonalertsv2.tracking.ArrivalTrackingNotifications.cancelHuntSummary(context)
+            scope.launch { huntRepository.clearLastSummary() }
+        }
     }
 
     val autoEnterMapPip by alertsViewModel.autoEnterMapPip.collectAsStateWithLifecycle()
@@ -925,7 +986,7 @@ private fun MainScaffold(
                             val selected = isNavDestinationSelected(destination, selectedTab, settingsOrigin)
                             NavigationBarItem(
                                 selected = selected,
-                                onClick = { selectedTab = destination.screen },
+                                onClick = { selectFromBar(destination.screen) },
                                 icon = { NavDestinationIcon(destination, selected) },
                                 label = { NavDestinationLabel(destination, selected) },
                                 colors = NavigationBarItemDefaults.colors(
@@ -958,7 +1019,7 @@ private fun MainScaffold(
                             val selected = isNavDestinationSelected(destination, selectedTab, settingsOrigin)
                             NavigationRailItem(
                                 selected = selected,
-                                onClick = { selectedTab = destination.screen },
+                                onClick = { selectFromBar(destination.screen) },
                                 icon = { NavDestinationIcon(destination, selected) },
                                 label = { NavDestinationLabel(destination, selected) },
                                 colors = NavigationRailItemDefaults.colors(
@@ -992,6 +1053,11 @@ private fun MainScaffold(
                                 showBackButton = false,
                                 openMapToolsRequested = openMapToolsRequested,
                                 onMapToolsRequestConsumed = { openMapToolsRequested = false },
+                                openHuntSetupRequested = openHuntSetupRequested,
+                                onHuntSetupRequestConsumed = { openHuntSetupRequested = false },
+                                // Closing the picker without hunting is backing out of the
+                                // Tools entry; starting stays on the map with the hunt.
+                                onHuntSetupClosed = { started -> if (!started && toolsReturn) returnToTools() },
                                 onOpenSettings = { openSettings() },
                                 onEnterPictureInPicture = onEnterPictureInPicture
                             )
@@ -1017,6 +1083,15 @@ private fun MainScaffold(
                             AlertsTab(
                                 section = alertsSection,
                                 onSectionChange = changeSection,
+                                onInsightsBack = {
+                                    if (toolsReturn) {
+                                        // Back to Tools, leaving the feed on Live for next time.
+                                        alertsSection = AlertsSection.LIVE
+                                        returnToTools()
+                                    } else {
+                                        changeSection(AlertsSection.HISTORY)
+                                    }
+                                },
                                 onOpenSettings = { openSettings() },
                                 refreshing = when (alertsSection) {
                                     AlertsSection.LIVE -> liveUiState.isLoading
@@ -1094,7 +1169,10 @@ private fun MainScaffold(
                                 onOpen = { id ->
                                     when (id) {
                                         "hunt" -> {
-                                            openMapToolsRequested = true
+                                            // Straight to the target picker -- or, during a
+                                            // hunt, to changing its targets.
+                                            toolsReturn = true
+                                            openHuntSetupRequested = true
                                             selectedTab = MAP_TAB_INDEX
                                         }
                                         "routes" -> context.startActivity(
@@ -1106,9 +1184,10 @@ private fun MainScaffold(
                                         "roster" -> context.startActivity(
                                             Intent(context, com.example.pokemonalertsv2.ui.settings.PokeGenieRosterActivity::class.java)
                                         )
-                                        "godex" -> openSettings(SettingsDestination.GODEX)
+                                        "godex" -> openSettings(SettingsDestination.GODEX, fromTools = true)
                                         "insights" -> {
                                             insightsViewModelProvider().seed(query = "", type = null)
+                                            toolsReturn = true
                                             alertsSection = AlertsSection.INSIGHTS
                                             selectedTab = ALERTS_TAB_INDEX
                                         }
@@ -1120,7 +1199,11 @@ private fun MainScaffold(
                         SETTINGS_TAB_INDEX -> {
                             SettingsScreen(
                                 viewModel = settingsViewModel,
-                                onClose = { selectedTab = settingsOrigin },
+                                onClose = {
+                                    settingsCloseFrom = null
+                                    selectedTab = settingsOrigin
+                                },
+                                closeFrom = settingsCloseFrom,
                                 onManageLocationPermissions = onManageLocationPermissions,
                                 requestedDestination = localSettingsDestination ?: requestedSettingsDestination,
                                 onRequestedDestinationConsumed = {

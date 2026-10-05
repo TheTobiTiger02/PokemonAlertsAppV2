@@ -1,29 +1,37 @@
 package com.example.pokemonalertsv2.tracking
 
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.PixelFormat
-import android.os.Build
-import android.provider.Settings
+import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.Outline
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.ContextThemeWrapper
 import android.view.ViewGroup
 import android.view.ViewOutlineProvider
-import android.view.WindowManager
-import android.graphics.Outline
-import android.graphics.drawable.GradientDrawable
-import android.content.res.ColorStateList
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.view.isVisible
+import coil.Coil
+import coil.request.ImageRequest
+import coil.request.SuccessResult
+import coil.size.Scale
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.data.FLOATING_MAP_MIN_OPACITY
+import com.example.pokemonalertsv2.data.FloatingMapLook
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.clampFloatingMapOpacity
 import com.example.pokemonalertsv2.hunt.HuntPath
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
 import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
@@ -41,6 +49,7 @@ import com.example.pokemonalertsv2.ui.alerts.mapMarkerBaseIconCacheKey
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapIconRequest
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapCountdown
 import com.example.pokemonalertsv2.ui.alerts.mapCountdownLabelHeightPx
+import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -68,7 +77,8 @@ import kotlin.math.roundToInt
  *
  * [FloatingWindow] owns the window itself — why it is an overlay and not PiP, how it moves and
  * resizes, and the two MapLibre details that make a map render in one. This class owns what is
- * inside it: the map, the handle bar's controls and the markers.
+ * inside it: the map, the handle bar's controls, the ⋯ panel, the markers, and the bubble the
+ * window folds into when minimized.
  */
 internal class FloatingMapOverlay(context: Context) {
 
@@ -82,9 +92,21 @@ internal class FloatingMapOverlay(context: Context) {
 
     private val themedContext = window.themedContext
 
+    /** The window's content: the full map ([expanded]) or the [bubble], never both. */
     private var root: FrameLayout? = null
-    private var undoButton: TextView? = null
-    private var pauseButton: TextView? = null
+    private var expanded: FrameLayout? = null
+    private var bubble: FrameLayout? = null
+    private var bubbleIcon: ImageView? = null
+    private var bubbleLabel: TextView? = null
+    private var bubbleRing: View? = null
+    private var undoStrip: LinearLayout? = null
+    private var undoText: TextView? = null
+    private var menuPanel: View? = null
+    private var menuScrim: View? = null
+    private var pauseItem: TextView? = null
+    private var opacitySlider: SeekBar? = null
+    private var opacityLabel: TextView? = null
+    private var recenterButton: ImageView? = null
     private var mapView: MapView? = null
     private var map: MapLibreMap? = null
 
@@ -94,11 +116,30 @@ internal class FloatingMapOverlay(context: Context) {
     /** Set once the trainer pans or pinches; cleared by recentre and fit. */
     private var cameraAdjustedByHand = false
 
+    private var opacity = 1f
+    private var startMinimized = false
+    private var following = false
+    private var paused = false
+
     /** Restores the geometry the trainer last left the window at. */
     fun restoreGeometry(x: Int, y: Int, width: Int, height: Int) =
         window.restoreGeometry(x, y, width, height)
 
+    /**
+     * Restores how the window looked when it was last open. Only before [show]: the
+     * window opens straight into that state rather than flashing the other one first.
+     */
+    fun restoreLook(look: FloatingMapLook) {
+        opacity = clampFloatingMapOpacity(look.opacity)
+        window.setOpacity(opacity)
+        window.restoreCompactPosition(look.bubbleX ?: -1, look.bubbleY ?: -1)
+        if (root == null) startMinimized = look.minimized
+    }
+
     val isShowing: Boolean get() = root != null
+
+    /** Folded into the bubble. The map behind it is paused, not torn down. */
+    val isMinimized: Boolean get() = window.isCompact
 
     /**
      * What the buttons do. An overlay window receives real touch events, so these
@@ -118,10 +159,7 @@ internal class FloatingMapOverlay(context: Context) {
     /** A stack was tapped. Opening it up is the only useful answer at this size. */
     var onClusterTap: (MapMarkerItem.Cluster) -> Unit = {}
 
-    /**
-     * The way back from the tick. It sits between the two step arrows, so it gets
-     * hit by accident on a map being read while walking.
-     */
+    /** The way back from the tick, offered in the strip under the bar after a catch. */
     var onUndo: () -> Unit = {}
     /**
      * The close button. It ends the hunt rather than only hiding the window: the
@@ -130,14 +168,20 @@ internal class FloatingMapOverlay(context: Context) {
      */
     var onClose: () -> Unit = {}
 
-    /** Frame the trainer alone, at walking zoom. */
+    /** Start following the trainer, at walking zoom. */
     var onRecenter: () -> Unit = {}
+
+    /** The trainer moved the map by hand, which is how following ends. */
+    var onFollowCancelled: () -> Unit = {}
 
     /** Frame the trainer and the target they are walking to together. */
     var onFit: () -> Unit = {}
 
     /** Bring the app forward, on the map. */
     var onOpenApp: () -> Unit = {}
+
+    /** Open the app on the hunt's target picker, to change what is being hunted. */
+    var onEditTargets: () -> Unit = {}
 
     /**
      * Re-plan the route from where the trainer is standing now.
@@ -152,12 +196,21 @@ internal class FloatingMapOverlay(context: Context) {
     /** Park the route, or pick it back up. See HuntSession.paused. */
     var onPauseToggle: () -> Unit = {}
 
+    /** The window was folded into the bubble, or opened back out of it. */
+    var onMinimizedChanged: (Boolean) -> Unit = {}
 
+    /** The opacity slider moved; reported live, so the caller should debounce saving it. */
+    var onOpacityChanged: (Float) -> Unit = {}
 
     /** Reported after a move or resize so the caller can persist the geometry. */
     var onGeometryChanged: (x: Int, y: Int, width: Int, height: Int) -> Unit
         get() = window.onGeometryChanged
         set(value) { window.onGeometryChanged = value }
+
+    /** Reported after the bubble is dragged. */
+    var onBubbleMoved: (x: Int, y: Int) -> Unit
+        get() = window.onCompactMoved
+        set(value) { window.onCompactMoved = value }
 
     fun show(onMapReady: (MapLibreMap) -> Unit = {}) {
         if (root != null || !canDraw(appContext)) return
@@ -180,7 +233,7 @@ internal class FloatingMapOverlay(context: Context) {
             onDestroy = { if (!view.isDestroyed) view.onDestroy() }
         )
 
-        val container = FrameLayout(themedContext).apply {
+        val mapFrame = FrameLayout(themedContext).apply {
             // Rounded and clipped so the window reads as a component rather than a
             // rectangle of map pasted over the launcher.
             outlineProvider = object : ViewOutlineProvider() {
@@ -189,7 +242,6 @@ internal class FloatingMapOverlay(context: Context) {
                 }
             }
             clipToOutline = true
-            elevation = dp(8).toFloat()
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(CORNER_DP).toFloat()
@@ -207,6 +259,10 @@ internal class FloatingMapOverlay(context: Context) {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 dp(HANDLE_DP)
             ))
+            addView(buildUndoStrip(), FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                dp(UNDO_STRIP_DP)
+            ).apply { topMargin = dp(HANDLE_DP) })
             // Floating over the map rather than in a second bar. A bar costs the
             // whole width of the window in height; three round buttons in the
             // corner cost only what they cover, and can be big enough to read.
@@ -224,7 +280,42 @@ internal class FloatingMapOverlay(context: Context) {
                 gravity = Gravity.BOTTOM or Gravity.END
                 setMargins(0, 0, dp(6), dp(6))
             })
+            // Last, so the panel and the scrim that closes it sit above everything.
+            addView(View(themedContext).apply {
+                isVisible = false
+                isClickable = true
+                setOnClickListener { setMenuOpen(false) }
+                menuScrim = this
+            }, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            ).apply { topMargin = dp(HANDLE_DP) })
+            addView(buildMenuPanel(), FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(HANDLE_DP + 4)
+                setMargins(dp(6), dp(HANDLE_DP + 4), dp(6), dp(6))
+            })
         }
+
+        val bubbleView = buildBubble()
+        val container = FrameLayout(themedContext).apply {
+            addView(mapFrame, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+            addView(bubbleView, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+        }
+
+        val minimized = startMinimized
+        startMinimized = false
+        if (minimized) window.enterCompact(dp(BUBBLE_WIDTH_DP), dp(BUBBLE_HEIGHT_DP))
+        mapFrame.isVisible = !minimized
+        bubbleView.isVisible = minimized
 
         if (!window.show(container)) {
             // A revoked grant must never take the journey down with it.
@@ -233,12 +324,16 @@ internal class FloatingMapOverlay(context: Context) {
         }
 
         root = container
+        expanded = mapFrame
         mapView = view
         map = null
         lifecycle = guard
+        syncOpacityControls()
 
-        guard.start()
-        guard.resume()
+        if (!minimized) {
+            guard.start()
+            guard.resume()
+        }
 
         view.getMapAsync { ready ->
             if (view.isDestroyed) return@getMapAsync
@@ -264,6 +359,7 @@ internal class FloatingMapOverlay(context: Context) {
                 ready.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         cameraAdjustedByHand = true
+                        if (following) onFollowCancelled()
                     }
                 }
                 onMapReady(ready)
@@ -271,13 +367,13 @@ internal class FloatingMapOverlay(context: Context) {
         }
     }
 
-    /**
-     * Draws the hunt's targets, plus the trainer's own position.
-     *
-     * Uses the immediate marker builder rather than the full one: the full pass
-     * loads species artwork over the network, which is the right trade for a
-     * full-screen map and the wrong one for a 220dp window on a walk.
-     */
+    /** The hunt's walk along the streets; [HuntPath.None] clears it. */
+    fun setHuntPath(path: HuntPath) {
+        if (map == null) return
+        runCatching { controller.setHuntPath(path) }
+            .onFailure { Log.w(TAG, "Could not draw the hunt path", it) }
+    }
+
     /**
      * The hunt's targets, in walking order.
      *
@@ -286,14 +382,11 @@ internal class FloatingMapOverlay(context: Context) {
      * the index *is* the position in the walk. Those wear it as a number, up to
      * [HUNT_ORDINAL_MAX], along with how long they have left; the rest are matches the plan
      * is not sending you to and wear neither.
+     *
+     * Uses the immediate marker builder rather than the full one: the full pass
+     * loads species artwork over the network, which is the right trade for a
+     * full-screen map and the wrong one for a 220dp window on a walk.
      */
-    /** The hunt's walk along the streets; [HuntPath.None] clears it. */
-    fun setHuntPath(path: HuntPath) {
-        if (map == null) return
-        runCatching { controller.setHuntPath(path) }
-            .onFailure { Log.w(TAG, "Could not draw the hunt path", it) }
-    }
-
     fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
         if (map == null) return
         val now = System.currentTimeMillis()
@@ -388,20 +481,178 @@ internal class FloatingMapOverlay(context: Context) {
     }
 
     fun hide() {
-        val container = root ?: return
+        if (root == null) return
         runCatching { controller.detach() }
-        lifecycle?.let { guard ->
-            guard.pause()
-            guard.stop()
-            guard.destroy()
-        }
+        lifecycle?.destroy()
+        // Hidden while folded: the next hunt opens the same way this one was left.
+        startMinimized = window.isCompact
+        window.exitCompact()
         window.hide()
         root = null
-        undoButton = null
-        pauseButton = null
+        expanded = null
+        bubble = null
+        bubbleIcon = null
+        bubbleLabel = null
+        bubbleRing = null
+        undoStrip = null
+        undoText = null
+        menuPanel = null
+        menuScrim = null
+        pauseItem = null
+        opacitySlider = null
+        opacityLabel = null
+        recenterButton = null
         mapView = null
         map = null
         lifecycle = null
+    }
+
+    /**
+     * Shows the undo offer in the strip under the bar, or hides it with null.
+     *
+     * A strip that says what was caught rather than a bare ↺: on a moving map, "Caught
+     * Mewtwo · UNDO" is readable at a glance, and the tick next to it cannot be taken for it.
+     */
+    fun setUndoOffer(caughtName: String?) {
+        undoText?.text = caughtName?.let { "Caught $it" }
+        undoStrip?.isVisible = caughtName != null
+    }
+
+    /** Names the pause row after whichever thing it would do next. */
+    fun setPaused(paused: Boolean) {
+        this.paused = paused
+        pauseItem?.text = if (paused) "▶  Resume route" else "❚❚  Pause route"
+    }
+
+    /** Folds the window into the bubble. Closing the panel first, so it is not open on return. */
+    fun minimize() {
+        if (root == null || window.isCompact) return
+        setMenuOpen(false)
+        lifecycle?.stop()
+        expanded?.isVisible = false
+        bubble?.isVisible = true
+        window.enterCompact(dp(BUBBLE_WIDTH_DP), dp(BUBBLE_HEIGHT_DP))
+        onMinimizedChanged(true)
+    }
+
+    fun expand() {
+        if (root == null || !window.isCompact) return
+        window.exitCompact()
+        bubble?.isVisible = false
+        expanded?.isVisible = true
+        lifecycle?.resume()
+        onMinimizedChanged(false)
+    }
+
+    /**
+     * The bubble's picture: the target's artwork in a ring of its category colour, or the
+     * map glyph while the hunt has nothing to walk to.
+     */
+    suspend fun setBubbleTarget(alert: PokemonAlert?) {
+        val icon = bubbleIcon ?: return
+        val accent = alert?.let { resolveAlertVisualStyle(it).category.accentArgb.toInt() } ?: PRIMARY
+        (icon.background as? GradientDrawable)?.setStroke(dp(3), accent)
+        (bubbleRing?.background as? GradientDrawable)?.setStroke(dp(3), accent)
+        val bitmap = alert?.let { loadBubbleArtwork(it) }
+        if (bubbleIcon !== icon) return
+        if (bitmap != null) {
+            icon.imageTintList = null
+            icon.setImageBitmap(bitmap)
+            val inset = dp(5)
+            icon.setPadding(inset, inset, inset, inset)
+        } else {
+            icon.setImageResource(R.drawable.ic_map)
+            icon.imageTintList = ColorStateList.valueOf(ON_SURFACE)
+            val inset = dp(14)
+            icon.setPadding(inset, inset, inset, inset)
+        }
+        icon.contentDescription = alert?.let { "Hunting ${it.pokemon ?: it.name}" } ?: "Hunt map"
+    }
+
+    /** The short line under the bubble: a distance, "In range", or what the hunt is doing. */
+    fun setBubbleReadout(text: String) {
+        bubbleLabel?.text = text
+    }
+
+    /** Three rings rippling out of the bubble: you are in range of what it shows. */
+    fun pulseBubble() {
+        val ring = bubbleRing ?: return
+        if (!window.isCompact) return
+        ring.animate().cancel()
+        val scaleX = ObjectAnimator.ofFloat(ring, View.SCALE_X, 1f, 1.3f)
+        val scaleY = ObjectAnimator.ofFloat(ring, View.SCALE_Y, 1f, 1.3f)
+        val fade = ObjectAnimator.ofFloat(ring, View.ALPHA, 0.9f, 0f)
+        listOf(scaleX, scaleY, fade).forEach { it.repeatCount = PULSE_REPEATS - 1; it.repeatMode = ValueAnimator.RESTART }
+        AnimatorSet().apply {
+            playTogether(scaleX, scaleY, fade)
+            duration = PULSE_MILLIS
+            start()
+        }
+    }
+
+    /**
+     * Shows whether the camera is following the trainer, the way every map app does: the
+     * location button turns solid blue while it is.
+     */
+    fun setFollowing(following: Boolean) {
+        this.following = following
+        val button = recenterButton ?: return
+        (button.background as? GradientDrawable)?.setColor(if (following) PRIMARY else CONTROL_BACKGROUND)
+        button.imageTintList = ColorStateList.valueOf(if (following) 0xFFFFFFFF.toInt() else ON_SURFACE)
+        button.contentDescription = if (following) "Following your location" else "Follow my location"
+    }
+
+    /**
+     * Keeps the trainer in the middle of the map at the zoom they chose. [engage] is the
+     * press that starts following: from a zoomed-out view it also brings the camera down to
+     * walking zoom, after which the trainer's own zoom is left alone.
+     */
+    fun follow(latitude: Double, longitude: Double, engage: Boolean = false) {
+        val ready = map ?: return
+        cameraAdjustedByHand = false
+        val target = LatLng(latitude, longitude)
+        val update = if (engage && ready.cameraPosition.zoom < FOLLOW_MIN_ZOOM) {
+            CameraUpdateFactory.newLatLngZoom(target, MAP_PIP_CLOSE_ZOOM)
+        } else {
+            CameraUpdateFactory.newLatLng(target)
+        }
+        runCatching { ready.animateCamera(update, if (engage) ENGAGE_ANIMATION_MS else FOLLOW_ANIMATION_MS) }
+            .onFailure { Log.w(TAG, "Could not follow the trainer", it) }
+    }
+
+    private fun setMenuOpen(open: Boolean) {
+        menuPanel?.isVisible = open
+        menuScrim?.isVisible = open
+    }
+
+    private fun syncOpacityControls() {
+        val percent = (opacity * 100).roundToInt()
+        opacitySlider?.progress = percent - OPACITY_MIN_PERCENT
+        opacityLabel?.text = "Opacity  $percent%"
+    }
+
+    private suspend fun loadBubbleArtwork(alert: PokemonAlert): Bitmap? {
+        // The pins' order: the thumbnail is the species art, the image can be a map snapshot.
+        val url = alert.thumbnailUrl?.takeIf { it.isNotBlank() }
+            ?: alert.imageUrl?.takeIf { it.isNotBlank() }
+            ?: return null
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val request = ImageRequest.Builder(appContext)
+                    .data(url)
+                    .size(dp(BUBBLE_DP))
+                    .scale(Scale.FIT)
+                    .allowHardware(false)
+                    .build()
+                val result = Coil.imageLoader(appContext).execute(request)
+                ((result as? SuccessResult)?.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+            }.getOrNull()
+        }
+    }
+
+    /** A long-lived service holding a map is exactly where this starts to matter. */
+    fun onLowMemory() {
+        runCatching { mapView?.onLowMemory() }
     }
 
     /**
@@ -410,65 +661,211 @@ internal class FloatingMapOverlay(context: Context) {
      * The previous build put a touch listener on the whole container, which never
      * fired -- MapView consumes touches for pan and pinch, so the parent never saw
      * them. A dedicated bar keeps both gestures working.
+     *
+     * The single-target actions on the left, the window's own on the right. Route
+     * controls and opacity live in the ⋯ panel: at 220dp a bar of nine glyphs pushed
+     * the close button off the end.
      */
-    /** Shows or hides the undo control, following the live offer. */
-    fun setUndoOffer(visible: Boolean) {
-        undoButton?.isVisible = visible
-    }
-
-    /**
-     * Points the pause control at whichever thing it would do next, because a button
-     * whose glyph is what it will do is the only one you can read while walking.
-     */
-    fun setPaused(paused: Boolean) {
-        pauseButton?.text = if (paused) PLAY_GLYPH else PAUSE_GLYPH
-    }
-
     @SuppressLint("ClickableViewAccessibility")
     private fun buildHandleBar(): LinearLayout = LinearLayout(themedContext).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(6), 0, dp(6), 0)
-        setBackgroundColor(0xFFF2F4F8.toInt())
+        setPadding(dp(4), 0, dp(4), 0)
+        setBackgroundColor(BAR_BACKGROUND)
         window.dragWith(this)
-        addView(controlButton("‹") { onPrevious() })
-        addView(controlButton("✓") { onGotIt() })
-        addView(controlButton("›") { onNext() })
-        // Built always, hidden until there is something to undo. Never replaces the
-        // tick: the next target can be caught inside the undo window.
-        addView(controlButton("↺") { onUndo() }.also { undoButton = it; it.isVisible = false })
-        // The two route controls, after the ones that act on a single target: "this
-        // plan is wrong" and "I am not walking it right now" are a different kind of
-        // press from "caught it" and "next".
-        addView(controlButton("⟳") { onRecalculate() })
-        addView(controlButton(PAUSE_GLYPH) { onPauseToggle() }.also { pauseButton = it })
-        // Spacer: the buttons sit left, the grab area is everything right of them.
+        addView(controlButton("‹", "Previous target") { onPrevious() })
+        addView(controlButton("✓", "Got it") { onGotIt() })
+        addView(controlButton("›", "Next target") { onNext() })
+        // Spacer: the buttons sit at either end, the grab area is everything between.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(controlButton("×") { onClose() })
+        addView(controlButton("⋯", "More options") { setMenuOpen(menuPanel?.isVisible != true) })
+        addView(controlButton("–", "Minimize map") { minimize() })
+        addView(controlButton("×", "Stop hunt") { onClose() })
+    }
+
+    private fun buildUndoStrip(): LinearLayout = LinearLayout(themedContext).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(10), 0, dp(4), 0)
+        setBackgroundColor(CONTROL_BACKGROUND)
+        isVisible = false
+        addView(TextView(themedContext).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(ON_SURFACE)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            undoText = this
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        addView(TextView(themedContext).apply {
+            text = "UNDO"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(PRIMARY)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = selectableBackground()
+            isClickable = true
+            contentDescription = "Undo catch"
+            setOnClickListener { onUndo() }
+        })
+        undoStrip = this
     }
 
     /**
-     * Recentre, fit and open-the-app, as round icon buttons over the map's bottom
+     * The ⋯ panel: opacity, and the controls that act on the whole route rather than on
+     * one target. Scrolls, because the window can be resized smaller than the panel.
+     */
+    private fun buildMenuPanel(): View {
+        val column = LinearLayout(themedContext).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+            addView(TextView(themedContext).apply {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setTextColor(MUTED)
+                setPadding(dp(12), dp(2), dp(12), 0)
+                opacityLabel = this
+            })
+            addView(SeekBar(themedContext).apply {
+                max = 100 - OPACITY_MIN_PERCENT
+                progressTintList = ColorStateList.valueOf(PRIMARY)
+                thumbTintList = ColorStateList.valueOf(PRIMARY)
+                contentDescription = "Map opacity"
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                        if (!fromUser) return
+                        opacity = clampFloatingMapOpacity((progress + OPACITY_MIN_PERCENT) / 100f)
+                        window.setOpacity(opacity)
+                        opacityLabel?.text = "Opacity  ${(opacity * 100).roundToInt()}%"
+                        onOpacityChanged(opacity)
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
+                    override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
+                })
+                opacitySlider = this
+            })
+            addView(divider())
+            addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() })
+            addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() })
+            addView(menuItem(if (paused) "▶  Resume route" else "❚❚  Pause route") {
+                setMenuOpen(false)
+                onPauseToggle()
+            }.also { pauseItem = it })
+        }
+        return ScrollView(themedContext).apply {
+            isVisible = false
+            isVerticalScrollBarEnabled = false
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(12).toFloat()
+                setColor(0xFFFFFFFF.toInt())
+                setStroke(dp(1), 0x22000000)
+            }
+            elevation = dp(6).toFloat()
+            addView(column)
+            menuPanel = this
+        }
+    }
+
+    private fun menuItem(label: String, onClick: () -> Unit): TextView =
+        TextView(themedContext).apply {
+            text = label
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(ON_SURFACE)
+            setPadding(dp(12), dp(9), dp(12), dp(9))
+            background = selectableBackground()
+            isClickable = true
+            setOnClickListener { onClick() }
+        }
+
+    private fun divider(): View = View(themedContext).apply {
+        setBackgroundColor(0x14000000)
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+            setMargins(0, dp(4), 0, dp(4))
+        }
+    }
+
+    /**
+     * The minimized window: one round button of artwork with a distance under it.
+     * Dragged anywhere, opened with a tap. Room is left around the circle for the pulse.
+     */
+    private fun buildBubble(): FrameLayout = FrameLayout(themedContext).apply {
+        isVisible = false
+        val circle = dp(BUBBLE_DP)
+        addView(View(themedContext).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setStroke(dp(3), PRIMARY)
+            }
+            alpha = 0f
+            bubbleRing = this
+        }, FrameLayout.LayoutParams(circle, circle).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = dp(BUBBLE_TOP_DP)
+        })
+        addView(ImageView(themedContext).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFFFFFFFF.toInt())
+                setStroke(dp(3), PRIMARY)
+            }
+            elevation = dp(4).toFloat()
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setImageResource(R.drawable.ic_map)
+            imageTintList = ColorStateList.valueOf(ON_SURFACE)
+            val inset = dp(14)
+            setPadding(inset, inset, inset, inset)
+            contentDescription = "Hunt map"
+            bubbleIcon = this
+        }, FrameLayout.LayoutParams(circle, circle).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            topMargin = dp(BUBBLE_TOP_DP)
+        })
+        addView(TextView(themedContext).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(0xFFFFFFFF.toInt())
+            gravity = Gravity.CENTER
+            maxLines = 1
+            setPadding(dp(7), dp(1), dp(7), dp(2))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(10).toFloat()
+                setColor(0xE616181D.toInt())
+            }
+            elevation = dp(5).toFloat()
+            text = "Hunting"
+            bubbleLabel = this
+        }, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            bottomMargin = dp(2)
+        })
+        window.dragOrTapWith(this) { expand() }
+        bubble = this
+    }
+
+    /**
+     * Follow, fit and open-the-app, as round icon buttons over the map's bottom
      * corner. Icons rather than glyphs because at this size a "⤡" is a
      * squiggle -- the buttons have to say what they do at a glance.
      */
     private fun buildMapControls(): LinearLayout = LinearLayout(themedContext).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(iconButton(R.drawable.ic_my_location) { onRecenter() })
-        addView(iconButton(R.drawable.ic_fit_map) { onFit() })
-        addView(iconButton(R.drawable.ic_map) { onOpenApp() })
+        addView(iconButton(R.drawable.ic_my_location, "Follow my location") { onRecenter() }
+            .also { recenterButton = it })
+        addView(iconButton(R.drawable.ic_fit_map, "Focus Hunt target or route") { onFit() })
+        addView(iconButton(R.drawable.ic_map, "Open map in app") { onOpenApp() })
+        setFollowing(following)
     }
 
-    private fun iconButton(iconRes: Int, onClick: () -> Unit): ImageView =
+    private fun iconButton(iconRes: Int, description: String, onClick: () -> Unit): ImageView =
         ImageView(themedContext).apply {
-            contentDescription = when (iconRes) {
-                R.drawable.ic_fit_map -> "Focus Hunt target or route"
-                R.drawable.ic_my_location -> "Centre on my location"
-                else -> "Open map in app"
-            }
+            contentDescription = description
             setImageResource(iconRes)
-            imageTintList = ColorStateList.valueOf(0xFF16181D.toInt())
+            imageTintList = ColorStateList.valueOf(ON_SURFACE)
             scaleType = ImageView.ScaleType.FIT_CENTER
             val inset = dp(7)
             setPadding(inset, inset, inset, inset)
@@ -476,7 +873,7 @@ internal class FloatingMapOverlay(context: Context) {
                 shape = GradientDrawable.OVAL
                 // Not fully opaque: these sit on top of the map, and a hint of what
                 // is underneath keeps them reading as controls rather than holes.
-                setColor(0xF2FFFFFF.toInt())
+                setColor(CONTROL_BACKGROUND)
                 setStroke(dp(1), 0x22000000)
             }
             elevation = dp(2).toFloat()
@@ -487,25 +884,31 @@ internal class FloatingMapOverlay(context: Context) {
             }
         }
 
-    private fun controlButton(label: String, onClick: () -> Unit): TextView =
+    private fun controlButton(label: String, description: String, onClick: () -> Unit): TextView =
         TextView(themedContext).apply {
             text = label
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setTextColor(0xFF16181D.toInt())
-            // Tightened from 9dp when the bar went from five controls to seven: at the
-            // default 220dp width the close button was being pushed off the end.
-            setPadding(dp(6), dp(2), dp(6), dp(2))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(ON_SURFACE)
+            gravity = Gravity.CENTER
+            contentDescription = description
+            minWidth = dp(BAR_BUTTON_DP)
+            setPadding(dp(4), 0, dp(4), 0)
+            background = selectableBackground()
             // Claims its own touches, so a tap on a button is not read as a drag
             // of the bar underneath it.
             isClickable = true
             setOnClickListener { onClick() }
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
 
-    /**
-     * Frames the trainer and their target together, reusing the same rule the
-     * picture-in-picture window used: fit both points, unless they are close
-     * enough that bounds would slam the camera to maximum zoom.
-     */
+    private fun selectableBackground() = TypedValue().let { value ->
+        themedContext.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
+        themedContext.getDrawable(value.resourceId)
+    }
+
     /** Opens a tapped stack up, so the tap does something rather than nothing. */
     fun focusCluster(coordinates: List<AlertMapCoordinates>) {
         if (coordinates.isEmpty()) return
@@ -521,6 +924,11 @@ internal class FloatingMapOverlay(context: Context) {
             .onFailure { Log.w(TAG, "Could not frame the Hunt route", it) }
     }
 
+    /**
+     * Frames the trainer and their target together, reusing the same rule the
+     * picture-in-picture window used: fit both points, unless they are close
+     * enough that bounds would slam the camera to maximum zoom.
+     */
     fun focus(
         userLatitude: Double?,
         userLongitude: Double?,
@@ -583,11 +991,6 @@ internal class FloatingMapOverlay(context: Context) {
         }.onFailure { Log.w(TAG, "Could not recentre the floating map", it) }
     }
 
-    /** A long-lived service holding a map is exactly where this starts to matter. */
-    fun onLowMemory() {
-        runCatching { mapView?.onLowMemory() }
-    }
-
     private fun dp(value: Int): Int = window.dp(value)
 
     /**
@@ -619,15 +1022,13 @@ internal class FloatingMapOverlay(context: Context) {
     companion object {
         private const val TAG = "FloatingMapOverlay"
 
-        /** Text, not emoji: the bar is glyphs at 15sp and these have to match it. */
-        private const val PAUSE_GLYPH = "❚❚"
-        private const val PLAY_GLYPH = "▶"
-
         private const val WIDTH_DP = 220
         private const val HEIGHT_DP = 170
         private const val FIT_PADDING_DP = 24
         private const val CORNER_DP = 16
         private const val HANDLE_DP = 30
+        private const val BAR_BUTTON_DP = 28
+        private const val UNDO_STRIP_DP = 28
         private const val GRIP_DP = 26
         private const val CONTROL_DP = 34
         private const val MIN_WIDTH_DP = 160
@@ -635,21 +1036,42 @@ internal class FloatingMapOverlay(context: Context) {
         private const val MAX_WIDTH_DP = 360
         private const val MAX_HEIGHT_DP = 420
         /** Enough room that an opened stack is not glued to the window's edges. */
-    private const val CLUSTER_FIT_PADDING_DP = 16
+        private const val CLUSTER_FIT_PADDING_DP = 16
 
-    private const val MARKER_DP = 32
+        private const val MARKER_DP = 32
         private const val EMPHASIZED_MARKER_DP = 40
         private const val ARTWORK_CONCURRENCY = 8
+
+        /** The bubble: a 56dp circle, with room around it for the pulse and below it for the label. */
+        private const val BUBBLE_DP = 56
+        private const val BUBBLE_TOP_DP = 8
+        private const val BUBBLE_WIDTH_DP = 80
+        private const val BUBBLE_HEIGHT_DP = 90
+        private const val PULSE_MILLIS = 700L
+        private const val PULSE_REPEATS = 3
+
+        private val OPACITY_MIN_PERCENT = (FLOATING_MAP_MIN_OPACITY * 100).roundToInt()
+
+        /** Below this a follow press zooms in to walking zoom; above it the trainer's zoom stays. */
+        private const val FOLLOW_MIN_ZOOM = 15.0
+        private const val ENGAGE_ANIMATION_MS = 600
+        private const val FOLLOW_ANIMATION_MS = 900
+
+        private const val PRIMARY = 0xFF0057D9.toInt()
+        private const val ON_SURFACE = 0xFF16181D.toInt()
+        private const val MUTED = 0xFF5B6472.toInt()
+        private const val BAR_BACKGROUND = 0xFFF2F4F8.toInt()
+        private const val CONTROL_BACKGROUND = 0xF2FFFFFF.toInt()
 
         /**
          * Static rather than themed: the window has no Compose tree to read
          * MaterialTheme from, and the map's own palette is fixed anyway.
          */
         private val OVERLAY_PALETTE = MapMarkerPalette(
-            primary = 0xFF0057D9.toInt(),
+            primary = PRIMARY,
             onPrimary = 0xFFFFFFFF.toInt(),
             surface = 0xFFFFFFFF.toInt(),
-            onSurface = 0xFF16181D.toInt(),
+            onSurface = ON_SURFACE,
             outline = 0xFFD8DEE8.toInt(),
             error = 0xFFEF4444.toInt(),
             onError = 0xFFFFFFFF.toInt()

@@ -44,15 +44,16 @@ import com.example.pokemonalertsv2.hunt.HuntRoutePoint
 import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
 import com.example.pokemonalertsv2.hunt.isUndoOfferLive
+import com.example.pokemonalertsv2.hunt.recordHuntCatch
 import com.example.pokemonalertsv2.hunt.undoLastCatch
 import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
+import com.example.pokemonalertsv2.ui.alerts.MapTrackingInteractionState
 import com.example.pokemonalertsv2.ui.alerts.MapPoseCadence
 import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
 import com.example.pokemonalertsv2.ui.alerts.MAP_PIP_REFIT_METERS
 import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.ui.alerts.stepMapPipSelection
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
-import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
@@ -158,10 +159,36 @@ class ArrivalTrackingService : Service() {
     /** What the floating map is currently drawing, so identical work is skipped. */
     private var renderedTargetKey: String? = null
 
-    /** Set once the stored window geometry has been read back from disk. */
+    /** Set once the stored window geometry and look have been read back from disk. */
     private var geometryRestored = false
+    private var geometryRestoreJob: Job? = null
     private var geometrySaveJob: Job? = null
+    private var opacitySaveJob: Job? = null
     private var artworkJob: Job? = null
+
+    /**
+     * Whether the floating map's camera follows the trainer. The in-app map's own state, so
+     * the two maps answer the location button and a hand pan the same way.
+     */
+    private var followState = MapTrackingInteractionState()
+    private val following: Boolean get() = followState.cameraFollowEnabled
+
+    /** The newest blue-dot fix: 1 Hz while walking, against the journey's 3-20 s. */
+    private var lastPoseLocation: Location? = null
+
+    /** Which fix the camera last followed; the pose stream re-emits on every compass tick. */
+    private var lastFollowedFixNanos = 0L
+
+    /** The target the bubble is showing artwork for. */
+    private var bubbleTargetId: String? = null
+    private var bubbleJob: Job? = null
+
+    /**
+     * Set to the new definition when the trainer edits the running hunt's targets. The first
+     * plan made *for that definition* decides whether the leg being walked still belongs to
+     * the hunt -- a plan already in flight for the old one must not; see [adoptEditedPlan].
+     */
+    private var retargetAfterPlanFor: FilterDefinition? = null
 
     /** Where the camera was last framed from, for the move-before-refit rule. */
     private var lastFocusLatitude: Double? = null
@@ -286,7 +313,7 @@ class ArrivalTrackingService : Service() {
                     .collectLatest { caught ->
                         undoOffer = caught?.takeIf { isUndoOfferLive(it, System.currentTimeMillis()) }
                         refreshCurrentNotification()
-                        floatingMap.setUndoOffer(undoOffer != null)
+                        floatingMap.setUndoOffer(undoOffer?.displayName)
                         // While walking, the 30s chip loop would drop the action on
                         // its own. In standby nothing re-posts, so the offer is aged
                         // out here instead of sitting there indefinitely.
@@ -296,7 +323,7 @@ class ArrivalTrackingService : Service() {
                         if (remaining > 0) delay(remaining)
                         undoOffer = null
                         refreshCurrentNotification()
-                        floatingMap.setUndoOffer(false)
+                        floatingMap.setUndoOffer(null)
                     }
             }
         }
@@ -312,13 +339,19 @@ class ArrivalTrackingService : Service() {
                     huntArea = session?.area.orEmpty()
                     huntName = session?.name
                     huntTargetId = session?.targetUniqueId
+                    val active = session != null
+                    val changed = active != huntActive
                     if (definitionChanged) {
                         // A different hunt: nothing of the old route carries over.
                         huntPlan = HuntPlan.Empty
                         pinnedHuntTargetId = null
+                        // The same hunt looking for something else: once the new plan is in,
+                        // the leg being walked has to earn its place in it again.
+                        if (active && !changed) {
+                            retargetAfterPlanFor = session?.definition
+                            refreshCurrentNotification()
+                        }
                     }
-                    val active = session != null
-                    val changed = active != huntActive
                     huntActive = active
                     val pausedChanged = huntPaused != (session?.paused == true)
                     huntPaused = session?.paused == true
@@ -424,6 +457,7 @@ class ArrivalTrackingService : Service() {
         journeyOverlay.reset()
         stopPoseTracking()
         artworkJob?.cancel()
+        bubbleJob?.cancel()
         renderedTargetKey = null
         floatingMap.hide()
         serviceScope.cancel()
@@ -627,7 +661,16 @@ class ArrivalTrackingService : Service() {
         lastArrivalFixMillis = fixMillis
         lastAcceptedLocation = Location(location)
         locationAvailable = true
-        if (huntActive) requestHuntPlanIfMoved(location)
+        if (huntActive) {
+            requestHuntPlanIfMoved(location)
+            val latitude = location.latitude
+            val longitude = location.longitude
+            val accuracy = location.accuracy
+            serviceScope.launch {
+                runCatching { huntRepository.recordFix(latitude, longitude, accuracy) }
+                    .onFailure { Log.w(TAG, "Could not add the fix to the distance walked", it) }
+            }
+        }
         if (destination == null) {
             if (huntActive) maybeAcquireHuntTarget()
             return
@@ -650,7 +693,9 @@ class ArrivalTrackingService : Service() {
         // A valid fix is useful for display even when its accuracy is too coarse to confirm
         // arrival. The evaluator still rejects fixes beyond its safety ceiling.
         lastWaitingForPreciseLocation = false
+        val wasInRange = lastInRange
         lastInRange = result != ArrivalFixResult.WAITING
+        if (lastInRange && !wasInRange && huntActive) announceInRangeOnBubble()
         when (result) {
             ArrivalFixResult.ARRIVED -> handleArrival(destination)
             ArrivalFixResult.FIRST_IN_RANGE -> {
@@ -776,12 +821,10 @@ class ArrivalTrackingService : Service() {
     private suspend fun markCurrentTargetCaught() {
         val destination = currentDestination ?: repository.currentDestination()
         destination?.let { target ->
-            runCatching {
-                val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
-                preferences.addDismissedAlert(target.uniqueId)
-                preferences.rememberCaughtAlert(target.uniqueId, caughtDisplayName(target))
-                AlertsWidgetProvider.requestUpdate(applicationContext)
-            }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
+            recordHuntCatch(applicationContext, target.alert, caughtDisplayName(target))
+            // Ahead of the dismissed-ids flow: standby re-acquires from the plan straight
+            // away, and the plan still lists the target just caught.
+            dismissedAlertIds = dismissedAlertIds + target.uniqueId
         }
         huntRepository.setTarget(null)
         repository.stopTracking()
@@ -813,8 +856,64 @@ class ArrivalTrackingService : Service() {
         // Same call site as the notification so the two readouts cannot drift, and so
         // the 30 s refresh loop keeps the pill alive while the trainer stands still.
         showJourneyOverlay(destination, distanceMeters, inRange)
+        updateBubble(destination, distanceMeters, inRange, waiting)
         focusFloatingMap()
         refreshFloatingMapAlerts()
+    }
+
+    /**
+     * The minimized window's readout: the target's artwork and how far away it is. Fed from
+     * the same call site as the chip and the pill, so the three cannot disagree.
+     */
+    private fun updateBubble(
+        destination: TrackedDestination?,
+        distanceMeters: Float?,
+        inRange: Boolean,
+        waiting: Boolean
+    ) {
+        if (!floatingMap.isShowing) return
+        floatingMap.setBubbleReadout(
+            floatingBubbleReadout(
+                hasTarget = destination != null,
+                distanceMeters = distanceMeters,
+                inRange = inRange,
+                waiting = waiting,
+                paused = huntPaused
+            )
+        )
+        val targetId = destination?.uniqueId
+        if (targetId == bubbleTargetId && bubbleJob != null) return
+        bubbleTargetId = targetId
+        bubbleJob?.cancel()
+        bubbleJob = serviceScope.launch { floatingMap.setBubbleTarget(destination?.alert) }
+    }
+
+    /**
+     * Arriving while the map is folded away: ripple the bubble and buzz once, since the
+     * hundo CP or the stop name you came for is now on the chip and you are not looking.
+     */
+    private fun announceInRangeOnBubble() {
+        Log.d(TAG, "In range; bubble minimized=${floatingMap.isMinimized}")
+        if (!floatingMap.isMinimized) return
+        floatingMap.pulseBubble()
+        serviceScope.launch {
+            val vibrate = runCatching {
+                AlertPreferences(applicationContext.alertPreferencesDataStore).notificationVibrate.first()
+            }.getOrDefault(true)
+            if (vibrate) buzzOnce()
+        }
+    }
+
+    private fun buzzOnce() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(android.os.Vibrator::class.java)
+        } ?: return
+        runCatching {
+            vibrator.vibrate(android.os.VibrationEffect.createWaveform(IN_RANGE_BUZZ, -1))
+        }.onFailure { Log.w(TAG, "Could not vibrate for the in-range bubble", it) }
     }
 
     private fun showJourneyOverlay(
@@ -850,12 +949,17 @@ class ArrivalTrackingService : Service() {
         // Put the window back where it was left before it is ever shown; moving it
         // afterwards would make it jump across the screen in front of the trainer.
         if (!geometryRestored) {
-            geometryRestored = true
-            serviceScope.launch {
-                runCatching {
-                    AlertPreferences(applicationContext.alertPreferencesDataStore)
-                        .getFloatingMapGeometry()
-                }.getOrNull()?.let { floatingMap.restoreGeometry(it.x, it.y, it.width, it.height) }
+            // Every call while the read is in flight waits for it: a leg starting or standby
+            // calling in here meanwhile would otherwise open the window at its defaults,
+            // full size and full opacity, before the trainer's own look arrived.
+            if (geometryRestoreJob?.isActive == true) return
+            geometryRestoreJob = serviceScope.launch {
+                val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
+                runCatching { preferences.getFloatingMapGeometry() }
+                    .getOrNull()?.let { floatingMap.restoreGeometry(it.x, it.y, it.width, it.height) }
+                runCatching { preferences.getFloatingMapLook() }
+                    .getOrNull()?.let { floatingMap.restoreLook(it) }
+                geometryRestored = true
                 showFloatingMap()
             }
             return
@@ -872,8 +976,44 @@ class ArrivalTrackingService : Service() {
                 }.onFailure { Log.w(TAG, "Could not persist the map window geometry", it) }
             }
         }
-        floatingMap.onRecenter = { focusFloatingMapOnUser() }
+        floatingMap.onBubbleMoved = { x, y ->
+            serviceScope.launch {
+                runCatching {
+                    AlertPreferences(applicationContext.alertPreferencesDataStore).updateFloatingBubblePosition(x, y)
+                }.onFailure { Log.w(TAG, "Could not persist the bubble position", it) }
+            }
+        }
+        floatingMap.onOpacityChanged = { opacity ->
+            opacitySaveJob?.cancel()
+            opacitySaveJob = serviceScope.launch {
+                delay(GEOMETRY_SAVE_DELAY_MS)
+                runCatching {
+                    AlertPreferences(applicationContext.alertPreferencesDataStore).updateFloatingMapOpacity(opacity)
+                }.onFailure { Log.w(TAG, "Could not persist the map opacity", it) }
+            }
+        }
+        floatingMap.onMinimizedChanged = { minimized ->
+            serviceScope.launch {
+                runCatching {
+                    AlertPreferences(applicationContext.alertPreferencesDataStore).updateFloatingMapMinimized(minimized)
+                }.onFailure { Log.w(TAG, "Could not persist the minimized map", it) }
+            }
+            if (minimized) {
+                // Nothing draws the blue dot while folded; the journey's own fixes carry on.
+                stopPoseTracking()
+            } else {
+                startPoseTracking(wantedPoseCadence())
+                renderedTargetKey = null
+                pendingCameraRefocus = true
+                refreshFloatingMapAlerts()
+                if (following) followTrainer(engage = true) else focusFloatingMap()
+            }
+        }
+        floatingMap.onRecenter = { startFollowing() }
+        floatingMap.onFollowCancelled = { stopFollowing() }
+        floatingMap.onEditTargets = { openTheApp(editHunt = true) }
         floatingMap.onFit = {
+            stopFollowing()
             huntFocus = huntFocus.pressed()
             val destination = currentDestination
             if (huntFocus == HuntMapFocus.ROUTE) {
@@ -891,8 +1031,8 @@ class ArrivalTrackingService : Service() {
             }
         }
         floatingMap.onOpenApp = { openTheApp() }
-        floatingMap.onPrevious = { stepHuntTarget(forward = false) }
-        floatingMap.onNext = { stepHuntTarget(forward = true) }
+        floatingMap.onPrevious = { stopFollowing(); stepHuntTarget(forward = false) }
+        floatingMap.onNext = { stopFollowing(); stepHuntTarget(forward = true) }
         floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
         floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
         floatingMap.onAlertTap = { retargetHuntTo(it) }
@@ -903,6 +1043,7 @@ class ArrivalTrackingService : Service() {
             if (huntPaused) recalculateHuntRoute() else pauseHuntRoute()
         }
         floatingMap.onClusterTap = { cluster ->
+            stopFollowing()
             floatingMap.focusCluster(cluster.alerts.mapNotNull { it.mapCoordinatesOrNull() })
         }
         // Closing the window ends the hunt. There is one control for "I am done",
@@ -910,17 +1051,64 @@ class ArrivalTrackingService : Service() {
         floatingMap.onClose = { stopEverything(applicationContext) }
         val mapWasShowing = floatingMap.isShowing
         floatingMap.show {
-            focusFloatingMap()
+            // The map can come up well after the window -- a window opened as the bubble only
+            // loads its map once expanded -- so anything framed or drawn before now went
+            // nowhere. Frame and draw it all afresh.
+            renderedTargetKey = null
+            pendingCameraRefocus = true
+            when {
+                following -> followTrainer(engage = true)
+                currentDestination == null -> focusFloatingMapOnUser()
+                else -> focusFloatingMap()
+            }
             refreshFloatingMapAlerts()
         }
-        floatingMap.setUndoOffer(undoOffer != null)
-        if (!mapWasShowing) batterySaver.restoreOverlayOrder()
+        floatingMap.setUndoOffer(undoOffer?.displayName)
+        if (!mapWasShowing) {
+            batterySaver.restoreOverlayOrder()
+            // Fresh views: the bubble and the follow button start blank.
+            bubbleTargetId = null
+            bubbleJob = null
+            floatingMap.setFollowing(following)
+        }
         floatingMap.setPaused(huntPaused)
-        // One place decides the cadence: full rate while there is a target being
-        // walked to, backed off while the hunt is only waiting for one.
-        startPoseTracking(if (currentDestination == null) MapPoseCadence.Standby else MapPoseCadence.Live)
+        if (floatingMap.isMinimized) {
+            stopPoseTracking()
+        } else {
+            startPoseTracking(wantedPoseCadence())
+        }
+        updateBubble(currentDestination, lastDirectDistanceMeters, lastInRange, lastWaitingForPreciseLocation)
         focusFloatingMap()
         refreshFloatingMapAlerts()
+    }
+
+    /**
+     * One place decides the blue dot's cadence: full rate while there is a target being
+     * walked to or the camera is following, backed off while the hunt only waits.
+     */
+    private fun wantedPoseCadence(): MapPoseCadence =
+        if (currentDestination == null && !following) MapPoseCadence.Standby else MapPoseCadence.Live
+
+    /** The location button: centre on the trainer and keep them there until they pan. */
+    private fun startFollowing() {
+        huntFocus = HuntMapFocus.READY
+        followState = followState.onGpsTapped()
+        floatingMap.setFollowing(true)
+        if (!floatingMap.isMinimized) startPoseTracking(wantedPoseCadence())
+        followTrainer(engage = true)
+    }
+
+    private fun stopFollowing() {
+        if (!following) return
+        followState = followState.onUserCameraGesture()
+        floatingMap.setFollowing(false)
+        if (!floatingMap.isMinimized) startPoseTracking(wantedPoseCadence())
+    }
+
+    private fun followTrainer(engage: Boolean = false) {
+        val location = lastPoseLocation ?: lastAcceptedLocation ?: return
+        lastFollowedFixNanos = location.elapsedRealtimeNanos
+        floatingMap.follow(location.latitude, location.longitude, engage)
     }
 
     /**
@@ -933,14 +1121,9 @@ class ArrivalTrackingService : Service() {
      */
     private suspend fun catchTargetAndAdvance() {
         val caught = currentDestination ?: repository.currentDestination() ?: return
-        runCatching {
-            val preferences = AlertPreferences(applicationContext.alertPreferencesDataStore)
-            preferences.addDismissedAlert(caught.uniqueId)
-            // Remembered so a mis-tap on the tick can be taken back; see
-            // AlertPreferences.lastCaughtAlert.
-            preferences.rememberCaughtAlert(caught.uniqueId, caughtDisplayName(caught))
-            AlertsWidgetProvider.requestUpdate(applicationContext)
-        }.onFailure { Log.w(TAG, "Could not record the caught target", it) }
+        // Remembered so a mis-tap on the tick can be taken back, and ends the raid's
+        // watch so its hundo CP and counters give way to the next target.
+        recordHuntCatch(applicationContext, caught.alert, caughtDisplayName(caught))
 
         pinnedHuntTargetId = null
         // Ahead of the dismissed-ids flow, which the next plan would otherwise race.
@@ -1120,7 +1303,8 @@ class ArrivalTrackingService : Service() {
         if (huntPlanJob?.isActive == true) return
         huntPlanJob = serviceScope.launch {
             for (request in huntPlanRequests) {
-                applyHuntPlan(computeHuntPlan())
+                val plannedFor = huntDefinition
+                applyHuntPlan(computeHuntPlan(), plannedFor = plannedFor)
                 delay(HUNT_PLAN_MIN_INTERVAL_MILLIS)
             }
         }
@@ -1178,7 +1362,11 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    private fun applyHuntPlan(plan: HuntPlan, follow: Boolean = true) {
+    private fun applyHuntPlan(
+        plan: HuntPlan,
+        follow: Boolean = true,
+        plannedFor: FilterDefinition? = huntDefinition
+    ) {
         if (!huntActive) return
         huntPlan = plan
         huntRepository.publishPlan(plan)
@@ -1190,7 +1378,37 @@ class ArrivalTrackingService : Service() {
             serviceScope.launch { refreshHuntPath() }
         }
         maybeAcquireHuntTarget()
-        if (follow) followHuntPlan()
+        val edited = retargetAfterPlanFor
+        if (edited != null && edited == plannedFor) {
+            retargetAfterPlanFor = null
+            adoptEditedPlan()
+        } else if (follow) {
+            followHuntPlan()
+        }
+    }
+
+    /**
+     * After the trainer changed what the hunt is looking for: keep walking to the current
+     * target if the new search still wants it, otherwise move to the new plan's first stop,
+     * or wait for a match when there is none yet. Replaces the slot like [retargetHuntTo]
+     * does, rather than clearing it, so the service is never torn down in between.
+     */
+    private fun adoptEditedPlan() {
+        val destination = currentDestination ?: return
+        if (huntPlan.ordered.any { it.uniqueId == destination.uniqueId }) return
+        val next = huntPlan.route.firstOrNull { it.uniqueId !in dismissedAlertIds }
+        pendingCameraRefocus = true
+        serviceScope.launch {
+            runCatching {
+                if (next == null) {
+                    huntRepository.setTarget(null)
+                    repository.stopTracking()
+                } else {
+                    repository.startTracking(next)
+                    huntRepository.setTarget(next.uniqueId)
+                }
+            }.onFailure { Log.w(TAG, "Could not move the edited hunt onto its new plan", it) }
+        }
     }
 
     /**
@@ -1278,7 +1496,8 @@ class ArrivalTrackingService : Service() {
     }
 
     private fun focusFloatingMap() {
-        if (huntFocus == HuntMapFocus.ROUTE) {
+        if (huntFocus == HuntMapFocus.ROUTE || following) {
+            // Following owns the camera; a new leg does not take it away.
             pendingCameraRefocus = false
             return
         }
@@ -1326,6 +1545,8 @@ class ArrivalTrackingService : Service() {
             applicationContext,
             { pose ->
                 floatingMap.setUserPose(pose)
+                lastPoseLocation = pose.location
+                if (following && pose.location.elapsedRealtimeNanos != lastFollowedFixNanos) followTrainer()
                 // The pose stream paints the window; the independent arrival source
                 // supplies the origin for target acquisition even without a window.
                 if (currentDestination == null) {
@@ -1460,7 +1681,7 @@ class ArrivalTrackingService : Service() {
             )
         )
         // Reached with currentDestination already null, so showFloatingMap picks
-        // the backed-off cadence for us.
+        // the backed-off cadence and the bubble's waiting readout for us.
         showFloatingMap()
         refreshFloatingMapAlerts()
         focusFloatingMapOnUser()
@@ -1581,7 +1802,8 @@ class ArrivalTrackingService : Service() {
         // happens to lie closest to the Gulf of Guinea. Standby is already holding
         // the service open, and its GPS source supplies the missing origin.
         if (lastAcceptedLocation?.let(::isFreshValidLocation) != true) return
-        val next = huntPlan.route.firstOrNull() ?: return
+        // The plan can be a beat behind a catch; never walk straight back to it.
+        val next = huntPlan.route.firstOrNull { it.uniqueId !in dismissedAlertIds } ?: return
         acquireJob = serviceScope.launch {
             runCatching {
                 // Re-check under the coroutine: the hunt can end between the feed
@@ -1595,20 +1817,29 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    /** Brings the app forward from the window, on whatever it was last showing. */
-    private fun openTheApp() {
+    /**
+     * Brings the app forward from the window, on whatever it was last showing -- or, with
+     * [editHunt], on the map with the running hunt's target picker open.
+     */
+    private fun openTheApp(editHunt: Boolean = false) {
         runCatching {
-            startActivity(
+            val intent = if (editHunt) {
+                MainActivity.createHuntEditorIntent(this)
+            } else {
                 Intent(this, MainActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            )
+            }
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
         }.onFailure { Log.w(TAG, "Could not open the app from the floating map", it) }
     }
 
     /** Standby has no destination, so the camera frames the trainer instead. */
     private fun focusFloatingMapOnUser() {
         huntFocus = HuntMapFocus.READY
-        val origin = lastAcceptedLocation ?: return
+        if (following) {
+            followTrainer()
+            return
+        }
+        val origin = lastPoseLocation ?: lastAcceptedLocation ?: return
         floatingMap.recenter(origin.latitude, origin.longitude)
     }
 
@@ -1701,6 +1932,9 @@ class ArrivalTrackingService : Service() {
         /** Long enough that a drag settles, short enough to survive a quick stop. */
         private const val GEOMETRY_SAVE_DELAY_MS = 400L
 
+        /** Two short taps: noticeable in a pocket, not mistaken for a call. */
+        private val IN_RANGE_BUZZ = longArrayOf(0L, 80L, 90L, 80L)
+
         /** How many hunt targets the floating window draws, nearest first. */
         private const val FLOATING_MAP_MAX_MARKERS = 40
         const val ACTION_STOP = "com.example.pokemonalertsv2.tracking.STOP"
@@ -1748,12 +1982,18 @@ class ArrivalTrackingService : Service() {
          * Clears both stores rather than messaging the service: the collectors
          * already tear the service down when either goes empty, and this way a
          * stop still works when no service is running to receive an intent.
+         *
+         * The hunt's summary is kept for the app to show. Stopped from outside the
+         * app ([fromApp] false) it is also announced, since nothing on screen will.
          */
-        fun stopEverything(context: Context) {
+        fun stopEverything(context: Context, fromApp: Boolean = false) {
             val appContext = context.applicationContext
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-                runCatching { HuntRepository.getInstance(appContext).stop() }
+                val summary = runCatching { HuntRepository.getInstance(appContext).finish() }.getOrNull()
                 runCatching { ArrivalTrackingRepository.getInstance(appContext).stopTracking() }
+                if (summary != null && !fromApp) {
+                    ArrivalTrackingNotifications.postHuntSummary(appContext, summary)
+                }
             }
         }
 
