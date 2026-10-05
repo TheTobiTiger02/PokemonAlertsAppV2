@@ -79,6 +79,9 @@ internal class FloatingWindow(
     private var compactHeight = 0
 
     private var opacity = 1f
+    private var suppressed = false
+    private var grip: TextView? = null
+    private var snapAnimator: android.animation.ValueAnimator? = null
 
     /** Reported on every drag and resize so a service can persist the geometry. */
     var onGeometryChanged: (x: Int, y: Int, width: Int, height: Int) -> Unit = { _, _, _, _ -> }
@@ -129,6 +132,10 @@ internal class FloatingWindow(
         if (root != null) return true
         content.alpha = opacity
         val params = buildLayoutParams()
+        if (suppressed) {
+            content.visibility = View.GONE
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
         val added = runCatching { windowManager.addView(content, params) }
             .onFailure { Log.w(TAG, "Could not add the floating window", it) }
             .isSuccess
@@ -140,6 +147,8 @@ internal class FloatingWindow(
 
     fun hide() {
         val container = root ?: return
+        snapAnimator?.cancel()
+        snapAnimator = null
         runCatching { windowManager.removeView(container) }
             .onFailure { Log.w(TAG, "Could not remove the floating window", it) }
         root = null
@@ -157,6 +166,24 @@ internal class FloatingWindow(
     fun setOpacity(alpha: Float) {
         opacity = alpha
         root?.alpha = alpha
+    }
+
+    /**
+     * Steps the window aside without taking it down: the content is hidden and the window
+     * stops taking touches, so whatever is underneath is fully usable. Everything inside --
+     * the map, its camera, the bubble -- is kept for when it comes back.
+     */
+    fun setSuppressed(suppressed: Boolean) {
+        this.suppressed = suppressed
+        val container = root ?: return
+        container.visibility = if (suppressed) View.GONE else View.VISIBLE
+        val params = layoutParams ?: return
+        params.flags = if (suppressed) {
+            params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        } else {
+            params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        }
+        applyLayout(params)
     }
 
     /**
@@ -182,6 +209,8 @@ internal class FloatingWindow(
 
     fun exitCompact() {
         if (!isCompact) return
+        snapAnimator?.cancel()
+        snapAnimator = null
         isCompact = false
         val params = layoutParams ?: return
         params.x = savedX ?: dp(size.xDp)
@@ -204,21 +233,65 @@ internal class FloatingWindow(
 
     /** The corner grip that resizes the window, sized [gripDp] square by the caller's layout. */
     @SuppressLint("ClickableViewAccessibility")
-    fun buildResizeGrip(): View = TextView(themedContext).apply {
+    fun buildResizeGrip(colors: OverlayColors = OverlayColors.Light): View = TextView(themedContext).apply {
         text = "◢"
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-        setTextColor(0xFF5B6472.toInt())
         gravity = Gravity.CENTER
         // A bare glyph over map tiles is invisible against half the places you might stand.
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(0xF2FFFFFF.toInt())
-            setStroke(dp(1), 0x22000000)
-        }
+        background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
         elevation = dp(2).toFloat()
         contentDescription = "Resize map"
         setOnTouchListener(ResizeListener())
+        grip = this
+        applyGripColors(colors)
     }
+
+    /** Repaints the resize grip for a theme change. */
+    fun applyGripColors(colors: OverlayColors) {
+        val view = grip ?: return
+        view.setTextColor(colors.muted)
+        (view.background as? GradientDrawable)?.apply {
+            setColor(colors.control)
+            setStroke(dp(1), colors.outline)
+        }
+    }
+
+    /**
+     * Glides the bubble to the nearer side of the screen, so it never comes to rest over
+     * the middle of the game.
+     */
+    private fun snapToEdge(params: WindowManager.LayoutParams) {
+        val (screenWidth, screenHeight) = screenSize()
+        val targetX = snapToEdgeX(params.x, params.width, screenWidth, dp(EDGE_MARGIN_DP))
+        params.y = params.y.coerceIn(0, (screenHeight - params.height).coerceAtLeast(0))
+        snapAnimator?.cancel()
+        snapAnimator = android.animation.ValueAnimator.ofInt(params.x, targetX).apply {
+            duration = SNAP_MILLIS
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener {
+                params.x = it.animatedValue as Int
+                applyLayout(params)
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (layoutParams !== params || !isCompact) return
+                    bubbleX = params.x
+                    bubbleY = params.y
+                    onCompactMoved(params.x, params.y)
+                }
+            })
+            start()
+        }
+    }
+
+    private fun screenSize(): Pair<Int, Int> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            bounds.width() to bounds.height()
+        } else {
+            val metrics = appContext.resources.displayMetrics
+            metrics.widthPixels to metrics.heightPixels
+        }
 
     private fun buildLayoutParams(): WindowManager.LayoutParams =
         WindowManager.LayoutParams(
@@ -275,11 +348,7 @@ internal class FloatingWindow(
                     when {
                         !dragging && event.action == MotionEvent.ACTION_UP && onTap != null -> onTap()
                         !dragging -> Unit
-                        isCompact -> {
-                            bubbleX = params.x
-                            bubbleY = params.y
-                            onCompactMoved(params.x, params.y)
-                        }
+                        isCompact -> snapToEdge(params)
                         else -> rememberGeometry(params)
                     }
                     true
@@ -339,7 +408,15 @@ internal class FloatingWindow(
 
     companion object {
         private const val TAG = "FloatingWindow"
+        private const val EDGE_MARGIN_DP = 8
+        private const val SNAP_MILLIS = 250L
 
         fun canDraw(context: Context): Boolean = Settings.canDrawOverlays(context)
     }
+}
+
+/** The x a window [width] wide comes to rest at: the nearer screen edge, [margin] inside it. */
+internal fun snapToEdgeX(x: Int, width: Int, screenWidth: Int, margin: Int): Int {
+    val right = (screenWidth - width - margin).coerceAtLeast(margin)
+    return if (x + width / 2 < screenWidth / 2) margin else right
 }

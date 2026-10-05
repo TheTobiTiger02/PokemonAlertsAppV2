@@ -64,6 +64,9 @@
         </activity>
         <!-- No picture-in-picture: the route is followed in a movable, resizable overlay
              window instead, which a PiP window cannot be. -->
+        <activity android:name=".hunt.HuntHistoryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PokemonAlertsV2" />
         <activity android:name=".catchroutes.CatchRoutesActivity"
             android:exported="false"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"

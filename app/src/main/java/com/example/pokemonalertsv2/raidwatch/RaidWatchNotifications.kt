@@ -47,6 +47,7 @@ internal object RaidWatchNotifications {
     private const val REQUEST_STOP = 40_062
     private const val REQUEST_COUNTERS = 40_063
     private const val REQUEST_COPY = 40_065
+    private const val REQUEST_STOP_FROM_SUMMARY = 40_066
 
     /** Android 16+ (API 36) exposes the Now Bar / live-update surfaces. */
     private const val LIVE_NOTIFICATION_MIN_SDK = 36
@@ -246,6 +247,21 @@ internal object RaidWatchNotifications {
             REQUEST_STOP,
             Intent(context, RaidWatchReceiver::class.java).apply {
                 action = RaidWatchReceiver.ACTION_STOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+    /**
+     * The same stop, offered on the "Hunt finished" notification. Its own request code and
+     * extra, so the receiver also re-posts that summary without the button it just used.
+     */
+    internal fun stopFromHuntSummaryPendingIntent(context: Context): PendingIntent =
+        PendingIntent.getBroadcast(
+            context,
+            REQUEST_STOP_FROM_SUMMARY,
+            Intent(context, RaidWatchReceiver::class.java).apply {
+                action = RaidWatchReceiver.ACTION_STOP
+                putExtra(RaidWatchReceiver.EXTRA_FROM_HUNT_SUMMARY, true)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

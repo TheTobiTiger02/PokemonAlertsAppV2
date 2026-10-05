@@ -201,6 +201,16 @@ class MainNavigationComposeTest {
     }
 
     @Test
+    fun toolsHuntHistoryOpensItsScreenAndBackReturnsToTools() {
+        openTools()
+        composeRule.onNodeWithText("Hunt history").performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) { huntHistoryResumed() }
+        Espresso.pressBack()
+        composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) { !huntHistoryResumed() }
+        waitForToolsScreen()
+    }
+
+    @Test
     fun toolsInsightsBackReturnsToTools() {
         openTools()
         composeRule.onNodeWithText("Spawn insights").performScrollTo().performClick()
@@ -330,6 +340,16 @@ class MainNavigationComposeTest {
             runCatching { composeRule.onNodeWithTag("map_full_content").fetchSemanticsNode() }.isSuccess
         }
         composeRule.onNodeWithTag("map_full_content").assertIsDisplayed()
+    }
+
+    private fun huntHistoryResumed(): Boolean {
+        var resumed = false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            resumed = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)
+                .any { it is com.example.pokemonalertsv2.hunt.HuntHistoryActivity }
+        }
+        return resumed
     }
 
     private fun openTools() {

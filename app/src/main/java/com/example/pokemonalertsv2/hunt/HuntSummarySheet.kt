@@ -16,6 +16,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.pokemonalertsv2.raidwatch.RaidWatchController
+import com.example.pokemonalertsv2.raidwatch.RaidWatchStore
+import kotlinx.coroutines.launch
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,7 +49,17 @@ import java.util.Date
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun HuntSummarySheet(summary: HuntSummary, onDismiss: () -> Unit) {
+internal fun HuntSummarySheet(
+    summary: HuntSummary,
+    doneLabel: String = "Done",
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // Offered only while that raid's info is actually still up: it ends on its own when the
+    // raid does, or from its own notification.
+    val watchedRaid by remember(context) { RaidWatchStore(context).watched }
+        .collectAsStateWithLifecycle(initialValue = null)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -93,15 +112,30 @@ internal fun HuntSummarySheet(summary: HuntSummary, onDismiss: () -> Unit) {
                 }
             }
 
+            val raid = summary.raidWatchStillShowing
+            if (raid != null && watchedRaid != null) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            RaidWatchController.stop(context)
+                            HuntRepository.getInstance(context).forgetSummaryRaid()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Dismiss $raid raid info")
+                }
+            }
+
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text("Done")
+                Text(doneLabel)
             }
         }
     }
 }
 
 @Composable
-private fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
+internal fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),

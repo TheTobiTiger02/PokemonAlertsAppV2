@@ -108,10 +108,12 @@ internal object ArrivalTrackingNotifications {
         huntName: String,
         undoOffer: CaughtAlert? = null,
         /** Parked by the trainer, rather than waiting for the feed. See HuntSession.paused. */
-        paused: Boolean = false
+        paused: Boolean = false,
+        /** "Mewtwo raid ended", when the target ran out moments ago. See [endedTargetNote]. */
+        endedNote: String? = null
     ): Notification {
         val title = if (paused) "Hunt paused: $huntName" else "Hunting $huntName"
-        val body = if (paused) {
+        val body = endedNote ?: if (paused) {
             "Tap a target on the map, or recalculate"
         } else {
             "Waiting for a match"
@@ -163,10 +165,12 @@ internal object ArrivalTrackingNotifications {
         waitingForPreciseLocation: Boolean = false,
         huntActive: Boolean = false,
         offerOverlay: Boolean = false,
-        undoOffer: CaughtAlert? = null
+        undoOffer: CaughtAlert? = null,
+        /** "Mewtwo raid ended · next: Eevee": leads the card for a minute after a switch. */
+        endedNote: String? = null
     ): Notification {
         val alert = destination.alert
-        val walkingContent = ongoingContent(
+        val walkingContent = endedNote ?: ongoingContent(
             destination = destination,
             distanceMeters = distanceMeters,
             walkingRoute = walkingRoute,
@@ -441,6 +445,18 @@ internal object ArrivalTrackingNotifications {
             .setSilent(true)
             .setAutoCancel(true)
             .setContentIntent(open)
+            .apply {
+                // The raid's hundo CP and counters outlive the hunt on purpose -- you may
+                // still be standing in the lobby -- so ending them is offered, not done.
+                summary.raidWatchStillShowing?.let { raid ->
+                    addAction(
+                        R.drawable.ic_close_small,
+                        "Dismiss $raid raid info",
+                        com.example.pokemonalertsv2.raidwatch.RaidWatchNotifications
+                            .stopFromHuntSummaryPendingIntent(context)
+                    )
+                }
+            }
             .build()
         runCatching { NotificationManagerCompat.from(context).notify(HUNT_SUMMARY_NOTIFICATION_ID, notification) }
     }

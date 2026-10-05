@@ -179,6 +179,23 @@ class ArrivalTrackingService : Service() {
     /** Which fix the camera last followed; the pose stream re-emits on every compass tick. */
     private var lastFollowedFixNanos = 0L
 
+    /** Whether the app's own Map tab is on screen; the window steps aside while it is. */
+    private var appMapVisible = false
+    private var appMapVisibilityJob: Job? = null
+
+    /** The stored theme mode, kept so a system night-mode change can be applied on its own. */
+    private var storedThemeMode = 0
+    private var themeJob: Job? = null
+    private var routeLineJob: Job? = null
+
+    /**
+     * A target that ran out before the trainer got there, said once on the chip and in the
+     * window so the switch to the next target is not a silent surprise.
+     */
+    private data class EndedTarget(val name: String, val isRaid: Boolean, val atMillis: Long)
+    private var endedTarget: EndedTarget? = null
+    private var endedNoteJob: Job? = null
+
     /** The target the bubble is showing artwork for. */
     private var bubbleTargetId: String? = null
     private var bubbleJob: Job? = null
@@ -327,6 +344,34 @@ class ArrivalTrackingService : Service() {
                     }
             }
         }
+        if (appMapVisibilityJob == null) {
+            appMapVisibilityJob = serviceScope.launch {
+                InAppMapVisibility.visible.collect { visible ->
+                    if (visible == appMapVisible) return@collect
+                    appMapVisible = visible
+                    applyAppMapVisibility()
+                }
+            }
+        }
+        if (themeJob == null) {
+            themeJob = serviceScope.launch {
+                AlertPreferences(applicationContext.alertPreferencesDataStore).themeMode.collect { mode ->
+                    storedThemeMode = mode
+                    applyOverlayTheme()
+                }
+            }
+        }
+        if (routeLineJob == null) {
+            routeLineJob = serviceScope.launch {
+                // Collected rather than read on each path refresh, so the switch in the window
+                // and the one in the map's filter sheet both take effect at once.
+                AlertPreferences(applicationContext.alertPreferencesDataStore).showHuntPath.collect { shown ->
+                    showHuntPath = shown
+                    floatingMap.setRouteLine(shown)
+                    floatingMap.setHuntPath(currentHuntPath())
+                }
+            }
+        }
         if (huntJob == null) {
             huntJob = serviceScope.launch {
                 huntRepository.sessionFlow.collect { session ->
@@ -452,6 +497,10 @@ class ArrivalTrackingService : Service() {
         mapAlertsJob?.cancel()
         overlayPreferenceJob?.cancel()
         undoOfferJob?.cancel()
+        appMapVisibilityJob?.cancel()
+        themeJob?.cancel()
+        routeLineJob?.cancel()
+        endedNoteJob?.cancel()
         huntMatrixJob?.cancel()
         huntPlanJob?.cancel()
         journeyOverlay.reset()
@@ -562,6 +611,7 @@ class ArrivalTrackingService : Service() {
         val remaining = endMillis - System.currentTimeMillis()
         if (remaining <= 0L) {
             serviceScope.launch {
+                noteEndedTarget(destination)
                 repository.stopTracking()
                 stopTrackingService()
             }
@@ -569,9 +619,39 @@ class ArrivalTrackingService : Service() {
         }
         expiryJob = serviceScope.launch {
             delay(remaining)
+            noteEndedTarget(destination)
             repository.stopTracking()
             stopTrackingService()
         }
+    }
+
+    /**
+     * Remembers, for a minute, that the hunt's target ran out before the trainer got there.
+     * The next notification and the window's strip say so; [endedNote] words it.
+     */
+    private fun noteEndedTarget(destination: TrackedDestination) {
+        if (!huntActive) return
+        val alert = destination.alert
+        endedTarget = EndedTarget(
+            name = alert.pokemon?.takeIf { it.isNotBlank() } ?: huntTargetTitle(alert),
+            isRaid = RaidTierParser.isRaid(alert),
+            atMillis = System.currentTimeMillis()
+        )
+        endedNoteJob?.cancel()
+        endedNoteJob = serviceScope.launch {
+            delay(ENDED_NOTE_MILLIS)
+            endedTarget = null
+            floatingMap.setNotice(null)
+            refreshCurrentNotification()
+        }
+    }
+
+    /** "Mewtwo raid ended · next: Eevee", while the ended target is still news. */
+    private fun endedNote(): String? {
+        val ended = endedTarget ?: return null
+        if (System.currentTimeMillis() - ended.atMillis > ENDED_NOTE_MILLIS) return null
+        val next = currentDestination?.alert?.let { it.pokemon?.takeIf(String::isNotBlank) ?: huntTargetTitle(it) }
+        return endedTargetNote(ended.name, ended.isRaid, next)
     }
 
     /**
@@ -847,12 +927,14 @@ class ArrivalTrackingService : Service() {
             waitingForPreciseLocation = waiting,
             huntActive = huntActive,
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
-            undoOffer = undoOffer
+            undoOffer = undoOffer,
+            endedNote = endedNote()
         )
         runCatching {
             NotificationManagerCompat.from(this)
                 .notify(ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID, notification)
         }
+        floatingMap.setNotice(endedNote())
         // Same call site as the notification so the two readouts cannot drift, and so
         // the 30 s refresh loop keeps the pill alive while the trainer stands still.
         showJourneyOverlay(destination, distanceMeters, inRange)
@@ -959,6 +1041,8 @@ class ArrivalTrackingService : Service() {
                     .getOrNull()?.let { floatingMap.restoreGeometry(it.x, it.y, it.width, it.height) }
                 runCatching { preferences.getFloatingMapLook() }
                     .getOrNull()?.let { floatingMap.restoreLook(it) }
+                runCatching { resolveOverlayColors(applicationContext) }
+                    .getOrNull()?.let { floatingMap.applyColors(it) }
                 geometryRestored = true
                 showFloatingMap()
             }
@@ -1002,11 +1086,14 @@ class ArrivalTrackingService : Service() {
                 // Nothing draws the blue dot while folded; the journey's own fixes carry on.
                 stopPoseTracking()
             } else {
-                startPoseTracking(wantedPoseCadence())
-                renderedTargetKey = null
-                pendingCameraRefocus = true
-                refreshFloatingMapAlerts()
-                if (following) followTrainer(engage = true) else focusFloatingMap()
+                revealFloatingMap()
+            }
+        }
+        floatingMap.onRouteLineToggle = { shown ->
+            serviceScope.launch {
+                runCatching {
+                    AlertPreferences(applicationContext.alertPreferencesDataStore).updateShowHuntPath(shown)
+                }.onFailure { Log.w(TAG, "Could not save the route line setting", it) }
             }
         }
         floatingMap.onRecenter = { startFollowing() }
@@ -1072,7 +1159,10 @@ class ArrivalTrackingService : Service() {
             floatingMap.setFollowing(following)
         }
         floatingMap.setPaused(huntPaused)
-        if (floatingMap.isMinimized) {
+        floatingMap.setRouteLine(showHuntPath)
+        floatingMap.setNotice(endedNote())
+        floatingMap.setSuppressed(appMapVisible)
+        if (floatingMap.isMinimized || appMapVisible) {
             stopPoseTracking()
         } else {
             startPoseTracking(wantedPoseCadence())
@@ -1080,6 +1170,45 @@ class ArrivalTrackingService : Service() {
         updateBubble(currentDestination, lastDirectDistanceMeters, lastInRange, lastWaitingForPreciseLocation)
         focusFloatingMap()
         refreshFloatingMapAlerts()
+    }
+
+    /**
+     * Brings the full window's picture up to date after it has been out of sight -- folded
+     * into the bubble, or stepped aside for the app's own map: the blue dot, the pins and
+     * the camera all stood still meanwhile.
+     */
+    private fun revealFloatingMap() {
+        startPoseTracking(wantedPoseCadence())
+        renderedTargetKey = null
+        pendingCameraRefocus = true
+        refreshFloatingMapAlerts()
+        when {
+            following -> followTrainer(engage = true)
+            currentDestination == null -> focusFloatingMapOnUser()
+            else -> focusFloatingMap()
+        }
+    }
+
+    /** Steps the window aside while the app's own Map tab shows the same hunt. */
+    private fun applyAppMapVisibility() {
+        if (!floatingMap.isShowing) return
+        floatingMap.setSuppressed(appMapVisible)
+        when {
+            appMapVisible -> stopPoseTracking()
+            !floatingMap.isMinimized -> revealFloatingMap()
+        }
+    }
+
+    private fun applyOverlayTheme(configuration: android.content.res.Configuration = resources.configuration) {
+        val systemDark = configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        floatingMap.applyColors(OverlayColors.forDark(overlayIsDark(storedThemeMode, systemDark)))
+    }
+
+    /** "System" theme follows night mode, which reaches a service only through here. */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyOverlayTheme(newConfig)
     }
 
     /**
@@ -1605,7 +1734,8 @@ class ArrivalTrackingService : Service() {
             waitingForPreciseLocation = lastWaitingForPreciseLocation,
             huntActive = huntActive,
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
-            undoOffer = undoOffer
+            undoOffer = undoOffer,
+            endedNote = endedNote()
         )
     }
 
@@ -1624,7 +1754,8 @@ class ArrivalTrackingService : Service() {
                     context = this,
                     huntName = huntName ?: "your target",
                     undoOffer = undoOffer,
-                    paused = huntPaused
+                    paused = huntPaused,
+                    endedNote = endedNote()
                 )
             } else {
                 return
@@ -1677,9 +1808,11 @@ class ArrivalTrackingService : Service() {
                 context = this,
                 huntName = huntName ?: "your target",
                 undoOffer = undoOffer,
-                paused = huntPaused
+                paused = huntPaused,
+                endedNote = endedNote()
             )
         )
+        floatingMap.setNotice(endedNote())
         // Reached with currentDestination already null, so showFloatingMap picks
         // the backed-off cadence and the bubble's waiting readout for us.
         showFloatingMap()
@@ -1752,9 +1885,6 @@ class ArrivalTrackingService : Service() {
      * showing a half route.
      */
     private suspend fun refreshHuntPath(force: Boolean = false) {
-        showHuntPath = runCatching {
-            AlertPreferences(applicationContext.alertPreferencesDataStore).showHuntPath.first()
-        }.getOrDefault(true)
         val origin = lastAcceptedLocation?.takeIf(::isFreshValidLocation)
         if (showHuntPath && huntActive && origin != null) {
             runCatching { huntPath.request(origin.latitude, origin.longitude, huntPathStops(), force) }
@@ -1932,6 +2062,9 @@ class ArrivalTrackingService : Service() {
         /** Long enough that a drag settles, short enough to survive a quick stop. */
         private const val GEOMETRY_SAVE_DELAY_MS = 400L
 
+        /** How long "Mewtwo raid ended" stays on the chip and in the window. */
+        private const val ENDED_NOTE_MILLIS = 60_000L
+
         /** Two short taps: noticeable in a pocket, not mistaken for a call. */
         private val IN_RANGE_BUZZ = longArrayOf(0L, 80L, 90L, 80L)
 
@@ -1989,7 +2122,12 @@ class ArrivalTrackingService : Service() {
         fun stopEverything(context: Context, fromApp: Boolean = false) {
             val appContext = context.applicationContext
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
-                val summary = runCatching { HuntRepository.getInstance(appContext).finish() }.getOrNull()
+                val raid = runCatching {
+                    com.example.pokemonalertsv2.raidwatch.RaidWatchStore(appContext).current()?.alert
+                }.getOrNull()?.let { it.pokemon?.takeIf(String::isNotBlank) ?: it.name }
+                val summary = runCatching {
+                    HuntRepository.getInstance(appContext).finish(raidWatchStillShowing = raid)
+                }.getOrNull()
                 runCatching { ArrivalTrackingRepository.getInstance(appContext).stopTracking() }
                 if (summary != null && !fromApp) {
                     ArrivalTrackingNotifications.postHuntSummary(appContext, summary)
