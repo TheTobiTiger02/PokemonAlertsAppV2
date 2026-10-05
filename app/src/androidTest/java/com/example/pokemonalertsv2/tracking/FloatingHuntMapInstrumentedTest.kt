@@ -80,6 +80,34 @@ class FloatingHuntMapInstrumentedTest {
         } finally { instrumentation.runOnMainSync { overlay.hide() } }
     }
 
+    @Test fun suppressingKeepsTheWindowAndItsStateAndThemesRepaint() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        assumeTrue(FloatingMapOverlay.canDraw(context))
+        lateinit var overlay: FloatingMapOverlay
+        instrumentation.runOnMainSync {
+            overlay = FloatingMapOverlay(context)
+            overlay.show()
+        }
+        try {
+            instrumentation.runOnMainSync {
+                overlay.setSuppressed(true)
+                assertTrue(overlay.isShowing)
+                overlay.applyColors(OverlayColors.Dark)
+                overlay.setSuppressed(false)
+                assertFalse(overlay.isMinimized)
+                overlay.minimize()
+                overlay.applyColors(OverlayColors.Light)
+                overlay.setSuppressed(true)
+                overlay.setSuppressed(false)
+                assertTrue(overlay.isMinimized)
+                overlay.setNotice("Mewtwo raid ended")
+                overlay.setUndoOffer("Pikachu")
+                overlay.setRouteLine(false)
+            }
+        } finally { instrumentation.runOnMainSync { overlay.hide() } }
+    }
+
     @Test fun aWindowHiddenWhileMinimizedReopensMinimized() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext

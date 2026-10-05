@@ -99,8 +99,10 @@ internal class FloatingMapOverlay(context: Context) {
     private var bubbleIcon: ImageView? = null
     private var bubbleLabel: TextView? = null
     private var bubbleRing: View? = null
-    private var undoStrip: LinearLayout? = null
-    private var undoText: TextView? = null
+    private var noticeStrip: LinearLayout? = null
+    private var noticeText: TextView? = null
+    private var undoAction: TextView? = null
+    private var routeLineSwitch: android.widget.Switch? = null
     private var menuPanel: View? = null
     private var menuScrim: View? = null
     private var pauseItem: TextView? = null
@@ -120,6 +122,17 @@ internal class FloatingMapOverlay(context: Context) {
     private var startMinimized = false
     private var following = false
     private var paused = false
+    private var undoName: String? = null
+    private var noticeMessage: String? = null
+    private var routeLineShown = true
+
+    /** The chrome's colours, and everything that paints with them, for a theme change. */
+    private var colors = OverlayColors.Light
+    private val painters = mutableListOf<(OverlayColors) -> Unit>()
+
+    /** The bubble's ring colour (the target's category) and whether it shows artwork. */
+    private var bubbleAccent: Int? = null
+    private var bubbleHasArtwork = false
 
     /** Restores the geometry the trainer last left the window at. */
     fun restoreGeometry(x: Int, y: Int, width: Int, height: Int) =
@@ -183,6 +196,9 @@ internal class FloatingMapOverlay(context: Context) {
     /** Open the app on the hunt's target picker, to change what is being hunted. */
     var onEditTargets: () -> Unit = {}
 
+    /** The ⋯ panel's route line switch was flipped. */
+    var onRouteLineToggle: (Boolean) -> Unit = {}
+
     /**
      * Re-plan the route from where the trainer is standing now.
      *
@@ -245,8 +261,12 @@ internal class FloatingMapOverlay(context: Context) {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(CORNER_DP).toFloat()
-                setColor(0xFFFFFFFF.toInt())
-                setStroke(dp(1), 0x33000000)
+            }
+            paint { colors ->
+                (background as? GradientDrawable)?.apply {
+                    setColor(colors.panel)
+                    setStroke(dp(1), colors.outline)
+                }
             }
             addView(
                 view,
@@ -259,7 +279,7 @@ internal class FloatingMapOverlay(context: Context) {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 dp(HANDLE_DP)
             ))
-            addView(buildUndoStrip(), FrameLayout.LayoutParams(
+            addView(buildNoticeStrip(), FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 dp(UNDO_STRIP_DP)
             ).apply { topMargin = dp(HANDLE_DP) })
@@ -273,7 +293,7 @@ internal class FloatingMapOverlay(context: Context) {
                 gravity = Gravity.BOTTOM or Gravity.START
                 setMargins(dp(6), 0, 0, dp(6))
             })
-            addView(window.buildResizeGrip(), FrameLayout.LayoutParams(
+            addView(window.buildResizeGrip(colors), FrameLayout.LayoutParams(
                 dp(GRIP_DP),
                 dp(GRIP_DP)
             ).apply {
@@ -494,8 +514,11 @@ internal class FloatingMapOverlay(context: Context) {
         bubbleIcon = null
         bubbleLabel = null
         bubbleRing = null
-        undoStrip = null
-        undoText = null
+        noticeStrip = null
+        noticeText = null
+        undoAction = null
+        routeLineSwitch = null
+        painters.clear()
         menuPanel = null
         menuScrim = null
         pauseItem = null
@@ -514,8 +537,63 @@ internal class FloatingMapOverlay(context: Context) {
      * Mewtwo · UNDO" is readable at a glance, and the tick next to it cannot be taken for it.
      */
     fun setUndoOffer(caughtName: String?) {
-        undoText?.text = caughtName?.let { "Caught $it" }
-        undoStrip?.isVisible = caughtName != null
+        undoName = caughtName
+        renderNoticeStrip()
+    }
+
+    /** A short notice in the same strip, such as "Mewtwo raid ended"; null clears it. */
+    fun setNotice(message: String?) {
+        noticeMessage = message
+        renderNoticeStrip()
+    }
+
+    private fun renderNoticeStrip() {
+        val undo = undoName
+        noticeText?.text = if (undo != null) "Caught $undo" else noticeMessage
+        undoAction?.isVisible = undo != null
+        noticeStrip?.isVisible = undo != null || noticeMessage != null
+    }
+
+    /** Keeps the panel's route line switch on the stored setting. */
+    fun setRouteLine(shown: Boolean) {
+        routeLineShown = shown
+        routeLineSwitch?.isChecked = shown
+    }
+
+    /** Repaints the window's chrome for a theme change, without rebuilding anything. */
+    fun applyColors(colors: OverlayColors) {
+        if (colors == this.colors) return
+        this.colors = colors
+        painters.forEach { it(colors) }
+        window.applyGripColors(colors)
+    }
+
+    /** Hides the window while the app's own map is on screen; see [InAppMapVisibility]. */
+    fun setSuppressed(suppressed: Boolean) {
+        if (suppressed) setMenuOpen(false)
+        window.setSuppressed(suppressed)
+        if (root == null || window.isCompact) return
+        if (suppressed) lifecycle?.stop() else lifecycle?.resume()
+    }
+
+    /** Registers [block] to paint this view now and again on every [applyColors]. */
+    private fun <T : View> T.paint(block: T.(OverlayColors) -> Unit) {
+        val view = this
+        val painter: (OverlayColors) -> Unit = { view.block(it) }
+        painters += painter
+        painter(colors)
+    }
+
+    private fun paintBubbleIcon() {
+        val icon = bubbleIcon ?: return
+        val accent = bubbleAccent ?: colors.primary
+        val fill = colors.bubble
+        (icon.background as? GradientDrawable)?.apply {
+            setColor(fill)
+            setStroke(dp(3), accent)
+        }
+        (bubbleRing?.background as? GradientDrawable)?.setStroke(dp(3), accent)
+        icon.imageTintList = if (bubbleHasArtwork) null else ColorStateList.valueOf(colors.onSurface)
     }
 
     /** Names the pause row after whichever thing it would do next. */
@@ -550,22 +628,20 @@ internal class FloatingMapOverlay(context: Context) {
      */
     suspend fun setBubbleTarget(alert: PokemonAlert?) {
         val icon = bubbleIcon ?: return
-        val accent = alert?.let { resolveAlertVisualStyle(it).category.accentArgb.toInt() } ?: PRIMARY
-        (icon.background as? GradientDrawable)?.setStroke(dp(3), accent)
-        (bubbleRing?.background as? GradientDrawable)?.setStroke(dp(3), accent)
+        bubbleAccent = alert?.let { resolveAlertVisualStyle(it).category.accentArgb.toInt() }
         val bitmap = alert?.let { loadBubbleArtwork(it) }
         if (bubbleIcon !== icon) return
+        bubbleHasArtwork = bitmap != null
         if (bitmap != null) {
-            icon.imageTintList = null
             icon.setImageBitmap(bitmap)
             val inset = dp(5)
             icon.setPadding(inset, inset, inset, inset)
         } else {
             icon.setImageResource(R.drawable.ic_map)
-            icon.imageTintList = ColorStateList.valueOf(ON_SURFACE)
             val inset = dp(14)
             icon.setPadding(inset, inset, inset, inset)
         }
+        paintBubbleIcon()
         icon.contentDescription = alert?.let { "Hunting ${it.pokemon ?: it.name}" } ?: "Hunt map"
     }
 
@@ -597,8 +673,8 @@ internal class FloatingMapOverlay(context: Context) {
     fun setFollowing(following: Boolean) {
         this.following = following
         val button = recenterButton ?: return
-        (button.background as? GradientDrawable)?.setColor(if (following) PRIMARY else CONTROL_BACKGROUND)
-        button.imageTintList = ColorStateList.valueOf(if (following) 0xFFFFFFFF.toInt() else ON_SURFACE)
+        (button.background as? GradientDrawable)?.setColor(if (following) colors.primary else colors.control)
+        button.imageTintList = ColorStateList.valueOf(if (following) colors.onPrimary else colors.onSurface)
         button.contentDescription = if (following) "Following your location" else "Follow my location"
     }
 
@@ -671,7 +747,7 @@ internal class FloatingMapOverlay(context: Context) {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(4), 0, dp(4), 0)
-        setBackgroundColor(BAR_BACKGROUND)
+        paint { setBackgroundColor(it.bar) }
         window.dragWith(this)
         addView(controlButton("‹", "Previous target") { onPrevious() })
         addView(controlButton("✓", "Got it") { onGotIt() })
@@ -683,31 +759,37 @@ internal class FloatingMapOverlay(context: Context) {
         addView(controlButton("×", "Stop hunt") { onClose() })
     }
 
-    private fun buildUndoStrip(): LinearLayout = LinearLayout(themedContext).apply {
+    /**
+     * The strip under the bar: the undo offer after a catch, or a short notice such as a
+     * target that ended before you got there. Undo wins when both are live -- it is the
+     * one with something to press.
+     */
+    private fun buildNoticeStrip(): LinearLayout = LinearLayout(themedContext).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(10), 0, dp(4), 0)
-        setBackgroundColor(CONTROL_BACKGROUND)
+        paint { setBackgroundColor(it.control) }
         isVisible = false
         addView(TextView(themedContext).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(ON_SURFACE)
+            paint { setTextColor(it.onSurface) }
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
-            undoText = this
+            noticeText = this
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         addView(TextView(themedContext).apply {
             text = "UNDO"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(PRIMARY)
+            paint { setTextColor(it.primary) }
             setPadding(dp(10), dp(4), dp(10), dp(4))
             background = selectableBackground()
             isClickable = true
             contentDescription = "Undo catch"
             setOnClickListener { onUndo() }
+            undoAction = this
         })
-        undoStrip = this
+        noticeStrip = this
     }
 
     /**
@@ -720,14 +802,16 @@ internal class FloatingMapOverlay(context: Context) {
             setPadding(0, dp(6), 0, dp(6))
             addView(TextView(themedContext).apply {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setTextColor(MUTED)
+                paint { setTextColor(it.muted) }
                 setPadding(dp(12), dp(2), dp(12), 0)
                 opacityLabel = this
             })
             addView(SeekBar(themedContext).apply {
                 max = 100 - OPACITY_MIN_PERCENT
-                progressTintList = ColorStateList.valueOf(PRIMARY)
-                thumbTintList = ColorStateList.valueOf(PRIMARY)
+                paint {
+                    progressTintList = ColorStateList.valueOf(it.primary)
+                    thumbTintList = ColorStateList.valueOf(it.primary)
+                }
                 contentDescription = "Map opacity"
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
@@ -744,6 +828,7 @@ internal class FloatingMapOverlay(context: Context) {
                 opacitySlider = this
             })
             addView(divider())
+            addView(buildRouteLineRow())
             addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() })
             addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() })
             addView(menuItem(if (paused) "▶  Resume route" else "❚❚  Pause route") {
@@ -757,8 +842,12 @@ internal class FloatingMapOverlay(context: Context) {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(12).toFloat()
-                setColor(0xFFFFFFFF.toInt())
-                setStroke(dp(1), 0x22000000)
+            }
+            paint { colors ->
+                (background as? GradientDrawable)?.apply {
+                    setColor(colors.panel)
+                    setStroke(dp(1), colors.outline)
+                }
             }
             elevation = dp(6).toFloat()
             addView(column)
@@ -766,11 +855,44 @@ internal class FloatingMapOverlay(context: Context) {
         }
     }
 
+    /** "Route line" with a switch: the same setting as the map filter sheet's Hunt path. */
+    @Suppress("UseSwitchCompatOrMaterialCode")
+    private fun buildRouteLineRow(): LinearLayout = LinearLayout(themedContext).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(12), dp(2), dp(8), dp(2))
+        background = selectableBackground()
+        isClickable = true
+        addView(TextView(themedContext).apply {
+            text = "〰  Route line"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            paint { setTextColor(it.onSurface) }
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val toggle = android.widget.Switch(themedContext).apply {
+            isChecked = routeLineShown
+            contentDescription = "Show route line"
+            paint { colors ->
+                val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+                thumbTintList = ColorStateList(states, intArrayOf(colors.primary, colors.muted))
+                trackTintList = ColorStateList(states, intArrayOf(colors.primary and 0x66FFFFFF, colors.divider))
+            }
+            setOnCheckedChangeListener { _, checked ->
+                if (checked != routeLineShown) {
+                    routeLineShown = checked
+                    onRouteLineToggle(checked)
+                }
+            }
+        }
+        addView(toggle)
+        setOnClickListener { toggle.isChecked = !toggle.isChecked }
+        routeLineSwitch = toggle
+    }
+
     private fun menuItem(label: String, onClick: () -> Unit): TextView =
         TextView(themedContext).apply {
             text = label
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(ON_SURFACE)
+            paint { setTextColor(it.onSurface) }
             setPadding(dp(12), dp(9), dp(12), dp(9))
             background = selectableBackground()
             isClickable = true
@@ -778,7 +900,7 @@ internal class FloatingMapOverlay(context: Context) {
         }
 
     private fun divider(): View = View(themedContext).apply {
-        setBackgroundColor(0x14000000)
+        paint { setBackgroundColor(it.divider) }
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
             setMargins(0, dp(4), 0, dp(4))
         }
@@ -794,7 +916,7 @@ internal class FloatingMapOverlay(context: Context) {
         addView(View(themedContext).apply {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setStroke(dp(3), PRIMARY)
+                setStroke(dp(3), bubbleAccent ?: this@FloatingMapOverlay.colors.primary)
             }
             alpha = 0f
             bubbleRing = this
@@ -803,15 +925,10 @@ internal class FloatingMapOverlay(context: Context) {
             topMargin = dp(BUBBLE_TOP_DP)
         })
         addView(ImageView(themedContext).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0xFFFFFFFF.toInt())
-                setStroke(dp(3), PRIMARY)
-            }
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
             elevation = dp(4).toFloat()
             scaleType = ImageView.ScaleType.FIT_CENTER
             setImageResource(R.drawable.ic_map)
-            imageTintList = ColorStateList.valueOf(ON_SURFACE)
             val inset = dp(14)
             setPadding(inset, inset, inset, inset)
             contentDescription = "Hunt map"
@@ -823,14 +940,16 @@ internal class FloatingMapOverlay(context: Context) {
         addView(TextView(themedContext).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(0xFFFFFFFF.toInt())
             gravity = Gravity.CENTER
             maxLines = 1
             setPadding(dp(7), dp(1), dp(7), dp(2))
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dp(10).toFloat()
-                setColor(0xE616181D.toInt())
+            }
+            paint { colors ->
+                setTextColor(colors.onLabel)
+                (background as? GradientDrawable)?.setColor(colors.label)
             }
             elevation = dp(5).toFloat()
             text = "Hunting"
@@ -842,6 +961,7 @@ internal class FloatingMapOverlay(context: Context) {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             bottomMargin = dp(2)
         })
+        paint { paintBubbleIcon() }
         window.dragOrTapWith(this) { expand() }
         bubble = this
     }
@@ -858,23 +978,26 @@ internal class FloatingMapOverlay(context: Context) {
             .also { recenterButton = it })
         addView(iconButton(R.drawable.ic_fit_map, "Focus Hunt target or route") { onFit() })
         addView(iconButton(R.drawable.ic_map, "Open map in app") { onOpenApp() })
-        setFollowing(following)
+        // After the buttons' own painters, so the follow state wins over the plain style.
+        paint { setFollowing(following) }
     }
 
     private fun iconButton(iconRes: Int, description: String, onClick: () -> Unit): ImageView =
         ImageView(themedContext).apply {
             contentDescription = description
             setImageResource(iconRes)
-            imageTintList = ColorStateList.valueOf(ON_SURFACE)
             scaleType = ImageView.ScaleType.FIT_CENTER
             val inset = dp(7)
             setPadding(inset, inset, inset, inset)
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                // Not fully opaque: these sit on top of the map, and a hint of what
-                // is underneath keeps them reading as controls rather than holes.
-                setColor(CONTROL_BACKGROUND)
-                setStroke(dp(1), 0x22000000)
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+            paint { colors ->
+                imageTintList = ColorStateList.valueOf(colors.onSurface)
+                (background as? GradientDrawable)?.apply {
+                    // Not fully opaque: these sit on top of the map, and a hint of what
+                    // is underneath keeps them reading as controls rather than holes.
+                    setColor(colors.control)
+                    setStroke(dp(1), colors.outline)
+                }
             }
             elevation = dp(2).toFloat()
             isClickable = true
@@ -888,7 +1011,7 @@ internal class FloatingMapOverlay(context: Context) {
         TextView(themedContext).apply {
             text = label
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(ON_SURFACE)
+            paint { setTextColor(it.onSurface) }
             gravity = Gravity.CENTER
             contentDescription = description
             minWidth = dp(BAR_BUTTON_DP)
@@ -1057,21 +1180,16 @@ internal class FloatingMapOverlay(context: Context) {
         private const val ENGAGE_ANIMATION_MS = 600
         private const val FOLLOW_ANIMATION_MS = 900
 
-        private const val PRIMARY = 0xFF0057D9.toInt()
-        private const val ON_SURFACE = 0xFF16181D.toInt()
-        private const val MUTED = 0xFF5B6472.toInt()
-        private const val BAR_BACKGROUND = 0xFFF2F4F8.toInt()
-        private const val CONTROL_BACKGROUND = 0xF2FFFFFF.toInt()
 
         /**
          * Static rather than themed: the window has no Compose tree to read
          * MaterialTheme from, and the map's own palette is fixed anyway.
          */
         private val OVERLAY_PALETTE = MapMarkerPalette(
-            primary = PRIMARY,
+            primary = 0xFF0057D9.toInt(),
             onPrimary = 0xFFFFFFFF.toInt(),
             surface = 0xFFFFFFFF.toInt(),
-            onSurface = ON_SURFACE,
+            onSurface = 0xFF16181D.toInt(),
             outline = 0xFFD8DEE8.toInt(),
             error = 0xFFEF4444.toInt(),
             onError = 0xFFFFFFFF.toInt()

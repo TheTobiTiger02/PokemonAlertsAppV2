@@ -166,15 +166,26 @@ class HuntRepository private constructor(context: Context) {
      * One edit, so the summary is built from exactly the session and stats being cleared.
      * Returns the summary when it was worth keeping, null otherwise.
      */
-    suspend fun finish(nowMillis: Long = System.currentTimeMillis()): HuntSummary? {
+    suspend fun finish(
+        nowMillis: Long = System.currentTimeMillis(),
+        raidWatchStillShowing: String? = null
+    ): HuntSummary? {
         var summary: HuntSummary? = null
         dataStore.edit { preferences ->
             val session = preferences[ACTIVE_HUNT_KEY]?.decodeSession()
             if (session != null) {
                 val stats = preferences[HUNT_STATS_KEY]?.decodeStats() ?: HuntStats()
-                summary = huntSummary(session, stats, nowMillis).takeIf { it.isWorthShowing() }
+                summary = huntSummary(session, stats, nowMillis, raidWatchStillShowing)
+                    .takeIf { it.isWorthShowing() }
             }
-            summary?.let { preferences[LAST_SUMMARY_KEY] = json.encodeToString(HuntSummary.serializer(), it) }
+            summary?.let {
+                preferences[LAST_SUMMARY_KEY] = json.encodeToString(HuntSummary.serializer(), it)
+                // The history keeps the trip, not the passing offer to dismiss a raid.
+                preferences[HUNT_HISTORY_KEY] = appendHuntHistory(
+                    preferences[HUNT_HISTORY_KEY].decodeHistory(),
+                    it.copy(raidWatchStillShowing = null)
+                ).encodeHistory()
+            }
             preferences.remove(ACTIVE_HUNT_KEY)
             preferences.remove(HUNT_STATS_KEY)
         }
@@ -241,6 +252,38 @@ class HuntRepository private constructor(context: Context) {
     suspend fun clearLastSummary() {
         dataStore.edit { preferences -> preferences.remove(LAST_SUMMARY_KEY) }
     }
+
+    /**
+     * Drops the "dismiss raid info" offer from the waiting summary once the raid info is
+     * gone, and answers with the updated summary (null when none is waiting).
+     */
+    suspend fun forgetSummaryRaid(): HuntSummary? {
+        var updated: HuntSummary? = null
+        dataStore.edit { preferences ->
+            val summary = preferences[LAST_SUMMARY_KEY]?.let { raw ->
+                runCatching { json.decodeFromString(HuntSummary.serializer(), raw) }.getOrNull()
+            } ?: return@edit
+            updated = summary.copy(raidWatchStillShowing = null)
+            preferences[LAST_SUMMARY_KEY] = json.encodeToString(HuntSummary.serializer(), updated!!)
+        }
+        return updated
+    }
+
+    /** Every finished hunt worth a summary, newest first. Kept apart from [lastSummary]. */
+    val history: Flow<List<HuntSummary>> = dataStore.data
+        .map { preferences -> preferences[HUNT_HISTORY_KEY].decodeHistory() }
+        .distinctUntilChanged()
+
+    suspend fun clearHistory() {
+        dataStore.edit { preferences -> preferences.remove(HUNT_HISTORY_KEY) }
+    }
+
+    private fun String?.decodeHistory(): List<HuntSummary> = this?.let { raw ->
+        runCatching { json.decodeFromString(ListSerializer(HuntSummary.serializer()), raw) }.getOrNull()
+    } ?: emptyList()
+
+    private fun List<HuntSummary>.encodeHistory(): String =
+        json.encodeToString(ListSerializer(HuntSummary.serializer()), this)
 
     /**
      * Points the hunt at [uniqueId], or clears the target with null. A no-op
@@ -348,6 +391,7 @@ class HuntRepository private constructor(context: Context) {
         private val SAVED_HUNTS_KEY = stringPreferencesKey("saved_hunts")
         private val HUNT_STATS_KEY = stringPreferencesKey("active_hunt_stats")
         private val LAST_SUMMARY_KEY = stringPreferencesKey("last_hunt_summary")
+        private val HUNT_HISTORY_KEY = stringPreferencesKey("hunt_history")
 
         @Volatile
         private var instance: HuntRepository? = null

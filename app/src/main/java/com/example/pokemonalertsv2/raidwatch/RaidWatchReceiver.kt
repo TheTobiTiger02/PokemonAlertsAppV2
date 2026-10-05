@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingNotifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +26,14 @@ class RaidWatchReceiver : BroadcastReceiver() {
             try {
                 when (intent.action) {
                     ACTION_TICK -> RaidWatchController.refresh(appContext)
-                    ACTION_STOP -> RaidWatchController.stop(appContext)
+                    ACTION_STOP -> {
+                        RaidWatchController.stop(appContext)
+                        if (intent.getBooleanExtra(EXTRA_FROM_HUNT_SUMMARY, false)) {
+                            HuntRepository.getInstance(appContext).forgetSummaryRaid()?.let {
+                                ArrivalTrackingNotifications.postHuntSummary(appContext, it)
+                            }
+                        }
+                    }
                     else -> Unit
                 }
             } catch (throwable: Throwable) {
@@ -37,6 +46,7 @@ class RaidWatchReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "RaidWatchReceiver"
+        const val EXTRA_FROM_HUNT_SUMMARY = "com.example.pokemonalertsv2.extra.FROM_HUNT_SUMMARY"
         const val ACTION_TICK = "com.example.pokemonalertsv2.action.RAID_WATCH_TICK"
         const val ACTION_STOP = "com.example.pokemonalertsv2.action.RAID_WATCH_STOP"
 

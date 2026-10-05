@@ -34,7 +34,7 @@ class HuntEmulatorFixtureInstrumentedTest {
         // A raid a few metres from the first target, for checking Raid Watch against "Got it".
         val raid = PokemonAlert(name = "Playback Mewtwo Raid", pokemon = "Mewtwo", type = listOf("Raid"),
             gym = "Playback Gym", hundoCP = HundoCP(level20 = 2387, level25 = 2984),
-            endTime = java.time.Instant.now().plusSeconds(45 * 60).toString(),
+            endTime = java.time.Instant.now().plusSeconds(args.getString("raidEndSeconds")?.toLongOrNull() ?: (45 * 60L)).toString(),
             latitude = 49.73805, longitude = 8.60305, area = "HuntPlaybackFixture")
         val seeded = if (args.getString("raid") == "true") listOf(target, next, raid) else listOf(target, next)
         seeded.forEach {

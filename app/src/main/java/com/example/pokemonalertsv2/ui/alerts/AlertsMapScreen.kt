@@ -840,6 +840,25 @@ internal fun AlertsMapScreenContent(
         }
     }
 
+    // The hunt's floating map steps aside while this tab is on screen: it would only cover
+    // the same hunt, drawn full size underneath. RESUMED is "on screen" because a hidden tab
+    // is held at CREATED; the compact picture-in-picture map is not the tab.
+    DisposableEffect(lifecycleOwner, compactPictureInPicture) {
+        fun publish() {
+            com.example.pokemonalertsv2.tracking.InAppMapVisibility.set(
+                !compactPictureInPicture &&
+                    lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+            )
+        }
+        val observer = LifecycleEventObserver { _, _ -> publish() }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        publish()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            com.example.pokemonalertsv2.tracking.InAppMapVisibility.set(false)
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_RESUME) {

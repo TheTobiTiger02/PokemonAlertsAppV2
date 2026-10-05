@@ -1175,6 +1175,9 @@ private fun MainScaffold(
                                             openHuntSetupRequested = true
                                             selectedTab = MAP_TAB_INDEX
                                         }
+                                        "hunthistory" -> context.startActivity(
+                                            Intent(context, com.example.pokemonalertsv2.hunt.HuntHistoryActivity::class.java)
+                                        )
                                         "routes" -> context.startActivity(
                                             Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)
                                         )

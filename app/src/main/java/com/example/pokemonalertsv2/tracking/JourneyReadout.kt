@@ -157,3 +157,12 @@ fun floatingBubbleReadout(
     waiting || distanceMeters == null -> "Locating"
     else -> formatJourneyDistance(distanceMeters)
 }
+
+/**
+ * What to say when the hunt's target ran out before the trainer arrived: a raid "ended", a
+ * spawn "despawned", and where the walk goes now when there is somewhere to go.
+ */
+fun endedTargetNote(name: String, isRaid: Boolean, nextName: String?): String {
+    val ended = if (isRaid) "$name raid ended" else "$name despawned"
+    return if (nextName.isNullOrBlank()) ended else "$ended · next: $nextName"
+}

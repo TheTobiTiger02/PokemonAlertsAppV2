@@ -88,10 +88,45 @@ data class HuntSummary(
     /** Time spent hunting, with the paused stretches taken out. */
     val activeMillis: Long,
     val distanceMeters: Double,
-    val catches: List<HuntCatch>
+    val catches: List<HuntCatch>,
+    /**
+     * The raid whose hundo CP and counters were still showing when the hunt stopped, so the
+     * summary can offer to dismiss them. Null when there was none.
+     */
+    val raidWatchStillShowing: String? = null
 )
 
-internal fun huntSummary(session: HuntSession, stats: HuntStats, nowMillis: Long): HuntSummary {
+/** Every hunt in the history, added up. */
+internal data class HuntHistoryTotals(
+    val hunts: Int,
+    val caught: Int,
+    val distanceMeters: Double,
+    val activeMillis: Long
+)
+
+internal fun huntHistoryTotals(history: List<HuntSummary>): HuntHistoryTotals = HuntHistoryTotals(
+    hunts = history.size,
+    caught = history.sumOf { it.catches.size },
+    distanceMeters = history.sumOf { it.distanceMeters },
+    activeMillis = history.sumOf { it.activeMillis }
+)
+
+/** Newest first, one entry per hunt, and never more than [cap]. */
+internal fun appendHuntHistory(
+    history: List<HuntSummary>,
+    summary: HuntSummary,
+    cap: Int = HUNT_HISTORY_CAP
+): List<HuntSummary> =
+    (listOf(summary) + history.filterNot { it.startedAtMillis == summary.startedAtMillis }).take(cap)
+
+internal const val HUNT_HISTORY_CAP = 50
+
+internal fun huntSummary(
+    session: HuntSession,
+    stats: HuntStats,
+    nowMillis: Long,
+    raidWatchStillShowing: String? = null
+): HuntSummary {
     val settled = stats.resumed(nowMillis)
     return HuntSummary(
         name = session.name,
@@ -99,7 +134,8 @@ internal fun huntSummary(session: HuntSession, stats: HuntStats, nowMillis: Long
         endedAtMillis = nowMillis,
         activeMillis = (nowMillis - session.startedAtMillis - settled.pausedTotalMillis).coerceAtLeast(0L),
         distanceMeters = settled.distanceMeters,
-        catches = settled.catches
+        catches = settled.catches,
+        raidWatchStillShowing = raidWatchStillShowing
     )
 }
 
