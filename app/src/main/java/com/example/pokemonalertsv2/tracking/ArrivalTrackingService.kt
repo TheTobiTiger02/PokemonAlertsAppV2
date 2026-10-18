@@ -775,7 +775,7 @@ class ArrivalTrackingService : Service() {
         lastWaitingForPreciseLocation = false
         val wasInRange = lastInRange
         lastInRange = result != ArrivalFixResult.WAITING
-        if (lastInRange && !wasInRange && huntActive) announceInRangeOnBubble()
+        if (lastInRange && !wasInRange) announceInRangeOnBubble()
         when (result) {
             ArrivalFixResult.ARRIVED -> handleArrival(destination)
             ArrivalFixResult.FIRST_IN_RANGE -> {
@@ -868,6 +868,22 @@ class ArrivalTrackingService : Service() {
             // looped every second or two, redrawing the floating map on each pass.
             if (huntActive) {
                 lastInRange = true
+                updateOngoing(
+                    destination = destination,
+                    distanceMeters = lastDirectDistanceMeters,
+                    waiting = false,
+                    inRange = true
+                )
+                return@launch
+            }
+            // "I'm going" to anything but a raid: arriving is when the card becomes useful -- the
+            // CP, the task, the grunt -- so it stays live, the way a hunt's does, until the alert
+            // ends or the trainer taps Got it or Stop. The heads-up still announces the arrival once.
+            if (!raidLiveUpdateStarted) {
+                lastInRange = true
+                if (hasNotificationPermission()) {
+                    ArrivalTrackingNotifications.postArrival(this@ArrivalTrackingService, destination)
+                }
                 updateOngoing(
                     destination = destination,
                     distanceMeters = lastDirectDistanceMeters,

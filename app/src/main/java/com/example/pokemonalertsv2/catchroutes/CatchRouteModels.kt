@@ -158,6 +158,8 @@ fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchW
     val version: String = "",
     val sources: List<SpawnSourceMetadata> = emptyList(),
     val waits: List<CatchWait> = emptyList(),
+    /** Metres that walk again over street already walked, on this route or before a replan, catching nothing new. */
+    val retraceMeters: Double = 0.0,
 ) {
     val distanceMeters: Double get() = path.lastOrNull()?.meters ?: 0.0
     val waitMillis: Long get() = waits.sumOf { it.millis }
@@ -174,13 +176,82 @@ fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchW
     val progressMeters: Double = 0.0,
     val undoVisits: List<CatchVisit>? = null,
     val finished: Boolean = false,
+    /** When guidance began; survives replans, which only swap the itinerary. 0 for sessions saved before it existed. */
+    val startedAtMillis: Long = 0L,
+    /** What was actually walked: drift-filtered fixes, for the summary map and for replans to avoid. */
+    val track: List<CatchPoint> = emptyList(),
+    val walkedMeters: Double = 0.0,
+    val pausedSinceMillis: Long? = null,
+    val pausedTotalMillis: Long = 0L,
+    /** The settings the trainer started with; replans swap the itinerary's settings for a remainder. */
+    val originalSettings: CatchRouteSettings? = null,
+    val replans: Int = 0,
 ) {
     fun wasVisited(opportunity: SpawnOpportunity): Boolean = visits.any { sameCycle(it.opportunity, opportunity, it.visitedAt) }
+    /** Every planned window not yet visited, including ones already walked past or despawned. */
     val remaining: List<CatchEncounter> get() = itinerary.encounters.filterNot { wasVisited(it.opportunity) }
+    /**
+     * Unvisited windows still worth walking to: not left behind on the route and, at [now], not despawned.
+     * A window passed before it spawned, or during a GPS gap, is missed rather than the next stop forever.
+     */
+    fun ahead(now: Long): List<CatchEncounter> = remaining.filter { it.meters >= progressMeters - itinerary.settings.radius && it.opportunity.despawnAt > now }
+    /** Unvisited windows the walk has left behind or that despawned first. */
+    fun missed(now: Long): List<CatchEncounter> = remaining - ahead(now).toSet()
+    val caught: Int get() = visits.count { !it.skipped }
     val availabilityReadout: String get() = "${remaining.size} remaining"
-    /** Where the trainer is walking to next: the earliest stop along the route still ahead. */
-    val nextStop: CatchPoint? get() = remaining.minByOrNull { it.meters }?.opportunity?.point
+    /** Where the trainer is walking to next: the earliest stop along the route not yet passed. */
+    val nextStop: CatchPoint? get() = remaining.filter { it.meters >= progressMeters - itinerary.settings.radius }.minByOrNull { it.meters }?.opportunity?.point
+    fun nextStopAt(now: Long): CatchPoint? = ahead(now).minByOrNull { it.meters }?.opportunity?.point
+    /** Guidance time with paused stretches left out, up to [now]. */
+    fun activeMillis(now: Long): Long {
+        if (startedAtMillis <= 0) return 0
+        val paused = pausedTotalMillis + (pausedSinceMillis?.let { now - it } ?: 0L)
+        return (now - startedAtMillis - paused).coerceAtLeast(0L)
+    }
+    /**
+     * Adds a measured fix to [track] and [walkedMeters]. Distance moves only once a fix is clearly
+     * somewhere else, so standing still does not add drift; coarse fixes and teleports are ignored.
+     */
+    fun withWalk(point: CatchPoint, accuracy: Double): CatchSession {
+        if (accuracy > CATCH_TRACK_MAX_ACCURACY_METERS) return this
+        val last = track.lastOrNull() ?: return copy(track = listOf(point))
+        val step = catchDistance(last, point)
+        if (step < max(accuracy, CATCH_TRACK_MIN_STEP_METERS)) return this
+        // A jump no walker makes between two fixes restarts the line instead of drawing it.
+        if (step > CATCH_TRACK_MAX_STEP_METERS) return copy(track = (track + point).takeLast(CATCH_TRACK_MAX_POINTS))
+        return copy(track = (track + point).takeLast(CATCH_TRACK_MAX_POINTS), walkedMeters = walkedMeters + step)
+    }
+    fun pausedAt(now: Long): CatchSession = if (pausedSinceMillis != null) this else copy(pausedSinceMillis = now)
+    fun resumedAt(now: Long): CatchSession {
+        val since = pausedSinceMillis ?: return this
+        return copy(pausedSinceMillis = null, pausedTotalMillis = pausedTotalMillis + (now - since).coerceAtLeast(0L))
+    }
 }
+
+internal const val CATCH_TRACK_MAX_ACCURACY_METERS = 25.0
+internal const val CATCH_TRACK_MIN_STEP_METERS = 5.0
+internal const val CATCH_TRACK_MAX_STEP_METERS = 500.0
+internal const val CATCH_TRACK_MAX_POINTS = 4000
+
+/**
+ * How far the walk is ahead of (negative) or behind (positive) the plan at [now], in millis: the clock time
+ * the plan reaches [CatchSession.progressMeters], against the real one. Null while paused or before start.
+ */
+fun catchScheduleDelta(session: CatchSession, now: Long): Long? {
+    val settings = session.itinerary.settings
+    if (session.paused || session.finished || now < settings.startAtMillis) return null
+    val delta = now - catchTimeAt(settings, session.progressMeters, session.itinerary.waits, includeWaitsAt = false)
+    // Standing through a planned wait is on schedule, not falling behind.
+    val wait = session.itinerary.waits.filter { abs(it.meters - session.progressMeters) <= settings.radius }.sumOf { it.millis }
+    return when {
+        delta <= 0 -> delta
+        delta <= wait -> 0
+        else -> delta - wait
+    }
+}
+
+/** At least this far off the plan before the walker is told to change pace. */
+internal const val CATCH_PACE_HINT_MILLIS = 60_000L
 
 // Use the actual visit instant to reconcile an expiry correction without consuming a later hourly cycle.
 fun sameCycle(a: SpawnOpportunity, b: SpawnOpportunity, visitedAt: Long): Boolean =

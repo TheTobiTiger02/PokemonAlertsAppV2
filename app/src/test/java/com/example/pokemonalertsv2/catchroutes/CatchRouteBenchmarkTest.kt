@@ -24,7 +24,7 @@ class CatchRouteBenchmarkTest {
         val dir = System.getProperty("catch.bench.dir")?.let(::File)
         assumeTrue("set -Pcatch.bench.dir to run", dir != null && dir.isDirectory)
         val rows = mutableListOf<String>()
-        rows += "scenario | min | finish | planner expected | encounters | km | requests | ms | reference expected | gap"
+        rows += "scenario | min | finish | planner expected | encounters | km | retraced m | requests | ms | reference expected | gap"
         for (file in dir!!.listFiles { f -> f.name.endsWith(".json") }!!.sorted()) {
             val fixture = Json.parseToJsonElement(file.readText()).jsonObject
             val start = CatchPoint(fixture.getValue("latitude").jsonPrimitive.double, fixture.getValue("longitude").jsonPrimitive.double)
@@ -43,7 +43,7 @@ class CatchRouteBenchmarkTest {
                 val reference = referenceSearch(settings, data.opportunities)
                 val got = plan?.expectedCatches ?: 0.0
                 rows += "${file.nameWithoutExtension} | $minutes | $finish | ${"%.2f".format(got)} | ${plan?.encounters?.size ?: 0} | " +
-                    "${"%.2f".format((plan?.distanceMeters ?: 0.0) / 1000)} | ${service.requests} | $ms | ${"%.2f".format(reference)} | " +
+                    "${"%.2f".format((plan?.distanceMeters ?: 0.0) / 1000)} | ${plan?.let { catchRetraceMeters(it.path, it.encounters, settings.radius).toInt() } ?: 0} | ${service.requests} | $ms | ${"%.2f".format(reference)} | " +
                     (if (reference > 0) "${"%.1f".format((reference - got) / reference * 100)}%" else "-")
             }
         }

@@ -10,7 +10,10 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.example.pokemonalertsv2.tracking.FloatingWindow
+import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
+import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -35,6 +38,12 @@ internal class CatchRouteWindow(context: Context) {
     private var guidance: TextView? = null
     private var pause: TextView? = null
     private var camera: TextView? = null
+    /**
+     * A second-by-second fix and the compass, only while the window is up: the puck and Follow need
+     * them, visit counting does not, so the service's own slower location stream stays as it is.
+     */
+    private var pose: MapPoseTracker? = null
+    private var posePoint: CatchPoint? = null
 
     val isShowing: Boolean get() = root != null
 
@@ -120,18 +129,32 @@ internal class CatchRouteWindow(context: Context) {
         update(session, location)
         // A window opened to walk by follows the walk, not the whole route.
         routeMap.follow()
+        pose = MapLocationTracker(context, onPose = { p ->
+            val point = CatchPoint(p.location.latitude, p.location.longitude)
+            posePoint = point
+            map?.setPose(point, p.headingDegrees, p.location.accuracy.takeIf { p.location.hasAccuracy() })
+        }, onStatus = {}).also { it.start() }
         return true
     }
 
     fun update(session: CatchSession, location: CatchPoint?, outOfDate: Boolean = false, replanning: Boolean = false) {
         if (root == null) return
-        map?.update(session.itinerary.settings, session.itinerary, location, session.progressMeters, session.nextStop)
-        guidance?.text = catchGuidance(session, System.currentTimeMillis(), outOfDate, replanning)
+        val now = System.currentTimeMillis()
+        map?.update(session.itinerary.settings, session.itinerary, posePoint ?: location, session.progressMeters, session.nextStopAt(now))
+        // Only what is still ahead: visited windows, ones walked past and despawned ones drop off the map.
+        map?.setSpawns(session.ahead(now).map { it.opportunity to (now >= it.opportunity.availableFrom) })
+        map?.setNextStop(catchNextStopIndex(session, now))
+        guidance?.text = catchGuidance(session, now, outOfDate, replanning)
+        // A pace warning tints the line it is on, so it reads at a glance over a game screen.
+        guidance?.setBackgroundColor(if (catchPaceHint(session, now) != null) 0xFFFFE8B0.toInt() else 0xFFF2F4F8.toInt())
         pause?.text = if (session.paused) "Resume" else "Pause"
     }
 
     fun hide() {
         if (root == null) return
+        pose?.stop()
+        pose = null
+        posePoint = null
         window.hide()
         map?.destroy()
         root = null
@@ -149,10 +172,18 @@ internal class CatchRouteWindow(context: Context) {
  * is, when you reach it, what it holds and how long that holds. The wording follows the stop
  * timeline in the planner so the two never describe the same stop differently.
  */
+/** Index into [catchStops] of the stop holding the first window still ahead, or null when none is. */
+internal fun catchNextStopIndex(session: CatchSession, now: Long): Int? {
+    val next = session.ahead(now).minByOrNull { it.meters } ?: return null
+    return catchStops(session.itinerary.encounters).indexOfFirst { stop -> stop.any { it.opportunity.id == next.opportunity.id } }.takeIf { it >= 0 }
+}
+
 internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean = false, replanning: Boolean = false): String {
     if (session.finished) return "Route finished"
-    val remaining = session.remaining
-    if (remaining.isEmpty()) return if (session.paused) "Paused · no stops left" else "No stops left"
+    val remaining = session.ahead(now).sortedBy { it.meters }
+    val tally = "${remaining.size} left · ${session.caught} caught"
+    if (remaining.isEmpty()) return (if (session.paused) "Paused · no stops ahead" else "No stops ahead") + "\n" + tally +
+        (if (replanning) " · Replanning…" else if (session.remaining.isNotEmpty()) " · tap Replan for more" else "")
     val next = remaining.first()
     val group = remaining.takeWhile { it.meters - next.meters < CATCH_STOP_SPAN_METERS }
     val stops = catchStops(session.itinerary.encounters)
@@ -167,10 +198,22 @@ internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean 
         if (number > 0) append("Stop $number · ")
         append("${walk.roundToInt()} m · ")
         append(String.format(Locale.getDefault(), "%tR", arrival))
-        append(" · ${group.size} Pokémon · gone in $margin min")
+        append(" · ${group.size} Pokémon · gone in ${if (margin == 0L) "<1" else margin} min")
         if (wait != null) append(" · wait ${wait.millis / 60_000}:${String.format(Locale.US, "%02d", wait.millis / 1000 % 60)}")
-        append("\n${remaining.size} left of ${session.itinerary.encounters.size}")
+        append("\n").append(tally)
+        catchPaceHint(session, now)?.let { append(" · ").append(it) }
         // Advice, never an automatic change: the route stays put until the trainer asks.
         if (replanning) append(" · Replanning…") else if (outOfDate) append(" · Route out of date, tap Replan")
     }
+}
+
+/**
+ * "3 min behind, speed up" or "2 min early, slow down" once the walk is [CATCH_PACE_HINT_MILLIS] off the
+ * plan's clock. Spawns are timed, so being early can mean arriving before one appears, not just waiting.
+ */
+internal fun catchPaceHint(session: CatchSession, now: Long): String? {
+    val delta = catchScheduleDelta(session, now) ?: return null
+    if (abs(delta) < CATCH_PACE_HINT_MILLIS) return null
+    val minutes = (abs(delta) / 60_000).coerceAtLeast(1)
+    return if (delta > 0) "$minutes min behind, speed up" else "$minutes min early, slow down"
 }

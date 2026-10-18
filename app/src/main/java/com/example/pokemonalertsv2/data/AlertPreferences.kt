@@ -170,9 +170,9 @@ interface AlertPreferencesStore {
 
     suspend fun updateFilterStateDocument(transform: (FilterStateDocument) -> FilterStateDocument) = Unit
 
-    val seenAlertIds: Flow<Set<String>>
-    suspend fun getSeenAlertIds(): Set<String>
-    suspend fun updateSeenAlertIds(alertIds: Set<String>)
+    /** Seen-alert keys mapped to the epoch millis after which each may be forgotten. */
+    suspend fun getSeenAlerts(): Map<String, Long>
+    suspend fun updateSeenAlerts(seen: Map<String, Long>)
 
     val favoriteAlertIds: Flow<Set<String>>
     suspend fun getFavoriteAlertIds(): Set<String>
@@ -437,20 +437,18 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
         }
     }
 
-    override val seenAlertIds: Flow<Set<String>> = dataStore.data.map { preferences ->
-        preferences[SEEN_ALERTS_KEY] ?: emptySet()
+    override suspend fun getSeenAlerts(): Map<String, Long> {
+        val entries = dataStore.data.first()[SEEN_ALERTS_KEY] ?: return emptyMap()
+        // Entries written before expiries were stored are bare keys. They get a
+        // day's grace rather than being dropped, so alerts already notified are
+        // not notified again on the first sync after the update.
+        val legacyExpiry = System.currentTimeMillis() + LEGACY_SEEN_GRACE_MILLIS
+        return entries.associate { entry -> decodeSeenEntry(entry, legacyExpiry) }
     }
 
-    override suspend fun getSeenAlertIds(): Set<String> = seenAlertIds.first()
-
-    override suspend fun updateSeenAlertIds(alertIds: Set<String>) {
-        val trimmedSet = if (alertIds.size <= MAX_SEEN_ALERTS) {
-            alertIds
-        } else {
-            alertIds.toList().takeLast(MAX_SEEN_ALERTS).toSet()
-        }
+    override suspend fun updateSeenAlerts(seen: Map<String, Long>) {
         dataStore.edit { prefs ->
-            prefs[SEEN_ALERTS_KEY] = trimmedSet
+            prefs[SEEN_ALERTS_KEY] = seen.mapTo(LinkedHashSet()) { (key, expiry) -> "$expiry$SEEN_SEPARATOR$key" }
         }
     }
 
@@ -1142,7 +1140,15 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     }
 
     companion object {
-        private const val MAX_SEEN_ALERTS = 200
+        private const val SEEN_SEPARATOR = '|'
+        private const val LEGACY_SEEN_GRACE_MILLIS = 24 * 60 * 60 * 1000L
+
+        /** Decodes `expiry|key`. Keys may contain the separator themselves, so only the first one splits. */
+        internal fun decodeSeenEntry(entry: String, legacyExpiry: Long): Pair<String, Long> {
+            val expiry = entry.substringBefore(SEEN_SEPARATOR, "").toLongOrNull()
+                ?: return entry to legacyExpiry
+            return entry.substringAfter(SEEN_SEPARATOR) to expiry
+        }
     }
 }
 

@@ -20,13 +20,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.LinkedHashSet
 
 class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
     private val preferences: AlertPreferencesStore,
     private val alertDao: AlertDao,
-    private val historyAlertDao: HistoryAlertDao
+    private val historyAlertDao: HistoryAlertDao,
+    private val clock: () -> Long = System::currentTimeMillis
 ) {
     
     // Expose preferences for notification settings and other UI needs
@@ -97,7 +97,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             // without this the first poll posted a notification for every one of them.
             // Only when nothing was ever seen, so a cursor reset on a used install still
             // notifies what it genuinely missed.
-            if (firstSync && preferences.getSeenAlertIds().isEmpty()) {
+            if (firstSync && preferences.getSeenAlerts().isEmpty()) {
                 markAlertsAsSeen(upserts.filterNot { it.isLiveSighting })
             }
             // Written only after the cache has actually been updated: a crash
@@ -310,24 +310,34 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     suspend fun detectNewAlerts(alerts: List<PokemonAlert>): List<PokemonAlert> {
         if (alerts.isEmpty()) return emptyList()
         return seenMutex.withLock {
-            val seenIds = preferences.getSeenAlertIds()
-            alerts.filter { alert -> alert.seenKeys().none { it in seenIds } }
+            val seen = preferences.getSeenAlerts()
+            alerts.filter { alert -> alert.seenKeys().none { it in seen } }
         }
     }
 
+    /**
+     * Remembers [alerts] until each one ends. Pruning by expiry, never by count:
+     * a count cap forgot all-day quests once enough newer alerts arrived, and the
+     * next sync, which checks every cached alert, notified them again.
+     */
     suspend fun markAlertsAsSeen(alerts: Collection<PokemonAlert>) {
         if (alerts.isEmpty()) return
         seenMutex.withLock {
-            val current = preferences.getSeenAlertIds()
-            val updated = LinkedHashSet<String>(current.size + alerts.size).apply {
-                addAll(current)
-                alerts.forEach { alert -> addAll(alert.seenKeys()) }
+            val now = clock()
+            val updated = preferences.getSeenAlerts().filterTo(LinkedHashMap()) { (_, expiry) -> expiry > now }
+            alerts.forEach { alert ->
+                val expiry = seenExpiry(alert, now)
+                alert.seenKeys().forEach { key -> updated[key] = maxOf(expiry, updated[key] ?: 0L) }
             }
-            preferences.updateSeenAlertIds(updated)
+            preferences.updateSeenAlerts(updated)
         }
     }
 
-    fun observeSeenAlerts(): Flow<Set<String>> = preferences.seenAlertIds
+    private fun seenExpiry(alert: PokemonAlert, now: Long): Long {
+        val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: return now + UNKNOWN_END_SEEN_MILLIS
+        // The margin covers clock skew and a late duplicate push for an alert that just ended.
+        return maxOf(end, now) + SEEN_EXPIRY_MARGIN_MILLIS
+    }
 
     fun observeFavorites(): Flow<Set<String>> = preferences.favoriteAlertIds
 
@@ -360,6 +370,8 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         const val INSIGHTS_MAX_ROWS = 3_000
         const val INSIGHTS_PAGE_SIZE = 500
         private const val ETAG_HEADER = "ETag"
+        private const val SEEN_EXPIRY_MARGIN_MILLIS = 60 * 60 * 1000L
+        private const val UNKNOWN_END_SEEN_MILLIS = 24 * 60 * 60 * 1000L
 
         private val fetchMutex = Mutex()
 

@@ -27,6 +27,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -76,7 +77,7 @@ class ArrivalTrackingServiceInstrumentedTest {
     }
 
     @Test
-    fun twoInjectedPhoneGradeFixesClearTripAndPostArrivalNotification() = runBlocking {
+    fun twoInjectedPhoneGradeFixesAnnounceArrivalAndKeepTheJourneyLive() = runBlocking {
         val latitude = 49.86
         val longitude = 8.65
         repository.startTracking(
@@ -97,12 +98,6 @@ class ArrivalTrackingServiceInstrumentedTest {
         SystemClock.sleep(2_100L)
         fakeLocationSource.emit(location(latitude, longitude, accuracyMeters = 150f))
 
-        val deadline = SystemClock.elapsedRealtime() + 5_000L
-        while (repository.currentDestination() != null && SystemClock.elapsedRealtime() < deadline) {
-            SystemClock.sleep(50L)
-        }
-        assertNull(repository.currentDestination())
-
         val manager = context.getSystemService(NotificationManager::class.java)
         fun arrivalWasPosted() = manager?.activeNotifications.orEmpty().any { status ->
                 status.id != ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID &&
@@ -110,13 +105,19 @@ class ArrivalTrackingServiceInstrumentedTest {
                         .getCharSequence(android.app.Notification.EXTRA_TITLE)
                         ?.contains("in range") == true
         }
-        // Clearing the trip precedes posting, and NotificationManager processes
-        // notify() asynchronously. Wait for the actual observable contract.
+        fun liveCardOffersGotIt() = manager?.activeNotifications.orEmpty().any { status ->
+            status.id == ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID &&
+                status.notification.actions.orEmpty().any { it.title == "Got it" }
+        }
+        // NotificationManager processes notify() asynchronously. Wait for the actual observable contract.
         val notificationDeadline = SystemClock.elapsedRealtime() + 5_000L
-        while (!arrivalWasPosted() && SystemClock.elapsedRealtime() < notificationDeadline) {
+        while (!(arrivalWasPosted() && liveCardOffersGotIt()) && SystemClock.elapsedRealtime() < notificationDeadline) {
             SystemClock.sleep(50L)
         }
         assertTrue("Arrival notification was not posted within five seconds", arrivalWasPosted())
+        // Arriving no longer ends an "I'm going": the live card stays, now with the alert's detail.
+        assertTrue("The live card did not switch to its in-range form", liveCardOffersGotIt())
+        assertNotNull(repository.currentDestination())
     }
 
     @Test
@@ -266,7 +267,8 @@ class ArrivalTrackingServiceInstrumentedTest {
             .firstOrNull { it.id == ArrivalTrackingNotifications.ONGOING_NOTIFICATION_ID }
             ?.notification
         val text = notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
-        assertTrue(text.contains("In range"))
+        // In range, the card carries the alert's own detail and offers Got it, instead of a distance.
+        assertTrue(notification?.actions.orEmpty().any { it.title == "Got it" })
         assertTrue(!text.contains("Waiting for precise GPS"))
     }
 

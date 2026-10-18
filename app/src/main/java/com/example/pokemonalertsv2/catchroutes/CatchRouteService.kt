@@ -10,13 +10,18 @@ import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.hunt.HuntBatterySaver
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.tracking.ArrivalLocationSourceFactory
 import com.example.pokemonalertsv2.tracking.DefaultArrivalLocationSourceFactory
 import com.example.pokemonalertsv2.tracking.ArrivalCadence
 import com.example.pokemonalertsv2.tracking.FloatingWindow
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 class CatchRouteService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -27,6 +32,17 @@ class CatchRouteService : Service() {
     private var latestStartId = 0
     private var geometryRestored = false
     private var geometrySaveJob: Job? = null
+    /**
+     * Ticks while the window is up: the pace hint and despawning dots change with the clock, not only
+     * with fixes, and fixes stop while the trainer stands still.
+     */
+    private val clock = MutableStateFlow(0L)
+    private var clockJob: Job? = null
+    private var batterySaverJob: Job? = null
+    private val batterySaver by lazy {
+        // The switch is the hunt's: one Battery Saver setting for both kinds of walk.
+        HuntBatterySaver(this) { scope.launch { HuntRepository.getInstance(applicationContext).setBatterySaverEnabled(false) } }
+    }
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latestStartId = startId
@@ -48,9 +64,14 @@ class CatchRouteService : Service() {
                 locationSource.start(ArrivalCadence.Approach, { fix -> scope.launch { controller.onFix(fix) } }, { available ->
                     if (!available) controller.message.value = "Waiting for location. Visits are paused until fresh fixes arrive."
                 })
-                combine(controller.session, controller.location, controller.message, controller.outOfDate, controller.recalculating) { session, point, _, outOfDate, replanning ->
+                if (batterySaverJob?.isActive != true) batterySaverJob = scope.launch {
+                    combine(controller.session.map { it != null && !it.finished }.distinctUntilChanged(),
+                        HuntRepository.getInstance(applicationContext).batterySaverEnabled) { walking, enabled -> walking && enabled }
+                        .collect { batterySaver.setEnabled(it) }
+                }
+                combine(combine(controller.session, controller.location, controller.message, controller.outOfDate, controller.recalculating) { session, point, _, outOfDate, replanning ->
                     GuidanceState(session, point, outOfDate, replanning)
-                }.collectLatest { (s, point, outOfDate, replanning) ->
+                }, clock) { state, _ -> state }.collectLatest { (s, point, outOfDate, replanning) ->
                     if (s == null || s.finished) {
                         if (controller.session.value == s) { locationSource.stop(); stopSelfResult(latestStartId) }
                         return@collectLatest
@@ -63,7 +84,7 @@ class CatchRouteService : Service() {
         return START_STICKY
     }
     private fun readout(s: CatchSession?): String = if (s == null) "Restoring route…" else
-        "${if (s.paused) "Paused · " else ""}${s.availabilityReadout}"
+        "${if (s.paused) "Paused · " else ""}${s.ahead(System.currentTimeMillis()).size} ahead · ${s.caught} caught"
     private fun notification(s: CatchSession?): Notification {
         val open = PendingIntent.getActivity(this, 70, Intent(this, CatchRoutesActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -98,7 +119,7 @@ class CatchRouteService : Service() {
         val session = controller.session.value ?: return
         window.onPause = { controller.pause() }
         window.onReplan = { controller.recalculate() }
-        window.onClose = { window.hide() }
+        window.onClose = { window.hide(); clockJob?.cancel() }
         window.onGeometryChanged = { x, y, width, height ->
             // Debounced: a drag reports on every release, and two drags in a row
             // should not queue two writes.
@@ -110,6 +131,13 @@ class CatchRouteService : Service() {
         }
         if (!window.show(session, controller.location.value)) {
             controller.message.value = "The floating map could not be opened."
+            return
+        }
+        // The blackout must stay above the window that just opened.
+        batterySaver.restoreOverlayOrder()
+        clockJob?.cancel()
+        clockJob = scope.launch {
+            while (window.isShowing) { delay(CLOCK_TICK_MS); clock.value = System.currentTimeMillis() }
         }
     }
 
@@ -118,6 +146,7 @@ class CatchRouteService : Service() {
     override fun onDestroy() {
         scope.cancel()
         locationSource.stop()
+        batterySaver.close()
         window.hide()
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
@@ -130,6 +159,7 @@ class CatchRouteService : Service() {
         internal const val NOTIFICATION_ID = 7350
         private const val CHANNEL = "catch_routes"
         private const val GEOMETRY_SAVE_DELAY_MS = 400L
+        private const val CLOCK_TICK_MS = 15_000L
 
         @Volatile
         internal var locationSourceFactory: ArrivalLocationSourceFactory =

@@ -67,6 +67,7 @@ internal val TOOL_ENTRIES = listOf(
     ToolEntry("hunt", "Hunt", "Follow matching live targets on the map", "Hunt & routes", "walking target battery saver"),
     ToolEntry("hunthistory", "Hunt history", "Past hunts, catches and distance walked", "Hunt & routes", "summary stats walked caught"),
     ToolEntry("routes", "Catch routes", "Plan a walk past the most spawnpoints", "Hunt & routes", "walk spawnpoints prediction"),
+    ToolEntry("routehistory", "Route history", "Past catch routes, catches, speed and the path walked", "Hunt & routes", "summary stats walked caught speed"),
     ToolEntry("raids", "Raid counters", "Pick a boss and see the best counters", "Raids", "boss pokebattler estimator team"),
     ToolEntry("roster", "My Pokémon", "Browse your imported Poké Genie roster", "Raids", "csv import pokegenie collection"),
     ToolEntry("godex", "GoDex checklist", "Missing Pokémon and nearby matches", "Collection & research", "hundo collection sync"),
@@ -87,7 +88,7 @@ private fun toolIcon(id: String): Painter = when (id) {
     "raids" -> painterResource(R.drawable.ic_timer)
     "roster" -> rememberVectorPainter(Icons.Filled.Person)
     "godex" -> rememberVectorPainter(Icons.Filled.CheckCircle)
-    "hunthistory" -> rememberVectorPainter(Icons.Filled.DateRange)
+    "hunthistory", "routehistory" -> rememberVectorPainter(Icons.Filled.DateRange)
     else -> painterResource(R.drawable.ic_insights)
 }
 

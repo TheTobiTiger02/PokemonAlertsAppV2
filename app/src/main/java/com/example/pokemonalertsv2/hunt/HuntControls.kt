@@ -57,8 +57,6 @@ fun HuntControls(
         ArrivalTrackingRepository.getInstance(context).destinationFlow
     }.collectAsStateWithLifecycle(initialValue = null)
 
-    val batterySaverEnabled by huntRepository.batterySaverEnabled.collectAsStateWithLifecycle(initialValue = false)
-    var batterySaverProblem by remember { mutableStateOf<String?>(null) }
     val panelOpenedAt = remember { System.currentTimeMillis() }
     val lastCaught by remember(context) {
         AlertPreferences(context.alertPreferencesDataStore).lastCaughtAlert
@@ -143,31 +141,10 @@ fun HuntControls(
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Battery Saver", modifier = Modifier.weight(1f))
-            androidx.compose.material3.Switch(
-                checked = batterySaverEnabled,
-                onCheckedChange = { enabled ->
-                    batterySaverProblem = if (enabled) HuntBatterySaver.unavailableReason(context) else null
-                    if (batterySaverProblem == null) scope.launch { huntRepository.setBatterySaverEnabled(enabled) }
-                },
-                modifier = Modifier.semantics { contentDescription = "Hunt Battery Saver" }
-            )
-        }
-        Text(
-            "Face down during a hunt blacks out the screen. Long press it to turn off.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+        BatterySaverSwitch(
+            description = "Hunt Battery Saver",
+            explanation = "Face down during a hunt blacks out the screen. Long press it to turn off."
         )
-        batterySaverProblem?.let { problem ->
-            Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            if (!android.provider.Settings.canDrawOverlays(context)) {
-                TextButton(onClick = {
-                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        android.net.Uri.parse("package:${context.packageName}")))
-                }) { Text("Allow display over other apps") }
-            }
-        }
 
         // The tick on the floating window sits between the two step arrows, on a
         // map being read while walking, and it retires the alert for good. This is

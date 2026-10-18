@@ -35,6 +35,8 @@ internal object ArrivalTrackingNotifications {
     const val ONGOING_NOTIFICATION_ID = 40_040
     private const val CHANNEL_ONGOING = "arrival_tracking_ongoing"
     private const val CHANNEL_ARRIVAL = "arrival_tracking_arrived"
+    /** The arrival heads-up only announces; the live card keeps the detail. */
+    private const val ARRIVAL_HEADS_UP_TIMEOUT_MS = 60_000L
     private const val REQUEST_STOP = 40_041
     private const val REQUEST_OPEN = 40_042
     private const val REQUEST_MAPS = 40_043
@@ -182,11 +184,11 @@ internal object ArrivalTrackingNotifications {
             ?.takeIf { it > 0L }
             ?.let { " \u2022 ${TimeUtils.formatDurationShort(it)} left" }
             .orEmpty()
-        // Arrived, during a hunt: the distance and the progress bar have both been
-        // spent, so the card becomes the reason you walked here -- the task, the
-        // reward, which grunt. Empty for a raid and for anything with nothing to add,
-        // which is what keeps the walking readout as the default.
-        val arrivedLines = if (inRange && huntActive) huntInRangeLines(alert) else emptyList()
+        // In range, on a hunt or an "I'm going": the distance and the progress bar have
+        // both been spent, so the card becomes the reason you walked here -- the task,
+        // the reward, which grunt. Empty for a raid and for anything with nothing to
+        // add, which is what keeps the walking readout as the default.
+        val arrivedLines = if (inRange) huntInRangeLines(alert) else emptyList()
         val content = arrivedLines.firstOrNull() ?: walkingContent
         val title = (if (arrivedLines.isEmpty()) null else huntInRangeTitle(alert))
             ?: ongoingTitle(alert)
@@ -198,7 +200,7 @@ internal object ArrivalTrackingNotifications {
         val chip = when {
             // Close enough to see it: the distance has stopped being the useful
             // number, so a hunt swaps in whatever decides the next tap instead.
-            inRange -> (if (huntActive) huntInRangeChipText(alert) else null) ?: "In range"
+            inRange -> huntInRangeChipText(alert) ?: "In range"
             waitingForPreciseLocation -> null
             walkingRoute != null -> formatDistance(walkingRoute.distanceMeters.toFloat())
             distanceMeters != null -> formatDistance(distanceMeters)
@@ -211,7 +213,8 @@ internal object ArrivalTrackingNotifications {
                 .setContentText(content)
                 .setContentIntent(openAlertPendingIntent(context, alert))
                 .apply {
-                    if (huntActive) {
+                    // Once there, a single journey can be retired too: it ends the journey.
+                    if (huntActive || inRange) {
                         addAction(
                             Notification.Action.Builder(
                                 Icon.createWithResource(context, R.drawable.ic_check),
@@ -268,7 +271,7 @@ internal object ArrivalTrackingNotifications {
             .setSubText(content)
             .setContentIntent(openAlertPendingIntent(context, alert))
             .apply {
-                if (huntActive) {
+                if (huntActive || inRange) {
                     addAction(R.drawable.ic_check, "Got it", gotItPendingIntent(context))
                 }
                 undoOffer?.let {
@@ -484,6 +487,8 @@ internal object ArrivalTrackingNotifications {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
+            // The live card carries on with the detail; this only announces the arrival.
+            .setTimeoutAfter(ARRIVAL_HEADS_UP_TIMEOUT_MS)
             .setColor(Color.GREEN)
             .setContentIntent(openAlertPendingIntent(context, alert))
             .addAction(R.drawable.ic_map, "Open Maps", mapsPendingIntent(context, alert))

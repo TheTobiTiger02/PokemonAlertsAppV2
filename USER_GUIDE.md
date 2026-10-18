@@ -43,6 +43,10 @@ When notifications are enabled, you can control:
 - **I’m going** tracks one active destination with precise location updates.
 - Gyms and PokéStops use an 80 m arrival radius; the configurable Settings radius applies
   to other alert locations.
+- Arriving no longer ends the journey: a short heads-up announces it, and the live
+  notification stays, now showing what you came for (CP, quest task and reward, grunt type,
+  the stop's name). Walk away and it goes back to the distance; it ends when the alert
+  expires, or with **Got it** (retires the alert) or **Stop**.
 - At a raid, the first trustworthy in-range fix replaces the journey notification with a raid
   Live Update, so the normal and weather-boosted hundo CPs appear immediately.
 - Expand the raid Live Update for a numbered counter list; the boss image remains its artwork

@@ -40,7 +40,7 @@ internal class HuntUpsideDownState {
     fun reset() { blackedOut = false; enteredAt = null }
 }
 
-/** Owned by the existing Hunt service; it never changes location or route cadence. */
+/** Owned by the hunt service and the catch route service; it never changes location or route cadence. */
 internal class HuntBatterySaver(private val context: Context, private val onEscape: () -> Unit) : SensorEventListener {
     private val sensors = context.getSystemService(SensorManager::class.java)
     private val windows = context.getSystemService(WindowManager::class.java)
@@ -122,7 +122,7 @@ internal class HuntBatterySaver(private val context: Context, private val onEsca
             if (android.os.Build.VERSION.SDK_INT >= 28) {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
-            setTitle("Hunt Battery Saver")
+            setTitle("Battery Saver")
         }
         runCatching { windows.addView(view, params); blackout = view }
             .onFailure { fail("Battery Saver could not cover the screen. Check display-over-apps permission.") }

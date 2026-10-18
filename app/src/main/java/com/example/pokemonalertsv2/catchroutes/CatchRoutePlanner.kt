@@ -30,7 +30,8 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
 
     /** [preloaded] skips the windows download (recommendations load once for many candidates). */
     suspend fun generate(settings: CatchRouteSettings, visits: List<CatchVisit> = emptyList(),
-        preloaded: SpawnAvailability? = null, progress: (String) -> Unit = {}): CatchItinerary = withContext(Dispatchers.Default) {
+        preloaded: SpawnAvailability? = null, priorTrack: List<CatchPoint> = emptyList(),
+        progress: (String) -> Unit = {}): CatchItinerary = withContext(Dispatchers.Default) {
         settings.validate()
         if (settings.fixed) {
             val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
@@ -62,7 +63,8 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
             val encounters = scoreCatchPath(positions, settings, data.opportunities, waits)
             val warnings = data.warnings + if (encounters.any { it.opportunity.uncertainty.isNotEmpty() })
                 listOf("Predictions include uncertain timing. Open a spawnpoint for evidence.") else emptyList()
-            return CatchItinerary(settings, positions, encounters, points, warnings, data.version, data.sources, waits)
+            return CatchItinerary(settings, positions, encounters, points, warnings, data.version, data.sources, waits,
+                retraceMeters = catchRetraceMeters(positions, encounters, settings.radius, priorTrack))
         }
         withTimeoutOrNull(30_000) {
             val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
@@ -138,6 +140,12 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
                         if (remove != null) path(current.anchors.filterIndexed { i, _ -> i != remove }, data)?.let {
                             if (betterCatchRoute(it, best)) best = it
                         }
+                    }
+                    // A dead end walked out and back for little: try the route without the stop at its tip.
+                    val spurry = best!!
+                    val tip = catchSpurTip(spurry, settings.radius)
+                    if (requests < 8 && tip != null) path(spurry.anchors.filterIndexed { i, _ -> i != tip }, data)?.let {
+                        if (betterCatchRoute(it, best)) best = it
                     }
                 } catch (e: CancellationException) { throw e }
                 catch (e: Exception) { lastError = e }
@@ -262,6 +270,7 @@ internal const val CATCH_ORDER_BUDGET_SHARE = 0.97
 internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<CatchAnchor>, costs: List<List<Double?>>,
     width: Int = 96, depth: Int = CATCH_MAX_STOPS, legs: CatchLegCoverage? = null, budget: Double = settings.walkingBudgetMeters): List<Int> {
     data class State(val order: List<Int>, val covered: Set<String>, val expected: Double, val meters: Double, val waitMillis: Long = 0)
+    val points = listOf(settings.start) + anchors.map { it.point }
     val finishIndex = if (settings.destination != null) anchors.size + 1 else null
     fun finishCost(s: State): Double? = finishIndex?.let { costs[s.order.lastOrNull()?.plus(1) ?: 0][it] } ?: if (finishIndex == null) 0.0 else null
     fun spent(s: State) = s.meters + s.waitMillis / 1000.0 * settings.speedMps
@@ -290,7 +299,8 @@ internal suspend fun catchBeamOrder(settings: CatchRouteSettings, anchors: List<
                 val at = arrival + w
                 val gained = passed + anchors[i].opportunities.filter { it.id !in coveredOnArrival && at >= it.availableFrom && at < it.despawnAt }
                 if (gained.isEmpty() && i in s.order) continue
-                val n = State(s.order + i, s.covered + gained.map { it.id }, s.expected + gained.sumOf { it.expectedCatch }, meters, s.waitMillis + w)
+                val turn = catchUTurnPenalty(points, s.order.map { it + 1 }, i + 1, passed.isEmpty(), s.expected, s.meters)
+                val n = State(s.order + i, s.covered + gained.map { it.id }, s.expected + gained.sumOf { it.expectedCatch } - turn, meters, s.waitMillis + w)
                 next += n
                 if (best == null || comparator.compare(n, best!!) < 0) best = n
             }
@@ -314,10 +324,13 @@ internal fun scoreCatchOrder(settings: CatchRouteSettings, anchors: List<CatchAn
     var waited = 0L
     val covered = mutableSetOf<String>()
     var expected = 0.0
-    for (i in order) {
+    val points = legs?.let { listOf(settings.start) + anchors.map { it.point } }
+    for ((k, i) in order.withIndex()) {
         val distance = costs[previous][i + 1] ?: return null
         val departAt = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() + waited
-        legs?.gained(previous, i + 1, distance, departAt, covered)?.forEach { if (covered.add(it.id)) expected += it.expectedCatch }
+        val passed = legs?.gained(previous, i + 1, distance, departAt, covered).orEmpty()
+        passed.forEach { if (covered.add(it.id)) expected += it.expectedCatch }
+        if (points != null) expected -= catchUTurnPenalty(points, order.take(k).map { it + 1 }, i + 1, passed.isEmpty(), expected, meters)
         meters += distance
         if (meters + waited / 1000.0 * settings.speedMps > budget) return null
         val arrival = settings.startAtMillis + ceil(meters / settings.speedMps * 1000).toLong() + waited
@@ -360,11 +373,128 @@ internal suspend fun improveCatchOrder(settings: CatchRouteSettings, anchors: Li
     return best
 }
 
-/** More expected catches wins; then more encounters; then the shorter walk. */
+/**
+ * Turning back the way the last leg came, onto a leg that walks past nothing new, retraces a street for
+ * nothing. Worth half of what the route earns per metre so far, over the stretch walked twice; the
+ * straight lines here stand in for the streets the routed path will be scored on.
+ */
+internal fun catchUTurnPenalty(points: List<CatchPoint>, order: List<Int>, next: Int, emptyLeg: Boolean, expected: Double, meters: Double): Double {
+    if (!emptyLeg) return 0.0
+    val at = order.lastOrNull() ?: return 0.0
+    val from = order.getOrNull(order.size - 2) ?: 0
+    if (from == at || next == at) return 0.0
+    val a = points[from]; val b = points[at]; val c = points[next]
+    if (catchTurnDegrees(a, b, c) < CATCH_UTURN_DEGREES) return 0.0
+    val overlap = min(catchDistance(a, b), catchDistance(b, c))
+    return overlap * catchYieldPerMeter(expected, meters) * CATCH_RETRACE_WEIGHT
+}
+
+/** Degrees between heading a→b and b→c: 0 straight on, 180 straight back. */
+internal fun catchTurnDegrees(a: CatchPoint, b: CatchPoint, c: CatchPoint): Double {
+    val sx = cos(Math.toRadians(b.latitude))
+    val x1 = (b.longitude - a.longitude) * sx; val y1 = b.latitude - a.latitude
+    val x2 = (c.longitude - b.longitude) * sx; val y2 = c.latitude - b.latitude
+    val n = hypot(x1, y1) * hypot(x2, y2)
+    if (n < 1e-12) return 0.0
+    return Math.toDegrees(acos(((x1 * x2 + y1 * y2) / n).coerceIn(-1.0, 1.0)))
+}
+
+/** Expected catches per metre: the route's own once it has walked far enough to say, a typical town's before. */
+internal fun catchYieldPerMeter(expected: Double, meters: Double): Double =
+    if (meters >= 300 && expected > 0) expected / meters else CATCH_DEFAULT_YIELD_PER_METER
+
+internal const val CATCH_UTURN_DEGREES = 150.0
+/** Retraced metres cost this share of what they would earn elsewhere on the route. */
+internal const val CATCH_RETRACE_WEIGHT = 0.5
+/** About one expected catch per 100 m, the rate of Alsbach's recorded routes. */
+internal const val CATCH_DEFAULT_YIELD_PER_METER = 0.01
+
+/**
+ * Metres of [path] that walk over street already walked — earlier on the path or on [priorTrack] — with no
+ * encounter caught on them. Sampled every [CATCH_RETRACE_SAMPLE_METERS]; a sample counts when it is within
+ * [CATCH_RETRACE_NEAR_METERS] of an earlier one, so walking a street back, or again, both count.
+ */
+internal fun catchRetraceMeters(path: List<CatchPathPosition>, encounters: List<CatchEncounter>, radius: Double,
+    priorTrack: List<CatchPoint> = emptyList()): Double = catchRetraceStretches(path, encounters, radius, priorTrack).sumOf { it.endInclusive - it.start }
+
+/** The retraced stretches of [catchRetraceMeters], as ranges of path metres. */
+internal fun catchRetraceStretches(path: List<CatchPathPosition>, encounters: List<CatchEncounter>, radius: Double,
+    priorTrack: List<CatchPoint> = emptyList()): List<ClosedFloatingPointRange<Double>> {
+    if (path.size < 2) return emptyList()
+    data class Sample(val point: CatchPoint, val meters: Double, val prior: Boolean)
+    val samples = sampleCatchPath(path)
+    var walked = 0.0
+    val track = priorTrack.mapIndexed { i, p ->
+        if (i > 0) walked += catchDistance(priorTrack[i - 1], p)
+        CatchPathPosition(p, walked)
+    }
+    val prior = if (track.size >= 2) sampleCatchPath(track) else track
+    val index = CatchSpatialIndex(samples.map { Sample(it.point, it.meters, false) } + prior.map { Sample(it.point, it.meters, true) }) { it.point }
+    val caughtAt = encounters.map { it.meters }
+    fun productive(m: Double) = caughtAt.any { abs(it - m) <= radius }
+    val stretches = mutableListOf<ClosedFloatingPointRange<Double>>()
+    var open: Double? = null
+    var last = 0.0
+    for (s in samples) {
+        val again = !productive(s.meters) && index.near(s.point, radius = CATCH_RETRACE_NEAR_METERS).any { o ->
+            (o.prior || o.meters < s.meters - CATCH_RETRACE_GAP_METERS) && catchDistance(o.point, s.point) <= CATCH_RETRACE_NEAR_METERS
+        }
+        val started = open
+        if (again && started == null) open = s.meters
+        if (!again && started != null) { stretches += started..last; open = null }
+        last = s.meters
+    }
+    open?.let { stretches += it..last }
+    return stretches.filter { it.endInclusive - it.start >= CATCH_RETRACE_SAMPLE_METERS }
+}
+
+/**
+ * The routed stop at the tip of the longest dead end walked out and back for nothing, or null: the anchor
+ * nearest the place the retraced stretch begins, which is where the walk turned around.
+ */
+internal fun catchSpurTip(route: CatchItinerary, radius: Double): Int? {
+    val stretch = catchRetraceStretches(route.path, route.encounters, radius).maxByOrNull { it.endInclusive - it.start } ?: return null
+    if (stretch.endInclusive - stretch.start < CATCH_SPUR_MIN_METERS) return null
+    val turn = route.path.minByOrNull { abs(it.meters - stretch.start) }?.point ?: return null
+    val last = route.anchors.lastIndex - if (route.settings.destination != null) 1 else 0
+    if (last < 1) return null
+    val tip = (1..last).minByOrNull { catchDistance(route.anchors[it], turn) } ?: return null
+    return tip.takeIf { catchDistance(route.anchors[it], turn) <= radius * 2 }
+}
+
+private fun sampleCatchPath(path: List<CatchPathPosition>): List<CatchPathPosition> {
+    if (path.size < 2) return path
+    val out = mutableListOf(path.first())
+    var next = path.first().meters + CATCH_RETRACE_SAMPLE_METERS
+    for ((a, b) in path.zipWithNext()) {
+        val length = b.meters - a.meters
+        if (length <= 0) continue
+        while (next <= b.meters) {
+            val t = (next - a.meters) / length
+            out += CatchPathPosition(CatchPoint(a.point.latitude + (b.point.latitude - a.point.latitude) * t,
+                a.point.longitude + (b.point.longitude - a.point.longitude) * t), next)
+            next += CATCH_RETRACE_SAMPLE_METERS
+        }
+    }
+    return out
+}
+
+internal const val CATCH_RETRACE_SAMPLE_METERS = 10.0
+internal const val CATCH_RETRACE_NEAR_METERS = 12.0
+/** Samples closer than this along the path are the same stretch, not a return to it. */
+internal const val CATCH_RETRACE_GAP_METERS = 40.0
+/** Shorter out-and-backs are the turn at a corner, not a dead end. */
+internal const val CATCH_SPUR_MIN_METERS = 60.0
+
+/** What a route is worth once retracing is paid for: [CATCH_RETRACE_WEIGHT] of the route's yield per retraced metre. */
+internal fun CatchItinerary.effectiveCatches(): Double =
+    expectedCatches - retraceMeters * catchYieldPerMeter(expectedCatches, distanceMeters) * CATCH_RETRACE_WEIGHT
+
+/** More expected catches, after retracing is paid for, wins; then more encounters; then the shorter walk. */
 internal fun betterCatchRoute(candidate: CatchItinerary, current: CatchItinerary?): Boolean {
     if (current == null) return true
-    val a = round(candidate.expectedCatches * 1000)
-    val b = round(current.expectedCatches * 1000)
+    val a = round(candidate.effectiveCatches() * 1000)
+    val b = round(current.effectiveCatches() * 1000)
     if (a != b) return a > b
     if (candidate.encounters.size != current.encounters.size) return candidate.encounters.size > current.encounters.size
     return candidate.distanceMeters < current.distanceMeters

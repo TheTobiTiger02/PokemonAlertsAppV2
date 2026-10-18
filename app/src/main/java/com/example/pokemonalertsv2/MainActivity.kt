@@ -1178,6 +1178,9 @@ private fun MainScaffold(
                                         "hunthistory" -> context.startActivity(
                                             Intent(context, com.example.pokemonalertsv2.hunt.HuntHistoryActivity::class.java)
                                         )
+                                        "routehistory" -> context.startActivity(
+                                            Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRouteHistoryActivity::class.java)
+                                        )
                                         "routes" -> context.startActivity(
                                             Intent(context, com.example.pokemonalertsv2.catchroutes.CatchRoutesActivity::class.java)
                                         )

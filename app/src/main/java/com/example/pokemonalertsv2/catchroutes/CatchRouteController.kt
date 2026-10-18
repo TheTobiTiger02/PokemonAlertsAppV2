@@ -24,6 +24,8 @@ class CatchRouteController private constructor(private val context: Context) {
     val message = MutableStateFlow<String?>(null)
     val location = MutableStateFlow<CatchPoint?>(null)
     val recalculating = MutableStateFlow(false)
+    /** The route that just ended, until a screen has shown it. */
+    val lastSummary = MutableStateFlow<CatchRouteSummary?>(null)
     /**
      * The route no longer matches the walk: a stop still ahead has already despawned, or the
      * trainer has been well away from the path for a while. Advice only -- the route changes
@@ -62,13 +64,14 @@ class CatchRouteController private constructor(private val context: Context) {
         evaluator.reset()
         retryAfter = 0
         resetOutOfDate()
-        mutable.value = CatchSession(itinerary)
+        mutable.value = CatchSession(itinerary, startedAtMillis = System.currentTimeMillis(), originalSettings = itinerary.settings)
         persist()
         armDeadline()
         ContextCompat.startForegroundService(context, Intent(context, CatchRouteService::class.java))
     } }
     suspend fun stop() = command {
         cancelRefresh(); deadlineJob?.cancel(); deadlineJob = null
+        mutable.value?.let { s -> if (!s.finished) record(s) }
         mutable.value = null; evaluator.reset(); resetOutOfDate(); store.clear()
         // The service observes null and stops itself after fulfilling Android's foreground start.
         // Stopping a queued startForegroundService here can crash on rapid start/stop.
@@ -77,13 +80,15 @@ class CatchRouteController private constructor(private val context: Context) {
         val s = mutable.value ?: return@command
         if (s.finished) return@command
         cancelRefresh()
-        mutable.value = s.copy(paused = !s.paused)
+        val now = System.currentTimeMillis()
+        mutable.value = if (s.paused) s.copy(paused = false).resumedAt(now) else s.copy(paused = true).pausedAt(now)
         evaluator.reset(); clearOffPath(); persist()
     } }
     fun skip() = scope.launch { command {
         val s = mutable.value ?: return@command
-        val next = s.remaining.firstOrNull() ?: return@command
-        val group = s.remaining.takeWhile { it.meters - next.meters < 25 }
+        val ahead = s.ahead(System.currentTimeMillis())
+        val next = ahead.firstOrNull() ?: return@command
+        val group = ahead.takeWhile { it.meters - next.meters < 25 }
         mutable.value = s.copy(visits = s.visits + group.map { CatchVisit(it.opportunity, it.arrivalMillis, skipped = true) }, undoVisits = s.visits)
         persist()
     } }
@@ -112,14 +117,21 @@ class CatchRouteController private constructor(private val context: Context) {
         location.value = p
         if (message.value?.startsWith("Waiting for location.") == true) message.value = null
         val s = mutable.value ?: return@command
-        val updated = if (now >= s.itinerary.settings.startAtMillis && now < s.itinerary.settings.endAtMillis) evaluator.accept(s, p, fix.accuracy.toDouble(), now - age, now) else s
+        val running = now >= s.itinerary.settings.startAtMillis && now < s.itinerary.settings.endAtMillis
+        val updated = if (running) evaluator.accept(s, p, fix.accuracy.toDouble(), now - age, now)
+            .let { if (it.paused || it.finished) it else it.withWalk(p, fix.accuracy.toDouble()) } else s
         mutable.value = updated
         if (updated.visits.size != s.visits.size || now - lastPersist > 10_000) persist()
         if (now >= s.itinerary.settings.endAtMillis) {
             finishIfExpired(); return@command
         }
         if (s.paused || s.finished || now < s.itinerary.settings.startAtMillis) return@command
-        val missed = updated.remaining.any { it.opportunity.despawnAt <= now }
+        // Stops already walked past are missed, not a reason to replan. Only what lies ahead counts, and only
+        // when enough of it would be gone by the time the plan's pace reaches it.
+        val ahead = updated.ahead(now)
+        val speed = s.itinerary.settings.speedMps
+        val unreachable = ahead.count { now + ((it.meters - updated.progressMeters).coerceAtLeast(0.0) / speed * 1000).toLong() >= it.opportunity.despawnAt }
+        val missed = unreachable >= maxOf(3, ahead.size / 10)
         val offPath = s.itinerary.path.zipWithNext().none { (a, b) -> catchCircleInterval(a.point, b.point, p, OFF_PATH_METERS) != null }
         // One stray fix is not leaving the route; only a sustained stretch away from it is.
         if (!offPath) clearOffPath()
@@ -149,11 +161,12 @@ class CatchRouteController private constructor(private val context: Context) {
                     end = original.destination, deadlineMillis = original.endAtMillis,
                     // A route walked as drawn carries on from where the trainer is on it, never re-optimised.
                     fixedPath = if (original.fixed) remainingFixedPath(original.fixedPath, p, s.progressMeters) else original.fixedPath)
-                val plan = CatchRoutePlanner(PokemonAlertsApi.catchRoutesService).generate(settings, s.visits)
+                // What was already walked costs the same as any backtrack: a replan prefers fresh streets.
+                val plan = CatchRoutePlanner(PokemonAlertsApi.catchRoutesService).generate(settings, s.visits, priorTrack = s.track)
                 command {
                     val current = mutable.value
                     if (epoch == generation && current != null) {
-                        mutable.value = current.copy(itinerary = plan, progressMeters = 0.0)
+                        mutable.value = current.copy(itinerary = plan, progressMeters = 0.0, replans = current.replans + 1)
                         evaluator.reset(); resetOutOfDate(); message.value = null; persist()
                     }
                 }
@@ -189,9 +202,18 @@ class CatchRouteController private constructor(private val context: Context) {
         if (!s.finished && System.currentTimeMillis() >= s.itinerary.settings.endAtMillis) {
             cancelRefresh(); evaluator.reset()
             mutable.value = s.copy(paused = true, finished = true)
-            message.value = "Session time finished. ${s.visits.count { !it.skipped }} visited."
+            message.value = "Session time finished. ${s.caught} visited."
             persist()
+            record(s)
         }
+    }
+    /** Adds the route that is ending to the history and offers its summary. */
+    private suspend fun record(s: CatchSession) {
+        val summary = catchRouteSummary(s, s.originalSettings ?: s.itinerary.settings, System.currentTimeMillis(), s.replans)
+        if (!summary.isWorthKeeping()) return
+        runCatching { store.addHistory(summary) }
+        lastSummary.value = summary
+        CatchRouteNotifications.postFinished(context, summary)
     }
     private suspend fun persist() { mutable.value?.let { store.write(it) }; lastPersist = System.currentTimeMillis() }
     companion object {

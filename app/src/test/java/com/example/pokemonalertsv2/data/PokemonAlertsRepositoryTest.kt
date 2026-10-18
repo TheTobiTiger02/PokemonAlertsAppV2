@@ -7,6 +7,7 @@ import com.example.pokemonalertsv2.data.database.HistoryAlertDao
 import com.example.pokemonalertsv2.data.database.HistoryAlertEntity
 import com.example.pokemonalertsv2.data.database.toEntity
 import com.example.pokemonalertsv2.data.database.toHistoryEntity
+import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,19 +29,20 @@ class PokemonAlertsRepositoryTest {
     private lateinit var historyDao: FakeHistoryAlertDao
     private lateinit var repository: PokemonAlertsRepository
     private val service = FakePokemonAlertsService()
+    private var now = 0L
 
     @Before
     fun setUp() {
         preferences = FakeAlertPreferencesStore()
         dao = FakeAlertDao()
         historyDao = FakeHistoryAlertDao()
-        repository = PokemonAlertsRepository(service, preferences, dao, historyDao)
+        repository = PokemonAlertsRepository(service, preferences, dao, historyDao, clock = { now })
     }
 
     @Test
     fun detectNewAlerts_skipsAlreadySeen() = runTest {
         val seenAlert = sampleAlert(name = "Seen", endTime = "2025-10-07 23:59:59")
-        preferences.updateSeenAlertIds(setOf(seenAlert.uniqueId))
+        preferences.seed(seenAlert.uniqueId)
 
         val newAlert = sampleAlert(name = "New", endTime = "2025-10-08 10:00:00")
         val alerts = listOf(seenAlert, newAlert)
@@ -53,7 +55,7 @@ class PokemonAlertsRepositoryTest {
     @Test
     fun detectNewAlerts_skipsAlertsSeenByServerId() = runTest {
         val seenAlert = sampleAlert(name = "Seen", id = 6215)
-        preferences.updateSeenAlertIds(setOf("server:6215"))
+        preferences.seed("server:6215")
 
         val freshAlerts = repository.detectNewAlerts(listOf(seenAlert, sampleAlert("New", id = 6216)))
 
@@ -67,8 +69,42 @@ class PokemonAlertsRepositoryTest {
 
         repository.markAlertsAsSeen(listOf(alertA, alertB))
 
-        val storedIds = preferences.getSeenAlertIds()
+        val storedIds = preferences.getSeenAlerts().keys
         assertTrue(storedIds.containsAll(listOf("server:101", alertA.uniqueId, alertB.uniqueId)))
+    }
+
+    @Test
+    fun markAlertsAsSeen_keepsAllDayAlertSeenThroughManyNewerAlerts() = runTest {
+        now = millis("2025-10-07 08:00:00")
+        val quest = sampleAlert("Quest", endTime = "2025-10-07 23:59:59", id = 1)
+        repository.markAlertsAsSeen(listOf(quest))
+
+        // Far more alerts than the old count cap remembered, all arriving after the quest.
+        val busyDay = (2..1_000).map { sampleAlert("Spawn $it", endTime = "2025-10-07 08:30:00", id = it) }
+        busyDay.chunked(10).forEach { repository.markAlertsAsSeen(it) }
+
+        assertEquals(emptyList<PokemonAlert>(), repository.detectNewAlerts(listOf(quest)))
+    }
+
+    @Test
+    fun markAlertsAsSeen_forgetsAlertsOnceTheyHaveExpired() = runTest {
+        now = millis("2025-10-07 08:00:00")
+        val spawn = sampleAlert("Spawn", endTime = "2025-10-07 08:30:00", id = 1)
+        repository.markAlertsAsSeen(listOf(spawn))
+
+        now = millis("2025-10-07 12:00:00")
+        repository.markAlertsAsSeen(listOf(sampleAlert("Later", endTime = "2025-10-07 13:00:00", id = 2)))
+
+        val stored = preferences.getSeenAlerts().keys
+        assertFalse(stored.any { it.endsWith(":1") || it.endsWith("-1") })
+        assertTrue(stored.containsAll(listOf("server:2", "server-2")))
+    }
+
+    @Test
+    fun decodeSeenEntry_readsExpiryAndKeepsSeparatorsInKey() {
+        assertEquals("Quest|2025-10-07 23:59:59" to 42L, AlertPreferences.decodeSeenEntry("42|Quest|2025-10-07 23:59:59", 7L))
+        assertEquals("server:5" to 7L, AlertPreferences.decodeSeenEntry("server:5", 7L))
+        assertEquals("Quest|2025-10-07 23:59:59" to 7L, AlertPreferences.decodeSeenEntry("Quest|2025-10-07 23:59:59", 7L))
     }
 
     @Test
@@ -198,7 +234,7 @@ class PokemonAlertsRepositoryTest {
 
     @Test
     fun fetchAlerts_cursorResetOnAUsedInstallStillNotifiesWhatItMissed() = runTest {
-        preferences.updateSeenAlertIds(setOf("server:1"))
+        preferences.seed("server:1")
         val missed = sampleAlert("Missed", id = 2)
         service.alerts = listOf(missed)
         service.syncRevision = 3L
@@ -601,6 +637,8 @@ class PokemonAlertsRepositoryTest {
         assertFalse(response.confirmed)
     }
 
+    private fun millis(time: String): Long = requireNotNull(TimeUtils.parseEndTimeToMillis(time))
+
     private fun sampleAlert(
         name: String,
         endTime: String = "2099-10-07 23:59:59",
@@ -758,8 +796,8 @@ class PokemonAlertsRepositoryTest {
 
     }
 
-    private class FakeAlertPreferencesStore(initial: Set<String> = emptySet()) : AlertPreferencesStore {
-        private val state = MutableStateFlow(initial)
+    private class FakeAlertPreferencesStore : AlertPreferencesStore {
+        private val state = MutableStateFlow(emptyMap<String, Long>())
         private val favoritesState = MutableStateFlow(emptySet<String>())
         private val themeModeState = MutableStateFlow(0)
         private val imperialState = MutableStateFlow(false)
@@ -796,9 +834,10 @@ class PokemonAlertsRepositoryTest {
         private val lastSyncState = MutableStateFlow(0L)
         private val selectedAlertFilterState = MutableStateFlow("ALL")
 
-        override val seenAlertIds: Flow<Set<String>> = state.asStateFlow()
-        override suspend fun getSeenAlertIds(): Set<String> = state.value
-        override suspend fun updateSeenAlertIds(alertIds: Set<String>) { state.value = alertIds }
+        override suspend fun getSeenAlerts(): Map<String, Long> = state.value
+        override suspend fun updateSeenAlerts(seen: Map<String, Long>) { state.value = seen }
+
+        fun seed(vararg keys: String) { state.value = keys.associateWith { Long.MAX_VALUE } }
 
         override val favoriteAlertIds: Flow<Set<String>> = favoritesState.asStateFlow()
         override suspend fun getFavoriteAlertIds(): Set<String> = favoritesState.value

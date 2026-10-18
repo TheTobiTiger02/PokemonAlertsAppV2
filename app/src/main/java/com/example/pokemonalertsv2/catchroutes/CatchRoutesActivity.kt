@@ -37,6 +37,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
+import com.example.pokemonalertsv2.hunt.BatterySaverSwitch
+import kotlinx.coroutines.flow.first
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
@@ -51,6 +53,8 @@ class CatchRoutesActivity : ComponentActivity() {
     internal val model: CatchRoutesViewModel by viewModels()
     private var pendingFollow = false
     private var locating: CancellationTokenSource? = null
+    /** A finished route's summary to show, from the controller or from a notification tap. */
+    private var summary by mutableStateOf<CatchRouteSummary?>(null)
     private val permissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         if (fineLocation()) {
             if (pendingFollow) {
@@ -87,6 +91,29 @@ class CatchRoutesActivity : ComponentActivity() {
                 ContextCompat.startForegroundService(this@CatchRoutesActivity, Intent(this@CatchRoutesActivity, CatchRouteService::class.java))
             }
         }
+        handle(intent)
+        lifecycleScope.launch {
+            model.controller.lastSummary.collect { if (it != null) { summary = it; model.controller.lastSummary.value = null } }
+        }
+    }
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handle(intent) }
+    /** A tap on "Route finished" opens its summary; "Walk again" in the history loads its settings. */
+    private fun handle(intent: Intent?) {
+        val summaryId = intent?.getStringExtra(CatchRouteNotifications.EXTRA_SUMMARY_ID)
+        val againId = intent?.getStringExtra(CatchRouteHistoryActivity.EXTRA_WALK_AGAIN_ID)
+        if (summaryId == null && againId == null) return
+        intent.removeExtra(CatchRouteNotifications.EXTRA_SUMMARY_ID)
+        intent.removeExtra(CatchRouteHistoryActivity.EXTRA_WALK_AGAIN_ID)
+        lifecycleScope.launch {
+            val history = model.store.history.first()
+            summaryId?.let { id -> history.firstOrNull { it.id == id }?.let { summary = it } }
+            againId?.let { id -> history.firstOrNull { it.id == id }?.let { walkAgain(it) } }
+        }
+    }
+    private fun walkAgain(previous: CatchRouteSummary) {
+        if (model.controller.session.value?.finished == false) { model.report("Stop the current route before walking another."); return }
+        lifecycleScope.launch { if (model.controller.session.value != null) model.controller.stop() }
+        model.walkAgain(previous.settings)
     }
     override fun onDestroy() { locating?.cancel(); super.onDestroy() }
 
@@ -150,6 +177,8 @@ class CatchRoutesActivity : ComponentActivity() {
                         Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
+                        modifier = Modifier.testTag("catch_route_history")) { Text("History") }
                     // Only useful while walking a route, so it only appears then.
                     if (active != null) IconButton(onClick = ::floatingWindow) {
                         Icon(androidx.compose.ui.res.painterResource(com.example.pokemonalertsv2.R.drawable.ic_pip), contentDescription = "Floating map")
@@ -166,7 +195,10 @@ class CatchRoutesActivity : ComponentActivity() {
                                 val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
                                 details = ids.mapNotNull { byId[it] }.take(5).ifEmpty { null }
                             }
-                            view.update(settings, plan, location, active?.progressMeters, active?.nextStop)
+                            view.update(settings, plan, location, active?.progressMeters, active?.nextStopAt(now))
+                            // Walking: only what is still ahead. Planning: every planned spawnpoint.
+                            view.setSpawns(active?.takeIf { walking }?.ahead(now)?.map { it.opportunity to (now >= it.opportunity.availableFrom) })
+                            view.setNextStop(active?.takeIf { walking }?.let { catchNextStopIndex(it, now) })
                             view.select(details?.map { it.pointId }?.toSet().orEmpty())
                         }, onRelease = { it.destroy() })
                     if (plan != null) Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -183,7 +215,7 @@ class CatchRoutesActivity : ComponentActivity() {
                 }
                 LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
                     verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp)) {
-                    if (active != null) item { SessionCard(active!!, settings, refreshing, outOfDate, notice) }
+                    if (active != null) item { SessionCard(active!!, settings, refreshing, outOfDate, notice, now) }
                     else if (plan != null && !editing) item {
                         RouteSummary(plan, encounters, onStart = {
                             if (!fineLocation() || (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@CatchRoutesActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)) { pendingFollow = true; permissions.launch(permissionNames()) }
@@ -204,11 +236,11 @@ class CatchRoutesActivity : ComponentActivity() {
                     }
                     if (plan != null && !showSettings) {
                         item { Text("Stops", style = MaterialTheme.typography.titleMedium) }
+                        val nextIndex = active?.let { catchNextStopIndex(it, now) }
                         itemsIndexed(stops) { index, group ->
                             val visited = active != null && group.all { e -> active!!.wasVisited(e.opportunity) }
                             val previousMeters = stops.getOrNull(index - 1)?.first()?.meters ?: 0.0
-                            StopRow(index + 1, group, previousMeters, plan, settings, visited, next = active != null && !visited &&
-                                stops.take(index).all { g -> g.all { e -> active!!.wasVisited(e.opportunity) } },
+                            StopRow(index + 1, group, previousMeters, plan, settings, visited, next = index == nextIndex,
                                 modifier = Modifier.testTag("catch_stop_$index")) { details = spawnpointSelections(group) }
                         }
                     }
@@ -223,6 +255,9 @@ class CatchRoutesActivity : ComponentActivity() {
             onGuide = { record -> model.importGuide(record); goRoutesOpen = false; mapView?.fit() })
         if (areaOpen) CatchAreaPicker(initial = settings.area, center = settings.start, title = "Route area",
             onDismiss = { areaOpen = false }, onDone = { model.edit(model.settings.copy(area = it)); areaOpen = false })
+        summary?.let { finished ->
+            CatchRouteSummarySheet(finished, onDismiss = { summary = null }, onWalkAgain = { summary = null; walkAgain(finished) })
+        }
         deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text("Delete ${setup.name}?") }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text("Cancel") } }) }
     }
 
@@ -264,12 +299,19 @@ class CatchRoutesActivity : ComponentActivity() {
     }
 
     @OptIn(ExperimentalLayoutApi::class)
-    @Composable private fun SessionCard(session: CatchSession, settings: CatchRouteSettings, refreshing: Boolean, outOfDate: Boolean, notice: String?) {
+    @Composable private fun SessionCard(session: CatchSession, settings: CatchRouteSettings, refreshing: Boolean, outOfDate: Boolean, notice: String?, now: Long) {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(session.itinerary.settings.name, style = MaterialTheme.typography.titleLarge)
                 if (session.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
-                Text("${session.visits.count { !it.skipped }} visited · ${session.availabilityReadout}")
+                Text("${session.caught} caught · ${session.ahead(now).size} ahead · ${session.missed(now).size} missed",
+                    modifier = Modifier.testTag("catch_session_tally"))
+                val active = session.activeMillis(now)
+                val speed = if (active >= 60_000 && session.walkedMeters >= 50) session.walkedMeters / (active / 1000.0) * 3.6 else null
+                Text("${formatCatchKm(session.walkedMeters)} walked · ${active / 60_000} min · ${formatCatchSpeed(speed)}",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                catchPaceHint(session, now)?.let { Text(it.replaceFirstChar { c -> c.uppercase() }, color = MaterialTheme.colorScheme.tertiary,
+                    style = MaterialTheme.typography.titleSmall) }
                 // Advice only: the route changes when the trainer taps Recalculate, never on its own.
                 if (outOfDate && !session.finished && !refreshing) Text("Route out of date: a stop has despawned or you left the route. Tap Recalculate for a new one.",
                     color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -287,6 +329,8 @@ class CatchRoutesActivity : ComponentActivity() {
                     TextButton(onClick = { lifecycleScope.launch { model.controller.stop() } }) { Text("Stop route") }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = settings.spacialRend, onCheckedChange = { model.controller.setRadius(it) }); Spacer(Modifier.width(8.dp)); Text("Spacial Rend · ${settings.radius.toInt()} m") }
+                BatterySaverSwitch(description = "Route Battery Saver",
+                    explanation = "Face down during a route blacks out the screen. Long press it to turn off. Shared with hunts.")
             }
         }
     }
@@ -352,6 +396,7 @@ class CatchRoutesActivity : ComponentActivity() {
                     if (settings.area.isArea()) TextButton(onClick = { model.edit(settings.copy(area = emptyList())) }) { Text("Remove") }
                     OutlinedButton(onClick = onArea) { Text(if (settings.area.isArea()) "Edit area" else "Limit to area") }
                 }
+                if (!settings.fixed) SavedAreaChips(settings.area) { model.edit(settings.copy(area = it)) }
             }
             SettingsCard("When") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

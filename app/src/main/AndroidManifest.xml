@@ -67,6 +67,9 @@
         <activity android:name=".hunt.HuntHistoryActivity"
             android:exported="false"
             android:theme="@style/Theme.PokemonAlertsV2" />
+        <activity android:name=".catchroutes.CatchRouteHistoryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.PokemonAlertsV2" />
         <activity android:name=".catchroutes.CatchRoutesActivity"
             android:exported="false"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"

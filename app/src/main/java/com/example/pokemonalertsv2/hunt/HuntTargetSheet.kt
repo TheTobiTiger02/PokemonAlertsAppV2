@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.catchroutes.CatchAreaPicker
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.catchroutes.isArea
+import com.example.pokemonalertsv2.catchroutes.SavedAreaChips
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.ui.alerts.ALSBACH_LATITUDE
 import com.example.pokemonalertsv2.ui.alerts.ALSBACH_LONGITUDE
@@ -242,6 +243,8 @@ internal fun HuntTargetSheet(
                     if (area.isArea()) TextButton(onClick = { area = emptyList() }) { Text("Remove") }
                     OutlinedButton(onClick = { areaOpen = true }) { Text(if (area.isArea()) "Edit area" else "Limit to area") }
                 }
+                // The areas saved in the picker, shared with catch routes, one tap each.
+                SavedAreaChips(area) { area = it }
             }
 
             val hunt = remember(draft) { draft.forHunt() }

@@ -48,6 +48,10 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
             edit(it.copy(startAtMillis = 0)); selectedId = entity.id; hasStart = true; useNow = true; startLabel = "From saved setup"
         }.onFailure { error = "This saved setup could not be read." }
     }
+    /** A past route's walk, ready to plan again from now. */
+    fun walkAgain(previous: CatchRouteSettings) {
+        edit(previous.copy(startAtMillis = 0, deadlineMillis = null)); selectedId = null; hasStart = true; useNow = true; startLabel = "From route history"
+    }
     fun save(duplicate: Boolean = false) = viewModelScope.launch {
         selectedId = store.save(settings.copy(startAtMillis = 0), if (duplicate) null else selectedId)
         progress = if (duplicate) "Copy saved" else "Setup saved"
