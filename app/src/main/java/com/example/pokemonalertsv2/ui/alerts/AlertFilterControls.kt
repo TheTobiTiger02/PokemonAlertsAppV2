@@ -179,6 +179,7 @@ import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
 import com.example.pokemonalertsv2.data.distanceLabel
 import com.example.pokemonalertsv2.util.TravelTime
+import androidx.compose.ui.platform.LocalConfiguration
 
 @Composable
 internal fun AlertListControls(
@@ -219,15 +220,19 @@ internal fun AlertListControls(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // The count gives way to the buttons on a narrow screen, never the other way round.
                 AnimatedContent(
                     targetState = visibleCount,
                     transitionSpec = { appFadeThrough() },
-                    label = "active_alert_count"
+                    label = "active_alert_count",
+                    modifier = Modifier.weight(1f)
                 ) { count ->
                     Text(
                         text = pluralStringResource(R.plurals.alerts_active_count, count, count),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Row(
@@ -437,12 +442,15 @@ internal fun HistoryListControls(
                 AnimatedContent(
                     targetState = visibleCount,
                     transitionSpec = { appFadeThrough() },
-                    label = "history_loaded_count"
+                    label = "history_loaded_count",
+                    modifier = Modifier.weight(1f)
                 ) { count ->
                     Text(
                         text = pluralStringResource(R.plurals.history_loaded_count, count, count),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Row(
@@ -615,7 +623,9 @@ internal fun AlertSearchBar(
         placeholder = {
             Text(
                 text = placeholder,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         },
         leadingIcon = {
@@ -668,6 +678,16 @@ internal val SortPreference.shortLabel: String
  * order was active, so the current order is now the label.
  */
 @Composable
+private fun SortIcon(sort: SortPreference) {
+    when (sort) {
+        SortPreference.POSTED_TIME -> Icon(Icons.Filled.DateRange, contentDescription = null)
+        SortPreference.DISTANCE -> Icon(Icons.Filled.LocationOn, contentDescription = null)
+        SortPreference.TIME_REMAINING -> Icon(painterResource(R.drawable.ic_timer), contentDescription = null)
+        SortPreference.NAME -> Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
+    }
+}
+
+@Composable
 internal fun SortingButton(
     currentSort: SortPreference,
     onSortChanged: (SortPreference) -> Unit,
@@ -675,15 +695,19 @@ internal fun SortingButton(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
+    // Below 360dp the label would push the filter and menu buttons off the row, so the button
+    // shows the current sort's icon instead.
+    val compact = LocalConfiguration.current.screenWidthDp < 360
     Box(modifier = modifier) {
         TextButton(
             onClick = { expanded = true },
-            contentPadding = PaddingValues(start = 10.dp, end = 4.dp),
+            contentPadding = PaddingValues(start = if (compact) 4.dp else 10.dp, end = 4.dp),
             modifier = Modifier.semantics {
                 contentDescription = "Sort alerts, current: ${currentSort.shortLabel}"
             }
         ) {
-            Text(currentSort.shortLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1)
+            if (compact) SortIcon(currentSort)
+            else Text(currentSort.shortLabel, style = MaterialTheme.typography.labelLarge, maxLines = 1)
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
 
@@ -698,14 +722,7 @@ internal fun SortingButton(
                         onSortChanged(option)
                         expanded = false
                     },
-                    leadingIcon = {
-                        when (option) {
-                            SortPreference.POSTED_TIME -> Icon(Icons.Filled.DateRange, contentDescription = null)
-                            SortPreference.DISTANCE -> Icon(Icons.Filled.LocationOn, contentDescription = null)
-                            SortPreference.TIME_REMAINING -> Icon(painterResource(R.drawable.ic_timer), contentDescription = null)
-                            SortPreference.NAME -> Icon(Icons.AutoMirrored.Filled.List, contentDescription = null)
-                        }
-                    },
+                    leadingIcon = { SortIcon(option) },
                     trailingIcon = if (option == currentSort) {
                         { Icon(Icons.Filled.Check, contentDescription = "Selected") }
                     } else null
@@ -750,111 +767,6 @@ private fun FeedOverflowMenu(
                 }
             )
         }
-    }
-}
-
-/**
- * Saved combinations of the four controls in this sheet.
- *
- * Lives in the filter sheet rather than above the feed: this is where the state it captures
- * gets edited, and the feed already carries a filter row, a chip row and a search field.
- */
-@Composable
-internal fun FilterPresetsSection(
-    controls: FilterPresetControls,
-    currentCategories: Set<AlertCategory>,
-    currentSort: SortPreference,
-    currentArea: String,
-    currentMaxDistance: Int,
-    onApplied: () -> Unit
-) {
-    var naming by rememberSaveable { mutableStateOf(false) }
-    var draftName by rememberSaveable { mutableStateOf("") }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Presets",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            TextButton(onClick = { draftName = ""; naming = true }) { Text("Save current") }
-        }
-        if (controls.presets.isEmpty()) {
-            Text(
-                text = "Save the filters you keep coming back to and apply them in one tap.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        } else {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(controls.presets, key = { it.name }) { preset ->
-                    InputChip(
-                        selected = false,
-                        onClick = {
-                            controls.onApply(preset)
-                            onApplied()
-                        },
-                        label = { Text(preset.name) },
-                        trailingIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Delete preset " + preset.name,
-                                modifier = Modifier
-                                    .size(18.dp)
-                                    .clickable { controls.onDelete(preset.name) }
-                            )
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    if (naming) {
-        AlertDialog(
-            onDismissRequest = { naming = false },
-            title = { Text("Save these filters") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = draftName,
-                        onValueChange = { draftName = it.take(FilterPresets.MAX_NAME_LENGTH) },
-                        label = { Text("Name") },
-                        singleLine = true
-                    )
-                    Text(
-                        text = FilterPresets.describe(
-                            FilterPreset(
-                                name = draftName,
-                                sort = currentSort.name,
-                                area = currentArea,
-                                maxDistanceMeters = currentMaxDistance,
-                                categories = currentCategories.toStoredNames()
-                            )
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = draftName.isNotBlank(),
-                    onClick = {
-                        controls.onSaveCurrent(draftName)
-                        naming = false
-                    }
-                ) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { naming = false }) { Text("Cancel") }
-            }
-        )
     }
 }
 

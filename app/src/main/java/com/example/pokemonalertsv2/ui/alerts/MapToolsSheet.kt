@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.hunt.HuntControls
 import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /**
  * Things the map *does*, as opposed to what it shows: hunts, route planning, the Mega
@@ -131,6 +132,7 @@ internal fun MapToolsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .keepScrollInSheet()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()

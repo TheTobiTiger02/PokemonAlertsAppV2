@@ -298,7 +298,8 @@ fun RaidCountersSettingsContent(
             style = MaterialTheme.typography.bodyMedium
         )
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Four sign-in providers do not fit one line on a narrow phone.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (account == null) {
             PokebattlerLoginProvider.entries.forEach { provider ->
                 TextButton(

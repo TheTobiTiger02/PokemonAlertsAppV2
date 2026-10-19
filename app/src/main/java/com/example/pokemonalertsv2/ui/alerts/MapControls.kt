@@ -52,11 +52,9 @@ import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
@@ -147,6 +145,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /**
  * Offline tile controls for the OpenStreetMap layer: what is stored, and two actions.
@@ -387,16 +386,19 @@ internal fun MapAlertDetailContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Tighter padding than the default 24dp, so both labels fit one line on a narrow phone.
             FilledTonalButton(
                 onClick = onGoing,
                 enabled = isGoing || alert.isEligibleArrivalDestination(),
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier.weight(1f).height(48.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
-                Text(if (isGoing) "Stop" else "I’m going")
+                Text(if (isGoing) "Stop" else "I’m going", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Button(
                 onClick = onOpenMaps,
-                modifier = Modifier.weight(1f).height(48.dp)
+                modifier = Modifier.weight(1f).height(48.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp)
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_map),
@@ -404,7 +406,7 @@ internal fun MapAlertDetailContent(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Text("Directions")
+                Text("Directions", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
 
@@ -449,6 +451,7 @@ internal fun MapAlertDetailContent(
             modifier = Modifier
                 .weight(1f, fill = false)
                 .fillMaxWidth()
+                .keepScrollInSheet()
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {

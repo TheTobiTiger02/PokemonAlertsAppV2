@@ -170,6 +170,8 @@ import androidx.compose.material3.InputChip
 import com.example.pokemonalertsv2.data.FilterPreset
 import com.example.pokemonalertsv2.data.FilterPresets
 import com.example.pokemonalertsv2.util.TravelTime
+import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @Composable
 internal fun AlertHistoryPage(
@@ -493,7 +495,17 @@ internal fun AlertHistoryPage(
         val countdownClock = rememberCountdownClock()
         val cardStyle = rememberAlertCardStyle()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
+        // Steps aside while scrolling down, as on the live list.
+        val hideControls = rememberHideOnScrollState()
+        val listAtTop by remember(listState) {
+            derivedStateOf { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+        }
         Column(modifier = Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = hideControls.visible || listAtTop || searchExpanded,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
             HistoryListControls(
                 visibleCount = filteredAlerts.size,
                 activeFilterCount = activeHistoryFilterCount,
@@ -519,7 +531,8 @@ internal fun AlertHistoryPage(
                 },
                 onOpenInsights = onOpenInsights
             )
-            BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            }
+            BoxWithConstraints(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
             val columns = if (maxWidth >= 840.dp) 2 else 1
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),

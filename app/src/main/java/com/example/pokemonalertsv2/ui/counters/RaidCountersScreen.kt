@@ -57,6 +57,7 @@ import com.example.pokemonalertsv2.data.counters.toCounterMetric
 import com.example.pokemonalertsv2.ui.alerts.rememberCountdownClock
 import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.launch
+import androidx.compose.material3.rememberModalBottomSheetState
 
 /**
  * The raid counters, as their own screen.
@@ -210,7 +211,10 @@ fun RaidCountersScreen(
     }
 
     if (megaSheetOpen) {
-        ModalBottomSheet(onDismissRequest = { megaSheetOpen = false }) {
+        ModalBottomSheet(
+            onDismissRequest = { megaSheetOpen = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
             ActiveMegaSheet(
                 state = state,
                 onSelect = {
@@ -222,7 +226,10 @@ fun RaidCountersScreen(
     }
 
     if (setupSheetOpen) {
-        ModalBottomSheet(onDismissRequest = { setupSheetOpen = false }) {
+        ModalBottomSheet(
+            onDismissRequest = { setupSheetOpen = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
             BattleSetupSheet(
                 state = state,
                 actions = actions,

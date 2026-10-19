@@ -34,9 +34,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.*
-import com.example.pokemonalertsv2.ui.alerts.mappanel.keepScrollInSheet
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
     SPAWN("IV spawn species", "IV spawns"),

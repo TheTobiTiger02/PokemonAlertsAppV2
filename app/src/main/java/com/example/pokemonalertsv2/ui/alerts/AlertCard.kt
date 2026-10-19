@@ -584,7 +584,9 @@ internal fun AlertCardPrimaryActions(
                 ) { going ->
                     Text(
                         if (going) "Stop" else "I\u2019m going",
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -604,7 +606,7 @@ internal fun AlertCardPrimaryActions(
                     contentDescription = stringResource(id = R.string.open_in_maps)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Navigate", style = MaterialTheme.typography.labelLarge)
+                Text("Navigate", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

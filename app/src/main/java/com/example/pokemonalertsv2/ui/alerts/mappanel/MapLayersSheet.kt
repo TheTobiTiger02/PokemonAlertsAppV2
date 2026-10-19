@@ -47,6 +47,15 @@ import com.example.pokemonalertsv2.ui.alerts.rememberMapClusteringSettings
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.util.s2CellAt
+import com.example.pokemonalertsv2.ui.components.PanelPages
+import com.example.pokemonalertsv2.ui.components.PanelHeader
+import com.example.pokemonalertsv2.ui.components.PanelSectionLabel
+import com.example.pokemonalertsv2.ui.components.PanelNavRow
+import com.example.pokemonalertsv2.ui.components.PanelSwitchRow
+import com.example.pokemonalertsv2.ui.components.PanelFooterButton
+import com.example.pokemonalertsv2.ui.components.PanelIcon
+import com.example.pokemonalertsv2.ui.components.panelGutter
+import androidx.compose.ui.text.style.TextOverflow
 
 /** The Layers sheet's pages: the list, and the marker grouping editor. */
 internal enum class LayersPage(val title: String) {
@@ -95,7 +104,7 @@ internal fun MapLayersSheet(
         modifier = modifier
     ) {
         Box(modifier = Modifier.weight(1f, fill = false)) {
-            MapPanelPages(page = page, root = LayersPage.ROOT, onBack = { page = LayersPage.ROOT }) { shown ->
+            PanelPages(page = page, root = LayersPage.ROOT, onBack = { page = LayersPage.ROOT }) { shown ->
                 when (shown) {
                     LayersPage.ROOT -> Column {
                         PanelHeader(title = shown.title, subtitle = weather)
@@ -286,7 +295,8 @@ private fun MapStyleTile(
             style = MaterialTheme.typography.labelLarge,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected) scheme.primary else scheme.onSurface,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

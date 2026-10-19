@@ -131,6 +131,7 @@ import com.example.pokemonalertsv2.data.backup.SettingsBackup
 import com.example.pokemonalertsv2.data.backup.SettingsBackupRepository
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.text.style.TextOverflow
 
 // Names are part of the pokemonalerts://settings/<name> deep-link contract; titles are free.
 internal enum class SettingsDestination(val title: String) {
@@ -317,7 +318,7 @@ internal fun SettingsScreen(
                             transitionSpec = { appFadeThrough() },
                             label = "settings_title"
                         ) { title ->
-                            Text(title, fontWeight = FontWeight.Bold)
+                            Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     },
                     navigationIcon = {

@@ -53,6 +53,10 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.ui.settings.SettingsOverviewGroup
 import com.example.pokemonalertsv2.ui.settings.SettingsOverviewRow
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
 
 /** What a tool is, independent of how the tab draws it. Settings pages are not tools. */
 internal data class ToolEntry(
@@ -146,12 +150,13 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 12.dp)
                     )
+                    // Tiles with one-line and two-line names share one height.
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         pinned.forEach { tool ->
-                            QuickAccessTile(tool, onClick = { open(tool.id) }, modifier = Modifier.weight(1f))
+                            QuickAccessTile(tool, onClick = { open(tool.id) }, modifier = Modifier.weight(1f).fillMaxHeight())
                         }
                         repeat(ToolPreferences.MAX_PINS - pinned.size) { Spacer(Modifier.weight(1f)) }
                     }
@@ -248,7 +253,8 @@ private fun QuickAccessTile(tool: ToolEntry, onClick: () -> Unit, modifier: Modi
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
-            maxLines = 2
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

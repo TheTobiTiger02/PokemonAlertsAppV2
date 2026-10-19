@@ -71,6 +71,9 @@ import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import java.util.Locale
 import com.example.pokemonalertsv2.data.counters.toCounterMetric
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @Composable
 internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) {
@@ -126,8 +129,12 @@ internal fun BattleSetupSheet(
     onDismiss: () -> Unit
 ) {
     val options = state.options
+    // Taller than a short phone, so it scrolls and Save stays reachable.
     Column(
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+        modifier = Modifier
+            .keepScrollInSheet()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Battle setup", style = MaterialTheme.typography.headlineSmall)

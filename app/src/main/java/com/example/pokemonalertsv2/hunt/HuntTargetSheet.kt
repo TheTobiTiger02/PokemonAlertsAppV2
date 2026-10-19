@@ -62,6 +62,7 @@ import com.example.pokemonalertsv2.ui.alerts.candidates
 import com.example.pokemonalertsv2.ui.alerts.selectionFor
 import com.example.pokemonalertsv2.ui.alerts.withSelection
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /**
  * Choose what to hunt, here and now.
@@ -120,6 +121,8 @@ internal fun HuntTargetSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // A fling back to the top must not close the sheet and lose the draft.
+                .keepScrollInSheet()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp),

@@ -27,6 +27,7 @@ import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import kotlinx.coroutines.launch
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
 internal const val WHATS_NEW_RELEASE = "1.18"
@@ -59,6 +60,7 @@ internal fun WhatsNewSheetHost() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .keepScrollInSheet()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
                 .navigationBarsPadding()

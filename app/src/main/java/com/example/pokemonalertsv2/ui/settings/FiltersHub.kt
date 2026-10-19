@@ -398,7 +398,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
             if (isSpecies) {
                 // Compact cells fit roughly twice as many species per screen. Selection reads from
                 // the border plus a corner badge instead of a full-size checkbox.
-                LazyVerticalGrid(columns = GridCells.Adaptive(80.dp), modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyVerticalGrid(columns = GridCells.Adaptive(72.dp), modifier = Modifier.weight(1f), contentPadding = PaddingValues(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     gridItems(display, key = { it.first }) { (key, value) ->
                         val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected)
                         val unavailable = key !in availableKeys

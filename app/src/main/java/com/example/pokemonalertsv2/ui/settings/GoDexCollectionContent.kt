@@ -234,7 +234,8 @@ internal fun GoDexCollectionContent(
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 104.dp),
+            // 96dp keeps three columns on a narrow phone or one set to a larger display size.
+            columns = GridCells.Adaptive(minSize = 96.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 132.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -263,7 +264,7 @@ internal fun GoDexCollectionContent(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search Pokémon, form, number, or key") },
+                    label = { Text("Search name or number", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = {
                         Icon(Icons.Filled.Search, contentDescription = null)
                     },

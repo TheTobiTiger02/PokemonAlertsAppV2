@@ -54,6 +54,12 @@ import com.example.pokemonalertsv2.ui.settings.DistanceOverridesDialog
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.util.TravelTime
+import com.example.pokemonalertsv2.ui.components.PanelGutter
+import com.example.pokemonalertsv2.ui.components.PanelHeader
+import com.example.pokemonalertsv2.ui.components.PanelNavRow
+import com.example.pokemonalertsv2.ui.components.PanelFooterButton
+import com.example.pokemonalertsv2.ui.components.PanelIcon
+import com.example.pokemonalertsv2.ui.components.panelGutter
 
 /** Everything the Filters tabs read and every way they can act. */
 internal class FiltersState(

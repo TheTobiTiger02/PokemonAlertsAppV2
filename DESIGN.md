@@ -55,6 +55,14 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   The sheet is a fixed 90% of the window; only its handle, header and tabs drag it, so scrolling a
   list back to the top never closes it (`keepScrollInSheet`).
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
+- **Panels and sheets** anywhere share `ui/components/Panel.kt` (header, blue section labels,
+  nav and switch rows, footer button, in-sheet pages). Every bottom sheet with a scroller opens fully
+  expanded and guards it with `keepScrollInSheet()`; controls above a long list scroll with it as
+  its first item. List toolbars on Live and History step aside while scrolling down and return on
+  any scroll up (`rememberHideOnScrollState`).
+- **Narrow phones.** Layouts are checked at about 348dp wide and font scale 1.3 (a phone set to a
+  larger display size). Counts in header rows take the leftover width with ellipsis, button labels
+  stay on one line, and grid minimums keep three tiles across.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back
   arrow. The old History screen id (1) is kept for widget and notification intents.

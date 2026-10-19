@@ -410,7 +410,8 @@ private fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: N
                 Text(
                     listOfNotNull(entry.rank?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(120.dp),
+                    // A share of the row, not a fixed width, so the bars keep room on a narrow phone.
+                    modifier = Modifier.weight(0.35f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -497,7 +498,7 @@ private fun InsightsBody(insights: SpawnInsights) {
                         Text(
                             entry.area,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width(110.dp),
+                            modifier = Modifier.weight(0.35f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

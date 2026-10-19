@@ -48,6 +48,8 @@ import kotlinx.coroutines.delay
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.PaddingValues
 
 class CatchRoutesActivity : ComponentActivity() {
     internal val model: CatchRoutesViewModel by viewModels()
@@ -410,8 +412,8 @@ class CatchRoutesActivity : ComponentActivity() {
                 }
                 Text("Not sure? Let the app compare:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!settings.fixed) OutlinedButton(onClick = model::recommendStart, enabled = !model.busy, modifier = Modifier.weight(1f).testTag("recommend_start")) { Text("Best start spot") }
-                    OutlinedButton(onClick = model::recommendTime, enabled = !model.busy && model.hasStart, modifier = Modifier.weight(1f).testTag("recommend_time")) { Text("Best start time") }
+                    if (!settings.fixed) OutlinedButton(onClick = model::recommendStart, enabled = !model.busy, modifier = Modifier.weight(1f).testTag("recommend_start"), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Best start spot", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    OutlinedButton(onClick = model::recommendTime, enabled = !model.busy && model.hasStart, modifier = Modifier.weight(1f).testTag("recommend_time"), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Best start time", maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
             SettingsCard("What") {

@@ -41,6 +41,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.foundation.layout.FlowRow
 
 private const val EVENTS_REFRESH_INTERVAL_MS = 10 * 60 * 1000L
 
@@ -314,7 +315,7 @@ private fun ReminderSettings(settings: EventSettings, types: List<String>, onTog
             }
         }
         Text("How long before", style = MaterialTheme.typography.titleSmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             REMINDER_LEAD_CHOICES.forEach { minutes ->
                 FilterChip(selected = settings.leadMinutes == minutes, onClick = { onLeadMinutes(minutes) }, label = { Text("$minutes min") })
             }

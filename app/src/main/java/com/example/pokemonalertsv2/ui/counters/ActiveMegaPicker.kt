@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,7 +36,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -47,6 +45,10 @@ import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.counters.PersonalCounter
 import com.example.pokemonalertsv2.data.gamemaster.MegaSpecies
 import java.util.Locale
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 
 /** How many megas the quick pick offers, like Poké Genie's shortlist. */
 internal const val TOP_MEGA_COUNT = 6
@@ -138,7 +140,7 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
  * because a stale or missing CSV must never hide a mega the trainer really does have.
  */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 internal fun ActiveMegaSheet(
     state: RaidCountersUiState,
     onSelect: (String?) -> Unit
@@ -158,105 +160,103 @@ internal fun ActiveMegaSheet(
     val topMegas = remember(state.personal, state.megaOptions) {
         topRosterMegas(state.personal?.ranked.orEmpty(), state.megaOptions)
     }
-    // The sheet's content slot is a wrap-content column, so a lazy list inside it can be
-    // measured with an unbounded height. Bound it against the window explicitly.
-    val listMaxHeight = (LocalConfiguration.current.screenHeightDp * (if (topMegas.isEmpty()) 0.6f else 0.45f)).dp
+    // One grid scrolls everything: the explanation, the quick picks, the mode chips and the
+    // search scroll away with the tiles instead of capping the tiles at a share of the window.
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 72.dp),
+        modifier = Modifier.fillMaxWidth().keepScrollInSheet(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp)
+    ) {
+        item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
+            Column {
+                Text("Active mega", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    "Only a mega you have already evolved can join a raid party, and only one at a " +
+                        "time. This picks which one the suggested team may use.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                )
+                if (state.megaOptions.isEmpty()) {
+                    Text(
+                        "The Pokébattler species list has not downloaded yet. Open this again once " +
+                            "counters have loaded.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 20.dp)
+                    )
+                    return@Column
+                }
 
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Text("Active mega", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Only a mega you have already evolved can join a raid party, and only one at a " +
-                "time. This picks which one the suggested team may use.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-        )
+                // Quick pick: the megas from the collection that help most against this boss, best first.
+                if (topMegas.isNotEmpty()) {
+                    Text("Best megas for this raid", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "From your collection, ranked against this boss.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 12.dp)
+                    ) {
+                        items(topMegas.size, key = { "top-" + topMegas[it].mega.pokemonId }) { index ->
+                            val top = topMegas[index]
+                            Box(modifier = Modifier.width(96.dp)) {
+                                MegaTile(
+                                    label = top.mega.displayName,
+                                    selected = state.activeMegaId == top.mega.pokemonId,
+                                    sprite = top.mega,
+                                    inRoster = false,
+                                    detail = megaShortlistDetail(top),
+                                    state = state,
+                                    onClick = { onSelect(top.mega.pokemonId) }
+                                )
+                            }
+                        }
+                    }
+                }
 
-        if (state.megaOptions.isEmpty()) {
-            Text(
-                "The Pokébattler species list has not downloaded yet. Open this again once " +
-                    "counters have loaded.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 20.dp)
-            )
-            return@Column
-        }
-
-        // Quick pick: the megas from the collection that help most against this boss, best first.
-        if (topMegas.isNotEmpty()) {
-            Text("Best megas for this raid", style = MaterialTheme.typography.titleSmall)
-            Text(
-                "From your collection, ranked against this boss.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 12.dp)
-            ) {
-                items(topMegas.size, key = { "top-" + topMegas[it].mega.pokemonId }) { index ->
-                    val top = topMegas[index]
-                    Box(modifier = Modifier.width(96.dp)) {
-                        MegaTile(
-                            label = top.mega.displayName,
-                            selected = state.activeMegaId == top.mega.pokemonId,
-                            sprite = top.mega,
-                            inRoster = false,
-                            detail = megaShortlistDetail(top),
-                            state = state,
-                            onClick = { onSelect(top.mega.pokemonId) }
+                if (owned.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        FilterChip(
+                            selected = rosterOnly,
+                            onClick = { rosterOnly = true },
+                            label = { Text("In your roster (${owned.size})") }
+                        )
+                        FilterChip(
+                            selected = !rosterOnly,
+                            onClick = { rosterOnly = false },
+                            label = { Text("All megas") }
                         )
                     }
                 }
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Search") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                )
+
+                if (matches.isEmpty()) {
+                    Text(
+                        text = "No mega matches that.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
             }
         }
-
-        if (owned.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp)
-            ) {
-                FilterChip(
-                    selected = rosterOnly,
-                    onClick = { rosterOnly = true },
-                    label = { Text("In your roster (${owned.size})") }
-                )
-                FilterChip(
-                    selected = !rosterOnly,
-                    onClick = { rosterOnly = false },
-                    label = { Text("All megas") }
-                )
-            }
-        }
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Search") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        if (matches.isEmpty()) {
-            Text(
-                text = "No mega matches that.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 12.dp)
-            )
-        }
-
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 84.dp),
-            modifier = Modifier
-                .heightIn(max = listMaxHeight)
-                .padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
+        if (state.megaOptions.isNotEmpty()) {
             // Pinned in both modes: "no mega" is a real answer, not the absence of one.
             item(key = "none") {
                 MegaTile(

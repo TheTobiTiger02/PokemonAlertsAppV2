@@ -178,6 +178,8 @@ import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
+import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @Composable
 fun PokemonAlertsRoute(
@@ -782,7 +784,18 @@ internal fun AlertsList(
         ).count { it }
     }
 
+    // The controls step aside while the list scrolls down, so a short screen shows more alerts,
+    // and come back on any scroll up, at the top, or while searching.
+    val hideControls = rememberHideOnScrollState()
+    val listAtTop by remember(gridState) {
+        derivedStateOf { gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0 }
+    }
     Column(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = hideControls.visible || listAtTop || searchExpanded,
+            enter = appExpandIn(),
+            exit = appCollapseOut()
+        ) {
         AlertListControls(
             visibleCount = filteredAlerts.size,
             activeFilterCount = activeFilterCount,
@@ -809,7 +822,8 @@ internal fun AlertsList(
             onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) },
             onStartManualRaid = onStartManualRaid
         )
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+        }
+        BoxWithConstraints(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),

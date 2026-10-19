@@ -895,10 +895,10 @@ internal fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking
             )
         }
 
-        // Stats row: CP and Level
-        Row(
+        // Stats row: CP and Level. Wraps rather than squeezing Stat Product on a narrow phone.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            itemVerticalAlignment = Alignment.CenterVertically
         ) {
             ranking.cp?.let { cp ->
                 Row(
