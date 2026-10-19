@@ -135,10 +135,10 @@ data class QuestFilterRules(
     }
 
     /**
-     * Switches one reward's task pairs ([group]) on, or off when all of them already are.
-     * A single pair works the same way, for picking one task.
+     * Switches a group of pairs on, or off when all of them already are: one reward's tasks,
+     * one task's rewards, or a single pair.
      */
-    fun withRewardToggled(group: Collection<QuestPairRule>, universe: Collection<QuestPairRule>): QuestFilterRules =
+    fun withGroupToggled(group: Collection<QuestPairRule>, universe: Collection<QuestPairRule>): QuestFilterRules =
         withPairs(group, show = !selectedPairs(universe).containsAll(group), universe = universe)
 
     /**

@@ -96,9 +96,10 @@ internal fun MapFiltersSheet(
         useSidePanel = useSidePanel,
         testTag = "map_filter_sheet",
         onDismiss = onDismiss,
-        modifier = modifier
+        modifier = modifier,
+        tall = true
     ) {
-        Box(modifier = Modifier.weight(1f, fill = false)) {
+        Box(modifier = Modifier.weight(1f)) {
             FiltersTabs(
                 FiltersState(
                     definition = definition,

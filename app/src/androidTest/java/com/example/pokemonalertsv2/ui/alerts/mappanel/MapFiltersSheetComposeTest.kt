@@ -86,7 +86,40 @@ class MapFiltersSheetComposeTest {
 
         composeRule.runOnIdle {
             assertEquals(
-                setOf(QuestPairRule("catch 5", "500 stardust"), QuestPairRule("throw 3", "razz berry")),
+                setOf(
+                    QuestPairRule("catch 5", "500 stardust"),
+                    QuestPairRule("throw 3", "razz berry"),
+                    QuestPairRule("catch 5", "razz berry")
+                ),
+                definition.quests.exactPairs
+            )
+        }
+    }
+
+    @Test
+    fun byTaskViewTogglesATaskAndPicksItsRewards() {
+        composeRule.setContent { Sheet() }
+
+        composeRule.onNodeWithTag("map_filter_tabs").performScrollToNode(hasTestTag("map_filter_tab_quests"))
+        composeRule.onNodeWithTag("map_filter_tab_quests").performClick()
+        composeRule.onNodeWithTag("quest_view_tasks").performClick()
+        composeRule.onNodeWithTag("quest_task_tile_catch 5").performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                setOf(QuestPairRule("spin 3", "500 stardust"), QuestPairRule("throw 3", "razz berry")),
+                definition.quests.exactPairs
+            )
+        }
+
+        composeRule.onNodeWithTag("quest_rewards_catch 5").performClick()
+        composeRule.onNodeWithTag("quest_pick_reward_razz berry").performClick()
+        composeRule.runOnIdle {
+            assertEquals(
+                setOf(
+                    QuestPairRule("spin 3", "500 stardust"),
+                    QuestPairRule("throw 3", "razz berry"),
+                    QuestPairRule("catch 5", "razz berry")
+                ),
                 definition.quests.exactPairs
             )
         }
@@ -103,7 +136,8 @@ class MapFiltersSheetComposeTest {
                     quests = listOf(
                         FilterCatalogQuest("a", "catch 5", "500 stardust", "Catch 5", "500 Stardust", active = true),
                         FilterCatalogQuest("b", "spin 3", "500 stardust", "Spin 3", "500 Stardust", active = true),
-                        FilterCatalogQuest("c", "throw 3", "razz berry", "Throw 3", "Razz Berry", active = true)
+                        FilterCatalogQuest("c", "throw 3", "razz berry", "Throw 3", "Razz Berry", active = true),
+                        FilterCatalogQuest("d", "catch 5", "razz berry", "Catch 5", "Razz Berry", active = true)
                     )
                 ),
                 artwork = emptyMap(),

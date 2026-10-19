@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -38,11 +39,16 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.MAP_TOP_CHROME_HEIGHT
@@ -60,6 +66,7 @@ internal enum class MapPanelScope { FILTERS, LAYERS }
  *
  * The sheet opens fully expanded. At partial expansion its own drag handling took the first
  * vertical gesture to grow itself, so the first swipe over the content scrolled nothing.
+ * [tall] gives the sheet most of the screen whatever its content, for sheets built around lists.
  */
 @Composable
 internal fun MapPanelContainer(
@@ -67,6 +74,7 @@ internal fun MapPanelContainer(
     testTag: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    tall: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     if (useSidePanel) {
@@ -81,7 +89,10 @@ internal fun MapPanelContainer(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             shadowElevation = 4.dp
         ) {
-            Column(modifier = Modifier.padding(vertical = Spacing.lg), content = content)
+            Column(
+                modifier = Modifier.then(if (tall) Modifier.fillMaxHeight() else Modifier).padding(vertical = Spacing.lg),
+                content = content
+            )
         }
     } else {
         ModalBottomSheet(
@@ -91,9 +102,32 @@ internal fun MapPanelContainer(
             contentColor = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.testTag(testTag)
         ) {
-            Column(content = content)
+            Column(
+                modifier = Modifier
+                    .then(if (tall) Modifier.fillMaxHeight(TallSheetFraction) else Modifier)
+                    .keepScrollInSheet(),
+                content = content
+            )
         }
     }
+}
+
+/** Share of the window a tall sheet fills; the rest keeps a strip of map in view above it. */
+private const val TallSheetFraction = 0.9f
+
+/**
+ * Keeps a list's leftover downward scroll and fling inside the sheet. Without it, scrolling a
+ * list back to its top carried on into the sheet and dragged or flung it closed. The handle,
+ * header and tabs still drag the sheet.
+ */
+internal fun Modifier.keepScrollInSheet(): Modifier = nestedScroll(SheetScrollGuard)
+
+private object SheetScrollGuard : NestedScrollConnection {
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+        Offset(0f, available.y.coerceAtLeast(0f))
+
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+        Velocity(0f, available.y.coerceAtLeast(0f))
 }
 
 /**

@@ -50,7 +50,10 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 - **Map filters** are tabs that edit in place (PogoMapper-style): Nearby, Types, Pokémon, Raids,
   Rocket, Quests, under removable chips for every active rule. Pokémon and raid bosses are artwork
   grids with search and set-all; raid tiers are coloured eggs and Rocket grunts type-coloured tiles;
-  quests are reward tiles, tapped to toggle a reward and held (or the tune icon) to pick its tasks.
+  quests switch between By reward (reward tiles) and By task (task tiles showing their first rewards), in one grid; tap
+  toggles one, and holding it (or the tune icon) picks the other side: a reward's tasks, a task's rewards.
+  The sheet is a fixed 90% of the window; only its handle, header and tabs drag it, so scrolling a
+  list back to the top never closes it (`keepScrollInSheet`).
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back

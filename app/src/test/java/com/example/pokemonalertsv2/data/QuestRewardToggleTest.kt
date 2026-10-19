@@ -10,7 +10,7 @@ class QuestRewardToggleTest {
 
     @Test
     fun fromAllSwitchingARewardOffKeepsTheOthers() {
-        val rules = QuestFilterRules().withRewardToggled(stardust, universe)
+        val rules = QuestFilterRules().withGroupToggled(stardust, universe)
         assertEquals(FilterSelectionMode.ONLY, rules.exactMode)
         assertEquals(berry.toSet(), rules.exactPairs)
     }
@@ -18,24 +18,24 @@ class QuestRewardToggleTest {
     @Test
     fun fromNoneSwitchingARewardOnSelectsIt() {
         val none = QuestFilterRules(exactMode = FilterSelectionMode.NONE)
-        assertEquals(berry.toSet(), none.withRewardToggled(berry, universe).exactPairs)
+        assertEquals(berry.toSet(), none.withGroupToggled(berry, universe).exactPairs)
     }
 
     @Test
     fun aPartlyChosenRewardIsCompletedFirst() {
         val partial = QuestFilterRules(exactPairs = setOf(stardust.first()))
-        assertEquals(stardust.toSet(), partial.withRewardToggled(stardust, universe).exactPairs)
+        assertEquals(stardust.toSet(), partial.withGroupToggled(stardust, universe).exactPairs)
     }
 
     @Test
     fun choosingEverythingSettlesBackToAll() {
-        val rules = QuestFilterRules(exactPairs = berry.toSet()).withRewardToggled(stardust, universe)
+        val rules = QuestFilterRules(exactPairs = berry.toSet()).withGroupToggled(stardust, universe)
         assertEquals(QuestFilterRules(), rules)
     }
 
     @Test
     fun emptyingTheSelectionSettlesToNone() {
-        val rules = QuestFilterRules(exactPairs = berry.toSet()).withRewardToggled(berry, universe)
+        val rules = QuestFilterRules(exactPairs = berry.toSet()).withGroupToggled(berry, universe)
         assertEquals(FilterSelectionMode.NONE, rules.exactMode)
         assertEquals(emptySet<QuestPairRule>(), rules.exactPairs)
     }
@@ -56,7 +56,7 @@ class QuestRewardToggleTest {
     @Test
     fun taskAndRewardRulesAreLeftAlone() {
         val facet = QuestFilterRules(facetEnabled = true, rewards = FilterSelection.only(listOf("rare candy")), exactMode = FilterSelectionMode.NONE)
-        val rules = facet.withRewardToggled(universe, universe)
+        val rules = facet.withGroupToggled(universe, universe)
         assertEquals(true, rules.facetEnabled)
         assertEquals(facet.rewards, rules.rewards)
         // With a facet rule in play, choosing every pair stays an explicit list rather than "all".

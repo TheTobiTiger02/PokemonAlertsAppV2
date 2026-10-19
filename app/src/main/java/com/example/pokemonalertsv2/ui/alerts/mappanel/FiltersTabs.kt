@@ -2,13 +2,15 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -27,7 +29,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.ui.alerts.MapSelectorTarget
@@ -45,9 +46,6 @@ private enum class FiltersTab(val label: String) {
     QUESTS("Quests")
 }
 
-/** Height of the tab body, fixed so switching tabs does not resize the sheet under the thumb. */
-private val TabBodyHeight = 440.dp
-
 /**
  * Every filter edits in place under a tab strip, no pages to open: the Pokémon tab is the species
  * artwork grid itself, with search and set-all, as PogoMapper lays out its lists.
@@ -56,7 +54,9 @@ private val TabBodyHeight = 440.dp
 internal fun FiltersTabs(state: FiltersState) {
     var tab by rememberSaveable { mutableStateOf(FiltersTab.NEARBY) }
     var speciesTarget by rememberSaveable { mutableStateOf(MapSelectorTarget.HUNDO) }
-    Column {
+    // The sheet has a fixed height, so the tab body takes what is left and switching tabs never
+    // resizes the sheet under the thumb.
+    Column(modifier = Modifier.fillMaxSize()) {
         FiltersHeader(state)
         ActiveFiltersRow(state)
         PrimaryScrollableTabRow(
@@ -74,7 +74,16 @@ internal fun FiltersTabs(state: FiltersState) {
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(TabBodyHeight).padding(top = Spacing.sm)) {
+        // Only the header, chips and tabs drag the sheet. A vertical drag anywhere in the body is
+        // claimed here when nothing under it scrolls, so a swipe on a search field or a row of
+        // buttons can not pull the sheet closed.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .draggable(rememberDraggableState {}, Orientation.Vertical)
+                .padding(top = Spacing.sm)
+        ) {
             when (tab) {
                 FiltersTab.NEARBY -> ScrollingTab {
                     DistanceEditor(state)

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.*
+import com.example.pokemonalertsv2.ui.alerts.mappanel.keepScrollInSheet
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
@@ -253,7 +254,7 @@ internal fun SpeciesPickerSheet(
             catalog = catalog,
             artwork = artwork,
             onDefinitionChange = onDefinitionChange,
-            modifier = Modifier.padding(horizontal = 20.dp)
+            modifier = Modifier.keepScrollInSheet().padding(horizontal = 20.dp)
         )
     }
 }
@@ -364,17 +365,25 @@ internal fun SpeciesPickerContent(
             shape = RoundedCornerShape(12.dp)
         )
 
+        // Count, sort and set-all share one row so the grid keeps as much height as it can.
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "${displayList.size} shown · ${currentSelection.summaryLabel()}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${displayList.size} shown",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = currentSelection.summaryLabel(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             FilterChip(
                 selected = true,
                 onClick = {
@@ -387,13 +396,15 @@ internal fun SpeciesPickerContent(
                 label = { Text("Sort: ${sortOrder.label}") },
                 shape = RoundedCornerShape(16.dp)
             )
+            TextButton(
+                onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
+                contentPadding = PaddingValues(horizontal = Spacing.sm)
+            ) { Text("All") }
+            TextButton(
+                onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) },
+                contentPadding = PaddingValues(horizontal = Spacing.sm)
+            ) { Text("None") }
         }
-
-        MapSetAllRow(
-            label = "Set all",
-            onAll = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
-            onNone = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) }
-        )
 
         // The grid is the sheet's only scroller, and it gets the rest of the height.
         LazyVerticalGrid(
