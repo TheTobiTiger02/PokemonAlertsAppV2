@@ -101,6 +101,9 @@ import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChrome
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapFiltersSheet
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapLayersSheet
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapPanelScope
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeActions
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeHunt
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeState
@@ -2454,56 +2457,60 @@ internal fun AlertsMapScreenContent(
         }
         // Filters live on the map so a quick narrowing never costs a trip to Settings.
         // Only one of the filter sheet and the alert detail sheet is ever open.
-        val panelScope = openPanel
-        if (!compactPictureInPicture && panelScope != null && selectedAlert == null) {
-            MapFilterSheet(
-                scope = panelScope,
-                definition = filterDefinition,
-                catalog = filterCatalog,
-                artwork = filterArtwork,
-                rewardThumbnails = questRewardThumbnails,
-                visibleCount = filteredAlerts.size,
-                totalCount = alerts.size,
-                categoryCounts = categoryCounts,
-                onDefinitionChange = onFilterDefinitionChange,
-                onOpenFilterStudio = { openPanel = null; onOpenFilterStudio() },
-                onDismiss = { openPanel = null },
-                useSidePanel = useSidePanel,
-                modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier,
-                refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
-                onRefresh = onRefresh,
-                onEnterPictureInPicture = onEnterPictureInPicture?.let { { requestFloatingMap() } },
-                userLocation = userLocation,
-                weatherCells = weatherCells,
-                // The retained camera, not the Google camera state: that one is not driven
-                // while the OpenStreetMap layer is the visible one.
-                mapCentre = retainedCamera(),
-                mapStyle = mapStyle,
-                onMapStyleChanged = {
-                    mapStyle = it
-                    onMapStyleChanged(it)
-                },
-                showTimeLabels = showTimeLabels,
-                onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
-                showSpawnRadius = showSpawnRadius,
-                onToggleSpawnRadius = onToggleSpawnRadius,
-                spacialRendEnabled = spacialRendEnabled,
-                onToggleSpacialRend = onToggleSpacialRend,
-                showWeatherCells = showWeatherCells,
-                onToggleWeatherCells = onToggleWeatherCells,
-                showHuntPath = showHuntPath,
-                onToggleHuntPath = onToggleHuntPath,
-                showDismissed = mapShowDismissed,
-                onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
-                autoEnterPictureInPicture = autoEnterPictureInPicture,
-                onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
-                    onToggleAutoEnterPictureInPicture
-                } else {
-                    null
-                }
-            )
+        // One of the top bar's two sheets, never both, and never over an alert's details.
+        if (!compactPictureInPicture && selectedAlert == null) {
+            val panelModifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier
+            when (openPanel) {
+                MapPanelScope.FILTERS -> MapFiltersSheet(
+                    definition = filterDefinition,
+                    catalog = filterCatalog,
+                    artwork = filterArtwork,
+                    rewardThumbnails = questRewardThumbnails,
+                    visibleCount = filteredAlerts.size,
+                    totalCount = alerts.size,
+                    categoryCounts = categoryCounts,
+                    onDefinitionChange = onFilterDefinitionChange,
+                    onOpenFilterStudio = { openPanel = null; onOpenFilterStudio() },
+                    onDismiss = { openPanel = null },
+                    useSidePanel = useSidePanel,
+                    modifier = panelModifier
+                )
+                MapPanelScope.LAYERS -> MapLayersSheet(
+                    userLocation = userLocation,
+                    weatherCells = weatherCells,
+                    // The retained camera, not the Google camera state: that one is not driven
+                    // while the OpenStreetMap layer is the visible one.
+                    mapCentre = retainedCamera(),
+                    mapStyle = mapStyle,
+                    onMapStyleChanged = {
+                        mapStyle = it
+                        onMapStyleChanged(it)
+                    },
+                    showTimeLabels = showTimeLabels,
+                    onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
+                    showWeatherCells = showWeatherCells,
+                    onToggleWeatherCells = onToggleWeatherCells,
+                    showHuntPath = showHuntPath,
+                    onToggleHuntPath = onToggleHuntPath,
+                    showSpawnRadius = showSpawnRadius,
+                    onToggleSpawnRadius = onToggleSpawnRadius,
+                    spacialRendEnabled = spacialRendEnabled,
+                    onToggleSpacialRend = onToggleSpacialRend,
+                    showDismissed = mapShowDismissed,
+                    onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
+                    autoEnterPictureInPicture = autoEnterPictureInPicture,
+                    onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
+                        onToggleAutoEnterPictureInPicture
+                    } else {
+                        null
+                    },
+                    onDismiss = { openPanel = null },
+                    useSidePanel = useSidePanel,
+                    modifier = panelModifier
+                )
+                null -> Unit
+            }
         }
-
 
         // One sheet at a time: the weather sheet yields to an alert or a cluster the way
         // those two already yield to each other.

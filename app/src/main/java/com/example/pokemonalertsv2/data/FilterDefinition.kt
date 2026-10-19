@@ -36,6 +36,18 @@ data class FilterSelection(
 
     val selectedCount: Int get() = if (mode == FilterSelectionMode.ONLY) normalizedValues.size else 0
 
+    /**
+     * Flips one [token] in or out. From [FilterSelectionMode.ALL] every member of [universe]
+     * starts selected, so switching one off leaves the rest on rather than emptying the list.
+     */
+    fun toggled(token: String, universe: Iterable<String>): FilterSelection {
+        val selected = normalizedValues.toMutableSet()
+        if (mode == FilterSelectionMode.ALL) selected += universe.mapNotNull(::normalizeFilterTokenOrNull)
+        val key = normalizeFilterToken(token)
+        if (contains(token)) selected -= key else selected += key
+        return only(selected)
+    }
+
     companion object {
         val All = FilterSelection(FilterSelectionMode.ALL)
         val None = FilterSelection(FilterSelectionMode.NONE)

@@ -146,17 +146,16 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
-import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
 
 /**
- * Offline tile controls for the OpenStreetMap layer.
+ * Offline tile controls for the OpenStreetMap layer: what is stored, and two actions.
  *
  * Only shown for that layer: the Google maps do their own caching, which is not ours to
  * manage or to promise anything about.
  */
 @Composable
-internal fun OfflineTilesSection(centre: MapCameraSnapshot) {
+internal fun OfflineTilesSection(centre: MapCameraSnapshot, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var cacheBytes by remember { mutableStateOf<Long?>(null) }
@@ -169,63 +168,60 @@ internal fun OfflineTilesSection(centre: MapCameraSnapshot) {
 
     LaunchedEffect(Unit) { refreshSize() }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Offline map", style = MaterialTheme.typography.labelLarge)
-        Text(
-            text = "Tiles you have already looked at stay available without a connection. " +
-                "Downloading an area also fetches the two zoom levels below it.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = status ?: cacheBytes?.let { "Stored: " + formatCacheSize(it) } ?: "Stored: ...",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(
-                enabled = !busy,
-                onClick = {
-                    val client = MapLibreInitializer.tileClient() ?: return@OutlinedButton
-                    busy = true
-                    status = "Downloading..."
-                    scope.launch {
-                        val stored = OpenStreetMapTileCache.prefetch(
-                            client = client,
-                            tileUrlTemplate = BuildConfig.OSM_TILE_URL,
-                            latitude = centre.latitude,
-                            longitude = centre.longitude,
-                            zoom = centre.zoom.toInt(),
-                            // A few hundred tiles takes tens of seconds, so say where it
-                            // is up to rather than leaving a bare "Downloading...".
-                            onProgress = { done, total ->
-                                status = "Downloading " + done + " / " + total + "..."
-                            }
-                        )
-                        refreshSize()
-                        status = if (stored == 0) {
-                            "Could not download tiles right now."
-                        } else {
-                            "Downloaded " + stored + " tiles."
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+            Text(
+                text = "Offline map · " + (status ?: cacheBytes?.let { formatCacheSize(it) + " saved" } ?: "…"),
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = "Areas you have viewed work without a connection. Saving an area also " +
+                    "fetches closer zoom levels.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        val client = MapLibreInitializer.tileClient() ?: return@TextButton
+                        busy = true
+                        status = "saving…"
+                        scope.launch {
+                            val stored = OpenStreetMapTileCache.prefetch(
+                                client = client,
+                                tileUrlTemplate = BuildConfig.OSM_TILE_URL,
+                                latitude = centre.latitude,
+                                longitude = centre.longitude,
+                                zoom = centre.zoom.toInt(),
+                                // A few hundred tiles takes tens of seconds, so say where it
+                                // is up to rather than leaving a bare "saving".
+                                onProgress = { done, total -> status = "saving $done / $total…" }
+                            )
+                            refreshSize()
+                            status = if (stored == 0) "could not save right now" else null
+                            busy = false
                         }
-                        busy = false
                     }
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Download this area") }
-            OutlinedButton(
-                enabled = !busy,
-                onClick = {
-                    busy = true
-                    scope.launch {
-                        OpenStreetMapTileCache.clear(context, MapLibreInitializer.tileClient())
-                        refreshSize()
-                        status = null
-                        busy = false
+                ) { Text("Save this area") }
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        scope.launch {
+                            OpenStreetMapTileCache.clear(context, MapLibreInitializer.tileClient())
+                            refreshSize()
+                            status = null
+                            busy = false
+                        }
                     }
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Clear") }
+                ) { Text("Clear") }
+            }
         }
     }
 }

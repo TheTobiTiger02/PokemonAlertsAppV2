@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -68,15 +69,20 @@ class ClusteringSettingsInstrumentedTest {
     }
 
     @Test fun presetsAndAdvancedControlsAreReachable() {
-        // The controls used to open from a button of their own. They are a section of the
-        // map panel now, collapsed until its header is tapped, and there is no Done to
-        // dismiss -- the panel itself is the way out.
-        rule.setContent { PokemonAlertsV2Theme { MapClusteringSettingsSection() } }
-        rule.onNodeWithText("Density & grouping").performClick()
+        // Presets are a radio list with a line each; the sliders only appear for Custom.
+        rule.setContent { PokemonAlertsV2Theme {
+            // Scrollable like both places that host it, so its lower controls can be reached.
+            androidx.compose.foundation.layout.Column(
+                androidx.compose.ui.Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())
+            ) { MapGroupingEditor() }
+        } }
         rule.onNodeWithText("Overlap only").assertIsDisplayed()
         rule.onNodeWithText("Same-location stacks").assertIsDisplayed()
-        // Below the fold in a section rendered on its own, so existence is the assertion.
-        rule.onNodeWithText("Advanced").assertExists()
-        rule.onNodeWithText("Reset").assertExists()
+        // The choice is written to DataStore off the main thread, which Compose's idling
+        // does not wait for.
+        rule.onNodeWithText("Custom").performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("Fine-tune").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Reset to default").performScrollTo().performClick()
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("Fine-tune").fetchSemanticsNodes().isEmpty() }
     }
 }
