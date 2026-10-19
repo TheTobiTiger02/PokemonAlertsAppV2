@@ -92,12 +92,17 @@ private const val SECTION_OVERLAYS = 6
 private const val SECTION_BEHAVIOUR = 7
 
 /**
- * Everything the map can do, behind the rail's settings button.
+ * Which panel to show: [FILTERS] answers "what is on the map", [LAYERS] answers "how does it
+ * look". Each opens from its own button in the map's top bar.
+ */
+internal enum class MapPanelScope { FILTERS, LAYERS }
+
+/**
+ * The map's filters or its layers, depending on [scope].
  *
- * The panel is one list, in three plain-language groups: what is on the map, how near it has to
- * be, and how it all looks. That ordering is the frequency ordering - narrowing is a daily
- * action, restyling is not - and the group headings exist so a setting can be found by asking
- * the question it answers rather than by remembering its name.
+ * Filters are one list in two plain-language groups: what is on the map, and how near it has to
+ * be. The group headings exist so a setting can be found by asking the question it answers
+ * rather than by remembering its name. Layers hold how it all looks and behaves.
  *
  * Changes apply immediately: the map behind the panel is the preview.
  */
@@ -135,6 +140,7 @@ internal fun MapFilterSheet(
     onEnterPictureInPicture: (() -> Unit)? = null,
     autoEnterPictureInPicture: Boolean = false,
     onToggleAutoEnterPictureInPicture: (() -> Unit)? = null,
+    scope: MapPanelScope,
     useSidePanel: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -172,6 +178,7 @@ internal fun MapFilterSheet(
             onEnterPictureInPicture = onEnterPictureInPicture,
             autoEnterPictureInPicture = autoEnterPictureInPicture,
             onToggleAutoEnterPictureInPicture = onToggleAutoEnterPictureInPicture,
+            scope = scope,
             modifier = contentModifier
         )
     }
@@ -198,7 +205,9 @@ internal fun MapFilterSheet(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.testTag("map_filter_sheet")
+            modifier = Modifier.testTag(
+                if (scope == MapPanelScope.LAYERS) "map_layers_sheet" else "map_filter_sheet"
+            )
         ) {
             content(Modifier.padding(horizontal = 20.dp))
         }
@@ -239,11 +248,15 @@ private fun MapFilterSheetContent(
     onEnterPictureInPicture: (() -> Unit)? = null,
     autoEnterPictureInPicture: Boolean = false,
     onToggleAutoEnterPictureInPicture: (() -> Unit)? = null,
+    scope: MapPanelScope,
     modifier: Modifier = Modifier
 ) {
+    val showFilters = scope == MapPanelScope.FILTERS
     // A bitmask rather than a single id: closing one section to read another, and losing the
     // first, made comparing two settings a game of memory.
-    var expandedMask by rememberSaveable { mutableIntStateOf(1 shl SECTION_TYPES) }
+    var expandedMask by rememberSaveable(scope) {
+        mutableIntStateOf(1 shl if (showFilters) SECTION_TYPES else SECTION_STYLE)
+    }
     var showQuests by rememberSaveable { mutableStateOf(false) }
     var showDistanceOverrides by rememberSaveable { mutableStateOf(false) }
     var speciesPickerTarget by rememberSaveable { mutableStateOf<MapSelectorTarget?>(null) }
@@ -257,6 +270,7 @@ private fun MapFilterSheetContent(
 
     Column(modifier = modifier.fillMaxWidth()) {
         MapPanelHeader(
+            scope = scope,
             visibleCount = visibleCount,
             totalCount = totalCount,
             isDefault = isDefault,
@@ -292,214 +306,216 @@ private fun MapFilterSheetContent(
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
             contentPadding = PaddingValues(bottom = Spacing.md)
         ) {
-            item("group_what") { MapGroupHeading("What's on the map") }
+            if (showFilters) {
+                item("group_what") { MapGroupHeading("What's on the map") }
 
-            item("types") {
-                MapPanelSection(
-                    title = "Alert types",
-                    summary = definition.alertTypes.typeSummary(),
-                    // The default (everything but Common) is not a narrowing the user made.
-                    active = definition.alertTypes.mode != FilterSelectionMode.ALL &&
-                        definition.alertTypes.normalizedValues != DEFAULT_FILTER_ALERT_TYPES.normalizedValues,
-                    expanded = isOpen(SECTION_TYPES),
-                    onToggle = { toggle(SECTION_TYPES) }
-                ) {
-                    AlertTypesSection(definition, categoryCounts, onDefinitionChange)
+                item("types") {
+                    MapPanelSection(
+                        title = "Alert types",
+                        summary = definition.alertTypes.typeSummary(),
+                        // The default (everything but Common) is not a narrowing the user made.
+                        active = definition.alertTypes.mode != FilterSelectionMode.ALL &&
+                            definition.alertTypes.normalizedValues != DEFAULT_FILTER_ALERT_TYPES.normalizedValues,
+                        expanded = isOpen(SECTION_TYPES),
+                        onToggle = { toggle(SECTION_TYPES) }
+                    ) {
+                        AlertTypesSection(definition, categoryCounts, onDefinitionChange)
+                    }
                 }
-            }
 
-            item("species") {
-                MapPanelLauncherRow(
-                    title = "Species",
-                    summary = definition.speciesSummary(),
-                    active = SPECIES_TARGETS.any {
-                        definition.selectionFor(it).mode != FilterSelectionMode.ALL
-                    },
-                    onClick = { speciesPickerTarget = MapSelectorTarget.HUNDO }
-                )
-            }
+                item("species") {
+                    MapPanelLauncherRow(
+                        title = "Species",
+                        summary = definition.speciesSummary(),
+                        active = SPECIES_TARGETS.any {
+                            definition.selectionFor(it).mode != FilterSelectionMode.ALL
+                        },
+                        onClick = { speciesPickerTarget = MapSelectorTarget.HUNDO }
+                    )
+                }
 
-            item("raids") {
-                MapPanelSection(
-                    title = "Raid tiers",
-                    summary = definition.raidTiers.tokenSummary(catalog.raidTiers, "tiers"),
-                    active = definition.raidTiers.mode != FilterSelectionMode.ALL,
-                    expanded = isOpen(SECTION_RAIDS),
-                    onToggle = { toggle(SECTION_RAIDS) }
-                ) {
-                    TokenSelectionSection(
-                        tokens = catalog.raidTiers,
-                        selection = definition.raidTiers,
-                        onSelectionChange = { onDefinitionChange(definition.copy(raidTiers = it)) }
+                item("raids") {
+                    MapPanelSection(
+                        title = "Raid tiers",
+                        summary = definition.raidTiers.tokenSummary(catalog.raidTiers, "tiers"),
+                        active = definition.raidTiers.mode != FilterSelectionMode.ALL,
+                        expanded = isOpen(SECTION_RAIDS),
+                        onToggle = { toggle(SECTION_RAIDS) }
+                    ) {
+                        TokenSelectionSection(
+                            tokens = catalog.raidTiers,
+                            selection = definition.raidTiers,
+                            onSelectionChange = { onDefinitionChange(definition.copy(raidTiers = it)) }
+                        )
+                    }
+                }
+
+                item("rocket") {
+                    MapPanelSection(
+                        title = "Team GO Rocket",
+                        summary = definition.rocketTypes.tokenSummary(catalog.rocketTypes, "grunt types"),
+                        active = definition.rocketTypes.mode != FilterSelectionMode.ALL,
+                        expanded = isOpen(SECTION_ROCKET),
+                        onToggle = { toggle(SECTION_ROCKET) }
+                    ) {
+                        TokenSelectionSection(
+                            tokens = catalog.rocketTypes,
+                            selection = definition.rocketTypes,
+                            onSelectionChange = { onDefinitionChange(definition.copy(rocketTypes = it)) }
+                        )
+                    }
+                }
+
+                item("quests") {
+                    MapPanelLauncherRow(
+                        title = "Field research quests",
+                        summary = if (definition.quests.exactMode == FilterSelectionMode.ALL) {
+                            "All quests visible"
+                        } else {
+                            "${definition.quests.exactPairs.size} quest pairs selected"
+                        },
+                        active = definition.quests.exactMode != FilterSelectionMode.ALL ||
+                            definition.quests.facetEnabled,
+                        onClick = { showQuests = true }
+                    )
+                }
+
+                item("group_near") { MapGroupHeading("How near") }
+
+                item("distance") {
+                    MapPanelSection(
+                        title = "Distance & walking time",
+                        summary = definition.distanceSummary(),
+                        active = definition.maxDistanceMeters > 0 || definition.maxWalkingMinutes > 0,
+                        expanded = isOpen(SECTION_DISTANCE),
+                        onToggle = { toggle(SECTION_DISTANCE) }
+                    ) {
+                        DistanceSection(definition, onDefinitionChange)
+                    }
+                }
+
+                item("overrides") {
+                    MapPanelLauncherRow(
+                        title = "Per-type & species limits",
+                        summary = definition.distanceOverrides.ruleCount.let { count ->
+                            if (count == 0) "No custom overrides set" else "$count custom distance rules"
+                        },
+                        active = definition.distanceOverrides.ruleCount > 0,
+                        onClick = { showDistanceOverrides = true }
                     )
                 }
             }
 
-            item("rocket") {
-                MapPanelSection(
-                    title = "Team GO Rocket",
-                    summary = definition.rocketTypes.tokenSummary(catalog.rocketTypes, "grunt types"),
-                    active = definition.rocketTypes.mode != FilterSelectionMode.ALL,
-                    expanded = isOpen(SECTION_ROCKET),
-                    onToggle = { toggle(SECTION_ROCKET) }
-                ) {
-                    TokenSelectionSection(
-                        tokens = catalog.rocketTypes,
-                        selection = definition.rocketTypes,
-                        onSelectionChange = { onDefinitionChange(definition.copy(rocketTypes = it)) }
-                    )
-                }
-            }
-
-            item("quests") {
-                MapPanelLauncherRow(
-                    title = "Field research quests",
-                    summary = if (definition.quests.exactMode == FilterSelectionMode.ALL) {
-                        "All quests visible"
-                    } else {
-                        "${definition.quests.exactPairs.size} quest pairs selected"
-                    },
-                    active = definition.quests.exactMode != FilterSelectionMode.ALL ||
-                        definition.quests.facetEnabled,
-                    onClick = { showQuests = true }
-                )
-            }
-
-            item("group_near") { MapGroupHeading("How near") }
-
-            item("distance") {
-                MapPanelSection(
-                    title = "Distance & walking time",
-                    summary = definition.distanceSummary(),
-                    active = definition.maxDistanceMeters > 0 || definition.maxWalkingMinutes > 0,
-                    expanded = isOpen(SECTION_DISTANCE),
-                    onToggle = { toggle(SECTION_DISTANCE) }
-                ) {
-                    DistanceSection(definition, onDefinitionChange)
-                }
-            }
-
-            item("overrides") {
-                MapPanelLauncherRow(
-                    title = "Per-type & species limits",
-                    summary = definition.distanceOverrides.ruleCount.let { count ->
-                        if (count == 0) "No custom overrides set" else "$count custom distance rules"
-                    },
-                    active = definition.distanceOverrides.ruleCount > 0,
-                    onClick = { showDistanceOverrides = true }
-                )
-            }
-
-            item("group_looks") { MapGroupHeading("How it looks") }
-
-            item("style") {
-                MapPanelSection(
-                    title = "Map style",
-                    summary = mapStyle.panelLabel(),
-                    active = mapStyle != MapStylePreference.GOOGLE_STANDARD,
-                    expanded = isOpen(SECTION_STYLE),
-                    onToggle = { toggle(SECTION_STYLE) }
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            MapStylePreference.entries.forEach { style ->
-                                MapStyleTile(
-                                    style = style,
-                                    selected = mapStyle == style,
-                                    onClick = { onMapStyleChanged(style) },
-                                    modifier = Modifier.weight(1f)
-                                )
+            if (!showFilters) {
+                item("style") {
+                    MapPanelSection(
+                        title = "Map style",
+                        summary = mapStyle.panelLabel(),
+                        active = mapStyle != MapStylePreference.GOOGLE_STANDARD,
+                        expanded = isOpen(SECTION_STYLE),
+                        onToggle = { toggle(SECTION_STYLE) }
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                MapStylePreference.entries.forEach { style ->
+                                    MapStyleTile(
+                                        style = style,
+                                        selected = mapStyle == style,
+                                        onClick = { onMapStyleChanged(style) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                            if (mapStyle == MapStylePreference.OPENSTREETMAP) {
+                                OfflineTilesSection(centre = mapCentre)
                             }
                         }
-                        if (mapStyle == MapStylePreference.OPENSTREETMAP) {
-                            OfflineTilesSection(centre = mapCentre)
-                        }
                     }
                 }
-            }
 
-            item("density") {
-                MapClusteringSection(
-                    expanded = isOpen(SECTION_DENSITY),
-                    onToggle = { toggle(SECTION_DENSITY) }
-                )
-            }
-
-            item("overlays") {
-                MapPanelSection(
-                    title = "Overlays",
-                    summary = overlaySummary(
-                        showTimeLabels = showTimeLabels,
-                        showSpawnRadius = showSpawnRadius,
-                        spacialRendEnabled = spacialRendEnabled,
-                        showWeatherCells = showWeatherCells,
-                        showHuntPath = showHuntPath
-                    ),
-                    active = showTimeLabels || showSpawnRadius || spacialRendEnabled,
-                    expanded = isOpen(SECTION_OVERLAYS),
-                    onToggle = { toggle(SECTION_OVERLAYS) }
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                        SwitchSetting(
-                            title = "Countdown labels",
-                            subtitle = "Print the time left under every marker",
-                            checked = showTimeLabels,
-                            onCheckedChange = { onToggleTimeLabels() }
-                        )
-                        SwitchSetting(
-                            title = "Weather cells",
-                            subtitle = "Outline the game's weather cell over each scanned area",
-                            checked = showWeatherCells,
-                            onCheckedChange = { onToggleWeatherCells() }
-                        )
-                        SwitchSetting(
-                            title = "Hunt path",
-                            subtitle = "Draw the hunt's walk along the streets, the next leg highlighted",
-                            checked = showHuntPath,
-                            onCheckedChange = { onToggleHuntPath() }
-                        )
-                        SwitchSetting(
-                            title = "Spawn radius",
-                            subtitle = "Draw the 40m circle a spawn can sit anywhere inside",
-                            checked = showSpawnRadius,
-                            onCheckedChange = { onToggleSpawnRadius() }
-                        )
-                        SwitchSetting(
-                            title = "Spacial Rend",
-                            subtitle = "Widen that circle to 80m",
-                            checked = spacialRendEnabled,
-                            onCheckedChange = { onToggleSpacialRend() },
-                            enabled = showSpawnRadius
-                        )
-                    }
+                item("density") {
+                    MapClusteringSection(
+                        expanded = isOpen(SECTION_DENSITY),
+                        onToggle = { toggle(SECTION_DENSITY) }
+                    )
                 }
-            }
 
-            item("behaviour") {
-                MapPanelSection(
-                    title = "Behaviour",
-                    summary = behaviourSummary(showDismissed, autoEnterPictureInPicture),
-                    active = showDismissed || autoEnterPictureInPicture,
-                    expanded = isOpen(SECTION_BEHAVIOUR),
-                    onToggle = { toggle(SECTION_BEHAVIOUR) }
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                        Box(modifier = Modifier.testTag("map_show_dismissed")) {
+                item("overlays") {
+                    MapPanelSection(
+                        title = "Overlays",
+                        summary = overlaySummary(
+                            showTimeLabels = showTimeLabels,
+                            showSpawnRadius = showSpawnRadius,
+                            spacialRendEnabled = spacialRendEnabled,
+                            showWeatherCells = showWeatherCells,
+                            showHuntPath = showHuntPath
+                        ),
+                        active = showTimeLabels || showSpawnRadius || spacialRendEnabled,
+                        expanded = isOpen(SECTION_OVERLAYS),
+                        onToggle = { toggle(SECTION_OVERLAYS) }
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
                             SwitchSetting(
-                                title = "Show dismissed alerts",
-                                subtitle = "Keep alerts on the map after you dismiss them",
-                                checked = showDismissed,
-                                onCheckedChange = { onToggleDismissed() }
+                                title = "Countdown labels",
+                                subtitle = "Print the time left under every marker",
+                                checked = showTimeLabels,
+                                onCheckedChange = { onToggleTimeLabels() }
+                            )
+                            SwitchSetting(
+                                title = "Weather cells",
+                                subtitle = "Outline the game's weather cell over each scanned area",
+                                checked = showWeatherCells,
+                                onCheckedChange = { onToggleWeatherCells() }
+                            )
+                            SwitchSetting(
+                                title = "Hunt path",
+                                subtitle = "Draw the hunt's walk along the streets, the next leg highlighted",
+                                checked = showHuntPath,
+                                onCheckedChange = { onToggleHuntPath() }
+                            )
+                            SwitchSetting(
+                                title = "Spawn radius",
+                                subtitle = "Draw the 40m circle a spawn can sit anywhere inside",
+                                checked = showSpawnRadius,
+                                onCheckedChange = { onToggleSpawnRadius() }
+                            )
+                            SwitchSetting(
+                                title = "Spacial Rend",
+                                subtitle = "Widen that circle to 80m",
+                                checked = spacialRendEnabled,
+                                onCheckedChange = { onToggleSpacialRend() },
+                                enabled = showSpawnRadius
                             )
                         }
-                        if (onToggleAutoEnterPictureInPicture != null) {
-                            Box(modifier = Modifier.testTag("map_auto_pip")) {
+                    }
+                }
+
+                item("behaviour") {
+                    MapPanelSection(
+                        title = "Behaviour",
+                        summary = behaviourSummary(showDismissed, autoEnterPictureInPicture),
+                        active = showDismissed || autoEnterPictureInPicture,
+                        expanded = isOpen(SECTION_BEHAVIOUR),
+                        onToggle = { toggle(SECTION_BEHAVIOUR) }
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
+                            Box(modifier = Modifier.testTag("map_show_dismissed")) {
                                 SwitchSetting(
-                                    title = stringResource(R.string.map_pip_auto_enter),
-                                    subtitle = "Shrink the map into a floating window when you leave the app",
-                                    checked = autoEnterPictureInPicture,
-                                    onCheckedChange = { onToggleAutoEnterPictureInPicture() }
+                                    title = "Show dismissed alerts",
+                                    subtitle = "Keep alerts on the map after you dismiss them",
+                                    checked = showDismissed,
+                                    onCheckedChange = { onToggleDismissed() }
                                 )
+                            }
+                            if (onToggleAutoEnterPictureInPicture != null) {
+                                Box(modifier = Modifier.testTag("map_auto_pip")) {
+                                    SwitchSetting(
+                                        title = stringResource(R.string.map_pip_auto_enter),
+                                        subtitle = "Shrink the map into a floating window when you leave the app",
+                                        checked = autoEnterPictureInPicture,
+                                        onCheckedChange = { onToggleAutoEnterPictureInPicture() }
+                                    )
+                                }
                             }
                         }
                     }
@@ -511,17 +527,19 @@ private fun MapFilterSheetContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = Spacing.sm),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = if (showFilters) Arrangement.SpaceBetween else Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = onOpenFilterStudio) {
-                Text(stringResource(R.string.map_filter_studio))
+            if (showFilters) {
+                TextButton(onClick = onOpenFilterStudio) {
+                    Text(stringResource(R.string.map_filter_studio))
+                }
             }
             // The button says what closing the panel will leave on the map, so the count is
             // read before the panel is dismissed rather than after.
             Button(onClick = onDismiss, shape = RoundedCornerShape(16.dp)) {
                 Text(
-                    if (visibleCount > 0) {
+                    if (showFilters && visibleCount > 0) {
                         stringResource(R.string.map_filter_show_count, visibleCount)
                     } else {
                         "Done"
@@ -571,6 +589,7 @@ private fun MapFilterSheetContent(
 /** Title, live count, local weather and the two actions that are not settings. */
 @Composable
 private fun MapPanelHeader(
+    scope: MapPanelScope,
     visibleCount: Int,
     totalCount: Int,
     isDefault: Boolean,
@@ -593,25 +612,38 @@ private fun MapPanelHeader(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.map_panel_title),
+                    text = when (scope) {
+                        MapPanelScope.FILTERS -> stringResource(R.string.map_filters_title)
+                        MapPanelScope.LAYERS -> stringResource(R.string.map_layers_title)
+                    },
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "$visibleCount of $totalCount alerts visible",
+                    text = if (scope == MapPanelScope.LAYERS) {
+                        "Style, overlays and how the map behaves"
+                    } else {
+                        "$visibleCount of $totalCount alerts visible"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
-            AnimatedVisibility(visible = !isDefault, enter = appExpandIn(), exit = appCollapseOut()) {
+            AnimatedVisibility(
+                visible = !isDefault && scope != MapPanelScope.LAYERS,
+                enter = appExpandIn(),
+                exit = appCollapseOut()
+            ) {
                 TextButton(onClick = onReset) {
                     Text(stringResource(R.string.map_filter_reset))
                 }
             }
         }
 
-        MapPanelWeatherLine(userLocation = userLocation, weatherCells = weatherCells)
+        if (scope == MapPanelScope.LAYERS) {
+            MapPanelWeatherLine(userLocation = userLocation, weatherCells = weatherCells)
+        }
     }
 }
 

@@ -36,9 +36,14 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 
 - Primary destinations are **Alerts**, **Map**, **Events**, and **Tools**. Events has quick views
   (All, Now, Upcoming, Starred) and a filter button for which event types show; all show by default.
-- **Settings** is not a tab: the gear in the header of Alerts, Events, Tools and the Map (also a row
-  in the map's tools sheet) opens it full screen, and its back arrow returns to where the gear was
-  pressed. On the map the filter button is a funnel so the gear is unambiguous.
+- **Settings** is not a tab: the gear in the header of Alerts, Events, Tools and the Map's top bar
+  opens it full screen, and its back arrow returns to where the gear was pressed.
+- **The Map** keeps its controls in three places. A top bar holds the alert count with a live/offline
+  dot (tap to retry when offline), then Filters (funnel, badged with rules the chips cannot show),
+  Layers and the Settings gear. The category chip rail sits under it. Along the bottom, a labelled
+  Tools button (hunt, catch route, Mega boost, floating map, refresh) sits left — it names the hunt
+  target while a hunt runs — and Fit and Locate sit right. Filters and Layers are separate sheets:
+  what is on the map versus how it looks.
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back
