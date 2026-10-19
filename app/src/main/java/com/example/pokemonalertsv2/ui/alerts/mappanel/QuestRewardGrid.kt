@@ -6,6 +6,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -142,7 +143,8 @@ internal fun QuestRewardGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(104.dp),
+        // 96dp still fits three tiles across a narrow phone or one set to a larger display size.
+        columns = GridCells.Adaptive(96.dp),
         modifier = modifier.fillMaxSize().testTag("map_panel_list"),
         contentPadding = PaddingValues(start = PanelGutter, end = PanelGutter, bottom = Spacing.lg),
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
@@ -186,7 +188,7 @@ internal fun QuestRewardGrid(
                         FilterSelectionMode.ALL -> if (rules.facetEnabled) "Rule-based selection" else "All quests shown"
                         FilterSelectionMode.NONE -> "No quests picked"
                         FilterSelectionMode.ONLY -> "${selected.size} of ${universe.size} quests"
-                    } + " · hold a ${view.unit} for its ${view.other}s",
+                    } + " · hold for ${view.other}s",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -289,13 +291,16 @@ private fun QuestTile(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                Box(Modifier.height(44.dp), contentAlignment = Alignment.Center) {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(44.dp), contentAlignment = Alignment.Center) {
                     if (byReward) {
                         QuestRewardIcon(group.label, group.key, rewardThumbnails, artwork, knownSpecies, size = 40.dp)
                     } else {
-                        // A task has no picture of its own, so it shows the first rewards it gives.
+                        // A task has no picture of its own, so it shows the first rewards it gives,
+                        // as many as fit between the tune button and the check in the corners.
+                        val fit = ((maxWidth - PreviewCornerClearance * 2) / PreviewIconStep).toInt()
+                            .coerceIn(1, MaxRewardPreview)
                         Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            group.members.take(MaxRewardPreview).forEach { quest ->
+                            group.members.take(fit).forEach { quest ->
                                 QuestRewardIcon(quest.reward.ifBlank { quest.rewardKey }, quest.rewardKey, rewardThumbnails, artwork, knownSpecies, size = 28.dp)
                             }
                         }
@@ -343,8 +348,14 @@ private fun QuestTile(
     }
 }
 
-/** Reward icons a task tile previews, two so they clear the corner buttons; its count says the rest. */
-private const val MaxRewardPreview = 2
+/** Most reward icons a task tile previews; its count says the rest. */
+private const val MaxRewardPreview = 3
+
+/** Room a task tile keeps clear on each side of its reward icons for the corner buttons. */
+private val PreviewCornerClearance = 23.dp
+
+/** Width each previewed reward icon takes, gap included. */
+private val PreviewIconStep = 30.dp
 
 /**
  * One group's other side, each with its own box: a reward's tasks, for when only some are worth
