@@ -31,7 +31,6 @@ class WholeAppUxTest {
             "Offline · showing cached alerts",
             SyncStatus.Cached(60_000L).alertsStatusMessage()
         )
-        assertEquals(null, SyncStatus.Live(99_000L).mapStatusMessage())
     }
 
     @Test

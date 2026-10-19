@@ -22,9 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,10 +37,8 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
@@ -51,18 +47,9 @@ import com.example.pokemonalertsv2.ui.theme.Spacing
 
 /**
  * How much room the rail takes at the top of the map, for the map engines' content insets.
- *
- * The chrome above the map used to be a 56dp bar with the rail on top of it, and the insets
- * hardcoded 72dp to clear that while ignoring the status bar entirely. There is only the rail
- * now. It excludes the status bar: the hosting tab is laid out below it.
+ * It excludes the status bar: the hosting tab is laid out below it.
  */
 internal val MAP_TOP_CHROME_HEIGHT = 52.dp
-
-/** The Settings gear's own row above the rail: the 40dp button plus the gap under it. */
-internal val MAP_SETTINGS_ROW_HEIGHT = 48.dp
-
-/** Footprint the pinned settings button reserves at the end of the rail. */
-internal val MAP_SETTINGS_BUTTON_SIZE = 40.dp
 
 /**
  * The map's category rail — and, since the header bar was removed, its entire top chrome.
@@ -217,74 +204,6 @@ private fun MapFilterPill(
                     style = MaterialTheme.typography.labelSmall,
                     color = scheme.onSurfaceVariant,
                     maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-/**
- * The map's settings button: one pinned, round control for everything the ten category chips
- * cannot express - the advanced filters, the map style, the overlays, refresh and
- * picture-in-picture.
- *
- * Pinned rather than carried by the rail. As the rail's last chip it scrolled away with the
- * categories, so reaching the panel meant swiping to the end of a twelve-chip row first, and
- * "Filters" undersold a panel that also holds the map's own settings.
- *
- * The badge counts active filter rules. Layer state is legible from the map itself, so counting
- * it here would make one badge mean two things at once.
- */
-@Composable
-internal fun MapSettingsButton(
-    activeRuleCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val scheme = MaterialTheme.colorScheme
-    val active = activeRuleCount > 0
-    Box(modifier = modifier) {
-        Surface(
-            modifier = Modifier.size(MAP_SETTINGS_BUTTON_SIZE).testTag("map_open_filters"),
-            shape = CircleShape,
-            color = if (active) {
-                scheme.primary.copy(alpha = Alphas.Tint).compositeOver(scheme.surface)
-            } else {
-                scheme.surface
-            },
-            contentColor = if (active) scheme.primary else scheme.onSurfaceVariant,
-            shadowElevation = 3.dp,
-            border = BorderStroke(
-                1.dp,
-                if (active) scheme.primary.copy(alpha = 0.7f) else scheme.outlineVariant
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .combinedClickable(onClick = onClick)
-                    .semantics { contentDescription = "Map settings and filters" },
-                contentAlignment = Alignment.Center
-            ) {
-                // A funnel, not a gear: the gear on the map's top edge is the app's Settings.
-                Icon(
-                    painter = painterResource(R.drawable.ic_filter),
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-        if (active) {
-            Surface(
-                modifier = Modifier.align(Alignment.TopEnd),
-                shape = CircleShape,
-                color = scheme.primary,
-                contentColor = scheme.onPrimary
-            ) {
-                Text(
-                    text = "$activeRuleCount",
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                 )
             }
         }

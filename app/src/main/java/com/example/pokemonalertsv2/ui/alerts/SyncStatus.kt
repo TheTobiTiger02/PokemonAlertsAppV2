@@ -24,11 +24,3 @@ internal fun SyncStatus.alertsStatusMessage(): String? = when (this) {
     is SyncStatus.Cached -> "Offline · showing cached alerts"
     is SyncStatus.Failed -> "Unable to load alerts"
 }
-
-internal fun SyncStatus.mapStatusMessage(): String? = when (this) {
-    SyncStatus.Loading -> "Loading map alerts…"
-    SyncStatus.Refreshing -> "Refreshing map alerts…"
-    is SyncStatus.Live -> null
-    is SyncStatus.Cached -> "Offline · showing cached alerts"
-    is SyncStatus.Failed -> "Unable to load map alerts"
-}

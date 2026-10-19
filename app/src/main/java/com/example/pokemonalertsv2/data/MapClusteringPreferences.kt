@@ -34,12 +34,13 @@ data class MapClusteringConfig(
         closeLimit = closeLimit.coerceIn(50, 1200))
 }
 
-enum class MapClusteringPreset(val label: String, val config: MapClusteringConfig) {
-    CURRENT("Current behavior", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
-    LESS("Less clustering", MapClusteringConfig()),
-    OVERLAP("Overlap only", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
-    STACKS("Same-location stacks", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
-    PERFORMANCE("Performance", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150))
+/** Stored by [name]; [label] and [description] are free to change. */
+enum class MapClusteringPreset(val label: String, val description: String, val config: MapClusteringConfig) {
+    LESS("Less clustering", "Pins separate early; groups only where crowded.", MapClusteringConfig()),
+    CURRENT("Classic grouping", "Groups nearby pins until you zoom in close.", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
+    OVERLAP("Overlap only", "Groups only pins that would overlap.", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
+    STACKS("Same-location stacks", "Stacks only alerts at the exact same spot.", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
+    PERFORMANCE("Performance", "Fewest markers; smoothest on busy maps.", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150))
 }
 
 @Serializable

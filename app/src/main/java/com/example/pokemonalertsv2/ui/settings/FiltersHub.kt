@@ -572,7 +572,7 @@ private fun QuestRewardGroup(
  * to the species sprite, then to a generic icon for rewards that are not currently live.
  */
 @Composable
-private fun QuestRewardIcon(
+internal fun QuestRewardIcon(
     rewardLabel: String,
     rewardKey: String,
     rewardThumbnails: Map<String, String>,

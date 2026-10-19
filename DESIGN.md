@@ -36,9 +36,24 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
 
 - Primary destinations are **Alerts**, **Map**, **Events**, and **Tools**. Events has quick views
   (All, Now, Upcoming, Starred) and a filter button for which event types show; all show by default.
-- **Settings** is not a tab: the gear in the header of Alerts, Events, Tools and the Map (also a row
-  in the map's tools sheet) opens it full screen, and its back arrow returns to where the gear was
-  pressed. On the map the filter button is a funnel so the gear is unambiguous.
+- **Settings** is not a tab: the gear in the header of Alerts, Events, Tools and the Map's top bar
+  opens it full screen, and its back arrow returns to where the gear was pressed.
+- **The Map** keeps its controls in three places. A top bar holds the alert count with a live/offline
+  dot (tap to retry when offline), then Filters (funnel, badged with rules the chips cannot show),
+  Layers and the Settings gear. The category chip rail sits under it. Along the bottom, a labelled
+  Tools button (hunt, catch route, Mega boost, floating map, refresh) sits left — it names the hunt
+  target while a hunt runs — and Fit and Locate sit right. Filters and Layers are separate sheets:
+  what is on the map versus how it looks.
+- **Map sheets** live in `ui/alerts/mappanel/` and end in one full-width button. Map layers is a
+  flat list: blue section labels, rows with a round icon badge and a one-line summary, whole-row
+  switches, and marker grouping as a page inside the sheet with a back arrow.
+- **Map filters** are tabs that edit in place (PogoMapper-style): Nearby, Types, Pokémon, Raids,
+  Rocket, Quests, under removable chips for every active rule. Pokémon and raid bosses are artwork
+  grids with search and set-all; raid tiers are coloured eggs and Rocket grunts type-coloured tiles;
+  quests switch between By reward (reward tiles) and By task (task tiles showing their first rewards), in one grid; tap
+  toggles one, and holding it (or the tune icon) picks the other side: a reward's tasks, a task's rewards.
+  The sheet is a fixed 90% of the window; only its handle, header and tabs drag it, so scrolling a
+  list back to the top never closes it (`keepScrollInSheet`).
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back

@@ -30,18 +30,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -55,11 +51,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -70,7 +62,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -94,7 +85,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +100,16 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChrome
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapFiltersSheet
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapLayersSheet
+import com.example.pokemonalertsv2.ui.alerts.mappanel.MapPanelScope
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeActions
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeHunt
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeState
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapLocateState
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeBottomInset
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChromeTopInset
 import com.example.pokemonalertsv2.data.MapStylePreference
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.AlertPreferences
@@ -127,7 +127,6 @@ import com.example.pokemonalertsv2.hunt.HuntPathCache
 import com.example.pokemonalertsv2.hunt.HuntRoutePoint
 import com.example.pokemonalertsv2.hunt.huntLegNode
 import com.example.pokemonalertsv2.hunt.huntTargets
-import com.example.pokemonalertsv2.hunt.HuntTargetBanner
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
@@ -663,7 +662,9 @@ internal fun AlertsMapScreenContent(
     } else {
         MapType.NORMAL
     }
-    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    // Which panel is up, if any: Classic opens the combined one, the other layouts open
+    // filters and layers separately.
+    var openPanel by rememberSaveable { mutableStateOf<MapPanelScope?>(null) }
     var showMegaBoost by rememberSaveable { mutableStateOf(false) }
     var showMapTools by rememberSaveable { mutableStateOf(false) }
     // The Tools tab opens the map straight onto its tools sheet (hunt, routes, Mega boost...).
@@ -929,6 +930,39 @@ internal fun AlertsMapScreenContent(
         }
     }
 
+    // The floating window follows you, so it needs location first; the permission result
+    // finishes the launch.
+    fun requestFloatingMap() {
+        if (hasLocationPermissionNow()) {
+            hasLocationPermission = true
+            showPreciseLocationGuidanceIfNeeded()
+            launchPictureInPicture()
+        } else {
+            pendingPictureInPictureLaunch = true
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    fun locateUser() {
+        if (hasLocationPermissionNow()) {
+            hasLocationPermission = true
+            showPreciseLocationGuidanceIfNeeded()
+            centerOnUserLocation()
+        } else {
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
     val expirationClock = rememberCountdownClock(30_000L)
 
     // Marker countdown refresh, decided below once the marker count is known — the clock
@@ -988,6 +1022,7 @@ internal fun AlertsMapScreenContent(
     val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
     val filteredAlerts = remember(
         alerts,
+        selectedCategories,
         filterDefinition,
         expirationNow,
         dismissedAlertIds,
@@ -1739,9 +1774,8 @@ internal fun AlertsMapScreenContent(
         // and the old hardcoded 72dp both overshot it and ignored the status bar, which pushed
         // the Google logo and the OpenStreetMap attribution further down than they needed.
         // The hosting tab already sits below the status bar (MainScaffold consumes that inset), so
-        // only the chrome itself is reserved: the rail, plus the gear's row when it is shown.
-        val topChromeInset = MAP_TOP_CHROME_HEIGHT +
-            if (onOpenSettings != null) MAP_SETTINGS_ROW_HEIGHT else 0.dp
+        // only the chrome itself is reserved: the top bar and the rail under it.
+        val topChromeInset = MapChromeTopInset
         val mapContentPadding = if (compactPictureInPicture) {
             PaddingValues(0.dp)
         } else {
@@ -1749,7 +1783,7 @@ internal fun AlertsMapScreenContent(
                 start = 16.dp,
                 top = topChromeInset,
                 end = if (useSidePanel) 392.dp else 16.dp,
-                bottom = if (useSidePanel) 24.dp else 96.dp
+                bottom = MapChromeBottomInset
             )
         }
         val fitPaddingPx = with(density) {
@@ -1767,7 +1801,7 @@ internal fun AlertsMapScreenContent(
                 bottom = if (compactPictureInPicture) {
                     0
                 } else {
-                    (if (useSidePanel) 24.dp else 96.dp).roundToPx()
+                    MapChromeBottomInset.roundToPx()
                 }
             )
         }
@@ -2184,7 +2218,12 @@ internal fun AlertsMapScreenContent(
             Surface(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 8.dp, bottom = 8.dp)
+                    // Above the Tools button in the bottom-left corner, where the Google logo
+                    // goes too.
+                    .padding(
+                        start = 8.dp,
+                        bottom = if (compactPictureInPicture) 8.dp else MapChromeBottomInset
+                    )
                     .clickable {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/copyright"))
@@ -2332,80 +2371,6 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        // The whole of the map's chrome: a chip rail, and a status pill when something is
-        // wrong. The bar that used to sit above this held one number and three icons, none of
-        // which needed to be visible at all times - they live in the panel behind the rail's
-        // trailing chip now, and the map got the space back.
-        if (!compactPictureInPicture) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = Spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-            ) {
-                // The Settings gear has its own row above the chip rail, at the end, so it never
-                // shares a row with (or runs over) the chips.
-                if (onOpenSettings != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(end = Spacing.lg),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(40.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.surface,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            shadowElevation = 3.dp
-                        ) {
-                            IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Settings,
-                                    contentDescription = "Settings",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-                MapCategoryRail(
-                    mutedCategories = selectedCategories,
-                    categoryCounts = categoryCounts,
-                    visibleAlertCount = filteredAlerts.size,
-                    showBackButton = showBackButton,
-                    onBack = onBack,
-                    onMutedCategoriesChange = onSelectedCategoriesChange,
-                    // The rail owns the full width again.
-                    contentPadding = PaddingValues(
-                        start = Spacing.lg,
-                        end = Spacing.lg,
-                        top = 2.dp,
-                        bottom = Spacing.xxs
-                    )
-                )
-
-                Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
-                    MapSyncStatus(status = syncStatus, onRetry = onRefresh)
-                }
-
-                // A hunt emphasizes one marker somewhere on the map. This says which
-                // one it is without opening the panel that started the hunt.
-                huntSession?.let { hunt ->
-                    Row(modifier = Modifier.padding(horizontal = Spacing.lg)) {
-                        HuntTargetBanner(
-                            huntName = hunt.name,
-                            target = arrivalTracking.activeDestination?.alert,
-                            distanceMeters = journeyDistanceMeters,
-                            onClick = {
-                                pressHuntFocus()
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
         // Any active narrowing can empty the map, not just a muted category, so the recovery
         // action clears both stores at once rather than only the rail.
         AnimatedVisibility(
@@ -2428,7 +2393,7 @@ internal fun AlertsMapScreenContent(
         }
 
         if (!compactPictureInPicture && preparedMarkers.markerLimitActive) {
-            Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+            Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = topChromeInset + Spacing.lg),
                 shape = MaterialTheme.shapes.small) {
                 Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
             }
@@ -2441,19 +2406,7 @@ internal fun AlertsMapScreenContent(
                     onEnterPictureInPicture = onEnterPictureInPicture?.let {
                         {
                             showMapTools = false
-                            if (hasLocationPermissionNow()) {
-                                hasLocationPermission = true
-                                showPreciseLocationGuidanceIfNeeded()
-                                launchPictureInPicture()
-                            } else {
-                                pendingPictureInPictureLaunch = true
-                                locationPermissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                        Manifest.permission.ACCESS_COARSE_LOCATION
-                                    )
-                                )
-                            }
+                            requestFloatingMap()
                         }
                     },
                     onOpenHuntSetup = {
@@ -2470,12 +2423,6 @@ internal fun AlertsMapScreenContent(
                     onOpenMegaBoost = {
                         showMapTools = false
                         showMegaBoost = true
-                    },
-                    onOpenSettings = onOpenSettings?.let {
-                        {
-                            showMapTools = false
-                            it()
-                        }
                     }
                 )
             }
@@ -2510,70 +2457,60 @@ internal fun AlertsMapScreenContent(
         }
         // Filters live on the map so a quick narrowing never costs a trip to Settings.
         // Only one of the filter sheet and the alert detail sheet is ever open.
-        if (!compactPictureInPicture && showFilterSheet && selectedAlert == null) {
-            MapFilterSheet(
-                definition = filterDefinition,
-                catalog = filterCatalog,
-                artwork = filterArtwork,
-                rewardThumbnails = questRewardThumbnails,
-                visibleCount = filteredAlerts.size,
-                totalCount = alerts.size,
-                categoryCounts = categoryCounts,
-                onDefinitionChange = onFilterDefinitionChange,
-                onOpenFilterStudio = { showFilterSheet = false; onOpenFilterStudio() },
-                onDismiss = { showFilterSheet = false },
-                useSidePanel = useSidePanel,
-                modifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier,
-                refreshing = syncStatus is SyncStatus.Loading || syncStatus is SyncStatus.Refreshing,
-                onRefresh = onRefresh,
-                onEnterPictureInPicture = onEnterPictureInPicture?.let {
-                    {
-                        if (hasLocationPermissionNow()) {
-                            hasLocationPermission = true
-                            showPreciseLocationGuidanceIfNeeded()
-                            launchPictureInPicture()
-                        } else {
-                            pendingPictureInPictureLaunch = true
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    }
-                },
-                userLocation = userLocation,
-                weatherCells = weatherCells,
-                // The retained camera, not the Google camera state: that one is not driven
-                // while the OpenStreetMap layer is the visible one.
-                mapCentre = retainedCamera(),
-                mapStyle = mapStyle,
-                onMapStyleChanged = {
-                    mapStyle = it
-                    onMapStyleChanged(it)
-                },
-                showTimeLabels = showTimeLabels,
-                onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
-                showSpawnRadius = showSpawnRadius,
-                onToggleSpawnRadius = onToggleSpawnRadius,
-                spacialRendEnabled = spacialRendEnabled,
-                onToggleSpacialRend = onToggleSpacialRend,
-                showWeatherCells = showWeatherCells,
-                onToggleWeatherCells = onToggleWeatherCells,
-                showHuntPath = showHuntPath,
-                onToggleHuntPath = onToggleHuntPath,
-                showDismissed = mapShowDismissed,
-                onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
-                autoEnterPictureInPicture = autoEnterPictureInPicture,
-                onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
-                    onToggleAutoEnterPictureInPicture
-                } else {
-                    null
-                }
-            )
+        // One of the top bar's two sheets, never both, and never over an alert's details.
+        if (!compactPictureInPicture && selectedAlert == null) {
+            val panelModifier = if (useSidePanel) Modifier.align(Alignment.TopEnd) else Modifier
+            when (openPanel) {
+                MapPanelScope.FILTERS -> MapFiltersSheet(
+                    definition = filterDefinition,
+                    catalog = filterCatalog,
+                    artwork = filterArtwork,
+                    rewardThumbnails = questRewardThumbnails,
+                    visibleCount = filteredAlerts.size,
+                    totalCount = alerts.size,
+                    categoryCounts = categoryCounts,
+                    onDefinitionChange = onFilterDefinitionChange,
+                    onOpenFilterStudio = { openPanel = null; onOpenFilterStudio() },
+                    onDismiss = { openPanel = null },
+                    useSidePanel = useSidePanel,
+                    modifier = panelModifier
+                )
+                MapPanelScope.LAYERS -> MapLayersSheet(
+                    userLocation = userLocation,
+                    weatherCells = weatherCells,
+                    // The retained camera, not the Google camera state: that one is not driven
+                    // while the OpenStreetMap layer is the visible one.
+                    mapCentre = retainedCamera(),
+                    mapStyle = mapStyle,
+                    onMapStyleChanged = {
+                        mapStyle = it
+                        onMapStyleChanged(it)
+                    },
+                    showTimeLabels = showTimeLabels,
+                    onToggleTimeLabels = { onShowTimeLabelsChanged(!showTimeLabels) },
+                    showWeatherCells = showWeatherCells,
+                    onToggleWeatherCells = onToggleWeatherCells,
+                    showHuntPath = showHuntPath,
+                    onToggleHuntPath = onToggleHuntPath,
+                    showSpawnRadius = showSpawnRadius,
+                    onToggleSpawnRadius = onToggleSpawnRadius,
+                    spacialRendEnabled = spacialRendEnabled,
+                    onToggleSpacialRend = onToggleSpacialRend,
+                    showDismissed = mapShowDismissed,
+                    onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
+                    autoEnterPictureInPicture = autoEnterPictureInPicture,
+                    onToggleAutoEnterPictureInPicture = if (onEnterPictureInPicture != null) {
+                        onToggleAutoEnterPictureInPicture
+                    } else {
+                        null
+                    },
+                    onDismiss = { openPanel = null },
+                    useSidePanel = useSidePanel,
+                    modifier = panelModifier
+                )
+                null -> Unit
+            }
         }
-
 
         // One sheet at a time: the weather sheet yields to an alert or a cluster the way
         // those two already yield to each other.
@@ -2605,93 +2542,45 @@ internal fun AlertsMapScreenContent(
             }
         }
 
-        AnimatedVisibility(
-            visible = !compactPictureInPicture &&
-                currentMapLoaded && (useSidePanel || selectedAlert == null),
-            enter = appFadeIn(),
-            exit = appFadeOut(),
-            modifier = Modifier.align(Alignment.BottomEnd)
-        ) {
-            Column(
-                modifier = Modifier
-                    // The gesture bar sits under this column whether or not the screen owns a
-                    // back button, so the inset is unconditional.
-                    .windowInsetsPadding(WindowInsets.navigationBars)
-                    .padding(end = if (useSidePanel) 392.dp else Spacing.lg, bottom = Spacing.xxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                horizontalAlignment = Alignment.End
-            ) {
-                // One column for everything the map does, ordered by how often it is reached
-                // for, with the most frequent lowest and nearest the thumb.
-                MapSettingsButton(
-                    activeRuleCount = advancedFilterRuleCount,
-                    onClick = { showFilterSheet = true }
-                )
-                SmallFloatingActionButton(
-                    onClick = { showMapTools = true },
-                    containerColor = if (huntSession != null) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surface,
-                    contentColor = if (huntSession != null) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.testTag("open_map_tools")
-                ) {
-                    Icon(painter = painterResource(id = R.drawable.ic_tools), contentDescription = "Map tools")
-                }
-                // Secondary: framing the alerts is occasional, finding yourself is constant.
-                SmallFloatingActionButton(
-                    onClick = ::fitVisibleAlerts,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_fit_map),
-                        contentDescription = if (huntSession != null) {
-                            if (huntFocus == HuntMapFocus.TARGET) "Show Hunt route" else "Focus Hunt target"
-                        } else stringResource(R.string.map_show_all_alerts)
+        if (!compactPictureInPicture) {
+            val chromeState = MapChromeState(
+                visibleCount = filteredAlerts.size,
+                totalCount = alerts.size,
+                categoryCounts = categoryCounts,
+                mutedCategories = selectedCategories,
+                syncStatus = syncStatus,
+                advancedFilterRuleCount = advancedFilterRuleCount,
+                hunt = huntSession?.let { hunt ->
+                    MapChromeHunt(
+                        name = hunt.name,
+                        target = arrivalTracking.activeDestination?.alert,
+                        distanceMeters = journeyDistanceMeters,
+                        focus = huntFocus
                     )
-                }
-                FloatingActionButton(
-                    onClick = {
-                        if (hasLocationPermissionNow()) {
-                            hasLocationPermission = true
-                            showPreciseLocationGuidanceIfNeeded()
-                            centerOnUserLocation()
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION
-                                )
-                            )
-                        }
-                    },
-                    containerColor = when {
-                        cameraFollowEnabled -> MaterialTheme.colorScheme.primary
-                        trackingRequested -> MaterialTheme.colorScheme.secondaryContainer
-                        else -> MaterialTheme.colorScheme.primaryContainer
-                    },
-                    contentColor = when {
-                        cameraFollowEnabled -> MaterialTheme.colorScheme.onPrimary
-                        trackingRequested -> MaterialTheme.colorScheme.onSecondaryContainer
-                        else -> MaterialTheme.colorScheme.onPrimaryContainer
-                    },
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_my_location),
-                        contentDescription = stringResource(
-                            when {
-                                cameraFollowEnabled && trackingStatus == MapTrackingStatus.DEGRADED ->
-                                    R.string.map_location_tracking_degraded
-                                cameraFollowEnabled -> R.string.map_location_following
-                                trackingRequested -> R.string.map_location_tracking_recenter
-                                else -> R.string.map_location_start_tracking
-                            }
-                        )
-                    )
-                }
-            }
+                },
+                locate = when {
+                    cameraFollowEnabled && trackingStatus == MapTrackingStatus.DEGRADED -> MapLocateState.FOLLOWING_DEGRADED
+                    cameraFollowEnabled -> MapLocateState.FOLLOWING
+                    trackingRequested -> MapLocateState.REQUESTED
+                    else -> MapLocateState.IDLE
+                },
+                mapLoaded = currentMapLoaded,
+                alertSelected = selectedAlert != null,
+                useSidePanel = useSidePanel,
+                showBackButton = showBackButton
+            )
+            val chromeActions = MapChromeActions(
+                onCategoriesChange = onSelectedCategoriesChange,
+                onBack = onBack,
+                onOpenSettings = onOpenSettings,
+                onOpenFilters = { openPanel = MapPanelScope.FILTERS },
+                onOpenLayers = { openPanel = MapPanelScope.LAYERS },
+                onOpenTools = { showMapTools = true },
+                onFit = ::fitVisibleAlerts,
+                onLocate = ::locateUser,
+                onRefresh = onRefresh
+            )
+            MapChrome(state = chromeState, actions = chromeActions)
         }
 
         if (!compactPictureInPicture) selectedAlert?.let { alert ->
@@ -2828,49 +2717,6 @@ internal fun resolveMapLoadState(loaded: Boolean, failed: Boolean): MapLoadState
     loaded -> MapLoadState.READY
     failed -> MapLoadState.ERROR
     else -> MapLoadState.LOADING
-}
-
-@Composable
-internal fun MapSyncStatus(status: SyncStatus, onRetry: () -> Unit) {
-    val text = status.mapStatusMessage()
-    val problem = status is SyncStatus.Cached || status is SyncStatus.Failed
-    AnimatedContent(
-        targetState = text to problem,
-        transitionSpec = { appFadeThrough() },
-        label = "map_sync_status"
-    ) { (animatedText, animatedProblem) ->
-        if (animatedText != null) {
-            // A pill that hugs its text, not a third full-width bar under the header.
-            Surface(
-                color = if (animatedProblem) {
-                    MaterialTheme.colorScheme.errorContainer
-                } else {
-                    MaterialTheme.colorScheme.surface
-                },
-                contentColor = if (animatedProblem) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                shape = RoundedCornerShape(50),
-                shadowElevation = 3.dp,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(
-                    Modifier.padding(
-                        start = Spacing.md,
-                        end = if (animatedProblem) Spacing.xxs else Spacing.md,
-                        top = Spacing.xxs,
-                        bottom = Spacing.xxs
-                    ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(animatedText, style = MaterialTheme.typography.labelMedium)
-                    if (animatedProblem) TextButton(onClick = onRetry) { Text("Retry") }
-                }
-            }
-        }
-    }
 }
 
 /** A virtualized list displaying rich rows for every member of an overlapping cluster or stack. */

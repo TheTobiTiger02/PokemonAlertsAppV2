@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -51,7 +49,6 @@ internal fun MapToolsContent(
     userLocation: android.location.Location? = null,
     onOpenCatchRoutes: () -> Unit = {},
     onOpenMegaBoost: () -> Unit = {},
-    onOpenSettings: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -97,16 +94,6 @@ internal fun MapToolsContent(
             icon = { AnimatedRefreshIcon(refreshing = refreshing, contentDescription = "") },
             onClick = onRefresh
         )
-        if (onOpenSettings != null) {
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-            ToolRow(
-                title = "Settings",
-                subtitle = "Filters, notifications, appearance and more",
-                icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                onClick = onOpenSettings,
-                modifier = Modifier.testTag("open_settings_from_map_tools")
-            )
-        }
     }
 }
 

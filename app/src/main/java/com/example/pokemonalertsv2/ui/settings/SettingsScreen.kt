@@ -490,7 +490,7 @@ internal fun SettingsScreen(
 
                 if (animatedDestination == SettingsDestination.MAP_TRACKING) {
                     SettingsSection(title = "Map markers") {
-                        com.example.pokemonalertsv2.ui.alerts.MapClusteringSettingsSection()
+                        com.example.pokemonalertsv2.ui.alerts.MapGroupingEditor()
                     }
                     SettingsSection(title = "Arrival tracking") {
                     Row(

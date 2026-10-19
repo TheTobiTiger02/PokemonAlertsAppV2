@@ -29,17 +29,14 @@ import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import kotlinx.coroutines.launch
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.16"
+internal const val WHATS_NEW_RELEASE = "1.18"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Compact alert rows fit about six alerts on screen. Prefer the map cards? Settings › Appearance.",
-    "History lives inside the Alerts tab (Live | History), and Spawn insights is a button on the history screen.",
-    "The feed and map filter buttons edit in place and bring you straight back.",
-    "The map’s new tools button holds hunts, catch routes, Mega boost and the floating map.",
-    "Alert pages keep only I’m going and Navigate at the bottom; snooze and share moved to the top.",
-    "The new Tools tab collects hunts, catch routes, raid counters and your collection tools; star up to four for quick access.",
-    "Settings moved behind the gear at the top of each screen, regrouped, with missing permissions shown as one card.",
-    "Alert notifications now show the distance right in the collapsed line."
+    "The map has one bar at the top: the alert count, then Filters, Layers and Settings. The type chips sit right below it.",
+    "Hunts, catch routes, Mega boost and the floating map are in the Tools button at the bottom left. During a hunt it names your target.",
+    "Filters are tabs that change the map as you tap: Nearby, Types, Pokémon, Raids, Rocket and Quests.",
+    "Pick quests by reward or by task. Hold a tile to choose single tasks or rewards.",
+    "Map layers is one list with style previews, switches and its own marker grouping page."
 )
 
 /**
