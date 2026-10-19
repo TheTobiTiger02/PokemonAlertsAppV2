@@ -34,31 +34,6 @@ class MapPanelsComposeTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun filtersRootListsTheEditorsAndRaidTiersOpensAsAPage() {
-        var definition by mutableStateOf(FilterDefinition())
-        composeRule.setContent {
-            PokemonAlertsV2Theme {
-                Filters(definition) { definition = it }
-            }
-        }
-
-        // A lazy list composes only what is on screen, so each row is scrolled to first.
-        listOf("Distance", "Refine by kind", "Alert types", "Species", "Raid tiers", "Field research", "Advanced rules")
-            .forEach { label ->
-                composeRule.onNodeWithTag("map_panel_list").performScrollToNode(hasText(label))
-                composeRule.onNodeWithText(label).assertIsDisplayed()
-            }
-
-        composeRule.onNodeWithTag("map_panel_list").performScrollToNode(hasTestTag("map_filter_raids"))
-        composeRule.onNodeWithTag("map_filter_raids").performClick()
-        composeRule.onNodeWithText("Mega").assertIsDisplayed().performClick()
-        composeRule.runOnIdle { assertEquals(FilterSelection.only(listOf("1", "5")), definition.raidTiers) }
-
-        composeRule.onNodeWithContentDescription("Back").performClick()
-        composeRule.onNodeWithTag("map_panel_list").assertIsDisplayed()
-    }
-
-    @Test
     fun activeChipRemovesOnlyItsRule() {
         var definition by mutableStateOf(FilterDefinition(maxDistanceMeters = 1_000, raidTiers = FilterSelection.None))
         composeRule.setContent {

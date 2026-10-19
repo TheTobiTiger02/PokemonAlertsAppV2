@@ -126,7 +126,36 @@ data class QuestFilterRules(
     val rewards: FilterSelection = FilterSelection.All,
     val exactMode: FilterSelectionMode = if (exactPairs.isNotEmpty()) FilterSelectionMode.ONLY
         else if (facetEnabled) FilterSelectionMode.NONE else FilterSelectionMode.ALL
-)
+) {
+    /** The exact quest pairs these rules let through, out of [universe]. */
+    fun selectedPairs(universe: Collection<QuestPairRule>): Set<QuestPairRule> = when (exactMode) {
+        FilterSelectionMode.ALL -> universe.toSet()
+        FilterSelectionMode.NONE -> emptySet()
+        FilterSelectionMode.ONLY -> exactPairs
+    }
+
+    /**
+     * Switches one reward's task pairs ([group]) on, or off when all of them already are.
+     * A single pair works the same way, for picking one task.
+     */
+    fun withRewardToggled(group: Collection<QuestPairRule>, universe: Collection<QuestPairRule>): QuestFilterRules =
+        withPairs(group, show = !selectedPairs(universe).containsAll(group), universe = universe)
+
+    /**
+     * Shows or hides [pairs]. Settles back to ALL when every pair in [universe] ends up chosen
+     * and no task/reward rule is in play, and to NONE when nothing is; the task/reward rule
+     * itself is left as it was.
+     */
+    fun withPairs(pairs: Collection<QuestPairRule>, show: Boolean, universe: Collection<QuestPairRule>): QuestFilterRules {
+        val selected = selectedPairs(universe)
+        val next = if (show) selected + pairs else selected - pairs.toSet()
+        return when {
+            !facetEnabled && next.containsAll(universe) -> copy(exactPairs = emptySet(), exactMode = FilterSelectionMode.ALL)
+            next.isEmpty() -> copy(exactPairs = emptySet(), exactMode = FilterSelectionMode.NONE)
+            else -> copy(exactPairs = next, exactMode = FilterSelectionMode.ONLY)
+        }
+    }
+}
 
 /**
  * Distance limits that are narrower (or wider) than the surface default.

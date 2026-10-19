@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,9 +34,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.*
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
-import com.example.pokemonalertsv2.data.distanceLabel
 import com.example.pokemonalertsv2.ui.theme.Spacing
-import com.example.pokemonalertsv2.util.TravelTime
 
 internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
     SPAWN("IV spawn species", "IV spawns"),
@@ -241,14 +240,43 @@ internal fun SpeciesPickerSheet(
     onDismiss: () -> Unit
 ) {
     var target by rememberSaveable { mutableStateOf(initialTarget) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.testTag("species_picker_sheet")
+    ) {
+        SpeciesPickerContent(
+            target = target,
+            onTargetChange = { target = it },
+            definition = definition,
+            catalog = catalog,
+            artwork = artwork,
+            onDefinitionChange = onDefinitionChange,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+    }
+}
+
+/**
+ * The species picker's body: which list, search, sort, set-all and the artwork grid. The grid is
+ * its only scroller and takes the remaining height, so a host must give it bounded space.
+ */
+@Composable
+internal fun SpeciesPickerContent(
+    target: MapSelectorTarget,
+    onTargetChange: (MapSelectorTarget) -> Unit,
+    definition: FilterDefinition,
+    catalog: FilterCatalog,
+    artwork: Map<String, String>,
+    onDefinitionChange: (FilterDefinition) -> Unit,
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
+    targets: List<MapSelectorTarget> = SPECIES_TARGETS
+) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOrder by rememberSaveable { mutableStateOf(SpeciesSortOrder.DEX_NUMBER) }
-
-    fun extractDex(key: String): Int {
-        val url = artwork[key] ?: return Int.MAX_VALUE
-        val match = Regex("""/(\d+)\.png""").find(url) ?: return Int.MAX_VALUE
-        return match.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
-    }
+    val gridState = rememberLazyGridState()
 
     val currentSelection = definition.selectionFor(target)
     val candidates = remember(target, catalog) { target.candidates(catalog) }
@@ -260,148 +288,150 @@ internal fun SpeciesPickerSheet(
     val availableKeys = remember(normalizedCandidates) {
         normalizedCandidates.mapTo(mutableSetOf()) { it.first }
     }
+    // Forms ("Arcanine Hisuian", "Mega Dragonite") resolve to their own sprite and the base
+    // species' Dex number, so they sort and search alongside it.
+    val arts = remember(normalizedCandidates, artwork) {
+        normalizedCandidates.associate { (key, value) -> key to speciesArt(value, artwork) }
+    }
+    fun dexOf(key: String): Int = arts[key]?.dex ?: Int.MAX_VALUE
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
-    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, artwork) {
+    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts) {
         normalizedCandidates
-            .filter { (key, _) -> key.contains(queryKey) || extractDex(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
+            .filter { (key, _) -> key.contains(queryKey) || dexOf(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
                     .thenComparing { (key, _) ->
-                        if (sortOrder == SpeciesSortOrder.DEX_NUMBER) extractDex(key) else Int.MAX_VALUE
+                        if (sortOrder == SpeciesSortOrder.DEX_NUMBER) dexOf(key) else Int.MAX_VALUE
                     }
                     .thenBy { (_, value) -> value.lowercase() }
             )
     }
+    // A keyed grid keeps its first visible item in view when the order changes, which after a
+    // re-sort left the list scrolled to wherever that item had moved. A new order starts at the top.
+    LaunchedEffect(sortOrder, target, queryKey) { gridState.scrollToItem(0) }
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("species_picker_sheet")
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-        ) {
+        if (showTitle) {
             Text(
                 text = target.title,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
+        }
 
-            // Which list is being edited. Each target keeps its own selection.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
-            ) {
-                SPECIES_TARGETS.forEach { candidate ->
-                    val selection = definition.selectionFor(candidate)
-                    val count = selection.selectedCount
-                    FilterChip(
-                        selected = candidate == target,
-                        onClick = { target = candidate },
-                        label = {
-                            Text(
-                                if (count > 0 && selection.mode == FilterSelectionMode.ONLY) {
-                                    "${candidate.shortLabel} ($count)"
-                                } else {
-                                    candidate.shortLabel
-                                }
-                            )
-                        },
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                }
-            }
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search ${target.shortLabel} (name or Dex #)…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
-                        }
-                    }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(12.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-            ) {
-                Text(
-                    text = "${displayList.size} shown · ${currentSelection.summaryLabel()}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f)
-                )
+        // Which list is being edited. Each target keeps its own selection.
+        if (targets.size > 1) FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+        ) {
+            targets.forEach { candidate ->
+                val selection = definition.selectionFor(candidate)
+                val count = selection.selectedCount
                 FilterChip(
-                    selected = true,
-                    onClick = {
-                        sortOrder = if (sortOrder == SpeciesSortOrder.DEX_NUMBER) {
-                            SpeciesSortOrder.NAME_AZ
-                        } else {
-                            SpeciesSortOrder.DEX_NUMBER
-                        }
+                    selected = candidate == target,
+                    onClick = { onTargetChange(candidate) },
+                    label = {
+                        Text(
+                            if (count > 0 && selection.mode == FilterSelectionMode.ONLY) {
+                                "${candidate.shortLabel} ($count)"
+                            } else {
+                                candidate.shortLabel
+                            }
+                        )
                     },
-                    label = { Text("Sort: ${sortOrder.label}") },
                     shape = RoundedCornerShape(16.dp)
                 )
             }
+        }
 
-            MapSetAllRow(
-                label = "Set all",
-                onAll = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
-                onNone = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) }
-            )
-
-            // The grid is the sheet's only scroller, and it gets the rest of the height.
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(76.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = false)
-                    .testTag("species_picker_grid"),
-                contentPadding = PaddingValues(bottom = Spacing.xl),
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-            ) {
-                gridItems(displayList, key = { it.first }) { (key, value) ->
-                    val checked = currentSelection.mode == FilterSelectionMode.ALL ||
-                        (currentSelection.mode == FilterSelectionMode.ONLY &&
-                            key in currentSelection.normalizedValues)
-                    SpeciesTile(
-                        name = value,
-                        artworkUrl = artwork[key],
-                        dexNumber = extractDex(key),
-                        checked = checked,
-                        unavailable = key !in availableKeys,
-                        onClick = {
-                            val currentSet = currentSelection.normalizedValues.toMutableSet()
-                            when (currentSelection.mode) {
-                                FilterSelectionMode.ALL -> {
-                                    currentSet.addAll(normalizedCandidates.map { it.first })
-                                    currentSet.remove(key)
-                                }
-                                FilterSelectionMode.NONE -> currentSet.add(key)
-                                FilterSelectionMode.ONLY ->
-                                    if (key in currentSet) currentSet.remove(key) else currentSet.add(key)
-                            }
-                            onDefinitionChange(
-                                definition.withSelection(target, FilterSelection.only(currentSet))
-                            )
-                        }
-                    )
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search ${target.shortLabel} (name or Dex #)…") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear")
+                    }
                 }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            Text(
+                text = "${displayList.size} shown · ${currentSelection.summaryLabel()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = true,
+                onClick = {
+                    sortOrder = if (sortOrder == SpeciesSortOrder.DEX_NUMBER) {
+                        SpeciesSortOrder.NAME_AZ
+                    } else {
+                        SpeciesSortOrder.DEX_NUMBER
+                    }
+                },
+                label = { Text("Sort: ${sortOrder.label}") },
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        MapSetAllRow(
+            label = "Set all",
+            onAll = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
+            onNone = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) }
+        )
+
+        // The grid is the sheet's only scroller, and it gets the rest of the height.
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(76.dp),
+            state = gridState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .testTag("species_picker_grid"),
+            contentPadding = PaddingValues(bottom = Spacing.xl),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+        ) {
+            gridItems(displayList, key = { it.first }) { (key, value) ->
+                val checked = currentSelection.mode == FilterSelectionMode.ALL ||
+                    (currentSelection.mode == FilterSelectionMode.ONLY &&
+                        key in currentSelection.normalizedValues)
+                SpeciesTile(
+                    name = value,
+                    art = arts[key] ?: SpeciesArt(null, null, null, null),
+                    checked = checked,
+                    unavailable = key !in availableKeys,
+                    onClick = {
+                        val currentSet = currentSelection.normalizedValues.toMutableSet()
+                        when (currentSelection.mode) {
+                            FilterSelectionMode.ALL -> {
+                                currentSet.addAll(normalizedCandidates.map { it.first })
+                                currentSet.remove(key)
+                            }
+                            FilterSelectionMode.NONE -> currentSet.add(key)
+                            FilterSelectionMode.ONLY ->
+                                if (key in currentSet) currentSet.remove(key) else currentSet.add(key)
+                        }
+                        onDefinitionChange(
+                            definition.withSelection(target, FilterSelection.only(currentSet))
+                        )
+                    }
+                )
             }
         }
     }
@@ -410,8 +440,7 @@ internal fun SpeciesPickerSheet(
 @Composable
 private fun SpeciesTile(
     name: String,
-    artworkUrl: String?,
-    dexNumber: Int,
+    art: SpeciesArt,
     checked: Boolean,
     unavailable: Boolean,
     onClick: () -> Unit
@@ -442,8 +471,10 @@ private fun SpeciesTile(
         ) {
             Box(contentAlignment = Alignment.TopEnd) {
                 AsyncImage(
-                    model = artworkUrl,
+                    model = art.url,
                     contentDescription = null,
+                    // Some new forms are listed before their sprite exists.
+                    error = art.fallbackUrl?.let { coil.compose.rememberAsyncImagePainter(it) },
                     modifier = Modifier.size(38.dp)
                 )
                 if (checked) {
@@ -455,7 +486,21 @@ private fun SpeciesTile(
                     )
                 }
             }
-            if (dexNumber != Int.MAX_VALUE) {
+            art.form?.let { form ->
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Text(
+                        text = form,
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                }
+            }
+            art.dex?.let { dexNumber ->
                 Text(
                     text = "#${dexNumber.toString().padStart(3, '0')}",
                     style = MaterialTheme.typography.labelSmall,
@@ -487,42 +532,6 @@ internal fun FilterSelection.summaryLabel(): String = when (mode) {
     FilterSelectionMode.ALL -> "all selected"
     FilterSelectionMode.NONE -> "none selected"
     FilterSelectionMode.ONLY -> "$selectedCount selected"
-}
-
-internal fun FilterSelection.typeSummary(): String = when (mode) {
-    FilterSelectionMode.ALL -> "All types"
-    FilterSelectionMode.NONE -> "No types — the map will be empty"
-    FilterSelectionMode.ONLY -> "$selectedCount of ${FilterAlertType.entries.size} types"
-}
-
-internal fun FilterSelection.tokenSummary(catalog: List<String>, noun: String): String = when (mode) {
-    FilterSelectionMode.ALL -> "All $noun"
-    FilterSelectionMode.NONE -> "No $noun"
-    FilterSelectionMode.ONLY -> {
-        val chosen = catalog.filter(::contains)
-        when {
-            chosen.isEmpty() -> "$selectedCount selected"
-            chosen.size <= 3 -> chosen.joinToString(", ")
-            else -> chosen.take(2).joinToString(", ") + " +${chosen.size - 2}"
-        }
-    }
-}
-
-internal fun FilterDefinition.distanceSummary(): String {
-    val parts = buildList {
-        if (maxDistanceMeters > 0) add(distanceLabel(maxDistanceMeters))
-        if (maxWalkingMinutes > 0) add(TravelTime.label(maxWalkingMinutes) + " walk")
-    }
-    return if (parts.isEmpty()) "No limit" else parts.joinToString(" · ")
-}
-
-internal fun FilterDefinition.speciesSummary(): String {
-    val narrowed = SPECIES_TARGETS.filter { selectionFor(it).mode != FilterSelectionMode.ALL }
-    return when {
-        narrowed.isEmpty() -> "All species"
-        narrowed.size <= 3 -> narrowed.joinToString(", ") { it.shortLabel } + " narrowed"
-        else -> "${narrowed.size} lists narrowed"
-    }
 }
 
 // ----------------------------------------------------------------------------- helpers

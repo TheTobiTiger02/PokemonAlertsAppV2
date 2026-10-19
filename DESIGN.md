@@ -44,11 +44,13 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   Tools button (hunt, catch route, Mega boost, floating map, refresh) sits left — it names the hunt
   target while a hunt runs — and Fit and Locate sit right. Filters and Layers are separate sheets:
   what is on the map versus how it looks.
-- **Map sheets** are flat lists (`ui/alerts/mappanel/`): blue section labels, rows with a round icon
-  badge and a one-line summary that turns blue when it narrows the map, and whole-row switches.
-  Deeper editors (alert types, raid tiers, Rocket grunts, marker grouping) open as pages inside the
-  sheet with a back arrow, never as expanding cards. Filters starts with removable chips for every
-  active rule. Each sheet ends in one full-width button.
+- **Map sheets** live in `ui/alerts/mappanel/` and end in one full-width button. Map layers is a
+  flat list: blue section labels, rows with a round icon badge and a one-line summary, whole-row
+  switches, and marker grouping as a page inside the sheet with a back arrow.
+- **Map filters** are tabs that edit in place (PogoMapper-style): Nearby, Types, Pokémon, Raids,
+  Rocket, Quests, under removable chips for every active rule. Pokémon and raid bosses are artwork
+  grids with search and set-all; raid tiers are coloured eggs and Rocket grunts type-coloured tiles;
+  quests are reward tiles, tapped to toggle a reward and held (or the tune icon) to pick its tasks.
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back
