@@ -185,10 +185,6 @@ internal fun getTypeColor(type: String): Color {
 
 @Composable
 internal fun StatsCard(alert: PokemonAlert) {
-    val isReplacement = alert.isSpeciesReplacement
-    val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
-    val accentColor = Color(resolveAlertVisualStyle(alert).category.accentArgb)
-
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -196,8 +192,20 @@ internal fun StatsCard(alert: PokemonAlert) {
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Section title
+        StatsCardContent(alert = alert, modifier = Modifier.padding(16.dp))
+    }
+}
+
+/** The stats card's body, also drawn flat (without its own title) by the redesigned detail. */
+@Composable
+internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier, showTitle: Boolean = true) {
+    val isReplacement = alert.isSpeciesReplacement
+    val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
+    val accentColor = Color(resolveAlertVisualStyle(alert).category.accentArgb)
+
+    Column(modifier = modifier) {
+        // Section title
+        if (showTitle) {
             Text(
                 text = when {
                     isReplacement -> "New species"
@@ -208,121 +216,121 @@ internal fun StatsCard(alert: PokemonAlert) {
                 color = if (isChanged) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
+        }
 
-            // Species replacement banner — shows old species info
-            if (isReplacement) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
+        // Species replacement banner — shows old species info
+        if (isReplacement) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = null,
-                            tint = accentColor
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = null,
+                        tint = accentColor
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Replacing ${alert.oldSpecies}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Column(modifier = Modifier.weight(1f)) {
+                        val oldDetails = listOfNotNull(
+                            alert.oldIv?.let { "IV: $it" },
+                            alert.oldCp?.let { "CP: $it" }
+                        )
+                        if (oldDetails.isNotEmpty()) {
                             Text(
-                                text = "Replacing ${alert.oldSpecies}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = oldDetails.joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            val oldDetails = listOfNotNull(
-                                alert.oldIv?.let { "IV: $it" },
-                                alert.oldCp?.let { "CP: $it" }
-                            )
-                            if (oldDetails.isNotEmpty()) {
-                                Text(
-                                    text = oldDetails.joinToString(" • "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // For weather change / replacement alerts, display the new stats as primary values
+        val displayIv = if (isChanged && alert.newIv != null) alert.newIv else alert.formattedIv
+        val displayCp = if (isChanged && alert.newCp != null) alert.newCp else alert.cp
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // IVs
+            displayIv?.let { iv ->
+                val isNewIv = isChanged && alert.newIv != null
+                StatItem(
+                    label = if (isNewIv) "New IV" else "IV",
+                    value = iv,
+                    subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
+                    highlight = alert.isPerfect,
+                    highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) MaterialTheme.colorScheme.primary else if (alert.isNundo) MaterialTheme.colorScheme.onSurfaceVariant else null
+                )
             }
 
-            // For weather change / replacement alerts, display the new stats as primary values
-            val displayIv = if (isChanged && alert.newIv != null) alert.newIv else alert.formattedIv
-            val displayCp = if (isChanged && alert.newCp != null) alert.newCp else alert.cp
+            // CP
+            displayCp?.let { cp ->
+                val isNewCp = isChanged && alert.newCp != null
+                StatItem(
+                    label = if (isNewCp) "New CP" else "CP",
+                    value = cp.toString(),
+                    subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
+                    highlightColor = if (isNewCp) accentColor else null
+                )
+            }
 
+            // Hundo CP (standalone for raids when no individual CP)
+            if (displayCp == null && alert.hundoCP != null) {
+                alert.hundoCP.level20?.let { l20 ->
+                    StatItem(
+                        label = "100% L20",
+                        value = l20.toString(),
+                        highlightColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+                alert.hundoCP.level25?.let { l25 ->
+                    StatItem(
+                        label = "100% L25",
+                        value = l25.toString(),
+                        highlightColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Level — show for species replacement (it's the new species' level), hide for weather-only change
+            if (!isChanged || isReplacement) {
+                alert.level?.let { level ->
+                    StatItem(
+                        label = if (isReplacement) "New Level" else "Level",
+                        value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
+                        highlightColor = if (isReplacement) accentColor else null
+                    )
+                }
+            }
+        }
+
+        // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
+        if (!isChanged && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // IVs
-                displayIv?.let { iv ->
-                    val isNewIv = isChanged && alert.newIv != null
-                    StatItem(
-                        label = if (isNewIv) "New IV" else "IV",
-                        value = iv,
-                        subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
-                        highlight = alert.isPerfect,
-                        highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) MaterialTheme.colorScheme.primary else if (alert.isNundo) MaterialTheme.colorScheme.onSurfaceVariant else null
-                    )
-                }
-
-                // CP
-                displayCp?.let { cp ->
-                    val isNewCp = isChanged && alert.newCp != null
-                    StatItem(
-                        label = if (isNewCp) "New CP" else "CP",
-                        value = cp.toString(),
-                        subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
-                        highlightColor = if (isNewCp) accentColor else null
-                    )
-                }
-
-                // Hundo CP (standalone for raids when no individual CP)
-                if (displayCp == null && alert.hundoCP != null) {
-                    alert.hundoCP.level20?.let { l20 ->
-                        StatItem(
-                            label = "100% L20",
-                            value = l20.toString(),
-                            highlightColor = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    alert.hundoCP.level25?.let { l25 ->
-                        StatItem(
-                            label = "100% L25",
-                            value = l25.toString(),
-                            highlightColor = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // Level — show for species replacement (it's the new species' level), hide for weather-only change
-                if (!isChanged || isReplacement) {
-                    alert.level?.let { level ->
-                        StatItem(
-                            label = if (isReplacement) "New Level" else "Level",
-                            value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
-                            highlightColor = if (isReplacement) accentColor else null
-                        )
-                    }
-                }
-            }
-
-            // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
-            if (!isChanged && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    IvBar(label = "ATK", value = alert.ivAttack, maxValue = 15)
-                    IvBar(label = "DEF", value = alert.ivDefense, maxValue = 15)
-                    IvBar(label = "STA", value = alert.ivStamina, maxValue = 15)
-                }
+                IvBar(label = "ATK", value = alert.ivAttack, maxValue = 15)
+                IvBar(label = "DEF", value = alert.ivDefense, maxValue = 15)
+                IvBar(label = "STA", value = alert.ivStamina, maxValue = 15)
             }
         }
     }

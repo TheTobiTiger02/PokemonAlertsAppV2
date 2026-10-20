@@ -297,74 +297,14 @@ internal fun GoDexCaughtAction(
     modifier: Modifier = Modifier,
     presentation: GoDexCaughtActionPresentation = GoDexCaughtActionPresentation.ICON
 ) {
-    val context = LocalContext.current
-    val repository = remember(context) { GoDexRepository.getInstance(context) }
-    val config by repository.config.collectAsState()
-    val entries by repository.entries.collectAsState()
-    val pendingEntryKeys by repository.pendingEntryKeys.collectAsState()
-    val scope = rememberCoroutineScope()
-    val haptic = LocalHapticFeedback.current
-    var showCatchDialog by remember(alert.uniqueId) { mutableStateOf(false) }
-    var showUncatchDialog by remember(alert.uniqueId) { mutableStateOf(false) }
-    var uncatchEntries by remember(alert.uniqueId) {
-        mutableStateOf<List<GoDexEntryEntity>>(emptyList())
-    }
-
-    if (!alert.hasType("hundo") || !config.hasWriteBackUrl) return
-
-    val catchOptions = remember(alert.pokemon, matchResult) {
-        goDexCatchOptions(alert.pokemon ?: "Pokémon", matchResult)
-    }
-    val caughtEntries = remember(alert, entries) {
-        repository.getCaughtEntries(alert, entries)
-    }
-    val relatedKeys = remember(matchResult, caughtEntries) {
-        buildSet {
-            matchResult.matchedEntryKey?.let(::add)
-            matchResult.evolutionTargets.mapTo(this) { it.entryKey }
-            matchResult.formChangeTargets.mapTo(this) { it.entryKey }
-            caughtEntries.mapTo(this) { it.entryKey }
-        }
-    }
-    val isPending = pendingEntryKeys.any(relatedKeys::contains)
-    val isCollected = matchResult.status == GoDexMatchStatus.COLLECTED
-    val hasCatchAction = catchOptions.isNotEmpty()
-    val hasUncatchAction = isCollected && caughtEntries.isNotEmpty()
-    if (!hasCatchAction && !hasUncatchAction) return
-
-    fun queueChange(entryKey: String, caught: Boolean) {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        scope.launch { repository.markAsCaught(entryKey, caught) }
-    }
-
-    val targetName = catchOptions.singleOrNull()?.displayName
-        ?: caughtEntries.singleOrNull()?.displayName
-    val actionLabel = when {
-        isPending && config.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-            "Queued \u2022 Sign in to sync"
-        isPending -> "Sending to GoDex\u2026"
-        hasUncatchAction -> "Mark as still needed"
-        catchOptions.size == 1 -> "Mark ${targetName ?: "target"} caught"
-        else -> "Choose caught target"
-    }
-    val contentDescription = when {
-        isPending -> "GoDex checklist change pending"
-        hasUncatchAction -> "Mark ${targetName ?: "Pokémon"} as needed in GoDex"
-        catchOptions.size == 1 -> "Mark ${targetName ?: "Pokémon"} as caught in GoDex"
-        else -> "Choose which GoDex entry to mark as caught"
-    }
-    val onClick = {
-        when {
-            hasUncatchAction -> {
-                uncatchEntries = caughtEntries
-                showUncatchDialog = true
-            }
-            hasCatchAction -> showCatchDialog = true
-        }
-    }
+    val control = GoDexCaughtControl(alert, matchResult) ?: return
+    val isPending = control.isPending
+    val hasUncatchAction = control.isCaught
+    val actionLabel = control.label
+    val onClick = control.onClick
 
     val semanticsModifier = modifier.semantics {
-        this.contentDescription = contentDescription
+        this.contentDescription = control.contentDescription
         stateDescription = when {
             isPending -> "Sync pending"
             hasUncatchAction -> "Caught"
@@ -447,6 +387,92 @@ internal fun GoDexCaughtAction(
             }
         }
     }
+}
+
+/** What the GoDex control does for one alert, for hosts that draw it as a button or a menu entry. */
+internal class GoDexCaughtState(
+    val label: String,
+    val contentDescription: String,
+    val isPending: Boolean,
+    val isCaught: Boolean,
+    val onClick: () -> Unit
+)
+
+/**
+ * The GoDex control's state and its dialogs, or null when the alert has nothing to mark. The
+ * dialogs are composed here, so a host that shows [GoDexCaughtState.onClick] in a menu that
+ * closes on tap keeps them open.
+ */
+@Composable
+internal fun GoDexCaughtControl(
+    alert: PokemonAlert,
+    matchResult: GoDexMatchResult
+): GoDexCaughtState? {
+    val context = LocalContext.current
+    val repository = remember(context) { GoDexRepository.getInstance(context) }
+    val config by repository.config.collectAsState()
+    val entries by repository.entries.collectAsState()
+    val pendingEntryKeys by repository.pendingEntryKeys.collectAsState()
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    var showCatchDialog by remember(alert.uniqueId) { mutableStateOf(false) }
+    var showUncatchDialog by remember(alert.uniqueId) { mutableStateOf(false) }
+    var uncatchEntries by remember(alert.uniqueId) {
+        mutableStateOf<List<GoDexEntryEntity>>(emptyList())
+    }
+
+    if (!alert.hasType("hundo") || !config.hasWriteBackUrl) return null
+
+    val catchOptions = remember(alert.pokemon, matchResult) {
+        goDexCatchOptions(alert.pokemon ?: "Pokémon", matchResult)
+    }
+    val caughtEntries = remember(alert, entries) {
+        repository.getCaughtEntries(alert, entries)
+    }
+    val relatedKeys = remember(matchResult, caughtEntries) {
+        buildSet {
+            matchResult.matchedEntryKey?.let(::add)
+            matchResult.evolutionTargets.mapTo(this) { it.entryKey }
+            matchResult.formChangeTargets.mapTo(this) { it.entryKey }
+            caughtEntries.mapTo(this) { it.entryKey }
+        }
+    }
+    val isPending = pendingEntryKeys.any(relatedKeys::contains)
+    val isCollected = matchResult.status == GoDexMatchStatus.COLLECTED
+    val hasCatchAction = catchOptions.isNotEmpty()
+    val hasUncatchAction = isCollected && caughtEntries.isNotEmpty()
+    if (!hasCatchAction && !hasUncatchAction) return null
+
+    fun queueChange(entryKey: String, caught: Boolean) {
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        scope.launch { repository.markAsCaught(entryKey, caught) }
+    }
+
+    val targetName = catchOptions.singleOrNull()?.displayName
+        ?: caughtEntries.singleOrNull()?.displayName
+    val actionLabel = when {
+        isPending && config.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
+            "Queued \u2022 Sign in to sync"
+        isPending -> "Sending to GoDex\u2026"
+        hasUncatchAction -> "Mark as still needed"
+        catchOptions.size == 1 -> "Mark ${targetName ?: "target"} caught"
+        else -> "Choose caught target"
+    }
+    val contentDescription = when {
+        isPending -> "GoDex checklist change pending"
+        hasUncatchAction -> "Mark ${targetName ?: "Pokémon"} as needed in GoDex"
+        catchOptions.size == 1 -> "Mark ${targetName ?: "Pokémon"} as caught in GoDex"
+        else -> "Choose which GoDex entry to mark as caught"
+    }
+    val onClick = {
+        when {
+            hasUncatchAction -> {
+                uncatchEntries = caughtEntries
+                showUncatchDialog = true
+            }
+            hasCatchAction -> showCatchDialog = true
+        }
+    }
 
     if (showCatchDialog) {
         GoDexCatchTargetDialog(
@@ -469,4 +495,12 @@ internal fun GoDexCaughtAction(
             }
         )
     }
+
+    return GoDexCaughtState(
+        label = actionLabel,
+        contentDescription = contentDescription,
+        isPending = isPending,
+        isCaught = hasUncatchAction,
+        onClick = onClick
+    )
 }
