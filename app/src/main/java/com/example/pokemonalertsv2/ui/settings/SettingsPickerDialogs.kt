@@ -61,7 +61,7 @@ internal fun DurationPickerDialog(
             )
         },
         title = {
-            Text("Select Duration")
+            Text("Silence for")
         },
         text = {
             Column(
@@ -313,7 +313,7 @@ internal fun DateTimePickerDialog(
                 )
             },
             title = {
-                Text("Select Date")
+                Text("Silence until")
             },
             text = {
                 Column(
@@ -431,7 +431,7 @@ internal fun DateTimePickerDialog(
                 )
             },
             title = {
-                Text("Select Time")
+                Text("At what time")
             },
             text = {
                 Column(
@@ -635,7 +635,7 @@ internal fun CustomDatePickerDialog(
             )
         },
         title = {
-            Text("Select Date")
+            Text("Silence until")
         },
         text = {
             Column(

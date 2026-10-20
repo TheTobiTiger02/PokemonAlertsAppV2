@@ -3,6 +3,8 @@ package com.example.pokemonalertsv2.ui.settings
 import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.SavedStateHandle
@@ -54,6 +56,17 @@ class SettingsPageDesignsComposeTest {
         silenceForAnHour()
     }
 
+
+    @Test
+    fun silenceOffersAnyLengthAndAnyDateAndQuietHoursKeepFromTo() {
+        show()
+        composeRule.onNodeWithTag("settings_silence_now").performScrollTo().performClick()
+        composeRule.onNodeWithTag("silence_tile_For…").performClick()
+        composeRule.onNodeWithText("Silence for").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithTag("silence_tile_Until…").performClick()
+        composeRule.onNodeWithText("Silence until").assertIsDisplayed()
+    }
 
     private fun show() {
         val viewModel = SettingsViewModel(app, SavedStateHandle())
