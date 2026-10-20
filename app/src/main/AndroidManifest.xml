@@ -217,6 +217,33 @@
                 android:resource="@xml/alerts_widget_info" />
         </receiver>
 
+        <activity
+            android:name=".widget.EventsWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.PokemonAlertsV2"
+            android:label="@string/widget_events_config_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name=".widget.EventsWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_events_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/events_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.EventsWidgetService"
+            android:permission="android.permission.BIND_REMOTEVIEWS"
+            android:exported="false" />
+
         <receiver
             android:name=".widget.NearbyRadarWidgetProvider"
             android:exported="false"

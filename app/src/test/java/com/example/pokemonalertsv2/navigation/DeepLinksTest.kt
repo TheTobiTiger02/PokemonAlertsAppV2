@@ -75,4 +75,10 @@ class DeepLinksTest {
         assertNull(parseDeepLink("pokemonalerts://"))
         assertNull(parseDeepLink("pokemonalerts://unknown"))
     }
+    @Test
+    fun `event link opens one event, decoding its id`() {
+        assertEquals(DeepLinkTarget.Event("community-day-2026-10"), parseDeepLink("pokemonalerts://event/community-day-2026-10"))
+        assertEquals(DeepLinkTarget.Event("a b/c"), parseDeepLink("pokemonalerts://event/a%20b%2Fc"))
+        assertNull(parseDeepLink("pokemonalerts://event/"))
+    }
 }

@@ -591,6 +591,10 @@ class MainActivity : ComponentActivity() {
     private fun handleDeepLink(url: String): Boolean {
         when (val target = parseDeepLink(url) ?: return false) {
             is DeepLinkTarget.RootTab -> requestedRootTab.value = target.tabIndex
+            is DeepLinkTarget.Event -> {
+                com.example.pokemonalertsv2.events.EventDeepLink.open(target.eventId)
+                requestedRootTab.value = EVENTS_TAB_INDEX
+            }
             is DeepLinkTarget.Settings -> {
                 requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
                 requestedSettingsDestination.value = target.destination

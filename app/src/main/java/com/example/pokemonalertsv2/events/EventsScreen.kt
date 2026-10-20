@@ -87,7 +87,10 @@ fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
     }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
     fun changed(block: suspend () -> Unit) = scope.launch { block(); EventReminderWorker.replan(context) }
+    val requestedEventId by EventDeepLink.pending.collectAsStateWithLifecycle()
     EventsContent(
+        openEventId = requestedEventId,
+        onOpenEventHandled = EventDeepLink::consume,
         loadPage = repository::page,
         rememberedPage = repository::remembered,
         state = EventsUiState(events, settings, loading, error, now),
@@ -116,12 +119,23 @@ fun EventsContent(
     loadPage: suspend (String) -> EventPage? = { null },
     rememberedPage: (String) -> EventPage? = { null },
     onOpenSettings: (() -> Unit)? = null,
+    /** An event to open in its detail view once the list has it, e.g. from the widget. */
+    openEventId: String? = null,
+    onOpenEventHandled: (String) -> Unit = {},
 ) {
     val sections = remember(state.events, state.nowMillis, state.settings.hiddenTypes) {
         groupEvents(state.events, state.nowMillis, state.settings.hiddenTypes)
     }
     val types = remember(state.events) { state.events.map { it.eventType }.distinct().sortedBy { eventTypeName(it) } }
     var selected by remember { mutableStateOf<GameEvent?>(null) }
+    // The cached list can still be empty on a cold start; wait for events rather than dropping
+    // the request, and drop it once the loaded list does not have the event.
+    LaunchedEffect(openEventId, state.events) {
+        val id = openEventId ?: return@LaunchedEffect
+        if (state.events.isEmpty()) return@LaunchedEffect
+        state.events.firstOrNull { it.id == id }?.let { selected = it }
+        onOpenEventHandled(id)
+    }
     var reminderSettingsOpen by remember { mutableStateOf(false) }
     var typesOpen by remember { mutableStateOf(false) }
     val hiddenTypeCount = types.count { it in state.settings.hiddenTypes }

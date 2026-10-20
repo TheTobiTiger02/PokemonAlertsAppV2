@@ -181,6 +181,10 @@
     <string name="map_enable_spacial_rend">Enable Spacial Rend (80m)</string>
     <string name="map_disable_spacial_rend">Disable Spacial Rend (40m)</string>
     <string name="widget_radar_title">Nearby Radar</string>
+    <string name="widget_events_title">Events</string>
+    <string name="widget_events_description">Current and upcoming Pok&#x00E9;mon GO events</string>
+    <string name="widget_events_empty">No events for the chosen types. Tap to open Events.</string>
+    <string name="widget_events_config_title">Events widget</string>
     <string name="widget_radar_description">See nearby active alerts on a compact map.</string>
     <string name="widget_radar_map_cd">Nearby alerts map. Tap to open the Map tab.</string>
     <string name="widget_radar_show_overview_cd">Show all alerts</string>
