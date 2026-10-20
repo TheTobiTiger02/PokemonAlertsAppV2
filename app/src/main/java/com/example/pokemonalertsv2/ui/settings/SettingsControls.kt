@@ -418,14 +418,22 @@ internal fun JourneyOverlayRow(
     }
 
     if (permissionPromptOpen) {
+        JourneyOverlayPermissionDialog(onDismiss = { permissionPromptOpen = false })
+    }
+}
+
+/** Explains the "Display over other apps" grant and opens Android's page for it. */
+@Composable
+internal fun JourneyOverlayPermissionDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
         AlertDialog(
-            onDismissRequest = { permissionPromptOpen = false },
+            onDismissRequest = onDismiss,
             title = { Text(stringResource(R.string.journey_overlay_permission_title)) },
             text = { Text(stringResource(R.string.journey_overlay_permission_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        permissionPromptOpen = false
+                        onDismiss()
                         runCatching {
                             context.startActivity(
                                 Intent(
@@ -446,12 +454,11 @@ internal fun JourneyOverlayRow(
                 ) { Text(stringResource(R.string.journey_overlay_permission_positive)) }
             },
             dismissButton = {
-                TextButton(onClick = { permissionPromptOpen = false }) {
+                TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.journey_overlay_permission_negative))
                 }
             }
         )
-    }
 }
 
 @Composable
