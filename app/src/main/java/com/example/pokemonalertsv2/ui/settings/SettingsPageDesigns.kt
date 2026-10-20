@@ -56,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -85,15 +84,9 @@ import com.example.pokemonalertsv2.ui.components.panelGutter
 import com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import kotlinx.coroutines.delay
-import java.util.Calendar
 
-// The two new designs for the Notifications and GoDex pages, picked with
-// DesignScreen.SETTINGS_PAGES: 1 lays every row out flat like the map's sheets, 2 puts one status
-// card per group on top and the same rows on a page behind each card. Option 0 stays in
-// SettingsScreen as it shipped.
-
-internal const val SETTINGS_DESIGN_FLAT = 1
-internal const val SETTINGS_DESIGN_CARDS = 2
+// The Notifications and GoDex pages, laid out flat like the map's sheets: blue section labels,
+// rows with a round icon badge, and pages inside the page instead of dialogs.
 
 /** The grants the Notifications page reports; SettingsScreen re-reads them on every resume. */
 internal data class PermissionGrants(
@@ -105,11 +98,10 @@ internal data class PermissionGrants(
         get() = listOf(notifications, foregroundLocation, backgroundLocation).count { !it }
 }
 
-private enum class NotificationsPage { ROOT, DELIVERY, QUIET, QUIET_HOURS, SILENCE }
+private enum class NotificationsPage { ROOT, QUIET_HOURS, SILENCE }
 
 @Composable
 internal fun NotificationsPageDesign(
-    option: Int,
     viewModel: SettingsViewModel,
     grants: PermissionGrants,
     onManageNotifications: () -> Unit,
@@ -128,7 +120,7 @@ internal fun NotificationsPageDesign(
     val definition by viewModel.notificationFilterDefinition.collectAsStateWithLifecycle()
     val now = rememberMinuteClock()
 
-    var pageName by rememberSaveable(option) { mutableStateOf(NotificationsPage.ROOT.name) }
+    var pageName by rememberSaveable { mutableStateOf(NotificationsPage.ROOT.name) }
     val page = NotificationsPage.valueOf(pageName)
     val open: (NotificationsPage) -> Unit = { pageName = it.name }
     val back = { open(NotificationsPage.ROOT) }
@@ -173,46 +165,7 @@ internal fun NotificationsPageDesign(
     PanelPages(page = page, root = NotificationsPage.ROOT, onBack = back) { shown ->
         PageColumn(modifier) {
             when (shown) {
-                NotificationsPage.ROOT -> if (option == SETTINGS_DESIGN_CARDS) {
-                    Spacer(Modifier.height(Spacing.sm))
-                    StatusCard(
-                        title = if (enabled) "Notifications on" else "Notifications off",
-                        status = when {
-                            grants.missingCount == 1 -> "1 permission missing"
-                            grants.missingCount > 1 -> "${grants.missingCount} permissions missing"
-                            else -> "Permissions allowed · last push ${pushAge(lastPush, now)}"
-                        },
-                        problem = grants.missingCount > 0 || !enabled,
-                        icon = Icons.Filled.Notifications,
-                        onClick = { open(NotificationsPage.DELIVERY) },
-                        tag = "settings_card_delivery"
-                    )
-                    StatusCard(
-                        title = when {
-                            silenced -> "Silenced until ${clockTime(silenceUntil, now)}"
-                            quietEnabled -> "Quiet $quietSummary"
-                            else -> "No quiet time"
-                        },
-                        status = when {
-                            silenced && quietEnabled -> "Quiet hours $quietSummary as well"
-                            silenced -> "Every alert waits until then"
-                            quietEnabled -> "Every day · silence now if you need to"
-                            else -> "Set nightly hours or silence now"
-                        },
-                        problem = false,
-                        icon = Icons.Filled.DateRange,
-                        onClick = { open(NotificationsPage.QUIET) },
-                        tag = "settings_card_quiet"
-                    )
-                    StatusCard(
-                        title = "What notifies",
-                        status = definition.notifiedTypeSummary(),
-                        problem = false,
-                        icon = Icons.Filled.CheckCircle,
-                        onClick = onOpenFilterStudio,
-                        tag = "settings_card_filters"
-                    )
-                } else {
+                NotificationsPage.ROOT -> {
                     permissionRows()
                     deliveryRows()
                     AnimatedVisibility(visible = enabled) {
@@ -242,20 +195,6 @@ internal fun NotificationsPageDesign(
                         onClick = onOpenFilterStudio,
                         icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
                     )
-                }
-
-                NotificationsPage.DELIVERY -> {
-                    PanelHeader("Delivery", onBack = back)
-                    permissionRows()
-                    deliveryRows()
-                }
-
-                NotificationsPage.QUIET -> {
-                    PanelHeader("Quiet time", onBack = back)
-                    PanelSectionLabel("Every day")
-                    quietHoursRows()
-                    PanelSectionLabel("Silence now")
-                    silenceRows {}
                 }
 
                 NotificationsPage.QUIET_HOURS -> {
@@ -389,9 +328,19 @@ private fun QuietHoursRows(
         icon = { Icon(Icons.Filled.DateRange, null, Modifier.size(20.dp)) }
     )
     AnimatedVisibility(visible = enabled) {
-        Column {
-            TimeRow("From", QuietHours.format(startMinute)) { editing = QuietHoursEdge.START }
-            TimeRow("To", QuietHours.format(endMinute)) { editing = QuietHoursEdge.END }
+        // The two buttons the quiet hours card always had: each says its time and opens the clock.
+        Row(
+            modifier = Modifier.fillMaxWidth().panelGutter().padding(vertical = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            OutlinedButton(
+                onClick = { editing = QuietHoursEdge.START },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("quiet_from")
+            ) { Text("From ${QuietHours.format(startMinute)}", maxLines = 1) }
+            OutlinedButton(
+                onClick = { editing = QuietHoursEdge.END },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("quiet_to")
+            ) { Text("To ${QuietHours.format(endMinute)}", maxLines = 1) }
         }
     }
     editing?.let { edge ->
@@ -407,7 +356,7 @@ private fun QuietHoursRows(
     }
 }
 
-private val SILENCE_DURATIONS = listOf(30 to "30 min", 60 to "1 hour", 120 to "2 hours", 240 to "4 hours", 480 to "8 hours")
+private val SILENCE_DURATIONS = listOf(30 to "30 min", 60 to "1 hour", 120 to "2 hours", 480 to "8 hours")
 
 @Composable
 private fun SilenceRows(
@@ -416,7 +365,8 @@ private fun SilenceRows(
     onSilenceFor: (Int) -> Unit,
     onClear: () -> Unit
 ) {
-    var pickingTime by rememberSaveable { mutableStateOf(false) }
+    var pickingLength by rememberSaveable { mutableStateOf(false) }
+    var pickingDate by rememberSaveable { mutableStateOf(false) }
     if (silenceUntil > now) {
         Row(
             modifier = Modifier
@@ -434,10 +384,12 @@ private fun SilenceRows(
             OutlinedButton(onClick = onClear) { Text("End now", maxLines = 1) }
         }
     }
-    // One tile per common length, and one clock for anything else: no dialog chain.
+    // One tile per common length, then any length ("For…", such as 40 minutes) or any date and
+    // time ("Until…").
     val tiles: List<Pair<String, () -> Unit>> =
         SILENCE_DURATIONS.map { (minutes, label) -> label to { onSilenceFor(minutes) } } +
-            ("Until…" to { pickingTime = true })
+            ("For…" to { pickingLength = true }) +
+            ("Until…" to { pickingDate = true })
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -465,31 +417,24 @@ private fun SilenceRows(
             }
         }
     }
-    if (pickingTime) {
-        val inAnHour = Calendar.getInstance().apply { timeInMillis = now + 60 * 60_000L }
-        ClockTimeDialog(
-            title = "Silence until",
-            initialMinute = inAnHour.get(Calendar.HOUR_OF_DAY) * 60 + inAnHour.get(Calendar.MINUTE),
-            onDismiss = { pickingTime = false },
-            onPick = { picked ->
-                pickingTime = false
-                onSilenceFor(minutesUntil(picked, System.currentTimeMillis()))
+    if (pickingLength) {
+        DurationPickerDialog(
+            onDismiss = { pickingLength = false },
+            onConfirm = { minutes ->
+                pickingLength = false
+                if (minutes > 0) onSilenceFor(minutes)
             }
         )
     }
-}
-
-/** Minutes from [now] to the next time the clock reads [minuteOfDay]. */
-internal fun minutesUntil(minuteOfDay: Int, now: Long): Int {
-    val target = Calendar.getInstance().apply {
-        timeInMillis = now
-        set(Calendar.HOUR_OF_DAY, minuteOfDay / 60)
-        set(Calendar.MINUTE, minuteOfDay % 60)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-        if (timeInMillis <= now) add(Calendar.DAY_OF_YEAR, 1)
+    if (pickingDate) {
+        DateTimePickerDialog(
+            onDismiss = { pickingDate = false },
+            onConfirm = { minutes ->
+                pickingDate = false
+                if (minutes > 0) onSilenceFor(minutes)
+            }
+        )
     }
-    return ((target.timeInMillis - now + 59_999L) / 60_000L).toInt()
 }
 
 /** The one wall-clock picker both quiet hours and "silence until" use. */
@@ -531,7 +476,6 @@ internal class GoDexPageActions(
 
 @Composable
 internal fun GoDexPageDesign(
-    option: Int,
     viewModel: SettingsViewModel,
     urlInput: String,
     onUrlInputChange: (String) -> Unit,
@@ -543,7 +487,6 @@ internal fun GoDexPageDesign(
     val entries by viewModel.goDexEntries.collectAsStateWithLifecycle()
     val sync by viewModel.goDexSyncUiState.collectAsStateWithLifecycle()
     GoDexPageContent(
-        option = option,
         config = config,
         needed = entries.count { it.needed },
         total = entries.size,
@@ -564,7 +507,6 @@ internal fun GoDexPageDesign(
 
 @Composable
 internal fun GoDexPageContent(
-    option: Int,
     config: GoDexConfig,
     needed: Int,
     total: Int,
@@ -577,7 +519,7 @@ internal fun GoDexPageContent(
     val context = LocalContext.current
     val now = rememberMinuteClock()
 
-    var pageName by rememberSaveable(option) { mutableStateOf(GoDexPage.ROOT.name) }
+    var pageName by rememberSaveable { mutableStateOf(GoDexPage.ROOT.name) }
     val page = GoDexPage.valueOf(pageName)
     val open: (GoDexPage) -> Unit = { pageName = it.name }
     val back = { open(GoDexPage.ROOT) }
@@ -623,35 +565,9 @@ internal fun GoDexPageContent(
             when (shown) {
                 GoDexPage.ROOT -> when {
                     !config.isConnected -> GoDexNotConnected(
-                        cards = option == SETTINGS_DESIGN_CARDS,
                         onSignIn = signIn,
                         onPublicLink = { open(GoDexPage.PUBLIC_LINK) }
                     )
-
-                    option == SETTINGS_DESIGN_CARDS -> {
-                        Text(
-                            text = config.collectionTitle.ifBlank { "GoDex Hundo collection" },
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.panelGutter().padding(top = Spacing.sm, bottom = Spacing.xs)
-                        )
-                        StatusCard(
-                            title = if (needed == 0) "Checklist complete" else "$needed still needed",
-                            status = syncLine.first,
-                            problem = syncLine.second,
-                            icon = Icons.Filled.CheckCircle,
-                            onClick = { open(GoDexPage.CHECKLIST) },
-                            tag = "settings_card_checklist"
-                        )
-                        StatusCard(
-                            title = "Account",
-                            status = account.first,
-                            problem = account.second,
-                            icon = Icons.Filled.AccountCircle,
-                            onClick = { open(GoDexPage.ACCOUNT) },
-                            tag = "settings_card_account"
-                        )
-                    }
 
                     else -> {
                         GoDexStatusHeader(config.collectionTitle, needed, total, syncLine)
@@ -716,27 +632,7 @@ internal fun GoDexPageContent(
 }
 
 @Composable
-private fun GoDexNotConnected(cards: Boolean, onSignIn: () -> Unit, onPublicLink: () -> Unit) {
-    if (cards) {
-        Spacer(Modifier.height(Spacing.sm))
-        StatusCard(
-            title = "Sign in to GoDex",
-            status = "Track needed Hundos and send catches back",
-            problem = false,
-            icon = Icons.Filled.AccountCircle,
-            onClick = onSignIn,
-            tag = "settings_card_sign_in"
-        )
-        StatusCard(
-            title = "Use a public link instead",
-            status = "Read-only, no sign-in",
-            problem = false,
-            icon = Icons.Filled.Info,
-            onClick = onPublicLink,
-            tag = "settings_card_public_link"
-        )
-        return
-    }
+private fun GoDexNotConnected(onSignIn: () -> Unit, onPublicLink: () -> Unit) {
     Column(
         modifier = Modifier.panelGutter().padding(top = Spacing.lg, bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -884,52 +780,6 @@ private fun PageColumn(modifier: Modifier, content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** One group's state at a glance; opens the page with that group's rows. */
-@Composable
-private fun StatusCard(
-    title: String,
-    status: String,
-    problem: Boolean,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    tag: String
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = PanelGutter, vertical = Spacing.xs)
-            .testTag(tag)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.lg),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            PanelRowIcon(active = !problem) {
-                Icon(if (problem) Icons.Filled.Warning else icon, null, Modifier.size(20.dp))
-            }
-            Spacer(Modifier.width(Spacing.lg))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (problem) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Icon(
-                painter = painterResource(R.drawable.ic_chevron_right),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
 /** A permission with its state as a badge; the row opens Android's page for it. */
 @Composable
 private fun PermissionRow(
@@ -1007,15 +857,6 @@ private fun InfoRow(title: String, summary: String, problem: Boolean, icon: @Com
                 color = if (problem) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-    }
-}
-
-/** A nested time setting: its label lines up with the switch row above it. */
-@Composable
-private fun TimeRow(label: String, value: String, onClick: () -> Unit) {
-    RowFrame(onClick = onClick, icon = { Spacer(Modifier.width(40.dp)) }) {
-        Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
     }
 }
 
