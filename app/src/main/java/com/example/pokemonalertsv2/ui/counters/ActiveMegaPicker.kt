@@ -143,7 +143,9 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 internal fun ActiveMegaSheet(
     state: RaidCountersUiState,
-    onSelect: (String?) -> Unit
+    onSelect: (String?) -> Unit,
+    // Off when the sheet is a page that already carries its own header.
+    showTitle: Boolean = true
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val owned = remember(state.megaOptions, state.ownedBaseSpeciesIds) {
@@ -171,7 +173,7 @@ internal fun ActiveMegaSheet(
     ) {
         item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
             Column {
-                Text("Active mega", style = MaterialTheme.typography.headlineSmall)
+                if (showTitle) Text("Active mega", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "Only a mega you have already evolved can join a raid party, and only one at a " +
                         "time. This picks which one the suggested team may use.",
