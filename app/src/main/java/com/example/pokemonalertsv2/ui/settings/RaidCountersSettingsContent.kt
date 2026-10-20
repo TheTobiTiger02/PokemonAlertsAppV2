@@ -39,6 +39,11 @@ import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
 import com.example.pokemonalertsv2.data.counters.RaidCounterSettings
 import com.example.pokemonalertsv2.data.pokegenie.PokeGenieImportCandidate
 import com.example.pokemonalertsv2.ui.auth.PokebattlerLoginActivity
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
+import com.example.pokemonalertsv2.ui.counters.CounterSetupPanel
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Dp
 import java.text.DateFormat
 import java.util.Date
 
@@ -74,7 +79,30 @@ fun RaidCountersSettingsContent(
         uri?.let(onPrepareCsv)
     }
 
-    SettingsSection(title = "Counter defaults") {
+    // The redesigned counters screens edit their setup in a panel; the defaults here use the
+    // same rows, so a setting looks the same in both places.
+    if (rememberDesignOption(DesignScreen.RAID_COUNTERS) != 0) {
+        Column {
+            Text(
+                text = "Counter defaults",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "Used when a raid opens. You can still change them on the raid itself.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            CounterSetupPanel(
+                options = options,
+                onOptionsChanged = onOptionsChanged,
+                scroll = false,
+                // The page already has a 16dp margin; the panel brings its own 20dp gutter.
+                modifier = Modifier.bleed(16.dp)
+            )
+        }
+    } else SettingsSection(title = "Counter defaults") {
         Text(
             text = "Used when a raid opens. You can still change them on the raid itself.",
             style = MaterialTheme.typography.bodySmall,
@@ -346,6 +374,18 @@ private fun <T> SettingDropdown(
             }
         }
     }
+}
+
+/** Lays the content out [horizontal] wider on each side than its parent's padding allows. */
+private fun Modifier.bleed(horizontal: Dp): Modifier = layout { measurable, constraints ->
+    val extra = (horizontal * 2).roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(
+            minWidth = constraints.minWidth + extra,
+            maxWidth = if (constraints.hasBoundedWidth) constraints.maxWidth + extra else constraints.maxWidth
+        )
+    )
+    layout(placeable.width - extra, placeable.height) { placeable.place(-horizontal.roundToPx(), 0) }
 }
 
 /**

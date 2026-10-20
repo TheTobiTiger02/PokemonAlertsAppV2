@@ -151,9 +151,15 @@ internal fun BossFacts(state: RaidCountersUiState) {
 }
 
 @Composable
-internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersActions) {
-    val hasPersonalSource = state.pokeGenieCount > 0 || !state.pokebattlerUserId.isNullOrBlank()
-    SpringSegmentedRow(
+internal fun SourceSelector(
+    state: RaidCountersUiState,
+    actions: RaidCountersActions,
+    showHint: Boolean = true,
+    // Off where tabs already choose between Pokébattler and My Pokémon.
+    showTopLevel: Boolean = true
+) {
+    val hasPersonalSource = state.hasPersonalSource
+    if (showTopLevel) SpringSegmentedRow(
         selectedIndex = if (state.showingPersonal) 1 else 0,
         segmentCount = 2
     ) {
@@ -178,7 +184,7 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
             }
         )
     }
-    if (!hasPersonalSource) {
+    if (!hasPersonalSource && showHint) {
         // The disabled segment looked like any unselected tab and gave no reason.
         Text(
             text = "To rank your own Pokémon, import a Poké Genie CSV or sign in to Pokébattler " +
@@ -193,7 +199,7 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
         SpringSegmentedRow(
             selectedIndex = if (state.source == CounterSourceId.POKEBATTLER_POKEBOX) 1 else 0,
             segmentCount = 2,
-            modifier = Modifier.padding(top = 6.dp)
+            modifier = Modifier.padding(top = if (showTopLevel) 6.dp else 0.dp)
         ) {
             SegmentedChoice(
                 label = "PokéGenie CSV",
@@ -219,6 +225,10 @@ internal fun SourceSelector(state: RaidCountersUiState, actions: RaidCountersAct
         }
     }
 }
+
+/** Whether the user has any roster to rank: a Poké Genie import or a linked Pokébox. */
+internal val RaidCountersUiState.hasPersonalSource: Boolean
+    get() = pokeGenieCount > 0 || !pokebattlerUserId.isNullOrBlank()
 
 // ── Quick controls ───────────────────────────────────────────────────────────
 

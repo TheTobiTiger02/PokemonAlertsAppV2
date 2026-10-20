@@ -74,7 +74,9 @@ class PokemonGoSearchClipboardComposeTest {
                     RaidCountersScreen(
                         state = state,
                         actions = RaidCountersActions.Noop,
-                        onBack = {}
+                        onBack = {},
+                        // The shipped screen, whatever design a debug device has picked.
+                        design = 0
                     )
                 }
             }
@@ -138,7 +140,9 @@ class PokemonGoSearchClipboardComposeTest {
                     RaidCountersScreen(
                         state = state,
                         actions = RaidCountersActions.Noop,
-                        onBack = {}
+                        onBack = {},
+                        // The shipped screen, whatever design a debug device has picked.
+                        design = 0
                     )
                 }
             }
@@ -170,7 +174,8 @@ class PokemonGoSearchClipboardComposeTest {
                         pokebattlerUserId = null
                     ),
                     actions = RaidCountersActions.Noop,
-                    onBack = {}
+                    onBack = {},
+                    design = 0
                 )
             }
         }
