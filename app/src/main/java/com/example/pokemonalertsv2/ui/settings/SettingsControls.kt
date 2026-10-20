@@ -101,39 +101,39 @@ internal fun JourneyOverlayRow(
 @Composable
 internal fun JourneyOverlayPermissionDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(R.string.journey_overlay_permission_title)) },
-            text = { Text(stringResource(R.string.journey_overlay_permission_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDismiss()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.journey_overlay_permission_title)) },
+        text = { Text(stringResource(R.string.journey_overlay_permission_message)) },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismiss()
+                    runCatching {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:" + context.packageName)
+                            )
+                        )
+                    }.onFailure {
+                        // Some builds refuse the package-scoped form; the list
+                        // screen still gets the trainer to the same switch.
                         runCatching {
                             context.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:" + context.packageName)
-                                )
+                                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
                             )
-                        }.onFailure {
-                            // Some builds refuse the package-scoped form; the list
-                            // screen still gets the trainer to the same switch.
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-                                )
-                            }
                         }
                     }
-                ) { Text(stringResource(R.string.journey_overlay_permission_positive)) }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.journey_overlay_permission_negative))
                 }
+            ) { Text(stringResource(R.string.journey_overlay_permission_positive)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.journey_overlay_permission_negative))
             }
-        )
+        }
+    )
 }
 
 @Composable
