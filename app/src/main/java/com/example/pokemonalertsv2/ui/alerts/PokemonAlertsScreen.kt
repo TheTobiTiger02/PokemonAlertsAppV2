@@ -678,7 +678,6 @@ fun PokemonAlertsPage(
             catalog = filterCatalog,
             categoryCounts = categoryCounts,
             visibleCount = filteredAlerts.size,
-            totalCount = alertsWithDistance.size,
             showDismissed = showDismissed,
             onShowDismissedChange = { showDismissed = it },
             onDefinitionChange = onFilterDefinitionChange,

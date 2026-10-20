@@ -73,9 +73,10 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   lifecycle is capped at CREATED, so switching back is instant and nothing hidden keeps working.
 - Filter Studio opens over the tab that asked for it; closing it returns there. It is the map's
   Filters tabs editing a draft with an Apply bar; areas and profiles sit in the Nearby tab.
-- **Live quick filters.** The Live filter button opens a sheet like History's: type tiles, area
-  chips, distance and walking time, and show dismissed, applied as you tap. "More filters" opens
-  Filter Studio for species, raid tiers, quests and profiles.
+- **Live quick filters.** The Live filter button opens the same small sheet as History's: one chip
+  row each for alert type, area and distance, a show-dismissed switch and "Show N alerts". Changes
+  apply as you tap. "More filters" opens Filter Studio for species, raid tiers, quests, walking time
+  and profiles.
 - **Hunt setup** is pages in one tall sheet: type tiles, one row per chosen type that opens its
   editor, the area row, and a Start button fixed at the bottom.
 - **Raid counters** put the boss and a time pill first, then the source tabs and one chip row

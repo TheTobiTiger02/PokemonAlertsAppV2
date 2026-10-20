@@ -39,7 +39,6 @@ class LiveQuickFiltersSheetComposeTest {
                     catalog = FilterCatalog(areas = listOf("Alsbach", "Darmstadt")),
                     categoryCounts = mapOf(AlertCategory.RAID to 3),
                     visibleCount = 10,
-                    totalCount = 20,
                     showDismissed = showDismissed,
                     onShowDismissedChange = { showDismissed = it },
                     onDefinitionChange = { definition = it },
