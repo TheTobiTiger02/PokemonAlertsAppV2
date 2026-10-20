@@ -361,6 +361,20 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /**
+     * Applies a whole feed [FilterDefinition] from the Live quick filter sheet, the same way the
+     * map sheet does for the map: a linked profile becomes a local copy, so a quick edit never
+     * rewrites a profile another surface uses.
+     */
+    fun updateFeedFilterDefinition(definition: FilterDefinition) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateFilterStateDocument { document ->
+                document.withAssignment(FilterSurface.FEED, FilterAssignment.local(definition))
+            }
+            repository.alertPreferences.updateFeedCategories(mutedFromSelection(definition.alertTypes))
+        }
+    }
+
     fun updateSelectedMapCategories(categories: Set<AlertCategory>) {
         viewModelScope.launch {
             repository.alertPreferences.updateMapCategories(categories.toStoredNames())

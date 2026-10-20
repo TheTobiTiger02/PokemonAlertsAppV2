@@ -18,7 +18,10 @@ class CatchRouteBackendUiTest {
         controller.stop()
         ActivityScenario.launch(CatchRoutesActivity::class.java).use { activity ->
             activity.onActivity { assertEquals(CatchPrediction.AUTOMATIC, it.model.settings.prediction) }
-            compose.onNodeWithText("Advanced settings").performScrollTo().performClick()
+            // The planner's settings are rows in its sheet; Advanced opens as a page.
+            compose.onNodeWithTag("plan_sheet_summary").performClick()
+            compose.waitForIdle()
+            compose.onNodeWithTag("plan_row_advanced").performScrollTo().performClick()
             compose.onNodeWithText("Automatic (learned timing)").performScrollTo().assertIsDisplayed()
             val now = System.currentTimeMillis()
             val p = CatchPoint(49.7408, 8.6201)
@@ -29,8 +32,8 @@ class CatchRouteBackendUiTest {
                 listOf(CatchPathPosition(p, 0.0)), listOf(CatchEncounter(observed, now + 60000, 0.0), CatchEncounter(inferred, now + 60000, 0.0)), listOf(p))
             try {
                 controller.begin(plan)
-                compose.onNodeWithTag("catch_route_form").performScrollToNode(hasTestTag("catch_stop_0"))
-                compose.onNodeWithTag("catch_stop_0").performClick()
+                compose.waitUntil(5_000) { compose.onAllNodesWithTag("catch_stop_0").fetchSemanticsNodes().isNotEmpty() }
+                compose.onNodeWithTag("catch_stop_0").performScrollTo().performClick()
                 compose.onNodeWithText("Likely event spawnpoint", substring = true).performScrollTo().assertIsDisplayed()
                 compose.onNodeWithText("Requires live confirmation", substring = true).performScrollTo().assertIsDisplayed()
                 compose.onNodeWithText("Estimated 60-minute lifetime", substring = true).performScrollTo().assertIsDisplayed()

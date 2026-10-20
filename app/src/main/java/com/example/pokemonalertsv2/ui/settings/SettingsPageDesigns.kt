@@ -501,7 +501,7 @@ internal fun GoDexPageDesign(
             onOpenCollection = onOpenCollection,
             onDisconnect = onDisconnect
         ),
-        modifier = modifier
+        modifier = modifier.testTag("godex_page")
     )
 }
 

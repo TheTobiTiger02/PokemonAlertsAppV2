@@ -71,7 +71,25 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   Settings pages are not repeated there.
 - Tabs stay composed once opened (`ui/components/KeepAlive.kt`): a hidden tab is unplaced and its
   lifecycle is capped at CREATED, so switching back is instant and nothing hidden keeps working.
-- Filter Studio opens over the tab that asked for it; closing it returns there.
+- Filter Studio opens over the tab that asked for it; closing it returns there. It is the map's
+  Filters tabs editing a draft with an Apply bar; areas and profiles sit in the Nearby tab.
+- **Live quick filters.** The Live filter button opens a sheet like History's: type tiles, area
+  chips, distance and walking time, and show dismissed, applied as you tap. "More filters" opens
+  Filter Studio for species, raid tiers, quests and profiles.
+- **Hunt setup** is pages in one tall sheet: type tiles, one row per chosen type that opens its
+  editor, the area row, and a Start button fixed at the bottom.
+- **Raid counters** put the boss and a time pill first, then the source tabs and one chip row
+  (Setup, weather, level, sort, owned) that edits in place. Each setting lives in one place.
+- **Catch routes** plan over a full-screen map with a bottom sheet: collapsed it shows what is set
+  and Generate, pulled up the rows that open their pages. While walking, Pause and Floating map
+  are buttons and the rest is in the ⋮ menu.
+- **Map alert sheet** leads with what the alert is (sprite, title, countdown, numbers), then
+  I'm going and Navigate, then "Also here" tiles and Open details; the rest is in ⋮.
+- **Settings pages** for Notifications and GoDex are flat rows with blue section labels. Silence
+  offers common lengths, any length (For…) and any date and time (Until…); quiet hours use From
+  and To buttons.
+- **Spawn insights** split spawns into Spawnpoints and Species tabs; a day is picked by tapping its
+  bar, and the explanations sit behind the info button.
 - Below 600dp use bottom navigation; from 600dp use a rail; from 840dp feeds may use two columns and map details use a side panel.
 - Root destinations do not show back buttons. Preserve destination, section, filter, and scroll state.
 - Phone headers use a large, bottom-aligned title area that collapses toward a compact toolbar as content scrolls.

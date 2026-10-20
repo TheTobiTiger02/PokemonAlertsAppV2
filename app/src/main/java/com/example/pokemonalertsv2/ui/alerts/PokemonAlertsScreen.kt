@@ -180,6 +180,7 @@ import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.pokemonalertsv2.data.FilterCatalog
 
 @Composable
 fun PokemonAlertsRoute(
@@ -197,6 +198,7 @@ fun PokemonAlertsRoute(
     val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
     val feedFilterDefinition by viewModel.feedFilterDefinition.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
+    val filterCatalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
@@ -267,6 +269,8 @@ fun PokemonAlertsRoute(
                     onSortPreferenceChange = viewModel::updateSortPreference,
                     onStartManualRaid = onStartManualRaid,
                     onOpenFilterStudio = onOpenFilterStudio,
+                    filterCatalog = filterCatalog,
+                    onFilterDefinitionChange = viewModel::updateFeedFilterDefinition,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -430,10 +434,14 @@ fun PokemonAlertsPage(
     onSortPreferenceChange: (SortPreference) -> Unit,
     onStartManualRaid: () -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
+    filterCatalog: FilterCatalog = FilterCatalog(),
+    /** Edits the feed filter in place from the quick sheet; null keeps the button on Filter Studio. */
+    onFilterDefinitionChange: ((FilterDefinition) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var quickFiltersOpen by rememberSaveable { mutableStateOf(false) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
     }
@@ -655,13 +663,31 @@ fun PokemonAlertsPage(
                 presetControls = presetControls,
                 maxWalkingMinutes = maxWalkingMinutes,
                 onMaxWalkingMinutesChange = onMaxWalkingMinutesChange,
-                onOpenFilterStudio = onOpenFilterStudio,
+                onOpenFilterStudio = if (onFilterDefinitionChange != null) ({ quickFiltersOpen = true }) else onOpenFilterStudio,
                 unifiedDefinition = filterDefinition,
                 onStartManualRaid = onStartManualRaid
             )
         }
         }
     }
+    }
+
+    if (quickFiltersOpen && onFilterDefinitionChange != null) {
+        LiveQuickFiltersSheet(
+            definition = filterDefinition,
+            catalog = filterCatalog,
+            categoryCounts = categoryCounts,
+            visibleCount = filteredAlerts.size,
+            totalCount = alertsWithDistance.size,
+            showDismissed = showDismissed,
+            onShowDismissedChange = { showDismissed = it },
+            onDefinitionChange = onFilterDefinitionChange,
+            onOpenFilterStudio = {
+                quickFiltersOpen = false
+                onOpenFilterStudio()
+            },
+            onDismiss = { quickFiltersOpen = false }
+        )
     }
 
     alertPendingSnooze?.let { alert ->
