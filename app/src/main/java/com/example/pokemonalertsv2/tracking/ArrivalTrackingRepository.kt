@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.tracking
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -129,6 +130,24 @@ class ArrivalTrackingRepository private constructor(context: Context) {
             initialValue = DEFAULT_RADIUS_METERS
         )
 
+    /**
+     * Whether an "I'm going" journey shows a map: a card on the alert's screen in the app, and
+     * the floating window over other apps. One switch, so the notification's Show map / Hide map
+     * and the in-app toggle always agree.
+     */
+    val showGoingMap = dataStore.data
+        .map { preferences -> preferences[SHOW_GOING_MAP_KEY] ?: false }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = scope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
+        )
+
+    suspend fun setShowGoingMap(enabled: Boolean) {
+        dataStore.edit { preferences -> preferences[SHOW_GOING_MAP_KEY] = enabled }
+    }
+
     suspend fun currentDestination(): TrackedDestination? =
         dataStore.data.first()[ACTIVE_DESTINATION_KEY]
             ?.decodeDestination()
@@ -213,6 +232,7 @@ class ArrivalTrackingRepository private constructor(context: Context) {
 
         private val ACTIVE_DESTINATION_KEY = stringPreferencesKey("active_destination")
         private val ARRIVAL_RADIUS_KEY = intPreferencesKey("arrival_radius_meters")
+        private val SHOW_GOING_MAP_KEY = booleanPreferencesKey("show_going_map")
 
         @Volatile
         private var instance: ArrivalTrackingRepository? = null
