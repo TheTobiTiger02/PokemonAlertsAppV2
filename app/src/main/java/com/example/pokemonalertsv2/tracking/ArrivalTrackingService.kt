@@ -66,6 +66,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -189,6 +191,16 @@ class ArrivalTrackingService : Service() {
     private var routeLineJob: Job? = null
 
     /**
+     * The "I'm going" map switch, shared with the app and the notification. Outside a hunt the
+     * floating window shows the one target only while the app is in the background; in the app
+     * the alert's own screen draws the map.
+     */
+    private var goingMapEnabled = false
+    private var appInForeground = false
+    private var goingMapJob: Job? = null
+    private var goingPathJob: Job? = null
+
+    /**
      * A target that ran out before the trainer got there, said once on the chip and in the
      * window so the switch to the next target is not a silent surprise.
      */
@@ -295,6 +307,20 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_TOGGLE_GOING_MAP) {
+            serviceScope.launch { repository.setShowGoingMap(!repository.showGoingMap.value) }
+            return START_NOT_STICKY
+        }
+
+        if (intent?.action == ACTION_RETARGET_HUNT) {
+            // "I'm going" while a hunt runs: the hunt walks to this alert next, the same
+            // way tapping its pin on the floating map does.
+            intent.getStringExtra(EXTRA_ALERT_JSON)
+                ?.let { runCatching { retargetJson.decodeFromString(PokemonAlert.serializer(), it) }.getOrNull() }
+                ?.let(::retargetHuntTo)
+            return START_NOT_STICKY
+        }
+
         if (intent?.action == ACTION_GOT_IT) {
             serviceScope.launch {
                 markCurrentTargetCaught()
@@ -353,6 +379,22 @@ class ArrivalTrackingService : Service() {
                 }
             }
         }
+        if (goingMapJob == null) {
+            goingMapJob = serviceScope.launch {
+                val foreground = androidx.lifecycle.ProcessLifecycleOwner.get().lifecycle.currentStateFlow
+                    .map { it.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) }
+                combine(repository.showGoingMap, foreground) { shown, inApp -> shown to inApp }
+                    .distinctUntilChanged()
+                    .collect { (shown, inApp) ->
+                        val switched = shown != goingMapEnabled
+                        goingMapEnabled = shown
+                        appInForeground = inApp
+                        updateGoingPathLoop()
+                        if (!huntActive) showFloatingMap()
+                        if (switched) refreshCurrentNotification()
+                    }
+            }
+        }
         if (themeJob == null) {
             themeJob = serviceScope.launch {
                 AlertPreferences(applicationContext.alertPreferencesDataStore).themeMode.collect { mode ->
@@ -398,6 +440,7 @@ class ArrivalTrackingService : Service() {
                         }
                     }
                     huntActive = active
+                    if (changed) updateGoingPathLoop()
                     val pausedChanged = huntPaused != (session?.paused == true)
                     huntPaused = session?.paused == true
                     floatingMap.setPaused(huntPaused)
@@ -500,6 +543,8 @@ class ArrivalTrackingService : Service() {
         appMapVisibilityJob?.cancel()
         themeJob?.cancel()
         routeLineJob?.cancel()
+        goingMapJob?.cancel()
+        goingPathJob?.cancel()
         endedNoteJob?.cancel()
         huntMatrixJob?.cancel()
         huntPlanJob?.cancel()
@@ -568,6 +613,7 @@ class ArrivalTrackingService : Service() {
         currentDestination = destination
         standbyCentred = false
         showFloatingMap()
+        if (previousDestination?.uniqueId != destination.uniqueId) updateGoingPathLoop()
         scheduleExpiry(destination)
         updateOngoing(
             destination = destination,
@@ -944,7 +990,8 @@ class ArrivalTrackingService : Service() {
             huntActive = huntActive,
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
             undoOffer = undoOffer,
-            endedNote = endedNote()
+            endedNote = endedNote(),
+            goingMapShown = if (huntActive) null else goingMapEnabled
         )
         runCatching {
             NotificationManagerCompat.from(this)
@@ -1021,8 +1068,9 @@ class ArrivalTrackingService : Service() {
     ) {
         // One surface only. Where the status bar chip exists it is strictly better,
         // and where it does not the map draws the label instead -- either way the
-        // pill stays out of the way rather than repeating the same number.
-        if (readoutSurface() != JourneyReadoutSurface.OVERLAY_PILL) {
+        // pill stays out of the way rather than repeating the same number. A one-off
+        // "I'm going" has its floating map for this, so the pill is a hunt's only.
+        if (!huntActive || readoutSurface() != JourneyReadoutSurface.OVERLAY_PILL) {
             journeyOverlay.hide()
             return
         }
@@ -1035,11 +1083,13 @@ class ArrivalTrackingService : Service() {
     }
 
     /**
-     * The floating map belongs to a hunt: it is what you walk between targets with.
-     * A one-off "I'm going" already has the notification and does not need a window.
+     * The floating map belongs to a hunt: it is what you walk between targets with. A one-off
+     * "I'm going" shows it only when the trainer asked for the map, and only while the app is
+     * in the background -- inside the app the alert's own screen draws it.
      */
     private fun showFloatingMap() {
-        if (!huntActive || !FloatingMapOverlay.canDraw(applicationContext)) {
+        val journeyMap = !huntActive && goingMapEnabled && currentDestination != null && !appInForeground
+        if (!(huntActive || journeyMap) || !FloatingMapOverlay.canDraw(applicationContext)) {
             stopPoseTracking()
             floatingMap.hide()
             return
@@ -1136,7 +1186,17 @@ class ArrivalTrackingService : Service() {
         floatingMap.onOpenApp = { openTheApp() }
         floatingMap.onPrevious = { stopFollowing(); stepHuntTarget(forward = false) }
         floatingMap.onNext = { stopFollowing(); stepHuntTarget(forward = true) }
-        floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
+        // A one-off journey's Got it is the notification's: mark it caught and finish.
+        floatingMap.onGotIt = {
+            serviceScope.launch {
+                if (huntActive) {
+                    catchTargetAndAdvance()
+                } else {
+                    markCurrentTargetCaught()
+                    stopTrackingService()
+                }
+            }
+        }
         floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
         floatingMap.onAlertTap = { retargetHuntTo(it) }
         floatingMap.onRecalculate = { recalculateHuntRoute() }
@@ -1151,8 +1211,14 @@ class ArrivalTrackingService : Service() {
         }
         // Closing the window ends the hunt. There is one control for "I am done",
         // and it is the one every window has in its corner.
-        floatingMap.onClose = { stopEverything(applicationContext) }
+        // On a one-off journey the window is only a view of it: closing hides the map and
+        // leaves the walk running.
+        floatingMap.onClose = {
+            if (huntActive) stopEverything(applicationContext)
+            else serviceScope.launch { repository.setShowGoingMap(false) }
+        }
         val mapWasShowing = floatingMap.isShowing
+        floatingMap.setHuntMode(huntActive)
         floatingMap.show {
             // The map can come up well after the window -- a window opened as the bubble only
             // loads its map once expanded -- so anything framed or drawn before now went
@@ -1589,7 +1655,8 @@ class ArrivalTrackingService : Service() {
         // are neither reachable on foot nor distinguishable in a window this small,
         // so the window draws the nearest slice and the emphasised target always.
         val plan = huntPlan
-        val all = plan.ordered
+        // A one-off journey has no plan: the window draws the one target.
+        val all = if (huntActive) plan.ordered else listOfNotNull(currentDestination?.alert)
         val emphasized = currentDestination?.uniqueId
         val nearest = all.take(FLOATING_MAP_MAX_MARKERS)
         val tracked = all.firstOrNull { it.uniqueId == emphasized }
@@ -1598,7 +1665,7 @@ class ArrivalTrackingService : Service() {
         } else {
             nearest
         }
-        val numbered = minOf(plan.route.size, targets.size)
+        val numbered = if (huntActive) minOf(plan.route.size, targets.size) else 0
         // This runs from updateOngoing, i.e. on every location fix. Rebuilding every
         // pin that often -- Canvas work, on the main thread -- was most of the lag.
         renderedHuntTargets = targets.take(numbered)
@@ -1751,7 +1818,8 @@ class ArrivalTrackingService : Service() {
             huntActive = huntActive,
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
             undoOffer = undoOffer,
-            endedNote = endedNote()
+            endedNote = endedNote(),
+            goingMapShown = if (huntActive) null else goingMapEnabled
         )
     }
 
@@ -1902,20 +1970,39 @@ class ArrivalTrackingService : Service() {
      */
     private suspend fun refreshHuntPath(force: Boolean = false) {
         val origin = lastAcceptedLocation?.takeIf(::isFreshValidLocation)
-        if (showHuntPath && huntActive && origin != null) {
+        if (showHuntPath && (huntActive || goingMapEnabled) && origin != null) {
             runCatching { huntPath.request(origin.latitude, origin.longitude, huntPathStops(), force) }
                 .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
         }
         floatingMap.setHuntPath(currentHuntPath())
     }
 
-    private fun huntPathStops(): List<HuntRoutePoint> = huntPlan.route.mapNotNull { alert ->
-        alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
-    }
+    /** The hunt's numbered route, or the one target of an "I'm going" journey. */
+    private fun huntPathStops(): List<HuntRoutePoint> =
+        (if (huntActive) huntPlan.route else listOfNotNull(currentDestination?.alert)).mapNotNull { alert ->
+            alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
+        }
 
     /** The street path for the plan as it stands now, or nothing while it is being fetched. */
     private fun currentHuntPath(): HuntPath =
-        if (showHuntPath && huntActive) huntPath.pathFor(huntPathStops()) else HuntPath.None
+        if (showHuntPath && (huntActive || goingMapEnabled)) huntPath.pathFor(huntPathStops()) else HuntPath.None
+
+    /**
+     * Keeps a one-off journey's walking path fresh while its map is switched on, in the app or
+     * in the window. The hunt has its own loop. The cache re-asks only once the trainer has
+     * walked away from where the line starts, so most passes cost nothing.
+     */
+    private fun updateGoingPathLoop() {
+        goingPathJob?.cancel()
+        goingPathJob = null
+        if (!goingMapEnabled || huntActive || currentDestination == null) return
+        goingPathJob = serviceScope.launch {
+            while (isActive) {
+                refreshHuntPath()
+                delay(GOING_PATH_REFRESH_MILLIS)
+            }
+        }
+    }
 
     private fun stopHuntMatrixLoop() {
         serviceScope.launch { huntPath.clear() }
@@ -2090,6 +2177,13 @@ class ArrivalTrackingService : Service() {
         const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
             const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
         const val ACTION_UNDO_CATCH = "com.example.pokemonalertsv2.tracking.UNDO_CATCH"
+        const val ACTION_TOGGLE_GOING_MAP = "com.example.pokemonalertsv2.tracking.TOGGLE_GOING_MAP"
+        const val ACTION_RETARGET_HUNT = "com.example.pokemonalertsv2.tracking.RETARGET_HUNT"
+        private const val EXTRA_ALERT_JSON = "alert_json"
+        private val retargetJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /** How often a one-off journey's path is re-checked; a request goes out only after moving. */
+        private const val GOING_PATH_REFRESH_MILLIS = 60_000L
 
         /**
          * How often the walked legs are refreshed while hunting.
@@ -2171,6 +2265,17 @@ class ArrivalTrackingService : Service() {
                 context.startService(
                     Intent(context, ArrivalTrackingService::class.java)
                         .setAction(ACTION_SHOW_MAP)
+                )
+            }
+        }
+
+        /** Makes [alert] the running hunt's target. The service is already up for the hunt. */
+        fun retargetHunt(context: Context, alert: PokemonAlert) {
+            runCatching {
+                context.startService(
+                    Intent(context, ArrivalTrackingService::class.java)
+                        .setAction(ACTION_RETARGET_HUNT)
+                        .putExtra(EXTRA_ALERT_JSON, retargetJson.encodeToString(PokemonAlert.serializer(), alert))
                 )
             }
         }

@@ -125,6 +125,9 @@ internal class FloatingMapOverlay(context: Context) {
     private var undoName: String? = null
     private var noticeMessage: String? = null
     private var routeLineShown = true
+    private var huntMode = true
+    /** Controls that only make sense with a hunt's route: hidden for a single journey. */
+    private val huntOnlyViews = mutableListOf<View>()
 
     /** The chrome's colours, and everything that paints with them, for a theme change. */
     private var colors = OverlayColors.Light
@@ -319,6 +322,7 @@ internal class FloatingMapOverlay(context: Context) {
             })
         }
 
+        huntOnlyViews.forEach { it.isVisible = huntMode }
         val bubbleView = buildBubble()
         val container = FrameLayout(themedContext).apply {
             addView(mapFrame, ViewGroup.LayoutParams(
@@ -519,6 +523,7 @@ internal class FloatingMapOverlay(context: Context) {
         undoAction = null
         routeLineSwitch = null
         painters.clear()
+        huntOnlyViews.clear()
         menuPanel = null
         menuScrim = null
         pauseItem = null
@@ -597,6 +602,15 @@ internal class FloatingMapOverlay(context: Context) {
     }
 
     /** Names the pause row after whichever thing it would do next. */
+    /**
+     * A hunt's window, or a single "I'm going" target's: the latter has no route to step
+     * through, edit or pause, and its × hides the map rather than ending the walk.
+     */
+    fun setHuntMode(hunt: Boolean) {
+        huntMode = hunt
+        huntOnlyViews.forEach { it.isVisible = hunt }
+    }
+
     fun setPaused(paused: Boolean) {
         this.paused = paused
         pauseItem?.text = if (paused) "▶  Resume route" else "❚❚  Pause route"
@@ -749,14 +763,14 @@ internal class FloatingMapOverlay(context: Context) {
         setPadding(dp(4), 0, dp(4), 0)
         paint { setBackgroundColor(it.bar) }
         window.dragWith(this)
-        addView(controlButton("‹", "Previous target") { onPrevious() })
+        addView(controlButton("‹", "Previous target") { onPrevious() }.also { huntOnlyViews += it })
         addView(controlButton("✓", "Got it") { onGotIt() })
-        addView(controlButton("›", "Next target") { onNext() })
+        addView(controlButton("›", "Next target") { onNext() }.also { huntOnlyViews += it })
         // Spacer: the buttons sit at either end, the grab area is everything between.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
         addView(controlButton("⋯", "More options") { setMenuOpen(menuPanel?.isVisible != true) })
         addView(controlButton("–", "Minimize map") { minimize() })
-        addView(controlButton("×", "Stop hunt") { onClose() })
+        addView(controlButton("×", if (huntMode) "Stop hunt" else "Hide map") { onClose() })
     }
 
     /**
@@ -829,12 +843,12 @@ internal class FloatingMapOverlay(context: Context) {
             })
             addView(divider())
             addView(buildRouteLineRow())
-            addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() })
-            addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() })
+            addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() }.also { huntOnlyViews += it })
+            addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() }.also { huntOnlyViews += it })
             addView(menuItem(if (paused) "▶  Resume route" else "❚❚  Pause route") {
                 setMenuOpen(false)
                 onPauseToggle()
-            }.also { pauseItem = it })
+            }.also { pauseItem = it; huntOnlyViews += it })
         }
         return ScrollView(themedContext).apply {
             isVisible = false

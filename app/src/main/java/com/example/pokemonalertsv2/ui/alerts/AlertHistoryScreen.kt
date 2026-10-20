@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.rememberOffMain
 import android.Manifest
 import android.app.DatePickerDialog
 import android.location.Location
@@ -180,7 +181,7 @@ internal fun AlertHistoryPage(
     // only load one page at a time, so deriving chips from loaded items is incomplete.
     val availableFilters = remember { AlertFilter.entries.toSet() }
 
-    val filteredAlerts = remember(uiState.alerts, selectedAreaFilter, sortPreference, userLocation) {
+    val filteredAlerts = rememberOffMain(uiState.alerts, selectedAreaFilter, sortPreference, userLocation, alertEndTimes) {
         // Type filtering is now server-side — uiState.alerts already contains
         // only the selected type/search result (or all types when no filter is active).
         var filtered = uiState.alerts.filter { selectedAreaFilter.includes(it) }
@@ -222,6 +223,13 @@ internal fun AlertHistoryPage(
                 it.name.lowercase()
             }
         }
+    }
+
+    // One label per row, computed once per list rather than twice per row whenever the grid
+    // content rebuilds (it rebuilds on every loading-state change while paging).
+    val dayLabels = remember(filteredAlerts) {
+        val nowMillis = System.currentTimeMillis()
+        filteredAlerts.map { historyDayLabel(it, nowMillis) }
     }
 
     // Statistics: prefer /api/stats/total scoped to the active date, fall back to local counting.
@@ -585,8 +593,8 @@ internal fun AlertHistoryPage(
             }
 
             filteredAlerts.forEachIndexed { index, alert ->
-                val dayLabel = historyDayLabel(alert)
-                val previousDayLabel = filteredAlerts.getOrNull(index - 1)?.let(::historyDayLabel)
+                val dayLabel = dayLabels[index]
+                val previousDayLabel = dayLabels.getOrNull(index - 1)
                 if (sortPreference == SortPreference.POSTED_TIME && dayLabel != previousDayLabel) {
                     item(
                         key = "history_day_$dayLabel",
@@ -783,9 +791,12 @@ internal fun historyDayLabel(
     return when (date) {
         today -> "Today"
         today.minusDays(1) -> "Yesterday"
-        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMM"))
+        else -> date.format(HISTORY_DAY_FORMATTER)
     }
 }
+
+private val HISTORY_DAY_FORMATTER: java.time.format.DateTimeFormatter =
+    java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMM")
 
 @Composable
 internal fun StatRow(label: String, count: Int, color: Color) {

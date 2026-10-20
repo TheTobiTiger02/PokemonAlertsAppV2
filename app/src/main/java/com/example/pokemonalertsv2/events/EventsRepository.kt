@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.events
-
+
+import com.example.pokemonalertsv2.widget.EventsWidgetProvider
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
@@ -20,6 +21,7 @@ import java.io.File
  * something to show without a connection.
  */
 class EventsRepository(context: Context, private val service: EventsService = PokemonAlertsApi.eventsService) {
+    private val appContext = context.applicationContext
     private val cacheFile = File(context.applicationContext.filesDir, "events.json")
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; coerceInputValues = true }
 
@@ -49,14 +51,23 @@ class EventsRepository(context: Context, private val service: EventsService = Po
         runCatching { json.decodeFromString<GameEventsResponse>(cacheFile.readText()).data }.getOrDefault(emptyList())
     }
 
-    /** Fresh events, stored for later; throws when the backend cannot answer. */
-    suspend fun refresh(): List<GameEvent> {
+    /** Whether the stored calendar is missing or older than [maxAgeMillis]. */
+    suspend fun isStale(maxAgeMillis: Long): Boolean = withContext(Dispatchers.IO) {
+        !cacheFile.exists() || System.currentTimeMillis() - cacheFile.lastModified() > maxAgeMillis
+    }
+
+    /**
+     * Fresh events, stored for later; throws when the backend cannot answer. [notifyWidgets]
+     * redraws the events widgets from the new copy; the widget's own fetch passes false.
+     */
+    suspend fun refresh(notifyWidgets: Boolean = true): List<GameEvent> {
         val response = service.events()
         if (response.code() == 404) throw IllegalStateException("The backend does not serve events yet. Deploy the latest backend.")
         val body = response.catchBody()
         withContext(Dispatchers.IO) {
             runCatching { cacheFile.writeText(json.encodeToString(GameEventsResponse.serializer(), body)) }
         }
+        if (notifyWidgets) runCatching { EventsWidgetProvider.refreshAll(appContext) }
         return body.data
     }
 }

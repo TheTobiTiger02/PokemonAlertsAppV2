@@ -18,6 +18,9 @@ internal sealed interface DeepLinkTarget {
 
     /** A single alert, resolved against the repository before it can be shown. */
     data class Alert(val alertId: String) : DeepLinkTarget
+
+    /** One event on the Events tab, opened in its detail view (the events widget's rows). */
+    data class Event(val eventId: String) : DeepLinkTarget
 }
 
 internal const val DEEP_LINK_SCHEME = "pokemonalerts"
@@ -39,6 +42,7 @@ private const val TAB_TOOLS = 5
  *  - `pokemonalerts://alerts`, `://history`, `://map`, `://events`, `://tools`, `://settings`
  *  - `pokemonalerts://settings/<destination-name>` (case-insensitive, e.g. `godex`)
  *  - `pokemonalerts://alert/<id>`
+ *  - `pokemonalerts://event/<id>`
  */
 internal fun parseDeepLink(url: String?): DeepLinkTarget? {
     val raw = url?.trim().orEmpty()
@@ -73,6 +77,9 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
         }
         // The id is the rest of the path, so an id containing a slash still round-trips.
         "alert" -> tail.joinToString("/").takeIf { it.isNotBlank() }?.let(DeepLinkTarget::Alert)
+        "event" -> tail.joinToString("/").takeIf { it.isNotBlank() }
+            ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
+            ?.let(DeepLinkTarget::Event)
         else -> null
     }
 }

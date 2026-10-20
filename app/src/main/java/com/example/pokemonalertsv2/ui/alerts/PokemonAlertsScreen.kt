@@ -1,7 +1,9 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import com.example.pokemonalertsv2.util.rememberOffMain
+import com.example.pokemonalertsv2.util.PerfTrace
 import com.example.pokemonalertsv2.data.AlertCardStyle
 import android.Manifest
 import android.app.DatePickerDialog
@@ -483,13 +485,13 @@ fun PokemonAlertsPage(
     // Computed in the ViewModel on Dispatchers.Default and retained across tab switches.
 
     // Filter out expired and optionally dismissed alerts
-    val activeAlerts = remember(
+    val activeAlerts = rememberOffMain(
         alertsWithDistance,
         dismissedAlertIds,
         showDismissed,
         filterNow,
         filterDefinition
-    ) {
+    ) { PerfTrace.section("Feed:filter") {
         alertsWithDistance.filter { model ->
             val end = model.endMillis ?: Long.MAX_VALUE
             if (end <= filterNow) return@filter false
@@ -506,9 +508,9 @@ fun PokemonAlertsPage(
                 )
             )
         }
-    }
+    } }
 
-    val filteredAlerts = remember(activeAlerts, sortPreference, searchQuery) {
+    val filteredAlerts = rememberOffMain(activeAlerts, sortPreference, searchQuery) { PerfTrace.section("Feed:sort") {
         var filtered = activeAlerts
         
         // Apply text search
@@ -550,7 +552,7 @@ fun PokemonAlertsPage(
                 it.alert.name.lowercase()
             }
         }
-    }
+    } }
     
     // Expired alerts are filtered by the coarse expiration tick above.
 

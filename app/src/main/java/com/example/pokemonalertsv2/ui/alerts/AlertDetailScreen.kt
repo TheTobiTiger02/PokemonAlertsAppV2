@@ -502,12 +502,7 @@ fun AlertDetailScreen(
                             enter = appExpandIn(),
                             exit = appCollapseOut()
                         ) {
-                            AlertPill(
-                                text = "Arrival tracking active",
-                                icon = Icons.Filled.LocationOn,
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            GoingMapCard(alert = alert)
                         }
 
                         // Quest Info Card (for quests)

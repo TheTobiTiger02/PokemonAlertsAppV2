@@ -1,7 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import com.example.pokemonalertsv2.util.PerfTrace
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -297,7 +298,7 @@ internal val NoGoDexMatch = GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
 internal fun rememberGoDexMatchResults(
     alerts: List<PokemonAlert>
 ): Map<String, GoDexMatchResult> {
-    if (alerts.none { it.hasType("hundo") }) return emptyMap()
+    if (PerfTrace.section("GoDex:hundoScan") { alerts.none { it.hasType("hundo") } }) return emptyMap()
     val context = LocalContext.current.applicationContext
     val repository = remember(context) { GoDexRepository.getInstance(context) }
     val entries by repository.entries.collectAsStateWithLifecycle()
@@ -311,7 +312,7 @@ internal fun rememberGoDexMatchResults(
     entries: List<GoDexEntryEntity>,
     configured: Boolean
 ): Map<String, GoDexMatchResult> {
-    if (alerts.none { it.hasType("hundo") }) return emptyMap()
+    if (PerfTrace.section("GoDex:hundoScan") { alerts.none { it.hasType("hundo") } }) return emptyMap()
     val context = LocalContext.current.applicationContext
     val repository = remember(context) { GoDexRepository.getInstance(context) }
     val matches by produceState<Map<String, GoDexMatchResult>>(

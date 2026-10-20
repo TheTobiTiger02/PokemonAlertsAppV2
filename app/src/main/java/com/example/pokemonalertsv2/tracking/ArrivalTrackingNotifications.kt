@@ -44,6 +44,7 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_OVERLAY = 40_045
     private const val REQUEST_UNDO = 40_046
     private const val REQUEST_SUMMARY = 40_047
+    private const val REQUEST_TOGGLE_GOING_MAP = 40_049
     const val HUNT_SUMMARY_NOTIFICATION_ID = 40_048
 
     /** Assumed max journey distance for the progress bar, in meters. */
@@ -169,7 +170,9 @@ internal object ArrivalTrackingNotifications {
         offerOverlay: Boolean = false,
         undoOffer: CaughtAlert? = null,
         /** "Mewtwo raid ended · next: Eevee": leads the card for a minute after a switch. */
-        endedNote: String? = null
+        endedNote: String? = null,
+        /** A one-off journey's map switch, shown as Show map / Hide map; null on a hunt. */
+        goingMapShown: Boolean? = null
     ): Notification {
         val alert = destination.alert
         val walkingContent = endedNote ?: ongoingContent(
@@ -245,6 +248,17 @@ internal object ArrivalTrackingNotifications {
                         stopPendingIntent(context)
                     ).build()
                 )
+                .apply {
+                    goingMapShown?.let { shown ->
+                        addAction(
+                            Notification.Action.Builder(
+                                Icon.createWithResource(context, R.drawable.ic_map),
+                                goingMapActionLabel(shown),
+                                goingMapPendingIntent(context)
+                            ).build()
+                        )
+                    }
+                }
                 .setStyle(
                     // A progress bar reading "you are here" is worth less than the
                     // task and the reward. BigTextStyle is promotion-eligible -- see
@@ -283,6 +297,11 @@ internal object ArrivalTrackingNotifications {
                 if (huntActive) "Stop hunt" else "Stop",
                 stopPendingIntent(context)
             )
+            .apply {
+                goingMapShown?.let { shown ->
+                    addAction(R.drawable.ic_map, goingMapActionLabel(shown), goingMapPendingIntent(context))
+                }
+            }
             // Offered exactly when the readout has nowhere else to go: no chip on
             // this API level, no overlay grant, and the map label only exists inside
             // the floating window. Without this the journey degrades silently to a
@@ -610,6 +629,26 @@ internal object ArrivalTrackingNotifications {
             },
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
+
+    internal fun goingMapActionLabel(shown: Boolean): String = if (shown) "Hide map" else "Show map"
+
+    /**
+     * Flips the journey map. Without the overlay grant the window cannot be drawn, so the
+     * action opens that setting instead of flipping a switch that would show nothing.
+     */
+    private fun goingMapPendingIntent(context: Context): PendingIntent =
+        if (FloatingWindow.canDraw(context)) {
+            PendingIntent.getService(
+                context,
+                REQUEST_TOGGLE_GOING_MAP,
+                Intent(context, ArrivalTrackingService::class.java).apply {
+                    action = ArrivalTrackingService.ACTION_TOGGLE_GOING_MAP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+            )
+        } else {
+            overlaySettingsPendingIntent(context)
+        }
 
     /** Short enough for an action button; the full sentence lives in the app. */
     internal fun undoActionLabel(caught: CaughtAlert): String = "Undo ${caught.displayName}"

@@ -563,6 +563,10 @@ private data class PositionedAlert(
     val categories by lazy(LazyThreadSafetyMode.NONE) { alert.alertCategories() }
     val rank by lazy(LazyThreadSafetyMode.NONE) { mapAlertCategoryRank(categories) }
     val iv by lazy(LazyThreadSafetyMode.NONE) { alert.ivPercentage ?: -1 }
+    // Parsed once: the sort compares each alert O(log n) times.
+    val endMillis by lazy(LazyThreadSafetyMode.NONE) {
+        TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
+    }
 }
 
 private fun comparePositionedAlertPriority(a: PositionedAlert, b: PositionedAlert): Int {
@@ -571,9 +575,7 @@ private fun comparePositionedAlertPriority(a: PositionedAlert, b: PositionedAler
     val cpA = a.alert.cp ?: -1
     val cpB = b.alert.cp ?: -1
     if (cpA != cpB) return cpB.compareTo(cpA)
-    val endA = TimeUtils.parseEndTimeToMillis(a.alert.endTime) ?: Long.MAX_VALUE
-    val endB = TimeUtils.parseEndTimeToMillis(b.alert.endTime) ?: Long.MAX_VALUE
-    if (endA != endB) return endA.compareTo(endB)
+    if (a.endMillis != b.endMillis) return a.endMillis.compareTo(b.endMillis)
     return a.alert.uniqueId.compareTo(b.alert.uniqueId)
 }
 

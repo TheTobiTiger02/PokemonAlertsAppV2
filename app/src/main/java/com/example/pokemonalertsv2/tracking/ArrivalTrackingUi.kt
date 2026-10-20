@@ -61,6 +61,12 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
 
     fun start(alert: PokemonAlert) {
         scope.launch {
+            // During a hunt this is a new target for the hunt, not a second journey.
+            if (com.example.pokemonalertsv2.hunt.HuntRepository.getInstance(context).isHunting()) {
+                ArrivalTrackingService.retargetHunt(context, alert)
+                message("Hunt target switched")
+                return@launch
+            }
             runCatching {
                 val destination = repository.startTracking(alert)
                 ArrivalTrackingService.start(context)

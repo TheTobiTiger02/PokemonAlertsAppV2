@@ -43,9 +43,15 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.FillLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleOpacity
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.fillColor
 import org.maplibre.android.style.layers.PropertyFactory.fillOpacity
 import org.maplibre.android.style.layers.PropertyFactory.fillOutlineColor
@@ -201,6 +207,9 @@ internal class OpenStreetMapController {
     private var pendingUserPose: MapUserPose? = null
     private var pendingWeatherCells: List<MapWeatherCell> = emptyList()
     private var pendingHuntPath: HuntPath = HuntPath.None
+    private var pendingSpawnpoints: List<MapSpawnpoint> = emptyList()
+    private var pendingSpawnpointNow = 0L
+    private var selectedSpawnpointId: String? = null
     /** Held so weather glyphs can be rasterised whenever the cell set changes, not just on attach. */
     private var imageContext: android.content.Context? = null
     private val registeredWeatherImages = HashSet<String>()
@@ -215,6 +224,9 @@ internal class OpenStreetMapController {
     var onCameraChanged: (MapCameraSnapshot) -> Unit = {}
     var onUserGesture: () -> Unit = {}
     var onWeatherCellClick: (String) -> Unit = {}
+    var onSpawnpointClick: (String) -> Unit = {}
+    /** The visible area once the camera settles, for loading what only covers the screen. */
+    var onViewportChanged: (SpawnpointViewport, Double) -> Unit = { _, _ -> }
     private var pendingGesturesEnabled = true
 
     /** Style images this controller has registered, so each pin is uploaded exactly once. */
@@ -252,6 +264,12 @@ internal class OpenStreetMapController {
                 }
                 return@addOnMapClickListener true
             }
+            val spawnpointHit = map.queryRenderedFeatures(touchBox, SPAWNPOINT_LAYER)
+                .firstNotNullOfOrNull { it.getStringProperty(SPAWNPOINT_ID_PROPERTY) }
+            if (spawnpointHit != null) {
+                onSpawnpointClick(spawnpointHit)
+                return@addOnMapClickListener true
+            }
             val hit = map.queryRenderedFeatures(screenPoint, WEATHER_GLYPH_LAYER)
                 .firstOrNull { it.hasProperty(WEATHER_AREA_PROPERTY) }
                 ?.getStringProperty(WEATHER_AREA_PROPERTY)
@@ -267,9 +285,21 @@ internal class OpenStreetMapController {
             val position = map.cameraPosition
             val target = position.target ?: return@addOnCameraIdleListener
             pendingZoom = position.zoom
-            // Spawn circles re-render through the marker pass on every camera change; the
-            // weather cells have no such pass, so their zoom gate is evaluated here.
+            // Both zoom-gated layers are evaluated here: the marker pass skips the spawn circles
+            // when only the countdowns changed.
             renderWeatherCells()
+            renderSpawnRadii()
+            map.projection.visibleRegion.latLngBounds.let { bounds ->
+                onViewportChanged(
+                    SpawnpointViewport(
+                        south = bounds.latitudeSouth,
+                        west = bounds.longitudeWest,
+                        north = bounds.latitudeNorth,
+                        east = bounds.longitudeEast
+                    ),
+                    position.zoom
+                )
+            }
             onCameraChanged(
                 MapCameraSnapshot(
                     latitude = target.latitude,
@@ -321,6 +351,7 @@ internal class OpenStreetMapController {
         style.addSource(GeoJsonSource(HUNT_PATH_NEXT_SOURCE))
         style.addSource(GeoJsonSource(USER_ACCURACY_SOURCE))
         style.addSource(GeoJsonSource(USER_POSE_SOURCE))
+        style.addSource(GeoJsonSource(SPAWNPOINT_SOURCE))
         // Weather cells sit at the very bottom: they are ~10km across, so anything drawn
         // over them would otherwise be tinted by a fill that covers most of the screen.
         style.addLayer(
@@ -348,6 +379,35 @@ internal class OpenStreetMapController {
                 lineColor(AndroidColor.parseColor("#1A73E8")),
                 lineWidth(2.5f),
                 lineOpacity(0.85f)
+            )
+        )
+        // Spawnpoints: small dots under the route, the trainer and the pins, coloured by where
+        // each point is in its hourly cycle.
+        style.addLayer(
+            CircleLayer(SPAWNPOINT_LAYER, SPAWNPOINT_SOURCE).withProperties(
+                circleRadius(
+                    Expression.switchCase(
+                        Expression.get(SPAWNPOINT_SELECTED_PROPERTY), Expression.literal(9f),
+                        Expression.literal(6f)
+                    )
+                ),
+                circleColor(
+                    Expression.match(
+                        Expression.get(SPAWNPOINT_PHASE_PROPERTY),
+                        Expression.color(SPAWNPOINT_UNKNOWN_COLOR),
+                        Expression.stop(SpawnpointPhase.ACTIVE.name, Expression.color(SPAWNPOINT_ACTIVE_COLOR)),
+                        Expression.stop(SpawnpointPhase.SOON.name, Expression.color(SPAWNPOINT_SOON_COLOR)),
+                        Expression.stop(SpawnpointPhase.INACTIVE.name, Expression.color(SPAWNPOINT_INACTIVE_COLOR))
+                    )
+                ),
+                circleOpacity(0.9f),
+                circleStrokeColor(AndroidColor.WHITE),
+                circleStrokeWidth(
+                    Expression.switchCase(
+                        Expression.get(SPAWNPOINT_SELECTED_PROPERTY), Expression.literal(3f),
+                        Expression.literal(1.2f)
+                    )
+                )
             )
         )
         // The hunt's walk, above the circles so it reads as a route and below the trainer and the pins,
@@ -415,6 +475,7 @@ internal class OpenStreetMapController {
 
         renderUserPose()
         renderSpawnRadii()
+        renderSpawnpoints()
         renderWeatherCells()
         renderHuntPath()
         renderMarkers()
@@ -530,9 +591,11 @@ internal class OpenStreetMapController {
     ) {
         imageContext = context.applicationContext
         pendingMarkers = markers
+        val alertsChanged = rawAlerts !== pendingAlerts
         pendingAlerts = rawAlerts
-        renderMarkers()
-        renderSpawnRadii()
+        MapPerfLog.timed("osm.renderMarkers") { renderMarkers() }
+        // A countdown tick republishes the same alerts: the radii cannot have moved.
+        if (alertsChanged) MapPerfLog.timed("osm.renderSpawnRadii") { renderSpawnRadii() }
     }
 
     fun setWeatherCells(context: android.content.Context, cells: List<MapWeatherCell>) {
@@ -553,9 +616,34 @@ internal class OpenStreetMapController {
         renderSpawnRadii()
     }
 
+    /** Draws [points] coloured for [nowMillis]; an empty list clears the layer. */
+    fun setSpawnpoints(points: List<MapSpawnpoint>, nowMillis: Long, selectedId: String?) {
+        pendingSpawnpoints = points
+        pendingSpawnpointNow = nowMillis
+        selectedSpawnpointId = selectedId
+        MapPerfLog.timed("osm.renderSpawnpoints") { renderSpawnpoints() }
+    }
+
+    private fun renderSpawnpoints() {
+        val source = style?.getSourceAs<GeoJsonSource>(SPAWNPOINT_SOURCE) ?: return
+        val now = pendingSpawnpointNow
+        val selected = selectedSpawnpointId
+        source.setGeoJson(
+            FeatureCollection.fromFeatures(
+                pendingSpawnpoints.map { point ->
+                    Feature.fromGeometry(Point.fromLngLat(point.longitude, point.latitude)).apply {
+                        addStringProperty(SPAWNPOINT_ID_PROPERTY, point.id)
+                        addStringProperty(SPAWNPOINT_PHASE_PROPERTY, spawnpointPhase(point, now).name)
+                        addBooleanProperty(SPAWNPOINT_SELECTED_PROPERTY, point.id == selected)
+                    }
+                }
+            )
+        )
+    }
+
     fun setUserPose(pose: MapUserPose?) {
         pendingUserPose = pose
-        renderUserPose()
+        MapPerfLog.timed("osm.renderUserPose") { renderUserPose() }
     }
 
     fun setContentInsets(insets: MapContentInsets) {
@@ -803,6 +891,15 @@ internal class OpenStreetMapController {
         const val HUNT_PATH_LAYER = "hunt-path-layer"
         const val HUNT_PATH_NEXT_SOURCE = "hunt-path-next-source"
         const val HUNT_PATH_NEXT_LAYER = "hunt-path-next-layer"
+        const val SPAWNPOINT_SOURCE = "spawnpoint-source"
+        const val SPAWNPOINT_LAYER = "spawnpoint-layer"
+        const val SPAWNPOINT_ID_PROPERTY = "spawnpointId"
+        const val SPAWNPOINT_PHASE_PROPERTY = "phase"
+        const val SPAWNPOINT_SELECTED_PROPERTY = "selected"
+        val SPAWNPOINT_ACTIVE_COLOR = AndroidColor.parseColor("#2E7D5B")
+        val SPAWNPOINT_SOON_COLOR = AndroidColor.parseColor("#E8A100")
+        val SPAWNPOINT_INACTIVE_COLOR = AndroidColor.parseColor("#7A8290")
+        val SPAWNPOINT_UNKNOWN_COLOR = AndroidColor.parseColor("#B3B8C2")
         const val SPAWN_RADIUS_SOURCE = "spawn-radius-source"
         const val SPAWN_RADIUS_LAYER = "spawn-radius-layer"
         const val SPAWN_RADIUS_LINE_LAYER = "spawn-radius-line-layer"
@@ -865,6 +962,10 @@ internal fun OpenStreetMapView(
     onCameraChanged: (MapCameraSnapshot) -> Unit,
     onUserGesture: () -> Unit,
     onWeatherCellClick: (String) -> Unit = {},
+    spawnpoints: List<MapSpawnpoint> = emptyList(),
+    selectedSpawnpointId: String? = null,
+    onSpawnpointClick: (String) -> Unit = {},
+    onViewportChanged: (SpawnpointViewport, Double) -> Unit = { _, _ -> },
     showSpawnRadius: Boolean = false,
     spacialRendEnabled: Boolean = false,
     weatherCells: List<MapWeatherCell> = emptyList(),
@@ -1219,6 +1320,18 @@ internal fun OpenStreetMapView(
         }
     }
 
+    LaunchedEffect(onSpawnpointClick, onViewportChanged) {
+        controller.onSpawnpointClick = onSpawnpointClick
+        controller.onViewportChanged = onViewportChanged
+    }
+    // Spawnpoint colours follow the hourly cycle; a half-minute tick is precise enough for
+    // "up now" and "spawning soon" and costs one small source update.
+    val spawnpointClock = rememberCountdownClock(30_000L)
+    LaunchedEffect(spawnpoints, selectedSpawnpointId) {
+        androidx.compose.runtime.snapshotFlow { spawnpointClock.value }.collect { now ->
+            controller.setSpawnpoints(spawnpoints, now, selectedSpawnpointId)
+        }
+    }
     LaunchedEffect(onWeatherCellClick) {
         controller.onWeatherCellClick = onWeatherCellClick
     }

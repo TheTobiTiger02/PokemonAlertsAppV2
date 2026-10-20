@@ -71,6 +71,7 @@ private val MAX_DISTANCE_KEY = androidx.datastore.preferences.core.intPreference
 private val MAX_DISTANCE_METERS_KEY = androidx.datastore.preferences.core.intPreferencesKey("max_distance_meters")
 private val SNOOZE_DURATION_KEY = androidx.datastore.preferences.core.intPreferencesKey("snooze_duration")
 private val SHOW_SPAWN_RADIUS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawn_radius")
+private val SHOW_SPAWNPOINTS_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_spawnpoints")
 private val SPACIAL_REND_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spacial_rend_enabled")
 private val JOURNEY_OVERLAY_ENABLED_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("journey_overlay_enabled")
 internal val LAST_SUCCESSFUL_ALERT_SYNC_KEY = androidx.datastore.preferences.core.longPreferencesKey("last_successful_alert_sync")
@@ -269,6 +270,10 @@ interface AlertPreferencesStore {
 
     val showSpawnRadius: Flow<Boolean>
     suspend fun updateShowSpawnRadius(enabled: Boolean)
+
+    /** The spawnpoint layer on the OpenStreetMap style. */
+    val showSpawnpoints: Flow<Boolean>
+    suspend fun updateShowSpawnpoints(enabled: Boolean)
 
     val spacialRendEnabled: Flow<Boolean>
     suspend fun updateSpacialRendEnabled(enabled: Boolean)
@@ -760,6 +765,16 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     override suspend fun updateShowSpawnRadius(enabled: Boolean) {
         dataStore.edit { prefs ->
             prefs[SHOW_SPAWN_RADIUS_KEY] = enabled
+        }
+    }
+
+    override val showSpawnpoints: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[SHOW_SPAWNPOINTS_KEY] ?: false
+    }
+
+    override suspend fun updateShowSpawnpoints(enabled: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[SHOW_SPAWNPOINTS_KEY] = enabled
         }
     }
 

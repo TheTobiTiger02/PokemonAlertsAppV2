@@ -90,6 +90,11 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                 val now = System.currentTimeMillis()
                 // Parse once per alert and sort on the parsed value: endTime is an ISO string,
                 // so sorting it directly ordered lexicographically, not chronologically.
+                val previous = _uiState.value.alerts
+                // Room re-emits on every table write; skipping content-equal lists keeps the
+                // distance/filter/sort pipelines (and the grid diff) from re-running for nothing.
+                // The comparison is a deep equals over ~1500 alerts, so it runs off the main
+                // thread together with the sort.
                 val activeAlerts = withContext(Dispatchers.Default) {
                     alerts.asSequence()
                         .filter { !it.isInvalidated }
@@ -98,12 +103,9 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
                         .sortedByDescending { (_, end) -> end }
                         .map { (alert, _) -> alert }
                         .toList()
-                }
-                // Room re-emits on every table write; skipping content-equal lists keeps the
-                // distance/filter/sort pipelines (and the grid diff) from re-running for nothing.
-                _uiState.update { current ->
-                    if (current.alerts == activeAlerts) current else current.copy(alerts = activeAlerts)
-                }
+                        .takeUnless { it == previous }
+                } ?: return@collectLatest
+                _uiState.update { current -> current.copy(alerts = activeAlerts) }
             }
         }
     }
@@ -205,7 +207,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     /** Live per-category counts over the active alerts; feeds every filter chip badge. */
     val categoryCounts: StateFlow<Map<AlertCategory, Int>> = _uiState
-        .map { state -> countAlertsByCategory(state.alerts) }
+        .map { state -> state.alerts }
+        // Loading and highlight changes also emit uiState; only a new alert list changes counts.
+        .distinctUntilChanged { old, new -> old === new }
+        .map { alerts -> countAlertsByCategory(alerts) }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
@@ -495,6 +500,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         .asPreferenceState(false)
     val showSpawnRadius = repository.alertPreferences.showSpawnRadius
         .asPreferenceState(false)
+    val showSpawnpoints = repository.alertPreferences.showSpawnpoints
+        .asPreferenceState(false)
     val spacialRendEnabled = repository.alertPreferences.spacialRendEnabled
         .asPreferenceState(false)
     val showWeatherCells = repository.alertPreferences.showWeatherCells
@@ -563,6 +570,12 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
     fun updateShowSpawnRadius(enabled: Boolean) {
         viewModelScope.launch {
             repository.alertPreferences.updateShowSpawnRadius(enabled)
+        }
+    }
+
+    fun updateShowSpawnpoints(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.alertPreferences.updateShowSpawnpoints(enabled)
         }
     }
 

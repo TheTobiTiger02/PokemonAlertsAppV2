@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.AlertPreferences
@@ -87,7 +88,10 @@ internal fun CompactAlertCard(
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val accent = Color(visualStyle.category.accentArgb)
     val onAccent = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
-    val isExpired = endMillis?.let { it <= countdownClock.value } ?: false
+    // Derived: the card recomposes when these flip, not on every countdown tick.
+    val isExpired by remember(endMillis, countdownClock) {
+        derivedStateOf { endMillis?.let { it <= countdownClock.value } ?: false }
+    }
     val policy = alertActionPolicy(
         context = cardContext,
         isExpired = isExpired,
@@ -95,10 +99,14 @@ internal fun CompactAlertCard(
         hasGoingAction = onGoingClick != null,
         isDismissed = isDismissed
     )
-    val lateWarning = TravelTime.expiresBeforeArrival(
-        walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
-        remainingMillis = endMillis?.minus(countdownClock.value)
-    )
+    val lateWarning by remember(endMillis, distanceInfo.walkingDurationSeconds, countdownClock) {
+        derivedStateOf {
+            TravelTime.expiresBeforeArrival(
+                walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
+                remainingMillis = endMillis?.minus(countdownClock.value)
+            )
+        }
+    }
     val details = remember(alert, distanceInfo) { compactDetailLine(alert, distanceInfo) }
     val questTask = remember(alert) { questAlertPresentation(alert)?.task }
     var menuOpen by remember { mutableStateOf(false) }

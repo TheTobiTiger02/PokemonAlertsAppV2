@@ -30,17 +30,13 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.19"
+internal const val WHATS_NEW_RELEASE = "1.20"
 
 private val WHATS_NEW_POINTS = listOf(
-    "The Live filter button opens a small sheet like History's: tap alert types, areas or a distance, and the list updates behind it.",
-    "Filter Studio uses the same tabs as the map filters, for the feed, notifications and widgets alike.",
-    "Hunt setup is pages in one sheet: pick types, then fine-tune each one.",
-    "Raid counters fit on one screen, with the boss, weather and party options as a chip row.",
-    "Catch routes plan on the map, with the settings in a sheet below.",
-    "Tap an alert on the map for a cleaner sheet with the important details first.",
-    "Silence alerts for any length, such as 40 minutes, or until a date and time. Quiet hours keep their From and To buttons.",
-    "Notification and GoDex settings are simple rows, and Spawn insights has tabs."
+    "Spawnpoints on the map: switch them on in Layers on the OpenStreetMap style. Green is up now, amber spawns within 10 minutes. Tap one for its hourly timer, next spawns and recent Pokémon.",
+    "\"I'm going\" has its own map: leave the app and it floats over other apps with you, a direction arrow, the target, the walking path and a Got it button. Hide it with × or Hide map in the notification. During a hunt, \"I'm going\" switches the hunt's target.",
+    "New Events widget for your home screen: what is running now and what is coming up, for the event types you choose. Tap an event to open it.",
+    "Smoother everywhere: filtering the live feed and the map no longer blocks scrolling, and countdowns no longer redraw every card each second."
 )
 
 /**

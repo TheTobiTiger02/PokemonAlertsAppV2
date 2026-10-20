@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import android.os.Trace
 import android.util.Log
 import com.example.pokemonalertsv2.BuildConfig
 
@@ -22,7 +23,7 @@ internal object MapPerfLog {
      * returning a default. Probing once is enough to keep the marker pipeline testable off-device
      * without the tests having to know that it logs at all.
      */
-    private val androidRuntimeAvailable: Boolean by lazy {
+    @PublishedApi internal val androidRuntimeAvailable: Boolean by lazy {
         runCatching { Log.isLoggable(TAG, Log.DEBUG) }.isSuccess
     }
 
@@ -30,12 +31,20 @@ internal object MapPerfLog {
 
     // System.nanoTime rather than SystemClock: same monotonic guarantee, and it exists off-device.
     inline fun <T> timed(stage: String, detail: () -> String = { "" }, block: () -> T): T {
-        if (!enabled) return block()
-        val start = System.nanoTime()
-        val result = block()
-        val millis = (System.nanoTime() - start) / 1_000_000.0
-        event(stage, "%.1fms %s".format(millis, detail()))
-        return result
+        // Trace sections work on every build type, so staging captures (atrace/Perfetto) see the
+        // marker pipeline too; they cost a flag check when nothing is tracing.
+        val traced = androidRuntimeAvailable
+        if (traced) Trace.beginSection("MapPerf:$stage")
+        try {
+            if (!enabled) return block()
+            val start = System.nanoTime()
+            val result = block()
+            val millis = (System.nanoTime() - start) / 1_000_000.0
+            event(stage, "%.1fms %s".format(millis, detail()))
+            return result
+        } finally {
+            if (traced) Trace.endSection()
+        }
     }
 
     fun event(stage: String, detail: String) {
