@@ -2655,7 +2655,8 @@ internal fun AlertsMapScreenContent(
                         onDismissAlert = dismissFromMap,
                         onRestoreAlert = restoreFromMap,
                     companions = companions,
-                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) }
+                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) },
+                        showCloseButton = false
                     )
                 }
             }

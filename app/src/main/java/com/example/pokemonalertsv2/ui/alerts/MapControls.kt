@@ -146,6 +146,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import com.example.pokemonalertsv2.BuildConfig
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 
 /**
  * Offline tile controls for the OpenStreetMap layer: what is stored, and two actions.
@@ -298,8 +300,32 @@ internal fun MapAlertDetailContent(
     onOpenCompanion: (PokemonAlert) -> Unit = {},
     goDexAction: @Composable () -> Unit = {
         GoDexCaughtAction(alert = alert, matchResult = goDexStatus)
-    }
+    },
+    /** Only the redesigned sheet honours this: a bottom sheet closes by dragging instead. */
+    showCloseButton: Boolean = true,
+    designOption: Int = rememberDesignOption(DesignScreen.ALERT_DETAIL)
 ) {
+    if (designOption != 0) {
+        MapAlertSheetContent(
+            alert = alert,
+            goDexStatus = goDexStatus,
+            distanceInfo = distanceInfo,
+            onDismiss = onDismiss,
+            isGoing = isGoing,
+            onGoing = onGoing,
+            onOpenMaps = onOpenMaps,
+            onShare = onShare,
+            onOpenFullDetail = onOpenFullDetail,
+            modifier = modifier,
+            isDismissed = isDismissed,
+            onDismissAlert = onDismissAlert,
+            onRestoreAlert = onRestoreAlert,
+            companions = companions,
+            onOpenCompanion = onOpenCompanion,
+            showCloseButton = showCloseButton
+        )
+        return
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showSnoozeDialog by rememberSaveable(alert.uniqueId) { mutableStateOf(false) }

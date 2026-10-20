@@ -155,7 +155,10 @@ import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
+import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
+import com.example.pokemonalertsv2.ui.components.DesignScreen
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 import com.example.pokemonalertsv2.ui.components.RollingNumberText
 import com.example.pokemonalertsv2.ui.components.GradientText
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
@@ -189,7 +192,9 @@ fun AlertDetailScreen(
     raidCountersState: RaidCountersUiState = RaidCountersUiState(),
     raidCountersActions: RaidCountersActions = RaidCountersActions.Noop,
     /** Land straight on counters, e.g. from the raid watch notification's Counters action. */
-    startOnCounters: Boolean = false
+    startOnCounters: Boolean = false,
+    /** Which design to draw; see [DesignScreen.ALERT_DETAIL]. 0 is the shipped layout. */
+    designOption: Int = rememberDesignOption(DesignScreen.ALERT_DETAIL)
 ) {
     if (isInPictureInPicture) {
         AlertPictureInPictureContent(alert = alert)
@@ -241,6 +246,29 @@ fun AlertDetailScreen(
             state = raidCountersState,
             actions = raidCountersActions,
             onBack = { countersOpen = false }
+        )
+    } else if (designOption != 0) {
+        val activity = LocalContext.current as? android.app.Activity
+        AlertDetailRedesign(
+            option = designOption,
+            ui = AlertDetailUi(
+                alert = alert,
+                goDexStatus = goDexStatus,
+                isGoing = isGoing,
+                goingEnabled = alert.isEligibleArrivalDestination(),
+                distance = rememberAlertDistance(alert),
+                countdownClock = rememberCountdownClock(),
+                raidCountersState = raidCountersState,
+                snackbarHostState = snackbarHostState,
+                onBack = { onBack?.invoke() ?: activity?.finish() },
+                onGoing = { arrivalTracking.onToggle(alert) },
+                onNavigate = { openMapForAlert(context, alert) },
+                onOpenCounters = { openCounters() },
+                onSnooze = if (alert.isExpiredAt(System.currentTimeMillis())) null else ({ showSnoozeDialog = true }),
+                onPictureInPicture = onEnterPictureInPicture,
+                onShare = { scope.launch { AlertShareCard.share(context, alert) } },
+                onShowImage = { showExpandedImage = true }
+            )
         )
     } else {
         Surface(
@@ -425,6 +453,7 @@ fun AlertDetailScreen(
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        DesignCompareStrip(DesignScreen.ALERT_DETAIL)
                         // Pokemon Name and Type Badge Row
                         Row(
                             modifier = Modifier.fillMaxWidth(),
