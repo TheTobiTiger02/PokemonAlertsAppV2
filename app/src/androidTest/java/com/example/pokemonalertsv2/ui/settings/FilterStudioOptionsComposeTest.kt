@@ -11,14 +11,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
-import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterSelectionMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -67,34 +64,6 @@ class FilterStudioOptionsComposeTest {
         }
     }
 
-    @Test
-    fun overviewOpensATypePageWhoseSwitchHidesTheType() {
-        composeRule.setContent { Body { StudioOverviewBody(it) } }
-        composeRule.onNodeWithTag("studio_row_raid").performScrollTo().performClick()
-        composeRule.onNodeWithTag("type_editor_raids").assertIsDisplayed()
-        composeRule.onNodeWithTag("type_switch_raids").performClick()
-        composeRule.runOnIdle { assertFalse(draft.alertTypes.contains(FilterAlertType.RAID.name)) }
-        composeRule.onNodeWithTag("token_tile_5").performClick()
-        composeRule.runOnIdle { assertEquals(FilterSelection.only(listOf("1", "Mega")), draft.raidTiers) }
-    }
 
-    @Test
-    fun overviewSwitchesTypesWithoutRules() {
-        composeRule.setContent { Body { StudioOverviewBody(it) } }
-        composeRule.onNodeWithTag("studio_switch_kecleon").performScrollTo().performClick()
-        composeRule.runOnIdle { assertFalse(draft.alertTypes.contains(FilterAlertType.KECLEON.name)) }
-        composeRule.onNodeWithTag("studio_profiles").performClick()
-        composeRule.runOnIdle { assertEquals(1, profilesOpened) }
-    }
 
-    @Test
-    fun tilesToggleOnTapAndOpenRulesFromTheTuneButton() {
-        composeRule.setContent { Body { StudioTilesBody(it) } }
-        composeRule.onNodeWithTag("studio_tile_rocket").performScrollTo().performClick()
-        composeRule.runOnIdle { assertFalse(draft.alertTypes.contains(FilterAlertType.ROCKET.name)) }
-        composeRule.onNodeWithTag("studio_tune_rocket").performClick()
-        composeRule.onNodeWithTag("type_editor_rocket").assertIsDisplayed()
-        composeRule.onNodeWithTag("token_tile_fire").performClick()
-        composeRule.runOnIdle { assertEquals(FilterSelection.only(listOf("Water")), draft.rocketTypes) }
-    }
 }

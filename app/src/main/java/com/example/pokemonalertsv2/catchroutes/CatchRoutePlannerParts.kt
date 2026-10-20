@@ -47,10 +47,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -76,6 +74,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 // The parts the planner's newer designs (Rows, Map + sheet, Steps) share: one page per setting,
 // the summary rows that open them, the Generate bar, and the slimmer route and walking cards.
@@ -423,17 +423,6 @@ internal fun GenerateButton(model: CatchRoutesViewModel, now: Long, modifier: Mo
     if (model.busy) OutlinedButton(onClick = model::cancel, modifier = modifier.height(52.dp).testTag("cancel_catch_route")) { Text("Cancel", maxLines = 1) }
     else Button(onClick = model::generate, enabled = model.retryAt <= now, shape = RoundedCornerShape(16.dp),
         modifier = modifier.height(52.dp).testTag("generate_catch_route")) { Text("Generate route", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-}
-
-/** The fixed bottom bar of the Rows design: status and one full-width Generate. */
-@Composable
-internal fun GenerateBar(model: CatchRoutesViewModel, now: Long, modifier: Modifier = Modifier) {
-    Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-        Column(Modifier.padding(bottom = Spacing.sm)) {
-            GenerateStatus(model, now)
-            GenerateButton(model, now, Modifier.fillMaxWidth().panelGutter().padding(top = Spacing.sm))
-        }
-    }
 }
 
 /**

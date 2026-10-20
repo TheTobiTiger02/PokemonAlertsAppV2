@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,12 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TextButton
@@ -57,7 +53,6 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -68,7 +63,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxHeight
 
@@ -96,9 +90,7 @@ fun SpawnInsightsScreen(
     onSpawnSearchChange: (String) -> Unit = {},
     onSpawnDayChange: (String?) -> Unit = {}
 ) {
-    val design = com.example.pokemonalertsv2.ui.components.rememberDesignOption(com.example.pokemonalertsv2.ui.components.DesignScreen.INSIGHTS)
     Column(modifier = modifier.fillMaxSize()) {
-        com.example.pokemonalertsv2.ui.components.DesignCompareStrip(com.example.pokemonalertsv2.ui.components.DesignScreen.INSIGHTS)
         PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
             InsightsTab.entries.forEach { tab ->
                 Tab(
@@ -112,11 +104,7 @@ fun SpawnInsightsScreen(
         }
         when (state.tab) {
             InsightsTab.ALERTS -> AlertInsights(state, onQueryChange, onRangeChange, onRun, suggestions)
-            InsightsTab.SPAWNS -> when (design) {
-                1 -> SpawnActivityTabsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
-                2 -> SpawnActivityCardsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
-                else -> SpawnActivityPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
-            }
+            InsightsTab.SPAWNS -> SpawnActivityTabsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
         }
     }
 }
@@ -205,89 +193,6 @@ private fun AlertInsights(
             else -> InsightsBody(state.insights)
         }
     }
-}
-
-/**
- * "Was today normal?" Active spawnpoints per day, so a surge or an outage stands out, and every wild
- * Pokémon the live scanner saw, ranked by species. Unlike the Alerts tab this is not limited to
- * the alerts that were posted: it is everything the scanner saw spawn.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SpawnActivityPane(
-    state: SpawnActivityUiState,
-    onRangeChange: (SpawnRange) -> Unit,
-    onAreaChange: (String?) -> Unit,
-    onRetry: () -> Unit,
-    onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        com.example.pokemonalertsv2.ui.settings.SegmentedSetting(
-            options = SpawnRange.entries.map { it.label },
-            selectedIndex = state.range.ordinal,
-            onSelected = { onRangeChange(SpawnRange.entries[it]) }
-        )
-        val areas = state.activity?.days?.areas.orEmpty()
-        if (areas.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
-                areas.forEach { area ->
-                    // "Unknown" is the server's bucket for spawnpoints outside every named area.
-                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
-                    FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
-                }
-            }
-        }
-
-        val activity = state.activity
-        when {
-            state.isLoading && activity == null -> Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
-
-            state.errorMessage != null && activity == null -> Column {
-                Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = onRetry) { Text("Try again") }
-            }
-
-            activity != null -> SpawnActivityBody(activity, isRefreshing = state.isLoading, search = state, onSearchChange = onSearchChange, onDayChange = onDayChange)
-        }
-    }
-}
-
-@Composable
-private fun SpawnActivityBody(
-    activity: SpawnActivity,
-    isRefreshing: Boolean,
-    search: SpawnActivityUiState,
-    onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
-) {
-    if (isRefreshing) {
-        Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    SpawnpointsSection(activity, showNotes = true)
-    WildSpawnsSection(activity, search, onDayChange, dayChips = true)
-    SpeciesSearch(search, onSearchChange)
-    SpeciesResults(activity, search)
-    Text(
-        SPECIES_FOOTNOTE,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }
 
 private const val SPECIES_FOOTNOTE =
@@ -505,8 +410,6 @@ private fun SpawnLoading(state: SpawnActivityUiState, onRetry: () -> Unit) {
     }
 }
 
-// --- A · Tabs ------------------------------------------------------------------------------
-
 /**
  * Spawnpoints and species as two tabs under one range-and-area block. Days are picked on the
  * bars, and the explanations sit behind the info button.
@@ -559,96 +462,6 @@ private fun SpawnActivityTabsPane(
                 SpeciesResults(activity, state)
             }
         }
-    }
-}
-
-// --- B · Summary cards ---------------------------------------------------------------------
-
-private enum class SpawnPage { ROOT, SPAWNPOINTS, SPECIES }
-
-/** Three summary cards; each opens its full section as a page with a back arrow. */
-@Composable
-private fun SpawnActivityCardsPane(
-    state: SpawnActivityUiState,
-    onRangeChange: (SpawnRange) -> Unit,
-    onAreaChange: (String?) -> Unit,
-    onRetry: () -> Unit,
-    onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
-) {
-    var page by rememberSaveable { mutableStateOf(SpawnPage.ROOT) }
-    val numbers = remember { NumberFormat.getIntegerInstance() }
-    com.example.pokemonalertsv2.ui.components.PanelPages(page = page, root = SpawnPage.ROOT, onBack = { page = SpawnPage.ROOT }) { shown ->
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).testTag("insights_cards_${shown.name.lowercase()}"),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            when (shown) {
-                SpawnPage.ROOT -> {
-                    SpawnScope(state, onRangeChange, onAreaChange)
-                    SpawnLoading(state, onRetry)
-                    state.activity?.let { activity ->
-                        val summary = remember(activity.days) { summarizeSpawnActivity(activity.days) }
-                        SummaryCard(
-                            title = "Spawnpoints",
-                            value = summary.today?.let { "${numbers.format(it)} today" } ?: "—",
-                            detail = summary.usual?.let { "Usual day ${numbers.format(it)}" + if (summary.flagged.isNotEmpty()) " · ${summary.flagged.size} unusual" else "" } ?: "",
-                            tag = "insights_card_spawnpoints"
-                        ) { page = SpawnPage.SPAWNPOINTS }
-                        SummaryCard(
-                            title = "Wild spawns",
-                            value = "${numbers.format(activity.species.totals.sightings)} sightings",
-                            detail = "${numbers.format(activity.species.totals.species)} species",
-                            tag = "insights_card_species"
-                        ) { page = SpawnPage.SPECIES }
-                        activity.species.species.firstOrNull()?.let { top ->
-                            SummaryCard(
-                                title = "Most seen",
-                                value = top.name ?: "#${top.pokemonId}",
-                                detail = "${numbers.format(top.count)} sightings",
-                                tag = "insights_card_top"
-                            ) { page = SpawnPage.SPECIES }
-                        }
-                    }
-                }
-                SpawnPage.SPAWNPOINTS -> {
-                    BackTitle("Spawnpoints") { page = SpawnPage.ROOT }
-                    state.activity?.let { SpawnpointsSection(it, showNotes = true) }
-                }
-                SpawnPage.SPECIES -> {
-                    BackTitle("Wild spawns") { page = SpawnPage.ROOT }
-                    state.activity?.let { activity ->
-                        WildSpawnsSection(activity, state, onDayChange, dayChips = false)
-                        SpeciesSearch(state, onSearchChange)
-                        SpeciesResults(activity, state)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryCard(title: String, value: String, detail: String, tag: String, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().testTag(tag)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                Text(value, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(painterResource(com.example.pokemonalertsv2.R.drawable.ic_chevron_right), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun BackTitle(title: String, onBack: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack, modifier = Modifier.testTag("insights_back")) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-        }
-        Text(title, style = MaterialTheme.typography.titleLarge)
     }
 }
 

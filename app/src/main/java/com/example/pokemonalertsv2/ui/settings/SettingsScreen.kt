@@ -2,16 +2,11 @@ package com.example.pokemonalertsv2.ui.settings
 
 import androidx.compose.material3.IconButton
 import com.example.pokemonalertsv2.ui.alerts.shortLabel
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,53 +14,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -80,58 +44,30 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.content.ContextCompat
-import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.notifications.QuietHours
 import com.example.pokemonalertsv2.data.SortPreference
-import com.example.pokemonalertsv2.data.godex.GoDexConfig
-import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
-import com.example.pokemonalertsv2.data.godex.GoDexSyncUiState
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import java.util.Calendar
-import java.text.DateFormat
-import java.util.Date
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
-import android.widget.Toast
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.util.UpdateState
-import com.example.pokemonalertsv2.data.NotificationPreset
-import com.example.pokemonalertsv2.data.NotificationCategoryState
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
 import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
-import com.example.pokemonalertsv2.ui.motion.appCollapseOut
-import com.example.pokemonalertsv2.ui.motion.appExpandIn
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.example.pokemonalertsv2.data.backup.SettingsBackup
-import com.example.pokemonalertsv2.data.backup.SettingsBackupRepository
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.text.style.TextOverflow
@@ -303,7 +239,6 @@ internal fun SettingsScreen(
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
-    val settingsDesign = rememberDesignOption(DesignScreen.SETTINGS_PAGES)
 
     LinearModernBackground(
         modifier = Modifier.fillMaxSize()
@@ -383,11 +318,10 @@ internal fun SettingsScreen(
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             val designedPage = animatedDestination == SettingsDestination.NOTIFICATIONS ||
                 animatedDestination == SettingsDestination.GODEX
-            if (designedPage) DesignCompareStrip(DesignScreen.SETTINGS_PAGES)
-            if (designedPage && settingsDesign != 0) {
+            if (designedPage) {
                 if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
                     NotificationsPageDesign(
-                        option = settingsDesign,
+
                         viewModel = viewModel,
                         grants = PermissionGrants(
                             notifications = systemNotificationsGranted,
@@ -408,7 +342,7 @@ internal fun SettingsScreen(
                     )
                 } else {
                     GoDexPageDesign(
-                        option = settingsDesign,
+
                         viewModel = viewModel,
                         urlInput = goDexUrlInput,
                         onUrlInputChange = { goDexUrlInput = it },
@@ -583,347 +517,9 @@ internal fun SettingsScreen(
                 }
                 }
 
-                if (animatedDestination == SettingsDestination.GODEX) {
-                SettingsSection(title = "GoDex Hundo checklist") {
-                    val totalCount = goDexEntries.size
-                    val neededCount = goDexEntries.count { it.needed }
-                    val isStale = goDexConfig.lastSuccessfulSyncMillis > 0L &&
-                        System.currentTimeMillis() - goDexConfig.lastSuccessfulSyncMillis >=
-                        GoDexRepository.STALE_WARNING_MILLIS
 
-                     if (!goDexConfig.isConnected) {
-                        val context = LocalContext.current
-                        Text(
-                            "Connect your GoDex Hundo collection to track needed targets, filter notifications, and sync catches.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        ElevatedButton(
-                            onClick = {
-                                context.startActivity(
-                                    com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.AccountCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Sign in to GoDex (Two-Way Sync)")
-                        }
-                        Text(
-                            "Logging in allows you to mark Pokémon as caught directly inside the app to sync them back to your GoDex checklist.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            "Or, connect with a Public URL (Read-Only):",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        OutlinedTextField(
-                            value = goDexUrlInput,
-                            onValueChange = { goDexUrlInput = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Public GoDex collection URL") },
-                            placeholder = { Text("https://godex.site/public-collection/\u2026") },
-                            singleLine = true,
-                            enabled = !goDexSyncUiState.isSyncing
-                        )
-                        ElevatedButton(
-                            onClick = { viewModel.connectGoDex(goDexUrlInput) },
-                            enabled = goDexUrlInput.isNotBlank() && !goDexSyncUiState.isSyncing
-                        ) {
-                            Text(if (goDexSyncUiState.isSyncing) "Connecting\u2026" else "Connect")
-                        }
-                        goDexSyncUiState.errorMessage?.let { error ->
-                            Text(
-                                text = error,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    } else {
-                        Text(
-                            goDexConfig.collectionTitle.ifBlank { "GoDex Hundo collection" },
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        GoDexSettingsProgressCard(
-                            neededCount = neededCount,
-                            totalCount = totalCount,
-                            onOpenCollection = { navigateTo(SettingsDestination.GODEX_COLLECTION) }
-                        )
-                        GoDexSyncStatusCard(
-                            config = goDexConfig,
-                            syncState = goDexSyncUiState,
-                            isStale = isStale
-                        )
-                        SwitchSetting(
-                            title = "Only notify for needed GoDex Hundos",
-                            subtitle = "Confirmed collected Hundos are suppressed. Unknown forms still notify.",
-                            checked = goDexConfig.notificationFilterEnabled,
-                            onCheckedChange = viewModel::updateGoDexNotificationFilter
-                        )
-                        if (goDexConfig.notificationFilterEnabled) {
-                            Text(
-                                "Your manual Hundo species selection is preserved and resumes when this filter is disabled.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            FilledTonalButton(
-                                onClick = { navigateTo(SettingsDestination.GODEX_COLLECTION) },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(if (neededCount == 0) "View collection" else "Review needed")
-                            }
-                            OutlinedButton(
-                                onClick = viewModel::syncGoDex,
-                                enabled = !goDexSyncUiState.isSyncing
-                            ) {
-                                Text(if (goDexSyncUiState.isSyncing) "Syncing\u2026" else "Sync now")
-                            }
-                        }
-                        val context = LocalContext.current
-                        if (goDexConfig.hasSession) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                if (goDexConfig.hasWriteBackUrl) {
-                                    val shortUrl = goDexConfig.writeBackUrl.substringAfterLast("/")
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
-                                            contentDescription = null,
-                                            tint = Color(0xFF4CAF50),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            "Two-way sync enabled for checklist: $shortUrl",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        TextButton(onClick = {
-                                            context.startActivity(
-                                                com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context, startAtPicker = true)
-                                            )
-                                        }) {
-                                            Text("Change checklist")
-                                        }
-                                        Spacer(modifier = Modifier.weight(1f))
-                                        TextButton(onClick = { viewModel.clearGoDexSession() }) {
-                                            Text("Sign out")
-                                        }
-                                    }
-                                } else {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Info,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFFB74D),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            "Signed in, but no checklist is selected.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        ElevatedButton(
-                                            onClick = {
-                                                context.startActivity(
-                                                    com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context, startAtPicker = true)
-                                                )
-                                            },
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("Select checklist to sync")
-                                        }
-                                        TextButton(onClick = { viewModel.clearGoDexSession() }) {
-                                            Text("Sign out")
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            val requiresReauthentication =
-                                goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED
-                            if (requiresReauthentication) {
-                                Text(
-                                    "Your GoDex session expired. Sign in again to resume " +
-                                        "${goDexSyncUiState.pendingCount} pending checklist " +
-                                        if (goDexSyncUiState.pendingCount == 1) "change." else "changes.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                            ElevatedButton(
-                                onClick = {
-                                    context.startActivity(
-                                        com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.AccountCircle,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    if (requiresReauthentication) {
-                                        "Sign in again to resume sync"
-                                    } else {
-                                        "Sign in to GoDex for two-way sync"
-                                    }
-                                )
-                            }
-                            Text(
-                                "Sign in to mark Pokémon as caught directly from alerts, and have changes sync back to your GoDex checklist.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        TextButton(
-                            onClick = { showGoDexDisconnectConfirmation = true },
-                            enabled = !goDexSyncUiState.isSyncing
-                        ) {
-                            Text("Disconnect GoDex")
-                        }
-                        // Two similar actions sat side by side with nothing to tell them apart.
-                        Text(
-                            "Sign out stops syncing changes back but keeps your checklist here. " +
-                                "Disconnect removes the checklist from this app.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                }
-                }
                 
-                if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
-                SettingsSection(title = "Permission status") {
-                    PermissionStatusRow(
-                        title = "Notifications",
-                        granted = systemNotificationsGranted,
-                        description = "Required for instant alert notifications",
-                        actionLabel = if (systemNotificationsGranted) "Manage" else "Enable",
-                        onAction = {
-                            context.startActivity(
-                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            )
-                        }
-                    )
-                    HorizontalDivider()
-                    PermissionStatusRow(
-                        title = "Location while using the app",
-                        granted = foregroundLocationGranted,
-                        description = "Enables distance, nearby sorting, and map tracking",
-                        actionLabel = if (foregroundLocationGranted) "Manage" else "Grant",
-                        onAction = onManageLocationPermissions
-                    )
-                    HorizontalDivider()
-                    PermissionStatusRow(
-                        title = "Background location",
-                        granted = backgroundLocationGranted,
-                        description = "Keeps location-based features accurate when the app is closed",
-                        actionLabel = if (backgroundLocationGranted) "Manage" else "Grant",
-                        onAction = onManageLocationPermissions
-                    )
-                    HorizontalDivider()
-                    // Permissions can all read green while push is still dead;
-                    // this is the only row that shows delivery actually working.
-                    PushLivenessRow(lastPushReceivedMillis = lastPushReceived)
-                }
-                SettingsSection(title = "Notification preferences") {
-                    OutlinedButton(onClick = {
-                        viewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.NOTIFICATIONS)
-                        navigateTo(SettingsDestination.ALERT_FILTERS)
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Choose eligible alerts in Filter Studio") }
-                    SwitchSetting(
-                        title = "Enable Notifications",
-                        subtitle = "Receive alerts for new Pokémon nearby",
-                        checked = notificationsEnabled,
-                        onCheckedChange = { viewModel.updateNotificationsEnabled(it) }
-                    )
-                    
-                    AnimatedVisibility(
-                        visible = notificationsEnabled,
-                        enter = appExpandIn(),
-                        exit = appCollapseOut()
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        SwitchSetting(
-                            title = "Vibration",
-                            subtitle = "Vibrate when receiving notifications",
-                            checked = notificationVibrate,
-                            onCheckedChange = { viewModel.updateNotificationVibrate(it) }
-                        )
 
-                        // The only always-visible readout below Android 16: the
-                        // status bar chip the Clock's timer uses is gated to system
-                        // apps, so an overlay is what is left.
-                        JourneyOverlayRow(
-                            enabled = journeyOverlayEnabled,
-                            onEnabledChange = { viewModel.updateJourneyOverlayEnabled(it) }
-                        )
-                        
-                        // A standing nightly window. Kept separate from the one-off
-                        // "silence for N hours" below: they answer different questions and
-                        // either can be on without the other.
-                        QuietHoursCard(
-                            enabled = quietHoursEnabled,
-                            startMinute = quietHoursStart,
-                            endMinute = quietHoursEnd,
-                            onEnabledChange = { viewModel.updateQuietHoursEnabled(it) },
-                            onWindowChange = { start, end -> viewModel.updateQuietHours(start, end) }
-                        )
-
-                        // Silence notifications section
-                        SilenceNotificationsCard(
-                            silenceUntil = silenceUntil,
-                            onSilenceFor = { minutes -> viewModel.silenceNotificationsFor(minutes) },
-                            onClearSilence = { viewModel.clearNotificationSilence() }
-                        )
-                        }
-                    }
-                }
-                }
                 
                 if (animatedDestination == SettingsDestination.ABOUT_UPDATES) {
                 SettingsSection(title = "Backup") {

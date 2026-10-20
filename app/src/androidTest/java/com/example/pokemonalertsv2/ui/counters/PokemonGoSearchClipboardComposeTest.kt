@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -74,17 +75,14 @@ class PokemonGoSearchClipboardComposeTest {
                     RaidCountersScreen(
                         state = state,
                         actions = RaidCountersActions.Noop,
-                        onBack = {},
-                        // The shipped screen, whatever design a debug device has picked.
-                        design = 0
+                        onBack = {}
                     )
                 }
             }
         }
 
-        composeRule.onNodeWithText("Time remaining").assertIsDisplayed()
-        composeRule.onNodeWithText("Boss moveset · Psycho Cut / Shadow Ball")
-            .assertIsDisplayed()
+        // The raid's countdown sits in a pill beside the boss.
+        composeRule.onNodeWithText("Psycho Cut / Shadow Ball", substring = true).assertIsDisplayed()
 
         composeRule.onNodeWithText("Copy for GO")
             .performScrollTo()
@@ -140,9 +138,7 @@ class PokemonGoSearchClipboardComposeTest {
                     RaidCountersScreen(
                         state = state,
                         actions = RaidCountersActions.Noop,
-                        onBack = {},
-                        // The shipped screen, whatever design a debug device has picked.
-                        design = 0
+                        onBack = {}
                     )
                 }
             }
@@ -174,17 +170,13 @@ class PokemonGoSearchClipboardComposeTest {
                         pokebattlerUserId = null
                     ),
                     actions = RaidCountersActions.Noop,
-                    onBack = {},
-                    design = 0
+                    onBack = {}
                 )
             }
         }
 
-        composeRule.onNodeWithText("Set up your recommended team").assertIsDisplayed()
-        composeRule.onNodeWithText(
-            "Import a Poké Genie CSV or link Pokébattler in Settings → Raid counters. " +
-                "Copy for GO is enabled only for a real personal team."
-        ).assertIsDisplayed()
+        // Said once, above the counters.
+        composeRule.onNodeWithTag("personal_source_hint").assertIsDisplayed()
     }
 
     private fun counter(

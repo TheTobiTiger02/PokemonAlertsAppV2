@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.pokemonalertsv2.ui.alerts
 
 import android.widget.Toast
@@ -40,12 +42,12 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
 import com.example.pokemonalertsv2.ui.components.PanelRowIcon
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.State
+import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 
 /**
  * The map's alert sheet in the redesigned detail options: what it is first (sprite, title,
@@ -85,7 +87,6 @@ internal fun MapAlertSheetContent(
             .testTag("map_alert_sheet"),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
-        DesignCompareStrip(DesignScreen.ALERT_DETAIL)
         AlertSheetHeader(
             alert = alert,
             goDexStatus = goDexStatus,
@@ -235,5 +236,57 @@ private fun CompanionTile(companion: PokemonAlert, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/**
+ * The map sheet's header: sprite, title, type and place, countdown, then
+ * one line of numbers (with "Going" or "Dismissed" first when that applies), a quest's task,
+ * and the GoDex status.
+ */
+@Composable
+internal fun AlertSheetHeader(
+    alert: PokemonAlert,
+    goDexStatus: GoDexMatchResult,
+    countdownClock: State<Long>,
+    distanceInfo: AlertDistanceInfo?,
+    isGoing: Boolean,
+    modifier: Modifier = Modifier,
+    isDismissed: Boolean = false,
+    actions: @Composable () -> Unit = {}
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(verticalAlignment = Alignment.Top) {
+            AlertSprite(alert, size = 56.dp)
+            Spacer(Modifier.width(Spacing.md))
+            AlertSummaryBlock(
+                alert = alert,
+                goDexStatus = goDexStatus,
+                countdownClock = countdownClock,
+                titleStyle = MaterialTheme.typography.titleLarge,
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("map_alert_title_block")
+            )
+            actions()
+        }
+        val status = listOfNotNull(
+            "Going".takeIf { isGoing },
+            "Dismissed".takeIf { isDismissed }
+        )
+        val numbers = alertNumbersLine(alert, distanceInfo)
+        val line = (status + listOf(numbers).filter { it.isNotEmpty() }).joinToString(" · ")
+        if (line.isNotEmpty()) {
+            Text(
+                text = line,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (status.isNotEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.testTag("alert_numbers_line")
+            )
+        }
+        questAlertPresentation(alert)?.task?.let { task ->
+            Text(task, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (goDexStatus.status != GoDexMatchStatus.NOT_CONFIGURED) GoDexStatusPill(goDexStatus)
     }
 }

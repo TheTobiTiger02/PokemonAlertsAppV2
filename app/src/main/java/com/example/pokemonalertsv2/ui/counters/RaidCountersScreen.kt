@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -15,35 +14,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.counters.CounterMetric
@@ -54,13 +35,9 @@ import com.example.pokemonalertsv2.data.counters.PokemonGoSearch
 import com.example.pokemonalertsv2.data.counters.bestOf
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import com.example.pokemonalertsv2.data.counters.toCounterMetric
-import com.example.pokemonalertsv2.ui.alerts.rememberCountdownClock
-import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.launch
-import androidx.compose.material3.rememberModalBottomSheetState
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * The raid counters, as their own screen.
@@ -79,143 +56,9 @@ fun RaidCountersScreen(
     state: RaidCountersUiState,
     actions: RaidCountersActions,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-    // Designs being compared on a device; see DesignScreen. Option 0 is the shipped screen.
-    design: Int = rememberDesignOption(DesignScreen.RAID_COUNTERS)
-) {
-    when (design) {
-        1 -> RaidCountersChipRow(state, actions, onBack, modifier)
-        2 -> RaidCountersCollapsing(state, actions, onBack, modifier)
-        3 -> RaidCountersTabs(state, actions, onBack, modifier)
-        else -> CurrentRaidCountersScreen(state, actions, onBack, modifier)
-    }
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun CurrentRaidCountersScreen(
-    state: RaidCountersUiState,
-    actions: RaidCountersActions,
-    onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var setupSheetOpen by rememberSaveable { mutableStateOf(false) }
-    var megaSheetOpen by rememberSaveable { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val copyTeam = rememberCopyTeam(state, snackbarHostState)
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                scrollBehavior = scrollBehavior,
-                title = {
-                    Column {
-                        Text(
-                            text = "Best counters",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        state.bossDisplayName?.let { name ->
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    // One spinner for the whole screen, in the bar. Rows must not each
-                    // sprout their own progress affordance during a refresh.
-                    if (state.isLoading || state.personalLoading) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .size(16.dp)
-                        )
-                    }
-                    ShareCountersButton(state)
-                }
-            )
-        }
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            DesignCompareStrip(DesignScreen.RAID_COUNTERS)
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = countersListPadding(),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                state.raidEndTimeMillis?.let { endMillis ->
-                    item(key = "raid_time") { RaidTimeRemaining(endMillis) }
-                }
-                item(key = "boss") { BossSummary(state) }
-                item(key = "source") { SourceSelector(state, actions) }
-                if (state.personalTeamRequested &&
-                    state.source == CounterSourceId.ALL_POKEMON &&
-                    state.pokeGenieCount == 0 &&
-                    state.pokebattlerUserId.isNullOrBlank()
-                ) {
-                    item(key = "personal_setup") { PersonalTeamSetupGuidance() }
-                }
-                item(key = "setup") { BattleSetupSummary(state, onOpen = { setupSheetOpen = true }) }
-                if (state.showingPersonal) {
-                    item(key = "mega") { ActiveMegaRow(state, onOpen = { megaSheetOpen = true }) }
-                }
-                item(key = "quick") { QuickControls(state, actions) }
-                // An item that renders nothing still costs a `spacedBy` gap, which is what
-                // left a band of dead space above the first section.
-                if (state.hasScreenNotices) {
-                    item(key = "notices") { ScreenNotices(state, actions) }
-                }
-                countersBody(state, actions, copyTeam)
-            }
-        }
-    }
-
-    if (megaSheetOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { megaSheetOpen = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            ActiveMegaSheet(
-                state = state,
-                onSelect = {
-                    actions.onActiveMegaChanged(it)
-                    megaSheetOpen = false
-                }
-            )
-        }
-    }
-
-    if (setupSheetOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { setupSheetOpen = false },
-            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ) {
-            BattleSetupSheet(
-                state = state,
-                actions = actions,
-                onDismiss = { setupSheetOpen = false }
-            )
-        }
-    }
+    RaidCountersChipRow(state, actions, onBack, modifier)
 }
 
 /** The list's padding: the screen gutter, and room for the navigation bar under the last row. */
@@ -280,66 +123,6 @@ internal fun rememberCopyTeam(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun PersonalTeamSetupGuidance() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.tertiaryContainer
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "Set up your recommended team",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                text = "Import a Poké Genie CSV or link Pokébattler in Settings → Raid counters. " +
-                    "Copy for GO is enabled only for a real personal team.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-        }
-    }
-}
-
-@Composable
-private fun RaidTimeRemaining(endMillis: Long) {
-    val now by rememberCountdownClock()
-    val remaining = (endMillis - now).coerceAtLeast(0L)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Time remaining",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = if (remaining > 0L) {
-                    TimeUtils.formatDurationShort(remaining)
-                } else {
-                    "Raid ended"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
         }
     }
 }

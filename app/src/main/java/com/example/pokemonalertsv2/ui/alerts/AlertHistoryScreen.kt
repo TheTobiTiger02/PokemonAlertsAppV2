@@ -4,106 +4,49 @@ package com.example.pokemonalertsv2.ui.alerts
 
 import android.Manifest
 import android.app.DatePickerDialog
-import android.content.Context
-import android.content.pm.PackageManager
 import android.location.Location
 import android.widget.DatePicker
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.runtime.Immutable
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedAssistChip
-import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.surfaceColorAtElevation
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -111,71 +54,34 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
-import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
-import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
-import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.components.ShimmerAlertCard
-import com.example.pokemonalertsv2.ui.history.AlertHistoryViewModel
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
-import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.util.CachedLocationProvider
-import com.example.pokemonalertsv2.util.DistanceSource
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.util.WalkingRouteInfo
-import com.example.pokemonalertsv2.util.WalkingRouteRepository
-import com.example.pokemonalertsv2.util.WalkingRouteUtils
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.InputChip
-import com.example.pokemonalertsv2.data.FilterPreset
-import com.example.pokemonalertsv2.data.FilterPresets
-import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
-import androidx.compose.material3.AssistChip
-import androidx.compose.ui.platform.testTag
 
 @Composable
 internal fun AlertHistoryPage(
@@ -499,8 +405,6 @@ internal fun AlertHistoryPage(
         val countdownClock = rememberCountdownClock()
         val cardStyle = rememberAlertCardStyle()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
-        // The new Insights designs fold the statistics card into one chip that opens Insights.
-        val insightsDesign = rememberDesignOption(DesignScreen.INSIGHTS)
         // Steps aside while scrolling down, as on the live list.
         val hideControls = rememberHideOnScrollState()
         val listAtTop by remember(listState) {
@@ -570,29 +474,8 @@ internal fun AlertHistoryPage(
                 }
             }
 
-            if (insightsDesign != 0) item(span = { GridItemSpan(maxLineSpan) }) {
-                val scope = selectedDateMillis?.let {
-                    java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault())
-                        .format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.getDefault()))
-                } ?: "all time"
-                val today = statistics["today"] ?: 0
-                AssistChip(
-                    onClick = { onOpenInsights?.invoke() },
-                    enabled = onOpenInsights != null,
-                    label = {
-                        Text(
-                            "${java.text.NumberFormat.getIntegerInstance().format(statistics["total"] ?: 0)} alerts · $scope" +
-                                if (today > 0) " · $today today" else "",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    leadingIcon = { Icon(painterResource(R.drawable.ic_insights), contentDescription = null, modifier = Modifier.size(18.dp)) },
-                    modifier = Modifier.testTag("history_stats_chip")
-                )
-            }
             // Statistics Card
-            if (insightsDesign == 0) item(span = { GridItemSpan(maxLineSpan) }) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 var isExpanded by rememberSaveable { mutableStateOf(false) }
 
                 val dateText = if (selectedDateMillis != null) {
@@ -935,126 +818,3 @@ internal fun StatRow(label: String, count: Int, color: Color) {
     }
 }
 
-/**
- * Builds a styled HTML page for sharing an alert that can be opened in any browser.
- * Uses dark theme styling matching the app's Midnight Sky theme.
- */
-internal fun buildAlertShareHtml(alert: PokemonAlert): String {
-    val title = formatAlertTitle(alert)
-    val imageUrl = alert.imageUrl ?: alert.thumbnailUrl ?: ""
-    val mapsUrl = alert.googleMapsUri.toString()
-
-    return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pokemon Alert: $title</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0A0A0F;
-            min-height: 100vh;
-            padding: 20px;
-            color: #E2E8F0;
-        }
-        .card {
-            max-width: 480px;
-            margin: 0 auto;
-            background: rgba(18, 18, 24, 0.95);
-            border-radius: 24px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            border: 1px solid rgba(255, 107, 53, 0.15);
-        }
-        .image-container {
-            position: relative;
-            height: 280px;
-            background: linear-gradient(135deg, #1F120E 0%, #121218 100%);
-        }
-        .image-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: linear-gradient(135deg, #1F120E 0%, #121218 100%);
-        }
-        .content { padding: 24px; }
-        h1 {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            background: linear-gradient(90deg, #FF6B35, #FFA809);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-        .stat {
-            background: rgba(255, 107, 53, 0.1);
-            padding: 12px;
-            border-radius: 12px;
-            text-align: center;
-            border: 1px solid rgba(255, 107, 53, 0.15);
-        }
-        .stat-value { font-size: 20px; font-weight: 700; color: #FFA809; }
-        .stat-label { font-size: 12px; color: #94A3B8; margin-top: 4px; }
-        .time-badge {
-            display: inline-block;
-            background: linear-gradient(90deg, #FF6B35, #D62828);
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            margin-bottom: 20px;
-        }
-        .location { color: #94A3B8; font-size: 14px; margin-bottom: 16px; }
-        .maps-btn {
-            display: block;
-            width: 100%;
-            background: linear-gradient(90deg, #FF6B35, #FFA809);
-            color: black;
-            text-decoration: none;
-            padding: 16px;
-            border-radius: 12px;
-            text-align: center;
-            font-weight: 700;
-            font-size: 16px;
-        }
-        .maps-btn:hover { opacity: 0.9; }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #64748B;
-            font-size: 12px;
-        }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="image-container">
-            ${if (imageUrl.isNotBlank()) "<img src=\"$imageUrl\" alt=\"$title\" onerror=\"this.style.display='none'\">" else ""}
-        </div>
-        <div class="content">
-            <h1>$title</h1>
-            <div class="time-badge">⏱ Ends: ${alert.endTime}</div>
-            <div class="stats">
-                ${alert.formattedIv?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>IV</div></div>" } ?: ""}
-                ${alert.cp?.let { "<div class='stat'><div class='stat-value'>$it</div><div class='stat-label'>CP</div></div>" } ?: ""}
-                ${alert.level?.let { val v = if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString(); "<div class='stat'><div class='stat-value'>$v</div><div class='stat-label'>Level</div></div>" } ?: ""}
-            </div>
-            ${alert.locationDisplay?.let { "<div class='location'>📍 $it</div>" } ?: ""}
-            <a href="$mapsUrl" class="maps-btn">📍 Open in Google Maps</a>
-        </div>
-    </div>
-    <div class="footer">Shared from Pokemon Alerts</div>
-</body>
-</html>
-    """.trimIndent()
-}

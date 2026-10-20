@@ -19,10 +19,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -40,9 +37,6 @@ import com.example.pokemonalertsv2.data.PokemonAlertsApi
 import com.example.pokemonalertsv2.hunt.BatterySaverSwitch
 import kotlinx.coroutines.flow.first
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
@@ -175,7 +169,6 @@ class CatchRoutesActivity : ComponentActivity() {
         val walking = active != null && active?.finished != true
         LaunchedEffect(mapView, walking) { if (walking) mapView?.follow() }
         val showSettings = active == null && (plan == null || editing)
-        val option = rememberDesignOption(DesignScreen.CATCH_ROUTES)
         val topBar: @Composable () -> Unit = {
             Column {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -185,12 +178,7 @@ class CatchRoutesActivity : ComponentActivity() {
                     Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                     TextButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
                         modifier = Modifier.testTag("catch_route_history")) { Text("History") }
-                    // Only useful while walking a route, so it only appears then.
-                    if (active != null && option == 0) IconButton(onClick = ::floatingWindow) {
-                        Icon(androidx.compose.ui.res.painterResource(com.example.pokemonalertsv2.R.drawable.ic_pip), contentDescription = "Floating map")
-                    }
                 }
-                DesignCompareStrip(DesignScreen.CATCH_ROUTES)
             }
         }
         val routeMap: PlannerMap = { mapModifier, hintAtTop ->
@@ -243,49 +231,8 @@ class CatchRoutesActivity : ComponentActivity() {
             showStop = { details = spawnpointSelections(it) },
             deleteSetup = { deleteSetup = it },
         )
-        if (option == 2) SheetPlanner(model, plannerState, actions, showSettings,
+        SheetPlanner(model, plannerState, actions, showSettings,
             topBar = { Surface { Column(Modifier.statusBarsPadding()) { topBar() } } }, map = routeMap)
-        else Scaffold { padding ->
-            Column(Modifier.fillMaxSize().padding(padding)) {
-                topBar()
-                when (option) {
-                    1 -> Box(Modifier.weight(1f)) { RowsPlanner(model, plannerState, actions, showSettings, routeMap) }
-                    3 -> Box(Modifier.weight(1f)) { StepsPlanner(model, plannerState, actions, showSettings, routeMap) }
-                    else -> {
-                        routeMap(Modifier.fillMaxWidth().weight(if (showSettings) 0.8f else 1.25f), false)
-                        LazyColumn(Modifier.testTag("catch_route_form").fillMaxWidth().weight(1f).padding(horizontal = 16.dp), state = formState,
-                            verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(top = 10.dp, bottom = 24.dp)) {
-                            if (active != null) item { SessionCard(active!!, settings, refreshing, outOfDate, notice, now) }
-                            else if (plan != null && !editing) item {
-                                RouteSummary(plan, encounters, onStart = startGuidance, onEdit = { editing = true })
-                                model.recommendation?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-                            }
-                            if (showSettings) item {
-                                RouteSettingsForm(settings, saved.size, advanced, picking, showSaved,
-                                    onAdvanced = { advanced = !advanced }, onPicking = { picking = it }, onShowSaved = { showSaved = !showSaved },
-                                    onArea = { areaOpen = true }, onGoRoutes = { goRoutesOpen = true }, onBack = if (plan != null) { { editing = false } } else null)
-                            }
-                            if (showSettings && showSaved) items(saved, key = { it.id }) { setup ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    TextButton(onClick = { model.load(setup); showSaved = false }, modifier = Modifier.weight(1f)) { Text(setup.name) }
-                                    TextButton(onClick = { deleteSetup = setup }) { Text("Delete") }
-                                }
-                            }
-                            if (plan != null && !showSettings) {
-                                item { Text("Stops", style = MaterialTheme.typography.titleMedium) }
-                                val nextIndex = active?.let { catchNextStopIndex(it, now) }
-                                itemsIndexed(stops) { index, group ->
-                                    val visited = active != null && group.all { e -> active!!.wasVisited(e.opportunity) }
-                                    val previousMeters = stops.getOrNull(index - 1)?.first()?.meters ?: 0.0
-                                    StopRow(index + 1, group, previousMeters, plan, settings, visited, next = index == nextIndex,
-                                        modifier = Modifier.testTag("catch_stop_$index")) { details = spawnpointSelections(group) }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
         details?.let { selections ->
             SpawnpointDetailSheet(selections, plan, loadDetail = { spawnpointDetails.detail(it) }, onDismiss = { details = null })
         }
@@ -556,11 +503,3 @@ class CatchRoutesActivity : ComponentActivity() {
     private fun time(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
 }
 
-internal fun groupCatchEncounters(encounters: List<CatchEncounter>): List<List<CatchEncounter>> {
-    val groups = mutableListOf<MutableList<CatchEncounter>>()
-    encounters.forEach { e ->
-        val group = groups.lastOrNull()
-        if (group == null || e.meters - group.first().meters > 25 || e.arrivalMillis - group.first().arrivalMillis > 30_000) groups += mutableListOf(e) else group += e
-    }
-    return groups
-}

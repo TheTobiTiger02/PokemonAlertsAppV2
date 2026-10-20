@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.ui.settings
 
 import android.app.Application
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -49,28 +48,18 @@ class SettingsPageDesignsComposeTest {
 
     @Test
     fun flatRowsToggleVibrationAndSilenceForAnHour() {
-        show(SETTINGS_DESIGN_FLAT)
+        show()
         toggleVibrationOff()
         composeRule.onNodeWithTag("settings_silence_now").performScrollTo().performClick()
         silenceForAnHour()
     }
 
-    @Test
-    fun statusCardsToggleVibrationAndSilenceForAnHour() {
-        show(SETTINGS_DESIGN_CARDS)
-        composeRule.onNodeWithTag("settings_card_delivery").performClick()
-        toggleVibrationOff()
-        composeRule.onNodeWithContentDescription("Back").performClick()
-        composeRule.onNodeWithTag("settings_card_quiet").performClick()
-        silenceForAnHour()
-    }
 
-    private fun show(option: Int) {
+    private fun show() {
         val viewModel = SettingsViewModel(app, SavedStateHandle())
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 NotificationsPageDesign(
-                    option = option,
                     viewModel = viewModel,
                     grants = PermissionGrants(notifications = true, foregroundLocation = true, backgroundLocation = true),
                     onManageNotifications = {},

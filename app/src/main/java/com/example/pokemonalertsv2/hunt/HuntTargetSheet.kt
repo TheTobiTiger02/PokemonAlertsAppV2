@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -22,15 +20,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -55,17 +50,8 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.data.QuestFilterRules
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.AlertTypesSection
-import com.example.pokemonalertsv2.ui.alerts.MapSelectorTarget
-import com.example.pokemonalertsv2.ui.alerts.SpeciesPickerSheet
-import com.example.pokemonalertsv2.ui.alerts.TokenSelectionSection
-import com.example.pokemonalertsv2.ui.alerts.candidates
-import com.example.pokemonalertsv2.ui.alerts.selectionFor
-import com.example.pokemonalertsv2.ui.alerts.withSelection
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 import com.example.pokemonalertsv2.ui.components.PanelFooterButton
 import com.example.pokemonalertsv2.ui.components.PanelGutter
 import com.example.pokemonalertsv2.ui.components.PanelHeader
@@ -86,6 +72,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * Choose what to hunt, here and now.
@@ -131,7 +119,6 @@ internal fun HuntTargetSheet(
     // from None makes the first tap additive. Nothing picked is then translated back
     // to "any" by [forHunt] on the way out, so an untouched section still means all.
     var draft by remember { mutableStateOf(editing?.definition?.forHuntDraft() ?: EMPTY_HUNT_DRAFT) }
-    var speciesTarget by remember { mutableStateOf<MapSelectorTarget?>(null) }
     var questsOpen by remember { mutableStateOf(false) }
     // Optional walking area: matches outside it are never suggested.
     var area by remember { mutableStateOf(editing?.area.orEmpty()) }
@@ -140,8 +127,7 @@ internal fun HuntTargetSheet(
     val chosenTypes = remember(draft) { draft.chosenTypes() }
     val ready = chosenTypes.isNotEmpty()
 
-    // The new layouts are compared alongside Filter Studio's, since they share its editors.
-    if (rememberDesignOption(DesignScreen.FILTER_STUDIO) != 0) {
+    run {
         val hunt = remember(draft) { draft.forHunt() }
         ModalBottomSheet(
             onDismissRequest = onDismiss,
@@ -189,167 +175,6 @@ internal fun HuntTargetSheet(
                 onStart = { onStart(huntName(hunt, catalog), hunt, editingId, area) }
             )
         }
-    } else
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        DesignCompareStrip(DesignScreen.FILTER_STUDIO)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // A fling back to the top must not close the sheet and lose the draft.
-                .keepScrollInSheet()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                if (editing != null) "Edit hunt targets" else "What are you hunting?",
-                style = MaterialTheme.typography.titleLarge
-            )
-            if (editing != null) {
-                Text(
-                    "The hunt keeps running. Your catches and the target you are walking to stay, " +
-                        "unless it no longer matches.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (editing == null && savedHunts.isNotEmpty()) {
-                Section("Hunted before") {
-                    savedHunts.forEach { saved ->
-                        SavedHuntRow(
-                            hunt = saved,
-                            onStart = { onStart(saved.name, saved.definition, saved.id, saved.area) },
-                            onEdit = {
-                                draft = saved.definition.forHuntDraft()
-                                editingId = saved.id
-                                area = saved.area
-                            },
-                            onRename = { renaming = saved },
-                            onDelete = {
-                                scope.launch { huntRepository.deleteSavedHunt(saved.id) }
-                                if (editingId == saved.id) editingId = null
-                            }
-                        )
-                    }
-                }
-            }
-
-            AlertTypesSection(
-                definition = draft,
-                categoryCounts = categoryCounts,
-                onDefinitionChange = { draft = it },
-                setAllLabel = "Pick one or more"
-            )
-
-            // Only the criteria that belong to the chosen types: a Rocket hunt has
-            // no business asking about raid tiers.
-            chosenTypes.forEach { type ->
-                when (type) {
-                    FilterAlertType.ROCKET -> Section("Which grunts?") {
-                        TokenSelectionSection(
-                            tokens = MapSelectorTarget.ROCKET.candidates(catalog),
-                            selection = draft.rocketTypes,
-                            onSelectionChange = { draft = draft.copy(rocketTypes = it) }
-                        )
-                    }
-
-                    FilterAlertType.RAID -> Section("Which raids?") {
-                        TokenSelectionSection(
-                            tokens = MapSelectorTarget.RAID_TIERS.candidates(catalog),
-                            selection = draft.raidTiers,
-                            onSelectionChange = { draft = draft.copy(raidTiers = it) }
-                        )
-                        SpeciesLauncher(
-                            label = "Raid bosses",
-                            selection = draft.raidSpecies,
-                            onClick = { speciesTarget = MapSelectorTarget.RAID_SPECIES }
-                        )
-                    }
-
-                    FilterAlertType.QUEST -> Section("Which quests?") {
-                        OutlinedButton(
-                            onClick = { questsOpen = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text(draft.quests.summary()) }
-                    }
-
-                    FilterAlertType.SPAWN -> SpeciesLauncher(
-                        label = "Spawn species",
-                        selection = draft.spawnSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.SPAWN }
-                    )
-
-                    FilterAlertType.HUNDO -> SpeciesLauncher(
-                        label = "Hundo species",
-                        selection = draft.hundoSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.HUNDO }
-                    )
-
-                    FilterAlertType.NUNDO -> SpeciesLauncher(
-                        label = "Nundo species",
-                        selection = draft.nundoSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.NUNDO }
-                    )
-
-                    FilterAlertType.PVP -> SpeciesLauncher(
-                        label = "PvP species",
-                        selection = draft.pvpSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.PVP }
-                    )
-
-                    FilterAlertType.COMMON -> SpeciesLauncher(
-                        label = "Common species",
-                        selection = draft.commonSpecies,
-                        onClick = { speciesTarget = MapSelectorTarget.COMMON }
-                    )
-
-                    // Kecleon, weather and "other" have nothing further to narrow.
-                    else -> Unit
-                }
-            }
-
-            Section("Where?") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (area.isArea()) "Only inside your area (${area.size} corners)" else "Anywhere nearby",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (area.isArea()) TextButton(onClick = { area = emptyList() }) { Text("Remove") }
-                    OutlinedButton(onClick = { areaOpen = true }) { Text(if (area.isArea()) "Edit area" else "Limit to area") }
-                }
-                // The areas saved in the picker, shared with catch routes, one tap each.
-                SavedAreaChips(area) { area = it }
-            }
-
-            val hunt = remember(draft) { draft.forHunt() }
-            Button(
-                onClick = { onStart(huntName(hunt, catalog), hunt, editingId, area) },
-                enabled = ready,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    when {
-                        !ready -> "Pick something to hunt"
-                        editing != null -> "Update hunt"
-                        else -> "Hunt ${huntName(hunt, catalog)}"
-                    }
-                )
-            }
-        }
-    }
-
-    speciesTarget?.let { target ->
-        SpeciesPickerSheet(
-            initialTarget = target,
-            definition = draft,
-            catalog = catalog,
-            artwork = artwork,
-            onDefinitionChange = { draft = it },
-            onDismiss = { speciesTarget = null }
-        )
     }
 
     renaming?.let { target ->
@@ -431,7 +256,6 @@ private fun HuntPages(
 ) {
     var page by remember { mutableStateOf(HuntPage.ROOT) }
     Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).keepScrollInSheet()) {
-        DesignCompareStrip(DesignScreen.FILTER_STUDIO)
         Box(Modifier.weight(1f)) {
             PanelPages(page = page, root = HuntPage.ROOT, onBack = { page = HuntPage.ROOT }) { shown ->
                 if (shown == HuntPage.ROOT) {
@@ -632,17 +456,6 @@ private fun Section(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall)
         content()
-    }
-}
-
-@Composable
-private fun SpeciesLauncher(
-    label: String,
-    selection: FilterSelection,
-    onClick: () -> Unit
-) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Text("$label · ${selection.summary()}")
     }
 }
 

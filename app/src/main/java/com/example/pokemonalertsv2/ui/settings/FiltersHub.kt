@@ -3,7 +3,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Intent
@@ -44,13 +43,7 @@ import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.*
 import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
-import com.example.pokemonalertsv2.ui.alerts.AlertCategory
-import com.example.pokemonalertsv2.ui.alerts.accentColor
-import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.widget.*
-import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 
 @Composable
 internal fun FiltersHubContent(
@@ -116,14 +109,6 @@ private fun SummaryCard(title: String, subtitle: String, icon: androidx.compose.
     }
 }
 
-private enum class SelectorTarget { SPAWN, COMMON, HUNDO, NUNDO, PVP, RAID_SPECIES, RAID_TIERS, ROCKET }
-
-private fun FilterSelection.summary(noun: String): String = when (mode) {
-    FilterSelectionMode.ALL -> "All $noun"
-    FilterSelectionMode.NONE -> "No $noun"
-    FilterSelectionMode.ONLY -> "$selectedCount $noun"
-}
-
 @Composable
 internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewModel, widgetId: Int? = null, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -144,8 +129,6 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     var draft by remember(surface, assignment) { mutableStateOf(assignment.resolve(document)) }
     var linkedProfileId by remember(surface, assignment) { mutableStateOf(assignment.profileId.takeIf { assignment.mode == FilterAssignmentMode.LINKED }) }
     var showLinkedWarning by remember { mutableStateOf(false) }
-    var selector by remember { mutableStateOf<SelectorTarget?>(null) }
-    var selectorQueries by remember { mutableStateOf(emptyMap<SelectorTarget, String>()) }
     var showProfiles by remember { mutableStateOf(false) }
     var showSave by remember { mutableStateOf(false) }
     var showQuests by remember { mutableStateOf(false) }
@@ -193,67 +176,23 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                 topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text("Filter Studio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text("Copy from") } }) },
                 bottomBar = { Surface(shadowElevation = 8.dp) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text("$matchCount of ${alerts.size} live alerts match", style = MaterialTheme.typography.labelLarge); Text("Draft changes apply together", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Button(onClick = applyDraft) { Text("Apply") } } } }
             ) { padding ->
-                val design = rememberDesignOption(DesignScreen.FILTER_STUDIO)
-                Column(Modifier.padding(padding).fillMaxSize()) {
-                DesignCompareStrip(DesignScreen.FILTER_STUDIO)
-                if (design != 0) {
-                    val body = StudioBodyState(
-                        draft = draft,
-                        onDraftChange = { draft = it },
-                        catalog = catalog,
-                        artwork = artwork,
-                        rewardThumbnails = rewardThumbnails,
-                        matchCount = matchCount,
-                        totalCount = alerts.size,
-                        areas = catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } },
-                        profileSummary = linkedProfile?.let { "Linked: ${it.name}" } ?: "Custom rules",
-                        openProfiles = { showProfiles = true },
-                        saveProfile = { showSave = true },
-                        openQuestRules = { showQuests = true },
-                        openDistanceOverrides = { showDistanceOverrides = true }
-                    )
-                    Box(Modifier.weight(1f)) {
-                        when (design) {
-                            1 -> StudioTabsBody(body)
-                            2 -> StudioOverviewBody(body)
-                            else -> StudioTilesBody(body)
-                        }
-                    }
-                } else
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { showProfiles = true }, modifier = Modifier.weight(1f)) { Text(if (assignment.mode == FilterAssignmentMode.LINKED) "Linked profile" else "Profiles") }
-                        OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("Save as profile") }
-                    }
-                    BasicRules(draft, catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } }, onEditDistanceOverrides = { showDistanceOverrides = true }) { draft = it }
-                    Text("Advanced by alert type", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("An alert shows if it matches any switched-on type. Inside a type, every rule must match.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    FilterAlertType.entries.forEach { type ->
-                        TypeRuleRow(type, draft, onToggle = { enabled ->
-                            val values = draft.alertTypes.normalizedValues.toMutableSet()
-                            if (draft.alertTypes.mode == FilterSelectionMode.ALL) values += FilterAlertType.entries.map { normalizeFilterToken(it.name) }
-                            if (enabled) values += normalizeFilterToken(type.name) else values -= normalizeFilterToken(type.name)
-                            draft = draft.copy(alertTypes = FilterSelection.only(values))
-                        }, onAdvanced = {
-                            selector = when (type) {
-                                FilterAlertType.SPAWN -> SelectorTarget.SPAWN; FilterAlertType.COMMON -> SelectorTarget.COMMON; FilterAlertType.HUNDO -> SelectorTarget.HUNDO; FilterAlertType.NUNDO -> SelectorTarget.NUNDO; FilterAlertType.PVP -> SelectorTarget.PVP; FilterAlertType.RAID -> SelectorTarget.RAID_SPECIES; FilterAlertType.ROCKET -> SelectorTarget.ROCKET
-                                FilterAlertType.QUEST -> { showQuests = true; null }; else -> null
-                            }
-                        }, onSecondaryAdvanced = if (type == FilterAlertType.RAID) ({ selector = SelectorTarget.RAID_TIERS }) else null)
-                    }
-                    Spacer(Modifier.height(12.dp))
-                }
-                }
+                val body = StudioBodyState(
+                    draft = draft,
+                    onDraftChange = { draft = it },
+                    catalog = catalog,
+                    artwork = artwork,
+                    rewardThumbnails = rewardThumbnails,
+                    matchCount = matchCount,
+                    totalCount = alerts.size,
+                    areas = catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } },
+                    profileSummary = linkedProfile?.let { "Linked: ${it.name}" } ?: "Custom rules",
+                    openProfiles = { showProfiles = true },
+                    saveProfile = { showSave = true },
+                    openQuestRules = { showQuests = true },
+                    openDistanceOverrides = { showDistanceOverrides = true }
+                )
+                Box(Modifier.padding(padding).fillMaxSize()) { StudioTabsBody(body) }
             }
-        }
-    }
-    selector?.let { target ->
-        val triple = when (target) {
-            SelectorTarget.SPAWN -> Triple("IV spawn species", draft.spawnSpecies, catalog.spawnSpecies); SelectorTarget.COMMON -> Triple("Common species", draft.commonSpecies, catalog.spawnSpecies); SelectorTarget.HUNDO -> Triple("Hundo species", draft.hundoSpecies, catalog.spawnSpecies); SelectorTarget.NUNDO -> Triple("Nundo species", draft.nundoSpecies, catalog.spawnSpecies); SelectorTarget.PVP -> Triple("PvP species", draft.pvpSpecies, catalog.spawnSpecies); SelectorTarget.RAID_SPECIES -> Triple("Raid species", draft.raidSpecies, catalog.raidSpecies); SelectorTarget.RAID_TIERS -> Triple("Raid tiers", draft.raidTiers, catalog.raidTiers); SelectorTarget.ROCKET -> Triple("Rocket types", draft.rocketTypes, catalog.rocketTypes)
-        }
-        SelectionDialog(triple.first, triple.third, triple.second, { selector = null }, artwork = artwork,
-            initialQuery = selectorQueries[target].orEmpty(), onQueryChanged = { selectorQueries = selectorQueries + (target to it) }) { selection ->
-            draft = when (target) { SelectorTarget.SPAWN -> draft.copy(spawnSpecies = selection); SelectorTarget.COMMON -> draft.copy(commonSpecies = selection); SelectorTarget.HUNDO -> draft.copy(hundoSpecies = selection); SelectorTarget.NUNDO -> draft.copy(nundoSpecies = selection); SelectorTarget.PVP -> draft.copy(pvpSpecies = selection); SelectorTarget.RAID_SPECIES -> draft.copy(raidSpecies = selection); SelectorTarget.RAID_TIERS -> draft.copy(raidTiers = selection); SelectorTarget.ROCKET -> draft.copy(rocketTypes = selection) }; selector = null
         }
     }
     if (showQuests) QuestRulesDialog(draft.quests, catalog.quests, artwork, rewardThumbnails, { showQuests = false }) { draft = draft.copy(quests = it); showQuests = false }
@@ -275,26 +214,6 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
         }) { Text("Apply to all") } },
         dismissButton = { TextButton(onClick = applyLocal) { Text("Only this surface") } }
     )
-}
-
-@Composable
-private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEditDistanceOverrides: () -> Unit, onChange: (FilterDefinition) -> Unit) {
-    SettingsSection("Basic rules") {
-        Text("Areas", style = MaterialTheme.typography.titleSmall)
-        AreaChipsEditor(definition, areas, onChange)
-        Text("Distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
-        com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
-            meters = definition.maxDistanceMeters,
-            onChange = { onChange(definition.copy(maxDistanceMeters = it)) }
-        )
-        val overrideCount = definition.distanceOverrides.ruleCount
-        OutlinedButton(onClick = onEditDistanceOverrides, modifier = Modifier.fillMaxWidth()) {
-            Text(if (overrideCount == 0) "Per-type and per-species limits" else "Per-type and per-species limits ($overrideCount)")
-        }
-        Text("Reachable on foot — ${TravelTime.label(definition.maxWalkingMinutes)}", style = MaterialTheme.typography.titleSmall)
-        Text("Missing route or coordinates never hide an alert.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { TravelTime.PRESET_MINUTES.forEach { minutes -> FilterChip(definition.maxWalkingMinutes == minutes, { onChange(definition.copy(maxWalkingMinutes = minutes)) }, label = { Text(TravelTime.label(minutes)) }) } }
-    }
 }
 
 /** Which areas an alert must be in: All, None, or the areas picked. */
@@ -328,52 +247,6 @@ internal fun FilterDefinition.areaSummary(): String = when (areas.mode) {
     FilterSelectionMode.NONE -> "No areas"
     FilterSelectionMode.ONLY -> if (areas.selectedCount == 1) areas.values.first() else "${areas.selectedCount} areas"
 }
-
-/** Distance, walking time and per-type limits in one line. */
-internal fun FilterDefinition.distanceSummary(): String = buildList {
-    add(if (maxDistanceMeters > 0) distanceLabel(maxDistanceMeters) else "Any distance")
-    if (maxWalkingMinutes > 0) add(TravelTime.label(maxWalkingMinutes) + " walk")
-    distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 custom limit" else "$it custom limits") }
-}.joinToString(" · ")
-
-@Composable
-private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onToggle: (Boolean) -> Unit, onAdvanced: () -> Unit, onSecondaryAdvanced: (() -> Unit)?) {
-    val enabled = definition.alertTypes.contains(type.name)
-    val summary = when (type) {
-        FilterAlertType.SPAWN -> definition.spawnSpecies.summary("species")
-        FilterAlertType.COMMON -> definition.commonSpecies.summary("species")
-        FilterAlertType.HUNDO -> definition.hundoSpecies.summary("species")
-        FilterAlertType.NUNDO -> definition.nundoSpecies.summary("species")
-        FilterAlertType.PVP -> definition.pvpSpecies.summary("species")
-        FilterAlertType.RAID -> "${definition.raidSpecies.summary("species")} • ${definition.raidTiers.summary("tiers") }"
-        FilterAlertType.ROCKET -> definition.rocketTypes.summary("Rocket types")
-        FilterAlertType.QUEST -> if (definition.quests.exactMode == FilterSelectionMode.ALL) "All quests" else "${definition.quests.exactPairs.size} exact • ${if (definition.quests.facetEnabled) "task + reward rule" else "no facets"}"
-        else -> "All in this type"
-    }
-    Surface(shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            Switch(enabled, onToggle, modifier = Modifier.padding(start = 12.dp, end = 12.dp).semantics { contentDescription = "Enable ${type.label}" })
-            val typeLimit = definition.distanceOverrides.perType[type.name]
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Surface(Modifier.size(8.dp), shape = CircleShape, color = type.category().accentColor()) {}
-                    Text(type.label, fontWeight = FontWeight.SemiBold)
-                }
-                Text(
-                    if (!enabled) "Disabled" else if (typeLimit != null) "$summary • ${distanceLabel(typeLimit)}" else summary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (type in setOf(FilterAlertType.SPAWN, FilterAlertType.COMMON, FilterAlertType.HUNDO, FilterAlertType.NUNDO, FilterAlertType.PVP, FilterAlertType.RAID, FilterAlertType.ROCKET, FilterAlertType.QUEST)) {
-                TextButton(onClick = onAdvanced, enabled = enabled, modifier = Modifier.semantics { contentDescription = "Edit ${type.label} filters" }) { Text(if (type == FilterAlertType.RAID) "Species" else "Edit") }
-                onSecondaryAdvanced?.let { TextButton(onClick = it, enabled = enabled, modifier = Modifier.semantics { contentDescription = "Raid tiers" }) { Text("Tiers") } }
-            }
-        }
-    }
-}
-
-private fun FilterAlertType.category(): AlertCategory = when (this) { FilterAlertType.SPAWN -> AlertCategory.SPAWN; FilterAlertType.RAID -> AlertCategory.RAID; FilterAlertType.QUEST -> AlertCategory.QUEST; FilterAlertType.ROCKET -> AlertCategory.ROCKET; FilterAlertType.KECLEON -> AlertCategory.KECLEON; FilterAlertType.HUNDO -> AlertCategory.HUNDO; FilterAlertType.NUNDO -> AlertCategory.NUNDO; FilterAlertType.PVP -> AlertCategory.PVP; FilterAlertType.COMMON -> AlertCategory.COMMON; FilterAlertType.WEATHER -> AlertCategory.WEATHER; FilterAlertType.OTHER -> AlertCategory.GENERIC }
 
 @Composable
 internal fun SelectionDialog(title: String, candidates: List<String>, current: FilterSelection, onDismiss: () -> Unit, artwork: Map<String, String> = emptyMap(), initialQuery: String = "", onQueryChanged: (String) -> Unit = {}, onSave: (FilterSelection) -> Unit) {

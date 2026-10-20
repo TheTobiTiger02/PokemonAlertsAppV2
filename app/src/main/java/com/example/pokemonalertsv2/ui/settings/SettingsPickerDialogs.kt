@@ -1,250 +1,43 @@
 package com.example.pokemonalertsv2.ui.settings
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.core.content.ContextCompat
-import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.notifications.QuietHours
-import com.example.pokemonalertsv2.data.SortPreference
-import com.example.pokemonalertsv2.data.godex.GoDexConfig
-import com.example.pokemonalertsv2.data.godex.GoDexRepository
-import com.example.pokemonalertsv2.data.godex.GoDexSessionState
-import com.example.pokemonalertsv2.data.godex.GoDexSyncUiState
-import kotlinx.coroutines.launch
-import com.example.pokemonalertsv2.ui.components.LinearModernBackground
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import java.util.Calendar
-import java.text.DateFormat
 import java.util.Date
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
-import android.widget.Toast
-import com.example.pokemonalertsv2.util.InAppUpdateManager
-import com.example.pokemonalertsv2.util.UpdateCheckSource
-import com.example.pokemonalertsv2.util.UpdateState
-import com.example.pokemonalertsv2.data.NotificationPreset
-import com.example.pokemonalertsv2.data.NotificationCategoryState
-import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
-import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
-import com.example.pokemonalertsv2.ui.motion.appCollapseOut
-import com.example.pokemonalertsv2.ui.motion.appExpandIn
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import com.example.pokemonalertsv2.data.backup.SettingsBackup
-import com.example.pokemonalertsv2.data.backup.SettingsBackupRepository
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-
-@Composable
-internal fun CustomSilenceDialog(
-    onDismiss: () -> Unit,
-    onSilenceFor: (Int) -> Unit
-) {
-    val context = LocalContext.current
-    var showDurationPicker by remember { mutableStateOf(false) }
-    var showDateTimePicker by remember { mutableStateOf(false) }
-
-    if (showDurationPicker) {
-        DurationPickerDialog(
-            onDismiss = { showDurationPicker = false },
-            onConfirm = { totalMinutes ->
-                onSilenceFor(totalMinutes)
-                showDurationPicker = false
-            }
-        )
-        return
-    }
-
-    if (showDateTimePicker) {
-        DateTimePickerDialog(
-            onDismiss = { showDateTimePicker = false },
-            onConfirm = { minutes ->
-                onSilenceFor(minutes)
-                showDateTimePicker = false
-            }
-        )
-        return
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = Icons.Default.DateRange,
-                contentDescription = null
-            )
-        },
-        title = {
-            Text("Custom Silence Duration")
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Choose how you want to set the silence duration:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                // Duration option
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showDurationPicker = true }
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Set Duration",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Choose hours and minutes",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Until time option
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showDateTimePicker = true }
-                            .padding(16.dp)
-                    ) {
-                        Text(
-                            text = "Until Specific Time",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Pick a date and time",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            FilledTonalButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
 
 @Composable
 internal fun DurationPickerDialog(

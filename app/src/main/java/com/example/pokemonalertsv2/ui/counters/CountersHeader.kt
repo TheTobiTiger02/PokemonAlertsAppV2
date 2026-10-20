@@ -2,75 +2,33 @@ package com.example.pokemonalertsv2.ui.counters
 
 import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.example.pokemonalertsv2.ui.components.SpringSegmentedRow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.counters.CounterSourceId
-import com.example.pokemonalertsv2.data.counters.CounterMetric
-import com.example.pokemonalertsv2.data.counters.DecoratedCounter
-import com.example.pokemonalertsv2.data.counters.PersonalCounter
-import com.example.pokemonalertsv2.data.counters.PersonalMovesMode
-import com.example.pokemonalertsv2.data.counters.PersonalRanking
-import com.example.pokemonalertsv2.data.counters.PokebattlerFriendship
-import com.example.pokemonalertsv2.data.counters.PokebattlerSort
-import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
-import com.example.pokemonalertsv2.data.counters.RaidCounter
-import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
-import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
-import com.example.pokemonalertsv2.data.counters.prettifyMoveName
-import java.util.Locale
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -86,12 +44,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import android.net.Uri
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.animation.AnimatedContent
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import androidx.compose.foundation.rememberScrollState
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
 internal fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCountersActions) {
@@ -231,59 +189,6 @@ internal val RaidCountersUiState.hasPersonalSource: Boolean
     get() = pokeGenieCount > 0 || !pokebattlerUserId.isNullOrBlank()
 
 // ── Quick controls ───────────────────────────────────────────────────────────
-
-/**
- * The three settings that actually get changed, inline.
- *
- * Weather, level and sort were three taps deep (summary -> sheet -> dropdown) while the
- * switches nobody touches sat at the same depth. The sheet stays for the rest. Each chip
- * shows its current value and reads as selected when it is off the default, so an active
- * filter is visible without opening anything.
- */
-@Composable
-internal fun QuickControls(state: RaidCountersUiState, actions: RaidCountersActions) {
-    val options = state.options
-    val defaults = remember { RaidCounterOptions() }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        OptionDropdown(
-            label = when {
-                state.weatherFromAlert && state.weatherUnconfirmed ->
-                    "${options.weather.label} · unconfirmed"
-                state.weatherFromAlert -> "${options.weather.label} · from raid"
-                else -> options.weather.label
-            },
-            entries = PokebattlerWeather.entries.map { it to it.label },
-            onSelect = { actions.onOptionsChanged(options.copy(weather = it)) },
-            selected = options.weather != defaults.weather
-        )
-        OptionDropdown(
-            label = "L${options.attackerLevel}",
-            entries = RaidCounterOptions.ATTACKER_LEVELS.map { it to "Level $it" },
-            onSelect = { actions.onOptionsChanged(options.copy(attackerLevel = it)) },
-            // Personal mode reads the level off the user's own roster.
-            enabled = !state.showingPersonal,
-            selected = !state.showingPersonal && options.attackerLevel != defaults.attackerLevel
-        )
-        OptionDropdown(
-            label = options.sort.label,
-            entries = PokebattlerSort.entries.map { it to it.label },
-            onSelect = { actions.onOptionsChanged(options.copy(sort = it)) },
-            selected = options.sort != defaults.sort
-        )
-        if (state.pokeGenieCount > 0 && !state.showingPersonal) {
-            CounterChip(
-                label = "Owned only",
-                selected = state.ownedOnly,
-                onClick = { actions.onOwnedOnlyChanged(!state.ownedOnly) }
-            )
-        }
-    }
-}
 
 // ── Footer ───────────────────────────────────────────────────────────────────
 

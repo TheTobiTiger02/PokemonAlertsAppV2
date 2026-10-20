@@ -9,16 +9,11 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.selectDesignOption
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,14 +23,6 @@ import org.junit.runner.RunWith
 class HuntPagesComposeTest {
     @get:Rule
     val composeRule = createComposeRule()
-
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
-
-    @Before
-    fun pickPagedDesign() = selectDesignOption(context, DesignScreen.FILTER_STUDIO, 2)
-
-    @After
-    fun restoreCurrentDesign() = selectDesignOption(context, DesignScreen.FILTER_STUDIO, 0)
 
     @Test
     fun aRaidHuntNarrowsTiersOnItsOwnPage() {

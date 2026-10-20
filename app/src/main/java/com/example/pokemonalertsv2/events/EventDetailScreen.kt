@@ -25,10 +25,6 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.ui.theme.typeColor
 import kotlinx.coroutines.launch
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.rememberDesignOption
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 /** Sections shown collapsed at first: useful now and then, but long and not about playing the event. */
 private val COLLAPSED_SECTIONS = setOf("sales", "graphic", "go-pass")
@@ -65,14 +61,7 @@ fun EventDetailScreen(
         Surface(Modifier.fillMaxSize().testTag("event_detail")) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // The new designs read as a screen: a back arrow, not a "Close" button.
-                    if (rememberDesignOption(DesignScreen.EVENTS) != 0) {
-                        IconButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                    } else {
-                        TextButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) { Text("Close") }
-                    }
+                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) { Text("Close") }
                     Spacer(Modifier.weight(1f))
                     event.link?.let { link ->
                         TextButton(onClick = { onOpenLink(link) }, modifier = Modifier.testTag("event_open_link")) { Text("Open on LeekDuck") }

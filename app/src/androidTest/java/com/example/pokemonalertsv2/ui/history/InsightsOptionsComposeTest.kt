@@ -5,7 +5,6 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.insights.SpawnActivity
 import com.example.pokemonalertsv2.data.insights.SpawnActivityDay
 import com.example.pokemonalertsv2.data.insights.SpawnActivityDaysResponse
@@ -13,10 +12,7 @@ import com.example.pokemonalertsv2.data.insights.SpawnDayTotal
 import com.example.pokemonalertsv2.data.insights.SpawnSpeciesCount
 import com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
 import com.example.pokemonalertsv2.data.insights.SpawnSpeciesTotals
-import com.example.pokemonalertsv2.ui.components.DesignScreen
-import com.example.pokemonalertsv2.ui.components.selectDesignOption
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
-import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +22,6 @@ class InsightsOptionsComposeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val days = listOf("2026-09-15", "2026-09-16", "2026-09-17")
     private val activity = SpawnActivity(
         days = SpawnActivityDaysResponse(days = days, summary = days.map { SpawnActivityDay(it, active = 100) }),
@@ -38,11 +33,7 @@ class InsightsOptionsComposeTest {
         )
     )
 
-    @After
-    fun restore() = selectDesignOption(context, DesignScreen.INSIGHTS, 0)
-
-    private fun show(option: Int, onDay: (String?) -> Unit = {}) {
-        selectDesignOption(context, DesignScreen.INSIGHTS, option)
+    private fun show(onDay: (String?) -> Unit = {}) {
         composeRule.setContent {
             PokemonAlertsV2Theme {
                 SpawnInsightsScreen(
@@ -59,18 +50,10 @@ class InsightsOptionsComposeTest {
     @Test
     fun tabsPickADayOnTheBars() {
         var day: String? = "unset"
-        show(1) { day = it }
+        show { day = it }
         composeRule.onNodeWithTag("insights_sub_species").performClick()
         composeRule.onNodeWithTag("insights_bar_1").performScrollTo().performClick()
         composeRule.runOnIdle { assertEquals("2026-09-16", day) }
     }
 
-    @Test
-    fun summaryCardsOpenTheirPage() {
-        show(2)
-        composeRule.onNodeWithTag("insights_card_species").performClick()
-        composeRule.onNodeWithTag("insights_cards_species").assertIsDisplayed()
-        composeRule.onNodeWithTag("insights_back").performClick()
-        composeRule.onNodeWithTag("insights_card_spawnpoints").assertIsDisplayed()
-    }
 }
