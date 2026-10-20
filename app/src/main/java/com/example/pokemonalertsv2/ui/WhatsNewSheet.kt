@@ -30,14 +30,17 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.18"
+internal const val WHATS_NEW_RELEASE = "1.19"
 
 private val WHATS_NEW_POINTS = listOf(
-    "The map has one bar at the top: the alert count, then Filters, Layers and Settings. The type chips sit right below it.",
-    "Hunts, catch routes, Mega boost and the floating map are in the Tools button at the bottom left. During a hunt it names your target.",
-    "Filters are tabs that change the map as you tap: Nearby, Types, Pokémon, Raids, Rocket and Quests.",
-    "Pick quests by reward or by task. Hold a tile to choose single tasks or rewards.",
-    "Map layers is one list with style previews, switches and its own marker grouping page."
+    "The Live filter button opens a small sheet like History's: tap alert types, areas or a distance, and the list updates behind it.",
+    "Filter Studio uses the same tabs as the map filters, for the feed, notifications and widgets alike.",
+    "Hunt setup is pages in one sheet: pick types, then fine-tune each one.",
+    "Raid counters fit on one screen, with the boss, weather and party options as a chip row.",
+    "Catch routes plan on the map, with the settings in a sheet below.",
+    "Tap an alert on the map for a cleaner sheet with the important details first.",
+    "Silence alerts for any length, such as 40 minutes, or until a date and time. Quiet hours keep their From and To buttons.",
+    "Notification and GoDex settings are simple rows, and Spawn insights has tabs."
 )
 
 /**
