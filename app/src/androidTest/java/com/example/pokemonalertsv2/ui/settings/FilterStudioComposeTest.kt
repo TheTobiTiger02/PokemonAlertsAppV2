@@ -94,13 +94,13 @@ class FilterStudioComposeTest {
             rule.setContent { PokemonAlertsV2Theme {
                 if (open) FilterStudioDialog(FilterSurface.FEED, viewModel) { open = false }
             } }
-            rule.onNodeWithText("None").performClick()
+            rule.onNodeWithText("None").performScrollTo().performClick()
             capture("editor-draft")
             rule.onNodeWithText("Apply").assertIsDisplayed()
             rule.onNodeWithContentDescription("Cancel").performClick()
             assertEquals(FilterSelection.All, runBlocking { preferences.filterStateDocument.first().feed.definition.areas })
             rule.runOnIdle { open = true }
-            rule.onNodeWithText("None").performClick()
+            rule.onNodeWithText("None").performScrollTo().performClick()
             rule.onNodeWithText("Apply").performClick()
             rule.waitUntil(5000) { runBlocking { preferences.filterStateDocument.first().feed.definition.areas.mode == FilterSelectionMode.NONE } }
             assertEquals(FilterSelection.All, runBlocking { preferences.filterStateDocument.first().map.definition.areas })
@@ -126,7 +126,7 @@ class FilterStudioComposeTest {
                 if (open) FilterStudioDialog(FilterSurface.FEED, viewModel) { open = false }
             } }
             rule.waitUntil(5000) { viewModel.filterStateDocument.value.feed.profileId == profile.id }
-            rule.onNodeWithText("None").performClick()
+            rule.onNodeWithText("None").performScrollTo().performClick()
             rule.onNodeWithText("Apply").performClick()
             rule.onNodeWithText("Update linked profile?").assertIsDisplayed()
             capture("profile-linked-apply-warning")
@@ -180,14 +180,17 @@ class FilterStudioComposeTest {
         rule.waitForIdle()
         // Compose idleness does not wait for the platform dialog window fade.
         android.os.SystemClock.sleep(350)
-        val directory = File(instrumentation.targetContext.getExternalFilesDir(null), "filter-studio-qa").apply { mkdirs() }
-        val screenshot = instrumentation.uiAutomation.takeScreenshot()
-        val file = File(directory, "$name.png")
-        file.outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        screenshot.recycle()
-        // Keep visual evidence after Gradle uninstalls the test application.
-        listOf("mkdir -p /data/local/tmp/filter-studio-qa", "cp ${file.absolutePath} /data/local/tmp/filter-studio-qa/$name.png").forEach { command ->
-            android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
+        // Evidence only: a device that refuses external storage must not fail the test.
+        runCatching {
+            val directory = File(instrumentation.targetContext.getExternalFilesDir(null), "filter-studio-qa").apply { mkdirs() }
+            val screenshot = instrumentation.uiAutomation.takeScreenshot()
+            val file = File(directory, "$name.png")
+            file.outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            screenshot.recycle()
+            // Keep visual evidence after Gradle uninstalls the test application.
+            listOf("mkdir -p /data/local/tmp/filter-studio-qa", "cp ${file.absolutePath} /data/local/tmp/filter-studio-qa/$name.png").forEach { command ->
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command)).use { it.readBytes() }
+            }
         }
     }
 }

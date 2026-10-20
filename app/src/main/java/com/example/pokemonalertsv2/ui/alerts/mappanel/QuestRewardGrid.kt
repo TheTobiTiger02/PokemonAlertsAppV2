@@ -66,6 +66,8 @@ import com.example.pokemonalertsv2.data.QuestFilterRules
 import com.example.pokemonalertsv2.data.QuestPairRule
 import com.example.pokemonalertsv2.ui.settings.QuestRewardIcon
 import com.example.pokemonalertsv2.ui.theme.Spacing
+import com.example.pokemonalertsv2.ui.components.PanelGutter
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /**
  * Which side of a quest the tab is organised by. Each side's detail sheet lists the other one:

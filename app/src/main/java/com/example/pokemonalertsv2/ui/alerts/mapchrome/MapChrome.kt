@@ -147,7 +147,8 @@ private fun MapTopBar(state: MapChromeState, actions: MapChromeActions, modifier
                         text = state.syncStatus.chromeSummary(),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

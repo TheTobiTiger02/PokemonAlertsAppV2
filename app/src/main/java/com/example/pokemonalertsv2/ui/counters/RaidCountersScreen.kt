@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -15,35 +14,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.data.counters.CounterMetric
@@ -54,9 +35,9 @@ import com.example.pokemonalertsv2.data.counters.PokemonGoSearch
 import com.example.pokemonalertsv2.data.counters.bestOf
 import com.example.pokemonalertsv2.data.counters.prettifyMoveName
 import com.example.pokemonalertsv2.data.counters.toCounterMetric
-import com.example.pokemonalertsv2.ui.alerts.rememberCountdownClock
-import com.example.pokemonalertsv2.util.TimeUtils
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * The raid counters, as their own screen.
@@ -71,230 +52,88 @@ import kotlinx.coroutines.launch
  * and a long list to keep in sync.
  */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun RaidCountersScreen(
     state: RaidCountersUiState,
     actions: RaidCountersActions,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var setupSheetOpen by rememberSaveable { mutableStateOf(false) }
-    var megaSheetOpen by rememberSaveable { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    RaidCountersChipRow(state, actions, onBack, modifier)
+}
+
+/** The list's padding: the screen gutter, and room for the navigation bar under the last row. */
+@Composable
+internal fun countersListPadding(top: androidx.compose.ui.unit.Dp = 8.dp): PaddingValues = PaddingValues(
+    start = 16.dp,
+    end = 16.dp,
+    top = top,
+    bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+)
+
+/** The counters themselves for the current phase, then where they came from. */
+internal fun LazyListScope.countersBody(
+    state: RaidCountersUiState,
+    actions: RaidCountersActions,
+    copyTeam: (CopyTeamFormat) -> Unit
+) {
+    val metric = state.options.sort.toCounterMetric()
+    when (state.phase) {
+        CountersPhase.UNRESOLVED -> item(key = "unresolved") { UnresolvedState(state, actions) }
+        CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList("Loading counters…") }
+        CountersPhase.ERROR -> item(key = "error") { ErrorState(state, actions) }
+        CountersPhase.EMPTY -> item(key = "empty") { EmptyState(state) }
+        CountersPhase.PERSONAL -> personalItems(state, actions, metric, copyTeam)
+        CountersPhase.GENERAL -> generalItems(state, metric)
+    }
+    item(key = "footer") { CountersFooter(state) }
+}
+
+/**
+ * Copies the suggested team as a Pokémon GO search, and offers the species-only query when the
+ * exact one may no longer match.
+ */
+@Composable
+internal fun rememberCopyTeam(
+    state: RaidCountersUiState,
+    snackbarHostState: SnackbarHostState
+): (CopyTeamFormat) -> Unit {
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                scrollBehavior = scrollBehavior,
-                title = {
-                    Column {
-                        Text(
-                            text = "Best counters",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        state.bossDisplayName?.let { name ->
-                            Text(
-                                text = name,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    // One spinner for the whole screen, in the bar. Rows must not each
-                    // sprout their own progress affordance during a refresh.
-                    if (state.isLoading || state.personalLoading) {
-                        CircularProgressIndicator(
-                            strokeWidth = 2.dp,
-                            modifier = Modifier
-                                .padding(end = 12.dp)
-                                .size(16.dp)
-                        )
-                    }
-                    ShareCountersButton(state)
-                }
-            )
+    return { format ->
+        val query = when (format) {
+            CopyTeamFormat.EXACT -> PokemonGoSearch.teamQuery(state.team, state.dexNumbers)
+            CopyTeamFormat.SPECIES -> PokemonGoSearch.speciesQuery(state.team, state.dexNumbers)
         }
-    ) { padding ->
-        val metric = state.options.sort.toCounterMetric()
-        val copyTeam: (CopyTeamFormat) -> Unit = { format ->
-            val query = when (format) {
-                CopyTeamFormat.EXACT -> PokemonGoSearch.teamQuery(state.team, state.dexNumbers)
-                CopyTeamFormat.SPECIES -> PokemonGoSearch.speciesQuery(state.team, state.dexNumbers)
-            }
-            if (query.isNotBlank()) {
-                clipboard.setText(AnnotatedString(query))
-                scope.launch {
-                    // Android 13+ shows its own copy toast, so this exists mainly to carry
-                    // the fallback: an exact query silently matches nothing if the roster
-                    // has moved on since the import.
-                    val result = snackbarHostState.showSnackbar(
-                        message = "Copied ${state.team.sumOf { it.count }} Pokémon",
-                        actionLabel = if (format == CopyTeamFormat.EXACT) "Species only" else null,
-                        withDismissAction = true
+        if (query.isNotBlank()) {
+            clipboard.setText(AnnotatedString(query))
+            scope.launch {
+                // Android 13+ shows its own copy toast, so this exists mainly to carry
+                // the fallback: an exact query silently matches nothing if the roster
+                // has moved on since the import.
+                val result = snackbarHostState.showSnackbar(
+                    message = "Copied ${state.team.sumOf { it.count }} Pokémon",
+                    actionLabel = if (format == CopyTeamFormat.EXACT) "Species only" else null,
+                    withDismissAction = true
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    clipboard.setText(
+                        AnnotatedString(
+                            PokemonGoSearch.speciesQuery(state.team, state.dexNumbers)
+                        )
                     )
-                    if (result == SnackbarResult.ActionPerformed) {
-                        clipboard.setText(
-                            AnnotatedString(
-                                PokemonGoSearch.speciesQuery(state.team, state.dexNumbers)
-                            )
-                        )
-                    }
                 }
             }
-        }
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                top = 8.dp,
-                bottom = 24.dp +
-                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            state.raidEndTimeMillis?.let { endMillis ->
-                item(key = "raid_time") { RaidTimeRemaining(endMillis) }
-            }
-            item(key = "boss") { BossSummary(state) }
-            item(key = "source") { SourceSelector(state, actions) }
-            if (state.personalTeamRequested &&
-                state.source == CounterSourceId.ALL_POKEMON &&
-                state.pokeGenieCount == 0 &&
-                state.pokebattlerUserId.isNullOrBlank()
-            ) {
-                item(key = "personal_setup") { PersonalTeamSetupGuidance() }
-            }
-            item(key = "setup") { BattleSetupSummary(state, onOpen = { setupSheetOpen = true }) }
-            if (state.showingPersonal) {
-                item(key = "mega") { ActiveMegaRow(state, onOpen = { megaSheetOpen = true }) }
-            }
-            item(key = "quick") { QuickControls(state, actions) }
-            // An item that renders nothing still costs a `spacedBy` gap, which is what
-            // left a band of dead space above the first section.
-            if (state.hasScreenNotices) {
-                item(key = "notices") { ScreenNotices(state, actions) }
-            }
-
-            when (state.phase) {
-                CountersPhase.UNRESOLVED -> item(key = "unresolved") { UnresolvedState(state, actions) }
-                CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList("Loading counters…") }
-                CountersPhase.ERROR -> item(key = "error") { ErrorState(state, actions) }
-                CountersPhase.EMPTY -> item(key = "empty") { EmptyState(state) }
-                CountersPhase.PERSONAL -> personalItems(state, actions, metric, copyTeam)
-                CountersPhase.GENERAL -> generalItems(state, metric)
-            }
-
-            item(key = "footer") { CountersFooter(state) }
-        }
-    }
-
-    if (megaSheetOpen) {
-        ModalBottomSheet(onDismissRequest = { megaSheetOpen = false }) {
-            ActiveMegaSheet(
-                state = state,
-                onSelect = {
-                    actions.onActiveMegaChanged(it)
-                    megaSheetOpen = false
-                }
-            )
-        }
-    }
-
-    if (setupSheetOpen) {
-        ModalBottomSheet(onDismissRequest = { setupSheetOpen = false }) {
-            BattleSetupSheet(
-                state = state,
-                actions = actions,
-                onDismiss = { setupSheetOpen = false }
-            )
-        }
-    }
-}
-
-@Composable
-private fun PersonalTeamSetupGuidance() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.tertiaryContainer
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "Set up your recommended team",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                text = "Import a Poké Genie CSV or link Pokébattler in Settings → Raid counters. " +
-                    "Copy for GO is enabled only for a real personal team.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-        }
-    }
-}
-
-@Composable
-private fun RaidTimeRemaining(endMillis: Long) {
-    val now by rememberCountdownClock()
-    val remaining = (endMillis - now).coerceAtLeast(0L)
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Time remaining",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = if (remaining > 0L) {
-                    TimeUtils.formatDurationShort(remaining)
-                } else {
-                    "Raid ended"
-                },
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
         }
     }
 }
 
 /** Boss identity at the top of the list: artwork, moveset, types and the fixed tier facts. */
 @Composable
-private fun BossSummary(state: RaidCountersUiState) {
+internal fun BossSummary(
+    state: RaidCountersUiState,
+    spriteSize: androidx.compose.ui.unit.Dp = 56.dp,
+    trailing: @Composable () -> Unit = {}
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -305,7 +144,7 @@ private fun BossSummary(state: RaidCountersUiState) {
             // the fallback for alerts that arrive without one.
             urls = listOfNotNull(state.bossThumbnailUrl) +
                 state.spriteUrls[state.bossPokemonId].orEmpty(),
-            size = 56.dp,
+            size = spriteSize,
             type = state.pokemonTypes[state.bossPokemonId]?.firstOrNull()
         ) {
             Text(text = "🛡️", style = MaterialTheme.typography.titleMedium)
@@ -334,15 +173,24 @@ private fun BossSummary(state: RaidCountersUiState) {
             )
             BossFacts(state)
         }
+        trailing()
     }
 }
 
-/** Degraded-setup and refresh notices, hidden together when there is nothing to say. */
+/**
+ * Degraded-setup and refresh notices, hidden together when there is nothing to say. Designs that
+ * show the weather's source next to the weather itself pass [includeWeather] false.
+ */
 @Composable
-private fun ScreenNotices(state: RaidCountersUiState, actions: RaidCountersActions) {
+internal fun ScreenNotices(
+    state: RaidCountersUiState,
+    actions: RaidCountersActions,
+    includeWeather: Boolean = true
+) {
     val showRefresh = state.hasCounters &&
         (state.isLoading || state.isStale || state.rateLimited)
-    if (state.degradedOptions.isEmpty() && !state.weatherUnconfirmed && !showRefresh) return
+    val showWeather = includeWeather && state.weatherUnconfirmed
+    if (state.degradedOptions.isEmpty() && !showWeather && !showRefresh) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // Pokébattler serves precomputed rankings only, and for a boss outside the current
         // raid rotation just one combination exists. Rather than show nothing, the repository
@@ -359,7 +207,7 @@ private fun ScreenNotices(state: RaidCountersUiState, actions: RaidCountersActio
         }
         // Ranked with this weather regardless — the last known reading beats assuming none —
         // but say so, because the wrong boost reorders the counters.
-        if (state.weatherUnconfirmed) {
+        if (showWeather) {
             Text(
                 text = "Using ${state.options.weather.label} — this weather is not confirmed yet.",
                 style = MaterialTheme.typography.labelSmall,
@@ -372,7 +220,7 @@ private fun ScreenNotices(state: RaidCountersUiState, actions: RaidCountersActio
 
 // ── List bodies ──────────────────────────────────────────────────────────────
 
-private fun LazyListScope.generalItems(state: RaidCountersUiState, metric: CounterMetric) {
+internal fun LazyListScope.generalItems(state: RaidCountersUiState, metric: CounterMetric) {
     val all = if (state.ownedOnly) state.counters.filter { it.isOwned } else state.counters
     if (all.isEmpty()) {
         item(key = "general_empty") {
@@ -415,7 +263,7 @@ private fun LazyListScope.generalItems(state: RaidCountersUiState, metric: Count
     }
 }
 
-private fun LazyListScope.personalItems(
+internal fun LazyListScope.personalItems(
     state: RaidCountersUiState,
     actions: RaidCountersActions,
     metric: CounterMetric,

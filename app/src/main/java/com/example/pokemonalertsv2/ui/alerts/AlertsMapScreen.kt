@@ -201,6 +201,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.material3.OutlinedButton
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 // The pose tracker fires up to 2 Hz; the route repository would answer unchanged for
 // movement under 75 m anyway, so re-ranking every alert per fix is pure waste.
@@ -2530,7 +2531,10 @@ internal fun AlertsMapScreenContent(
         }
 
         if (!compactPictureInPicture && selectedClusterAlerts.isNotEmpty()) {
-            ModalBottomSheet(onDismissRequest = { selectedClusterAlerts = emptyList() }) {
+            ModalBottomSheet(
+                onDismissRequest = { selectedClusterAlerts = emptyList() },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ) {
                 MapClusterMemberList(
                     alerts = selectedClusterAlerts,
                     countdownClock = markerCountdownClock,
@@ -2651,7 +2655,8 @@ internal fun AlertsMapScreenContent(
                         onDismissAlert = dismissFromMap,
                         onRestoreAlert = restoreFromMap,
                     companions = companions,
-                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) }
+                    onOpenCompanion = { context.startActivity(AlertDetailActivity.createIntent(context, it)) },
+                        showCloseButton = false
                     )
                 }
             }
@@ -2732,7 +2737,7 @@ internal fun MapClusterMemberList(
     LazyColumn(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 560.dp)
+            .keepScrollInSheet()
             .testTag("map_cluster_members"),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)

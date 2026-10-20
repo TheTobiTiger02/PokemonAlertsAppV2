@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import java.text.DateFormat
 import java.util.Date
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.layout.BoxWithConstraints
 
 /**
  * How the hunt that just ended went: what was caught, how far it took, and how long.
@@ -69,6 +71,7 @@ internal fun HuntSummarySheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .keepScrollInSheet()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .navigationBarsPadding()
@@ -141,21 +144,27 @@ internal fun StatTile(value: String, label: String, modifier: Modifier = Modifie
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
+        // A tile shares its row with up to two others, so on a narrow phone a value such as
+        // "1 h 05 min" drops a type size rather than being cut off.
+        BoxWithConstraints {
+        val narrow = maxWidth < 96.dp
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = if (narrow) 8.dp else 12.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
-                style = MaterialTheme.typography.titleLarge,
+                style = if (narrow) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
         }
     }
 }

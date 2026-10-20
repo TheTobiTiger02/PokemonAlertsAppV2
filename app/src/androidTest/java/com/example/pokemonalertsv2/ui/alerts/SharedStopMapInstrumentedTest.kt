@@ -98,8 +98,7 @@ class SharedStopMapInstrumentedTest {
             instrumentation.sendPointerSync(event)
             event.recycle()
         }
-        rule.waitUntil(10_000) { rule.onAllNodesWithText("Also at this stop").fetchSemanticsNodes().isNotEmpty() }
-        rule.onNodeWithText("Catch 5 Pokemon").assertIsDisplayed()
+        rule.waitUntil(10_000) { rule.onAllNodesWithText("Also here").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("500 Stardust").assertIsDisplayed()
         screenshot("$style-$kind-details")
         rule.onNodeWithTag("same_stop_${quest.uniqueId}").performClick()

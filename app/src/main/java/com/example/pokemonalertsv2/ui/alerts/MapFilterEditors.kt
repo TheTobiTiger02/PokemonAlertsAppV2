@@ -34,7 +34,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.*
-import com.example.pokemonalertsv2.ui.alerts.mappanel.keepScrollInSheet
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
@@ -191,72 +190,6 @@ private fun MapToggleTile(
                 maxLines = 1
             )
         }
-    }
-}
-
-/** Raid tiers and Rocket grunt types are the same control over different catalogs. */
-@Composable
-internal fun TokenSelectionSection(
-    tokens: List<String>,
-    selection: FilterSelection,
-    onSelectionChange: (FilterSelection) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        MapSetAllRow(
-            label = if (tokens.isEmpty()) "Loads with the next refresh" else "${tokens.size} available",
-            onAll = { onSelectionChange(FilterSelection.All) },
-            onNone = { onSelectionChange(FilterSelection.None) }
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs)
-        ) {
-            tokens.forEach { token ->
-                val isSelected = selection.contains(token)
-                FilterChip(
-                    selected = isSelected,
-                    onClick = { onSelectionChange(selection.toggled(token, tokens)) },
-                    label = { Text(token) },
-                    shape = RoundedCornerShape(16.dp)
-                )
-            }
-        }
-    }
-}
-
-/**
- * The species lists, in a sheet of their own.
- *
- * A thousand-entry grid does not belong inside another scroller: capped to 320dp inside the
- * panel it was both too small to browse and a trap for every drag that started over it. Given
- * the whole screen it can be searched, sorted and set in bulk, which is what Wingull does with
- * the same problem.
- */
-@Composable
-internal fun SpeciesPickerSheet(
-    initialTarget: MapSelectorTarget,
-    definition: FilterDefinition,
-    catalog: FilterCatalog,
-    artwork: Map<String, String>,
-    onDefinitionChange: (FilterDefinition) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var target by rememberSaveable { mutableStateOf(initialTarget) }
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.testTag("species_picker_sheet")
-    ) {
-        SpeciesPickerContent(
-            target = target,
-            onTargetChange = { target = it },
-            definition = definition,
-            catalog = catalog,
-            artwork = artwork,
-            onDefinitionChange = onDefinitionChange,
-            modifier = Modifier.keepScrollInSheet().padding(horizontal = 20.dp)
-        )
     }
 }
 

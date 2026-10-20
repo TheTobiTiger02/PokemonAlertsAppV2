@@ -54,6 +54,12 @@ import com.example.pokemonalertsv2.ui.settings.DistanceOverridesDialog
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.theme.Spacing
 import com.example.pokemonalertsv2.util.TravelTime
+import com.example.pokemonalertsv2.ui.components.PanelGutter
+import com.example.pokemonalertsv2.ui.components.PanelHeader
+import com.example.pokemonalertsv2.ui.components.PanelNavRow
+import com.example.pokemonalertsv2.ui.components.PanelFooterButton
+import com.example.pokemonalertsv2.ui.components.PanelIcon
+import com.example.pokemonalertsv2.ui.components.panelGutter
 
 /** Everything the Filters tabs read and every way they can act. */
 internal class FiltersState(
@@ -67,7 +73,10 @@ internal class FiltersState(
     val onDefinitionChange: (FilterDefinition) -> Unit,
     val openQuests: () -> Unit,
     val openDistanceOverrides: () -> Unit,
-    val openFilterStudio: () -> Unit
+    /** Opens the full editor from the Nearby tab; null where this already is the full editor. */
+    val openFilterStudio: (() -> Unit)? = null,
+    /** What the Nearby tab adds below distance, such as Filter Studio's areas and profiles. */
+    val nearbyExtras: (@Composable () -> Unit)? = null
 )
 
 /**

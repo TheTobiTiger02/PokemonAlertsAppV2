@@ -178,6 +178,9 @@ import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.util.TravelTime
+import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.pokemonalertsv2.data.FilterCatalog
 
 @Composable
 fun PokemonAlertsRoute(
@@ -195,6 +198,7 @@ fun PokemonAlertsRoute(
     val selectedFeedCategories by viewModel.selectedFeedCategories.collectAsStateWithLifecycle()
     val feedFilterDefinition by viewModel.feedFilterDefinition.collectAsStateWithLifecycle()
     val categoryCounts by viewModel.categoryCounts.collectAsStateWithLifecycle()
+    val filterCatalog by viewModel.filterCatalog.collectAsStateWithLifecycle()
 
     val onShareClick: (PokemonAlert) -> Unit = { alert ->
         scope.launch {
@@ -265,6 +269,8 @@ fun PokemonAlertsRoute(
                     onSortPreferenceChange = viewModel::updateSortPreference,
                     onStartManualRaid = onStartManualRaid,
                     onOpenFilterStudio = onOpenFilterStudio,
+                    filterCatalog = filterCatalog,
+                    onFilterDefinitionChange = viewModel::updateFeedFilterDefinition,
                     onRefresh = viewModel::refreshAlerts,
                     onAlertSelected = { alert ->
                         val intent = AlertDetailActivity.createIntent(context, alert)
@@ -428,10 +434,14 @@ fun PokemonAlertsPage(
     onSortPreferenceChange: (SortPreference) -> Unit,
     onStartManualRaid: () -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},
+    filterCatalog: FilterCatalog = FilterCatalog(),
+    /** Edits the feed filter in place from the quick sheet; null keeps the button on Filter Studio. */
+    onFilterDefinitionChange: ((FilterDefinition) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    var quickFiltersOpen by rememberSaveable { mutableStateOf(false) }
     var hasLocationPermission by remember {
         mutableStateOf(hasForegroundLocationPermission(context))
     }
@@ -653,13 +663,30 @@ fun PokemonAlertsPage(
                 presetControls = presetControls,
                 maxWalkingMinutes = maxWalkingMinutes,
                 onMaxWalkingMinutesChange = onMaxWalkingMinutesChange,
-                onOpenFilterStudio = onOpenFilterStudio,
+                onOpenFilterStudio = if (onFilterDefinitionChange != null) ({ quickFiltersOpen = true }) else onOpenFilterStudio,
                 unifiedDefinition = filterDefinition,
                 onStartManualRaid = onStartManualRaid
             )
         }
         }
     }
+    }
+
+    if (quickFiltersOpen && onFilterDefinitionChange != null) {
+        LiveQuickFiltersSheet(
+            definition = filterDefinition,
+            catalog = filterCatalog,
+            categoryCounts = categoryCounts,
+            visibleCount = filteredAlerts.size,
+            showDismissed = showDismissed,
+            onShowDismissedChange = { showDismissed = it },
+            onDefinitionChange = onFilterDefinitionChange,
+            onOpenFilterStudio = {
+                quickFiltersOpen = false
+                onOpenFilterStudio()
+            },
+            onDismiss = { quickFiltersOpen = false }
+        )
     }
 
     alertPendingSnooze?.let { alert ->
@@ -782,7 +809,18 @@ internal fun AlertsList(
         ).count { it }
     }
 
+    // The controls step aside while the list scrolls down, so a short screen shows more alerts,
+    // and come back on any scroll up, at the top, or while searching.
+    val hideControls = rememberHideOnScrollState()
+    val listAtTop by remember(gridState) {
+        derivedStateOf { gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0 }
+    }
     Column(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visible = hideControls.visible || listAtTop || searchExpanded,
+            enter = appExpandIn(),
+            exit = appCollapseOut()
+        ) {
         AlertListControls(
             visibleCount = filteredAlerts.size,
             activeFilterCount = activeFilterCount,
@@ -809,7 +847,8 @@ internal fun AlertsList(
             onClearWalkingFilter = { onMaxWalkingMinutesChange(TravelTime.NO_LIMIT) },
             onStartManualRaid = onStartManualRaid
         )
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+        }
+        BoxWithConstraints(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
         val columns = if (maxWidth >= 840.dp) 2 else 1
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),

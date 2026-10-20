@@ -2,193 +2,71 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
-import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.location.Location
 import android.location.LocationManager
-import android.net.Uri
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.data.AffectedAlert
-import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.PokemonAlert
-import com.example.pokemonalertsv2.ui.counters.RaidCountersActions
-import androidx.activity.compose.BackHandler
-import androidx.compose.runtime.saveable.rememberSaveable
-import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
-import com.example.pokemonalertsv2.ui.counters.RaidCountersScreen
-import com.example.pokemonalertsv2.ui.counters.RaidCountersTeaser
-import com.example.pokemonalertsv2.ui.counters.RaidCountersUiState
 import com.example.pokemonalertsv2.data.PokemonMoves
 import com.example.pokemonalertsv2.data.PokemonReward
-import com.example.pokemonalertsv2.data.alertPreferencesDataStore
-import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
-import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
-import com.example.pokemonalertsv2.data.godex.GoDexRepository
-import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
-import com.example.pokemonalertsv2.data.godex.GoDexMatcher
-import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
-import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
-import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
-import com.example.pokemonalertsv2.ui.theme.Dimens
-import com.example.pokemonalertsv2.ui.theme.MetricTextStyle
-import com.example.pokemonalertsv2.ui.motion.appCollapseOut
-import com.example.pokemonalertsv2.ui.motion.appExpandIn
-import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import com.example.pokemonalertsv2.ui.components.LinearModernCard
-import com.example.pokemonalertsv2.ui.components.RollingNumberText
-import com.example.pokemonalertsv2.ui.components.GradientText
-import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
-import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
-import com.example.pokemonalertsv2.util.DistanceSource
-import com.example.pokemonalertsv2.util.validAlertCoordinates
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.util.Locale
-import kotlin.math.roundToInt
-import com.example.pokemonalertsv2.util.TravelTime
-import com.example.pokemonalertsv2.ui.theme.AppAccents
-
-@Composable
-internal fun getTypeColor(type: String): Color {
-    return MaterialTheme.colorScheme.primary
-}
 
 @Composable
 internal fun StatsCard(alert: PokemonAlert) {
-    val isReplacement = alert.isSpeciesReplacement
-    val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
-    val accentColor = Color(resolveAlertVisualStyle(alert).category.accentArgb)
-
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -196,8 +74,20 @@ internal fun StatsCard(alert: PokemonAlert) {
         shape = MaterialTheme.shapes.large,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Section title
+        StatsCardContent(alert = alert, modifier = Modifier.padding(16.dp))
+    }
+}
+
+/** The stats card's body, also drawn flat (without its own title) by the redesigned detail. */
+@Composable
+internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier, showTitle: Boolean = true) {
+    val isReplacement = alert.isSpeciesReplacement
+    val isChanged = alert.isWeatherChange  // includes both weather-only and replacement
+    val accentColor = Color(resolveAlertVisualStyle(alert).category.accentArgb)
+
+    Column(modifier = modifier) {
+        // Section title
+        if (showTitle) {
             Text(
                 text = when {
                     isReplacement -> "New species"
@@ -208,121 +98,121 @@ internal fun StatsCard(alert: PokemonAlert) {
                 color = if (isChanged) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
+        }
 
-            // Species replacement banner — shows old species info
-            if (isReplacement) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.fillMaxWidth()
+        // Species replacement banner — shows old species info
+        if (isReplacement) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = null,
-                            tint = accentColor
+                    Icon(
+                        imageVector = Icons.Filled.Refresh,
+                        contentDescription = null,
+                        tint = accentColor
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Replacing ${alert.oldSpecies}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                        Column(modifier = Modifier.weight(1f)) {
+                        val oldDetails = listOfNotNull(
+                            alert.oldIv?.let { "IV: $it" },
+                            alert.oldCp?.let { "CP: $it" }
+                        )
+                        if (oldDetails.isNotEmpty()) {
                             Text(
-                                text = "Replacing ${alert.oldSpecies}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = oldDetails.joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            val oldDetails = listOfNotNull(
-                                alert.oldIv?.let { "IV: $it" },
-                                alert.oldCp?.let { "CP: $it" }
-                            )
-                            if (oldDetails.isNotEmpty()) {
-                                Text(
-                                    text = oldDetails.joinToString(" • "),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(14.dp))
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // For weather change / replacement alerts, display the new stats as primary values
+        val displayIv = if (isChanged && alert.newIv != null) alert.newIv else alert.formattedIv
+        val displayCp = if (isChanged && alert.newCp != null) alert.newCp else alert.cp
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // IVs
+            displayIv?.let { iv ->
+                val isNewIv = isChanged && alert.newIv != null
+                StatItem(
+                    label = if (isNewIv) "New IV" else "IV",
+                    value = iv,
+                    subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
+                    highlight = alert.isPerfect,
+                    highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) MaterialTheme.colorScheme.primary else if (alert.isNundo) MaterialTheme.colorScheme.onSurfaceVariant else null
+                )
             }
 
-            // For weather change / replacement alerts, display the new stats as primary values
-            val displayIv = if (isChanged && alert.newIv != null) alert.newIv else alert.formattedIv
-            val displayCp = if (isChanged && alert.newCp != null) alert.newCp else alert.cp
+            // CP
+            displayCp?.let { cp ->
+                val isNewCp = isChanged && alert.newCp != null
+                StatItem(
+                    label = if (isNewCp) "New CP" else "CP",
+                    value = cp.toString(),
+                    subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
+                    highlightColor = if (isNewCp) accentColor else null
+                )
+            }
 
+            // Hundo CP (standalone for raids when no individual CP)
+            if (displayCp == null && alert.hundoCP != null) {
+                alert.hundoCP.level20?.let { l20 ->
+                    StatItem(
+                        label = "100% L20",
+                        value = l20.toString(),
+                        highlightColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+                alert.hundoCP.level25?.let { l25 ->
+                    StatItem(
+                        label = "100% L25",
+                        value = l25.toString(),
+                        highlightColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Level — show for species replacement (it's the new species' level), hide for weather-only change
+            if (!isChanged || isReplacement) {
+                alert.level?.let { level ->
+                    StatItem(
+                        label = if (isReplacement) "New Level" else "Level",
+                        value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
+                        highlightColor = if (isReplacement) accentColor else null
+                    )
+                }
+            }
+        }
+
+        // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
+        if (!isChanged && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // IVs
-                displayIv?.let { iv ->
-                    val isNewIv = isChanged && alert.newIv != null
-                    StatItem(
-                        label = if (isNewIv) "New IV" else "IV",
-                        value = iv,
-                        subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
-                        highlight = alert.isPerfect,
-                        highlightColor = if (isNewIv) accentColor else if (alert.isPerfect) MaterialTheme.colorScheme.primary else if (alert.isNundo) MaterialTheme.colorScheme.onSurfaceVariant else null
-                    )
-                }
-
-                // CP
-                displayCp?.let { cp ->
-                    val isNewCp = isChanged && alert.newCp != null
-                    StatItem(
-                        label = if (isNewCp) "New CP" else "CP",
-                        value = cp.toString(),
-                        subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
-                        highlightColor = if (isNewCp) accentColor else null
-                    )
-                }
-
-                // Hundo CP (standalone for raids when no individual CP)
-                if (displayCp == null && alert.hundoCP != null) {
-                    alert.hundoCP.level20?.let { l20 ->
-                        StatItem(
-                            label = "100% L20",
-                            value = l20.toString(),
-                            highlightColor = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    alert.hundoCP.level25?.let { l25 ->
-                        StatItem(
-                            label = "100% L25",
-                            value = l25.toString(),
-                            highlightColor = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-
-                // Level — show for species replacement (it's the new species' level), hide for weather-only change
-                if (!isChanged || isReplacement) {
-                    alert.level?.let { level ->
-                        StatItem(
-                            label = if (isReplacement) "New Level" else "Level",
-                            value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
-                            highlightColor = if (isReplacement) accentColor else null
-                        )
-                    }
-                }
-            }
-
-            // Individual IVs breakdown — hide for weather change alerts (old breakdown is no longer relevant)
-            if (!isChanged && alert.ivAttack != null && alert.ivDefense != null && alert.ivStamina != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    IvBar(label = "ATK", value = alert.ivAttack, maxValue = 15)
-                    IvBar(label = "DEF", value = alert.ivDefense, maxValue = 15)
-                    IvBar(label = "STA", value = alert.ivStamina, maxValue = 15)
-                }
+                IvBar(label = "ATK", value = alert.ivAttack, maxValue = 15)
+                IvBar(label = "DEF", value = alert.ivDefense, maxValue = 15)
+                IvBar(label = "STA", value = alert.ivStamina, maxValue = 15)
             }
         }
     }
@@ -895,10 +785,10 @@ internal fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking
             )
         }
 
-        // Stats row: CP and Level
-        Row(
+        // Stats row: CP and Level. Wraps rather than squeezing Stat Product on a narrow phone.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+            itemVerticalAlignment = Alignment.CenterVertically
         ) {
             ranking.cp?.let { cp ->
                 Row(

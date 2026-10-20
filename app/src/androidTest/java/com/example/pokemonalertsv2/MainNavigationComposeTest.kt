@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.test.espresso.Espresso
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onFirst
@@ -142,43 +143,20 @@ class MainNavigationComposeTest {
         composeRule.onNodeWithText("Filters").performScrollTo().performClick()
         composeRule.onNodeWithText("Filter Studio").assertIsDisplayed()
         composeRule.onNodeWithText("Feed").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Basic rules").assertIsDisplayed()
+        // Filter Studio is the map's Filters tabs editing a draft.
+        composeRule.onNodeWithTag("map_filter_tabs").assertIsDisplayed()
         composeRule.onNodeWithText("Apply").assertIsDisplayed()
         composeRule.onNodeWithContentDescription("Cancel").performClick()
-        composeRule.onNodeWithText("GoDex Hundo checklist").assertDoesNotExist()
+        composeRule.onNodeWithTag("godex_page").assertDoesNotExist()
         composeRule.activity.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
 
         composeRule.onNodeWithText("GoDex checklist").performClick()
-        composeRule.onNodeWithText("GoDex Hundo checklist").performScrollTo().assertIsDisplayed()
-        val isDisconnected = composeRule
-            .onAllNodesWithText("Public GoDex collection URL")
-            .fetchSemanticsNodes()
-            .isNotEmpty()
-        if (isDisconnected) {
-            composeRule.onNodeWithText("Public GoDex collection URL").performScrollTo().assertIsDisplayed()
-            composeRule.onNodeWithText("Connect").assertHasClickAction()
-        } else {
-            val collectionAction = if (
-                composeRule.onAllNodesWithText("Review needed").fetchSemanticsNodes().isNotEmpty()
-            ) {
-                "Review needed"
-            } else {
-                "View collection"
-            }
-            composeRule.onNodeWithText(collectionAction)
-                .performScrollTo()
-                .assertIsDisplayed()
-                .assertHasClickAction()
-                .performClick()
-            composeRule.onNodeWithText("Search Pokémon, form, number, or key")
-                .assertIsDisplayed()
-            composeRule.activity.runOnUiThread {
-                composeRule.activity.onBackPressedDispatcher.onBackPressed()
-            }
-            composeRule.onNodeWithText("GoDex Hundo checklist").assertIsDisplayed()
-        }
+        composeRule.onNodeWithTag("godex_page").assertIsDisplayed()
+        // Connected or not, the page says which: a status header or the sign-in prompt.
+        val connected = composeRule.onAllNodesWithText("Not connected").fetchSemanticsNodes().isEmpty()
+        if (!connected) composeRule.onNodeWithText("Sign in to GoDex").assertHasClickAction()
         composeRule.activity.runOnUiThread {
             composeRule.activity.onBackPressedDispatcher.onBackPressed()
         }
@@ -227,7 +205,7 @@ class MainNavigationComposeTest {
         openTools()
         composeRule.onNodeWithText("GoDex checklist").performScrollTo().performClick()
         composeRule.waitUntil(timeoutMillis = NAVIGATION_TIMEOUT_MILLIS) {
-            composeRule.onAllNodesWithText("GoDex Hundo checklist").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("godex_page").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.runOnIdle { composeRule.activity.onBackPressedDispatcher.onBackPressed() }
         waitForToolsScreen()

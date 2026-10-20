@@ -1,10 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -23,12 +19,11 @@ class PartyPowerComposeTest {
         var saved: RaidCounterOptions? = null
         compose.setContent {
             PokemonAlertsV2Theme {
-                Column(Modifier.verticalScroll(rememberScrollState())) {
-                    BattleSetupSheet(state.value, RaidCountersActions(
-                        onOptionsChanged = { state.value = state.value.copy(options = it) },
-                        onSaveAsDefault = { saved = state.value.options }
-                    ), onDismiss = {})
-                }
+                // The sheet scrolls itself, so Save stays reachable on a short screen.
+                BattleSetupSheet(state.value, RaidCountersActions(
+                    onOptionsChanged = { state.value = state.value.copy(options = it) },
+                    onSaveAsDefault = { saved = state.value.options }
+                ), onDismiss = {})
             }
         }
         compose.onNodeWithText("Party Power").performScrollTo().performClick()

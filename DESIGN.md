@@ -55,6 +55,14 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   The sheet is a fixed 90% of the window; only its handle, header and tabs drag it, so scrolling a
   list back to the top never closes it (`keepScrollInSheet`).
   The old Settings screen id (4) is kept for notification, widget and deep-link intents.
+- **Panels and sheets** anywhere share `ui/components/Panel.kt` (header, blue section labels,
+  nav and switch rows, footer button, in-sheet pages). Every bottom sheet with a scroller opens fully
+  expanded and guards it with `keepScrollInSheet()`; controls above a long list scroll with it as
+  its first item. List toolbars on Live and History step aside while scrolling down and return on
+  any scroll up (`rememberHideOnScrollState`).
+- **Narrow phones.** Layouts are checked at about 348dp wide and font scale 1.3 (a phone set to a
+  larger display size). Counts in header rows take the leftover width with ellipsis, button labels
+  stay on one line, and grid minimums keep three tiles across.
 - **Live** and **History** are sections of Alerts, switched by one segmented control in the tab
   header. **Spawn insights** opens from the chart button on the History screen and has its own back
   arrow. The old History screen id (1) is kept for widget and notification intents.
@@ -63,7 +71,26 @@ Motion is defined in `ui/motion/AppMotion.kt` and split by what causes it.
   Settings pages are not repeated there.
 - Tabs stay composed once opened (`ui/components/KeepAlive.kt`): a hidden tab is unplaced and its
   lifecycle is capped at CREATED, so switching back is instant and nothing hidden keeps working.
-- Filter Studio opens over the tab that asked for it; closing it returns there.
+- Filter Studio opens over the tab that asked for it; closing it returns there. It is the map's
+  Filters tabs editing a draft with an Apply bar; areas and profiles sit in the Nearby tab.
+- **Live quick filters.** The Live filter button opens the same small sheet as History's: one chip
+  row each for alert type, area and distance, a show-dismissed switch and "Show N alerts". Changes
+  apply as you tap. "More filters" opens Filter Studio for species, raid tiers, quests, walking time
+  and profiles.
+- **Hunt setup** is pages in one tall sheet: type tiles, one row per chosen type that opens its
+  editor, the area row, and a Start button fixed at the bottom.
+- **Raid counters** put the boss and a time pill first, then the source tabs and one chip row
+  (Setup, weather, level, sort, owned) that edits in place. Each setting lives in one place.
+- **Catch routes** plan over a full-screen map with a bottom sheet: collapsed it shows what is set
+  and Generate, pulled up the rows that open their pages. While walking, Pause and Floating map
+  are buttons and the rest is in the ⋮ menu.
+- **Map alert sheet** leads with what the alert is (sprite, title, countdown, numbers), then
+  I'm going and Navigate, then "Also here" tiles and Open details; the rest is in ⋮.
+- **Settings pages** for Notifications and GoDex are flat rows with blue section labels. Silence
+  offers common lengths, any length (For…) and any date and time (Until…); quiet hours use From
+  and To buttons.
+- **Spawn insights** split spawns into Spawnpoints and Species tabs; a day is picked by tapping its
+  bar, and the explanations sit behind the info button.
 - Below 600dp use bottom navigation; from 600dp use a rail; from 840dp feeds may use two columns and map details use a side panel.
 - Root destinations do not show back buttons. Preserve destination, section, filter, and scroll state.
 - Phone headers use a large, bottom-aligned title area that collapses toward a compact toolbar as content scrolls.

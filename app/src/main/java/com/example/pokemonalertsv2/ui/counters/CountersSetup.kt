@@ -2,122 +2,38 @@ package com.example.pokemonalertsv2.ui.counters
 
 import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
-import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import com.example.pokemonalertsv2.R
-import com.example.pokemonalertsv2.data.counters.CounterSourceId
-import com.example.pokemonalertsv2.data.counters.CounterMetric
-import com.example.pokemonalertsv2.data.counters.DecoratedCounter
-import com.example.pokemonalertsv2.data.counters.PersonalCounter
 import com.example.pokemonalertsv2.data.counters.PersonalMovesMode
-import com.example.pokemonalertsv2.data.counters.PersonalRanking
 import com.example.pokemonalertsv2.data.counters.PokebattlerFriendship
 import com.example.pokemonalertsv2.data.counters.PokebattlerSort
 import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
-import com.example.pokemonalertsv2.data.counters.RaidCounter
 import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
-import com.example.pokemonalertsv2.data.counters.RaidBossMoveset
-import com.example.pokemonalertsv2.data.counters.prettifyMoveName
-import java.util.Locale
-import com.example.pokemonalertsv2.data.counters.toCounterMetric
-
-@Composable
-internal fun BattleSetupSummary(state: RaidCountersUiState, onOpen: () -> Unit) {
-    val options = state.options
-    // My Pokémon ranks each copy at its own level, so the attacker level does not apply there.
-    val levelLabel = if (state.showingPersonal) "Your levels" else "L${options.attackerLevel}"
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                role = Role.Button,
-                onClickLabel = "Open battle setup",
-                onClick = onOpen
-            )
-            .semantics {
-                contentDescription = "Battle setup: " +
-                    (if (state.showingPersonal) "your own levels, " else "level ${options.attackerLevel}, ") +
-                    "${options.weather.label}, ${options.friendship.label}, ${options.sort.label}, " +
-                    "Party Power ${if (options.partyPower) "on" else "off"}"
-            },
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Battle setup", style = MaterialTheme.typography.labelLarge)
-                Text(
-                    text = buildString {
-                        append("$levelLabel · ${options.weather.label} · ")
-                        append(options.friendship.label)
-                        if (options.partyPower) append(" · Party Power")
-                        append(" · ${options.sort.label}")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            TextButton(onClick = onOpen) { Text("Tune") }
-        }
-    }
-}
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 @Composable
 internal fun BattleSetupSheet(
@@ -126,8 +42,12 @@ internal fun BattleSetupSheet(
     onDismiss: () -> Unit
 ) {
     val options = state.options
+    // Taller than a short phone, so it scrolls and Save stays reachable.
     Column(
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+        modifier = Modifier
+            .keepScrollInSheet()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Battle setup", style = MaterialTheme.typography.headlineSmall)

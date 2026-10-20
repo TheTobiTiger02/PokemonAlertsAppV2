@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,12 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TextButton
@@ -56,6 +52,19 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxHeight
 
 /**
  * "When and where does this actually turn up?"
@@ -95,7 +104,7 @@ fun SpawnInsightsScreen(
         }
         when (state.tab) {
             InsightsTab.ALERTS -> AlertInsights(state, onQueryChange, onRangeChange, onRun, suggestions)
-            InsightsTab.SPAWNS -> SpawnActivityPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
+            InsightsTab.SPAWNS -> SpawnActivityTabsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
         }
     }
 }
@@ -186,82 +195,15 @@ private fun AlertInsights(
     }
 }
 
-/**
- * "Was today normal?" Active spawnpoints per day, so a surge or an outage stands out, and every wild
- * Pokémon the live scanner saw, ranked by species. Unlike the Alerts tab this is not limited to
- * the alerts that were posted: it is everything the scanner saw spawn.
- */
-@OptIn(ExperimentalLayoutApi::class)
+private const val SPECIES_FOOTNOTE =
+    "Each spawn counts once, on the day it was first seen. Today is still running. Sightings are kept 30 days."
+
+/** Active spawnpoints per day: today against a usual day, with unusual days marked. */
 @Composable
-private fun SpawnActivityPane(
-    state: SpawnActivityUiState,
-    onRangeChange: (SpawnRange) -> Unit,
-    onAreaChange: (String?) -> Unit,
-    onRetry: () -> Unit,
-    onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Text(
-            "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        com.example.pokemonalertsv2.ui.settings.SegmentedSetting(
-            options = SpawnRange.entries.map { it.label },
-            selectedIndex = state.range.ordinal,
-            onSelected = { onRangeChange(SpawnRange.entries[it]) }
-        )
-        val areas = state.activity?.days?.areas.orEmpty()
-        if (areas.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
-                areas.forEach { area ->
-                    // "Unknown" is the server's bucket for spawnpoints outside every named area.
-                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
-                    FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
-                }
-            }
-        }
-
-        val activity = state.activity
-        when {
-            state.isLoading && activity == null -> Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
-
-            state.errorMessage != null && activity == null -> Column {
-                Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = onRetry) { Text("Try again") }
-            }
-
-            activity != null -> SpawnActivityBody(activity, isRefreshing = state.isLoading, search = state, onSearchChange = onSearchChange, onDayChange = onDayChange)
-        }
-    }
-}
-
-@Composable
-private fun SpawnActivityBody(
-    activity: SpawnActivity,
-    isRefreshing: Boolean,
-    search: SpawnActivityUiState,
-    onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
-) {
+private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean) {
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val summary = remember(activity.days) { summarizeSpawnActivity(activity.days) }
     val days = activity.days.summary
-    if (isRefreshing) {
-        Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-
     Section("Active spawnpoints per day") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             Headline("Today so far", summary.today?.let(numbers::format) ?: "—", Modifier.weight(1f))
@@ -281,16 +223,26 @@ private fun SpawnActivityBody(
             listOfNotNull(
                 if (flagged.isEmpty()) {
                     "No unusual days in range."
-                } else {
+                } else if (showNotes) {
                     "Highlighted: ${flagged.joinToString()} — more than ${(UNUSUAL_SHARE * 100).toInt()}% above or below a usual day, or an unexplained surge."
+                } else {
+                    "Unusual: ${flagged.joinToString()}"
                 },
-                if (summary.unscanned > 0) "${summary.unscanned} day(s) before live scanning are left out." else null
+                if (showNotes && summary.unscanned > 0) "${summary.unscanned} day(s) before live scanning are left out." else null
             ).joinToString(" "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
 
+/**
+ * Wild sightings per day. With [dayChips] a row of day chips picks one day; without it the bars
+ * themselves are tapped, and a single chip shows the picked day so it can be cleared.
+ */
+@Composable
+private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiState, onDayChange: (String?) -> Unit, dayChips: Boolean) {
+    val numbers = remember { NumberFormat.getIntegerInstance() }
     val species = activity.species
     Section("Wild spawns") {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -303,25 +255,47 @@ private fun SpawnActivityBody(
                 values = species.perDay.map { it.total },
                 labels = dayLabels(species.perDay.map { it.day }),
                 highlighted = if (picked >= 0) setOf(picked) else emptySet(),
-                partial = todayIndex(species.perDay.map { it.day })
+                partial = todayIndex(species.perDay.map { it.day }),
+                onSelect = if (dayChips) null else { index ->
+                    val day = species.perDay[index].day
+                    onDayChange(if (search.day == day) null else day)
+                }
             )
-            // Newest first: the day people usually want is today or yesterday.
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text("Whole range") })
-                species.perDay.asReversed().forEach { day ->
-                    FilterChip(
-                        selected = search.day == day.day,
-                        onClick = { onDayChange(if (search.day == day.day) null else day.day) },
-                        label = { Text(shortDay(day.day)) }
+            if (dayChips) {
+                // Newest first: the day people usually want is today or yesterday.
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text("Whole range") })
+                    species.perDay.asReversed().forEach { day ->
+                        FilterChip(
+                            selected = search.day == day.day,
+                            onClick = { onDayChange(if (search.day == day.day) null else day.day) },
+                            label = { Text(shortDay(day.day)) }
+                        )
+                    }
+                }
+            } else {
+                val day = search.day
+                if (day == null) {
+                    Text("Tap a bar to see that day.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    InputChip(
+                        selected = true,
+                        onClick = { onDayChange(null) },
+                        label = { Text(shortDay(day)) },
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Show the whole range", modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.testTag("insights_picked_day")
                     )
                 }
             }
         }
     }
+}
 
+@Composable
+private fun SpeciesSearch(search: SpawnActivityUiState, onSearchChange: (String) -> Unit) {
     OutlinedTextField(
         value = search.search,
         onValueChange = onSearchChange,
@@ -337,7 +311,12 @@ private fun SpawnActivityBody(
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         modifier = Modifier.fillMaxWidth()
     )
+}
 
+@Composable
+private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState) {
+    val numbers = remember { NumberFormat.getIntegerInstance() }
+    val species = activity.species
     val result = search.searchResult
     val listed = search.search.isNotBlank() || search.day != null
     // Shares are of the sightings the list covers: the picked day's, or the range's.
@@ -388,11 +367,102 @@ private fun SpawnActivityBody(
             SpeciesRows(species.species.take(30), total, numbers)
         }
     }
-    Text(
-        "Each spawn counts once, on the day it was first seen. Today is still running. Sightings are kept 30 days.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
+}
+
+/** Range and area in one compact block, shared by the new layouts. */
+@Composable
+private fun SpawnScope(state: SpawnActivityUiState, onRangeChange: (SpawnRange) -> Unit, onAreaChange: (String?) -> Unit, trailing: @Composable () -> Unit = {}) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                com.example.pokemonalertsv2.ui.settings.SegmentedSetting(
+                    options = SpawnRange.entries.map { it.label },
+                    selectedIndex = state.range.ordinal,
+                    onSelected = { onRangeChange(SpawnRange.entries[it]) }
+                )
+            }
+            trailing()
+        }
+        val areas = state.activity?.days?.areas.orEmpty()
+        if (areas.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
+                areas.forEach { area ->
+                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
+                    FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SpawnLoading(state: SpawnActivityUiState, onRetry: () -> Unit) {
+    when {
+        state.isLoading && state.activity == null -> Box(
+            modifier = Modifier.fillMaxWidth().height(180.dp),
+            contentAlignment = Alignment.Center
+        ) { CircularProgressIndicator() }
+        state.errorMessage != null && state.activity == null -> Column {
+            Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = onRetry) { Text("Try again") }
+        }
+    }
+}
+
+/**
+ * Spawnpoints and species as two tabs under one range-and-area block. Days are picked on the
+ * bars, and the explanations sit behind the info button.
+ */
+@Composable
+private fun SpawnActivityTabsPane(
+    state: SpawnActivityUiState,
+    onRangeChange: (SpawnRange) -> Unit,
+    onAreaChange: (String?) -> Unit,
+    onRetry: () -> Unit,
+    onSearchChange: (String) -> Unit,
+    onDayChange: (String?) -> Unit
+) {
+    var sub by rememberSaveable { mutableIntStateOf(0) }
+    var notes by rememberSaveable { mutableStateOf(false) }
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).testTag("insights_tabs"),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SpawnScope(state, onRangeChange, onAreaChange) {
+            IconButton(onClick = { notes = !notes }, modifier = Modifier.testTag("insights_info")) {
+                Icon(Icons.Filled.Info, contentDescription = if (notes) "Hide notes" else "About these numbers")
+            }
+        }
+        if (notes) {
+            Text(
+                "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day. " + SPECIES_FOOTNOTE,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf("Spawnpoints", "Species").forEachIndexed { index, label ->
+                SegmentedButton(
+                    selected = sub == index,
+                    onClick = { sub = index },
+                    shape = SegmentedButtonDefaults.itemShape(index, 2),
+                    modifier = Modifier.testTag("insights_sub_${label.lowercase()}")
+                ) { Text(label) }
+            }
+        }
+        SpawnLoading(state, onRetry)
+        state.activity?.let { activity ->
+            if (state.isLoading) Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (sub == 0) {
+                SpawnpointsSection(activity, showNotes = notes)
+            } else {
+                WildSpawnsSection(activity, state, onDayChange, dayChips = false)
+                SpeciesSearch(state, onSearchChange)
+                SpeciesResults(activity, state)
+            }
+        }
+    }
 }
 
 @Composable
@@ -410,7 +480,8 @@ private fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: N
                 Text(
                     listOfNotNull(entry.rank?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(120.dp),
+                    // A share of the row, not a fixed width, so the bars keep room on a narrow phone.
+                    modifier = Modifier.weight(0.35f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -497,7 +568,7 @@ private fun InsightsBody(insights: SpawnInsights) {
                         Text(
                             entry.area,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.width(110.dp),
+                            modifier = Modifier.weight(0.35f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -549,7 +620,14 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * none, and a bar chart does not justify adding one.
  */
 @Composable
-private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int> = emptySet(), partial: Int? = null) {
+private fun BarRow(
+    values: List<Int>,
+    labels: List<String>,
+    highlighted: Set<Int> = emptySet(),
+    partial: Int? = null,
+    /** Makes each bar a button for its slot, such as picking a day. */
+    onSelect: ((Int) -> Unit)? = null
+) {
     val max = (values.maxOrNull() ?: 0).coerceAtLeast(1)
     Column {
         Row(
@@ -561,6 +639,12 @@ private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .then(if (onSelect != null) Modifier.fillMaxHeight().clickable(onClickLabel = labels.getOrNull(index)) { onSelect(index) }.testTag("insights_bar_$index") else Modifier),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
                         // A zero bar still gets a hairline so the axis reads as a
                         // row of slots rather than a gap of unknown width.
                         .height((6f + 84f * value / max).dp)
@@ -579,6 +663,7 @@ private fun BarRow(values: List<Int>, labels: List<String>, highlighted: Set<Int
                             }
                         )
                 )
+                }
             }
         }
         Spacer(Modifier.height(4.dp))

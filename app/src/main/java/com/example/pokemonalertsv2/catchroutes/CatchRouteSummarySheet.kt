@@ -12,6 +12,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.pokemonalertsv2.hunt.StatTile
 import java.text.DateFormat
 import java.util.Date
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Column
 
 /**
  * How a guided route went: the numbers, and a map of what was walked over what was planned.
@@ -21,12 +25,15 @@ import java.util.Date
 @Composable
 internal fun CatchRouteSummarySheet(summary: CatchRouteSummary, onDismiss: () -> Unit, onWalkAgain: (() -> Unit)?) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        CatchRouteSummaryContent(summary, Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (onWalkAgain != null) OutlinedButton(onClick = onWalkAgain, modifier = Modifier.weight(1f).testTag("catch_summary_again")) { Text("Walk again") }
-            Button(onClick = onDismiss, modifier = Modifier.weight(1f).testTag("catch_summary_done")) { Text("Done") }
+        // Scrolls on short screens so Done stays reachable under the map.
+        Column(Modifier.keepScrollInSheet().verticalScroll(rememberScrollState())) {
+            CatchRouteSummaryContent(summary, Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onWalkAgain != null) OutlinedButton(onClick = onWalkAgain, modifier = Modifier.weight(1f).testTag("catch_summary_again")) { Text("Walk again") }
+                Button(onClick = onDismiss, modifier = Modifier.weight(1f).testTag("catch_summary_done")) { Text("Done") }
+            }
+            Spacer(Modifier.height(16.dp))
         }
-        Spacer(Modifier.height(16.dp))
     }
 }
 

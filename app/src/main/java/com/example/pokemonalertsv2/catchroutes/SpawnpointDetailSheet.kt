@@ -40,6 +40,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** One spawnpoint as the planner knows it: its windows, and where the route meets them. */
 internal data class SpawnpointSelection(
@@ -186,11 +187,11 @@ internal fun SpawnpointDetailSheet(
     loadDetail: suspend (String) -> SpawnpointDetail,
     onDismiss: () -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = selections.size > 1)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
         val now by rememberCountdownClock()
-        Column(Modifier.fillMaxWidth().heightIn(max = 680.dp).verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth().keepScrollInSheet().verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp).padding(bottom = 24.dp).testTag("spawnpoint_detail_sheet"),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -12,7 +12,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,6 +23,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import androidx.compose.foundation.layout.PaddingValues
 
 /**
  * Which mega to have active while catching here: the live Pokémon per type in the chosen area, and the
@@ -35,44 +36,54 @@ internal fun MegaBoostContent(
     onArea: (String) -> Unit,
     onRefresh: () -> Unit,
     onSelect: (MegaCandidate) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val counts = state.counts
     val live = counts.values.sum()
     val totals = state.totals
     val ranking = state.ranking
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Best mega for catching", style = MaterialTheme.typography.headlineSmall)
-                Text("Pokémon sharing a type with your active mega give extra candy.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = onRefresh, enabled = !state.loading, modifier = Modifier.testTag("mega_boost_refresh")) { Text("Refresh") }
-        }
-        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("mega_boost_error")) }
-        if (state.areas.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(state.areas, key = { it.first }) { (area, total) ->
-                FilterChip(selected = state.area == area, onClick = { onArea(area) }, label = { Text("$area · $total") },
-                    modifier = Modifier.testTag("mega_boost_area_$area"))
-            }
-        }
-        if (state.live != null) {
-            Text(buildString {
-                append("$live live Pokémon")
-                state.live.generatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }?.let {
-                    append(" · updated ").append(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()).format(it.atZone(ZoneId.systemDefault())))
+    // One scroller: the header scrolls away with the ranking, so a short or narrow screen still
+    // shows more than a couple of megas.
+    LazyColumn(
+        modifier.fillMaxWidth().keepScrollInSheet().testTag("mega_boost_list"),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        item(key = "header") {
+            Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Best mega for catching", style = MaterialTheme.typography.headlineSmall)
+                        Text("Pokémon sharing a type with your active mega give extra candy.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = onRefresh, enabled = !state.loading, modifier = Modifier.testTag("mega_boost_refresh")) { Text("Refresh") }
                 }
-            }, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("mega_boost_live"))
-            if (live == 0) Text("Nothing live here right now.", style = MaterialTheme.typography.bodyMedium)
+                if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("mega_boost_error")) }
+                if (state.areas.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(state.areas, key = { it.first }) { (area, total) ->
+                        FilterChip(selected = state.area == area, onClick = { onArea(area) }, label = { Text("$area · $total") },
+                            modifier = Modifier.testTag("mega_boost_area_$area"))
+                    }
+                }
+                if (state.live != null) {
+                    Text(buildString {
+                        append("$live live Pokémon")
+                        state.live.generatedAt?.let { runCatching { Instant.parse(it) }.getOrNull() }?.let {
+                            append(" · updated ").append(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()).format(it.atZone(ZoneId.systemDefault())))
+                        }
+                    }, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("mega_boost_live"))
+                    if (live == 0) Text("Nothing live here right now.", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (totals.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(totals, key = { it.first }) { (type, count) -> TypeChip(type, "$count") }
+                }
+            }
         }
-        if (totals.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(totals, key = { it.first }) { (type, count) -> TypeChip(type, "$count") }
-        }
-        val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
         // Without live data, or with nothing live, every mega would read "0 of 0 (0%)"; the ranking
         // only means something once there is something to boost.
-        if (state.live != null && live > 0) LazyColumn(Modifier.heightIn(max = maxHeight).testTag("mega_boost_list"), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        if (state.live != null && live > 0) {
             items(ranking, key = { it.mega.pokemonId }) { row ->
                 MegaBoostRowItem(row, active = row.mega.pokemonId == state.activeMegaId,
                     urls = state.spriteUrls[row.mega.pokemonId].orEmpty(), onClick = { onSelect(row.mega) })
@@ -124,7 +135,7 @@ internal fun MegaBoostSheet(onDismiss: () -> Unit) {
     val controller = androidx.compose.runtime.remember { MegaBoostController(context, scope) }
     val state by controller.uiState.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(Unit) { controller.load() }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         MegaBoostContent(state, onArea = controller::selectArea, onRefresh = controller::load, onSelect = { mega ->
             controller.setActive(mega.pokemonId)
             android.widget.Toast.makeText(context, "${mega.name} is now your active mega", android.widget.Toast.LENGTH_SHORT).show()

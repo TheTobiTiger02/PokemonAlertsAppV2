@@ -61,8 +61,8 @@ class ClusteringSettingsInstrumentedTest {
                 onGoing = {}, onOpenMaps = {}, onShare = {}, onOpenFullDetail = {},
                 companions = listOf(quest), onOpenCompanion = { opened = it }, goDexAction = {})
         } }
-        rule.onNodeWithText("Also at this stop").assertIsDisplayed()
-        rule.onNodeWithText("Catch 5 Pokemon").assertIsDisplayed()
+        // Others at the stop are small tiles: sprite, the reward, and the alert type.
+        rule.onNodeWithText("Also here").assertIsDisplayed()
         rule.onNodeWithText("500 Stardust").assertIsDisplayed()
         rule.onNodeWithTag("same_stop_${quest.uniqueId}").performClick()
         rule.runOnIdle { assertEquals(quest, opened) }
