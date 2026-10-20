@@ -42,6 +42,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import androidx.compose.foundation.layout.FlowRow
+import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 
 private const val EVENTS_REFRESH_INTERVAL_MS = 10 * 60 * 1000L
 
@@ -128,18 +131,24 @@ fun EventsContent(
     val hiddenTypeCount = types.count { it in state.settings.hiddenTypes }
     var view by rememberSaveable { mutableStateOf(EventView.ALL) }
     val starred = state.settings.starredIds
+    // Option 0 keeps the two old sheets; the new designs merge them into one settings sheet.
+    val design = rememberDesignOption(DesignScreen.EVENTS)
+    var settingsOpen by remember { mutableStateOf(false) }
     fun List<GameEvent>.inView() = if (view == EventView.STARRED) filter { it.id in starred } else this
     val nowEvents = if (view == EventView.UPCOMING) emptyList() else sections.now.inView()
     val upcomingDays = if (view == EventView.NOW) emptyList()
     else sections.upcoming.map { (day, events) -> day to events.inView() }.filter { it.second.isNotEmpty() }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item { DesignCompareStrip(DesignScreen.EVENTS) }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
-                    if (types.isNotEmpty()) {
-                        IconButton(onClick = { typesOpen = true }, modifier = Modifier.testTag("events_filter")) {
+                    if (design == 0) {
+                        TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
+                    }
+                    if (types.isNotEmpty() || design != 0) {
+                        IconButton(onClick = { if (design == 0) typesOpen = true else settingsOpen = true }, modifier = Modifier.testTag("events_filter")) {
                             BadgedBox(badge = { if (hiddenTypeCount > 0) Badge() }) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_filter),
@@ -229,6 +238,17 @@ fun EventsContent(
         ReminderSettings(state.settings, (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
             onToggleReminderType, onLeadMinutes)
     }
+    if (settingsOpen) EventSettingsSheet(
+        tabs = design == 2,
+        settings = state.settings,
+        listedTypes = types,
+        reminderTypes = (types + DEFAULT_REMINDER_EVENT_TYPES).distinct().sortedBy { eventTypeName(it) },
+        onToggleHidden = onToggleHidden,
+        onShowAllTypes = onShowAllTypes,
+        onToggleReminderType = onToggleReminderType,
+        onLeadMinutes = onLeadMinutes,
+        onDismiss = { settingsOpen = false }
+    )
 }
 
 /** Which slice of the event list is showing. Not persisted: it is a way of looking, not a setting. */

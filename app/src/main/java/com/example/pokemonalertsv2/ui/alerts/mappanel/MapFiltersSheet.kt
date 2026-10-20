@@ -73,7 +73,10 @@ internal class FiltersState(
     val onDefinitionChange: (FilterDefinition) -> Unit,
     val openQuests: () -> Unit,
     val openDistanceOverrides: () -> Unit,
-    val openFilterStudio: () -> Unit
+    /** Opens the full editor from the Nearby tab; null where this already is the full editor. */
+    val openFilterStudio: (() -> Unit)? = null,
+    /** What the Nearby tab adds below distance, such as Filter Studio's areas and profiles. */
+    val nearbyExtras: (@Composable () -> Unit)? = null
 )
 
 /**

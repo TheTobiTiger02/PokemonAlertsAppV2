@@ -53,6 +53,9 @@ private object DesignOptions {
     }
 }
 
+/** Picks one of [screen]'s designs, as the strip does; also how tests choose one. */
+internal fun selectDesignOption(context: Context, screen: DesignScreen, option: Int) = DesignOptions.set(context, screen, option)
+
 /** Which of [screen]'s designs to draw: an index into [DesignScreen.options]. */
 @Composable
 internal fun rememberDesignOption(screen: DesignScreen): Int = DesignOptions.get(LocalContext.current, screen)
@@ -69,7 +72,7 @@ internal fun DesignCompareStrip(screen: DesignScreen, modifier: Modifier = Modif
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .background(MaterialTheme.colorScheme.surface)
             .testTag("design_compare_${screen.name.lowercase()}"),
         contentPadding = PaddingValues(horizontal = PanelGutter),
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
@@ -77,7 +80,7 @@ internal fun DesignCompareStrip(screen: DesignScreen, modifier: Modifier = Modif
         itemsIndexed(screen.options) { index, label ->
             FilterChip(
                 selected = index == current,
-                onClick = { DesignOptions.set(context, screen, index) },
+                onClick = { selectDesignOption(context, screen, index) },
                 // New designs are lettered A, B, C as they are referred to in conversation.
                 label = { Text(if (index == 0) label else "${'A' + (index - 1)} · $label") },
                 modifier = Modifier.testTag("design_option_${screen.name.lowercase()}_$index")

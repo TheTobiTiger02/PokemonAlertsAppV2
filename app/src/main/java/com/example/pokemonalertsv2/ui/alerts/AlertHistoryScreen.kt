@@ -172,6 +172,10 @@ import com.example.pokemonalertsv2.data.FilterPresets
 import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.ui.components.rememberHideOnScrollState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
+import androidx.compose.material3.AssistChip
+import androidx.compose.ui.platform.testTag
 
 @Composable
 internal fun AlertHistoryPage(
@@ -495,6 +499,8 @@ internal fun AlertHistoryPage(
         val countdownClock = rememberCountdownClock()
         val cardStyle = rememberAlertCardStyle()
         val goDexMatches = rememberGoDexMatchResults(uiState.alerts)
+        // The new Insights designs fold the statistics card into one chip that opens Insights.
+        val insightsDesign = rememberDesignOption(DesignScreen.INSIGHTS)
         // Steps aside while scrolling down, as on the live list.
         val hideControls = rememberHideOnScrollState()
         val listAtTop by remember(listState) {
@@ -564,8 +570,29 @@ internal fun AlertHistoryPage(
                 }
             }
 
+            if (insightsDesign != 0) item(span = { GridItemSpan(maxLineSpan) }) {
+                val scope = selectedDateMillis?.let {
+                    java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault())
+                        .format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.getDefault()))
+                } ?: "all time"
+                val today = statistics["today"] ?: 0
+                AssistChip(
+                    onClick = { onOpenInsights?.invoke() },
+                    enabled = onOpenInsights != null,
+                    label = {
+                        Text(
+                            "${java.text.NumberFormat.getIntegerInstance().format(statistics["total"] ?: 0)} alerts · $scope" +
+                                if (today > 0) " · $today today" else "",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_insights), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    modifier = Modifier.testTag("history_stats_chip")
+                )
+            }
             // Statistics Card
-            item(span = { GridItemSpan(maxLineSpan) }) {
+            if (insightsDesign == 0) item(span = { GridItemSpan(maxLineSpan) }) {
                 var isExpanded by rememberSaveable { mutableStateOf(false) }
 
                 val dateText = if (selectedDateMillis != null) {

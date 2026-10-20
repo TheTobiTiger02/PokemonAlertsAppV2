@@ -63,6 +63,29 @@ import com.example.pokemonalertsv2.ui.alerts.selectionFor
 import com.example.pokemonalertsv2.ui.alerts.withSelection
 import com.example.pokemonalertsv2.ui.settings.QuestRulesDialog
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
+import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
+import com.example.pokemonalertsv2.ui.components.PanelFooterButton
+import com.example.pokemonalertsv2.ui.components.PanelGutter
+import com.example.pokemonalertsv2.ui.components.PanelHeader
+import com.example.pokemonalertsv2.ui.components.PanelIcon
+import com.example.pokemonalertsv2.ui.components.PanelNavRow
+import com.example.pokemonalertsv2.ui.components.PanelPages
+import com.example.pokemonalertsv2.ui.components.PanelSectionLabel
+import com.example.pokemonalertsv2.ui.alerts.mappanel.FiltersState
+import com.example.pokemonalertsv2.ui.alerts.mappanel.TypeEditor
+import com.example.pokemonalertsv2.ui.alerts.mappanel.TypeEditorBody
+import com.example.pokemonalertsv2.ui.alerts.mappanel.editor
+import com.example.pokemonalertsv2.R
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 
 /**
  * Choose what to hunt, here and now.
@@ -117,7 +140,58 @@ internal fun HuntTargetSheet(
     val chosenTypes = remember(draft) { draft.chosenTypes() }
     val ready = chosenTypes.isNotEmpty()
 
+    // The new layouts are compared alongside Filter Studio's, since they share its editors.
+    if (rememberDesignOption(DesignScreen.FILTER_STUDIO) != 0) {
+        val hunt = remember(draft) { draft.forHunt() }
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.testTag("hunt_target_pages")
+        ) {
+            HuntPages(
+                editing = editing != null,
+                savedHunts = if (editing == null) savedHunts else emptyList(),
+                chosenTypes = chosenTypes,
+                filters = FiltersState(
+                    definition = draft,
+                    catalog = catalog,
+                    artwork = artwork,
+                    rewardThumbnails = questRewardThumbnails,
+                    categoryCounts = categoryCounts,
+                    visibleCount = 0,
+                    totalCount = 0,
+                    onDefinitionChange = { draft = it },
+                    openQuests = { questsOpen = true },
+                    openDistanceOverrides = {}
+                ),
+                areaSummary = if (area.isArea()) "Only inside your area (${area.size} corners)" else "Anywhere nearby",
+                area = area,
+                onAreaChange = { area = it },
+                onOpenArea = { areaOpen = true },
+                onStartSaved = { saved -> onStart(saved.name, saved.definition, saved.id, saved.area) },
+                onEditSaved = { saved ->
+                    draft = saved.definition.forHuntDraft()
+                    editingId = saved.id
+                    area = saved.area
+                },
+                onRenameSaved = { renaming = it },
+                onDeleteSaved = { saved ->
+                    scope.launch { huntRepository.deleteSavedHunt(saved.id) }
+                    if (editingId == saved.id) editingId = null
+                },
+                startLabel = when {
+                    !ready -> "Pick something to hunt"
+                    editing != null -> "Update hunt"
+                    else -> "Hunt ${huntName(hunt, catalog)}"
+                },
+                ready = ready,
+                onStart = { onStart(huntName(hunt, catalog), hunt, editingId, area) }
+            )
+        }
+    } else
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        DesignCompareStrip(DesignScreen.FILTER_STUDIO)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -313,6 +387,137 @@ internal fun HuntTargetSheet(
                 draft = draft.copy(quests = it)
                 questsOpen = false
             }
+        )
+    }
+}
+
+private enum class HuntPage { ROOT, SPAWN, HUNDO, PVP, NUNDO, COMMON, RAIDS, ROCKET, QUESTS }
+
+/** What a hunt narrows a type to, where "nothing picked" means "any of them". */
+private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = when (this) {
+    FilterAlertType.SPAWN -> definition.spawnSpecies.summary()
+    FilterAlertType.HUNDO -> definition.hundoSpecies.summary()
+    FilterAlertType.PVP -> definition.pvpSpecies.summary()
+    FilterAlertType.NUNDO -> definition.nundoSpecies.summary()
+    FilterAlertType.COMMON -> definition.commonSpecies.summary()
+    FilterAlertType.RAID -> if (definition.raidTiers.mode != FilterSelectionMode.ONLY && definition.raidSpecies.mode != FilterSelectionMode.ONLY) "Any"
+        else "Tiers: ${definition.raidTiers.summary()} · bosses: ${definition.raidSpecies.summary()}"
+    FilterAlertType.ROCKET -> definition.rocketTypes.summary()
+    FilterAlertType.QUEST -> definition.quests.summary()
+    else -> "Any"
+}
+
+/**
+ * The hunt picker as pages in one sheet: what (type tiles, then one row per chosen type that
+ * opens its editor), where, and a Start button that stays put at the bottom.
+ */
+@Composable
+private fun HuntPages(
+    editing: Boolean,
+    savedHunts: List<SavedHunt>,
+    chosenTypes: List<FilterAlertType>,
+    filters: FiltersState,
+    areaSummary: String,
+    area: List<CatchPoint>,
+    onAreaChange: (List<CatchPoint>) -> Unit,
+    onOpenArea: () -> Unit,
+    onStartSaved: (SavedHunt) -> Unit,
+    onEditSaved: (SavedHunt) -> Unit,
+    onRenameSaved: (SavedHunt) -> Unit,
+    onDeleteSaved: (SavedHunt) -> Unit,
+    startLabel: String,
+    ready: Boolean,
+    onStart: () -> Unit
+) {
+    var page by remember { mutableStateOf(HuntPage.ROOT) }
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.9f).keepScrollInSheet()) {
+        DesignCompareStrip(DesignScreen.FILTER_STUDIO)
+        Box(Modifier.weight(1f)) {
+            PanelPages(page = page, root = HuntPage.ROOT, onBack = { page = HuntPage.ROOT }) { shown ->
+                if (shown == HuntPage.ROOT) {
+                    LazyColumn(Modifier.fillMaxSize().testTag("hunt_root")) {
+                        item {
+                            Spacer(Modifier.height(8.dp))
+                            PanelHeader(
+                                title = if (editing) "Edit hunt targets" else "What are you hunting?",
+                                subtitle = if (editing) "The hunt keeps running while you change it" else null
+                            )
+                        }
+                        if (savedHunts.isNotEmpty()) {
+                            item { PanelSectionLabel("Hunted before") }
+                            items(savedHunts, key = { it.id }) { saved ->
+                                Box(Modifier.padding(horizontal = PanelGutter)) {
+                                    SavedHuntRow(
+                                        hunt = saved,
+                                        onStart = { onStartSaved(saved) },
+                                        onEdit = { onEditSaved(saved) },
+                                        onRename = { onRenameSaved(saved) },
+                                        onDelete = { onDeleteSaved(saved) }
+                                    )
+                                }
+                            }
+                        }
+                        item { PanelSectionLabel("What") }
+                        item {
+                            Box(Modifier.padding(horizontal = PanelGutter)) {
+                                AlertTypesSection(
+                                    definition = filters.definition,
+                                    categoryCounts = filters.categoryCounts,
+                                    onDefinitionChange = filters.onDefinitionChange,
+                                    setAllLabel = "Pick one or more"
+                                )
+                            }
+                        }
+                        // Only the criteria that belong to the chosen types: a Rocket hunt has
+                        // no business asking about raid tiers.
+                        val editable = chosenTypes.mapNotNull { type -> type.editor()?.let { type to it } }
+                        if (editable.isNotEmpty()) {
+                            item { PanelSectionLabel("Narrow it down") }
+                            items(editable, key = { it.first.name }) { (type, editor) ->
+                                PanelNavRow(
+                                    title = type.label,
+                                    summary = type.huntSummary(filters.definition),
+                                    active = type.huntSummary(filters.definition) != "Any",
+                                    onClick = { page = HuntPage.valueOf(editor.name) },
+                                    modifier = Modifier.testTag("hunt_row_${type.name.lowercase()}"),
+                                    icon = { PanelIcon(R.drawable.ic_tune) }
+                                )
+                            }
+                        }
+                        item { PanelSectionLabel("Where") }
+                        item {
+                            PanelNavRow(
+                                title = "Area",
+                                summary = areaSummary,
+                                active = area.isArea(),
+                                onClick = onOpenArea,
+                                modifier = Modifier.testTag("hunt_row_area"),
+                                icon = { PanelIcon(R.drawable.ic_map) }
+                            )
+                        }
+                        item {
+                            // The areas saved in the picker, shared with catch routes, one tap each.
+                            Box(Modifier.padding(horizontal = PanelGutter, vertical = 4.dp)) { SavedAreaChips(area) { onAreaChange(it) } }
+                        }
+                    }
+                } else {
+                    val editor = TypeEditor.valueOf(shown.name)
+                    Column(Modifier.fillMaxSize()) {
+                        PanelHeader(
+                            title = editor.type.label,
+                            subtitle = editor.type.huntSummary(filters.definition),
+                            onBack = { page = HuntPage.ROOT }
+                        )
+                        TypeEditorBody(editor, filters, Modifier.fillMaxWidth().weight(1f))
+                    }
+                }
+            }
+        }
+        PanelFooterButton(
+            text = startLabel,
+            onClick = onStart,
+            enabled = ready,
+            modifier = Modifier.navigationBarsPadding().testTag("hunt_start")
         )
     }
 }

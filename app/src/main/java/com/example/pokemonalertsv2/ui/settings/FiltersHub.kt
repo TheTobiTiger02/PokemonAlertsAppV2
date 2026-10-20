@@ -48,6 +48,9 @@ import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.accentColor
 import com.example.pokemonalertsv2.util.TravelTime
 import com.example.pokemonalertsv2.widget.*
+import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 
 @Composable
 internal fun FiltersHubContent(
@@ -190,7 +193,34 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                 topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text("Filter Studio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text("Copy from") } }) },
                 bottomBar = { Surface(shadowElevation = 8.dp) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text("$matchCount of ${alerts.size} live alerts match", style = MaterialTheme.typography.labelLarge); Text("Draft changes apply together", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Button(onClick = applyDraft) { Text("Apply") } } } }
             ) { padding ->
-                Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                val design = rememberDesignOption(DesignScreen.FILTER_STUDIO)
+                Column(Modifier.padding(padding).fillMaxSize()) {
+                DesignCompareStrip(DesignScreen.FILTER_STUDIO)
+                if (design != 0) {
+                    val body = StudioBodyState(
+                        draft = draft,
+                        onDraftChange = { draft = it },
+                        catalog = catalog,
+                        artwork = artwork,
+                        rewardThumbnails = rewardThumbnails,
+                        matchCount = matchCount,
+                        totalCount = alerts.size,
+                        areas = catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } },
+                        profileSummary = linkedProfile?.let { "Linked: ${it.name}" } ?: "Custom rules",
+                        openProfiles = { showProfiles = true },
+                        saveProfile = { showSave = true },
+                        openQuestRules = { showQuests = true },
+                        openDistanceOverrides = { showDistanceOverrides = true }
+                    )
+                    Box(Modifier.weight(1f)) {
+                        when (design) {
+                            1 -> StudioTabsBody(body)
+                            2 -> StudioOverviewBody(body)
+                            else -> StudioTilesBody(body)
+                        }
+                    }
+                } else
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { showProfiles = true }, modifier = Modifier.weight(1f)) { Text(if (assignment.mode == FilterAssignmentMode.LINKED) "Linked profile" else "Profiles") }
                         OutlinedButton(onClick = { showSave = true }, modifier = Modifier.weight(1f)) { Text("Save as profile") }
@@ -212,6 +242,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                         }, onSecondaryAdvanced = if (type == FilterAlertType.RAID) ({ selector = SelectorTarget.RAID_TIERS }) else null)
                     }
                     Spacer(Modifier.height(12.dp))
+                }
                 }
             }
         }
@@ -250,26 +281,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
 private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEditDistanceOverrides: () -> Unit, onChange: (FilterDefinition) -> Unit) {
     SettingsSection("Basic rules") {
         Text("Areas", style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text("All") })
-            FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
-            (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area ->
-                val only = definition.areas.mode == FilterSelectionMode.ONLY
-                val picked = only && definition.areas.contains(area)
-                // A zone is already covered when its city is picked ("Darmstadt" includes
-                // "Darmstadt-North"), so it shows as included and cannot be toggled on its own.
-                val impliedByCity = only && !picked && AlertFilterMatcher.matchesArea(definition.areas, area)
-                FilterChip(
-                    selected = picked || impliedByCity,
-                    enabled = !impliedByCity,
-                    onClick = { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) },
-                    label = { Text(area) },
-                    leadingIcon = if (picked || impliedByCity) {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
-                    } else null
-                )
-            }
-        }
+        AreaChipsEditor(definition, areas, onChange)
         Text("Distance — ${distanceLabel(definition.maxDistanceMeters)}", style = MaterialTheme.typography.titleSmall)
         com.example.pokemonalertsv2.ui.components.DistanceLimitPicker(
             meters = definition.maxDistanceMeters,
@@ -284,6 +296,45 @@ private fun BasicRules(definition: FilterDefinition, areas: List<String>, onEdit
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { TravelTime.PRESET_MINUTES.forEach { minutes -> FilterChip(definition.maxWalkingMinutes == minutes, { onChange(definition.copy(maxWalkingMinutes = minutes)) }, label = { Text(TravelTime.label(minutes)) }) } }
     }
 }
+
+/** Which areas an alert must be in: All, None, or the areas picked. */
+@Composable
+internal fun AreaChipsEditor(definition: FilterDefinition, areas: List<String>, onChange: (FilterDefinition) -> Unit, modifier: Modifier = Modifier) {
+    FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text("All") })
+        FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
+        (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area ->
+            val only = definition.areas.mode == FilterSelectionMode.ONLY
+            val picked = only && definition.areas.contains(area)
+            // A zone is already covered when its city is picked ("Darmstadt" includes
+            // "Darmstadt-North"), so it shows as included and cannot be toggled on its own.
+            val impliedByCity = only && !picked && AlertFilterMatcher.matchesArea(definition.areas, area)
+            FilterChip(
+                selected = picked || impliedByCity,
+                enabled = !impliedByCity,
+                onClick = { val set = definition.areas.normalizedValues.toMutableSet(); val key = normalizeFilterToken(area); if (!set.add(key)) set.remove(key); onChange(definition.copy(areas = if (set.isEmpty()) FilterSelection.None else FilterSelection.only(set))) },
+                label = { Text(area) },
+                leadingIcon = if (picked || impliedByCity) {
+                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null
+            )
+        }
+    }
+}
+
+/** "All areas", "Darmstadt", "3 areas" or "No areas". */
+internal fun FilterDefinition.areaSummary(): String = when (areas.mode) {
+    FilterSelectionMode.ALL -> "All areas"
+    FilterSelectionMode.NONE -> "No areas"
+    FilterSelectionMode.ONLY -> if (areas.selectedCount == 1) areas.values.first() else "${areas.selectedCount} areas"
+}
+
+/** Distance, walking time and per-type limits in one line. */
+internal fun FilterDefinition.distanceSummary(): String = buildList {
+    add(if (maxDistanceMeters > 0) distanceLabel(maxDistanceMeters) else "Any distance")
+    if (maxWalkingMinutes > 0) add(TravelTime.label(maxWalkingMinutes) + " walk")
+    distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 custom limit" else "$it custom limits") }
+}.joinToString(" · ")
 
 @Composable
 private fun TypeRuleRow(type: FilterAlertType, definition: FilterDefinition, onToggle: (Boolean) -> Unit, onAdvanced: () -> Unit, onSecondaryAdvanced: (() -> Unit)?) {

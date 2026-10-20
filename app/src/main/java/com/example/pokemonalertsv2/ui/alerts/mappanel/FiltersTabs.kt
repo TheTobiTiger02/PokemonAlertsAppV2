@@ -56,13 +56,16 @@ private enum class FiltersTab(val label: String) {
  * artwork grid itself, with search and set-all, as PogoMapper lays out its lists.
  */
 @Composable
-internal fun FiltersTabs(state: FiltersState) {
+internal fun FiltersTabs(
+    state: FiltersState,
+    header: @Composable () -> Unit = { FiltersHeader(state) }
+) {
     var tab by rememberSaveable { mutableStateOf(FiltersTab.NEARBY) }
     var speciesTarget by rememberSaveable { mutableStateOf(MapSelectorTarget.HUNDO) }
     // The sheet has a fixed height, so the tab body takes what is left and switching tabs never
     // resizes the sheet under the thumb.
     Column(modifier = Modifier.fillMaxSize()) {
-        FiltersHeader(state)
+        header()
         ActiveFiltersRow(state)
         PrimaryScrollableTabRow(
             selectedTabIndex = tab.ordinal,
@@ -90,14 +93,17 @@ internal fun FiltersTabs(state: FiltersState) {
             when (tab) {
                 FiltersTab.NEARBY -> ScrollingTab {
                     DistanceEditor(state)
-                    PanelSectionLabel("More")
-                    PanelNavRow(
-                        title = "Advanced rules",
-                        summary = "Areas, presets and more in Filter Studio",
-                        onClick = state.openFilterStudio,
-                        modifier = Modifier.testTag("map_filter_studio"),
-                        icon = { PanelIcon(R.drawable.ic_tools) }
-                    )
+                    state.nearbyExtras?.invoke()
+                    state.openFilterStudio?.let { open ->
+                        PanelSectionLabel("More")
+                        PanelNavRow(
+                            title = "Advanced rules",
+                            summary = "Areas, presets and more in Filter Studio",
+                            onClick = open,
+                            modifier = Modifier.testTag("map_filter_studio"),
+                            icon = { PanelIcon(R.drawable.ic_tools) }
+                        )
+                    }
                 }
                 FiltersTab.TYPES -> ScrollingTab {
                     AllNoneRow(
@@ -119,30 +125,42 @@ internal fun FiltersTabs(state: FiltersState) {
                     targets = SPECIES_TARGETS - MapSelectorTarget.RAID_SPECIES
                 )
                 FiltersTab.RAIDS -> RaidsTab(state)
-                FiltersTab.ROCKET -> ScrollingTab {
-                    AllNoneRow(
-                        onAll = { state.onDefinitionChange(state.definition.copy(rocketTypes = FilterSelection.All)) },
-                        onNone = { state.onDefinitionChange(state.definition.copy(rocketTypes = FilterSelection.None)) }
-                    )
-                    TokenGridOrNote(
-                        tokens = state.catalog.rocketTypes,
-                        selection = state.definition.rocketTypes,
-                        onSelectionChange = { state.onDefinitionChange(state.definition.copy(rocketTypes = it)) },
-                        perRow = 3,
-                        look = ::rocketTypeLook
-                    )
-                }
-                FiltersTab.QUESTS -> QuestRewardGrid(
-                    rules = state.definition.quests,
-                    quests = state.catalog.quests,
-                    rewardThumbnails = state.rewardThumbnails,
-                    artwork = state.artwork,
-                    onRulesChange = { state.onDefinitionChange(state.definition.copy(quests = it)) },
-                    onOpenRules = state.openQuests
-                )
+                FiltersTab.ROCKET -> RocketTab(state)
+                FiltersTab.QUESTS -> QuestsTab(state)
             }
         }
     }
+}
+
+/** Rocket grunts as type-coloured tiles. */
+@Composable
+internal fun RocketTab(state: FiltersState) {
+    ScrollingTab {
+        AllNoneRow(
+            onAll = { state.onDefinitionChange(state.definition.copy(rocketTypes = FilterSelection.All)) },
+            onNone = { state.onDefinitionChange(state.definition.copy(rocketTypes = FilterSelection.None)) }
+        )
+        TokenGridOrNote(
+            tokens = state.catalog.rocketTypes,
+            selection = state.definition.rocketTypes,
+            onSelectionChange = { state.onDefinitionChange(state.definition.copy(rocketTypes = it)) },
+            perRow = 3,
+            look = ::rocketTypeLook
+        )
+    }
+}
+
+/** Field research by reward or by task. */
+@Composable
+internal fun QuestsTab(state: FiltersState) {
+    QuestRewardGrid(
+        rules = state.definition.quests,
+        quests = state.catalog.quests,
+        rewardThumbnails = state.rewardThumbnails,
+        artwork = state.artwork,
+        onRulesChange = { state.onDefinitionChange(state.definition.copy(quests = it)) },
+        onOpenRules = state.openQuests
+    )
 }
 
 @Composable
@@ -166,7 +184,7 @@ private fun AllNoneRow(onAll: () -> Unit, onNone: () -> Unit) {
 
 /** Raids: the tiers as eggs, or the bosses as the species grid, one at a time. */
 @Composable
-private fun RaidsTab(state: FiltersState) {
+internal fun RaidsTab(state: FiltersState) {
     var bosses by rememberSaveable { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxSize()) {
         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().panelGutter().padding(bottom = Spacing.sm)) {
