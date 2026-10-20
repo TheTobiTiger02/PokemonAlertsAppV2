@@ -284,14 +284,14 @@ private fun PermissionRows(
     PermissionRow(
         title = "Notifications",
         granted = grants.notifications,
-        summary = if (grants.notifications) "Alerts arrive as posted" else "Alerts can not reach you",
+        summary = if (grants.notifications) "Alerts arrive" else "Alerts can not arrive",
         icon = Icons.Filled.Notifications,
         onClick = onManageNotifications
     )
     PermissionRow(
         title = "Location in use",
         granted = grants.foregroundLocation,
-        summary = if (grants.foregroundLocation) "Distances and the map" else "No distances",
+        summary = if (grants.foregroundLocation) "Distances, map" else "No distances",
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
@@ -437,7 +437,7 @@ private fun SilenceRows(
     // One tile per common length, and one clock for anything else: no dialog chain.
     val tiles: List<Pair<String, () -> Unit>> =
         SILENCE_DURATIONS.map { (minutes, label) -> label to { onSilenceFor(minutes) } } +
-            ("Until a time…" to { pickingTime = true })
+            ("Until…" to { pickingTime = true })
     Column(
         modifier = Modifier
             .fillMaxWidth()
