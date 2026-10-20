@@ -284,21 +284,21 @@ private fun PermissionRows(
     PermissionRow(
         title = "Notifications",
         granted = grants.notifications,
-        summary = if (grants.notifications) "Alerts arrive as they post" else "Alerts can not reach you",
+        summary = if (grants.notifications) "Alerts arrive as posted" else "Alerts can not reach you",
         icon = Icons.Filled.Notifications,
         onClick = onManageNotifications
     )
     PermissionRow(
-        title = "Location while in use",
+        title = "Location in use",
         granted = grants.foregroundLocation,
-        summary = if (grants.foregroundLocation) "Distances, sorting and the map" else "No distances or nearby sorting",
+        summary = if (grants.foregroundLocation) "Distances and the map" else "No distances",
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
     PermissionRow(
         title = "Background location",
         granted = grants.backgroundLocation,
-        summary = if (grants.backgroundLocation) "Distances stay right while closed" else "Distances go stale while closed",
+        summary = if (grants.backgroundLocation) "Fresh while closed" else "Stale while closed",
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
@@ -519,6 +519,16 @@ private fun ClockTimeDialog(
 
 private enum class GoDexPage { ROOT, CHECKLIST, ACCOUNT, PUBLIC_LINK }
 
+/** What the GoDex page's rows do; [GoDexPageDesign] wires them to the view model. */
+internal class GoDexPageActions(
+    val onConnect: (String) -> Unit,
+    val onSync: () -> Unit,
+    val onNotifyNeededChange: (Boolean) -> Unit,
+    val onSignOut: () -> Unit,
+    val onOpenCollection: () -> Unit,
+    val onDisconnect: () -> Unit
+)
+
 @Composable
 internal fun GoDexPageDesign(
     option: Int,
@@ -529,13 +539,43 @@ internal fun GoDexPageDesign(
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val config by viewModel.goDexConfig.collectAsStateWithLifecycle()
     val entries by viewModel.goDexEntries.collectAsStateWithLifecycle()
     val sync by viewModel.goDexSyncUiState.collectAsStateWithLifecycle()
+    GoDexPageContent(
+        option = option,
+        config = config,
+        needed = entries.count { it.needed },
+        total = entries.size,
+        sync = sync,
+        urlInput = urlInput,
+        onUrlInputChange = onUrlInputChange,
+        actions = GoDexPageActions(
+            onConnect = viewModel::connectGoDex,
+            onSync = viewModel::syncGoDex,
+            onNotifyNeededChange = viewModel::updateGoDexNotificationFilter,
+            onSignOut = viewModel::clearGoDexSession,
+            onOpenCollection = onOpenCollection,
+            onDisconnect = onDisconnect
+        ),
+        modifier = modifier
+    )
+}
+
+@Composable
+internal fun GoDexPageContent(
+    option: Int,
+    config: GoDexConfig,
+    needed: Int,
+    total: Int,
+    sync: GoDexSyncUiState,
+    urlInput: String,
+    onUrlInputChange: (String) -> Unit,
+    actions: GoDexPageActions,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
     val now = rememberMinuteClock()
-    val needed = entries.count { it.needed }
-    val total = entries.size
 
     var pageName by rememberSaveable(option) { mutableStateOf(GoDexPage.ROOT.name) }
     val page = GoDexPage.valueOf(pageName)
@@ -555,14 +595,14 @@ internal fun GoDexPageDesign(
             title = "Collection",
             summary = if (needed == 0) "Complete · $total caught" else "$needed needed of $total",
             active = needed > 0,
-            onClick = onOpenCollection,
+            onClick = actions.onOpenCollection,
             icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
         )
         PanelSwitchRow(
             title = "Only notify needed",
             subtitle = "Hundos you have stay quiet. Unknown forms still notify.",
             checked = config.notificationFilterEnabled,
-            onCheckedChange = viewModel::updateGoDexNotificationFilter,
+            onCheckedChange = actions.onNotifyNeededChange,
             icon = { Icon(Icons.Filled.Notifications, null, Modifier.size(20.dp)) }
         )
         ActionRow(
@@ -570,7 +610,7 @@ internal fun GoDexPageDesign(
             summary = syncLine.first,
             problem = syncLine.second,
             enabled = !sync.isSyncing,
-            onClick = viewModel::syncGoDex,
+            onClick = actions.onSync,
             icon = {
                 if (sync.isSyncing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                 else PanelIcon(R.drawable.ic_refresh)
@@ -640,8 +680,8 @@ internal fun GoDexPageDesign(
                         sync = sync,
                         onSignIn = signIn,
                         onPickChecklist = pickChecklist,
-                        onSignOut = viewModel::clearGoDexSession,
-                        onDisconnect = onDisconnect
+                        onSignOut = actions.onSignOut,
+                        onDisconnect = actions.onDisconnect
                     )
                 }
 
@@ -664,7 +704,7 @@ internal fun GoDexPageDesign(
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                         Button(
-                            onClick = { viewModel.connectGoDex(urlInput) },
+                            onClick = { actions.onConnect(urlInput) },
                             enabled = urlInput.isNotBlank() && !sync.isSyncing,
                             modifier = Modifier.fillMaxWidth().height(52.dp)
                         ) { Text(if (sync.isSyncing) "Connecting…" else "Connect") }
@@ -905,7 +945,9 @@ private fun PermissionRow(
             Text(
                 summary,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (granted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                color = if (granted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(Spacing.sm))
