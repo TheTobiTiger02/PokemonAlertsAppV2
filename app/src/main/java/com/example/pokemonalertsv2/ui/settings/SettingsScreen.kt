@@ -102,6 +102,9 @@ import com.example.pokemonalertsv2.data.godex.GoDexSessionState
 import com.example.pokemonalertsv2.data.godex.GoDexSyncUiState
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.LinearModernBackground
+import com.example.pokemonalertsv2.ui.components.DesignCompareStrip
+import com.example.pokemonalertsv2.ui.components.DesignScreen
+import com.example.pokemonalertsv2.ui.components.rememberDesignOption
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -300,6 +303,7 @@ internal fun SettingsScreen(
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val settingsDesign = rememberDesignOption(DesignScreen.SETTINGS_PAGES)
 
     LinearModernBackground(
         modifier = Modifier.fillMaxSize()
@@ -376,10 +380,46 @@ internal fun SettingsScreen(
                     modifier = Modifier.padding(padding)
                 )
             } else {
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            val designedPage = animatedDestination == SettingsDestination.NOTIFICATIONS ||
+                animatedDestination == SettingsDestination.GODEX
+            if (designedPage) DesignCompareStrip(DesignScreen.SETTINGS_PAGES)
+            if (designedPage && settingsDesign != 0) {
+                if (animatedDestination == SettingsDestination.NOTIFICATIONS) {
+                    NotificationsPageDesign(
+                        option = settingsDesign,
+                        viewModel = viewModel,
+                        grants = PermissionGrants(
+                            notifications = systemNotificationsGranted,
+                            foregroundLocation = foregroundLocationGranted,
+                            backgroundLocation = backgroundLocationGranted
+                        ),
+                        onManageNotifications = {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            )
+                        },
+                        onManageLocation = onManageLocationPermissions,
+                        onOpenFilterStudio = {
+                            viewModel.requestFilterEditor(com.example.pokemonalertsv2.data.FilterSurface.NOTIFICATIONS)
+                            navigateTo(SettingsDestination.ALERT_FILTERS)
+                        }
+                    )
+                } else {
+                    GoDexPageDesign(
+                        option = settingsDesign,
+                        viewModel = viewModel,
+                        urlInput = goDexUrlInput,
+                        onUrlInputChange = { goDexUrlInput = it },
+                        onOpenCollection = { navigateTo(SettingsDestination.GODEX_COLLECTION) },
+                        onDisconnect = { showGoDexDisconnectConfirmation = true }
+                    )
+                }
+            } else
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
                     .padding(horizontal = 16.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -941,6 +981,7 @@ internal fun SettingsScreen(
                 }
                 
                 Spacer(modifier = Modifier.height(24.dp))
+            }
             }
             }
             }
