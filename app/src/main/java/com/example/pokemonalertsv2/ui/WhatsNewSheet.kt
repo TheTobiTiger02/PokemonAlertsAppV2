@@ -34,7 +34,7 @@ internal const val WHATS_NEW_RELEASE = "1.20"
 
 private val WHATS_NEW_POINTS = listOf(
     "Spawnpoints on the map: switch them on in Layers on the OpenStreetMap style. Green is up now, amber spawns within 10 minutes. Tap one for its hourly timer, next spawns and recent Pokémon.",
-    "\"I'm going\" can show a map: tap Map on the alert to see yourself with a direction arrow, the target and the walking path. Show map in the live notification opens it over other apps.",
+    "\"I'm going\" has its own map: leave the app and it floats over other apps with you, a direction arrow, the target, the walking path and a Got it button. Hide it with × or Hide map in the notification. During a hunt, \"I'm going\" switches the hunt's target.",
     "New Events widget for your home screen: what is running now and what is coming up, for the event types you choose. Tap an event to open it.",
     "Smoother everywhere: filtering the live feed and the map no longer blocks scrolling, and countdowns no longer redraw every card each second."
 )

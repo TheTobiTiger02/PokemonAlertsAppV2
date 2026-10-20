@@ -312,6 +312,15 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
+        if (intent?.action == ACTION_RETARGET_HUNT) {
+            // "I'm going" while a hunt runs: the hunt walks to this alert next, the same
+            // way tapping its pin on the floating map does.
+            intent.getStringExtra(EXTRA_ALERT_JSON)
+                ?.let { runCatching { retargetJson.decodeFromString(PokemonAlert.serializer(), it) }.getOrNull() }
+                ?.let(::retargetHuntTo)
+            return START_NOT_STICKY
+        }
+
         if (intent?.action == ACTION_GOT_IT) {
             serviceScope.launch {
                 markCurrentTargetCaught()
@@ -1059,8 +1068,9 @@ class ArrivalTrackingService : Service() {
     ) {
         // One surface only. Where the status bar chip exists it is strictly better,
         // and where it does not the map draws the label instead -- either way the
-        // pill stays out of the way rather than repeating the same number.
-        if (readoutSurface() != JourneyReadoutSurface.OVERLAY_PILL) {
+        // pill stays out of the way rather than repeating the same number. A one-off
+        // "I'm going" has its floating map for this, so the pill is a hunt's only.
+        if (!huntActive || readoutSurface() != JourneyReadoutSurface.OVERLAY_PILL) {
             journeyOverlay.hide()
             return
         }
@@ -1176,7 +1186,17 @@ class ArrivalTrackingService : Service() {
         floatingMap.onOpenApp = { openTheApp() }
         floatingMap.onPrevious = { stopFollowing(); stepHuntTarget(forward = false) }
         floatingMap.onNext = { stopFollowing(); stepHuntTarget(forward = true) }
-        floatingMap.onGotIt = { serviceScope.launch { catchTargetAndAdvance() } }
+        // A one-off journey's Got it is the notification's: mark it caught and finish.
+        floatingMap.onGotIt = {
+            serviceScope.launch {
+                if (huntActive) {
+                    catchTargetAndAdvance()
+                } else {
+                    markCurrentTargetCaught()
+                    stopTrackingService()
+                }
+            }
+        }
         floatingMap.onUndo = { serviceScope.launch { undoLastCatch(applicationContext) } }
         floatingMap.onAlertTap = { retargetHuntTo(it) }
         floatingMap.onRecalculate = { recalculateHuntRoute() }
@@ -2158,6 +2178,9 @@ class ArrivalTrackingService : Service() {
             const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
         const val ACTION_UNDO_CATCH = "com.example.pokemonalertsv2.tracking.UNDO_CATCH"
         const val ACTION_TOGGLE_GOING_MAP = "com.example.pokemonalertsv2.tracking.TOGGLE_GOING_MAP"
+        const val ACTION_RETARGET_HUNT = "com.example.pokemonalertsv2.tracking.RETARGET_HUNT"
+        private const val EXTRA_ALERT_JSON = "alert_json"
+        private val retargetJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
         /** How often a one-off journey's path is re-checked; a request goes out only after moving. */
         private const val GOING_PATH_REFRESH_MILLIS = 60_000L
@@ -2242,6 +2265,17 @@ class ArrivalTrackingService : Service() {
                 context.startService(
                     Intent(context, ArrivalTrackingService::class.java)
                         .setAction(ACTION_SHOW_MAP)
+                )
+            }
+        }
+
+        /** Makes [alert] the running hunt's target. The service is already up for the hunt. */
+        fun retargetHunt(context: Context, alert: PokemonAlert) {
+            runCatching {
+                context.startService(
+                    Intent(context, ArrivalTrackingService::class.java)
+                        .setAction(ACTION_RETARGET_HUNT)
+                        .putExtra(EXTRA_ALERT_JSON, retargetJson.encodeToString(PokemonAlert.serializer(), alert))
                 )
             }
         }

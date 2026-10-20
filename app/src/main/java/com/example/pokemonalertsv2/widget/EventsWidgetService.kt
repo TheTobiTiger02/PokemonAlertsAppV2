@@ -15,6 +15,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.events.EventsRepository
 import com.example.pokemonalertsv2.events.eventTypeName
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 
 class EventsWidgetService : RemoteViewsService() {
     override fun onGetViewFactory(intent: Intent): RemoteViewsFactory = EventsFactory(
@@ -38,18 +39,28 @@ private class EventsFactory(
 
     override fun onCreate() = Unit
 
+    /**
+     * Reads the stored calendar only: the fetch happens in [EventsWidgetProvider]'s update, off
+     * this call. On Android 16 the widget host interrupts a list load that runs long, and an
+     * interrupted runBlocking throws, which took the whole app down; the rows from the last load
+     * stay up instead, and artwork gets a bounded time.
+     */
     override fun onDataSetChanged() {
-        runBlocking {
-            palette = resolveWidgetThemePalette(context)
-            val repository = EventsRepository(context)
-            val events = repository.cached().takeIf { it.isNotEmpty() && !repository.isStale(STALE_AFTER_MILLIS) }
-                ?: runCatching { repository.refresh(notifyWidgets = false) }.getOrElse { repository.cached() }
-            val shown = EventsWidgetSettings.shownTypes(context, appWidgetId)
-            rows = eventsWidgetRows(events, System.currentTimeMillis(), shown)
-            // Artwork is loaded here, off the per-row call, and kept while the image URLs stay.
-            val wanted = rows.mapNotNull { (it as? EventsWidgetRow.Event)?.event?.image }.toSet()
-            images.keys.retainAll(wanted)
-            wanted.filterNot(images::containsKey).forEach { url -> images[url] = loadImage(url) }
+        try {
+            runBlocking {
+                palette = resolveWidgetThemePalette(context)
+                val events = EventsRepository(context).cached()
+                val shown = EventsWidgetSettings.shownTypes(context, appWidgetId)
+                rows = eventsWidgetRows(events, System.currentTimeMillis(), shown)
+                // Artwork is loaded here, off the per-row call, and kept while the image URLs stay.
+                val wanted = rows.mapNotNull { (it as? EventsWidgetRow.Event)?.event?.image }.toSet()
+                images.keys.retainAll(wanted)
+                withTimeoutOrNull(IMAGE_BUDGET_MILLIS) {
+                    wanted.filterNot(images::containsKey).forEach { url -> images[url] = loadImage(url) }
+                }
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
@@ -108,6 +119,6 @@ private class EventsFactory(
     override fun hasStableIds(): Boolean = true
 
     private companion object {
-        const val STALE_AFTER_MILLIS = 6 * 60 * 60 * 1000L
+        const val IMAGE_BUDGET_MILLIS = 4_000L
     }
 }

@@ -764,7 +764,7 @@ internal class FloatingMapOverlay(context: Context) {
         paint { setBackgroundColor(it.bar) }
         window.dragWith(this)
         addView(controlButton("‹", "Previous target") { onPrevious() }.also { huntOnlyViews += it })
-        addView(controlButton("✓", "Got it") { onGotIt() }.also { huntOnlyViews += it })
+        addView(controlButton("✓", "Got it") { onGotIt() })
         addView(controlButton("›", "Next target") { onNext() }.also { huntOnlyViews += it })
         // Spacer: the buttons sit at either end, the grab area is everything between.
         addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))

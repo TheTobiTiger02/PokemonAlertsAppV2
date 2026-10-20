@@ -136,12 +136,13 @@ class ArrivalTrackingRepository private constructor(context: Context) {
      * and the in-app toggle always agree.
      */
     val showGoingMap = dataStore.data
-        .map { preferences -> preferences[SHOW_GOING_MAP_KEY] ?: false }
+        // On until the trainer closes it: the window is what a journey shows over other apps.
+        .map { preferences -> preferences[SHOW_GOING_MAP_KEY] ?: true }
         .distinctUntilChanged()
         .stateIn(
             scope = scope,
             started = SharingStarted.Eagerly,
-            initialValue = false
+            initialValue = true
         )
 
     suspend fun setShowGoingMap(enabled: Boolean) {

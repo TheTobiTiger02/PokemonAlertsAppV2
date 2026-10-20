@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.events.EventsRepository
 import com.example.pokemonalertsv2.events.GameEvent
 import com.example.pokemonalertsv2.events.displayZone
 import com.example.pokemonalertsv2.events.durationLabel
@@ -127,6 +128,7 @@ class EventsWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val REQUEST_OPEN_EVENTS = 41_001
         private const val REQUEST_OPEN_EVENT = 41_002
+        private const val STALE_AFTER_MILLIS = 6 * 60 * 60 * 1000L
         private val widgetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         /** Re-reads the calendar into every events widget, e.g. after the app fetched it. */
@@ -143,6 +145,10 @@ class EventsWidgetProvider : AppWidgetProvider() {
             update(context, AppWidgetManager.getInstance(context), intArrayOf(appWidgetId))
 
         private suspend fun update(context: Context, manager: AppWidgetManager, ids: IntArray) {
+            // The list itself only reads the stored calendar, so a missing or old one is
+            // fetched here, before the list is told to reload.
+            val repository = EventsRepository(context)
+            if (repository.isStale(STALE_AFTER_MILLIS)) runCatching { repository.refresh(notifyWidgets = false) }
             val palette = resolveWidgetThemePalette(context)
             ids.forEach { id -> manager.updateAppWidget(id, buildViews(context, id, palette)) }
             manager.notifyAppWidgetViewDataChanged(ids, R.id.events_list)
