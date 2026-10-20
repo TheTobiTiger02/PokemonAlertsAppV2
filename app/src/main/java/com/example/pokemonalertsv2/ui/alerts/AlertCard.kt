@@ -1,7 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import androidx.compose.runtime.derivedStateOf
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -415,12 +416,17 @@ internal fun AlertCard(
                     }
                     // A warning, never a filter: the user may be cycling, driving, or
                     // already halfway there, and none of that is knowable from here.
-                    if (
-                        TravelTime.expiresBeforeArrival(
-                            walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
-                            remainingMillis = cardEndMillis?.minus(countdownClock.value)
-                        )
-                    ) {
+                    // Derived, so the card recomposes when the warning flips rather than on
+                    // every countdown tick.
+                    val endsBeforeArrival by remember(cardEndMillis, distanceInfo.walkingDurationSeconds, countdownClock) {
+                        derivedStateOf {
+                            TravelTime.expiresBeforeArrival(
+                                walkingDurationSeconds = distanceInfo.walkingDurationSeconds,
+                                remainingMillis = cardEndMillis?.minus(countdownClock.value)
+                            )
+                        }
+                    }
+                    if (endsBeforeArrival) {
                         AlertPill(
                             text = "Ends before you arrive",
                             icon = Icons.Filled.Warning,
@@ -456,9 +462,13 @@ internal fun AlertActionsOverflow(
     isDismissed: Boolean = false,
     onAction: (AlertSecondaryAction) -> Unit
 ) {
+    val endMillis = remember(endTime) { TimeUtils.parseEndTimeToMillis(endTime) }
+    val isExpired by remember(endMillis, countdownClock) {
+        derivedStateOf { endMillis?.let { it <= countdownClock.value } ?: false }
+    }
     val policy = alertActionPolicy(
         context = context,
-        isExpired = TimeUtils.parseEndTimeToMillis(endTime)?.let { it <= countdownClock.value } ?: false,
+        isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
         hasGoingAction = hasGoingAction,
         isDismissed = isDismissed
@@ -545,9 +555,12 @@ internal fun AlertCardPrimaryActions(
     onOpenMaps: () -> Unit,
     categoryAccent: Color
 ) {
+    val isExpired by remember(alert, countdownClock) {
+        derivedStateOf { alert.isExpiredAt(countdownClock.value) }
+    }
     val policy = alertActionPolicy(
         context = context,
-        isExpired = alert.isExpiredAt(countdownClock.value),
+        isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
         hasGoingAction = onGoingClick != null
     )

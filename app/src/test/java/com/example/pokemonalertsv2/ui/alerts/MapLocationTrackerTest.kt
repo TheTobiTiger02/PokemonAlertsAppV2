@@ -116,4 +116,13 @@ class MapLocationTrackerTest {
             sensorAxesForDisplayRotation(Surface.ROTATION_270)
         )
     }
+    @Test fun `heading emits the first value, then only visible turns at most five times a second`() {
+        assertTrue(MapHeadingMath.shouldEmitHeading(null, 10f, 0L))
+        assertFalse(MapHeadingMath.shouldEmitHeading(10f, 11f, 1_000L))
+        assertFalse(MapHeadingMath.shouldEmitHeading(10f, 30f, 50L))
+        assertTrue(MapHeadingMath.shouldEmitHeading(10f, 13f, 250L))
+        // Across north: 359 to 2 is a 3 degree turn, not 357.
+        assertTrue(MapHeadingMath.shouldEmitHeading(359f, 2f, 250L))
+        assertEquals(3f, MapHeadingMath.delta(359f, 2f), 0.001f)
+    }
 }

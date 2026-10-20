@@ -22,6 +22,7 @@ import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.LocationAvailability
 import com.google.android.gms.location.Priority
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -76,6 +77,26 @@ internal object MapHeadingMath {
     ): Float? = bearingDegrees
         .takeIf { hasBearing && hasSpeed && speedMetersPerSecond >= minimumSpeedMetersPerSecond }
         ?.let(::normalize)
+
+    /** Smallest angle between two headings, 0..180. */
+    fun delta(a: Float, b: Float): Float {
+        val diff = abs(normalize(a) - normalize(b))
+        return if (diff > 180f) 360f - diff else diff
+    }
+
+    /**
+     * Whether a new sensor heading is worth a pose. The rotation-vector sensor fires ~15 times a
+     * second at SENSOR_DELAY_UI, and every pose redraws the arrow and recomposes whoever holds it;
+     * a turn under [minDegrees] is invisible and more than ~5 updates a second reads no smoother.
+     */
+    fun shouldEmitHeading(
+        lastEmitted: Float?,
+        next: Float,
+        millisSinceLastEmit: Long,
+        minDegrees: Float = 2f,
+        minIntervalMillis: Long = 200L
+    ): Boolean = lastEmitted == null ||
+        (millisSinceLastEmit >= minIntervalMillis && delta(lastEmitted, next) >= minDegrees)
 
     fun movementBearing(location: Location, minimumSpeedMetersPerSecond: Float = 0.7f): Float? =
         movementBearing(
@@ -188,6 +209,9 @@ internal class MapLocationTracker(
     private var smoothedHeading: Float? = null
     private var sensorHeading: Float? = null
     private var sensorReliable = true
+    private var declination = 0f
+    private var lastEmittedHeading: Float? = null
+    private var lastHeadingEmitMillis = 0L
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -240,16 +264,13 @@ internal class MapLocationTracker(
         SensorManager.remapCoordinateSystem(rotationMatrix, xAxis, yAxis, adjustedRotationMatrix)
         SensorManager.getOrientation(adjustedRotationMatrix, orientation)
         val magneticHeading = Math.toDegrees(orientation[0].toDouble()).toFloat()
-        val declination = latestLocation?.let { location ->
-            GeomagneticField(
-                location.latitude.toFloat(),
-                location.longitude.toFloat(),
-                location.altitude.toFloat(),
-                System.currentTimeMillis()
-            ).declination
-        } ?: 0f
-        smoothedHeading = MapHeadingMath.smooth(smoothedHeading, magneticHeading + declination)
-        sensorHeading = smoothedHeading
+        val heading = MapHeadingMath.smooth(smoothedHeading, magneticHeading + declination)
+        smoothedHeading = heading
+        sensorHeading = heading
+        val now = SystemClock.elapsedRealtime()
+        if (!MapHeadingMath.shouldEmitHeading(lastEmittedHeading, heading, now - lastHeadingEmitMillis)) return
+        lastEmittedHeading = heading
+        lastHeadingEmitMillis = now
         emitPose()
     }
 
@@ -280,6 +301,13 @@ internal class MapLocationTracker(
 
         latestLocation = Location(location)
         latestElapsedRealtimeNanos = location.elapsedRealtimeNanos
+        // Declination changes over kilometres, not per sensor event: compute it per fix.
+        declination = GeomagneticField(
+            location.latitude.toFloat(),
+            location.longitude.toFloat(),
+            location.altitude.toFloat(),
+            System.currentTimeMillis()
+        ).declination
         onStatus(MapTrackingStatus.ACTIVE)
         emitPose()
     }

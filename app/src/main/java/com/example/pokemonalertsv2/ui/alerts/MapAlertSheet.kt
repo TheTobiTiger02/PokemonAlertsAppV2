@@ -1,7 +1,9 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import android.widget.Toast
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -79,7 +81,9 @@ internal fun MapAlertSheetContent(
     val countdownClock = rememberCountdownClock()
     val snoozeMinutes = rememberDefaultSnoozeMinutes()
     var showSnoozeDialog by rememberSaveable(alert.uniqueId) { mutableStateOf(false) }
-    val expired = alert.isExpiredAt(countdownClock.value)
+    val expired by remember(alert, countdownClock) {
+        derivedStateOf { alert.isExpiredAt(countdownClock.value) }
+    }
 
     Column(
         modifier = modifier

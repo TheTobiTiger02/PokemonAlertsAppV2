@@ -1,7 +1,14 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import com.example.pokemonalertsv2.catchroutes.CatchPoint
+import com.example.pokemonalertsv2.catchroutes.SpawnpointSelection
+import com.example.pokemonalertsv2.catchroutes.SpawnpointDetailSheet
+import com.example.pokemonalertsv2.catchroutes.SpawnAvailabilityRepository
+import com.example.pokemonalertsv2.data.PokemonAlertsApi
+import com.example.pokemonalertsv2.util.rememberOffMain
+import com.example.pokemonalertsv2.util.PerfTrace
 import android.os.Build
 import android.Manifest
 import android.content.Intent
@@ -394,6 +401,7 @@ fun AlertsMapRoute(
 
     val autoEnterMapPip by viewModel.autoEnterMapPip.collectAsStateWithLifecycle()
     val showSpawnRadius by viewModel.showSpawnRadius.collectAsStateWithLifecycle()
+    val showSpawnpoints by viewModel.showSpawnpoints.collectAsStateWithLifecycle()
     val spacialRendEnabled by viewModel.spacialRendEnabled.collectAsStateWithLifecycle()
     val showWeatherCells by viewModel.showWeatherCells.collectAsStateWithLifecycle()
     val showHuntPath by viewModel.showHuntPath.collectAsStateWithLifecycle()
@@ -446,6 +454,8 @@ fun AlertsMapRoute(
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = { viewModel.updateShowSpawnRadius(!showSpawnRadius) },
         onToggleSpacialRend = { viewModel.updateSpacialRendEnabled(!spacialRendEnabled) },
+        showSpawnpoints = showSpawnpoints,
+        onToggleSpawnpoints = { viewModel.updateShowSpawnpoints(!showSpawnpoints) },
         showWeatherCells = showWeatherCells,
         onToggleWeatherCells = { viewModel.updateShowWeatherCells(!showWeatherCells) },
         showHuntPath = showHuntPath,
@@ -499,6 +509,8 @@ fun AlertsMapScreen(
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
     onToggleSpacialRend: () -> Unit = {},
+    showSpawnpoints: Boolean = false,
+    onToggleSpawnpoints: () -> Unit = {},
     showWeatherCells: Boolean = true,
     onToggleWeatherCells: () -> Unit = {},
     showHuntPath: Boolean = true,
@@ -547,6 +559,8 @@ fun AlertsMapScreen(
         spacialRendEnabled = spacialRendEnabled,
         onToggleSpawnRadius = onToggleSpawnRadius,
         onToggleSpacialRend = onToggleSpacialRend,
+        showSpawnpoints = showSpawnpoints,
+        onToggleSpawnpoints = onToggleSpawnpoints,
         showWeatherCells = showWeatherCells,
         onToggleWeatherCells = onToggleWeatherCells,
         showHuntPath = showHuntPath,
@@ -599,6 +613,8 @@ internal fun AlertsMapScreenContent(
     spacialRendEnabled: Boolean = false,
     onToggleSpawnRadius: () -> Unit = {},
     onToggleSpacialRend: () -> Unit = {},
+    showSpawnpoints: Boolean = false,
+    onToggleSpawnpoints: () -> Unit = {},
     showWeatherCells: Boolean = true,
     onToggleWeatherCells: () -> Unit = {},
     showHuntPath: Boolean = true,
@@ -686,6 +702,27 @@ internal fun AlertsMapScreenContent(
         }
     }
     var selectedWeatherArea by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Spawnpoint layer (OpenStreetMap only): the catalogue for what is on screen, loaded when
+    // the camera settles at street zoom.
+    var selectedSpawnpointId by rememberSaveable { mutableStateOf<String?>(null) }
+    var spawnpointViewport by remember { mutableStateOf<Pair<SpawnpointViewport, Double>?>(null) }
+    var mapSpawnpoints by remember { mutableStateOf<List<MapSpawnpoint>>(emptyList()) }
+    val spawnpointSource = remember { MapSpawnpointSource(PokemonAlertsApi.catchRoutesService) }
+    val spawnpointDetails = remember { SpawnAvailabilityRepository(PokemonAlertsApi.catchRoutesService) }
+    val spawnpointsWanted = showSpawnpoints && mapSource == MapDisplaySource.OPENSTREETMAP && !compactPictureInPicture
+    LaunchedEffect(spawnpointsWanted, spawnpointViewport) {
+        val (viewport, zoom) = spawnpointViewport ?: (null to 0.0)
+        if (!spawnpointsWanted || viewport == null || zoom < SPAWNPOINT_MIN_ZOOM) {
+            mapSpawnpoints = emptyList()
+            return@LaunchedEffect
+        }
+        // A fling settles several times; only the last position is worth a request.
+        delay(SPAWNPOINT_LOAD_DEBOUNCE_MILLIS)
+        runCatching { withContext(Dispatchers.IO) { spawnpointSource.load(viewport) } }
+            .onSuccess { mapSpawnpoints = it }
+            .onFailure { if (it is CancellationException) throw it }
+    }
     var initialCameraPositioned by rememberSaveable { mutableStateOf(false) }
     var retainedLatitude by rememberSaveable { mutableStateOf(ALSBACH_LATITUDE) }
     var retainedLongitude by rememberSaveable { mutableStateOf(ALSBACH_LONGITUDE) }
@@ -748,7 +785,12 @@ internal fun AlertsMapScreenContent(
             context,
             { pose ->
                 userPose = pose
-                userLocation = pose.location
+                // A heading-only pose carries a copy of the same fix. Keeping the old instance
+                // stops every compass update from re-running the location-keyed work (filtering,
+                // routing, camera follow) that reads userLocation.
+                if (userLocation?.elapsedRealtimeNanos != pose.location.elapsedRealtimeNanos) {
+                    userLocation = pose.location
+                }
                 locationLookupComplete = true
             },
             { trackingStatus = it }
@@ -1021,7 +1063,7 @@ internal fun AlertsMapScreenContent(
 
     val expirationNow = expirationClock.value
     val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
-    val filteredAlerts = remember(
+    val filteredAlerts = rememberOffMain(
         alerts,
         selectedCategories,
         filterDefinition,
@@ -1031,7 +1073,7 @@ internal fun AlertsMapScreenContent(
         walkingRoutes,
         userLocation?.latitude,
         userLocation?.longitude
-    ) {
+    ) { PerfTrace.section("Map:visibleMapAlerts") {
         visibleMapAlerts(
             alerts = alerts,
             selectedCategories = selectedCategories,
@@ -1043,7 +1085,7 @@ internal fun AlertsMapScreenContent(
             userLongitude = userLocation?.longitude,
             walkingRoutes = walkingRoutes
         )
-    }
+    } }
 
     // A hunt window answers to the hunt, not to whatever the map happens to be
     // filtered to: the whole point is that only the quarry is on screen.
@@ -1105,7 +1147,9 @@ internal fun AlertsMapScreenContent(
         if (huntSession?.definition == null) emptyList()
         else shownHuntPlan.ordered.filter { it.uniqueId !in dismissedAlertIds }
     }
-    val huntOrdinals = huntRoute.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
+    val huntOrdinals = remember(huntRoute) {
+        huntRoute.take(HUNT_ORDINAL_MAX).mapIndexed { index, alert -> alert.uniqueId to index + 1 }.toMap()
+    }
     // The street path is one cache for the app: the service fills it while it plans, the map while it does not.
     val huntPathCache = remember { HuntPathCache.getInstance() }
     val publishedHuntPath by huntPathCache.path.collectAsStateWithLifecycle()
@@ -2202,6 +2246,15 @@ internal fun AlertsMapScreenContent(
                     onWeatherCellClick = { area ->
                         if (!compactPictureInPicture) selectedWeatherArea = area
                     },
+                    spawnpoints = mapSpawnpoints,
+                    selectedSpawnpointId = selectedSpawnpointId,
+                    onSpawnpointClick = { id ->
+                        if (!compactPictureInPicture) {
+                            selectedWeatherArea = null
+                            selectedSpawnpointId = id
+                        }
+                    },
+                    onViewportChanged = { viewport, zoom -> spawnpointViewport = viewport to zoom },
                     showSpawnRadius = showSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
                     weatherCells = weatherCells,
@@ -2497,6 +2550,8 @@ internal fun AlertsMapScreenContent(
                     onToggleSpawnRadius = onToggleSpawnRadius,
                     spacialRendEnabled = spacialRendEnabled,
                     onToggleSpacialRend = onToggleSpacialRend,
+                    showSpawnpoints = showSpawnpoints,
+                    onToggleSpawnpoints = onToggleSpawnpoints,
                     showDismissed = mapShowDismissed,
                     onToggleDismissed = { onMapShowDismissedChange(!mapShowDismissed) },
                     autoEnterPictureInPicture = autoEnterPictureInPicture,
@@ -2511,6 +2566,26 @@ internal fun AlertsMapScreenContent(
                 )
                 null -> Unit
             }
+        }
+
+        if (!compactPictureInPicture && selectedAlert == null && selectedClusterAlerts.isEmpty()) {
+            selectedSpawnpointId
+                ?.let { id -> mapSpawnpoints.firstOrNull { it.id == id } }
+                ?.let { point ->
+                    SpawnpointDetailSheet(
+                        selections = listOf(
+                            SpawnpointSelection(
+                                pointId = point.id,
+                                point = CatchPoint(point.latitude, point.longitude),
+                                opportunities = emptyList(),
+                                encounters = emptyList()
+                            )
+                        ),
+                        itinerary = null,
+                        loadDetail = { id -> withContext(Dispatchers.IO) { spawnpointDetails.detail(id) } },
+                        onDismiss = { selectedSpawnpointId = null }
+                    )
+                }
         }
 
         // One sheet at a time: the weather sheet yields to an alert or a cluster the way
@@ -2843,3 +2918,5 @@ internal fun MapClusterMemberList(
         }
     }
 }
+
+private const val SPAWNPOINT_LOAD_DEBOUNCE_MILLIS = 300L

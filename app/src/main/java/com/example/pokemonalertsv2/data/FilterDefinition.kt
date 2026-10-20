@@ -638,8 +638,26 @@ private val WHITESPACE_RUNS = Regex("""\s+""")
 /** Tokens that are already in their normalized spelling need no Normalizer or regex passes. */
 private val PLAIN_TOKEN = Regex("""[a-z0-9]+(?: [a-z0-9]+)*""")
 
+/**
+ * The matcher normalizes the same few hundred strings (type names, areas, species, quest
+ * rewards) for every alert on every pass: ~1500 alerts made one feed filter pass take ~240 ms on
+ * the S21's main thread. The vocabulary is small, so memoize it; the size cap only guards against
+ * free text such as search queries growing it without bound.
+ */
+private val NORMALIZED_TOKENS = java.util.concurrent.ConcurrentHashMap<String, String>()
+private const val NORMALIZED_TOKEN_CACHE_LIMIT = 4096
+private const val NO_TOKEN = ""
+
 fun normalizeFilterTokenOrNull(value: String?): String? {
     val raw = value?.takeIf(String::isNotBlank) ?: return null
+    NORMALIZED_TOKENS[raw]?.let { return it.takeIf(String::isNotEmpty) }
+    val normalized = computeFilterToken(raw)
+    if (NORMALIZED_TOKENS.size >= NORMALIZED_TOKEN_CACHE_LIMIT) NORMALIZED_TOKENS.clear()
+    NORMALIZED_TOKENS[raw] = normalized ?: NO_TOKEN
+    return normalized
+}
+
+private fun computeFilterToken(raw: String): String? {
     if (PLAIN_TOKEN.matches(raw)) return raw
     return raw
         .let { Normalizer.normalize(it, Normalizer.Form.NFD) }

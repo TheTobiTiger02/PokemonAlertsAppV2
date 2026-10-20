@@ -957,6 +957,9 @@ class PokemonAlertsRepositoryTest {
         private val showSpawnRadiusState = MutableStateFlow(false)
         override val showSpawnRadius: Flow<Boolean> = showSpawnRadiusState.asStateFlow()
         override suspend fun updateShowSpawnRadius(enabled: Boolean) { showSpawnRadiusState.value = enabled }
+        private val showSpawnpointsState = MutableStateFlow(false)
+        override val showSpawnpoints: Flow<Boolean> = showSpawnpointsState.asStateFlow()
+        override suspend fun updateShowSpawnpoints(enabled: Boolean) { showSpawnpointsState.value = enabled }
 
         private val spacialRendEnabledState = MutableStateFlow(false)
         override val spacialRendEnabled: Flow<Boolean> = spacialRendEnabledState.asStateFlow()

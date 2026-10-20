@@ -84,6 +84,8 @@ internal fun MapLayersSheet(
     onToggleSpawnRadius: () -> Unit,
     spacialRendEnabled: Boolean,
     onToggleSpacialRend: () -> Unit,
+    showSpawnpoints: Boolean = false,
+    onToggleSpawnpoints: () -> Unit = {},
     showDismissed: Boolean,
     onToggleDismissed: () -> Unit,
     autoEnterPictureInPicture: Boolean,
@@ -172,6 +174,20 @@ internal fun MapLayersSheet(
                                     checked = showSpawnRadius,
                                     onCheckedChange = { onToggleSpawnRadius() },
                                     icon = { PanelIcon(R.drawable.ic_radius) }
+                                )
+                            }
+                            item("spawnpoints") {
+                                PanelSwitchRow(
+                                    title = "Spawnpoints",
+                                    subtitle = if (mapStyle == MapStylePreference.OPENSTREETMAP) {
+                                        "Where spawns appear, coloured by their hourly timer"
+                                    } else {
+                                        "Shown on the OpenStreetMap style"
+                                    },
+                                    checked = showSpawnpoints,
+                                    onCheckedChange = { onToggleSpawnpoints() },
+                                    modifier = Modifier.testTag("map_show_spawnpoints"),
+                                    icon = { PanelIcon(R.drawable.ic_species) }
                                 )
                             }
                             // Spacial Rend only widens the circle, so it is offered only while
