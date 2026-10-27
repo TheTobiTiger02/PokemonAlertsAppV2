@@ -30,13 +30,14 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.20"
+internal const val WHATS_NEW_RELEASE = "1.21"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Spawnpoints on the map: switch them on in Layers on the OpenStreetMap style. Green is up now, amber spawns within 10 minutes. Tap one for its hourly timer, next spawns and recent Pokémon.",
-    "\"I'm going\" has its own map: leave the app and it floats over other apps with you, a direction arrow, the target, the walking path and a Got it button. Hide it with × or Hide map in the notification. During a hunt, \"I'm going\" switches the hunt's target.",
-    "New Events widget for your home screen: what is running now and what is coming up, for the event types you choose. Tap an event to open it.",
-    "Smoother everywhere: filtering the live feed and the map no longer blocks scrolling, and countdowns no longer redraw every card each second."
+    "Walking a catch route, the top of the map turns into a blue banner: how far the next stop is, which stop, and what it holds. The route is drawn bolder, and the next stop stands on a pin.",
+    "Follow keeps you and the next stop in view however far apart you are, and the bold line now ends exactly at the stop's number.",
+    "The floating Catch Route window has the same banner, with Pause, Replan, Follow and Route in a bar along the bottom.",
+    "The floating hunt map names your target in a card along the bottom, with previous, Got it and next. Tap the card to open the app.",
+    "Catch routes follow the app's own light or dark setting."
 )
 
 /**
