@@ -1,7 +1,9 @@
 package com.example.pokemonalertsv2.util
 
 import com.example.pokemonalertsv2.data.GitHubRelease
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,6 +16,22 @@ class InAppUpdateManagerTest {
         assertTrue(InAppUpdateManager.isNewerVersion("v1.0.4", "1.1.0"))
         assertFalse(InAppUpdateManager.isNewerVersion("1.0.5", "v1.0.5"))
         assertFalse(InAppUpdateManager.isNewerVersion("1.1.0", "v1.0.5"))
+    }
+
+    @Test
+    fun latestTagComesFromTheReleasePageRedirect() {
+        assertEquals("v1.21.0", tagFromReleaseUrl("https://github.com/o/r/releases/tag/v1.21.0"))
+        assertEquals("v1.21.0", tagFromReleaseUrl("https://github.com/o/r/releases/tag/v1.21.0/?x=1"))
+        // No release yet: GitHub sends the releases list instead.
+        assertNull(tagFromReleaseUrl("https://github.com/o/r/releases"))
+    }
+
+    @Test
+    fun withoutTheApiTheUpdateStillHasItsApk() {
+        val release = releaseWithoutDetails("o", "r", "v1.21.0")
+        assertEquals("v1.21.0", release.tagName)
+        assertNull(release.body)
+        assertEquals("https://github.com/o/r/releases/download/v1.21.0/app-release.apk", release.assets.single().browserDownloadUrl)
     }
 
     @Test
