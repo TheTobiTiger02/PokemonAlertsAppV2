@@ -202,7 +202,7 @@ private const val SPECIES_FOOTNOTE =
     "Each spawn counts once, on the day it was first seen. Today is still running. Sightings are kept 30 days."
 
 /**
- * Active spawnpoints per day: the count on each column, today against a usual day, unusual days marked.
+ * Active spawnpoints per day: counts on the columns, today against a usual day, unusual days marked.
  * Tapping a column opens that day hour by hour below.
  */
 @Composable
@@ -224,6 +224,7 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
                 selected = days.indexOfFirst { it.day == detailDay }.takeIf { it >= 0 },
                 flagged = summary.flagged,
                 reference = summary.usual,
+                referenceLabel = "Usual",
                 // A label every few days on long ranges; the opened day always has its own.
                 labelEvery = if (days.size > 10) (days.size + 6) / 7 else 1,
                 onSelect = { onOpenDay(days[it].day) }
@@ -233,7 +234,6 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
         val flagged = summary.flagged.sorted().map { shortDay(days[it].day) }
         Text(
             listOfNotNull(
-                "The dashed line is a usual day. Tap a day to see its hours.",
                 if (flagged.isEmpty()) {
                     "No unusual days in range."
                 } else if (showNotes) {
@@ -451,7 +451,8 @@ private fun SpawnActivityTabsPane(
         }
         if (notes) {
             Text(
-                "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day. " + SPECIES_FOOTNOTE,
+                "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day. Tap a day's column " +
+                    "to see it hour by hour. " + SPECIES_FOOTNOTE,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -481,8 +482,9 @@ private fun SpawnActivityTabsPane(
     }
 }
 
+/** [compact] drops the rank and the share, for a card too narrow to show them beside the name. */
 @Composable
-internal fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: NumberFormat) {
+internal fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: NumberFormat, compact: Boolean = false) {
     val max = entries.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         entries.forEach { entry ->
@@ -494,13 +496,14 @@ internal fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: 
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    listOfNotNull(entry.rank?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
+                    listOfNotNull(entry.rank?.takeUnless { compact }?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
                     style = MaterialTheme.typography.bodySmall,
                     // A share of the row, not a fixed width, so the bars keep room on a narrow phone.
-                    modifier = Modifier.weight(0.35f),
+                    modifier = Modifier.weight(if (compact) 0.6f else 0.35f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .weight(entry.count.toFloat() / max)
@@ -511,7 +514,7 @@ internal fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: 
                 Spacer(Modifier.weight((max - entry.count).toFloat() / max + 0.0001f))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "${numbers.format(entry.count)} · ${"%.1f".format(entry.count * 100f / total)}%",
+                    if (compact) numbers.format(entry.count) else "${numbers.format(entry.count)} · ${"%.1f".format(entry.count * 100f / total)}%",
                     style = MaterialTheme.typography.labelMedium
                 )
             }

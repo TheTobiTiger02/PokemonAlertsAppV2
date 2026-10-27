@@ -82,9 +82,10 @@ class SpawnHourMapView(context: Context) : FrameLayout(context) {
     override fun onDetachedFromWindow() { if (started) { view?.onPause(); view?.onStop(); started = false }; super.onDetachedFromWindow() }
     fun destroy() { if (started) { view?.onPause(); view?.onStop(); started = false }; view?.onDestroy(); view = null; map = null; style = null }
 
-    private companion object {
-        const val SOURCE = "insights-hour-points"
-        const val LAYER = "insights-hour-dot"
+    internal companion object {
+        private const val SOURCE = "insights-hour-points"
+        private const val LAYER = "insights-hour-dot"
+        /** Also drawn in the key under the map. */
         const val LIVE_COLOR = "#1E63F0"
         const val CATALOGUE_COLOR = "#8B909B"
     }

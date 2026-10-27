@@ -1,6 +1,9 @@
 package com.example.pokemonalertsv2.data.insights
 
+import com.example.pokemonalertsv2.ui.history.ValueLabels
+import com.example.pokemonalertsv2.ui.history.alertTypes
 import com.example.pokemonalertsv2.ui.history.compactCount
+import com.example.pokemonalertsv2.ui.history.labelledColumns
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -53,5 +56,24 @@ class SpawnDayTest {
         assertEquals("11.7k", compactCount(11_660))
         assertEquals("10k", compactCount(10_000))
         assertEquals("120k", compactCount(120_400))
+    }
+
+    @Test
+    fun `every count is drawn only while all of them fit, else the selected and the peak`() {
+        val totals = listOf(5, 0, 9, 3)
+        assertEquals(setOf(0, 2, 3), labelledColumns(totals, listOf(true, true, true, true), selected = 3, ValueLabels.ALL_IF_FIT))
+        assertEquals(setOf(3, 2), labelledColumns(totals, listOf(true, true, false, true), selected = 3, ValueLabels.ALL_IF_FIT))
+        assertEquals(setOf(0, 2), labelledColumns(totals, listOf(true, true, true, true), selected = 0, ValueLabels.SELECTED_AND_PEAK))
+        // An empty selected column has no count to show.
+        assertEquals(setOf(2), labelledColumns(totals, listOf(true, true, true, true), selected = 1, ValueLabels.SELECTED_AND_PEAK))
+        assertEquals(emptySet<Int>(), labelledColumns(listOf(0, 0), listOf(true, true), selected = null, ValueLabels.SELECTED_AND_PEAK))
+    }
+
+    @Test
+    fun `alert types read most first and fold the tail into a count`() {
+        assertEquals("No alerts received this day.", alertTypes(emptyMap(), 0))
+        assertEquals("Rare 5 · Raid 2", alertTypes(mapOf("Raid" to 2, "Rare" to 5, "Quest" to 0), 7))
+        assertEquals("F 6 · E 5 · D 4 · C 3 · +2 more",
+            alertTypes(mapOf("A" to 1, "B" to 2, "C" to 3, "D" to 4, "E" to 5, "F" to 6), 21))
     }
 }
