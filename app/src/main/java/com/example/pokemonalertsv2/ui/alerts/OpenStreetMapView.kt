@@ -212,6 +212,9 @@ internal class OpenStreetMapController {
     private var selectedSpawnpointId: String? = null
     /** Held so weather glyphs can be rasterised whenever the cell set changes, not just on attach. */
     private var imageContext: android.content.Context? = null
+    /** How the hunt's route is drawn; set before [attachStyle]. The floating hunt map draws footsteps. */
+    var routeLook = RouteLineStyle.CLASSIC
+    private val huntRouteSources = RouteLineSources(next = HUNT_PATH_NEXT_SOURCE, later = HUNT_PATH_SOURCE)
     private val registeredWeatherImages = HashSet<String>()
     private var pendingContentInsets = MapContentInsets(0, 0, 0, 0)
     /** Live camera zoom, tracked only to gate the spawn-radius polygons. */
@@ -413,11 +416,7 @@ internal class OpenStreetMapController {
         // The hunt's walk, above the circles so it reads as a route and below the trainer and the pins,
         // which must never be hidden by it. Same look as a catch route: the leg to the next target bold
         // with chevrons, later legs faded.
-        style.addRouteLineLayers(
-            HUNT_PATH_LAYER_PREFIX,
-            RouteLineSources(next = HUNT_PATH_NEXT_SOURCE, later = HUNT_PATH_SOURCE),
-            context
-        )
+        style.addRouteLineLayers(HUNT_PATH_LAYER_PREFIX, huntRouteSources, context, routeLook)
         style.addLayer(
             FillLayer(USER_ACCURACY_LAYER, USER_ACCURACY_SOURCE).withProperties(
                 fillColor(MAP_USER_LOCATION_BLUE),

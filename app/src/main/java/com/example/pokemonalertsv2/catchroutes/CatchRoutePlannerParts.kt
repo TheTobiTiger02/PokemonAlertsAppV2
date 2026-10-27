@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteGuidanceInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -574,36 +575,38 @@ private fun PlannedCard(model: CatchRoutesViewModel, plan: CatchItinerary, encou
     }
 }
 
+/** Where a walk goes next: the next stop, the finish, or that it is done. */
+internal fun catchGuidance(session: CatchSession, stops: List<List<CatchEncounter>>, now: Long): RouteGuidanceInfo {
+    val next = catchNextStopIndex(session, now)
+    val group = next?.let { stops.getOrNull(it) }
+    val progress = (session.progressMeters / session.itinerary.distanceMeters.coerceAtLeast(1.0)).toFloat()
+    return when {
+        session.finished -> RouteGuidanceInfo(RouteBadge.Number("✓"), "Route finished",
+            "${session.caught} caught · ${formatCatchKm(session.walkedMeters)} walked")
+        group != null && next != null -> {
+            val first = group.first()
+            // To the stop's badge, where the map's bold leg ends.
+            val distance = ((session.nextLegEnd(now) ?: first.meters) - session.progressMeters).coerceAtLeast(0.0)
+            val opens = group.minOf { it.opportunity.availableFrom }
+            val open = if (now >= opens) "open now" else "opens ${catchClock(opens)}"
+            RouteGuidanceInfo(RouteBadge.Number("${next + 1}"), "Stop ${next + 1} · ${group.size} Pokémon",
+                "${formatCatchKm(distance)} · due ${catchClock(first.arrivalMillis)} · $open", progress)
+        }
+        else -> RouteGuidanceInfo(RouteBadge.Number("F"), if (session.paused) "Paused · no stops ahead" else "Back to the finish",
+            "${formatCatchKm((session.itinerary.distanceMeters - session.progressMeters).coerceAtLeast(0.0))} left · ${session.caught} caught",
+            progress)
+    }
+}
+
 /**
- * The walk in progress, as much as the sheet peeks: where to go next, in the same card a hunt
- * uses for its target, and the two buttons needed while walking. Everything else is in the map's
- * ⋮ menu ([WalkingMenuItems]) or further down the sheet ([WalkingDetails]).
+ * The walk in progress, as much as the sheet peeks: the two buttons needed while walking. Where to
+ * go next is in the map's top banner ([catchGuidance]); everything else is in the map's ⋮ menu
+ * ([WalkingMenuItems]) or further down the sheet ([WalkingDetails]).
  */
 @Composable
 private fun WalkingCard(model: CatchRoutesViewModel, session: CatchSession, state: PlannerState, actions: PlannerActions) {
-    val now = state.now
-    val next = catchNextStopIndex(session, now)
-    val group = next?.let { state.stops.getOrNull(it) }
-    val progress = (session.progressMeters / session.itinerary.distanceMeters.coerceAtLeast(1.0)).toFloat()
     // Bottom padding so the peek ends in empty space, not halfway through the details below.
     Column(Modifier.padding(bottom = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        when {
-            session.finished -> RouteGuidanceCard(RouteBadge.Number("✓"), "Route finished",
-                "${session.caught} caught · ${formatCatchKm(session.walkedMeters)} walked", Modifier.fillMaxWidth().testTag("catch_session_tally"))
-            group != null && next != null -> {
-                val first = group.first()
-                // To the next catch itself, the same one the map's bold leg ends at.
-                val distance = ((session.nextAt(now)?.meters ?: first.meters) - session.progressMeters).coerceAtLeast(0.0)
-                val opens = group.minOf { it.opportunity.availableFrom }
-                val open = if (now >= opens) "open now" else "opens ${catchClock(opens)}"
-                RouteGuidanceCard(RouteBadge.Number("${next + 1}"), "Stop ${next + 1} · ${group.size} Pokémon",
-                    "${formatCatchKm(distance)} · due ${catchClock(first.arrivalMillis)} · $open", Modifier.fillMaxWidth().testTag("catch_session_tally"),
-                    progress = progress)
-            }
-            else -> RouteGuidanceCard(RouteBadge.Number("F"), if (session.paused) "Paused · no stops ahead" else "Back to the finish",
-                "${formatCatchKm((session.itinerary.distanceMeters - session.progressMeters).coerceAtLeast(0.0))} left · ${session.caught} caught",
-                Modifier.fillMaxWidth().testTag("catch_session_tally"), progress = progress)
-        }
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             Button(onClick = actions.floatingWindow, modifier = Modifier.weight(1f).testTag("catch_floating_map")) {
                 Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)

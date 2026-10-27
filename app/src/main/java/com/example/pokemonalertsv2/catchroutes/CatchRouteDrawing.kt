@@ -74,3 +74,16 @@ internal fun catchStops(encounters: List<CatchEncounter>): List<List<CatchEncoun
 
 /** The middle of each stop's stretch: where its numbered badge sits. */
 internal fun catchStopMeters(encounters: List<CatchEncounter>): List<Double> = catchStops(encounters).map { (it.first().meters + it.last().meters) / 2 }
+
+/**
+ * Where the leg to the next stop ends, in metres along the route: at that stop's numbered badge,
+ * so the bold line, Follow and the distance all point at the same place. Once the badge is behind
+ * the walk, the catch still ahead in that stop. Null when nothing is ahead.
+ */
+internal fun CatchSession.nextLegEnd(now: Long): Double? {
+    val next = nextAt(now) ?: return null
+    val stop = catchStops(itinerary.encounters).firstOrNull { s -> s.any { it.opportunity.id == next.opportunity.id } }
+        ?: return next.meters
+    val badge = (stop.first().meters + stop.last().meters) / 2
+    return if (badge > progressMeters) badge else next.meters
+}

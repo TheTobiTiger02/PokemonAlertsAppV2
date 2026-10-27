@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.ui.alerts.replaceRouteLineLayers
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -79,6 +80,9 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     var onFailure: (() -> Unit)? = null
     private var started = false
     private var drawing = CatchRouteDrawing(emptyList(), emptyList())
+    /** Walking draws the bolder navigation line; planning the plain one. See [setWalking]. */
+    private var walking = false
+    private val routeSources = RouteLineSources(next = "catch-next", later = "catch-later", walked = "catch-walked")
     /** Screen space the host covers with its own controls, kept clear when framing; see [setInsets]. */
     private var insets = IntArray(4)
     /** The camera shows the whole route and nobody has moved it since, so it is refitted when [insets] change. */
@@ -139,8 +143,8 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                 occupied += box
             }
 
-            // Numbered stops: the next one is larger and filled in the route's blue; others are white with a
-            // blue number; walked ones shrink to grey; overlaps are skipped.
+            // Numbered stops: the next one is a larger blue pin standing on its point; walked ones shrink
+            // to grey; overlaps are skipped.
             // The stop the guidance line names, when a walk says which; otherwise the first not yet passed.
             val named = nextStopIndex?.let { drawing.stops.getOrNull(it) }
             val next = named ?: drawing.stops.firstOrNull { it.meters > walked + 1 }
@@ -149,22 +153,34 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                 if (!visible(p.x, p.y, 20 * density)) continue
                 val isNext = stop === next && progressMeters != null
                 val done = if (named != null) drawing.stops.indexOf(stop) < nextStopIndex!! else stop.meters <= walked
-                val r = (if (isNext) 14f else if (done) 8f else 10f) * density
-                val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
+                val r = (if (isNext) 15f else if (done) 8f else 10f) * density
+                // The next pin stands on its point, so its circle sits above the stop.
+                val cy = if (isNext) p.y - r - 7 * density else p.y
+                val box = RectF(p.x - r, cy - r, p.x + r, if (isNext) p.y else cy + r)
                 if (!isNext && occupied.any { RectF.intersects(it, box) }) continue
                 occupied += box
                 paint.style = Paint.Style.FILL
-                if (isNext) { paint.color = 0x33000000; canvas.drawCircle(p.x, p.y + 1 * density, r, paint) }
-                paint.color = 0xFFFFFFFF.toInt(); canvas.drawCircle(p.x, p.y, r, paint)
+                if (isNext) {
+                    paint.color = 0x33000000; canvas.drawCircle(p.x, cy + 1.5f * density, r, paint)
+                    paint.color = 0xFFFFFFFF.toInt()
+                    canvas.drawPath(Path().apply {
+                        moveTo(p.x - r * 0.55f, cy + r * 0.6f); lineTo(p.x, p.y); lineTo(p.x + r * 0.55f, cy + r * 0.6f); close()
+                    }, paint)
+                    paint.color = RouteLineStyle.COLOR
+                    canvas.drawPath(Path().apply {
+                        moveTo(p.x - r * 0.35f, cy + r * 0.6f); lineTo(p.x, p.y - 2.5f * density); lineTo(p.x + r * 0.35f, cy + r * 0.6f); close()
+                    }, paint)
+                }
+                paint.color = 0xFFFFFFFF.toInt(); canvas.drawCircle(p.x, cy, r, paint)
                 paint.color = if (done) RouteLineStyle.WALKED_COLOR else RouteLineStyle.COLOR
-                if (isNext || done) canvas.drawCircle(p.x, p.y, r - 2.5f * density, paint)
+                if (isNext || done) canvas.drawCircle(p.x, cy, r - 3 * density, paint)
                 else {
                     paint.style = Paint.Style.STROKE; paint.strokeWidth = 2 * density
-                    canvas.drawCircle(p.x, p.y, r - 1 * density, paint); paint.style = Paint.Style.FILL
+                    canvas.drawCircle(p.x, cy, r - 1 * density, paint); paint.style = Paint.Style.FILL
                 }
                 paint.color = if (isNext || done) 0xFFFFFFFF.toInt() else RouteLineStyle.COLOR
-                paint.textSize = (if (isNext) 13f else if (done) 8f else 10f) * density
-                canvas.drawText(stop.label, p.x, p.y - (paint.ascent() + paint.descent()) / 2, paint)
+                paint.textSize = r * (if (done) 1f else 0.95f)
+                canvas.drawText(stop.label, p.x, cy - (paint.ascent() + paint.descent()) / 2, paint)
             }
 
             // Area editing: a handle on every edge to pull a new corner out of, then the corners on top.
@@ -253,7 +269,7 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                         style.addLayer(FillLayer("catch-range", "catch-circles").withProperties(fillColor("#1E63F0"), fillOpacity(0.10f)))
                         style.addLayer(LineLayer("catch-range-line", "catch-circles").withProperties(lineColor("#1E63F0"), lineWidth(1.5f), lineOpacity(0.6f)))
                         listOf("catch-walked", "catch-later", "catch-next").forEach { style.addSource(GeoJsonSource(it)) }
-                        style.addRouteLineLayers("catch-route", RouteLineSources(next = "catch-next", later = "catch-later", walked = "catch-walked"), context)
+                        style.addRouteLineLayers("catch-route", routeSources, context, routeLook())
                         // What was actually walked, for a finished route's summary: over the plan, under the markers.
                         style.addSource(GeoJsonSource("catch-track"))
                         style.addLayer(LineLayer("catch-track-line", "catch-track").withProperties(lineColor("#00897B"), lineWidth(4f),
@@ -290,11 +306,12 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
      * it is walking to; both null for a preview.
      */
     fun update(settings: CatchRouteSettings, itinerary: CatchItinerary?, location: CatchPoint?, progressMeters: Double? = null,
-        next: CatchEncounter? = null) {
-        val nextStop = next?.opportunity?.point
+        nextLegEnd: Double? = null) {
+        val path = itinerary?.path.orEmpty()
+        val nextStop = nextLegEnd?.takeIf { path.isNotEmpty() }?.let { catchPointAt(path, it) }
         if (this.settings == settings && this.itinerary === itinerary && user == location && this.progressMeters == progressMeters &&
-            focus == nextStop && focusMeters == next?.meters) return
-        focusMeters = next?.meters
+            focusMeters == nextLegEnd) return
+        focusMeters = nextLegEnd
         val movedStart = this.settings.start != settings.start
         val routeChanged = this.itinerary !== itinerary || this.settings.area != settings.area
         this.settings = settings; this.itinerary = itinerary; user = location; this.progressMeters = progressMeters; focus = nextStop
@@ -323,6 +340,15 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
         val style = map?.style ?: return
         style.getSourceAs<GeoJsonSource>("catch-track")?.setGeoJson(FeatureCollection.fromFeatures(
             if (track.size >= 2) listOf(Feature.fromGeometry(LineString.fromLngLats(track.map(::point)))) else emptyList()))
+    }
+
+    private fun routeLook() = if (walking) RouteLineStyle.NAVIGATION else RouteLineStyle.CLASSIC
+
+    /** Walking draws the bold navigation line, planning the plain one; the camera and the data stay. */
+    fun setWalking(walking: Boolean) {
+        if (this.walking == walking) return
+        this.walking = walking
+        map?.style?.takeIf { it.isFullyLoaded }?.replaceRouteLineLayers("catch-route", routeSources, context, routeLook())
     }
 
     fun setNextStop(index: Int?) {
@@ -596,6 +622,7 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
 
 /** The trainer's dot: teal, a colour the blue-to-violet route line never takes. */
 internal const val CATCH_USER_COLOR = 0xFF00897B.toInt()
+
 /** Street level: a block or two around the trainer in the floating window. */
 internal const val CATCH_FOLLOW_ZOOM = 17.5
 /** Follow never zooms out further than this to bring the next stop in. */

@@ -2021,21 +2021,25 @@ internal fun AlertsMapScreenContent(
                     )
                 }
                 (huntPath as? HuntPath.Resolved)?.let { path ->
-                    // Same look as the OpenStreetMap layers (RouteLineStyle): later legs faded, the next
-                    // leg bold with a white casing. Google gets no chevrons.
+                    // Same look as the OpenStreetMap layers (RouteLineStyle.CLASSIC): later legs faded,
+                    // the next leg bold with a white casing. Google gets no chevrons.
                     val rest = path.rest.map { LatLng(it.latitude, it.longitude) }
                     val next = path.next.map { LatLng(it.latitude, it.longitude) }
-                    val routeColor = Color(RouteLineStyle.COLOR)
-                    @Composable fun line(points: List<LatLng>, color: Color, width: Float, z: Float) {
-                        if (points.size >= 2) Polyline(
-                            points = points, color = color, width = width * density.density,
+                    val look = RouteLineStyle.CLASSIC
+                    @Composable fun line(points: List<LatLng>, stroke: RouteStroke, casing: Boolean, z: Float) {
+                        if (points.size < 2) return
+                        Polyline(
+                            points = points,
+                            color = if (casing) Color(stroke.casingColor).copy(alpha = stroke.casingOpacity)
+                            else Color(stroke.color).copy(alpha = stroke.opacity),
+                            width = (if (casing) stroke.casingWidth else stroke.width) * density.density,
                             startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = z
                         )
                     }
-                    line(rest, Color.White.copy(alpha = RouteLineStyle.LATER_CASING_OPACITY), RouteLineStyle.LATER_CASING_WIDTH, 300f)
-                    line(rest, routeColor.copy(alpha = RouteLineStyle.LATER_OPACITY), RouteLineStyle.LATER_WIDTH, 301f)
-                    line(next, Color.White, RouteLineStyle.NEXT_CASING_WIDTH, 302f)
-                    line(next, routeColor, RouteLineStyle.NEXT_WIDTH, 303f)
+                    line(rest, look.later, casing = true, 300f)
+                    line(rest, look.later, casing = false, 301f)
+                    line(next, look.next, casing = true, 302f)
+                    line(next, look.next, casing = false, 303f)
                 }
                 if (cameraAnchor.zoom >= WEATHER_CELL_MIN_ZOOM) {
                     weatherCells.forEach { cell ->

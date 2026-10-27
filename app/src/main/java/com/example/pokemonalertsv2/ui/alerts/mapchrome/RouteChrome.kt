@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.alerts.mapchrome
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -106,9 +109,125 @@ internal fun RouteGuidanceCard(
             )
         }
     }
-    val border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    if (onClick != null) Surface(onClick = onClick, modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 3.dp, border = border, content = body)
-    else Surface(modifier = modifier, shape = shape, color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface, shadowElevation = 3.dp, border = border, content = body)
+    ChromeSurface(onClick, modifier, shape, body = body)
+}
+
+/** A surface that is a button only when there is something to do on tap. */
+@Composable
+private fun ChromeSurface(
+    onClick: (() -> Unit)?,
+    modifier: Modifier,
+    shape: Shape,
+    color: Color = MaterialTheme.colorScheme.surface,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    border: BorderStroke? = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    elevation: Dp = 3.dp,
+    body: @Composable () -> Unit,
+) {
+    if (onClick != null) Surface(onClick = onClick, modifier = modifier, shape = shape, color = color,
+        contentColor = contentColor, shadowElevation = elevation, border = border, content = body)
+    else Surface(modifier = modifier, shape = shape, color = color,
+        contentColor = contentColor, shadowElevation = elevation, border = border, content = body)
+}
+
+/** A detail line's parts; hunts separate them with "•", catch routes with "·". */
+private fun detailParts(detail: String): List<String> =
+    detail.split(" · ", " • ").map(String::trim).filter(String::isNotEmpty)
+
+private val DISTANCE = Regex("""\d\s?k?m\b""")
+
+/** The distance a detail line gives, such as "~171 m" or "1.2 km"; null when it has none. */
+internal fun guidanceDistance(detail: String): String? = detailParts(detail).firstOrNull { DISTANCE.containsMatchIn(it) }
+
+/** Everything in a detail line but its distance. */
+internal fun guidanceRest(detail: String): String {
+    val distance = guidanceDistance(detail)
+    return detailParts(detail).filter { it != distance }.joinToString(" · ")
+}
+
+/** Where a walk goes next, for [RouteNavBanner]. */
+internal class RouteGuidanceInfo(
+    val badge: RouteBadge,
+    val title: String,
+    val detail: String,
+    val progress: Float? = null,
+)
+
+@Composable
+private fun BadgeCircle(badge: RouteBadge, size: Dp, color: Color, contentColor: Color) {
+    Surface(shape = CircleShape, color = color, contentColor = contentColor, modifier = Modifier.size(size)) {
+        Box(contentAlignment = Alignment.Center) {
+            when (badge) {
+                is RouteBadge.Number -> Text(badge.label, style = if (size >= 40.dp) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                is RouteBadge.Glyph -> Icon(badge.icon, contentDescription = null, modifier = Modifier.size(size * 0.55f))
+            }
+        }
+    }
+}
+
+/**
+ * A walking route's top bar: the next target in large type on the route's colour, like a
+ * turn instruction. [leading] and [trailing] hold a screen's back and menu buttons when the banner
+ * is its top bar; [subtitle] is the walk's own line under it.
+ */
+@Composable
+internal fun RouteNavBanner(
+    info: RouteGuidanceInfo,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    onClick: (() -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val scheme = MaterialTheme.colorScheme
+    ChromeSurface(onClick, modifier.fillMaxWidth(), RoundedCornerShape(20.dp), color = scheme.primary,
+        contentColor = scheme.onPrimary, border = null, elevation = 6.dp) {
+        Column {
+            Row(Modifier.padding(start = if (leading != null) Spacing.xxs else Spacing.md, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                leading?.invoke()
+                BadgeCircle(info.badge, 44.dp, scheme.onPrimary, scheme.primary)
+                Column(Modifier.weight(1f).padding(start = Spacing.xs)) {
+                    val distance = guidanceDistance(info.detail)
+                    Text(distance ?: info.title, style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (distance != null) Text(info.title, style = MaterialTheme.typography.titleSmall, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    val line = listOf(guidanceRest(info.detail), subtitle.orEmpty()).filter { it.isNotBlank() }.joinToString("  ·  ")
+                    if (line.isNotEmpty()) Text(line, style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onPrimary.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                trailing?.invoke()
+            }
+            if (info.progress != null) LinearProgressIndicator(
+                progress = { info.progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(3.dp),
+                color = scheme.onPrimary,
+                trackColor = scheme.onPrimary.copy(alpha = 0.25f),
+                drawStopIndicator = {}
+            )
+        }
+    }
+}
+
+/**
+ * A route screen's top bar. [navigation] and [actions] are its buttons (back, menu). While walking,
+ * [guidance] turns it into the [RouteNavBanner]; otherwise it is the plain pill bar.
+ */
+@Composable
+internal fun RouteTopChrome(
+    title: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+    guidance: RouteGuidanceInfo? = null,
+    navigation: @Composable () -> Unit,
+    actions: @Composable () -> Unit,
+) {
+    if (guidance != null) RouteNavBanner(guidance, modifier, subtitle = subtitle, leading = navigation, trailing = actions)
+    else MapPillBar(modifier) {
+        Box(Modifier.padding(start = Spacing.xxs)) { navigation() }
+        MapPillTitle(title, subtitle, Modifier.weight(1f))
+        Box(Modifier.padding(end = Spacing.xxs)) { actions() }
+    }
 }

@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
+import com.example.pokemonalertsv2.hunt.huntTargetDetail
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Service
@@ -1025,6 +1027,11 @@ class ArrivalTrackingService : Service() {
                 waiting = waiting,
                 paused = huntPaused
             )
+        )
+        // The designed windows name the target beside that readout; the distance is the readout's.
+        floatingMap.setGuidance(
+            title = destination?.alert?.let(::huntTargetTitle) ?: if (huntPaused) "Hunt paused" else "Looking for targets",
+            detail = destination?.let { guidanceRest(huntTargetDetail(it.alert, distanceMeters)) }.orEmpty()
         )
         val targetId = destination?.uniqueId
         if (targetId == bubbleTargetId && bubbleJob != null) return

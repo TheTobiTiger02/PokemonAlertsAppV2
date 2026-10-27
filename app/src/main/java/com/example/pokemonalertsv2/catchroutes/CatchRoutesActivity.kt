@@ -1,5 +1,12 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.example.pokemonalertsv2.ui.theme.AppThemeMode
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
+import com.example.pokemonalertsv2.data.AlertPreferences
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.mutableIntStateOf
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteTopChrome
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import android.Manifest
@@ -85,7 +92,11 @@ class CatchRoutesActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
-        setContent { PokemonAlertsV2Theme { PlannerScreen() } }
+        setContent {
+            // The app's own light/dark choice, as the rest of the app uses it, not only the system's.
+            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }.collectAsStateWithLifecycle(initialValue = 0)
+            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) { PlannerScreen() }
+        }
         lifecycleScope.launch {
             model.controller.ready()
             if (!model.hasStart && model.controller.session.value == null && fineLocation()) useLocation(automatic = true)
@@ -173,6 +184,8 @@ class CatchRoutesActivity : ComponentActivity() {
             if (!fineLocation() || (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@CatchRoutesActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)) { pendingFollow = true; permissions.launch(permissionNames()) }
             else model.follow()
         }
+        // Follow's state, so the button shows when a pan has paused it.
+        var following by remember { mutableStateOf(false) }
         val plannerState = PlannerState(settings, plan, active, stops, encounters, saved, refreshing, outOfDate, notice, now)
         val actions = PlannerActions(
             useLocation = { useLocation() },
@@ -188,8 +201,8 @@ class CatchRoutesActivity : ComponentActivity() {
             showStop = { details = spawnpointSelections(it) },
             deleteSetup = { deleteSetup = it },
         )
-        // Follow's state, so the button shows when a pan has paused it.
-        var following by remember { mutableStateOf(false) }
+        // Measured, so the taller walking banner is kept clear when framing, as the plain bar is.
+        var topChromePx by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
         val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         val routeMap: PlannerMap = { mapModifier, frame ->
@@ -200,7 +213,11 @@ class CatchRoutesActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize().testTag("catch_route_map"),
                     update = { view ->
                         // Framing stays clear of the floating top bar and the collapsed sheet.
-                        with(density) { view.setInsets(0, (statusBar + Spacing.xs + TopBarHeight + Spacing.sm).roundToPx(), 0, frame.bottomInset.roundToPx()) }
+                        with(density) {
+                            val top = topChromePx.takeIf { it > 0 } ?: (statusBar + Spacing.xs + TopBarHeight).roundToPx()
+                            view.setInsets(0, top + Spacing.sm.roundToPx(), 0, frame.bottomInset.roundToPx())
+                        }
+                        view.setWalking(walking)
                         // A route walked as drawn fixes its start; only its finish-free walk is left to tap.
                         view.onPick = if (active == null && showSettings && !settings.fixed) { p -> if (picking == "end") model.edit(model.settings.copy(end = p)) else model.startPoint(p) } else null
                         // A tap on a spawnpoint opens its details; up to five when they overlap.
@@ -208,36 +225,41 @@ class CatchRoutesActivity : ComponentActivity() {
                             val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
                             details = ids.mapNotNull { byId[it] }.take(5).ifEmpty { null }
                         }
-                        view.update(settings, plan, location, active?.progressMeters, active?.takeIf { walking }?.nextAt(now))
+                        view.update(settings, plan, location, active?.progressMeters, active?.takeIf { walking }?.nextLegEnd(now))
                         // Walking: only what is still ahead. Planning: every planned spawnpoint.
                         view.setSpawns(active?.takeIf { walking }?.ahead(now)?.map { it.opportunity to (now >= it.opportunity.availableFrom) })
                         view.setNextStop(active?.takeIf { walking }?.let { catchNextStopIndex(it, now) })
                         view.select(details?.map { it.pointId }?.toSet().orEmpty())
                     }, onRelease = { it.destroy() })
-                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.xs),
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().onSizeChanged { topChromePx = it.height }
+                    .statusBarsPadding().padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.xs),
                     verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    MapPillBar(Modifier.testTag("catch_route_top_bar")) {
-                        IconButton(onClick = { finish() }, modifier = Modifier.padding(start = Spacing.xxs)) {
-                            Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                        }
-                        val (title, subtitle) = catchTopBarText(plan, active, stops, encounters.size, editing, now)
-                        MapPillTitle(title, subtitle, Modifier.weight(1f))
-                        val session = active
-                        if (session != null) {
-                            var menu by remember { mutableStateOf(false) }
-                            Box {
-                                IconButton(onClick = { menu = true }, modifier = Modifier.padding(end = Spacing.xxs).testTag("catch_session_menu")) {
-                                    Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Route actions")
-                                }
-                                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                    WalkingMenuItems(model, session, plannerState, actions, frame.openOptions) { menu = false }
-                                }
+                    val (title, subtitle) = catchTopBarText(plan, active, stops, encounters.size, editing, now)
+                    val session = active
+                    // Walking, the bar becomes a banner naming the next stop; planning, it names the route.
+                    RouteTopChrome(title, subtitle, Modifier.testTag("catch_route_top_bar"),
+                        guidance = session?.takeIf { walking }?.let { catchGuidance(it, stops, now) },
+                        navigation = {
+                            IconButton(onClick = { finish() }) {
+                                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                             }
-                        } else IconButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
-                            modifier = Modifier.padding(end = Spacing.xxs).testTag("catch_route_history")) {
-                            Icon(androidx.compose.material.icons.Icons.Filled.DateRange, contentDescription = "Route history")
-                        }
-                    }
+                        },
+                        actions = {
+                            if (session != null) {
+                                var menu by remember { mutableStateOf(false) }
+                                Box {
+                                    IconButton(onClick = { menu = true }, modifier = Modifier.testTag("catch_session_menu")) {
+                                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Route actions")
+                                    }
+                                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                        WalkingMenuItems(model, session, plannerState, actions, frame.openOptions) { menu = false }
+                                    }
+                                }
+                            } else IconButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
+                                modifier = Modifier.testTag("catch_route_history")) {
+                                Icon(androidx.compose.material.icons.Icons.Filled.DateRange, contentDescription = "Route history")
+                            }
+                        })
                     if (showSettings && !settings.fixed) Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp, modifier = Modifier.padding(start = Spacing.xs)) {
                         Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start",
