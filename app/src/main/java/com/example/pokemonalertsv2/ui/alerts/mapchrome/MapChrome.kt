@@ -1,7 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts.mapchrome
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
@@ -13,20 +12,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -102,7 +98,7 @@ internal fun BoxScope.MapChrome(state: MapChromeState, actions: MapChromeActions
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
             horizontalAlignment = Alignment.End
         ) {
-            MapFitButton(hunt = state.hunt, onClick = actions.onFit)
+            MapFitButton(contentDescription = fitDescription(state.hunt), onClick = actions.onFit)
             MapLocateButton(state = state.locate, onClick = actions.onLocate)
         }
     }
@@ -110,65 +106,56 @@ internal fun BoxScope.MapChrome(state: MapChromeState, actions: MapChromeActions
 
 @Composable
 private fun MapTopBar(state: MapChromeState, actions: MapChromeActions, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth().height(TopBarHeight).testTag("map_top_bar"),
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        shadowElevation = 3.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // The status half doubles as the retry button when the alerts are not live.
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clickable(
-                        enabled = state.syncStatus.isProblem,
-                        role = Role.Button,
-                        onClickLabel = "Retry loading alerts",
-                        onClick = actions.onRefresh
-                    )
-                    .padding(start = Spacing.lg, end = Spacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-            ) {
-                MapSyncDot(state.syncStatus)
-                Column {
-                    Text(
-                        text = state.countLabel(),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = state.syncStatus.chromeSummary(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            IconButton(onClick = actions.onOpenFilters, modifier = Modifier.testTag("map_open_filters")) {
-                BadgedIcon(
-                    icon = painterResource(R.drawable.ic_filter),
-                    contentDescription = "Filters",
-                    count = state.advancedFilterRuleCount
+    MapPillBar(modifier = modifier.testTag("map_top_bar")) {
+        // The status half doubles as the retry button when the alerts are not live.
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable(
+                    enabled = state.syncStatus.isProblem,
+                    role = Role.Button,
+                    onClickLabel = "Retry loading alerts",
+                    onClick = actions.onRefresh
+                )
+                .padding(start = Spacing.lg, end = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            MapSyncDot(state.syncStatus)
+            Column {
+                Text(
+                    text = state.countLabel(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = state.syncStatus.chromeSummary(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = actions.onOpenLayers, modifier = Modifier.testTag("map_open_layers")) {
-                Icon(painterResource(R.drawable.ic_layers), contentDescription = "Map layers")
-            }
-            actions.onOpenSettings?.let { openSettings ->
-                IconButton(
-                    onClick = openSettings,
-                    modifier = Modifier.padding(end = Spacing.xxs).testTag("open_settings")
-                ) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "Settings")
-                }
+        }
+        IconButton(onClick = actions.onOpenFilters, modifier = Modifier.testTag("map_open_filters")) {
+            BadgedIcon(
+                icon = painterResource(R.drawable.ic_filter),
+                contentDescription = "Filters",
+                count = state.advancedFilterRuleCount
+            )
+        }
+        IconButton(onClick = actions.onOpenLayers, modifier = Modifier.testTag("map_open_layers")) {
+            Icon(painterResource(R.drawable.ic_layers), contentDescription = "Map layers")
+        }
+        actions.onOpenSettings?.let { openSettings ->
+            IconButton(
+                onClick = openSettings,
+                modifier = Modifier.padding(end = Spacing.xxs).testTag("open_settings")
+            ) {
+                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
             }
         }
     }
@@ -183,37 +170,35 @@ private val MapChromeState.controlsEndPadding: Dp
     get() = if (useSidePanel) 392.dp else Spacing.lg
 
 /**
- * "Tools" at rest; during a hunt, the target and how far away it is. Uses the content-slot
- * overload: the text-slot one clears its label's semantics, which left TalkBack with nothing.
+ * "Tools" at rest. During a hunt, the same guidance card a catch route walks with: the target
+ * and how far away it is, opening the hunt's controls. Uses the content-slot FAB overload: the
+ * text-slot one clears its label's semantics, which left TalkBack with nothing.
  */
 @Composable
 private fun MapToolsPill(state: MapChromeState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val hunt = state.hunt
+    if (hunt != null) {
+        RouteGuidanceCard(
+            badge = RouteBadge.Glyph(painterResource(R.drawable.ic_my_location)),
+            title = hunt.title(),
+            detail = hunt.detail(),
+            onClick = onClick,
+            modifier = modifier.widthIn(max = 300.dp).testTag("open_map_tools"),
+            trailing = {
+                Icon(painterResource(R.drawable.ic_tools), contentDescription = "Hunt controls",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        )
+        return
+    }
     ExtendedFloatingActionButton(
         onClick = onClick,
         modifier = modifier.widthIn(max = 260.dp).testTag("open_map_tools"),
-        containerColor = if (hunt != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-        contentColor = if (hunt != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
     ) {
         Icon(painterResource(R.drawable.ic_tools), contentDescription = null)
         Spacer(Modifier.width(Spacing.md))
-        if (hunt == null) {
-            Text("Tools")
-        } else {
-            Column {
-                Text(
-                    text = hunt.title(),
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = hunt.detail(),
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
+        Text("Tools")
     }
 }

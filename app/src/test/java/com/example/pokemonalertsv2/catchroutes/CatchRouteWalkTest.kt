@@ -30,6 +30,15 @@ class CatchRouteWalkTest {
         assertTrue(guidance, guidance.startsWith("Stop 2 · 100 m"))
     }
 
+    @Test fun `the next leg ends at the stop's badge, then at the catch still ahead in it`() {
+        // Two catches 40 m apart make one stop; its badge sits halfway, at 120 m.
+        val plan = CatchItinerary(settings(), path(0.0, 1000.0), listOf(encounter("a", 100.0), encounter("b", 140.0)), emptyList())
+        assertEquals(120.0, CatchSession(plan, progressMeters = 50.0).nextLegEnd(now)!!, 1e-6)
+        // Past the badge, the leg ends at the catch still in reach: a, within its circle behind the walk.
+        assertEquals(100.0, CatchSession(plan, progressMeters = 130.0).nextLegEnd(now)!!, 1e-6)
+        assertNull(CatchSession(plan, progressMeters = 500.0).nextLegEnd(now))
+    }
+
     @Test fun `a despawned stop drops off the route ahead`() {
         val plan = CatchItinerary(settings(), path(0.0, 1000.0), listOf(encounter("a", 100.0, until = now + 60_000), encounter("b", 400.0)), emptyList())
         val session = CatchSession(plan)

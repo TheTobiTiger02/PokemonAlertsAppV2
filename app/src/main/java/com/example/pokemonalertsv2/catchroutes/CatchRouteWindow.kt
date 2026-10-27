@@ -1,13 +1,19 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceDistance
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteBadge
+import com.example.pokemonalertsv2.tracking.OverlayGuidance
+import com.example.pokemonalertsv2.tracking.OverlayColors
+import com.example.pokemonalertsv2.tracking.OverlayChrome
+import com.example.pokemonalertsv2.tracking.OverlayAction
+import com.example.pokemonalertsv2.R
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import com.example.pokemonalertsv2.tracking.FloatingWindow
 import com.example.pokemonalertsv2.ui.alerts.MapLocationTracker
@@ -35,9 +41,11 @@ internal class CatchRouteWindow(context: Context) {
 
     private var root: FrameLayout? = null
     private var map: CatchRouteMapView? = null
-    private var guidance: TextView? = null
-    private var pause: TextView? = null
-    private var camera: TextView? = null
+    private val colors = OverlayColors.Light
+    /** The banner's badge, distance, stop and detail. */
+    private var guidanceViews: OverlayChrome.GuidanceViews? = null
+    private var pauseLabel: TextView? = null
+    private var followLabel: TextView? = null
     /**
      * A second-by-second fix and the compass, only while the window is up: the puck and Follow need
      * them, visit counting does not, so the service's own slower location stream stays as it is.
@@ -63,66 +71,25 @@ internal class CatchRouteWindow(context: Context) {
         if (!FloatingWindow.canDraw(window.themedContext)) return false
         val context = window.themedContext
 
-        val handle = TextView(context).apply {
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0xFF16181D.toInt())
-            setBackgroundColor(0xFFF2F4F8.toInt())
-            setPadding(dp(10), dp(6), dp(10), dp(6))
-            window.dragWith(this)
-        }
-        guidance = handle
-
         val routeMap = CatchRouteMapView(context)
         map = routeMap
+        routeMap.onFollowChanged = { following -> followLabel?.text = if (following) "Following" else "Follow" }
 
-        val controls = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(0xFFF2F4F8.toInt())
-        }
-        fun control(label: String, action: () -> Unit): TextView = TextView(context).apply {
-            text = label
-            gravity = Gravity.CENTER
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setTextColor(0xFF16181D.toInt())
-            isClickable = true
-            setOnClickListener { action() }
-            controls.addView(this, LinearLayout.LayoutParams(0, dp(40), 1f))
-        }
-        pause = control(if (session.paused) "Resume" else "Pause") { onPause() }
-        control("Replan") { onReplan() }
-        // Follow frames you and the next stop as you walk; Route shows the whole walk.
-        camera = control("Route") { if (routeMap.following) routeMap.overview() else routeMap.follow() }
-        routeMap.onFollowChanged = { following -> camera?.text = if (following) "Route" else "Follow" }
-        control("Close") { onClose() }
-
-        val column = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.WHITE)
-            addView(handle, LinearLayout.LayoutParams(-1, -2))
-            addView(routeMap, LinearLayout.LayoutParams(-1, 0, 1f))
-            addView(controls, LinearLayout.LayoutParams(-1, -2))
-        }
-
+        val layer = FrameLayout(context)
         val container = FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 cornerRadius = dp(14).toFloat()
                 setColor(Color.WHITE)
             }
             clipToOutline = true
-            addView(column, FrameLayout.LayoutParams(-1, -1))
-            // Over the map's bottom-right corner, where it cannot cover the guidance line.
-            addView(window.buildResizeGrip(), FrameLayout.LayoutParams(dp(26), dp(26)).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, dp(6), dp(46))
-            })
+            addView(routeMap, FrameLayout.LayoutParams(-1, -1))
+            addView(layer, FrameLayout.LayoutParams(-1, -1))
         }
+        buildChrome(layer, routeMap)
 
         if (!window.show(container)) {
             routeMap.destroy()
             map = null
-            guidance = null
-            pause = null
-            camera = null
             return false
         }
         root = container
@@ -140,14 +107,49 @@ internal class CatchRouteWindow(context: Context) {
     fun update(session: CatchSession, location: CatchPoint?, outOfDate: Boolean = false, replanning: Boolean = false) {
         if (root == null) return
         val now = System.currentTimeMillis()
-        map?.update(session.itinerary.settings, session.itinerary, posePoint ?: location, session.progressMeters, session.nextStopAt(now))
+        map?.update(session.itinerary.settings, session.itinerary, posePoint ?: location, session.progressMeters, session.nextLegEnd(now))
         // Only what is still ahead: visited windows, ones walked past and despawned ones drop off the map.
         map?.setSpawns(session.ahead(now).map { it.opportunity to (now >= it.opportunity.availableFrom) })
         map?.setNextStop(catchNextStopIndex(session, now))
-        guidance?.text = catchGuidance(session, now, outOfDate, replanning)
-        // A pace warning tints the line it is on, so it reads at a glance over a game screen.
-        guidance?.setBackgroundColor(if (catchPaceHint(session, now) != null) 0xFFFFE8B0.toInt() else 0xFFF2F4F8.toInt())
-        pause?.text = if (session.paused) "Resume" else "Pause"
+        guidanceViews?.bind(catchOverlayGuidance(session, now, outOfDate, replanning), colors)
+        pauseLabel?.text = if (session.paused) "Resume" else "Pause"
+    }
+
+    /**
+     * The controls over the map: a blue banner on top with the next stop, how far it is and Close,
+     * and a labelled bar along the bottom with Pause, Replan, Follow and the whole route.
+     */
+    private fun buildChrome(layer: FrameLayout, routeMap: CatchRouteMapView) {
+        val kit = OverlayChrome(window.themedContext, window) { painter -> painter(colors) }
+        routeMap.setWalking(true)
+        fun add(view: View, gravity: Int, r: Int = 0, b: Int = 0, w: Int = -2, h: Int = -2) =
+            layer.addView(view, FrameLayout.LayoutParams(w, h, gravity).apply { setMargins(0, 0, dp(r), dp(b)) })
+
+        val pause = OverlayAction("Pause", glyph = "❚❚") { onPause() }
+        val replan = OverlayAction("Replan", icon = R.drawable.ic_refresh) { onReplan() }
+        val follow = OverlayAction("Follow", icon = R.drawable.ic_my_location) { routeMap.follow() }
+        val route = OverlayAction("Whole route", icon = R.drawable.ic_route, label = "Route") { routeMap.overview() }
+        val close = OverlayAction("Close", icon = R.drawable.ic_close_small) { onClose() }
+
+        val (banner, views) = kit.banner(BANNER_DP, kit.circle(close, 30, OverlayChrome.Look.BANNER))
+        guidanceViews = views
+        add(banner, Gravity.TOP, w = -1, h = dp(BANNER_DP))
+        val (bar, labels) = kit.labelBar(NAV_BAR_DP, pause, replan, follow, route)
+        pauseLabel = labels[0]
+        followLabel = labels[2]
+        add(bar, Gravity.BOTTOM, w = -1, h = dp(NAV_BAR_DP))
+        setMapMargins(dp(BANNER_DP), dp(NAV_BAR_DP))
+        // Over the map's bottom-right corner, clear of the bar.
+        add(window.buildResizeGrip(colors), Gravity.BOTTOM or Gravity.END, r = 6, b = NAV_BAR_DP + 6, w = dp(26), h = dp(26))
+    }
+
+    private fun setMapMargins(top: Int, bottom: Int) {
+        val view = map ?: return
+        val params = view.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.topMargin == top && params.bottomMargin == bottom) return
+        params.topMargin = top
+        params.bottomMargin = bottom
+        view.post { view.layoutParams = params }
     }
 
     fun hide() {
@@ -159,9 +161,14 @@ internal class CatchRouteWindow(context: Context) {
         map?.destroy()
         root = null
         map = null
-        guidance = null
-        pause = null
-        camera = null
+        guidanceViews = null
+        pauseLabel = null
+        followLabel = null
+    }
+
+    private companion object {
+        const val BANNER_DP = 66
+        const val NAV_BAR_DP = 44
     }
 
     private fun dp(value: Int) = window.dp(value)
@@ -176,6 +183,28 @@ internal class CatchRouteWindow(context: Context) {
 internal fun catchNextStopIndex(session: CatchSession, now: Long): Int? {
     val next = session.ahead(now).minByOrNull { it.meters } ?: return null
     return catchStops(session.itinerary.encounters).indexOfFirst { stop -> stop.any { it.opportunity.id == next.opportunity.id } }.takeIf { it >= 0 }
+}
+
+/**
+ * The same walk for the designed windows: the stop as a badge, how far as the figure, and the
+ * pace and route advice after the details.
+ */
+internal fun catchOverlayGuidance(session: CatchSession, now: Long, outOfDate: Boolean = false, replanning: Boolean = false): OverlayGuidance {
+    val info = catchGuidance(session, catchStops(session.itinerary.encounters), now)
+    val pace = catchPaceHint(session, now)
+    val advice = when {
+        replanning -> "Replanning…"
+        outOfDate -> "Route out of date, tap Replan"
+        else -> null
+    }
+    return OverlayGuidance(
+        badge = (info.badge as? RouteBadge.Number)?.label,
+        title = (if (session.paused && !session.finished) "Paused · " else "") + info.title,
+        headline = guidanceDistance(info.detail),
+        detail = listOfNotNull(guidanceRest(info.detail).takeIf { it.isNotBlank() }, pace, advice).joinToString(" · "),
+        progress = info.progress,
+        warning = pace != null || outOfDate,
+    )
 }
 
 internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean = false, replanning: Boolean = false): String {

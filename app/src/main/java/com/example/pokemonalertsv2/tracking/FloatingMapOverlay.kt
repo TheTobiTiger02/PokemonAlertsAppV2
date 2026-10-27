@@ -1,9 +1,9 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.ui.alerts.RouteLineStyle
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
@@ -108,7 +108,6 @@ internal class FloatingMapOverlay(context: Context) {
     private var pauseItem: TextView? = null
     private var opacitySlider: SeekBar? = null
     private var opacityLabel: TextView? = null
-    private var recenterButton: ImageView? = null
     private var mapView: MapView? = null
     private var map: MapLibreMap? = null
 
@@ -132,6 +131,13 @@ internal class FloatingMapOverlay(context: Context) {
     /** The chrome's colours, and everything that paints with them, for a theme change. */
     private var colors = OverlayColors.Light
     private val painters = mutableListOf<(OverlayColors) -> Unit>()
+
+    /** Repaints the Follow button when following starts or stops. */
+    private var followView: ((Boolean) -> Unit)? = null
+    private var guidanceViews: OverlayChrome.GuidanceViews? = null
+    private var guidanceTitle = "Hunting"
+    private var guidanceDetail = ""
+    private var readout = "Hunting"
 
     /** The bubble's ring colour (the target's category) and whether it shows artwork. */
     private var bubbleAccent: Int? = null
@@ -276,33 +282,16 @@ internal class FloatingMapOverlay(context: Context) {
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
-                ).apply { topMargin = dp(HANDLE_DP) }
+                ).apply { bottomMargin = dp(DOCK_DP - DOCK_OVERLAP_DP) }
             )
-            addView(buildHandleBar(), FrameLayout.LayoutParams(
+            addView(buildChrome(), FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                dp(HANDLE_DP)
+                FrameLayout.LayoutParams.MATCH_PARENT
             ))
             addView(buildNoticeStrip(), FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 dp(UNDO_STRIP_DP)
-            ).apply { topMargin = dp(HANDLE_DP) })
-            // Floating over the map rather than in a second bar. A bar costs the
-            // whole width of the window in height; three round buttons in the
-            // corner cost only what they cover, and can be big enough to read.
-            addView(buildMapControls(), FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.START
-                setMargins(dp(6), 0, 0, dp(6))
-            })
-            addView(window.buildResizeGrip(colors), FrameLayout.LayoutParams(
-                dp(GRIP_DP),
-                dp(GRIP_DP)
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, dp(6), dp(6))
-            })
+            ).apply { topMargin = dp(TOP_BUTTONS_DP) })
             // Last, so the panel and the scrim that closes it sit above everything.
             addView(View(themedContext).apply {
                 isVisible = false
@@ -312,16 +301,16 @@ internal class FloatingMapOverlay(context: Context) {
             }, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply { topMargin = dp(HANDLE_DP) })
+            ).apply { topMargin = dp(TOP_BUTTONS_DP) })
             addView(buildMenuPanel(), FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                topMargin = dp(HANDLE_DP + 4)
-                setMargins(dp(6), dp(HANDLE_DP + 4), dp(6), dp(6))
+                setMargins(dp(6), dp(TOP_BUTTONS_DP + 4), dp(6), dp(6))
             })
         }
 
+        mapView = view
         huntOnlyViews.forEach { it.isVisible = huntMode }
         val bubbleView = buildBubble()
         val container = FrameLayout(themedContext).apply {
@@ -378,6 +367,7 @@ internal class FloatingMapOverlay(context: Context) {
                 // queryRenderedFeatures back to an alert id. This is the whole of it.
                 controller.onAlertClick = { alert -> onAlertTap(alert) }
                 controller.onClusterClick = { cluster -> onClusterTap(cluster) }
+                controller.routeLook = RouteLineStyle.FOOTSTEPS
                 controller.attachStyle(style, themedContext)
                 controller.setGesturesEnabled(true)
                 ready.addOnCameraMoveStartedListener { reason ->
@@ -524,12 +514,13 @@ internal class FloatingMapOverlay(context: Context) {
         routeLineSwitch = null
         painters.clear()
         huntOnlyViews.clear()
+        followView = null
+        guidanceViews = null
         menuPanel = null
         menuScrim = null
         pauseItem = null
         opacitySlider = null
         opacityLabel = null
-        recenterButton = null
         mapView = null
         map = null
         lifecycle = null
@@ -571,6 +562,7 @@ internal class FloatingMapOverlay(context: Context) {
         this.colors = colors
         painters.forEach { it(colors) }
         window.applyGripColors(colors)
+        rebindGuidance()
     }
 
     /** Hides the window while the app's own map is on screen; see [InAppMapVisibility]. */
@@ -662,6 +654,19 @@ internal class FloatingMapOverlay(context: Context) {
     /** The short line under the bubble: a distance, "In range", or what the hunt is doing. */
     fun setBubbleReadout(text: String) {
         bubbleLabel?.text = text
+        readout = text
+        rebindGuidance()
+    }
+
+    /** The target the dock names: [title], then the bubble's readout and [detail] under it. */
+    fun setGuidance(title: String, detail: String) {
+        guidanceTitle = title
+        guidanceDetail = detail
+        rebindGuidance()
+    }
+
+    private fun rebindGuidance() {
+        guidanceViews?.bind(OverlayGuidance(badge = null, title = guidanceTitle, headline = readout, detail = guidanceDetail), colors)
     }
 
     /** Three rings rippling out of the bubble: you are in range of what it shows. */
@@ -686,10 +691,7 @@ internal class FloatingMapOverlay(context: Context) {
      */
     fun setFollowing(following: Boolean) {
         this.following = following
-        val button = recenterButton ?: return
-        (button.background as? GradientDrawable)?.setColor(if (following) colors.primary else colors.control)
-        button.imageTintList = ColorStateList.valueOf(if (following) colors.onPrimary else colors.onSurface)
-        button.contentDescription = if (following) "Following your location" else "Follow my location"
+        followView?.invoke(following)
     }
 
     /**
@@ -746,31 +748,39 @@ internal class FloatingMapOverlay(context: Context) {
     }
 
     /**
-     * The one thing the map itself cannot provide: somewhere to grab.
-     *
-     * The previous build put a touch listener on the whole container, which never
-     * fired -- MapView consumes touches for pan and pinch, so the parent never saw
-     * them. A dedicated bar keeps both gestures working.
-     *
-     * The single-target actions on the left, the window's own on the right. Route
-     * controls and opacity live in the ⋯ panel: at 220dp a bar of nine glyphs pushed
-     * the close button off the end.
+     * The controls over the map: a card along the bottom naming the target, with its ‹ ✓ ›, and
+     * a tap on it opens the app; ⋯ – × in the top-right corner; Follow and Fit just above the card.
      */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun buildHandleBar(): LinearLayout = LinearLayout(themedContext).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(4), 0, dp(4), 0)
-        paint { setBackgroundColor(it.bar) }
-        window.dragWith(this)
-        addView(controlButton("‹", "Previous target") { onPrevious() }.also { huntOnlyViews += it })
-        addView(controlButton("✓", "Got it") { onGotIt() })
-        addView(controlButton("›", "Next target") { onNext() }.also { huntOnlyViews += it })
-        // Spacer: the buttons sit at either end, the grab area is everything between.
-        addView(View(themedContext), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(controlButton("⋯", "More options") { setMenuOpen(menuPanel?.isVisible != true) })
-        addView(controlButton("–", "Minimize map") { minimize() })
-        addView(controlButton("×", if (huntMode) "Stop hunt" else "Hide map") { onClose() })
+    private fun buildChrome(): FrameLayout = FrameLayout(themedContext).apply {
+        val kit = OverlayChrome(themedContext, window) { painter -> painters += painter; painter(colors) }
+        fun add(view: View, gravity: Int, l: Int = 0, t: Int = 0, r: Int = 0, b: Int = 0, w: Int = -2, h: Int = -2) =
+            addView(view, FrameLayout.LayoutParams(w, h, gravity).apply { setMargins(dp(l), dp(t), dp(r), dp(b)) })
+        val previous = OverlayAction("Previous target", icon = R.drawable.ic_pip_prev) { onPrevious() }
+        val gotIt = OverlayAction("Got it", icon = R.drawable.ic_check) { onGotIt() }
+        val nextTarget = OverlayAction("Next target", icon = R.drawable.ic_pip_next) { onNext() }
+        val more = OverlayAction("More options", glyph = "⋯") { setMenuOpen(menuPanel?.isVisible != true) }
+        val minimize = OverlayAction("Minimize map", glyph = "–") { minimize() }
+        val close = OverlayAction(if (huntMode) "Stop hunt" else "Hide map", icon = R.drawable.ic_close_small) { onClose() }
+        val follow = OverlayAction("Follow my location", icon = R.drawable.ic_my_location) { onRecenter() }
+        val fit = OverlayAction("Focus Hunt target or route", icon = R.drawable.ic_fit_map) { onFit() }
+        fun huntOnly(view: View) = view.also { huntOnlyViews += it }
+
+        val (dock, views) = kit.dock(DOCK_DP, huntOnly(kit.circle(previous, 30)),
+            kit.circle(gotIt, 30, OverlayChrome.Look.FILLED), huntOnly(kit.circle(nextTarget, 30)), onTap = { onOpenApp() })
+        guidanceViews = views
+        add(dock, Gravity.BOTTOM, w = -1, h = dp(DOCK_DP))
+        add(kit.row(kit.circle(more, 28), kit.circle(minimize, 28), kit.circle(close, 28)), Gravity.TOP or Gravity.END, t = 6, r = 6)
+        val above = DOCK_DP - DOCK_OVERLAP_DP + 6
+        val followButton = kit.circle(follow, 30)
+        followView = { on ->
+            kit.setCircleOn(followButton, on, colors)
+            followButton.contentDescription = if (on) "Following your location" else "Follow my location"
+        }
+        add(kit.row(followButton, kit.circle(fit, 30)), Gravity.BOTTOM or Gravity.START, l = 2, b = above)
+        add(window.buildResizeGrip(colors), Gravity.BOTTOM or Gravity.END, r = 6, b = above, w = dp(GRIP_DP), h = dp(GRIP_DP))
+        // After the buttons' own painters, so the follow state wins over the plain style.
+        paint { setFollowing(following) }
+        rebindGuidance()
     }
 
     /**
@@ -980,67 +990,6 @@ internal class FloatingMapOverlay(context: Context) {
         bubble = this
     }
 
-    /**
-     * Follow, fit and open-the-app, as round icon buttons over the map's bottom
-     * corner. Icons rather than glyphs because at this size a "⤡" is a
-     * squiggle -- the buttons have to say what they do at a glance.
-     */
-    private fun buildMapControls(): LinearLayout = LinearLayout(themedContext).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        addView(iconButton(R.drawable.ic_my_location, "Follow my location") { onRecenter() }
-            .also { recenterButton = it })
-        addView(iconButton(R.drawable.ic_fit_map, "Focus Hunt target or route") { onFit() })
-        addView(iconButton(R.drawable.ic_map, "Open map in app") { onOpenApp() })
-        // After the buttons' own painters, so the follow state wins over the plain style.
-        paint { setFollowing(following) }
-    }
-
-    private fun iconButton(iconRes: Int, description: String, onClick: () -> Unit): ImageView =
-        ImageView(themedContext).apply {
-            contentDescription = description
-            setImageResource(iconRes)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            val inset = dp(7)
-            setPadding(inset, inset, inset, inset)
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
-            paint { colors ->
-                imageTintList = ColorStateList.valueOf(colors.onSurface)
-                (background as? GradientDrawable)?.apply {
-                    // Not fully opaque: these sit on top of the map, and a hint of what
-                    // is underneath keeps them reading as controls rather than holes.
-                    setColor(colors.control)
-                    setStroke(dp(1), colors.outline)
-                }
-            }
-            elevation = dp(2).toFloat()
-            isClickable = true
-            setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(dp(CONTROL_DP), dp(CONTROL_DP)).apply {
-                marginEnd = dp(6)
-            }
-        }
-
-    private fun controlButton(label: String, description: String, onClick: () -> Unit): TextView =
-        TextView(themedContext).apply {
-            text = label
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            paint { setTextColor(it.onSurface) }
-            gravity = Gravity.CENTER
-            contentDescription = description
-            minWidth = dp(BAR_BUTTON_DP)
-            setPadding(dp(4), 0, dp(4), 0)
-            background = selectableBackground()
-            // Claims its own touches, so a tap on a button is not read as a drag
-            // of the bar underneath it.
-            isClickable = true
-            setOnClickListener { onClick() }
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        }
-
     private fun selectableBackground() = TypedValue().let { value ->
         themedContext.theme.resolveAttribute(android.R.attr.selectableItemBackground, value, true)
         themedContext.getDrawable(value.resourceId)
@@ -1163,11 +1112,13 @@ internal class FloatingMapOverlay(context: Context) {
         private const val HEIGHT_DP = 170
         private const val FIT_PADDING_DP = 24
         private const val CORNER_DP = 16
-        private const val HANDLE_DP = 30
-        private const val BAR_BUTTON_DP = 28
+        private const val DOCK_DP = 60
+        /** The dock's rounded top runs over the map's bottom edge by this much. */
+        private const val DOCK_OVERLAP_DP = 10
+        /** Height of the ⋯ – × row: the notice strip and the ⋯ panel hang under it. */
+        private const val TOP_BUTTONS_DP = 40
         private const val UNDO_STRIP_DP = 28
         private const val GRIP_DP = 26
-        private const val CONTROL_DP = 34
         private const val MIN_WIDTH_DP = 160
         private const val MIN_HEIGHT_DP = 140
         private const val MAX_WIDTH_DP = 360

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteGuidanceInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +12,9 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -60,6 +64,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.hunt.BatterySaverSwitch
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteBadge
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteGuidanceCard
 import com.example.pokemonalertsv2.ui.components.PanelGutter
 import com.example.pokemonalertsv2.ui.components.PanelHeader
 import com.example.pokemonalertsv2.ui.components.PanelIcon
@@ -457,28 +463,30 @@ internal fun PlanPanel(
 }
 
 /** The route pages after generating: the route or the walk, its stops, and the walk's options. */
-private enum class ResultPage { ROOT, OPTIONS }
+internal enum class ResultPage { ROOT, OPTIONS }
 
 /**
  * A planned route or a walk in progress, for every newer design. [firstItem] goes on the card at
- * the top, so Map + sheet can peek exactly that much.
+ * the top, so Map + sheet can peek exactly that much. [page] is hoisted because the walk's ⋮
+ * menu, which opens the options page, sits in the map's top bar.
  */
 @Composable
 internal fun ResultPanel(
     model: CatchRoutesViewModel,
     state: PlannerState,
     actions: PlannerActions,
+    page: ResultPage,
+    onPage: (ResultPage) -> Unit,
     modifier: Modifier = Modifier,
     listModifier: Modifier = Modifier,
     firstItem: Modifier = Modifier,
 ) {
-    var page by remember { mutableStateOf(ResultPage.ROOT) }
     val session = state.session
-    if (session == null && page != ResultPage.ROOT) page = ResultPage.ROOT
-    PanelPages(page = page, root = ResultPage.ROOT, onBack = { page = ResultPage.ROOT }) { shown ->
+    if (session == null && page != ResultPage.ROOT) onPage(ResultPage.ROOT)
+    PanelPages(page = page, root = ResultPage.ROOT, onBack = { onPage(ResultPage.ROOT) }) { shown ->
         if (shown == ResultPage.OPTIONS && session != null) {
             Column(modifier.fillMaxWidth()) {
-                PanelHeader("Route options", onBack = { page = ResultPage.ROOT })
+                PanelHeader("Route options", onBack = { onPage(ResultPage.ROOT) })
                 Column(listModifier.verticalScroll(rememberScrollState())) {
                     PanelSwitchRow("Spacial Rend", state.settings.spacialRend, { model.controller.setRadius(it) },
                         Modifier.testTag("route_option_spacial_rend"), subtitle = "Catch range ${state.settings.radius.toInt()} m") {
@@ -494,11 +502,15 @@ internal fun ResultPanel(
             LazyColumn(listModifier.then(modifier).fillMaxWidth().testTag("catch_route_result_list"),
                 contentPadding = PaddingValues(bottom = Spacing.xxl), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 item {
-                    Box(firstItem.panelGutter().padding(top = Spacing.sm)) {
-                        if (session != null) WalkingCard(model, session, state, actions) { page = ResultPage.OPTIONS }
+                    // The peek is exactly this card; padding it by the navigation bar keeps the card above
+                    // the bar and what follows out of sight.
+                    val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    Box(firstItem.panelGutter().padding(top = Spacing.sm, bottom = navBar)) {
+                        if (session != null) WalkingCard(model, session, state, actions)
                         else PlannedCard(model, plan, state.encounters, actions)
                     }
                 }
+                if (session != null) item { WalkingDetails(session, state, Modifier.panelGutter()) }
                 item { PanelSectionLabel("Stops") }
                 val nextIndex = session?.let { catchNextStopIndex(it, state.now) }
                 itemsIndexed(state.stops) { index, group ->
@@ -563,64 +575,84 @@ private fun PlannedCard(model: CatchRoutesViewModel, plan: CatchItinerary, encou
     }
 }
 
+/** Where a walk goes next: the next stop, the finish, or that it is done. */
+internal fun catchGuidance(session: CatchSession, stops: List<List<CatchEncounter>>, now: Long): RouteGuidanceInfo {
+    val next = catchNextStopIndex(session, now)
+    val group = next?.let { stops.getOrNull(it) }
+    val progress = (session.progressMeters / session.itinerary.distanceMeters.coerceAtLeast(1.0)).toFloat()
+    return when {
+        session.finished -> RouteGuidanceInfo(RouteBadge.Number("✓"), "Route finished",
+            "${session.caught} caught · ${formatCatchKm(session.walkedMeters)} walked")
+        group != null && next != null -> {
+            val first = group.first()
+            // To the stop's badge, where the map's bold leg ends.
+            val distance = ((session.nextLegEnd(now) ?: first.meters) - session.progressMeters).coerceAtLeast(0.0)
+            val opens = group.minOf { it.opportunity.availableFrom }
+            val open = if (now >= opens) "open now" else "opens ${catchClock(opens)}"
+            RouteGuidanceInfo(RouteBadge.Number("${next + 1}"), "Stop ${next + 1} · ${group.size} Pokémon",
+                "${formatCatchKm(distance)} · due ${catchClock(first.arrivalMillis)} · $open", progress)
+        }
+        else -> RouteGuidanceInfo(RouteBadge.Number("F"), if (session.paused) "Paused · no stops ahead" else "Back to the finish",
+            "${formatCatchKm((session.itinerary.distanceMeters - session.progressMeters).coerceAtLeast(0.0))} left · ${session.caught} caught",
+            progress)
+    }
+}
+
 /**
- * The walk in progress: the tally, two buttons for what is needed while walking (the floating map
- * and pause), and everything else in the ⋮ menu. The switches live on the Route options page.
+ * The walk in progress, as much as the sheet peeks: the two buttons needed while walking. Where to
+ * go next is in the map's top banner ([catchGuidance]); everything else is in the map's ⋮ menu
+ * ([WalkingMenuItems]) or further down the sheet ([WalkingDetails]).
  */
 @Composable
-private fun WalkingCard(model: CatchRoutesViewModel, session: CatchSession, state: PlannerState, actions: PlannerActions, onOptions: () -> Unit) {
-    val now = state.now
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = Spacing.lg, end = Spacing.xs, top = Spacing.xs, bottom = Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(session.itinerary.settings.name, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f))
-                var menu by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(onClick = { menu = true }, modifier = Modifier.testTag("catch_session_menu")) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Route actions")
-                    }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(text = { Text("Skip stop") }, onClick = { menu = false; model.controller.skip() }, enabled = !session.finished)
-                        DropdownMenuItem(text = { Text("Undo") }, onClick = { menu = false; model.controller.undo() })
-                        DropdownMenuItem(text = { Text("Recalculate") }, onClick = { menu = false; model.controller.recalculate() },
-                            enabled = !state.refreshing && !session.finished)
-                        DropdownMenuItem(text = { Text("Open in Google Maps") }, onClick = { menu = false; actions.openInMaps(session.itinerary) })
-                        DropdownMenuItem(text = { Text("Route options") }, onClick = { menu = false; onOptions() },
-                            modifier = Modifier.testTag("catch_route_options"))
-                        DropdownMenuItem(text = { Text("Stop route", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; actions.stop() })
-                    }
-                }
+private fun WalkingCard(model: CatchRoutesViewModel, session: CatchSession, state: PlannerState, actions: PlannerActions) {
+    // Bottom padding so the peek ends in empty space, not halfway through the details below.
+    Column(Modifier.padding(bottom = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Button(onClick = actions.floatingWindow, modifier = Modifier.weight(1f).testTag("catch_floating_map")) {
+                Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Column(Modifier.padding(end = Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                if (session.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
-                Text("${session.caught} caught · ${session.ahead(now).size} ahead · ${session.missed(now).size} missed",
-                    modifier = Modifier.testTag("catch_session_tally"))
-                val active = session.activeMillis(now)
-                val speed = if (active >= 60_000 && session.walkedMeters >= 50) session.walkedMeters / (active / 1000.0) * 3.6 else null
-                Text("${formatCatchKm(session.walkedMeters)} walked · ${active / 60_000} min · ${formatCatchSpeed(speed)}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                catchPaceHint(session, now)?.let {
-                    Text(it.replaceFirstChar { c -> c.uppercase() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
-                }
-                // Advice only: the route changes when the trainer asks for it, never on its own.
-                if (state.outOfDate && !session.finished && !state.refreshing)
-                    Text("Route out of date: a stop has despawned or you left the route. Recalculate from the ⋮ menu.",
-                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
-                state.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), modifier = Modifier.padding(top = Spacing.xs)) {
-                    Button(onClick = actions.floatingWindow, modifier = Modifier.weight(1f).testTag("catch_floating_map")) {
-                        Text("Floating map", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    OutlinedButton(onClick = { model.controller.pause() }, enabled = !session.finished, modifier = Modifier.weight(1f)) {
-                        Text(if (session.paused) "Resume" else "Pause", maxLines = 1)
-                    }
-                }
+            OutlinedButton(onClick = { model.controller.pause() }, enabled = !session.finished, modifier = Modifier.weight(1f)) {
+                Text(if (session.paused) "Resume" else "Pause", maxLines = 1)
             }
         }
     }
+}
+
+/** The walk's numbers and advice, under the peek: the tally, distance and speed, pace, and notices. */
+@Composable
+private fun WalkingDetails(session: CatchSession, state: PlannerState, modifier: Modifier = Modifier) {
+    val now = state.now
+    Column(modifier.fillMaxWidth().padding(top = Spacing.xs), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Text("${session.caught} caught · ${session.ahead(now).size} ahead · ${session.missed(now).size} missed",
+            style = MaterialTheme.typography.titleSmall)
+        val active = session.activeMillis(now)
+        val speed = if (active >= 60_000 && session.walkedMeters >= 50) session.walkedMeters / (active / 1000.0) * 3.6 else null
+        Text("${formatCatchKm(session.walkedMeters)} walked · ${active / 60_000} min · ${formatCatchSpeed(speed)}",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        catchPaceHint(session, now)?.let {
+            Text(it.replaceFirstChar { c -> c.uppercase() }, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleSmall)
+        }
+        // Advice only: the route changes when the trainer asks for it, never on its own.
+        if (state.outOfDate && !session.finished && !state.refreshing)
+            Text("Route out of date: a stop has despawned or you left the route. Recalculate from the ⋮ menu.",
+                color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        if (state.refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
+        state.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    }
+}
+
+/** The walk's less frequent actions, for the ⋮ menu in the map's top bar. */
+@Composable
+internal fun WalkingMenuItems(model: CatchRoutesViewModel, session: CatchSession, state: PlannerState, actions: PlannerActions,
+    onOptions: () -> Unit, dismiss: () -> Unit) {
+    DropdownMenuItem(text = { Text("Skip stop") }, onClick = { dismiss(); model.controller.skip() }, enabled = !session.finished)
+    DropdownMenuItem(text = { Text("Undo") }, onClick = { dismiss(); model.controller.undo() })
+    DropdownMenuItem(text = { Text("Recalculate") }, onClick = { dismiss(); model.controller.recalculate() },
+        enabled = !state.refreshing && !session.finished)
+    DropdownMenuItem(text = { Text("Open in Google Maps") }, onClick = { dismiss(); actions.openInMaps(session.itinerary) })
+    DropdownMenuItem(text = { Text("Route options") }, onClick = { dismiss(); onOptions() },
+        modifier = Modifier.testTag("catch_route_options"))
+    DropdownMenuItem(text = { Text("Stop route", color = MaterialTheme.colorScheme.error) }, onClick = { dismiss(); actions.stop() })
 }
 
 /** One numbered stop, its badge in theme colours: filled blue for the next stop, muted once visited. */

@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.pokemonalertsv2.ui.components.PanelGutter
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
@@ -46,32 +47,39 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
-/** Draws the planner's map; the hint about map taps goes at the top when something covers the bottom. */
-internal typealias PlannerMap = @Composable (modifier: Modifier, hintAtTop: Boolean) -> Unit
+/**
+ * What the map needs from the sheet: how much of the bottom the collapsed sheet covers, so its
+ * buttons and framing stay above it, and a way for the map's ⋮ menu to open the walk's options.
+ */
+internal class PlannerMapFrame(val bottomInset: Dp, val openOptions: () -> Unit)
+
+/** Draws the planner's map and the controls floating over it. */
+internal typealias PlannerMap = @Composable (modifier: Modifier, frame: PlannerMapFrame) -> Unit
 
 /**
- * The planner: the map fills the screen under a sheet. Collapsed, the sheet shows what is
- * set and Generate; pulled up, the rows, which open their pages inside the sheet.
+ * The planner: the map fills the whole screen under a sheet, with its own floating controls.
+ * Collapsed, the sheet shows what is set and Generate; pulled up, the rows, which open their
+ * pages inside the sheet.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun SheetPlanner(model: CatchRoutesViewModel, state: PlannerState, actions: PlannerActions, planning: Boolean,
-    topBar: @Composable () -> Unit, map: PlannerMap) {
+internal fun SheetPlanner(model: CatchRoutesViewModel, state: PlannerState, actions: PlannerActions, planning: Boolean, map: PlannerMap) {
     val scaffold = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
     var page by rememberSaveable { mutableStateOf(PlanPage.ROOT) }
+    var resultPage by rememberSaveable { mutableStateOf(ResultPage.ROOT) }
     var peekPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    // The drag handle is 48dp tall; the peek is the handle plus the measured summary.
-    val peek = if (peekPx == 0) 180.dp else with(density) { peekPx.toDp() } + 48.dp + navBar
-    // Below the top bar, so the sheet never covers the way back.
+    // The drag handle is 48dp tall; the peek is the handle plus the measured summary. A route's
+    // card already includes the navigation bar.
+    val peek = if (peekPx == 0) 180.dp else with(density) { peekPx.toDp() } + 48.dp + if (planning) navBar else 0.dp
+    // Below the map's top bar, so the sheet never covers the way back.
     val maxSheet = LocalConfiguration.current.screenHeightDp.dp * 0.82f
     val expanded = scaffold.bottomSheetState.currentValue == SheetValue.Expanded
     LaunchedEffect(page) { if (page != PlanPage.ROOT) scaffold.bottomSheetState.expand() }
     BottomSheetScaffold(
         scaffoldState = scaffold,
-        topBar = topBar,
         sheetPeekHeight = peek,
         sheetContent = {
             Column(Modifier.fillMaxWidth().heightIn(max = maxSheet).navigationBarsPadding().testTag("catch_route_sheet")) {
@@ -96,11 +104,12 @@ internal fun SheetPlanner(model: CatchRoutesViewModel, state: PlannerState, acti
                         GenerateStatus(model, state.now)
                         GenerateButton(model, state.now, Modifier.fillMaxWidth().panelGutter().padding(top = Spacing.sm, bottom = Spacing.sm))
                     }
-                } else ResultPanel(model, state, actions, listModifier = Modifier.keepScrollInSheet(), firstItem = Modifier.reportHeight { peekPx = it })
+                } else ResultPanel(model, state, actions, resultPage, { resultPage = it }, listModifier = Modifier.keepScrollInSheet(),
+                    firstItem = Modifier.reportHeight { peekPx = it })
             }
         }
-    ) { padding ->
-        map(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()), true)
+    ) {
+        map(Modifier.fillMaxSize(), PlannerMapFrame(peek) { resultPage = ResultPage.OPTIONS; scope.launch { scaffold.bottomSheetState.expand() } })
     }
 }
 

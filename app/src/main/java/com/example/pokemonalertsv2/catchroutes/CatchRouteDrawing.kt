@@ -1,96 +1,59 @@
 package com.example.pokemonalertsv2.catchroutes
 
-import kotlin.math.*
-
 /** Display geometry only. Never used by scoring, distance, or visit tracking. */
-internal data class CatchDrawSegment(val from: CatchPoint, val to: CatchPoint, val startMeters: Double, val endMeters: Double)
-internal data class CatchDrawMarker(val point: CatchPoint, val label: String, val bearing: Double = 0.0, val meters: Double = 0.0)
+internal data class CatchDrawMarker(val point: CatchPoint, val label: String, val meters: Double = 0.0)
 
-/**
- * What the route map draws: the line in lane-separated [segments], direction [arrows] (dense; the map
- * thins them to a fixed on-screen spacing), numbered [stops] where catches happen, and the two [endpoints].
- */
+/** What the route map pins on the line: numbered [stops] where catches happen, and the two [endpoints]. */
 internal data class CatchRouteDrawing(
-    val segments: List<CatchDrawSegment>,
-    val arrows: List<CatchDrawMarker>,
     val stops: List<CatchDrawMarker>,
     val endpoints: List<CatchDrawMarker>,
 )
 
-/** Arrow candidates along the line; the map keeps one per ~90 dp on screen, so zooming in shows more. */
-internal const val CATCH_ARROW_SPACING_METERS = 30.0
-
 /**
- * Turns a routed [path] into drawing geometry. [stopMeters] are the positions along the path of the
- * places where Pokémon are caught, in walking order; they become the numbered stops. Out-and-back legs
- * over the same street are drawn in two lanes so both directions stay visible.
+ * Places the numbered stops and endpoints of a routed [path]. [stopMeters] are the positions along
+ * the path of the places where Pokémon are caught, in walking order.
  */
 internal fun catchRouteDrawing(path: List<CatchPathPosition>, stopMeters: List<Double> = emptyList()): CatchRouteDrawing {
-    if (path.isEmpty()) return CatchRouteDrawing(emptyList(), emptyList(), emptyList(), emptyList())
-    fun key(p: CatchPoint) = "${round(p.latitude * 100000).toLong()}:${round(p.longitude * 100000).toLong()}"
-    val vertices = CatchSpatialIndex(path) { it.point }
-    // Split at shared vertices so different upstream segmentation still gets separate lanes.
-    val legs = path.zipWithNext().flatMap { (a,b) ->
-        val sx=111195.0*cos(Math.toRadians(a.point.latitude)).coerceAtLeast(0.01)
-        val dx=(b.point.longitude-a.point.longitude)*sx
-        val dy=(b.point.latitude-a.point.latitude)*111195.0
-        val length2=dx*dx+dy*dy
-        if(length2<0.01) emptyList() else {
-            val splits=vertices.near(a.point,b.point,1.5).mapNotNull { v ->
-                val x=(v.point.longitude-a.point.longitude)*sx
-                val y=(v.point.latitude-a.point.latitude)*111195.0
-                val t=(x*dx+y*dy)/length2
-                if(t>0.000001 && t<0.999999 && abs(x*dy-y*dx)/sqrt(length2)<1.5)
-                    CatchPathPosition(v.point,a.meters+(b.meters-a.meters)*t) else null
-            }.distinctBy { key(it.point) }.sortedBy { it.meters }
-            (listOf(a)+splits+listOf(b)).zipWithNext().filter { catchDistance(it.first.point,it.second.point)>0.1 }
-        }
-    }
-    fun edge(a: CatchPoint, b: CatchPoint) = listOf(key(a), key(b)).sorted().joinToString("/")
-    val repeats = legs.withIndex().groupBy { edge(it.value.first.point, it.value.second.point) }
-    val lanes = mutableMapOf<Int, Double>()
-    for (group in repeats.values) group.forEachIndexed { lane, entry ->
-        val (a,b) = entry.value
-        lanes[entry.index] = (lane - (group.size - 1) / 2.0) * 6.0 * if (key(a.point) < key(b.point)) 1 else -1
-    }
-    val segments = mutableListOf<CatchDrawSegment>()
-    val arrows = mutableListOf<CatchDrawMarker>()
-    val stops = mutableListOf<CatchDrawMarker>()
-    val pendingStops = stopMeters.sorted().toMutableList()
-    var nextArrow = CATCH_ARROW_SPACING_METERS
-    for ((i, leg) in legs.withIndex()) {
-        val (a,b) = leg
-        val scale = 111195.0 * cos(Math.toRadians((a.point.latitude+b.point.latitude)/2)).coerceAtLeast(0.01)
-        val dx = (b.point.longitude-a.point.longitude)*scale
-        val dy = (b.point.latitude-a.point.latitude)*111195.0
-        val length = hypot(dx,dy)
-        val offset = lanes.getValue(i)
-        fun shift(p: CatchPoint) = CatchPoint(p.latitude + dx/length*offset/111195.0, p.longitude - dy/length*offset/scale)
-        val from=shift(a.point); val to=shift(b.point)
-        fun at(meters: Double): CatchPoint {
-            val t=((meters-a.meters)/(b.meters-a.meters).coerceAtLeast(0.001)).coerceIn(0.0,1.0)
-            return CatchPoint(from.latitude+(to.latitude-from.latitude)*t,from.longitude+(to.longitude-from.longitude)*t)
-        }
-        val previous = segments.lastOrNull()
-        // Bridge the small lane jump so the line reads as one continuous stroke.
-        if (previous != null && catchDistance(previous.to,from)>0.1) segments += CatchDrawSegment(previous.to,from,a.meters,a.meters)
-        segments += CatchDrawSegment(from,to,a.meters,b.meters)
-        val bearing = Math.toDegrees(atan2(dx,dy))
-        while(nextArrow <= b.meters) {
-            if(nextArrow >= a.meters) arrows += CatchDrawMarker(at(nextArrow), "", bearing, nextArrow)
-            nextArrow += CATCH_ARROW_SPACING_METERS
-        }
-        while (pendingStops.isNotEmpty() && pendingStops.first() <= b.meters + 0.01) {
-            val meters = pendingStops.removeAt(0)
-            stops += CatchDrawMarker(at(meters), (stops.size + 1).toString(), bearing, meters)
-        }
-    }
-    // Stops at or beyond the end (a zero-length path, or rounding) sit on the last point.
-    pendingStops.forEach { stops += CatchDrawMarker(path.last().point, (stops.size + 1).toString(), 0.0, it) }
-    val closed = catchDistance(path.first().point,path.last().point)<10
+    if (path.isEmpty()) return CatchRouteDrawing(emptyList(), emptyList())
+    val stops = stopMeters.sorted().mapIndexed { i, meters -> CatchDrawMarker(catchPointAt(path, meters), (i + 1).toString(), meters) }
+    val closed = catchDistance(path.first().point, path.last().point) < 10
     val endpoints = if (closed) listOf(CatchDrawMarker(path.first().point, "Start / Finish"))
-        else listOf(CatchDrawMarker(path.first().point, "Start"), CatchDrawMarker(path.last().point, "Finish", meters = path.last().meters))
-    return CatchRouteDrawing(segments, arrows, stops, endpoints)
+        else listOf(CatchDrawMarker(path.first().point, "Start"), CatchDrawMarker(path.last().point, "Finish", path.last().meters))
+    return CatchRouteDrawing(stops, endpoints)
+}
+
+/**
+ * The route cut into what is already [walked], the [next] leg to walk now, and everything [later].
+ * Three lines, whatever the route's length, so redrawing on every fix stays cheap.
+ */
+internal data class CatchRouteSlices(val walked: List<CatchPoint>, val next: List<CatchPoint>, val later: List<CatchPoint>)
+
+/**
+ * Slices [path] at [walkedMeters] and [nextMeters]. A preview ([walkedMeters] null) is all "next":
+ * the whole plan is what you would walk. Without a stop ahead the next leg runs to the finish.
+ */
+internal fun catchRouteSlices(path: List<CatchPathPosition>, walkedMeters: Double?, nextMeters: Double?): CatchRouteSlices {
+    if (path.size < 2) return CatchRouteSlices(emptyList(), emptyList(), emptyList())
+    val end = path.last().meters
+    val walkedTo = (walkedMeters ?: 0.0).coerceIn(0.0, end)
+    val nextTo = if (walkedMeters == null || nextMeters == null) end else nextMeters.coerceIn(walkedTo, end)
+    return CatchRouteSlices(catchPathSlice(path, 0.0, walkedTo), catchPathSlice(path, walkedTo, nextTo), catchPathSlice(path, nextTo, end))
+}
+
+/** The part of [path] between [from] and [to] metres, with interpolated ends; empty when shorter than a metre. */
+internal fun catchPathSlice(path: List<CatchPathPosition>, from: Double, to: Double): List<CatchPoint> {
+    if (path.size < 2 || to - from < 1.0) return emptyList()
+    return listOf(catchPointAt(path, from)) + path.filter { it.meters > from && it.meters < to }.map { it.point } + catchPointAt(path, to)
+}
+
+/** Where along [path] the walk is after [meters]; clamped to its ends. */
+internal fun catchPointAt(path: List<CatchPathPosition>, meters: Double): CatchPoint {
+    if (meters <= path.first().meters) return path.first().point
+    val i = path.indexOfFirst { it.meters >= meters }
+    if (i < 0) return path.last().point
+    val a = path[i - 1]; val b = path[i]
+    val t = ((meters - a.meters) / (b.meters - a.meters).coerceAtLeast(0.001)).coerceIn(0.0, 1.0)
+    return CatchPoint(a.point.latitude + (b.point.latitude - a.point.latitude) * t, a.point.longitude + (b.point.longitude - a.point.longitude) * t)
 }
 
 /** How much route one numbered stop covers: catches within this stretch share a number. */
@@ -112,11 +75,15 @@ internal fun catchStops(encounters: List<CatchEncounter>): List<List<CatchEncoun
 /** The middle of each stop's stretch: where its numbered badge sits. */
 internal fun catchStopMeters(encounters: List<CatchEncounter>): List<Double> = catchStops(encounters).map { (it.first().meters + it.last().meters) / 2 }
 
-/** Route colour at [fraction] of the way, from blue at the start to violet at the finish. */
-internal fun catchRouteColor(fraction: Double): Int {
-    val t = fraction.coerceIn(0.0, 1.0)
-    val from = intArrayOf(0x1E, 0x63, 0xF0)
-    val to = intArrayOf(0x8B, 0x3F, 0xE0)
-    val c = IntArray(3) { (from[it] + (to[it] - from[it]) * t).roundToInt() }
-    return (0xFF shl 24) or (c[0] shl 16) or (c[1] shl 8) or c[2]
+/**
+ * Where the leg to the next stop ends, in metres along the route: at that stop's numbered badge,
+ * so the bold line, Follow and the distance all point at the same place. Once the badge is behind
+ * the walk, the catch still ahead in that stop. Null when nothing is ahead.
+ */
+internal fun CatchSession.nextLegEnd(now: Long): Double? {
+    val next = nextAt(now) ?: return null
+    val stop = catchStops(itinerary.encounters).firstOrNull { s -> s.any { it.opportunity.id == next.opportunity.id } }
+        ?: return next.meters
+    val badge = (stop.first().meters + stop.last().meters) / 2
+    return if (badge > progressMeters) badge else next.meters
 }

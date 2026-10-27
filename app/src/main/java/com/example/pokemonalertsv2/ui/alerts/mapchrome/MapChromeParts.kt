@@ -65,9 +65,9 @@ private fun locateDescription(state: MapLocateState): Int = when (state) {
     MapLocateState.IDLE -> R.string.map_location_start_tracking
 }
 
-/** Frames every visible alert, or, during a hunt, flips between its target and its route. */
+/** The small framing button above [MapLocateButton]; what it frames is the caller's to say. */
 @Composable
-internal fun MapFitButton(hunt: MapChromeHunt?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun MapFitButton(contentDescription: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     SmallFloatingActionButton(
         onClick = onClick,
         modifier = modifier,
@@ -75,14 +75,7 @@ internal fun MapFitButton(hunt: MapChromeHunt?, onClick: () -> Unit, modifier: M
         contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 3.dp)
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_fit_map),
-            contentDescription = when {
-                hunt == null -> stringResource(R.string.map_show_all_alerts)
-                hunt.focus == HuntMapFocus.TARGET -> "Show Hunt route"
-                else -> "Focus Hunt target"
-            }
-        )
+        Icon(painter = painterResource(R.drawable.ic_fit_map), contentDescription = contentDescription)
     }
 }
 
@@ -140,6 +133,14 @@ internal fun SyncStatus.chromeSummary(): String = when (this) {
 
 internal fun MapChromeState.countLabel(): String =
     if (visibleCount == totalCount) "$visibleCount on map" else "$visibleCount of $totalCount on map"
+
+/** Frames every visible alert, or, during a hunt, flips between its target and its route. */
+@Composable
+internal fun fitDescription(hunt: MapChromeHunt?): String = when {
+    hunt == null -> stringResource(R.string.map_show_all_alerts)
+    hunt.focus == HuntMapFocus.TARGET -> "Show Hunt route"
+    else -> "Focus Hunt target"
+}
 
 internal fun MapChromeHunt.title(): String = target?.let(::huntTargetTitle) ?: "Hunting $name"
 
