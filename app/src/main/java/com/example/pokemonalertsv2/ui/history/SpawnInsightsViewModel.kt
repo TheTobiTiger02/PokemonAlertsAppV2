@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.FilterCatalogRepository
 import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.insights.SpawnActivity
+import com.example.pokemonalertsv2.data.insights.SpawnDayDetail
+import com.example.pokemonalertsv2.data.insights.SpawnHourResponse
+import com.example.pokemonalertsv2.data.insights.defaultHour
 import com.example.pokemonalertsv2.data.insights.SpawnInsights
 import com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
 import kotlinx.coroutines.delay
@@ -59,7 +62,17 @@ data class SpawnActivityUiState(
     /** The species list for [search] and/or [day]; null while neither is set. */
     val searchResult: SpawnSpeciesResponse? = null,
     val isSearching: Boolean = false,
-    val searchError: String? = null
+    val searchError: String? = null,
+    /** The day opened under the chart, hour by hour; today until another column is tapped. */
+    val detailDay: String? = null,
+    val dayDetail: SpawnDayDetail? = null,
+    val isDayLoading: Boolean = false,
+    val dayError: String? = null,
+    /** The hour opened in that day, by its start (epoch millis). */
+    val hourStart: Long? = null,
+    val hourDetail: SpawnHourResponse? = null,
+    val isHourLoading: Boolean = false,
+    val hourError: String? = null
 )
 
 @Immutable
@@ -88,6 +101,8 @@ class SpawnInsightsViewModel(application: Application) : AndroidViewModel(applic
     private var loadJob: Job? = null
     private var spawnJob: Job? = null
     private var searchJob: Job? = null
+    private var dayJob: Job? = null
+    private var hourJob: Job? = null
 
     init {
         val window = catalog.cached()?.observationWindow
@@ -176,6 +191,10 @@ class SpawnInsightsViewModel(application: Application) : AndroidViewModel(applic
             runCatching { repository.fetchSpawnActivity(days = spawns.range.days, area = spawns.area) }
                 .onSuccess { activity ->
                     _uiState.update { it.copy(spawns = it.spawns.copy(isLoading = false, activity = activity)) }
+                    // Keep the day someone was looking at while it is in range; otherwise open today.
+                    val days = activity.days.days
+                    val current = _uiState.value.spawns.detailDay
+                    days.lastOrNull()?.let { today -> openDay(if (current != null && current in days) current else today, keepHour = true) }
                 }
                 .onFailure { throwable ->
                     if (throwable is CancellationException) throw throwable
@@ -187,6 +206,58 @@ class SpawnInsightsViewModel(application: Application) : AndroidViewModel(applic
                                 errorMessage = throwable.localizedMessage ?: "Couldn't load spawn activity"
                             )
                         )
+                    }
+                }
+        }
+    }
+
+    /** Opens one day under the chart: its hours and alerts, then the hour kept or the day's default one. */
+    fun openDay(day: String, keepHour: Boolean = false) {
+        val before = _uiState.value.spawns
+        val area = before.area
+        val sameDay = before.detailDay == day
+        dayJob?.cancel()
+        hourJob?.cancel()
+        _uiState.update {
+            it.copy(spawns = it.spawns.copy(detailDay = day, isDayLoading = true, dayError = null,
+                dayDetail = if (sameDay) it.spawns.dayDetail else null,
+                hourStart = if (sameDay && keepHour) it.spawns.hourStart else null,
+                hourDetail = if (sameDay && keepHour) it.spawns.hourDetail else null))
+        }
+        dayJob = viewModelScope.launch {
+            runCatching { repository.fetchSpawnDay(day = day, area = area) }
+                .onSuccess { detail ->
+                    val isToday = _uiState.value.spawns.activity?.days?.days?.lastOrNull() == day
+                    val kept = _uiState.value.spawns.hourStart?.takeIf { start -> detail.spawns.hours.any { it.start == start } }
+                    _uiState.update { it.copy(spawns = it.spawns.copy(isDayLoading = false, dayDetail = detail)) }
+                    (kept ?: defaultHour(detail.spawns, isToday))?.let { openHour(it, force = true) }
+                }
+                .onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    Log.e(TAG, "Spawn day load failed", throwable)
+                    _uiState.update {
+                        it.copy(spawns = it.spawns.copy(isDayLoading = false, dayError = throwable.localizedMessage ?: "Couldn't load this day"))
+                    }
+                }
+        }
+    }
+
+    /** Opens one hour of the open day: its species and where its spawnpoints are. */
+    fun openHour(start: Long, force: Boolean = false) {
+        if (!force && _uiState.value.spawns.hourStart == start) return
+        val area = _uiState.value.spawns.area
+        hourJob?.cancel()
+        _uiState.update { it.copy(spawns = it.spawns.copy(hourStart = start, isHourLoading = true, hourError = null)) }
+        hourJob = viewModelScope.launch {
+            runCatching { repository.fetchSpawnHour(start = start, area = area) }
+                .onSuccess { hour ->
+                    _uiState.update { it.copy(spawns = it.spawns.copy(isHourLoading = false, hourDetail = hour)) }
+                }
+                .onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    Log.e(TAG, "Spawn hour load failed", throwable)
+                    _uiState.update {
+                        it.copy(spawns = it.spawns.copy(isHourLoading = false, hourError = throwable.localizedMessage ?: "Couldn't load this hour"))
                     }
                 }
         }

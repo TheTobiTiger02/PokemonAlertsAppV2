@@ -321,6 +321,12 @@ class HuntRouteMatrixCacheTest {
         override suspend fun getSpawnSpecies(days: Int, area: String?, q: String?, day: String?) =
             com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse()
 
+        override suspend fun getSpawnDay(day: String, area: String?) = com.example.pokemonalertsv2.data.insights.SpawnDayResponse(day = day)
+
+        override suspend fun getSpawnHour(start: Long, area: String?) = com.example.pokemonalertsv2.data.insights.SpawnHourResponse(start = start)
+
+        override suspend fun getAlertHours(day: String) = com.example.pokemonalertsv2.data.insights.AlertHoursResponse(day = day)
+
         override suspend fun getTotalStats(date: String?): TotalStatsResponse = TotalStatsResponse()
 
         override suspend fun getWalkingRoutes(request: WalkingRouteRequest): WalkingRoutesResponse =

@@ -11,7 +11,10 @@ import com.example.pokemonalertsv2.data.database.toHistoryEntity
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.data.insights.InsightsHistory
 import com.example.pokemonalertsv2.data.insights.SpawnActivity
+import com.example.pokemonalertsv2.data.insights.SpawnDayDetail
+import com.example.pokemonalertsv2.data.insights.SpawnHourResponse
 import com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -236,6 +239,17 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
     /** Species for one day and/or matching a search; either may be null, not both. */
     suspend fun searchSpawnSpecies(days: Int, area: String?, query: String?, day: String?): SpawnSpeciesResponse =
         service.getSpawnSpecies(days = days, area = area, q = query, day = day)
+
+    /** A day opened on the Spawns tab: its hours and its alerts in parallel. Alerts failing leaves the hours. */
+    suspend fun fetchSpawnDay(day: String, area: String?): SpawnDayDetail = coroutineScope {
+        val spawns = async { service.getSpawnDay(day = day, area = area) }
+        val alerts = async {
+            try { service.getAlertHours(day) } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        }
+        SpawnDayDetail(spawns = spawns.await(), alerts = alerts.await())
+    }
+
+    suspend fun fetchSpawnHour(start: Long, area: String?): SpawnHourResponse = service.getSpawnHour(start = start, area = area)
 
     suspend fun fetchInsightsHistory(
         startDate: String,

@@ -298,6 +298,24 @@ interface PokemonAlertsService {
         @Query("day") day: String? = null
     ): com.example.pokemonalertsv2.data.insights.SpawnSpeciesResponse
 
+    /** One of the last 30 Berlin days hour by hour; a finished day is cached on the server for half an hour. */
+    @GET("api/spawnpoints/day")
+    suspend fun getSpawnDay(
+        @Query("day") day: String,
+        @Query("area") area: String? = null
+    ): com.example.pokemonalertsv2.data.insights.SpawnDayResponse
+
+    /** One hour, by the `start` the day lists: its spawnpoints and named species. */
+    @GET("api/spawnpoints/hour")
+    suspend fun getSpawnHour(
+        @Query("start") start: Long,
+        @Query("area") area: String? = null
+    ): com.example.pokemonalertsv2.data.insights.SpawnHourResponse
+
+    /** Alerts received per Berlin hour and type on one of the last 30 days; counts only. */
+    @GET("api/alerts/hourly")
+    suspend fun getAlertHours(@Query("day") day: String): com.example.pokemonalertsv2.data.insights.AlertHoursResponse
+
     @POST("api/routes/walking")
     suspend fun getWalkingRoutes(
         @Body request: WalkingRouteRequest
