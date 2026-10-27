@@ -201,7 +201,9 @@ fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchW
     val availabilityReadout: String get() = "${remaining.size} remaining"
     /** Where the trainer is walking to next: the earliest stop along the route not yet passed. */
     val nextStop: CatchPoint? get() = remaining.filter { it.meters >= progressMeters - itinerary.settings.radius }.minByOrNull { it.meters }?.opportunity?.point
-    fun nextStopAt(now: Long): CatchPoint? = ahead(now).minByOrNull { it.meters }?.opportunity?.point
+    /** The next catch along the route that is still possible at [now]: what guidance walks to. */
+    fun nextAt(now: Long): CatchEncounter? = ahead(now).minByOrNull { it.meters }
+    fun nextStopAt(now: Long): CatchPoint? = nextAt(now)?.opportunity?.point
     /** Guidance time with paused stretches left out, up to [now]. */
     fun activeMillis(now: Long): Long {
         if (startedAtMillis <= 0) return 0

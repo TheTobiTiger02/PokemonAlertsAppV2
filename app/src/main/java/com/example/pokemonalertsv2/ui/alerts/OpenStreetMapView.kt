@@ -411,31 +411,12 @@ internal class OpenStreetMapController {
             )
         )
         // The hunt's walk, above the circles so it reads as a route and below the trainer and the pins,
-        // which must never be hidden by it.
-        style.addLayer(
-            LineLayer(HUNT_PATH_CASING_LAYER, HUNT_PATH_SOURCE).withProperties(
-                lineColor(AndroidColor.WHITE),
-                lineWidth(7f),
-                lineOpacity(0.7f),
-                lineCap(Property.LINE_CAP_ROUND),
-                lineJoin(Property.LINE_JOIN_ROUND)
-            )
-        )
-        style.addLayer(
-            LineLayer(HUNT_PATH_LAYER, HUNT_PATH_SOURCE).withProperties(
-                lineColor(AndroidColor.parseColor("#1E63F0")),
-                lineWidth(4.5f),
-                lineCap(Property.LINE_CAP_ROUND),
-                lineJoin(Property.LINE_JOIN_ROUND)
-            )
-        )
-        style.addLayer(
-            LineLayer(HUNT_PATH_NEXT_LAYER, HUNT_PATH_NEXT_SOURCE).withProperties(
-                lineColor(AndroidColor.parseColor("#E8710A")),
-                lineWidth(5.5f),
-                lineCap(Property.LINE_CAP_ROUND),
-                lineJoin(Property.LINE_JOIN_ROUND)
-            )
+        // which must never be hidden by it. Same look as a catch route: the leg to the next target bold
+        // with chevrons, later legs faded.
+        style.addRouteLineLayers(
+            HUNT_PATH_LAYER_PREFIX,
+            RouteLineSources(next = HUNT_PATH_NEXT_SOURCE, later = HUNT_PATH_SOURCE),
+            context
         )
         style.addLayer(
             FillLayer(USER_ACCURACY_LAYER, USER_ACCURACY_SOURCE).withProperties(
@@ -579,7 +560,19 @@ internal class OpenStreetMapController {
                 val bounds = LatLngBounds.Builder()
                     .includes(coordinates.map { LatLng(it.latitude, it.longitude) })
                     .build()
-                currentMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx), 750)
+                // Bounds framing replaces the map's own padding, so the chrome insets are added
+                // here; otherwise the fit lands under the top bar and the chip rail.
+                val insets = pendingContentInsets
+                currentMap.animateCamera(
+                    CameraUpdateFactory.newLatLngBounds(
+                        bounds,
+                        insets.left + paddingPx,
+                        insets.top + paddingPx,
+                        insets.right + paddingPx,
+                        insets.bottom + paddingPx
+                    ),
+                    750
+                )
             }
         }
     }
@@ -887,10 +880,8 @@ internal class OpenStreetMapController {
         const val WEATHER_GLYPH_LAYER = "weather-glyph-layer"
         const val WEATHER_AREA_PROPERTY = "area"
         const val HUNT_PATH_SOURCE = "hunt-path-source"
-        const val HUNT_PATH_CASING_LAYER = "hunt-path-casing-layer"
-        const val HUNT_PATH_LAYER = "hunt-path-layer"
+        const val HUNT_PATH_LAYER_PREFIX = "hunt-path"
         const val HUNT_PATH_NEXT_SOURCE = "hunt-path-next-source"
-        const val HUNT_PATH_NEXT_LAYER = "hunt-path-next-layer"
         const val SPAWNPOINT_SOURCE = "spawnpoint-source"
         const val SPAWNPOINT_LAYER = "spawnpoint-layer"
         const val SPAWNPOINT_ID_PROPERTY = "spawnpointId"

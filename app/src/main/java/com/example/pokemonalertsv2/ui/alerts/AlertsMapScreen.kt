@@ -1705,6 +1705,17 @@ internal fun AlertsMapScreenContent(
         val pose = userPose ?: return@LaunchedEffect
         if (!cameraFollowEnabled || !currentMapLoaded) return@LaunchedEffect
         val location = pose.location
+        // During a hunt, following keeps you and the target in view together, like a catch
+        // route's Follow; the fit/route toggle keeps its own state.
+        val huntTarget = if (huntSession != null && !compactPictureInPicture) {
+            arrivalTracking.activeDestination?.alert ?: huntTargetAlerts.firstOrNull()
+        } else null
+        if (huntTarget != null) {
+            val previousFocus = huntFocus
+            focusBrowsedAlert(huntTarget, location)
+            huntFocus = previousFocus
+            return@LaunchedEffect
+        }
         val currentZoom = if (compactPictureInPicture) {
             pipZoom
         } else if (mapSource == MapDisplaySource.GOOGLE) {
@@ -2010,24 +2021,21 @@ internal fun AlertsMapScreenContent(
                     )
                 }
                 (huntPath as? HuntPath.Resolved)?.let { path ->
-                    // Same look as the OpenStreetMap layers: white casing, blue walk, the next leg in orange.
+                    // Same look as the OpenStreetMap layers (RouteLineStyle): later legs faded, the next
+                    // leg bold with a white casing. Google gets no chevrons.
                     val rest = path.rest.map { LatLng(it.latitude, it.longitude) }
                     val next = path.next.map { LatLng(it.latitude, it.longitude) }
-                    listOf(rest, next).forEach { line ->
-                        if (line.size >= 2) Polyline(
-                            points = line, color = Color.White.copy(alpha = 0.7f),
-                            width = 7f * density.density, startCap = RoundCap(), endCap = RoundCap(),
-                            jointType = JointType.ROUND, zIndex = 300f
+                    val routeColor = Color(RouteLineStyle.COLOR)
+                    @Composable fun line(points: List<LatLng>, color: Color, width: Float, z: Float) {
+                        if (points.size >= 2) Polyline(
+                            points = points, color = color, width = width * density.density,
+                            startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = z
                         )
                     }
-                    if (rest.size >= 2) Polyline(
-                        points = rest, color = Color(0xFF1E63F0), width = 4.5f * density.density,
-                        startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = 301f
-                    )
-                    if (next.size >= 2) Polyline(
-                        points = next, color = Color(0xFFE8710A), width = 5.5f * density.density,
-                        startCap = RoundCap(), endCap = RoundCap(), jointType = JointType.ROUND, zIndex = 302f
-                    )
+                    line(rest, Color.White.copy(alpha = RouteLineStyle.LATER_CASING_OPACITY), RouteLineStyle.LATER_CASING_WIDTH, 300f)
+                    line(rest, routeColor.copy(alpha = RouteLineStyle.LATER_OPACITY), RouteLineStyle.LATER_WIDTH, 301f)
+                    line(next, Color.White, RouteLineStyle.NEXT_CASING_WIDTH, 302f)
+                    line(next, routeColor, RouteLineStyle.NEXT_WIDTH, 303f)
                 }
                 if (cameraAnchor.zoom >= WEATHER_CELL_MIN_ZOOM) {
                     weatherCells.forEach { cell ->

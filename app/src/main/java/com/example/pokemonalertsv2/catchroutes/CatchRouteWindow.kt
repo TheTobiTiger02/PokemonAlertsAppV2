@@ -140,7 +140,7 @@ internal class CatchRouteWindow(context: Context) {
     fun update(session: CatchSession, location: CatchPoint?, outOfDate: Boolean = false, replanning: Boolean = false) {
         if (root == null) return
         val now = System.currentTimeMillis()
-        map?.update(session.itinerary.settings, session.itinerary, posePoint ?: location, session.progressMeters, session.nextStopAt(now))
+        map?.update(session.itinerary.settings, session.itinerary, posePoint ?: location, session.progressMeters, session.nextAt(now))
         // Only what is still ahead: visited windows, ones walked past and despawned ones drop off the map.
         map?.setSpawns(session.ahead(now).map { it.opportunity to (now >= it.opportunity.availableFrom) })
         map?.setNextStop(catchNextStopIndex(session, now))

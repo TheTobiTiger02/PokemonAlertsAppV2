@@ -11,6 +11,9 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
+import com.example.pokemonalertsv2.ui.alerts.RouteLineSources
+import com.example.pokemonalertsv2.ui.alerts.RouteLineStyle
+import com.example.pokemonalertsv2.ui.alerts.addRouteLineLayers
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapStyleJson
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -29,10 +32,10 @@ import kotlin.math.*
 /**
  * Shared route renderer for the planner, Android PiP, the floating map and the area picker.
  *
- * Deliberately quiet: one line coloured from start (blue) to finish (violet) with the walked part
- * greyed out, a few direction chevrons spaced on screen, numbered stops only where Pokémon are caught
- * (the next one highlighted), small spawn dots, and start/finish pins. Range circles appear only for
- * the spawnpoints whose details are open.
+ * Deliberately quiet, in the same style as a hunt's route: the leg to the next stop bold with
+ * chevrons, the rest faded, the walked part grey; numbered stops only where Pokémon are caught (the
+ * next one highlighted), small spawn dots, and start/finish pins. Range circles appear only for the
+ * spawnpoints whose details are open.
  */
 class CatchRouteMapView(context: Context) : FrameLayout(context) {
     private var map: MapLibreMap? = null
@@ -53,8 +56,10 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     private var nextStopIndex: Int? = null
     private var progressMeters: Double? = null
     private var fitted: CatchItinerary? = null
-    /** The stop the trainer is walking to; what Follow frames alongside them. */
+    /** The catch the trainer is walking to; what Follow frames alongside them. */
     private var focus: CatchPoint? = null
+    /** Where along the route that catch is; the bold "next" leg ends there. */
+    private var focusMeters: Double? = null
     /**
      * Follow keeps the trainer and the next stop in view as they walk; otherwise the camera shows
      * the whole route and stays where it is put. Panning or pinching by hand pauses Follow until
@@ -73,7 +78,11 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     var onReady: (() -> Unit)? = null
     var onFailure: (() -> Unit)? = null
     private var started = false
-    private var drawing = CatchRouteDrawing(emptyList(), emptyList(), emptyList(), emptyList())
+    private var drawing = CatchRouteDrawing(emptyList(), emptyList())
+    /** Screen space the host covers with its own controls, kept clear when framing; see [setInsets]. */
+    private var insets = IntArray(4)
+    /** The camera shows the whole route and nobody has moved it since, so it is refitted when [insets] change. */
+    private var overviewShown = false
     /** An area being drawn in the picker; replaces the route's own area while set. */
     private var editingArea: List<CatchPoint>? = null
     /**
@@ -130,7 +139,8 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                 occupied += box
             }
 
-            // Numbered stops: the next one is larger and orange; walked ones fade; overlaps are skipped.
+            // Numbered stops: the next one is larger and filled in the route's blue; others are white with a
+            // blue number; walked ones shrink to grey; overlaps are skipped.
             // The stop the guidance line names, when a walk says which; otherwise the first not yet passed.
             val named = nextStopIndex?.let { drawing.stops.getOrNull(it) }
             val next = named ?: drawing.stops.firstOrNull { it.meters > walked + 1 }
@@ -139,36 +149,23 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                 if (!visible(p.x, p.y, 20 * density)) continue
                 val isNext = stop === next && progressMeters != null
                 val done = if (named != null) drawing.stops.indexOf(stop) < nextStopIndex!! else stop.meters <= walked
-                val r = (if (isNext) 13f else 10f) * density
+                val r = (if (isNext) 14f else if (done) 8f else 10f) * density
                 val box = RectF(p.x - r, p.y - r, p.x + r, p.y + r)
                 if (!isNext && occupied.any { RectF.intersects(it, box) }) continue
                 occupied += box
                 paint.style = Paint.Style.FILL
+                if (isNext) { paint.color = 0x33000000; canvas.drawCircle(p.x, p.y + 1 * density, r, paint) }
                 paint.color = 0xFFFFFFFF.toInt(); canvas.drawCircle(p.x, p.y, r, paint)
-                paint.color = when { isNext -> 0xFFE8710A.toInt(); done -> 0xFF9AA3B2.toInt(); else -> 0xFF1E4FD8.toInt() }
-                canvas.drawCircle(p.x, p.y, r - 2 * density, paint)
-                paint.color = 0xFFFFFFFF.toInt(); paint.textSize = (if (isNext) 12f else 10f) * density
+                paint.color = if (done) RouteLineStyle.WALKED_COLOR else RouteLineStyle.COLOR
+                if (isNext || done) canvas.drawCircle(p.x, p.y, r - 2.5f * density, paint)
+                else {
+                    paint.style = Paint.Style.STROKE; paint.strokeWidth = 2 * density
+                    canvas.drawCircle(p.x, p.y, r - 1 * density, paint); paint.style = Paint.Style.FILL
+                }
+                paint.color = if (isNext || done) 0xFFFFFFFF.toInt() else RouteLineStyle.COLOR
+                paint.textSize = (if (isNext) 13f else if (done) 8f else 10f) * density
                 canvas.drawText(stop.label, p.x, p.y - (paint.ascent() + paint.descent()) / 2, paint)
             }
-
-            // Chevrons: at most one per ~90 dp of line on screen, never on top of a marker, not on the walked part.
-            var last: android.graphics.PointF? = null
-            paint.style = Paint.Style.FILL
-            for (arrow in drawing.arrows) {
-                if (arrow.meters <= walked) continue
-                val p = screen(arrow.point)
-                if (!visible(p.x, p.y)) { last = null; continue }
-                if (last != null && hypot(p.x - last.x, p.y - last.y) < 90 * density) continue
-                val box = RectF(p.x - 6 * density, p.y - 6 * density, p.x + 6 * density, p.y + 6 * density)
-                if (occupied.any { RectF.intersects(it, box) }) continue
-                last = p
-                canvas.save(); canvas.translate(p.x, p.y); canvas.rotate((arrow.bearing - m.cameraPosition.bearing).toFloat())
-                val shape = Path().apply { moveTo(-4 * density, 2.5f * density); lineTo(0f, -2.5f * density); lineTo(4 * density, 2.5f * density) }
-                paint.style = Paint.Style.STROKE; paint.strokeCap = Paint.Cap.ROUND; paint.strokeJoin = Paint.Join.ROUND
-                paint.strokeWidth = 2.2f * density; paint.color = 0xFFFFFFFF.toInt(); canvas.drawPath(shape, paint)
-                canvas.restore()
-            }
-            paint.style = Paint.Style.FILL
 
             // Area editing: a handle on every edge to pull a new corner out of, then the corners on top.
             editingArea?.let { corners ->
@@ -233,6 +230,7 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                     map = m
                     m.addOnCameraMoveListener { overlay.invalidate() }
                     m.addOnCameraMoveStartedListener { reason ->
+                        if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) overviewShown = false
                         if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE && following) {
                             following = false
                             onFollowChanged?.invoke(false)
@@ -254,11 +252,8 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
                         style.addSource(GeoJsonSource("catch-circles"))
                         style.addLayer(FillLayer("catch-range", "catch-circles").withProperties(fillColor("#1E63F0"), fillOpacity(0.10f)))
                         style.addLayer(LineLayer("catch-range-line", "catch-circles").withProperties(lineColor("#1E63F0"), lineWidth(1.5f), lineOpacity(0.6f)))
-                        style.addSource(GeoJsonSource("catch-path"))
-                        style.addLayer(LineLayer("catch-path-casing", "catch-path").withProperties(lineColor("#FFFFFF"), lineWidth(9f),
-                            lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
-                        style.addLayer(LineLayer("catch-path-line", "catch-path").withProperties(lineColor(Expression.get("color")), lineWidth(5f),
-                            lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+                        listOf("catch-walked", "catch-later", "catch-next").forEach { style.addSource(GeoJsonSource(it)) }
+                        style.addRouteLineLayers("catch-route", RouteLineSources(next = "catch-next", later = "catch-later", walked = "catch-walked"), context)
                         // What was actually walked, for a finished route's summary: over the plan, under the markers.
                         style.addSource(GeoJsonSource("catch-track"))
                         style.addLayer(LineLayer("catch-track-line", "catch-track").withProperties(lineColor("#00897B"), lineWidth(4f),
@@ -291,13 +286,15 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     fun destroy() { if (started) { view?.onPause(); view?.onStop(); started = false }; view?.onDestroy(); view = null; map = null }
 
     /**
-     * [progressMeters] is how far along the route a guided session has walked, and [nextStop] where
+     * [progressMeters] is how far along the route a guided session has walked, and [next] the catch
      * it is walking to; both null for a preview.
      */
     fun update(settings: CatchRouteSettings, itinerary: CatchItinerary?, location: CatchPoint?, progressMeters: Double? = null,
-        nextStop: CatchPoint? = null) {
+        next: CatchEncounter? = null) {
+        val nextStop = next?.opportunity?.point
         if (this.settings == settings && this.itinerary === itinerary && user == location && this.progressMeters == progressMeters &&
-            focus == nextStop) return
+            focus == nextStop && focusMeters == next?.meters) return
+        focusMeters = next?.meters
         val movedStart = this.settings.start != settings.start
         val routeChanged = this.itinerary !== itinerary || this.settings.area != settings.area
         this.settings = settings; this.itinerary = itinerary; user = location; this.progressMeters = progressMeters; focus = nextStop
@@ -427,6 +424,24 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
         map?.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(point.latitude, point.longitude), zoom))
     }
 
+    /**
+     * Keeps framing clear of controls the host draws over the map, such as a floating top bar and
+     * a bottom sheet, in pixels. Fit and Follow then centre in the part of the map you can see.
+     */
+    fun setInsets(left: Int, top: Int, right: Int, bottom: Int) {
+        val next = intArrayOf(left, top, right, bottom)
+        if (next.contentEquals(insets)) return
+        insets = next
+        if (following) frameWalk(force = true) else if (overviewShown) fit()
+    }
+
+    /** [insets] plus [extra] pixels on every side. MapLibre's bounds framing replaces the map's own padding, so it is always passed explicitly. */
+    private fun padded(extra: Int) = IntArray(4) { insets[it] + extra }
+
+    /** A camera at [target] and [zoom], centred in the part of the map the host's controls leave visible. */
+    private fun centredIn(target: LatLng, zoom: Double) = CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(target).zoom(zoom)
+        .padding(insets[0].toDouble(), insets[1].toDouble(), insets[2].toDouble(), insets[3].toDouble()).build())
+
     /** Starts following the trainer and the next stop, and frames them now. */
     fun follow() {
         val changed = !following
@@ -444,10 +459,10 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     }
 
     /**
-     * Keeps the trainer in the middle at street level, like a navigation app. When the next stop is
-     * close it is framed too, but never by zooming out past [CATCH_FOLLOW_MIN_ZOOM]: a stop far away
-     * is what the Route view is for. Moves of under two metres are ignored so GPS jitter does not
-     * keep the camera twitching.
+     * Keeps the trainer and the next stop in view together, between [CATCH_FOLLOW_MIN_ZOOM] and
+     * [CATCH_FOLLOW_ZOOM]. A stop too far for that keeps the trainer in the middle instead. Moves of
+     * under two metres are ignored, and so are zoom changes too small to see, so GPS jitter does not
+     * keep the camera breathing.
      */
     private fun frameWalk(force: Boolean) {
         val m = map ?: return
@@ -457,15 +472,20 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
         framedUser = here; framedFocus = target
         val update = when {
             here == null && target == null -> { fit(); return }
-            here == null -> CameraUpdateFactory.newLatLngZoom(LatLng(target!!.latitude, target.longitude), CATCH_FOLLOW_ZOOM)
-            target != null && catchDistance(here, target) in 25.0..CATCH_FOLLOW_FRAME_METERS -> {
+            here == null -> centredIn(LatLng(target!!.latitude, target.longitude), CATCH_FOLLOW_ZOOM)
+            target != null && catchDistance(here, target) >= 25.0 -> {
+                // Both the trainer and the next stop stay in view, however far apart they are.
                 val bounds = LatLngBounds.Builder().include(LatLng(here.latitude, here.longitude)).include(LatLng(target.latitude, target.longitude)).build()
-                val fitted = m.getCameraForLatLngBounds(bounds, intArrayOf((48 * density).toInt(), (48 * density).toInt(), (48 * density).toInt(), (48 * density).toInt()))
-                val zoom = (fitted?.zoom ?: CATCH_FOLLOW_ZOOM).coerceIn(CATCH_FOLLOW_MIN_ZOOM, CATCH_FOLLOW_ZOOM)
-                // Centred on the trainer, not the middle of the two: following means you stay put on screen.
-                CameraUpdateFactory.newLatLngZoom(LatLng(here.latitude, here.longitude), zoom)
+                val fitted = m.getCameraForLatLngBounds(bounds, padded((48 * density).toInt()))
+                val wanted = fitted?.zoom ?: CATCH_FOLLOW_ZOOM
+                val current = m.cameraPosition.zoom
+                val zoom = (if (!force && abs(wanted - current) < CATCH_FOLLOW_ZOOM_STEP) current else wanted).coerceIn(CATCH_FOLLOW_MIN_ZOOM, CATCH_FOLLOW_ZOOM)
+                // Too far to frame both: stay on the trainer rather than lose them.
+                val centre = if (wanted < CATCH_FOLLOW_MIN_ZOOM) LatLng(here.latitude, here.longitude)
+                    else LatLng((here.latitude + target.latitude) / 2, (here.longitude + target.longitude) / 2)
+                centredIn(centre, zoom)
             }
-            else -> CameraUpdateFactory.newLatLngZoom(LatLng(here.latitude, here.longitude), CATCH_FOLLOW_ZOOM)
+            else -> centredIn(LatLng(here.latitude, here.longitude), CATCH_FOLLOW_ZOOM)
         }
         m.easeCamera(update, if (force) 600 else 400)
     }
@@ -473,8 +493,10 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     fun fit() {
         val coords = (itinerary?.path?.map { it.point } ?: listOfNotNull(settings.start, settings.destination) + settings.area)
             .map { LatLng(it.latitude, it.longitude) }
-        if (coords.distinct().size > 1) map?.animateCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(coords).build(), (44 * density).toInt()))
-        else coords.firstOrNull()?.let { map?.animateCamera(CameraUpdateFactory.newLatLngZoom(it, 16.0)) }
+        overviewShown = true
+        val pad = padded((44 * density).toInt())
+        if (coords.distinct().size > 1) map?.animateCamera(CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(coords).build(), pad[0], pad[1], pad[2], pad[3]))
+        else coords.firstOrNull()?.let { map?.animateCamera(centredIn(it, 16.0)) }
     }
     private fun point(p: CatchPoint) = Point.fromLngLat(p.longitude, p.latitude)
 
@@ -543,17 +565,19 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
             }))
     }
 
-    /** Line colours depend on how far a session has walked, so they are redrawn as it moves. */
+    /** The line is cut at how far a session has walked and at the next stop, so it is redrawn as it moves. */
     private fun renderProgress() {
         val style = map?.style ?: return
-        val total = itinerary?.distanceMeters?.takeIf { it > 0 } ?: 1.0
-        val walked = progressMeters ?: -1.0
-        style.getSourceAs<GeoJsonSource>("catch-path")?.setGeoJson(FeatureCollection.fromFeatures(drawing.segments.map { s ->
-            Feature.fromGeometry(LineString.fromLngLats(listOf(point(s.from), point(s.to)))).also {
-                val color = if (s.endMeters <= walked) 0xFFB4BBC6.toInt() else catchRouteColor(s.startMeters / total)
-                it.addStringProperty("color", String.format("#%06X", color and 0xFFFFFF))
-            }
-        }))
+        val path = itinerary?.path.orEmpty()
+        val walked = progressMeters
+        val slices = catchRouteSlices(path, walked, focusMeters)
+        // A preview's chevrons would point both ways along out-and-back streets; the numbered stops give its order.
+        fun set(source: String, points: List<CatchPoint>) = style.getSourceAs<GeoJsonSource>(source)?.setGeoJson(FeatureCollection.fromFeatures(
+            if (points.size >= 2) listOf(Feature.fromGeometry(LineString.fromLngLats(points.map(::point))).also { it.addBooleanProperty("arrows", walked != null) })
+            else emptyList()))
+        set("catch-walked", slices.walked)
+        set("catch-later", slices.later)
+        set("catch-next", slices.next)
         overlay.invalidate()
     }
 
@@ -575,7 +599,7 @@ internal const val CATCH_USER_COLOR = 0xFF00897B.toInt()
 /** Street level: a block or two around the trainer in the floating window. */
 internal const val CATCH_FOLLOW_ZOOM = 17.5
 /** Follow never zooms out further than this to bring the next stop in. */
-internal const val CATCH_FOLLOW_MIN_ZOOM = 16.5
-/** Next stops closer than this are framed with the trainer while following. */
-internal const val CATCH_FOLLOW_FRAME_METERS = 150.0
+internal const val CATCH_FOLLOW_MIN_ZOOM = 14.5
+/** Zoom changes smaller than this are ignored while following. */
+internal const val CATCH_FOLLOW_ZOOM_STEP = 0.3
 internal const val CATCH_FOLLOW_STEP_METERS = 2.0

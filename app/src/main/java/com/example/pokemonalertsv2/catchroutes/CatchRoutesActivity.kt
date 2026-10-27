@@ -17,24 +17,27 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
-import com.example.pokemonalertsv2.hunt.BatterySaverSwitch
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapFitButton
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapLocateButton
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapLocateState
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapPillBar
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapPillTitle
+import com.example.pokemonalertsv2.ui.alerts.mapchrome.TopBarHeight
+import com.example.pokemonalertsv2.ui.theme.Spacing
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalDensity
 import kotlinx.coroutines.flow.first
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.google.android.gms.location.LocationServices
@@ -145,9 +148,7 @@ class CatchRoutesActivity : ComponentActivity() {
         val refreshing by model.controller.recalculating.collectAsStateWithLifecycle()
         val outOfDate by model.controller.outOfDate.collectAsStateWithLifecycle()
         val saved by model.store.setups.collectAsStateWithLifecycle(emptyList())
-        var advanced by remember { mutableStateOf(false) }
         var picking by remember { mutableStateOf("start") }
-        var showSaved by remember { mutableStateOf(false) }
         var editing by remember { mutableStateOf(false) }
         var areaOpen by remember { mutableStateOf(false) }
         var goRoutesOpen by remember { mutableStateOf(false) }
@@ -163,55 +164,11 @@ class CatchRoutesActivity : ComponentActivity() {
         val encounters = active?.remaining ?: plan?.encounters.orEmpty()
         // Same grouping and order as the numbered stops on the map.
         val stops = remember(plan) { catchStops(plan?.encounters.orEmpty()) }
-        val formState = rememberLazyListState()
-        LaunchedEffect(model.itinerary) { if (model.itinerary != null) { editing = false; formState.scrollToItem(0) } }
+        LaunchedEffect(model.itinerary) { if (model.itinerary != null) editing = false }
         // While walking a route the map follows the walk; planning shows the whole route.
         val walking = active != null && active?.finished != true
         LaunchedEffect(mapView, walking) { if (walking) mapView?.follow() }
         val showSettings = active == null && (plan == null || editing)
-        val topBar: @Composable () -> Unit = {
-            Column {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { finish() }) {
-                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                    Text("Catch routes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
-                        modifier = Modifier.testTag("catch_route_history")) { Text("History") }
-                }
-            }
-        }
-        val routeMap: PlannerMap = { mapModifier, hintAtTop ->
-            Box(mapModifier) {
-                AndroidView(factory = { ctx -> CatchRouteMapView(ctx).also { mapView = it; it.onFailure = { mapFailed = true } } },
-                    modifier = Modifier.fillMaxSize().testTag("catch_route_map"),
-                    update = { view ->
-                        // A route walked as drawn fixes its start; only its finish-free walk is left to tap.
-                        view.onPick = if (active == null && showSettings && !settings.fixed) { p -> if (picking == "end") model.edit(model.settings.copy(end = p)) else model.startPoint(p) } else null
-                        // A tap on a spawnpoint opens its details; up to five when they overlap.
-                        view.onSpawnpointTap = { ids ->
-                            val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
-                            details = ids.mapNotNull { byId[it] }.take(5).ifEmpty { null }
-                        }
-                        view.update(settings, plan, location, active?.progressMeters, active?.nextStopAt(now))
-                        // Walking: only what is still ahead. Planning: every planned spawnpoint.
-                        view.setSpawns(active?.takeIf { walking }?.ahead(now)?.map { it.opportunity to (now >= it.opportunity.availableFrom) })
-                        view.setNextStop(active?.takeIf { walking }?.let { catchNextStopIndex(it, now) })
-                        view.select(details?.map { it.pointId }?.toSet().orEmpty())
-                    }, onRelease = { it.destroy() })
-                if (plan != null) Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Follow frames you and the next stop as you walk; Fit shows the whole route.
-                    if (active != null) FilledTonalButton(onClick = { mapView?.follow() },
-                        contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Follow") }
-                    FilledTonalButton(onClick = { mapView?.overview() },
-                        contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Fit") }
-                }
-                if (mapFailed) Surface(Modifier.align(Alignment.Center)) { Text("Map unavailable. Check connection.", Modifier.padding(12.dp)) }
-                if (showSettings && !settings.fixed) Surface(Modifier.align(if (hintAtTop) Alignment.TopStart else Alignment.BottomCenter).padding(8.dp), tonalElevation = 4.dp, shape = MaterialTheme.shapes.small) {
-                    Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start", Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
         val startGuidance: () -> Unit = {
             if (!fineLocation() || (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this@CatchRoutesActivity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)) { pendingFollow = true; permissions.launch(permissionNames()) }
             else model.follow()
@@ -231,8 +188,76 @@ class CatchRoutesActivity : ComponentActivity() {
             showStop = { details = spawnpointSelections(it) },
             deleteSetup = { deleteSetup = it },
         )
-        SheetPlanner(model, plannerState, actions, showSettings,
-            topBar = { Surface { Column(Modifier.statusBarsPadding()) { topBar() } } }, map = routeMap)
+        // Follow's state, so the button shows when a pan has paused it.
+        var following by remember { mutableStateOf(false) }
+        val density = LocalDensity.current
+        val statusBar = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+        val routeMap: PlannerMap = { mapModifier, frame ->
+            Box(mapModifier) {
+                AndroidView(factory = { ctx -> CatchRouteMapView(ctx).also { view ->
+                        mapView = view; view.onFailure = { mapFailed = true }; view.onFollowChanged = { following = it }
+                    } },
+                    modifier = Modifier.fillMaxSize().testTag("catch_route_map"),
+                    update = { view ->
+                        // Framing stays clear of the floating top bar and the collapsed sheet.
+                        with(density) { view.setInsets(0, (statusBar + Spacing.xs + TopBarHeight + Spacing.sm).roundToPx(), 0, frame.bottomInset.roundToPx()) }
+                        // A route walked as drawn fixes its start; only its finish-free walk is left to tap.
+                        view.onPick = if (active == null && showSettings && !settings.fixed) { p -> if (picking == "end") model.edit(model.settings.copy(end = p)) else model.startPoint(p) } else null
+                        // A tap on a spawnpoint opens its details; up to five when they overlap.
+                        view.onSpawnpointTap = { ids ->
+                            val byId = spawnpointSelections(plan?.encounters.orEmpty()).associateBy { it.pointId }
+                            details = ids.mapNotNull { byId[it] }.take(5).ifEmpty { null }
+                        }
+                        view.update(settings, plan, location, active?.progressMeters, active?.takeIf { walking }?.nextAt(now))
+                        // Walking: only what is still ahead. Planning: every planned spawnpoint.
+                        view.setSpawns(active?.takeIf { walking }?.ahead(now)?.map { it.opportunity to (now >= it.opportunity.availableFrom) })
+                        view.setNextStop(active?.takeIf { walking }?.let { catchNextStopIndex(it, now) })
+                        view.select(details?.map { it.pointId }?.toSet().orEmpty())
+                    }, onRelease = { it.destroy() })
+                Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(start = Spacing.lg, end = Spacing.lg, top = Spacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    MapPillBar(Modifier.testTag("catch_route_top_bar")) {
+                        IconButton(onClick = { finish() }, modifier = Modifier.padding(start = Spacing.xxs)) {
+                            Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                        val (title, subtitle) = catchTopBarText(plan, active, stops, encounters.size, editing, now)
+                        MapPillTitle(title, subtitle, Modifier.weight(1f))
+                        val session = active
+                        if (session != null) {
+                            var menu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton(onClick = { menu = true }, modifier = Modifier.padding(end = Spacing.xxs).testTag("catch_session_menu")) {
+                                    Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Route actions")
+                                }
+                                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                    WalkingMenuItems(model, session, plannerState, actions, frame.openOptions) { menu = false }
+                                }
+                            }
+                        } else IconButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
+                            modifier = Modifier.padding(end = Spacing.xxs).testTag("catch_route_history")) {
+                            Icon(androidx.compose.material.icons.Icons.Filled.DateRange, contentDescription = "Route history")
+                        }
+                    }
+                    if (showSettings && !settings.fixed) Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface,
+                        shadowElevation = 2.dp, modifier = Modifier.padding(start = Spacing.xs)) {
+                        Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start",
+                            Modifier.padding(horizontal = Spacing.md, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+                if (mapFailed) Surface(Modifier.align(Alignment.Center), shape = MaterialTheme.shapes.medium, shadowElevation = 2.dp) {
+                    Text("Map unavailable. Check connection.", Modifier.padding(12.dp))
+                }
+                // Fit shows the whole route; Follow (a walk only) keeps you and the next stop in view.
+                Column(Modifier.align(Alignment.BottomEnd).padding(end = Spacing.lg, bottom = frame.bottomInset + Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md), horizontalAlignment = Alignment.End) {
+                    if (plan != null) MapFitButton(contentDescription = "Show whole route", onClick = { mapView?.overview() },
+                        modifier = Modifier.testTag("catch_route_fit"))
+                    if (walking) MapLocateButton(state = if (following) MapLocateState.FOLLOWING else MapLocateState.IDLE,
+                        onClick = { mapView?.follow() })
+                }
+            }
+        }
+        SheetPlanner(model, plannerState, actions, showSettings, map = routeMap)
         details?.let { selections ->
             SpawnpointDetailSheet(selections, plan, loadDetail = { spawnpointDetails.detail(it) }, onDismiss = { details = null })
         }
@@ -247,242 +272,18 @@ class CatchRoutesActivity : ComponentActivity() {
         deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text("Delete ${setup.name}?") }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text("Cancel") } }) }
     }
 
-    /** The planned route at a glance: what it catches, how far, when you are back, and the two things to do next. */
-    @Composable private fun RouteSummary(plan: CatchItinerary, encounters: List<CatchEncounter>, onStart: () -> Unit, onEdit: () -> Unit) {
-        ElevatedCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("${encounters.size}", style = MaterialTheme.typography.displaySmall, modifier = Modifier.testTag("catch_route_result"))
-                    Text(" Pokémon", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 6.dp))
-                    Spacer(Modifier.weight(1f))
-                    Text("about ${String.format(Locale.getDefault(), "%.1f", encounters.sumOf { it.opportunity.expectedCatch })} expected",
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 8.dp))
-                }
-                val minutes = (plan.finishAtMillis - plan.settings.startAtMillis) / 60_000
-                Text("${String.format(Locale.getDefault(), "%.1f", plan.distanceMeters / 1000)} km · $minutes min · back ${time(plan.finishAtMillis)}" +
-                    if (plan.waits.isNotEmpty()) " · ${plan.waits.size} short waits" else "", style = MaterialTheme.typography.titleSmall)
-                plan.settings.sourceRouteName?.let { name ->
-                    Text(if (plan.settings.fixed) "Walking $name as drawn" else "Planned near $name", style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary)
-                }
-                val events = encounters.count { it.opportunity.eventOnly }
-                Text("${encounters.count { it.opportunity.observed }} seen live · ${encounters.count { !it.opportunity.observed }} predicted" +
-                    (if (events > 0) " · $events event" else "") + (if (plan.settings.area.isArea()) " · inside your area" else ""),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (plan.warnings.isNotEmpty()) {
-                    var open by remember { mutableStateOf(false) }
-                    TextButton(onClick = { open = !open }, contentPadding = PaddingValues(0.dp)) { Text(if (open) "Hide notes" else "${plan.warnings.size} notes about the data") }
-                    if (open) plan.warnings.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onStart, modifier = Modifier.weight(1f).testTag("follow_catch_route")) { Text("Start guidance") }
-                    OutlinedButton(onClick = onEdit) { Text("Edit route") }
-                }
-                TextButton(onClick = { openInGoogleMaps(plan) }, contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.testTag("export_catch_route")) { Text("Open in Google Maps") }
-            }
+    /** The map's top bar: the route's name and where the walk stands, or the planner's title. */
+    private fun catchTopBarText(plan: CatchItinerary?, active: CatchSession?, stops: List<List<CatchEncounter>>, pokemon: Int,
+        editing: Boolean, now: Long): Pair<String, String?> {
+        if (active != null) {
+            val left = formatCatchKm((active.itinerary.distanceMeters - active.progressMeters).coerceAtLeast(0.0))
+            if (active.finished) return active.itinerary.settings.name to "Finished · ${active.caught} caught"
+            val next = catchNextStopIndex(active, now)
+            val where = next?.let { "Stop ${it + 1} of ${stops.size}" } ?: "No stops ahead"
+            return active.itinerary.settings.name to "$where · $left left · back ${catchClock(active.itinerary.finishAtMillis)}"
         }
-    }
-
-    @OptIn(ExperimentalLayoutApi::class)
-    @Composable private fun SessionCard(session: CatchSession, settings: CatchRouteSettings, refreshing: Boolean, outOfDate: Boolean, notice: String?, now: Long) {
-        ElevatedCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(session.itinerary.settings.name, style = MaterialTheme.typography.titleLarge)
-                if (session.finished) Text("Session finished", style = MaterialTheme.typography.titleMedium)
-                Text("${session.caught} caught · ${session.ahead(now).size} ahead · ${session.missed(now).size} missed",
-                    modifier = Modifier.testTag("catch_session_tally"))
-                val active = session.activeMillis(now)
-                val speed = if (active >= 60_000 && session.walkedMeters >= 50) session.walkedMeters / (active / 1000.0) * 3.6 else null
-                Text("${formatCatchKm(session.walkedMeters)} walked · ${active / 60_000} min · ${formatCatchSpeed(speed)}",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                catchPaceHint(session, now)?.let { Text(it.replaceFirstChar { c -> c.uppercase() }, color = MaterialTheme.colorScheme.tertiary,
-                    style = MaterialTheme.typography.titleSmall) }
-                // Advice only: the route changes when the trainer taps Recalculate, never on its own.
-                if (outOfDate && !session.finished && !refreshing) Text("Route out of date: a stop has despawned or you left the route. Tap Recalculate for a new one.",
-                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
-                notice?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = ::floatingWindow, modifier = Modifier.weight(1f)) { Text("Floating map") }
-                    OutlinedButton(onClick = { model.controller.pause() }, enabled = !session.finished) { Text(if (session.paused) "Resume" else "Pause") }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    TextButton(onClick = { model.controller.skip() }) { Text("Skip stop") }
-                    TextButton(onClick = { model.controller.undo() }) { Text("Undo") }
-                    TextButton(onClick = { model.controller.recalculate() }, enabled = !refreshing && !session.finished) { Text("Recalculate") }
-                    TextButton(onClick = { openInGoogleMaps(session.itinerary) }) { Text("Google Maps") }
-                    TextButton(onClick = { lifecycleScope.launch { model.controller.stop() } }) { Text("Stop route") }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = settings.spacialRend, onCheckedChange = { model.controller.setRadius(it) }); Spacer(Modifier.width(8.dp)); Text("Spacial Rend · ${settings.radius.toInt()} m") }
-                BatterySaverSwitch(description = "Route Battery Saver",
-                    explanation = "Face down during a route blacks out the screen. Long press it to turn off. Shared with hunts.")
-            }
-        }
-    }
-
-    /** One numbered stop: when you get there, what it holds, how far from the previous stop, and any wait. */
-    @Composable private fun StopRow(number: Int, group: List<CatchEncounter>, previousMeters: Double, plan: CatchItinerary,
-        settings: CatchRouteSettings, visited: Boolean, next: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-        val first = group.first()
-        val wait = plan.waits.firstOrNull { kotlin.math.abs(it.meters - first.meters) <= settings.radius * 2 }
-        val badge = when { next -> Color(0xFFE8710A); visited -> Color(0xFF9AA3B2); else -> Color(0xFF1E4FD8) }
-        Surface(onClick = onClick, shape = MaterialTheme.shapes.medium, tonalElevation = if (next) 3.dp else 1.dp, modifier = modifier.fillMaxWidth()) {
-            Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(30.dp).background(badge, CircleShape), contentAlignment = Alignment.Center) {
-                    Text("$number", color = Color.White, style = MaterialTheme.typography.labelLarge)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    val events = group.count { it.opportunity.eventOnly }
-                    Text("${time(first.arrivalMillis)} · ${group.size} Pokémon" + if (events > 0) " · $events event" else "",
-                        style = MaterialTheme.typography.titleSmall, color = if (visited) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified)
-                    val walk = (first.meters - previousMeters).coerceAtLeast(0.0)
-                    val margin = group.minOf { it.opportunity.despawnAt - it.arrivalMillis } / 60_000
-                    Text("${walk.toInt()} m walk · earliest despawn in $margin min" +
-                        (wait?.let { " · wait ${it.millis / 60_000}:${String.format(Locale.US, "%02d", it.millis / 1000 % 60)}" } ?: ""),
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(if (visited) "Done" else "Details", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        }
-    }
-
-    /** Where, when and what: the route settings, grouped, with the recommendation shortcuts beside the time. */
-    @OptIn(ExperimentalLayoutApi::class)
-    @Composable private fun RouteSettingsForm(settings: CatchRouteSettings, savedCount: Int, advanced: Boolean, picking: String, showSaved: Boolean,
-        onAdvanced: () -> Unit, onPicking: (String) -> Unit, onShowSaved: () -> Unit, onArea: () -> Unit, onGoRoutes: () -> Unit, onBack: (() -> Unit)?) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (onBack != null) TextButton(onClick = onBack, contentPadding = PaddingValues(0.dp)) { Text("‹ Back to route") }
-            SettingsCard("Where") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(when {
-                        settings.fixed -> "Walking ${settings.sourceRouteName ?: "an imported route"} as drawn"
-                        settings.sourceRouteId != null -> "Planning near ${settings.sourceRouteName ?: "an imported route"}"
-                        else -> "Follow a Pokémon GO route"
-                    }, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    if (settings.sourceRouteId != null) TextButton(onClick = model::removeImport, modifier = Modifier.testTag("remove_go_route")) { Text("Remove") }
-                    OutlinedButton(onClick = onGoRoutes, modifier = Modifier.testTag("open_go_routes")) { Text(if (settings.sourceRouteId != null) "Change" else "Choose") }
-                }
-                if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Selected by where the start came from. The map-tap mode is on by default, so
-                    // keying "Pick start on map" off it lit that chip while the text said
-                    // "Start: Your location".
-                    FilterChip(selected = model.hasStart && model.startLabel == "Your location", onClick = { useLocation() }, label = { Text("Use my location") })
-                    FilterChip(selected = model.hasStart && model.startLabel == "Pinned on the map", onClick = { onPicking("start") }, label = { Text("Pick start on map") })
-                }
-                Text(if (model.hasStart) "Start: ${model.startLabel}" else "Choose where you start", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (!settings.fixed) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    CatchFinish.entries.forEach { finish -> FilterChip(selected = settings.finish == finish, onClick = { model.edit(settings.copy(finish = finish)); onPicking(if (finish == CatchFinish.PIN) "end" else "start") }, label = { Text(when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> "End at pin" }) }) }
-                }
-                if (settings.finish == CatchFinish.PIN) Text(if (settings.end != null) "Finish: pinned on the map" else "Finish: tap the map", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (!settings.fixed) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (settings.area.isArea()) "Stays inside your area (${settings.area.size} corners)" else "No area limit", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                    if (settings.area.isArea()) TextButton(onClick = { model.edit(settings.copy(area = emptyList())) }) { Text("Remove") }
-                    OutlinedButton(onClick = onArea) { Text(if (settings.area.isArea()) "Edit area" else "Limit to area") }
-                }
-                if (!settings.fixed) SavedAreaChips(settings.area) { model.edit(settings.copy(area = it)) }
-            }
-            SettingsCard("When") {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    FilterChip(selected = model.useNow, onClick = { model.schedule(null) }, label = { Text("Now") })
-                    FilterChip(selected = !model.useNow, onClick = ::pickTime, label = { Text(if (model.useNow) "Later…" else time(settings.startAtMillis)) })
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
-                    listOf(30, 60, 90, 120).forEach { minutes -> FilterChip(selected = settings.durationMinutes == minutes, onClick = { model.edit(settings.copy(durationMinutes = minutes)) }, label = { Text("$minutes min") }) }
-                    OutlinedTextField(value = settings.durationMinutes.toString(), onValueChange = { model.edit(settings.copy(durationMinutes = it.toIntOrNull() ?: 0)) },
-                        label = { Text("Minutes") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.width(110.dp))
-                }
-                Text("Not sure? Let the app compare:", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!settings.fixed) OutlinedButton(onClick = model::recommendStart, enabled = !model.busy, modifier = Modifier.weight(1f).testTag("recommend_start"), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Best start spot", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    OutlinedButton(onClick = model::recommendTime, enabled = !model.busy && model.hasStart, modifier = Modifier.weight(1f).testTag("recommend_time"), contentPadding = PaddingValues(horizontal = 12.dp)) { Text("Best start time", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                }
-            }
-            SettingsCard("What") {
-                SwitchRow("Event spawns", "Spawnpoints that only spawn during Spotlight Hours, Community Days and similar events", settings.includeEventSpawns) { model.edit(settings.copy(includeEventSpawns = it)) }
-                if (settings.includeEventSpawns) {
-                    Text("Which events", style = MaterialTheme.typography.titleSmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
-                        EVENT_SPAWN_TYPES.forEach { type ->
-                            val selected = type in settings.eventSpawnTypes
-                            FilterChip(
-                                selected = selected,
-                                // The last type stays on: with none chosen the switch above would do nothing.
-                                onClick = {
-                                    val next = if (selected) settings.eventSpawnTypes - type else settings.eventSpawnTypes + type
-                                    if (next.isNotEmpty()) model.edit(settings.copy(eventSpawnTypes = next))
-                                },
-                                label = { Text(EVENT_SPAWN_TYPE_LABELS[type] ?: type) },
-                                modifier = Modifier.testTag("event_type_$type")
-                            )
-                        }
-                    }
-                    Text("Planned like any other spawnpoint, even when no event is running.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                SwitchRow("Spacial Rend", "Catch range ${settings.radius.toInt()} m", settings.spacialRend) { model.edit(settings.copy(spacialRend = it)) }
-                TextButton(onClick = onAdvanced, contentPadding = PaddingValues(0.dp)) { Text(if (advanced) "Hide advanced" else "Advanced settings") }
-                if (advanced) {
-                    Text("Walking pace: ${String.format(Locale.getDefault(), "%.1f", settings.speedMps * 3.6)} km/h")
-                    Slider(value = settings.speedMps.toFloat(), onValueChange = { model.edit(settings.copy(speedMps = it.toDouble())) }, valueRange = 0.5f..2.5f)
-                    CatchPrediction.entries.forEach { prediction ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = settings.prediction == prediction, onClick = { model.edit(settings.copy(prediction = prediction)) })
-                            Text(when (prediction) { CatchPrediction.AUTOMATIC -> "Automatic (learned timing)"; CatchPrediction.THIRTY_MINUTES -> "Assume 30-minute spawns"; CatchPrediction.SIXTY_MINUTES -> "Assume 60-minute spawns"; CatchPrediction.SUPPORTED_ONLY -> "Supported windows only" })
-                        }
-                    }
-                    Text("Wait at a spawnpoint for it to appear", style = MaterialTheme.typography.titleSmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(0, 2, 5, 10).forEach { minutes ->
-                            FilterChip(selected = settings.maxWaitMinutes == minutes, onClick = { model.edit(settings.copy(maxWaitMinutes = minutes)) },
-                                label = { Text(if (minutes == 0) "Never" else "Up to $minutes min") })
-                        }
-                    }
-                    OutlinedTextField(value = settings.name, onValueChange = { model.edit(settings.copy(name = it.take(80))) }, label = { Text("Route name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                }
-            }
-            model.error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("catch_route_error")) }
-            if (model.retryAt > now()) Text("Retry in ${(model.retryAt - now()) / 1000 + 1}s")
-            if (model.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(model.progress, style = MaterialTheme.typography.bodySmall); TextButton(onClick = model::cancel) { Text("Cancel") } }
-            else Button(onClick = model::generate, modifier = Modifier.fillMaxWidth().height(52.dp).testTag("generate_catch_route"), enabled = model.retryAt <= now()) { Text("Generate route") }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = onShowSaved, modifier = Modifier.weight(1f)) {
-                    Text(if (showSaved) "Hide saved routes" else "Saved routes ($savedCount)")
-                }
-                var setupMenu by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(onClick = { setupMenu = true }, enabled = model.hasStart) {
-                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Setup options")
-                    }
-                    DropdownMenu(expanded = setupMenu, onDismissRequest = { setupMenu = false }) {
-                        DropdownMenuItem(text = { Text("Save this setup") }, onClick = { setupMenu = false; model.save() })
-                        DropdownMenuItem(text = { Text("Save as a copy") }, onClick = { setupMenu = false; model.save(true) })
-                    }
-                }
-            }
-            if (!model.busy && model.progress.isNotBlank()) Text(model.progress, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-
-    @Composable private fun SettingsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-        OutlinedCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                content()
-            }
-        }
-    }
-
-    @Composable private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = onChange)
-        }
+        if (plan != null && !editing) return "Catch routes" to "$pokemon Pokémon · ${formatCatchKm(plan.distanceMeters)}"
+        return "Catch routes" to null
     }
 
     private fun now() = System.currentTimeMillis()

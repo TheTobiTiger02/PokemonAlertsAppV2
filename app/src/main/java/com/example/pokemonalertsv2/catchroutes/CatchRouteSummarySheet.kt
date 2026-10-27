@@ -67,7 +67,7 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
                 onRelease = { it.destroy() },
                 modifier = Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(16.dp)).testTag("catch_summary_map"),
             )
-            Text("Teal: where you walked · blue to violet: the last planned route",
+            Text("Teal: where you walked · blue: the last planned route",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
