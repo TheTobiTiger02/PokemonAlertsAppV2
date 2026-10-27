@@ -8,6 +8,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.data.GitHubAsset
 import com.example.pokemonalertsv2.data.GitHubRelease
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +56,8 @@ object InAppUpdateManager {
     }
 
     private val client by lazy { OkHttpClient.Builder().build() }
+    /** For reading where github.com's "latest release" page redirects, without following it. */
+    private val redirectClient by lazy { client.newBuilder().followRedirects(false).followSslRedirects(false).build() }
 
     fun resetState() {
         _updateState.value = UpdateState.Idle
@@ -70,26 +73,14 @@ object InAppUpdateManager {
         _updateState.value = UpdateState.Checking
         try {
             withContext(Dispatchers.IO) {
-                val url = "https://api.github.com/repos/$owner/$repo/releases/latest"
-                val request = Request.Builder()
-                    .url(url)
-                    .header("User-Agent", "PokemonAlertsApp")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        finishCheckWithError(source, "Failed to fetch release info: ${response.code}")
-                        return@withContext
-                    }
-                    val bodyString = response.body?.string() ?: throw IOException("Empty response body")
-                    val release = json.decodeFromString<GitHubRelease>(bodyString)
-                    
-                    val currentVersion = BuildConfig.VERSION_NAME
-                    if (isNewerVersion(currentVersion, release.tagName)) {
-                        _updateState.value = UpdateState.UpdateAvailable(release)
-                    } else {
-                        _updateState.value = noUpdateState(source)
-                    }
+                // The tag comes from the web page, not the API: the API allows 60 unauthenticated
+                // requests an hour per IP address, shared by every device on the network, and a
+                // check runs each time the app comes to the foreground.
+                val tag = latestTag(owner, repo)
+                _updateState.value = if (isNewerVersion(BuildConfig.VERSION_NAME, tag)) {
+                    UpdateState.UpdateAvailable(releaseDetails(owner, repo, tag))
+                } else {
+                    noUpdateState(source)
                 }
             }
         } catch (e: Exception) {
@@ -97,6 +88,38 @@ object InAppUpdateManager {
         } finally {
             updateCheckInFlight.set(false)
         }
+    }
+
+    /** The newest release's tag, from where github.com/<owner>/<repo>/releases/latest redirects. */
+    private fun latestTag(owner: String, repo: String): String {
+        val request = Request.Builder()
+            .url("https://github.com/$owner/$repo/releases/latest")
+            .header("User-Agent", USER_AGENT)
+            .build()
+        redirectClient.newCall(request).execute().use { response ->
+            val location = response.header("Location")
+            if (!response.isRedirect || location == null) throw IOException("Failed to fetch release info: ${response.code}")
+            return tagFromReleaseUrl(location) ?: throw IOException("No release published yet")
+        }
+    }
+
+    /**
+     * The release notes and APK of [tag], from the API. Asked only when there is an update, so it
+     * rarely meets the rate limit; when it does, the update still installs from the APK's fixed
+     * download address, without notes.
+     */
+    private fun releaseDetails(owner: String, repo: String, tag: String): GitHubRelease {
+        val request = Request.Builder()
+            .url("https://api.github.com/repos/$owner/$repo/releases/tags/$tag")
+            .header("User-Agent", USER_AGENT)
+            .build()
+        val fetched = runCatching {
+            client.newCall(request).execute().use { response ->
+                response.body?.string()?.takeIf { response.isSuccessful }?.let { json.decodeFromString<GitHubRelease>(it) }
+            }
+        }.getOrNull()
+        return fetched?.takeIf { release -> release.assets.any { it.name.endsWith(".apk") } }
+            ?: releaseWithoutDetails(owner, repo, tag)
     }
 
     private fun finishCheckWithError(source: UpdateCheckSource, message: String) {
@@ -260,6 +283,7 @@ object InAppUpdateManager {
     }
 
     private const val UPDATE_APK_NAME = "pokemon-alerts-update.apk"
+    private const val USER_AGENT = "PokemonAlertsApp"
     private const val TAG = "InAppUpdateManager"
 }
 
@@ -309,3 +333,16 @@ internal object PendingInstallStore {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }
 }
+
+/** The tag in a release page address such as ".../releases/tag/v1.21.0"; null when it names none. */
+internal fun tagFromReleaseUrl(url: String): String? =
+    url.substringAfter("/releases/tag/", "").substringBefore('?').substringBefore('#').trimEnd('/').takeIf { it.isNotBlank() }
+
+/** [tag] with the APK every release publishes as app-release.apk, for when the API cannot be asked. */
+internal fun releaseWithoutDetails(owner: String, repo: String, tag: String) = GitHubRelease(
+    tagName = tag,
+    htmlUrl = "https://github.com/$owner/$repo/releases/tag/$tag",
+    assets = listOf(GitHubAsset(RELEASE_APK_NAME, "https://github.com/$owner/$repo/releases/download/$tag/$RELEASE_APK_NAME", 0)),
+)
+
+private const val RELEASE_APK_NAME = "app-release.apk"
