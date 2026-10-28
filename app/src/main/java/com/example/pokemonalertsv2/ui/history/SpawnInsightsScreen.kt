@@ -88,7 +88,9 @@ fun SpawnInsightsScreen(
     onSpawnAreaChange: (String?) -> Unit = {},
     onSpawnRetry: () -> Unit = {},
     onSpawnSearchChange: (String) -> Unit = {},
-    onSpawnDayChange: (String?) -> Unit = {}
+    onSpawnDayChange: (String?) -> Unit = {},
+    onSpawnOpenDay: (String) -> Unit = {},
+    onSpawnOpenHour: (Long) -> Unit = {}
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         PrimaryTabRow(selectedTabIndex = state.tab.ordinal) {
@@ -104,7 +106,8 @@ fun SpawnInsightsScreen(
         }
         when (state.tab) {
             InsightsTab.ALERTS -> AlertInsights(state, onQueryChange, onRangeChange, onRun, suggestions)
-            InsightsTab.SPAWNS -> SpawnActivityTabsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange)
+            InsightsTab.SPAWNS -> SpawnActivityTabsPane(state.spawns, onSpawnRangeChange, onSpawnAreaChange, onSpawnRetry, onSpawnSearchChange, onSpawnDayChange,
+                onSpawnOpenDay, onSpawnOpenHour)
         }
     }
 }
@@ -198,9 +201,12 @@ private fun AlertInsights(
 private const val SPECIES_FOOTNOTE =
     "Each spawn counts once, on the day it was first seen. Today is still running. Sightings are kept 30 days."
 
-/** Active spawnpoints per day: today against a usual day, with unusual days marked. */
+/**
+ * Active spawnpoints per day: counts on the columns, today against a usual day, unusual days marked.
+ * Tapping a column opens that day hour by hour below.
+ */
 @Composable
-private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean) {
+private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, detailDay: String?, onOpenDay: (String) -> Unit) {
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val summary = remember(activity.days) { summarizeSpawnActivity(activity.days) }
     val days = activity.days.summary
@@ -210,13 +216,20 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean) {
             Headline("Usual day", summary.usual?.let(numbers::format) ?: "—", Modifier.weight(1f))
             Headline("Busiest", summary.busiest?.let(numbers::format) ?: "—", Modifier.weight(1f))
         }
-        if (days.size > 1) {
-            BarRow(
-                values = days.map { it.active },
-                labels = dayLabels(days.map { it.day }),
-                highlighted = summary.flagged,
-                partial = todayIndex(days.map { it.day })
+        if (days.isNotEmpty()) {
+            StackedColumns(
+                columns = days.map { ColumnValue(it.live, it.catalogueOnly) },
+                labels = days.map { shortDay(it.day) },
+                descriptions = days.map { "${shortDay(it.day)}: ${numbers.format(it.active)} active spawnpoints, open its hours" },
+                selected = days.indexOfFirst { it.day == detailDay }.takeIf { it >= 0 },
+                flagged = summary.flagged,
+                reference = summary.usual,
+                referenceLabel = "Usual",
+                // A label every few days on long ranges; the opened day always has its own.
+                labelEvery = if (days.size > 10) (days.size + 6) / 7 else 1,
+                onSelect = { onOpenDay(days[it].day) }
             )
+            ColumnKey()
         }
         val flagged = summary.flagged.sorted().map { shortDay(days[it].day) }
         Text(
@@ -421,7 +434,9 @@ private fun SpawnActivityTabsPane(
     onAreaChange: (String?) -> Unit,
     onRetry: () -> Unit,
     onSearchChange: (String) -> Unit,
-    onDayChange: (String?) -> Unit
+    onDayChange: (String?) -> Unit,
+    onOpenDay: (String) -> Unit,
+    onOpenHour: (Long) -> Unit
 ) {
     var sub by rememberSaveable { mutableIntStateOf(0) }
     var notes by rememberSaveable { mutableStateOf(false) }
@@ -436,7 +451,8 @@ private fun SpawnActivityTabsPane(
         }
         if (notes) {
             Text(
-                "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day. " + SPECIES_FOOTNOTE,
+                "Active spawnpoints and every wild Pokémon the live scanner saw, per Berlin day. Tap a day's column " +
+                    "to see it hour by hour. " + SPECIES_FOOTNOTE,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -455,7 +471,8 @@ private fun SpawnActivityTabsPane(
         state.activity?.let { activity ->
             if (state.isLoading) Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sub == 0) {
-                SpawnpointsSection(activity, showNotes = notes)
+                SpawnpointsSection(activity, showNotes = notes, detailDay = state.detailDay, onOpenDay = onOpenDay)
+                SpawnDayDetailSection(state, onOpenHour = onOpenHour, onRetry = { state.detailDay?.let(onOpenDay) })
             } else {
                 WildSpawnsSection(activity, state, onDayChange, dayChips = false)
                 SpeciesSearch(state, onSearchChange)
@@ -465,8 +482,9 @@ private fun SpawnActivityTabsPane(
     }
 }
 
+/** [compact] drops the rank and the share, for a card too narrow to show them beside the name. */
 @Composable
-private fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: NumberFormat) {
+internal fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: NumberFormat, compact: Boolean = false) {
     val max = entries.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         entries.forEach { entry ->
@@ -478,13 +496,14 @@ private fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: N
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    listOfNotNull(entry.rank?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
+                    listOfNotNull(entry.rank?.takeUnless { compact }?.let { "#$it" }, entry.name ?: "#${entry.pokemonId}").joinToString(" "),
                     style = MaterialTheme.typography.bodySmall,
                     // A share of the row, not a fixed width, so the bars keep room on a narrow phone.
-                    modifier = Modifier.weight(0.35f),
+                    modifier = Modifier.weight(if (compact) 0.6f else 0.35f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .weight(entry.count.toFloat() / max)
@@ -495,7 +514,7 @@ private fun SpeciesRows(entries: List<SpawnSpeciesCount>, total: Int, numbers: N
                 Spacer(Modifier.weight((max - entry.count).toFloat() / max + 0.0001f))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "${numbers.format(entry.count)} · ${"%.1f".format(entry.count * 100f / total)}%",
+                    if (compact) numbers.format(entry.count) else "${numbers.format(entry.count)} · ${"%.1f".format(entry.count * 100f / total)}%",
                     style = MaterialTheme.typography.labelMedium
                 )
             }

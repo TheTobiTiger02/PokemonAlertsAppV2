@@ -30,14 +30,12 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.21"
+internal const val WHATS_NEW_RELEASE = "1.22"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Walking a catch route, the top of the map turns into a blue banner: how far the next stop is, which stop, and what it holds. The route is drawn bolder, and the next stop stands on a pin.",
-    "Follow keeps you and the next stop in view however far apart you are, and the bold line now ends exactly at the stop's number.",
-    "The floating Catch Route window has the same banner, with Pause, Replan, Follow and Route in a bar along the bottom.",
-    "The floating hunt map names your target in a card along the bottom, with previous, Got it and next. Tap the card to open the app.",
-    "Catch routes follow the app's own light or dark setting."
+    "Spawn insights load in a moment instead of half a minute.",
+    "Each day in Spawns shows its count of active spawnpoints right on the column, with a dashed line for a usual day.",
+    "Tap a day to see it hour by hour: active spawnpoints, the Pokémon seen in the picked hour, where they spawned on a map, and the alerts that came in."
 )
 
 /**

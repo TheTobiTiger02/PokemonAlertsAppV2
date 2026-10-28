@@ -1160,7 +1160,9 @@ private fun MainScaffold(
                                         onSpawnAreaChange = insightsViewModel::setSpawnArea,
                                         onSpawnRetry = insightsViewModel::loadSpawns,
                                         onSpawnSearchChange = insightsViewModel::setSpawnSearch,
-                                        onSpawnDayChange = insightsViewModel::setSpawnDay
+                                        onSpawnDayChange = insightsViewModel::setSpawnDay,
+                                        onSpawnOpenDay = { day -> insightsViewModel.openDay(day) },
+                                        onSpawnOpenHour = { start -> insightsViewModel.openHour(start) }
                                     )
                                 }
                             )
