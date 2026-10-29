@@ -132,7 +132,8 @@ class LiveSightingsTest {
         assertEquals(FilterSelection.All, profile.commonSpecies)
         assertEquals(mapOf("COMMON" to 300), profile.distanceOverrides.perType)
         val feed = document.feed.resolve(document)
-        assertEquals(DEFAULT_FILTER_ALERT_TYPES.normalizedValues, feed.alertTypes.normalizedValues)
+        // The feed showed Other, so schema 5 adds the Tappables that used to be filed there.
+        assertEquals(DEFAULT_FILTER_ALERT_TYPES.normalizedValues + "tappable", feed.alertTypes.normalizedValues)
         assertEquals(FilterSelectionMode.NONE, document.map.resolve(document).alertTypes.mode)
         // Re-reading the migrated document changes nothing.
         assertEquals(document, FilterStateCodec.decode(FilterStateCodec.encode(document)))

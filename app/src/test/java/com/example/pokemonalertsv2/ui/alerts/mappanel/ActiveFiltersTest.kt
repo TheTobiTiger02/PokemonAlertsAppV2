@@ -33,7 +33,7 @@ class ActiveFiltersTest {
     fun everyNarrowingFieldGetsALabelledChip() {
         assertEquals(
             listOf(
-                "Types: 2 of 11",
+                "Types: 2 of 12",
                 "≤ 1 km",
                 "≤ 15 min walk",
                 "1 distance rule",

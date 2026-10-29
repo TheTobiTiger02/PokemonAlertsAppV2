@@ -44,6 +44,9 @@ internal fun mergeFilterCatalog(cached: FilterCatalog?, localSpecies: List<Strin
             .mapNotNull { it.filterSpecies().trim().takeIf(String::isNotEmpty) }
         val observedAreas = currentAlerts.mapNotNull { it.area?.trim()?.takeIf(String::isNotEmpty) }
         val observedRocket = currentAlerts.mapNotNull { it.gruntType?.trim()?.takeIf(String::isNotEmpty) }
+        val observedLoot = currentAlerts
+            .filter { it.isTappable && it.pokemon.isNullOrBlank() }
+            .mapNotNull { it.tappableToken() }
         val observedQuests = currentAlerts.mapNotNull { alert ->
             if (FilterAlertType.QUEST !in alert.filterAlertTypes()) return@mapNotNull null
             val pair = QuestPairRule.of(alert.questTask, alert.questReward) ?: return@mapNotNull null
@@ -64,6 +67,7 @@ internal fun mergeFilterCatalog(cached: FilterCatalog?, localSpecies: List<Strin
             raidSpecies = (cached?.raidSpecies.orEmpty() + observedRaidSpecies).distinctBy(::normalizeFilterToken),
             raidTiers = (cached?.raidTiers.orEmpty() + RaidTier.entries.map(RaidTier::displayLabel)).distinct(),
             rocketTypes = (cached?.rocketTypes.orEmpty() + DEFAULT_ROCKET_FILTER_TYPES + observedRocket).distinctBy(::normalizeFilterToken),
+            tappableRewards = (cached?.tappableRewards.orEmpty() + observedLoot).distinctBy(::normalizeFilterToken),
             quests = (observedQuests + cached?.quests.orEmpty()).distinctBy { it.key }
         )
 }

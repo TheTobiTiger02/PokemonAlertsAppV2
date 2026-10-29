@@ -1168,8 +1168,8 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
 }
 
 internal fun migrateLegacyFilterState(preferences: Preferences): FilterStateDocument {
-    // Common is opt-in, so a legacy "nothing muted" becomes every other type.
-    val allTypes = FilterAlertType.entries.filterNot { it == FilterAlertType.COMMON }.map(FilterAlertType::name).toSet()
+    // Common and Tappables are opt-in, so a legacy "nothing muted" becomes every other type.
+    val allTypes = FilterAlertType.entries.filterNot { it in OPT_IN_FILTER_ALERT_TYPES }.map(FilterAlertType::name).toSet()
     fun typesFromMuted(muted: Set<String>): FilterSelection {
         if (muted.isEmpty()) return DEFAULT_FILTER_ALERT_TYPES
         val allowed = allTypes.filterNot { name -> muted.any { it.equals(name, ignoreCase = true) } }

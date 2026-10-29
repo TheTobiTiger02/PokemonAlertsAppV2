@@ -540,6 +540,7 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
         AlertCategory.PVP in categories -> AlertCategory.PVP
         AlertCategory.ROCKET in categories -> AlertCategory.ROCKET
         AlertCategory.KECLEON in categories -> AlertCategory.KECLEON
+        AlertCategory.TAPPABLE in categories -> AlertCategory.TAPPABLE
         AlertCategory.WEATHER in categories -> AlertCategory.WEATHER
         AlertCategory.COMMON in categories -> AlertCategory.COMMON
         else -> AlertCategory.SPAWN

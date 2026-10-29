@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.fcm
 
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterDefinition
+import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterSelectionMode
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.PushTopicArea
@@ -40,33 +41,53 @@ object PushTopicPlanner {
      * subscription made for them would wake the phone for every sighting. Common off means none;
      * all Common species means the all-sightings topic; a species list means one topic per species
      * that [dexNumbers] (normalized name to pokedex number) can resolve.
+     *
+     * Pokémon from Tappables are live sightings too, on their own `{base}-tp-` family, chosen the
+     * same way from the Tappable type and its list. Loot names in that list resolve to no species
+     * and add nothing: loot is never pushed.
      */
     fun liveSightingTopics(
         catalog: PushTopicCatalog?,
         notifications: FilterDefinition,
         dexNumbers: Map<String, Int>
     ): Set<String> {
-        if (!notifications.alertTypes.contains(FilterAlertType.COMMON.name)) return emptySet()
         val base = catalog?.baseTopic?.takeIf { it.isNotBlank() }
             ?: catalog?.legacyTopic?.takeIf { it.isNotBlank() }
             ?: DEFAULT_LEGACY_TOPIC
-        val species = notifications.commonSpecies
-        return when (species.mode) {
+        val topics = LinkedHashSet<String>()
+        if (notifications.alertTypes.contains(FilterAlertType.COMMON.name)) {
+            topics += speciesTopics("$base-$LIVE_AXIS-", notifications.commonSpecies, dexNumbers)
+        }
+        if (notifications.alertTypes.contains(FilterAlertType.TAPPABLE.name)) {
+            topics += speciesTopics("$base-$TAPPABLE_AXIS-", notifications.tappableSpecies, dexNumbers)
+        }
+        return topics
+    }
+
+    private fun speciesTopics(prefix: String, species: FilterSelection, dexNumbers: Map<String, Int>): Set<String> =
+        when (species.mode) {
             FilterSelectionMode.NONE -> emptySet()
-            FilterSelectionMode.ALL -> setOf("$base-l-all")
+            FilterSelectionMode.ALL -> setOf("${prefix}all")
             FilterSelectionMode.ONLY -> species.normalizedValues
                 .mapNotNull { dexNumbers[it] }
                 .filter { it in 1 until 10_000 }
                 .distinct().sorted().take(MAX_LIVE_SIGHTING_TOPICS)
-                .mapTo(LinkedHashSet()) { "$base-l-$it" }
+                .mapTo(LinkedHashSet()) { "$prefix$it" }
         }
-    }
 
-    /** The server-side registration matching [liveSightingTopics]: `-l-all` or the pokedex numbers. */
+    /** The server-side registration matching [liveSightingTopics]: `all` or the pokedex numbers, per family. */
     fun liveSightingRegistration(topics: Set<String>): LiveSightingRegistration = LiveSightingRegistration(
-        all = topics.any { it.endsWith("-l-all") },
-        species = topics.mapNotNull { it.substringAfterLast("-l-", "").toIntOrNull() }.sorted()
+        all = topics.any { it.endsWith("-$LIVE_AXIS-all") },
+        species = topics.speciesOf(LIVE_AXIS),
+        tappableAll = topics.any { it.endsWith("-$TAPPABLE_AXIS-all") },
+        tappableSpecies = topics.speciesOf(TAPPABLE_AXIS)
     )
+
+    private fun Set<String>.speciesOf(axis: String): List<Int> =
+        mapNotNull { it.substringAfterLast("-$axis-", "").toIntOrNull() }.sorted()
+
+    private const val LIVE_AXIS = "l"
+    private const val TAPPABLE_AXIS = "tp"
 
     /** FCM allows 2000 topics per install; a hunt list this long is a mistake, not a plan. */
     const val MAX_LIVE_SIGHTING_TOPICS = 200

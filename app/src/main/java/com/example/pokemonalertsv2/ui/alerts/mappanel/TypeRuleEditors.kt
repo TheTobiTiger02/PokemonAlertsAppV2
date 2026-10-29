@@ -26,7 +26,8 @@ internal enum class TypeEditor(val type: FilterAlertType) {
     COMMON(FilterAlertType.COMMON),
     RAIDS(FilterAlertType.RAID),
     ROCKET(FilterAlertType.ROCKET),
-    QUESTS(FilterAlertType.QUEST)
+    QUESTS(FilterAlertType.QUEST),
+    TAPPABLES(FilterAlertType.TAPPABLE)
 }
 
 internal fun FilterAlertType.editor(): TypeEditor? = TypeEditor.entries.firstOrNull { it.type == this }
@@ -51,6 +52,7 @@ private fun TypeEditor.speciesTarget(): MapSelectorTarget? = when (this) {
     TypeEditor.PVP -> MapSelectorTarget.PVP
     TypeEditor.NUNDO -> MapSelectorTarget.NUNDO
     TypeEditor.COMMON -> MapSelectorTarget.COMMON
+    TypeEditor.TAPPABLES -> MapSelectorTarget.TAPPABLE
     else -> null
 }
 

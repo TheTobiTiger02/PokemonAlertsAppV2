@@ -45,7 +45,8 @@ internal enum class MapSelectorTarget(val title: String, val shortLabel: String)
     NUNDO("Nundo species", "0%"),
     RAID_SPECIES("Raid species", "Raid Bosses"),
     RAID_TIERS("Raid tiers", "Tiers"),
-    ROCKET("Rocket types", "Rockets")
+    ROCKET("Rocket types", "Rockets"),
+    TAPPABLE("Tappable species and loot", "Tappables")
 }
 
 internal val SPECIES_TARGETS = listOf(
@@ -54,7 +55,8 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.RAID_SPECIES,
     MapSelectorTarget.COMMON,
     MapSelectorTarget.SPAWN,
-    MapSelectorTarget.NUNDO
+    MapSelectorTarget.NUNDO,
+    MapSelectorTarget.TAPPABLE
 )
 
 /**
@@ -229,12 +231,14 @@ internal fun SpeciesPickerContent(
         normalizedCandidates.associate { (key, value) -> key to speciesArt(value, artwork) }
     }
     fun dexOf(key: String): Int = arts[key]?.dex ?: Int.MAX_VALUE
+    val leadingKeys = remember(target, catalog) { target.leadingCandidates(catalog).mapTo(mutableSetOf(), ::normalizeFilterToken) }
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
-    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts) {
+    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts, leadingKeys) {
         normalizedCandidates
             .filter { (key, _) -> key.contains(queryKey) || dexOf(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
+                    .thenByDescending { (key, _) -> key in leadingKeys }
                     .thenComparing { (key, _) ->
                         if (sortOrder == SpeciesSortOrder.DEX_NUMBER) dexOf(key) else Int.MAX_VALUE
                     }
@@ -489,6 +493,7 @@ internal fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSel
     MapSelectorTarget.RAID_SPECIES -> raidSpecies
     MapSelectorTarget.RAID_TIERS -> raidTiers
     MapSelectorTarget.ROCKET -> rocketTypes
+    MapSelectorTarget.TAPPABLE -> tappableSpecies
 }
 
 internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection: FilterSelection): FilterDefinition = when (target) {
@@ -500,14 +505,20 @@ internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection
     MapSelectorTarget.RAID_SPECIES -> copy(raidSpecies = selection)
     MapSelectorTarget.RAID_TIERS -> copy(raidTiers = selection)
     MapSelectorTarget.ROCKET -> copy(rocketTypes = selection)
+    MapSelectorTarget.TAPPABLE -> copy(tappableSpecies = selection)
 }
 
 internal fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> = when (this) {
     MapSelectorTarget.RAID_SPECIES -> catalog.raidSpecies
     MapSelectorTarget.RAID_TIERS -> catalog.raidTiers
     MapSelectorTarget.ROCKET -> catalog.rocketTypes
+    MapSelectorTarget.TAPPABLE -> catalog.tappableRewards + catalog.spawnSpecies
     else -> catalog.spawnSpecies
 }
+
+/** Candidates listed ahead of the species, which have no Dex number to sort by: Tappable loot. */
+internal fun MapSelectorTarget.leadingCandidates(catalog: FilterCatalog): List<String> =
+    if (this == MapSelectorTarget.TAPPABLE) catalog.tappableRewards else emptyList()
 
 internal fun FilterAlertType.mapCategory(): AlertCategory = when (this) {
     FilterAlertType.SPAWN -> AlertCategory.SPAWN
@@ -519,6 +530,7 @@ internal fun FilterAlertType.mapCategory(): AlertCategory = when (this) {
     FilterAlertType.NUNDO -> AlertCategory.NUNDO
     FilterAlertType.PVP -> AlertCategory.PVP
     FilterAlertType.COMMON -> AlertCategory.COMMON
+    FilterAlertType.TAPPABLE -> AlertCategory.TAPPABLE
     FilterAlertType.WEATHER -> AlertCategory.WEATHER
     FilterAlertType.OTHER -> AlertCategory.GENERIC
 }

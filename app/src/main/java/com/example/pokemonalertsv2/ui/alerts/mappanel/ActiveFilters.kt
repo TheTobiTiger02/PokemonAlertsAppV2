@@ -95,6 +95,15 @@ internal fun activeFilterChips(
             )
         )
     }
+    if (definition.tappableSpecies.mode != FilterSelectionMode.ALL) {
+        add(
+            ActiveFilterChip(
+                id = "tappable",
+                label = "Tappables: " + definition.tappableSpecies.countLabel(null),
+                clear = { it.copy(tappableSpecies = Defaults.tappableSpecies) }
+            )
+        )
+    }
     if (definition.quests != Defaults.quests) {
         add(
             ActiveFilterChip(

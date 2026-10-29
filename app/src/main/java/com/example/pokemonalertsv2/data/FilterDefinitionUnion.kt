@@ -46,6 +46,7 @@ fun unionOf(definitions: List<FilterDefinition>): FilterDefinition {
             raidSpecies = left.raidSpecies.union(right.raidSpecies),
             raidTiers = left.raidTiers.union(right.raidTiers),
             rocketTypes = left.rocketTypes.union(right.rocketTypes),
+            tappableSpecies = left.tappableSpecies.union(right.tappableSpecies),
             quests = QuestFilterRules()
         )
     }

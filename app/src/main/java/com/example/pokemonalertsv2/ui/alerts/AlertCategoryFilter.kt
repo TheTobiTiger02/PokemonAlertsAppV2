@@ -24,6 +24,7 @@ val FILTERABLE_ALERT_CATEGORIES: List<AlertCategory> = listOf(
     AlertCategory.NUNDO,
     AlertCategory.PVP,
     AlertCategory.COMMON,
+    AlertCategory.TAPPABLE,
     AlertCategory.WEATHER
 )
 
@@ -39,6 +40,7 @@ val AlertCategory.filterLabel: String
         AlertCategory.NUNDO -> "Nundos"
         AlertCategory.PVP -> "PvP"
         AlertCategory.COMMON -> "Common"
+        AlertCategory.TAPPABLE -> "Tappables"
         AlertCategory.WEATHER -> "Weather"
         AlertCategory.GENERIC -> "Other"
     }
@@ -100,6 +102,7 @@ fun legacyWidgetTokenToCategory(token: String): AlertCategory? {
         "nundo", "000" -> AlertCategory.NUNDO
         "pvp" -> AlertCategory.PVP
         "rare", "common" -> AlertCategory.COMMON
+        "tappable", "tappables" -> AlertCategory.TAPPABLE
         "weather" -> AlertCategory.WEATHER
         else -> null
     }

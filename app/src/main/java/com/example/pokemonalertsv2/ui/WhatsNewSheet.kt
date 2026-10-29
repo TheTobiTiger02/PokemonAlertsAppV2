@@ -30,12 +30,12 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.22"
+internal const val WHATS_NEW_RELEASE = "1.23"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Spawn insights load in a moment instead of half a minute.",
-    "Each day in Spawns shows its count of active spawnpoints right on the column, with a dashed line for a usual day.",
-    "Tap a day to see it hour by hour: active spawnpoints, the Pokémon seen in the picked hour, where they spawned on a map, and the alerts that came in."
+    "Tappables are their own alert type: the Pokémon they spawn and the loot they drop, like Rare Candy.",
+    "Switch Tappables off entirely, or narrow them to the species and items you want, such as only Gengar or only Rare Candy.",
+    "Tappable notifications are off until you turn them on in your notifications filter, and they never mix with Common sightings."
 )
 
 /**
