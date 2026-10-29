@@ -1,6 +1,12 @@
 package com.example.pokemonalertsv2.data
 
 import com.example.pokemonalertsv2.fcm.PushTopicPlanner
+import com.example.pokemonalertsv2.ui.alerts.MapSelectorTarget
+import com.example.pokemonalertsv2.ui.alerts.SPECIES_TARGETS
+import com.example.pokemonalertsv2.ui.alerts.candidates
+import com.example.pokemonalertsv2.ui.alerts.mappanel.activeFilterChips
+import com.example.pokemonalertsv2.ui.alerts.mappanel.tappableRewardIcon
+import com.example.pokemonalertsv2.ui.alerts.mappanel.tappableRewardSections
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
@@ -159,5 +165,55 @@ class TappableTest {
         assertEquals("Rare Candy", loot.tappableToken())
         val catalog = json.decodeFromString<FilterCatalog>("""{"schemaVersion":1,"tappableRewards":["Rare Candy"]}""")
         assertEquals(listOf("Rare Candy"), catalog.tappableRewards)
+    }
+
+    @Test
+    fun theTappablesTabOffersOnlyWhatTappablesGive() {
+        val catalog = FilterCatalog(
+            spawnSpecies = listOf("Bulbasaur", "Gengar", "Drifblim", "Pidgey"),
+            tappableRewards = listOf("Rare Candy", "Gengar", "Drifblim"),
+            tappableRewardIcons = mapOf("Rare Candy" to "https://icons.example/item/1301.png")
+        )
+        assertEquals(listOf("Rare Candy", "Gengar", "Drifblim"), MapSelectorTarget.TAPPABLE.candidates(catalog))
+        assertFalse("not in the Pokémon tab", MapSelectorTarget.TAPPABLE in SPECIES_TARGETS)
+
+        val sections = tappableRewardSections(catalog, FilterSelection.All, artwork = emptyMap())
+        assertEquals(listOf("Rare Candy"), sections.loot)
+        assertEquals(listOf("Gengar", "Drifblim"), sections.pokemon)
+        // A pick that has since dropped out of the catalogue stays listed, so it can be undone.
+        val stale = tappableRewardSections(catalog, FilterSelection.only(listOf("Pidgey", "Gengar")), emptyMap())
+        assertEquals(listOf("Gengar", "Drifblim", "Pidgey"), stale.pokemon)
+
+        assertEquals("https://icons.example/item/1301.png", tappableRewardIcon("rare candy", catalog, emptyMap()))
+        assertEquals(
+            "https://sprites.example/94.png",
+            tappableRewardIcon("Gengar", catalog, mapOf("gengar" to "https://sprites.example/94.png"))
+        )
+    }
+
+    @Test
+    fun aNarrowedTappableRuleShowsOneChip() {
+        val chips = activeFilterChips(FilterDefinition(tappableSpecies = FilterSelection.only(listOf("Gengar"))))
+        assertEquals(listOf("Tappables: 1"), chips.filter { "Tappable" in it.label }.map { it.label })
+    }
+
+    @Test
+    fun tappablesOnScreenJoinTheCatalogueWithTheirIcons() {
+        val cached = FilterCatalog(tappableRewards = listOf("Rare Candy", "Gengar"))
+        val merged = mergeFilterCatalog(
+            cached,
+            localSpecies = emptyList(),
+            currentAlerts = listOf(
+                gengar.copy(pokemon = "Noibat", pokedexId = 714, thumbnailUrl = "https://icons.example/pokemon/714.png"),
+                rareCandy.copy(questReward = "Poké Ball ×5", thumbnailUrl = "https://icons.example/item/1.png")
+            )
+        )
+        assertEquals(listOf("Poké Ball", "Rare Candy", "Gengar", "Noibat"), merged.tappableRewards)
+        assertEquals("https://icons.example/pokemon/714.png", merged.tappableRewardIcons["Noibat"])
+        assertEquals("https://icons.example/item/1.png", merged.tappableRewardIcons["Poké Ball"])
+        val parsed = Json { ignoreUnknownKeys = true }.decodeFromString<FilterCatalog>(
+            """{"tappableRewards":["Rare Candy","Gengar"],"tappableRewardIcons":{"Rare Candy":"https://icons.example/item/1301.png"}}"""
+        )
+        assertEquals(mapOf("Rare Candy" to "https://icons.example/item/1301.png"), parsed.tappableRewardIcons)
     }
 }

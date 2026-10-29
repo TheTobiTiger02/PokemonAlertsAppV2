@@ -55,8 +55,7 @@ internal val SPECIES_TARGETS = listOf(
     MapSelectorTarget.RAID_SPECIES,
     MapSelectorTarget.COMMON,
     MapSelectorTarget.SPAWN,
-    MapSelectorTarget.NUNDO,
-    MapSelectorTarget.TAPPABLE
+    MapSelectorTarget.NUNDO
 )
 
 /**
@@ -231,14 +230,12 @@ internal fun SpeciesPickerContent(
         normalizedCandidates.associate { (key, value) -> key to speciesArt(value, artwork) }
     }
     fun dexOf(key: String): Int = arts[key]?.dex ?: Int.MAX_VALUE
-    val leadingKeys = remember(target, catalog) { target.leadingCandidates(catalog).mapTo(mutableSetOf(), ::normalizeFilterToken) }
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
-    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts, leadingKeys) {
+    val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts) {
         normalizedCandidates
             .filter { (key, _) -> key.contains(queryKey) || dexOf(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
-                    .thenByDescending { (key, _) -> key in leadingKeys }
                     .thenComparing { (key, _) ->
                         if (sortOrder == SpeciesSortOrder.DEX_NUMBER) dexOf(key) else Int.MAX_VALUE
                     }
@@ -512,13 +509,10 @@ internal fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> 
     MapSelectorTarget.RAID_SPECIES -> catalog.raidSpecies
     MapSelectorTarget.RAID_TIERS -> catalog.raidTiers
     MapSelectorTarget.ROCKET -> catalog.rocketTypes
-    MapSelectorTarget.TAPPABLE -> catalog.tappableRewards + catalog.spawnSpecies
+    // Only what Tappables have given lately, never the whole Pokédex. Edited in the Tappables tab.
+    MapSelectorTarget.TAPPABLE -> catalog.tappableRewards
     else -> catalog.spawnSpecies
 }
-
-/** Candidates listed ahead of the species, which have no Dex number to sort by: Tappable loot. */
-internal fun MapSelectorTarget.leadingCandidates(catalog: FilterCatalog): List<String> =
-    if (this == MapSelectorTarget.TAPPABLE) catalog.tappableRewards else emptyList()
 
 internal fun FilterAlertType.mapCategory(): AlertCategory = when (this) {
     FilterAlertType.SPAWN -> AlertCategory.SPAWN
