@@ -176,8 +176,10 @@ data class FilterCatalog(
     val raidSpecies: List<String> = emptyList(),
     val raidTiers: List<String> = emptyList(),
     val rocketTypes: List<String> = emptyList(),
-    /** Loot items Tappables drop ("Rare Candy"), offered next to species in the Tappable picker. */
+    /** What Tappables have given lately, loot first then Pokémon: the only choices the Tappables tab offers. */
     val tappableRewards: List<String> = emptyList(),
+    /** Icon per [tappableRewards] name. */
+    val tappableRewardIcons: Map<String, String> = emptyMap(),
     val quests: List<FilterCatalogQuest> = emptyList()
 )
 

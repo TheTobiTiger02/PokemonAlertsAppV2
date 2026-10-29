@@ -48,7 +48,8 @@ private enum class FiltersTab(val label: String) {
     POKEMON("Pokémon"),
     RAIDS("Raids"),
     ROCKET("Rocket"),
-    QUESTS("Quests")
+    QUESTS("Quests"),
+    TAPPABLES("Tappables")
 }
 
 /**
@@ -127,6 +128,7 @@ internal fun FiltersTabs(
                 FiltersTab.RAIDS -> RaidsTab(state)
                 FiltersTab.ROCKET -> RocketTab(state)
                 FiltersTab.QUESTS -> QuestsTab(state)
+                FiltersTab.TAPPABLES -> TappablesTab(state)
             }
         }
     }

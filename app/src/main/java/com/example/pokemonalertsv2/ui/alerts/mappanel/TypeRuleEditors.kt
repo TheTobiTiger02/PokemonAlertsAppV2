@@ -52,7 +52,6 @@ private fun TypeEditor.speciesTarget(): MapSelectorTarget? = when (this) {
     TypeEditor.PVP -> MapSelectorTarget.PVP
     TypeEditor.NUNDO -> MapSelectorTarget.NUNDO
     TypeEditor.COMMON -> MapSelectorTarget.COMMON
-    TypeEditor.TAPPABLES -> MapSelectorTarget.TAPPABLE
     else -> null
 }
 
@@ -75,6 +74,7 @@ internal fun TypeEditorBody(editor: TypeEditor, state: FiltersState, modifier: M
             )
             editor == TypeEditor.RAIDS -> RaidsTab(state)
             editor == TypeEditor.ROCKET -> RocketTab(state)
+            editor == TypeEditor.TAPPABLES -> TappablesTab(state)
             else -> QuestsTab(state)
         }
     }

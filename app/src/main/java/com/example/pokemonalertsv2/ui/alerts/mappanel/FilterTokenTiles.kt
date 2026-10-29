@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.RaidTier
 import com.example.pokemonalertsv2.data.normalizeFilterToken
@@ -40,7 +42,14 @@ import com.example.pokemonalertsv2.ui.theme.typeColor
 import com.example.pokemonalertsv2.ui.theme.typeLabel
 
 /** How a token is drawn: the badge's colour and glyph, and the tile's label. */
-internal class TokenLook(val label: String, val badge: Color, val glyph: String, val tint: Color? = null)
+internal class TokenLook(
+    val label: String,
+    val badge: Color,
+    val glyph: String,
+    val tint: Color? = null,
+    /** Artwork shown in place of the glyph badge, such as a Tappable's reward icon. */
+    val imageUrl: String? = null
+)
 
 /**
  * Tokens (raid tiers, grunt types) as a grid of tiles with a coloured badge, rather than a run of
@@ -53,7 +62,9 @@ internal fun TokenTileGrid(
     onSelectionChange: (FilterSelection) -> Unit,
     perRow: Int,
     look: (String) -> TokenLook,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Everything the selection ranges over, when [tokens] is only one section of it. */
+    universe: List<String> = tokens
 ) {
     FlowRow(
         modifier = modifier.fillMaxWidth(),
@@ -65,7 +76,7 @@ internal fun TokenTileGrid(
             TokenTile(
                 look = look(token),
                 selected = selection.contains(token),
-                onClick = { onSelectionChange(selection.toggled(token, tokens)) },
+                onClick = { onSelectionChange(selection.toggled(token, universe)) },
                 modifier = Modifier.weight(1f).testTag("token_tile_${normalizeFilterToken(token)}")
             )
         }
@@ -93,14 +104,22 @@ private fun TokenTile(look: TokenLook, selected: Boolean, onClick: () -> Unit, m
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
-                Surface(
-                    modifier = Modifier.size(34.dp),
-                    shape = CircleShape,
-                    color = look.badge.copy(alpha = if (selected) 1f else 0.55f),
-                    contentColor = Color.White
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(look.glyph, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                if (look.imageUrl != null) {
+                    AsyncImage(
+                        model = look.imageUrl,
+                        contentDescription = null,
+                        modifier = Modifier.size(40.dp).alpha(if (selected) 1f else 0.7f)
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.size(34.dp),
+                        shape = CircleShape,
+                        color = look.badge.copy(alpha = if (selected) 1f else 0.55f),
+                        contentColor = Color.White
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(look.glyph, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
                 Text(

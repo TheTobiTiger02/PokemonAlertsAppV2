@@ -30,12 +30,12 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.23"
+internal const val WHATS_NEW_RELEASE = "1.24"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Tappables are their own alert type: the Pokémon they spawn and the loot they drop, like Rare Candy.",
-    "Switch Tappables off entirely, or narrow them to the species and items you want, such as only Gengar or only Rare Candy.",
-    "Tappable notifications are off until you turn them on in your notifications filter, and they never mix with Common sightings."
+    "Tappables have their own tab in Filters, next to Quests.",
+    "It lists only what Tappables have actually given lately: the loot, like Rare Candy, and the Pokémon they spawn, each with its picture.",
+    "Tap a reward to show or hide it; All and None switch every Tappable reward at once."
 )
 
 /**
