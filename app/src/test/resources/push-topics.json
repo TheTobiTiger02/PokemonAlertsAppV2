@@ -59,6 +59,10 @@
       "topic": "alerts-t-kecleon"
     },
     {
+      "value": "Tappable",
+      "topic": "alerts-t-tappable"
+    },
+    {
       "value": "Common",
       "topic": "alerts-t-common"
     },
@@ -134,6 +138,11 @@
     },
     {
       "area": "Alsbach",
+      "type": "Tappable",
+      "topic": "alerts-a-alsbach-t-tappable"
+    },
+    {
+      "area": "Alsbach",
       "type": "Common",
       "topic": "alerts-a-alsbach-t-common"
     },
@@ -176,6 +185,11 @@
       "area": "Darmstadt",
       "type": "Kecleon",
       "topic": "alerts-a-darmstadt-t-kecleon"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "Tappable",
+      "topic": "alerts-a-darmstadt-t-tappable"
     },
     {
       "area": "Darmstadt",
@@ -224,6 +238,11 @@
     },
     {
       "area": "Darmstadt-North",
+      "type": "Tappable",
+      "topic": "alerts-a-darmstadt-north-t-tappable"
+    },
+    {
+      "area": "Darmstadt-North",
       "type": "Common",
       "topic": "alerts-a-darmstadt-north-t-common"
     },
@@ -269,6 +288,11 @@
     },
     {
       "area": "Darmstadt-South",
+      "type": "Tappable",
+      "topic": "alerts-a-darmstadt-south-t-tappable"
+    },
+    {
+      "area": "Darmstadt-South",
       "type": "Common",
       "topic": "alerts-a-darmstadt-south-t-common"
     },
@@ -311,6 +335,11 @@
       "area": "Unknown",
       "type": "Kecleon",
       "topic": "alerts-a-unknown-t-kecleon"
+    },
+    {
+      "area": "Unknown",
+      "type": "Tappable",
+      "topic": "alerts-a-unknown-t-tappable"
     },
     {
       "area": "Unknown",

@@ -38,6 +38,7 @@ internal fun huntName(definition: FilterDefinition, catalog: FilterCatalog): Str
         FilterAlertType.NUNDO -> definition.nundoSpecies.singleLabel()?.let { "$it nundos" } ?: "Nundos"
         FilterAlertType.PVP -> definition.pvpSpecies.singleLabel()?.let { "$it PvP" } ?: "PvP"
         FilterAlertType.COMMON -> definition.commonSpecies.singleLabel() ?: "Common spawns"
+        FilterAlertType.TAPPABLE -> definition.tappableSpecies.singleLabel()?.let { "$it Tappables" } ?: "Tappables"
 
         // Several types at once, or none narrowed: name the breadth honestly
         // rather than picking one of them and implying the others are excluded.

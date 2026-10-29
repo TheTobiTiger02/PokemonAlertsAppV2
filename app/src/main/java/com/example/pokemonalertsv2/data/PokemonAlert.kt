@@ -289,7 +289,7 @@ data class PokemonAlert(
      * Cached: the filter matcher consults this for every alert on every pass. */
     val isSpawnAlert: Boolean by lazy {
         if (hasType("Raid") || hasType("Rocket") || hasType("Quest") ||
-            hasType("Kecleon") || hasType("WeatherChange")
+            hasType("Kecleon") || hasType("WeatherChange") || isTappable
         ) {
             false
         } else {
@@ -310,7 +310,14 @@ data class PokemonAlert(
         if (isStopOrGymAlert) STOP_OR_GYM_INTERACTION_RANGE_METERS else SPAWN_INTERACTION_RANGE_METERS
     }
 
+    /**
+     * An event Tappable: the loot it drops, or a Pokémon it spawned (a live sighting). It is only
+     * ever a Tappable, never also Common or a spawn, so switching Tappables off hides it.
+     */
+    val isTappable: Boolean by lazy { hasType("Tappable") }
+
     val cachedFilterAlertTypes: Set<FilterAlertType> by lazy {
+        if (isTappable) return@lazy java.util.EnumSet.of(FilterAlertType.TAPPABLE)
         val set = java.util.EnumSet.noneOf(FilterAlertType::class.java)
         if (hasType("Raid")) set.add(FilterAlertType.RAID)
         if (hasType("Quest")) set.add(FilterAlertType.QUEST)
@@ -329,6 +336,7 @@ data class PokemonAlert(
     }
 
     val cachedAlertCategories: Set<AlertCategory> by lazy {
+        if (isTappable) return@lazy java.util.EnumSet.of(AlertCategory.TAPPABLE)
         val set = java.util.EnumSet.noneOf(AlertCategory::class.java)
         if (hasType("Raid")) set.add(AlertCategory.RAID)
         if (hasType("Quest")) set.add(AlertCategory.QUEST)

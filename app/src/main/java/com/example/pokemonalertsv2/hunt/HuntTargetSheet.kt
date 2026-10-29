@@ -216,7 +216,8 @@ internal fun HuntTargetSheet(
     }
 }
 
-private enum class HuntPage { ROOT, SPAWN, HUNDO, PVP, NUNDO, COMMON, RAIDS, ROCKET, QUESTS }
+// Mirrors TypeEditor by name: a chosen type opens its editor through HuntPage.valueOf(editor.name).
+private enum class HuntPage { ROOT, SPAWN, HUNDO, PVP, NUNDO, COMMON, RAIDS, ROCKET, QUESTS, TAPPABLES }
 
 /** What a hunt narrows a type to, where "nothing picked" means "any of them". */
 private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = when (this) {
@@ -229,6 +230,7 @@ private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = 
         else "Tiers: ${definition.raidTiers.summary()} · bosses: ${definition.raidSpecies.summary()}"
     FilterAlertType.ROCKET -> definition.rocketTypes.summary()
     FilterAlertType.QUEST -> definition.quests.summary()
+    FilterAlertType.TAPPABLE -> definition.tappableSpecies.summary()
     else -> "Any"
 }
 

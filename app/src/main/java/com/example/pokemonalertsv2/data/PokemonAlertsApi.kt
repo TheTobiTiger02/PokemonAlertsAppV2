@@ -176,6 +176,8 @@ data class FilterCatalog(
     val raidSpecies: List<String> = emptyList(),
     val raidTiers: List<String> = emptyList(),
     val rocketTypes: List<String> = emptyList(),
+    /** Loot items Tappables drop ("Rare Candy"), offered next to species in the Tappable picker. */
+    val tappableRewards: List<String> = emptyList(),
     val quests: List<FilterCatalogQuest> = emptyList()
 )
 
@@ -201,7 +203,13 @@ interface PushTopicsService {
 }
 
 @Serializable
-data class LiveSightingRegistration(val all: Boolean = false, val species: List<Int> = emptyList())
+data class LiveSightingRegistration(
+    val all: Boolean = false,
+    val species: List<Int> = emptyList(),
+    /** Pokémon from Tappables, registered apart from wild sightings. */
+    val tappableAll: Boolean = false,
+    val tappableSpecies: List<Int> = emptyList()
+)
 
 /**
  * Identity of an alert the server dropped from the active set.

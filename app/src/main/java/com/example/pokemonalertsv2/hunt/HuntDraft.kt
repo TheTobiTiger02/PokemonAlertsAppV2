@@ -27,7 +27,8 @@ internal val EMPTY_HUNT_DRAFT = FilterDefinition(
     pvpSpecies = FilterSelection.None,
     raidSpecies = FilterSelection.None,
     raidTiers = FilterSelection.None,
-    rocketTypes = FilterSelection.None
+    rocketTypes = FilterSelection.None,
+    tappableSpecies = FilterSelection.None
 )
 
 /**
@@ -43,7 +44,8 @@ internal fun FilterDefinition.forHunt(): FilterDefinition = copy(
     pvpSpecies = pvpSpecies.orAny(),
     raidSpecies = raidSpecies.orAny(),
     raidTiers = raidTiers.orAny(),
-    rocketTypes = rocketTypes.orAny()
+    rocketTypes = rocketTypes.orAny(),
+    tappableSpecies = tappableSpecies.orAny()
 )
 
 /**
@@ -64,7 +66,8 @@ internal fun FilterDefinition.forHuntDraft(): FilterDefinition = copy(
     pvpSpecies = pvpSpecies.orNone(),
     raidSpecies = raidSpecies.orNone(),
     raidTiers = raidTiers.orNone(),
-    rocketTypes = rocketTypes.orNone()
+    rocketTypes = rocketTypes.orNone(),
+    tappableSpecies = tappableSpecies.orNone()
 )
 
 private fun FilterSelection.orAny(): FilterSelection =

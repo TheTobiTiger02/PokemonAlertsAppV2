@@ -82,6 +82,8 @@ enum class FilterAlertType(val label: String) {
     PVP("PvP"),
     /** Every other wild spawn, including the backend's live sightings without IV. Off by default. */
     COMMON("Common"),
+    /** Event Tappables: Pokémon they spawn and the loot they drop, filtered by species or item. */
+    TAPPABLE("Tappables"),
     WEATHER("Weather"),
     OTHER("Other")
 }
@@ -95,7 +97,8 @@ val FilterAlertType.interactionRadiusMeters: Float
         FilterAlertType.COMMON,
         FilterAlertType.HUNDO,
         FilterAlertType.NUNDO,
-        FilterAlertType.PVP -> SPAWN_INTERACTION_RANGE_METERS
+        FilterAlertType.PVP,
+        FilterAlertType.TAPPABLE -> SPAWN_INTERACTION_RANGE_METERS
         FilterAlertType.RAID,
         FilterAlertType.ROCKET,
         FilterAlertType.KECLEON,
@@ -190,13 +193,19 @@ data class DistanceOverrides(
 
 private const val LEGACY_RARE_TOKEN = "rare"
 private const val COMMON_TOKEN = "common"
+private const val OTHER_TOKEN = "other"
+private const val TAPPABLE_TOKEN = "tappable"
 
 /**
- * Every type except Common: those are thousands an hour, so a filter only shows them once asked to.
- * Lazy because the token normalizer's regexes are declared further down this file.
+ * Types a filter only shows once asked to: Common sightings are thousands an hour, and an event
+ * puts hundreds of Tappables on the map at once. A reset, including the notifications filter's,
+ * leaves them off. Existing filters that showed Other keep their Tappables (schema 5).
  */
+val OPT_IN_FILTER_ALERT_TYPES: Set<FilterAlertType> = setOf(FilterAlertType.COMMON, FilterAlertType.TAPPABLE)
+
+/** Every type except [OPT_IN_FILTER_ALERT_TYPES]. Lazy: the token normalizer's regexes are declared further down. */
 val DEFAULT_FILTER_ALERT_TYPES: FilterSelection by lazy {
-    FilterSelection.only(FilterAlertType.entries.filterNot { it == FilterAlertType.COMMON }.map { it.name })
+    FilterSelection.only(FilterAlertType.entries.filterNot { it in OPT_IN_FILTER_ALERT_TYPES }.map { it.name })
 }
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -216,6 +225,8 @@ data class FilterDefinition(
     val raidSpecies: FilterSelection = FilterSelection.All,
     val raidTiers: FilterSelection = FilterSelection.All,
     val rocketTypes: FilterSelection = FilterSelection.All,
+    /** One list for both kinds of Tappable: species ("Gengar") and loot items ("Rare Candy"). */
+    val tappableSpecies: FilterSelection = FilterSelection.All,
     val quests: QuestFilterRules = QuestFilterRules(),
     /** Retained when a legacy feed preset is promoted into the reusable library. */
     val feedSort: String? = null,
@@ -224,7 +235,7 @@ data class FilterDefinition(
     val advancedRuleCount: Int
         get() = listOf(
             spawnSpecies, commonSpecies, hundoSpecies, nundoSpecies, pvpSpecies,
-            raidSpecies, raidTiers, rocketTypes
+            raidSpecies, raidTiers, rocketTypes, tappableSpecies
         ).count { it.mode != FilterSelectionMode.ALL } +
             (if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0) +
             distanceOverrides.ruleCount
@@ -311,10 +322,10 @@ enum class FilterSurface(val label: String) {
 
 /**
  * 2 added [FilterDefinition.distanceOverrides]; 3 stores distances in meters (v1/v2 stored
- * kilometers); 4 renamed Rare to Common and made Common opt-in. Older documents still decode:
- * [FilterStateCodec] rewrites them on read.
+ * kilometers); 4 renamed Rare to Common and made Common opt-in; 5 added Tappables. Older
+ * documents still decode: [FilterStateCodec] rewrites them on read.
  */
-const val CURRENT_FILTER_SCHEMA_VERSION = 4
+const val CURRENT_FILTER_SCHEMA_VERSION = 5
 const val MAX_FILTER_PROFILE_NAME = 40
 const val MAX_FILTER_DISTANCE_METERS = 50_000
 
@@ -396,7 +407,8 @@ object FilterStateCodec {
         if (version >= CURRENT_FILTER_SCHEMA_VERSION) return root
         var migrated: JsonElement = document
         if (version < 3) migrated = rescaleDistanceNode(migrated)
-        migrated = commonOptInNode(migrated)
+        if (version < 4) migrated = commonOptInNode(migrated)
+        if (version < 5) migrated = tappableNode(migrated)
         return stampVersion(migrated)
     }
 
@@ -439,6 +451,38 @@ object FilterStateCodec {
             JsonObject(children)
         }
         is JsonArray -> JsonArray(element.map(::commonOptInNode))
+        else -> element
+    }
+
+    /**
+     * Schema 5: Tappables, which until now classified as Other, became their own type. Wherever
+     * Other is listed, Tappable joins it, so they stay where they were shown. The one exception is
+     * a local notifications filter: Tappable notifications are opt-in, because an event puts
+     * hundreds on the map at once. Every definition gets `tappableSpecies = All`.
+     */
+    private fun tappableNode(element: JsonElement, notifications: Boolean = false): JsonElement = when (element) {
+        is JsonObject -> {
+            val children = element.mapValues { (key, value) ->
+                tappableNode(value, notifications = notifications || key == "notifications")
+            }.toMutableMap()
+            if ("alertTypes" in children) {
+                val types = children["alertTypes"] as? JsonObject
+                val mode = (types?.get("mode") as? JsonPrimitive)?.content
+                val values = (types?.get("values") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }
+                if (!notifications && mode == FilterSelectionMode.ONLY.name &&
+                    values.any { normalizeFilterToken(it) == OTHER_TOKEN } &&
+                    values.none { normalizeFilterToken(it) == TAPPABLE_TOKEN }
+                ) {
+                    children["alertTypes"] = json.encodeToJsonElement(
+                        FilterSelection.serializer(),
+                        FilterSelection.only(values + FilterAlertType.TAPPABLE.name)
+                    )
+                }
+                children["tappableSpecies"] = json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.All)
+            }
+            JsonObject(children)
+        }
+        is JsonArray -> JsonArray(element.map { tappableNode(it, notifications) })
         else -> element
     }
 
@@ -585,6 +629,7 @@ object AlertFilterMatcher {
             definition.raidTiers.contains(RaidTierParser.parse(alert)?.displayLabel)
         FilterAlertType.ROCKET -> definition.rocketTypes.contains(alert.gruntType)
         FilterAlertType.QUEST -> matchesQuest(alert, definition.quests)
+        FilterAlertType.TAPPABLE -> definition.tappableSpecies.contains(alert.tappableToken())
         FilterAlertType.KECLEON, FilterAlertType.WEATHER, FilterAlertType.OTHER -> true
     }
 
@@ -618,8 +663,16 @@ fun PokemonAlert.isDirectlyInRange(directDistanceMeters: Float?): Boolean {
 fun FilterAlertType.matchTokenFor(alert: PokemonAlert): String? = when (this) {
     FilterAlertType.QUEST -> alert.questReward
     FilterAlertType.ROCKET -> alert.gruntType
+    FilterAlertType.TAPPABLE -> alert.tappableToken()
     else -> alert.filterSpecies()
 }
+
+/**
+ * What a Tappable rule keys on: the species of a Pokémon Tappable, or the item a loot Tappable
+ * drops ("Rare Candy" from the reward "Rare Candy ×3").
+ */
+fun PokemonAlert.tappableToken(): String? = pokemon?.takeIf { it.isNotBlank() }
+    ?: questReward?.substringBefore(" ×")?.trim()?.takeIf { it.isNotBlank() }
 
 fun PokemonAlert.filterSpecies(): String = pokemon
     ?.takeIf { it.isNotBlank() }
