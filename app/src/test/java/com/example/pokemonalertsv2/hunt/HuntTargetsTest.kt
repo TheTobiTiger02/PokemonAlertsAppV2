@@ -231,6 +231,33 @@ class HuntTargetsTest {
         assertTrue(!isHuntTarget(alerts[1], dragonGrunts, now, area))
     }
 
+    @Test
+    fun `outside the area, a match is only shown, unless it was tapped`() {
+        val area = listOf(
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(49.999, 7.999),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(49.999, 8.001),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(50.003, 8.001),
+            com.example.pokemonalertsv2.catchroutes.CatchPoint(50.003, 7.999)
+        )
+        val inside = grunt("inside", "Dragon", latitude = 50.002, longitude = 8.0)
+        val far = grunt("far", "Dragon", latitude = 50.001, longitude = 8.020)
+        val near = grunt("near", "Dragon", latitude = 50.001, longitude = 8.004)
+        val other = grunt("other", "Water", latitude = 50.001, longitude = 8.003)
+        val alerts = listOf(inside, far, near, other)
+
+        assertEquals(listOf("inside"), alerts.plannableInHuntArea(area, pinnedId = null).map { it.name })
+        assertEquals(listOf("inside", "near"), alerts.plannableInHuntArea(area, pinnedId = near.uniqueId).map { it.name })
+        assertEquals(alerts, alerts.plannableInHuntArea(emptyList(), pinnedId = null))
+
+        fun outside(limit: Int, dismissed: Set<String> = emptySet()) = huntMatchesOutsideArea(
+            alerts, dragonGrunts, dismissed, area, originLatitude = 50.0, originLongitude = 8.0, limit = limit, nowMillis = now
+        ).map { it.name }
+        assertEquals(listOf("near", "far"), outside(limit = 10))
+        assertEquals(listOf("near"), outside(limit = 1))
+        assertEquals(listOf("far"), outside(limit = 10, dismissed = setOf(near.uniqueId)))
+        assertTrue(huntMatchesOutsideArea(alerts, dragonGrunts, emptySet(), emptyList(), 50.0, 8.0, 10, now).isEmpty())
+    }
+
     private fun grunt(
         name: String,
         gruntType: String,

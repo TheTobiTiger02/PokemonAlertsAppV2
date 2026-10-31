@@ -60,14 +60,18 @@ internal fun huntPathRequestSpan(chain: List<HuntRoutePoint>, known: Set<HuntLeg
 }
 
 /**
- * The published path for [chain], stitched from [legs], or [HuntPath.None] when a leg is missing.
+ * The path for [chain], stitched from [legs]; [HuntPath.None] only when there is no leg to draw.
  *
- * A half-drawn route would read as "the walk ends here", which is worse than no line at all.
+ * A leg whose streets have not arrived yet -- the plan just re-ordered, the trainer walked on, or the
+ * routing edge is making us wait -- is drawn straight until they do. A line that vanishes every time the
+ * plan changes reads as a broken map; a straight stretch that turns into streets a moment later does not.
  */
 internal fun huntPathFrom(chain: List<HuntRoutePoint>, legs: Map<HuntLegKey, List<CatchPoint>>, nowMillis: Long): HuntPath {
     val keys = huntPathLegKeys(chain)
     if (keys.isEmpty()) return HuntPath.None
-    val resolved = keys.map { legs[it] ?: return HuntPath.None }
+    val resolved = keys.mapIndexed { index, key ->
+        legs[key] ?: listOf(chain[index], chain[index + 1]).map { CatchPoint(it.latitude, it.longitude) }
+    }
     val rest = mutableListOf<CatchPoint>()
     for (leg in resolved.drop(1)) {
         if (rest.isEmpty()) rest += leg else rest += leg.drop(1)

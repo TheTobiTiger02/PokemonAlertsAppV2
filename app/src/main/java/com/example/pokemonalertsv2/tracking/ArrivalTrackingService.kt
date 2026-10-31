@@ -34,6 +34,8 @@ import com.example.pokemonalertsv2.hunt.HuntBatterySaver
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.hunt.isHuntTarget
 import com.example.pokemonalertsv2.hunt.insideHuntArea
+import com.example.pokemonalertsv2.hunt.huntMatchesOutsideArea
+import com.example.pokemonalertsv2.hunt.plannableInHuntArea
 import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.hunt.shouldRetargetHuntTo
@@ -45,6 +47,7 @@ import com.example.pokemonalertsv2.hunt.HuntPathCache
 import com.example.pokemonalertsv2.hunt.HuntRoutePoint
 import com.example.pokemonalertsv2.hunt.huntRoutingCandidates
 import com.example.pokemonalertsv2.hunt.CATCH_UNDO_WINDOW_MILLIS
+import com.example.pokemonalertsv2.hunt.OVERLAY_UNDO_DISPLAY_MILLIS
 import com.example.pokemonalertsv2.hunt.isUndoOfferLive
 import com.example.pokemonalertsv2.hunt.recordHuntCatch
 import com.example.pokemonalertsv2.hunt.undoLastCatch
@@ -191,6 +194,12 @@ class ArrivalTrackingService : Service() {
     private var storedThemeMode = 0
     private var themeJob: Job? = null
     private var routeLineJob: Job? = null
+    private var spacialRendJob: Job? = null
+    private var outsideAreaJob: Job? = null
+    /** Whether the window also draws, dimmed, the hunt's matches outside its area. */
+    private var showOutsideArea = false
+    /** Those matches, nearest first, refreshed with every plan rather than on every fix. */
+    @Volatile private var huntOutsideMatches: List<PokemonAlert> = emptyList()
 
     /**
      * The "I'm going" map switch, shared with the app and the notification. Outside a hunt the
@@ -356,19 +365,25 @@ class ArrivalTrackingService : Service() {
                 AlertPreferences(applicationContext.alertPreferencesDataStore)
                     .lastCaughtAlert
                     .collectLatest { caught ->
-                        undoOffer = caught?.takeIf { isUndoOfferLive(it, System.currentTimeMillis()) }
+                        val now = System.currentTimeMillis()
+                        undoOffer = caught?.takeIf { isUndoOfferLive(it, now) }
                         refreshCurrentNotification()
-                        floatingMap.setUndoOffer(undoOffer?.displayName)
+                        floatingMap.setUndoOffer(
+                            caught?.takeIf { isUndoOfferLive(it, now, OVERLAY_UNDO_DISPLAY_MILLIS) }?.displayName
+                        )
                         // While walking, the 30s chip loop would drop the action on
                         // its own. In standby nothing re-posts, so the offer is aged
-                        // out here instead of sitting there indefinitely.
+                        // out here instead of sitting there indefinitely. The window's
+                        // strip covers the map, so it leaves well before the notification.
                         val offer = undoOffer ?: return@collectLatest
+                        val stripLeft = OVERLAY_UNDO_DISPLAY_MILLIS - (System.currentTimeMillis() - offer.caughtAtMillis)
+                        if (stripLeft > 0) delay(stripLeft)
+                        floatingMap.setUndoOffer(null)
                         val remaining = CATCH_UNDO_WINDOW_MILLIS -
                             (System.currentTimeMillis() - offer.caughtAtMillis)
                         if (remaining > 0) delay(remaining)
                         undoOffer = null
                         refreshCurrentNotification()
-                        floatingMap.setUndoOffer(null)
                     }
             }
         }
@@ -413,6 +428,23 @@ class ArrivalTrackingService : Service() {
                     showHuntPath = shown
                     floatingMap.setRouteLine(shown)
                     floatingMap.setHuntPath(currentHuntPath())
+                }
+            }
+        }
+        if (spacialRendJob == null) {
+            spacialRendJob = serviceScope.launch {
+                // Only mirrors the switch: the arrival radius already follows the setting itself.
+                AlertPreferences(applicationContext.alertPreferencesDataStore).spacialRendEnabled.collect { enabled ->
+                    floatingMap.setSpacialRend(enabled)
+                }
+            }
+        }
+        if (outsideAreaJob == null) {
+            outsideAreaJob = serviceScope.launch {
+                huntRepository.showOutsideArea.collect { shown ->
+                    showOutsideArea = shown
+                    if (!shown) huntOutsideMatches = emptyList()
+                    requestHuntPlan()
                 }
             }
         }
@@ -545,6 +577,8 @@ class ArrivalTrackingService : Service() {
         appMapVisibilityJob?.cancel()
         themeJob?.cancel()
         routeLineJob?.cancel()
+        spacialRendJob?.cancel()
+        outsideAreaJob?.cancel()
         goingMapJob?.cancel()
         goingPathJob?.cancel()
         endedNoteJob?.cancel()
@@ -639,9 +673,20 @@ class ArrivalTrackingService : Service() {
     private fun startChipRefreshLoop() {
         chipRefreshJob?.cancel()
         chipRefreshJob = serviceScope.launch {
+            var repostedAt = System.currentTimeMillis()
             while (isActive) {
-                delay(CHIP_REFRESH_INTERVAL_MILLIS)
+                val now = System.currentTimeMillis()
+                // In a target's last minute the window counts seconds, so it is woken every second for
+                // that alone; the notification keeps its own slower cadence.
+                val untilRepost = CHIP_REFRESH_INTERVAL_MILLIS - (now - repostedAt)
+                delay(floatingMapTickDelay(untilRepost, now).coerceAtLeast(FINAL_MINUTE_TICK_MILLIS))
                 val destination = currentDestination ?: break
+                if (System.currentTimeMillis() - repostedAt < CHIP_REFRESH_INTERVAL_MILLIS) {
+                    updateBubble(destination, lastDirectDistanceMeters, lastInRange, lastWaitingForPreciseLocation)
+                    refreshFloatingMapAlerts()
+                    continue
+                }
+                repostedAt = System.currentTimeMillis()
                 expireUnavailableLocation()
                 updateOngoing(
                     destination = destination,
@@ -651,6 +696,14 @@ class ArrivalTrackingService : Service() {
                 )
             }
         }
+    }
+
+    /** How long until the window's readouts next need redrawing, at most [untilRepost]. */
+    private fun floatingMapTickDelay(untilRepost: Long, now: Long): Long {
+        if (!floatingMap.isShowing || floatingMap.isMinimized) return untilRepost
+        val ends = (renderedHuntTargets.map { it.endTime } + currentDestination?.alert?.endTime)
+            .mapNotNull { TimeUtils.parseEndTimeToMillis(it) }
+        return finalMinuteTickDelay(ends, now, untilRepost)
     }
 
     private fun scheduleExpiry(destination: TrackedDestination) {
@@ -1169,6 +1222,13 @@ class ArrivalTrackingService : Service() {
                 }.onFailure { Log.w(TAG, "Could not save the route line setting", it) }
             }
         }
+        floatingMap.onSpacialRendToggle = { enabled ->
+            serviceScope.launch {
+                runCatching {
+                    AlertPreferences(applicationContext.alertPreferencesDataStore).updateSpacialRendEnabled(enabled)
+                }.onFailure { Log.w(TAG, "Could not save the Spacial Rend setting", it) }
+            }
+        }
         floatingMap.onRecenter = { startFollowing() }
         floatingMap.onFollowCancelled = { stopFollowing() }
         floatingMap.onEditTargets = { openTheApp(editHunt = true) }
@@ -1239,7 +1299,9 @@ class ArrivalTrackingService : Service() {
             }
             refreshFloatingMapAlerts()
         }
-        floatingMap.setUndoOffer(undoOffer?.displayName)
+        floatingMap.setUndoOffer(
+            undoOffer?.takeIf { isUndoOfferLive(it, System.currentTimeMillis(), OVERLAY_UNDO_DISPLAY_MILLIS) }?.displayName
+        )
         if (!mapWasShowing) {
             batterySaver.restoreOverlayOrder()
             // Fresh views: the bubble and the follow button start blank.
@@ -1552,7 +1614,6 @@ class ArrivalTrackingService : Service() {
         val origin = lastAcceptedLocation
         val latitude = origin?.latitude ?: currentDestination?.latitude ?: return HuntPlan.Empty
         val longitude = origin?.longitude ?: currentDestination?.longitude ?: return HuntPlan.Empty
-        val alerts = liveAlerts.insideHuntArea(huntArea)
         val dismissed = dismissedAlertIds
         val destinationId = currentDestination?.uniqueId
         val previous = if (fromScratch) {
@@ -1561,11 +1622,30 @@ class ArrivalTrackingService : Service() {
             (listOfNotNull(destinationId) + huntPlan.route.map { it.uniqueId }).distinct()
         }
         val pinned = if (fromScratch) null else pinnedHuntTargetId?.takeIf { it == destinationId }
+        // A tapped match outside the area is walked to like any pinned target; nothing else outside is planned.
+        val alerts = liveAlerts.plannableInHuntArea(huntArea, pinned)
         val costs = huntMatrix.snapshot()
         huntPlanLatitude = latitude
         huntPlanLongitude = longitude
+        val outsideShown = showOutsideArea
+        val area = huntArea
+        val everything = liveAlerts
         return withContext(Dispatchers.Default) {
             val now = System.currentTimeMillis()
+            huntOutsideMatches = if (outsideShown) {
+                huntMatchesOutsideArea(
+                    alerts = everything,
+                    definition = definition,
+                    dismissedAlertIds = dismissed,
+                    area = area,
+                    originLatitude = latitude,
+                    originLongitude = longitude,
+                    limit = FLOATING_MAP_MAX_OUTSIDE_MARKERS,
+                    nowMillis = now
+                )
+            } else {
+                emptyList()
+            }
             huntTargets(
                 alerts = alerts,
                 definition = definition,
@@ -1673,6 +1753,8 @@ class ArrivalTrackingService : Service() {
             nearest
         }
         val numbered = if (huntActive) minOf(plan.route.size, targets.size) else 0
+        val outside = outsideAreaMarkers(targets)
+        val dimmedIds = outside.mapTo(HashSet()) { it.uniqueId }
         // This runs from updateOngoing, i.e. on every location fix. Rebuilding every
         // pin that often -- Canvas work, on the main thread -- was most of the lag.
         renderedHuntTargets = targets.take(numbered)
@@ -1682,7 +1764,8 @@ class ArrivalTrackingService : Service() {
         // what a pin looks like.
         val wearsNumber = minOf(numbered, HUNT_ORDINAL_MAX)
         val key = targets.take(wearsNumber).joinToString(",") { it.uniqueId } + "|" +
-            targets.drop(wearsNumber).map { it.uniqueId }.sorted().joinToString(",") + "|" + emphasized.orEmpty()
+            targets.drop(wearsNumber).map { it.uniqueId }.sorted().joinToString(",") + "|" + emphasized.orEmpty() +
+            "|" + dimmedIds.sorted().joinToString(",")
         val labelKey = targets.take(minOf(numbered, HUNT_ORDINAL_MAX))
             .joinToString(",") { mapCountdownLabel(it.endTime, now, minutePrecision = true) }
         if (key == renderedTargetKey && labelKey == renderedLabelKey) return
@@ -1690,7 +1773,8 @@ class ArrivalTrackingService : Service() {
         renderedTargetKey = key
         renderedLabelKey = labelKey
 
-        floatingMap.setAlerts(targets, emphasized, numbered)
+        val drawn = targets + outside
+        floatingMap.setAlerts(drawn, emphasized, numbered, dimmedIds)
         // A window opened mid-hunt draws the line it already has rather than waiting a refresh pass,
         // and a re-plan drops a line that no longer matches the numbers.
         if (pinsChanged) floatingMap.setHuntPath(currentHuntPath())
@@ -1700,9 +1784,17 @@ class ArrivalTrackingService : Service() {
         // Then the real artwork, off the main thread, replacing the placeholders.
         artworkJob?.cancel()
         artworkJob = serviceScope.launch {
-            runCatching { floatingMap.loadArtwork(targets, emphasized, numbered) }
+            runCatching { floatingMap.loadArtwork(drawn, emphasized, numbered, dimmedIds) }
                 .onFailure { if (it !is kotlinx.coroutines.CancellationException) Log.w(TAG, "Artwork pass failed", it) }
         }
+    }
+
+    /** The hunt's matches outside its area, for the window to draw dimmed when the trainer asked to see them. */
+    private fun outsideAreaMarkers(shown: List<PokemonAlert>): List<PokemonAlert> {
+        if (!huntActive || !showOutsideArea) return emptyList()
+        val shownIds = shown.mapTo(HashSet()) { it.uniqueId }
+        val dismissed = dismissedAlertIds
+        return huntOutsideMatches.filter { it.uniqueId !in shownIds && it.uniqueId !in dismissed }
     }
 
     /** Fits the displayed numbered route without reranking it from a new GPS fix. */
@@ -2180,6 +2272,8 @@ class ArrivalTrackingService : Service() {
 
         /** How many hunt targets the floating window draws, nearest first. */
         private const val FLOATING_MAP_MAX_MARKERS = 40
+        /** Dimmed matches outside the hunt's area, drawn on top of the route's own [FLOATING_MAP_MAX_MARKERS]. */
+        private const val FLOATING_MAP_MAX_OUTSIDE_MARKERS = 15
         const val ACTION_STOP = "com.example.pokemonalertsv2.tracking.STOP"
         const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
             const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
@@ -2221,6 +2315,7 @@ class ArrivalTrackingService : Service() {
          * fix rate is left to [arrivalCadenceFor] instead.
          */
         private const val CHIP_REFRESH_INTERVAL_MILLIS = 10_000L
+        private const val FINAL_MINUTE_TICK_MILLIS = 1_000L
 
         @Volatile
         internal var locationSourceFactory: ArrivalLocationSourceFactory =
@@ -2323,4 +2418,14 @@ class ArrivalTrackingService : Service() {
             }
         }
     }
+}
+
+/**
+ * The wait before the next readout redraw: a second while any of [endMillis] is in its last
+ * minute, else until the soonest one enters it, never longer than [fallbackMillis].
+ */
+internal fun finalMinuteTickDelay(endMillis: List<Long>, nowMillis: Long, fallbackMillis: Long): Long {
+    val untilFinalMinute = endMillis.map { it - nowMillis }.filter { it > 0 }.minOfOrNull { it - 60_000L }
+        ?: return fallbackMillis
+    return if (untilFinalMinute <= 0) 1_000L else minOf(untilFinalMinute, fallbackMillis)
 }

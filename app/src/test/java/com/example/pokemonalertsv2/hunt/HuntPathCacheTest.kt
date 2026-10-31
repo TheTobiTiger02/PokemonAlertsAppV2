@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.hunt
 import com.example.pokemonalertsv2.catchroutes.CatchPathGeometry
 import com.example.pokemonalertsv2.catchroutes.CatchPathLeg
 import com.example.pokemonalertsv2.catchroutes.CatchPathResponse
+import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.catchroutes.CatchRoutesService
 import com.example.pokemonalertsv2.catchroutes.CatchSnappedPoint
 import com.example.pokemonalertsv2.data.RouteMatrixRequest
@@ -120,7 +121,9 @@ class HuntPathCacheTest {
         clock += 30_000
         assertFalse(cache.request(originLat, originLon, listOf(a, b)))
         assertEquals(1, service.requests.size)
-        assertEquals(HuntPath.None, cache.snapshot())
+        // Held back, the route is still drawn: straight, until the streets can be asked for.
+        val waiting = cache.snapshot() as HuntPath.Resolved
+        assertEquals(listOf(CatchPoint(originLat, originLon), CatchPoint(a.latitude, a.longitude)), waiting.next)
     }
 
     @Test fun `a failure keeps the line already drawn and backs off`() = runTest {
@@ -131,7 +134,7 @@ class HuntPathCacheTest {
         fail = true
         clock += 20_000
         assertFalse(cache.request(originLat, originLon, listOf(a, b, c)))
-        assertEquals(drawn, cache.snapshot())
+        assertEquals((drawn as HuntPath.Resolved).next, (cache.snapshot() as HuntPath.Resolved).next)
         assertEquals(clock + HuntPathCache.BASE_BACKOFF_MILLIS, HuntRoutingGate.blockedUntilMillis)
         assertEquals(2, service.requests.size)
     }
@@ -144,14 +147,35 @@ class HuntPathCacheTest {
         assertEquals(2, service.requests.last().points.size)
     }
 
-    @Test fun `a path is only handed out for the route it was fetched for`() = runTest {
+    @Test fun `the line always walks the order asked for, and never blinks out on a re-plan`() = runTest {
         val (cache, _) = cache(::ok)
         assertEquals(HuntPath.None, cache.pathFor(listOf(a, b, c)))
         cache.request(originLat, originLon, listOf(a, b, c))
-        assertTrue(cache.pathFor(listOf(a, b, c)) is HuntPath.Resolved)
-        // The plan re-ordered or swapped a stop before a new path arrived: no line rather than the old one.
-        assertEquals(HuntPath.None, cache.pathFor(listOf(b, a, c)))
-        assertEquals(HuntPath.None, cache.pathFor(listOf(a, b)))
-        assertEquals(HuntPath.None, cache.pathFor(listOf(a, b, c.copy(id = "d"))))
+        assertEquals(listOf("a", "b", "c"), (cache.pathFor(listOf(a, b, c)) as HuntPath.Resolved).stopIds)
+        // Re-ordered before a new path arrived: drawn in the new order, the unknown legs straight.
+        val reordered = cache.pathFor(listOf(b, a, c)) as HuntPath.Resolved
+        assertEquals(listOf("b", "a", "c"), reordered.stopIds)
+        assertEquals(listOf(CatchPoint(originLat, originLon), CatchPoint(b.latitude, b.longitude)), reordered.next)
+        assertEquals(listOf("a", "b"), (cache.pathFor(listOf(a, b)) as HuntPath.Resolved).stopIds)
+    }
+
+    @Test fun `a leg due for refresh is still drawn until its replacement lands`() = runTest {
+        var answered = 0
+        // Streets with a bend in them, so they cannot be mistaken for the straight stand-in.
+        val (cache, service) = cache { request ->
+            if (answered++ > 0) return@cache busy()
+            val body = ok(request).body()!!
+            Response.success(body.copy(legs = body.legs.map { leg ->
+                val (from, to) = leg.geometry.coordinates
+                leg.copy(geometry = leg.geometry.copy(coordinates = listOf(from, listOf(from[0], to[1]), to)))
+            }))
+        }
+        cache.request(originLat, originLon, listOf(a, b))
+        val streets = (cache.pathFor(listOf(a, b)) as HuntPath.Resolved).next
+        assertEquals(3, streets.size)
+        clock += HUNT_LEG_TTL_MILLIS + 1
+        assertFalse(cache.request(originLat, originLon, listOf(a, b)))
+        assertEquals(2, service.requests.size)
+        assertEquals(streets, (cache.pathFor(listOf(a, b)) as HuntPath.Resolved).next)
     }
 }

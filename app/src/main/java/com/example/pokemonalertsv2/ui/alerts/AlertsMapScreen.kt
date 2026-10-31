@@ -232,6 +232,8 @@ internal fun mapCountdownLabel(
 ): String {
     val remaining = (TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) - nowMillis
     if (remaining <= 0L) return "Expired"
+    // The last minute always counts seconds: "1m" there says nothing about whether it is worth running.
+    if (remaining <= 59_000L) return TimeUtils.formatDurationShort(remaining)
     // A ticking seconds figure earns its cost near the despawn and nowhere else. Beyond the
     // window, minute precision holds the label - and therefore the marker's icon cache key -
     // steady for a minute at a time, so a screen of pins no longer re-rasterizes every second

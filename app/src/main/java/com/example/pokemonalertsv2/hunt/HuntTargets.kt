@@ -538,3 +538,37 @@ internal fun PokemonAlert.insideHuntArea(area: List<CatchPoint>): Boolean {
 
 internal fun List<PokemonAlert>.insideHuntArea(area: List<CatchPoint>): List<PokemonAlert> =
     if (!area.isArea()) this else filter { it.insideHuntArea(area) }
+
+/**
+ * What a hunt limited to [area] plans from: the alerts inside it, plus [pinnedId] wherever it is. A match
+ * outside the area is never suggested, but one the trainer tapped on purpose is still walked to.
+ */
+internal fun List<PokemonAlert>.plannableInHuntArea(area: List<CatchPoint>, pinnedId: String?): List<PokemonAlert> =
+    if (!area.isArea()) this else filter { it.insideHuntArea(area) || it.uniqueId == pinnedId }
+
+/**
+ * The matches outside the hunt's [area], nearest first, for drawing dimmed beside the route: the hunt is
+ * looking for them, it just will not send you there unless you tap one.
+ */
+internal fun huntMatchesOutsideArea(
+    alerts: List<PokemonAlert>,
+    definition: FilterDefinition,
+    dismissedAlertIds: Set<String>,
+    area: List<CatchPoint>,
+    originLatitude: Double?,
+    originLongitude: Double?,
+    limit: Int,
+    nowMillis: Long = System.currentTimeMillis()
+): List<PokemonAlert> {
+    if (!area.isArea() || limit <= 0) return emptyList()
+    val outside = alerts.filter { alert ->
+        alert.uniqueId !in dismissedAlertIds &&
+            !alert.insideHuntArea(area) &&
+            alert.isEligibleArrivalDestination(nowMillis) &&
+            AlertFilterMatcher.matches(alert, definition)
+    }
+    if (originLatitude == null || originLongitude == null) return outside.take(limit)
+    return outside.sortedBy { alert ->
+        mapPipDistanceMeters(originLatitude, originLongitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0)
+    }.take(limit)
+}

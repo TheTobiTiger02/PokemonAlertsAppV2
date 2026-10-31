@@ -36,6 +36,7 @@ import com.example.pokemonalertsv2.hunt.HuntPath
 import com.example.pokemonalertsv2.ui.alerts.MapLibreInitializer
 import com.example.pokemonalertsv2.ui.alerts.HUNT_ORDINAL_MAX
 import com.example.pokemonalertsv2.ui.alerts.AlertMapCoordinates
+import com.example.pokemonalertsv2.ui.alerts.MapContentInsets
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerItem
 import com.example.pokemonalertsv2.ui.alerts.MapMarkerPalette
 import com.example.pokemonalertsv2.ui.alerts.MapUserPose
@@ -44,6 +45,7 @@ import com.example.pokemonalertsv2.ui.alerts.MAP_EMPHASIZED_MARKER_Z_INDEX
 import com.example.pokemonalertsv2.ui.alerts.OpenStreetMapMarker
 import com.example.pokemonalertsv2.ui.alerts.createImmediateOpenStreetMapMarker
 import com.example.pokemonalertsv2.ui.alerts.createMapMarkerIcon
+import com.example.pokemonalertsv2.ui.alerts.fitBoundsPadding
 import com.example.pokemonalertsv2.ui.alerts.mapMarkerArtworkRasterPx
 import com.example.pokemonalertsv2.ui.alerts.mapMarkerBaseIconCacheKey
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapIconRequest
@@ -62,6 +64,7 @@ import com.example.pokemonalertsv2.ui.alerts.MAP_PIP_CLOSE_ZOOM
 import com.example.pokemonalertsv2.ui.alerts.MapPipFocus
 import com.example.pokemonalertsv2.ui.alerts.openStreetMapStyleJson
 import com.example.pokemonalertsv2.ui.alerts.resolveMapPipFocus
+import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -103,6 +106,7 @@ internal class FloatingMapOverlay(context: Context) {
     private var noticeText: TextView? = null
     private var undoAction: TextView? = null
     private var routeLineSwitch: android.widget.Switch? = null
+    private var spacialRendSwitch: android.widget.Switch? = null
     private var menuPanel: View? = null
     private var menuScrim: View? = null
     private var pauseItem: TextView? = null
@@ -124,6 +128,9 @@ internal class FloatingMapOverlay(context: Context) {
     private var undoName: String? = null
     private var noticeMessage: String? = null
     private var routeLineShown = true
+    private var spacialRendOn = false
+    /** Map padding that keeps pins and the trainer out from under the chrome; see [applyChromeInsets]. */
+    private var chromeInsets = MapContentInsets(0, 0, 0, 0)
     private var huntMode = true
     /** Controls that only make sense with a hunt's route: hidden for a single journey. */
     private val huntOnlyViews = mutableListOf<View>()
@@ -208,6 +215,9 @@ internal class FloatingMapOverlay(context: Context) {
     /** The ⋯ panel's route line switch was flipped. */
     var onRouteLineToggle: (Boolean) -> Unit = {}
 
+    /** The ⋯ panel's Spacial Rend switch was flipped. */
+    var onSpacialRendToggle: (Boolean) -> Unit = {}
+
     /**
      * Re-plan the route from where the trainer is standing now.
      *
@@ -249,6 +259,9 @@ internal class FloatingMapOverlay(context: Context) {
             // as a black box. TextureView costs a little performance and renders.
             .textureMode(true)
         val view = MapView(themedContext, options).apply { onCreate(null) }
+        view.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) applyChromeInsets()
+        }
 
         val guard = OpenStreetMapLifecycleGuard(
             onStart = { if (!view.isDestroyed) view.onStart() },
@@ -370,6 +383,7 @@ internal class FloatingMapOverlay(context: Context) {
                 controller.routeLook = RouteLineStyle.FOOTSTEPS
                 controller.attachStyle(style, themedContext)
                 controller.setGesturesEnabled(true)
+                applyChromeInsets()
                 ready.addOnCameraMoveStartedListener { reason ->
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
                         cameraAdjustedByHand = true
@@ -395,13 +409,14 @@ internal class FloatingMapOverlay(context: Context) {
      * ([com.example.pokemonalertsv2.hunt.HuntPlan.route]), so for the first [numbered] alerts
      * the index *is* the position in the walk. Those wear it as a number, up to
      * [HUNT_ORDINAL_MAX], along with how long they have left; the rest are matches the plan
-     * is not sending you to and wear neither.
+     * is not sending you to and wear neither. [dimmedIds] are shown for reference only -- matches
+     * outside the hunt's area -- and drawn faded; tapping one still walks you there.
      *
      * Uses the immediate marker builder rather than the full one: the full pass
      * loads species artwork over the network, which is the right trade for a
      * full-screen map and the wrong one for a 220dp window on a walk.
      */
-    fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
+    fun setAlerts(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int, dimmedIds: Set<String> = emptySet()) {
         if (map == null) return
         val now = System.currentTimeMillis()
         val markers = alerts.mapIndexedNotNull { index, alert ->
@@ -420,7 +435,7 @@ internal class FloatingMapOverlay(context: Context) {
                 goDexMatches = emptyMap(),
                 emphasized = emphasized,
                 ordinal = ordinal
-            ).withCountdown(alert, ordinal, sizePx, now)
+            ).withCountdown(alert, ordinal, sizePx, now).copy(dimmed = alert.uniqueId in dimmedIds && !emphasized)
         }
         runCatching { controller.setMarkers(themedContext, markers, alerts) }
             .onFailure { Log.w(TAG, "Could not draw the floating map markers", it) }
@@ -434,7 +449,7 @@ internal class FloatingMapOverlay(context: Context) {
      * every pin fell back to initials, forever. This is the pass that actually
      * loads them, and it populates the shared caches for everyone.
      */
-    suspend fun loadArtwork(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int) {
+    suspend fun loadArtwork(alerts: List<PokemonAlert>, emphasizedId: String?, numbered: Int, dimmedIds: Set<String> = emptySet()) {
         if (map == null) return
         // Teaches the Context-free raster helper the canonical size. Until this has
         // run once the fallback path looks artwork up under a key nothing writes.
@@ -478,7 +493,8 @@ internal class FloatingMapOverlay(context: Context) {
                         item = MapMarkerItem.Alert(alert, coordinates.latitude, coordinates.longitude),
                         iconId = mapMarkerBaseIconCacheKey(request),
                         icon = icon,
-                        zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f
+                        zIndex = if (emphasized) MAP_EMPHASIZED_MARKER_Z_INDEX else 0f,
+                        dimmed = alert.uniqueId in dimmedIds && !emphasized
                     ).withCountdown(alert, request.ordinal, sizePx, System.currentTimeMillis())
                 }
             }.awaitAll().filterNotNull()
@@ -512,6 +528,7 @@ internal class FloatingMapOverlay(context: Context) {
         noticeText = null
         undoAction = null
         routeLineSwitch = null
+        spacialRendSwitch = null
         painters.clear()
         huntOnlyViews.clear()
         followView = null
@@ -547,7 +564,37 @@ internal class FloatingMapOverlay(context: Context) {
         val undo = undoName
         noticeText?.text = if (undo != null) "Caught $undo" else noticeMessage
         undoAction?.isVisible = undo != null
-        noticeStrip?.isVisible = undo != null || noticeMessage != null
+        val shown = undo != null || noticeMessage != null
+        if (noticeStrip?.isVisible != shown) {
+            noticeStrip?.isVisible = shown
+            applyChromeInsets()
+        }
+    }
+
+    /**
+     * Pads the map by the chrome drawn over it: the ⋯ – × row (and the notice strip under it while
+     * shown) and a pin's height at the top, the Follow and Fit row at the bottom. Following, recentring and every
+     * framing then aim at the part of the map you can actually see.
+     */
+    private fun applyChromeInsets() {
+        val height = mapView?.height?.takeIf { it > 0 } ?: return
+        val stripShown = noticeStrip?.isVisible == true
+        chromeInsets = floatingMapChromeInsets(
+            mapHeightPx = height,
+            // Pins stand up from their coordinate, so a pin framed right at the edge still needs its height.
+            topPx = dp(TOP_BUTTONS_DP + (if (stripShown) UNDO_STRIP_DP else 0) + EMPHASIZED_MARKER_DP),
+            bottomPx = dp(CONTROLS_ROW_DP + CONTROLS_GAP_DP),
+            sidePx = dp(CHROME_SIDE_INSET_DP)
+        )
+        if (map == null) return
+        runCatching { controller.setContentInsets(chromeInsets) }
+            .onFailure { Log.w(TAG, "Could not pad the floating map", it) }
+    }
+
+    /** Keeps the panel's Spacial Rend switch on the stored setting. */
+    fun setSpacialRend(enabled: Boolean) {
+        spacialRendOn = enabled
+        spacialRendSwitch?.isChecked = enabled
     }
 
     /** Keeps the panel's route line switch on the stored setting. */
@@ -703,11 +750,8 @@ internal class FloatingMapOverlay(context: Context) {
         val ready = map ?: return
         cameraAdjustedByHand = false
         val target = LatLng(latitude, longitude)
-        val update = if (engage && ready.cameraPosition.zoom < FOLLOW_MIN_ZOOM) {
-            CameraUpdateFactory.newLatLngZoom(target, MAP_PIP_CLOSE_ZOOM)
-        } else {
-            CameraUpdateFactory.newLatLng(target)
-        }
+        val zoom = ready.cameraPosition.zoom
+        val update = centredIn(target, if (engage && zoom < FOLLOW_MIN_ZOOM) MAP_PIP_CLOSE_ZOOM else zoom)
         runCatching { ready.animateCamera(update, if (engage) ENGAGE_ANIMATION_MS else FOLLOW_ANIMATION_MS) }
             .onFailure { Log.w(TAG, "Could not follow the trainer", it) }
     }
@@ -765,6 +809,12 @@ internal class FloatingMapOverlay(context: Context) {
         val fit = OverlayAction("Focus Hunt target or route", icon = R.drawable.ic_fit_map) { onFit() }
         fun huntOnly(view: View) = view.also { huntOnlyViews += it }
 
+        // Handles first, so every button drawn after them still takes its own touches: the whole top
+        // row and a band down each side drag the window, not only the dock.
+        add(dragHandle("Move map"), Gravity.TOP, w = -1, h = dp(TOP_BUTTONS_DP))
+        val bandBottom = DOCK_DP - DOCK_OVERLAP_DP
+        add(dragHandle(null), Gravity.START, t = TOP_BUTTONS_DP, b = bandBottom, w = dp(EDGE_HANDLE_DP), h = -1)
+        add(dragHandle(null), Gravity.END, t = TOP_BUTTONS_DP, b = bandBottom, w = dp(EDGE_HANDLE_DP), h = -1)
         val (dock, views) = kit.dock(DOCK_DP, huntOnly(kit.circle(previous, 30)),
             kit.circle(gotIt, 30, OverlayChrome.Look.FILLED), huntOnly(kit.circle(nextTarget, 30)), onTap = { onOpenApp() })
         guidanceViews = views
@@ -783,6 +833,12 @@ internal class FloatingMapOverlay(context: Context) {
         rebindGuidance()
     }
 
+    /** A transparent strip the window is dragged by; the map under it gives up those touches. */
+    private fun dragHandle(description: String?): View = View(themedContext).apply {
+        contentDescription = description
+        window.dragWith(this)
+    }
+
     /**
      * The strip under the bar: the undo offer after a catch, or a short notice such as a
      * target that ended before you got there. Undo wins when both are live -- it is the
@@ -799,6 +855,8 @@ internal class FloatingMapOverlay(context: Context) {
             paint { setTextColor(it.onSurface) }
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
+            // The strip covers the top of the map, so it moves the window like the row above it.
+            window.dragWith(this)
             noticeText = this
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         addView(TextView(themedContext).apply {
@@ -853,6 +911,7 @@ internal class FloatingMapOverlay(context: Context) {
             })
             addView(divider())
             addView(buildRouteLineRow())
+            addView(buildSpacialRendRow())
             addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() }.also { huntOnlyViews += it })
             addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() }.also { huntOnlyViews += it })
             addView(menuItem(if (paused) "▶  Resume route" else "❚❚  Pause route") {
@@ -880,36 +939,54 @@ internal class FloatingMapOverlay(context: Context) {
     }
 
     /** "Route line" with a switch: the same setting as the map filter sheet's Hunt path. */
-    @Suppress("UseSwitchCompatOrMaterialCode")
-    private fun buildRouteLineRow(): LinearLayout = LinearLayout(themedContext).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(12), dp(2), dp(8), dp(2))
-        background = selectableBackground()
-        isClickable = true
-        addView(TextView(themedContext).apply {
-            text = "〰  Route line"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            paint { setTextColor(it.onSurface) }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val toggle = android.widget.Switch(themedContext).apply {
-            isChecked = routeLineShown
-            contentDescription = "Show route line"
-            paint { colors ->
-                val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-                thumbTintList = ColorStateList(states, intArrayOf(colors.primary, colors.muted))
-                trackTintList = ColorStateList(states, intArrayOf(colors.primary and 0x66FFFFFF, colors.divider))
-            }
-            setOnCheckedChangeListener { _, checked ->
-                if (checked != routeLineShown) {
-                    routeLineShown = checked
-                    onRouteLineToggle(checked)
-                }
-            }
+    private fun buildRouteLineRow(): LinearLayout = buildSwitchRow("〰  Route line", "Show route line", routeLineShown) { checked ->
+        if (checked != routeLineShown) {
+            routeLineShown = checked
+            onRouteLineToggle(checked)
         }
-        addView(toggle)
-        setOnClickListener { toggle.isChecked = !toggle.isChecked }
-        routeLineSwitch = toggle
+    }.also { routeLineSwitch = it.second }.first
+
+    /** "Spacial Rend": the app's setting that widens a spawn's in-range circle from 40 m to 80 m. */
+    private fun buildSpacialRendRow(): LinearLayout = buildSwitchRow("〇  Spacial Rend", "Spacial Rend active", spacialRendOn) { checked ->
+        if (checked != spacialRendOn) {
+            spacialRendOn = checked
+            onSpacialRendToggle(checked)
+        }
+    }.also { spacialRendSwitch = it.second }.first
+
+    @Suppress("UseSwitchCompatOrMaterialCode")
+    private fun buildSwitchRow(
+        label: String,
+        description: String,
+        checked: Boolean,
+        onToggle: (Boolean) -> Unit
+    ): Pair<LinearLayout, android.widget.Switch> {
+        lateinit var toggle: android.widget.Switch
+        val row = LinearLayout(themedContext).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(2), dp(8), dp(2))
+            background = selectableBackground()
+            isClickable = true
+            addView(TextView(themedContext).apply {
+                text = label
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                paint { setTextColor(it.onSurface) }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            toggle = android.widget.Switch(themedContext).apply {
+                isChecked = checked
+                contentDescription = description
+                paint { colors ->
+                    val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+                    thumbTintList = ColorStateList(states, intArrayOf(colors.primary, colors.muted))
+                    trackTintList = ColorStateList(states, intArrayOf(colors.primary and 0x66FFFFFF, colors.divider))
+                }
+                setOnCheckedChangeListener { _, on -> onToggle(on) }
+            }
+            addView(toggle)
+            setOnClickListener { toggle.isChecked = !toggle.isChecked }
+        }
+        return row to toggle
     }
 
     private fun menuItem(label: String, onClick: () -> Unit): TextView =
@@ -1031,10 +1108,7 @@ internal class FloatingMapOverlay(context: Context) {
         val update = if (userLatitude == null || userLongitude == null) {
             // No fix yet: show the target rather than leaving the camera at
             // null island, which is where MapLibre starts.
-            CameraUpdateFactory.newLatLngZoom(
-                LatLng(targetLatitude, targetLongitude),
-                MAP_PIP_CLOSE_ZOOM
-            )
+            centredIn(LatLng(targetLatitude, targetLongitude), MAP_PIP_CLOSE_ZOOM)
         } else {
             when (
                 val focus = resolveMapPipFocus(
@@ -1045,18 +1119,19 @@ internal class FloatingMapOverlay(context: Context) {
                 )
             ) {
                 is MapPipFocus.Centre ->
-                    CameraUpdateFactory.newLatLngZoom(
-                        LatLng(focus.latitude, focus.longitude),
-                        focus.zoom
-                    )
-                is MapPipFocus.Fit ->
+                    centredIn(LatLng(focus.latitude, focus.longitude), focus.zoom)
+                is MapPipFocus.Fit -> {
+                    // Bounds framing replaces the map's own padding, so the chrome is added per side.
+                    val (left, top, right, bottom) =
+                        fitBoundsPadding(chromeInsets, dp(FIT_PADDING_DP), ready.width, ready.height)
                     CameraUpdateFactory.newLatLngBounds(
                         LatLngBounds.Builder()
                             .include(LatLng(focus.south, focus.west))
                             .include(LatLng(focus.north, focus.east))
                             .build(),
-                        dp(FIT_PADDING_DP)
+                        left, top, right, bottom
                     )
+                }
             }
         }
         runCatching { ready.animateCamera(update) }
@@ -1071,10 +1146,20 @@ internal class FloatingMapOverlay(context: Context) {
         val ready = map ?: return
         cameraAdjustedByHand = false
         runCatching {
-            ready.animateCamera(
-                CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), MAP_PIP_CLOSE_ZOOM)
-            )
+            ready.animateCamera(centredIn(LatLng(latitude, longitude), MAP_PIP_CLOSE_ZOOM))
         }.onFailure { Log.w(TAG, "Could not recentre the floating map", it) }
+    }
+
+    /**
+     * A camera at [target] centred in the part of the map the chrome leaves visible. The padding
+     * travels with the camera, because a bounds fit before it will have replaced the map's own.
+     */
+    private fun centredIn(target: LatLng, zoom: Double) = chromeInsets.let { insets ->
+        CameraUpdateFactory.newCameraPosition(
+            CameraPosition.Builder().target(target).zoom(zoom).padding(
+                insets.left.toDouble(), insets.top.toDouble(), insets.right.toDouble(), insets.bottom.toDouble()
+            ).build()
+        )
     }
 
     private fun dp(value: Int): Int = window.dp(value)
@@ -1119,6 +1204,12 @@ internal class FloatingMapOverlay(context: Context) {
         private const val TOP_BUTTONS_DP = 40
         private const val UNDO_STRIP_DP = 28
         private const val GRIP_DP = 26
+        /** Width of the drag bands down the map's sides. */
+        private const val EDGE_HANDLE_DP = 12
+        /** Follow and Fit: 30dp circles sitting this far above the map's bottom edge. */
+        private const val CONTROLS_ROW_DP = 30
+        private const val CONTROLS_GAP_DP = 6
+        private const val CHROME_SIDE_INSET_DP = 4
         private const val MIN_WIDTH_DP = 160
         private const val MIN_HEIGHT_DP = 140
         private const val MAX_WIDTH_DP = 360
@@ -1163,3 +1254,21 @@ internal class FloatingMapOverlay(context: Context) {
         fun canDraw(context: Context): Boolean = FloatingWindow.canDraw(context)
     }
 }
+
+/**
+ * Map padding for the chrome over the floating map, shrunk proportionally when the window is so
+ * small that the full padding would leave less than [MIN_VISIBLE_FRACTION] of the map to frame in.
+ */
+internal fun floatingMapChromeInsets(mapHeightPx: Int, topPx: Int, bottomPx: Int, sidePx: Int): MapContentInsets {
+    val allowed = (mapHeightPx * (1 - MIN_VISIBLE_FRACTION)).toInt()
+    val wanted = topPx + bottomPx
+    val scale = if (wanted > allowed && wanted > 0) allowed.toFloat() / wanted else 1f
+    return MapContentInsets(
+        left = sidePx,
+        top = (topPx * scale).toInt(),
+        right = sidePx,
+        bottom = (bottomPx * scale).toInt()
+    )
+}
+
+private const val MIN_VISIBLE_FRACTION = 0.4f

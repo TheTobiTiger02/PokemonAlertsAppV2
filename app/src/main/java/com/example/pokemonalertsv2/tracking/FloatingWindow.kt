@@ -319,6 +319,7 @@ internal class FloatingWindow(
         private var startX = 0
         private var startY = 0
         private var dragging = false
+        private var screen = 0 to 0
         private val touchSlop = ViewConfiguration.get(appContext).scaledTouchSlop
 
         @SuppressLint("ClickableViewAccessibility")
@@ -328,8 +329,11 @@ internal class FloatingWindow(
                 MotionEvent.ACTION_DOWN -> {
                     downX = event.rawX
                     downY = event.rawY
-                    startX = params.x
-                    startY = params.y
+                    screen = screenSize()
+                    // Measured from where the window is drawn, which a restored or rotated position can
+                    // be past the edge of.
+                    startX = if (isCompact) params.x else keepInside(params.x, params.width, screen.first)
+                    startY = if (isCompact) params.y else keepInside(params.y, params.height, screen.second)
                     dragging = false
                     // Claim the gesture: declining here is what breaks dragging.
                     true
@@ -341,6 +345,12 @@ internal class FloatingWindow(
                     dragging = true
                     params.x = startX + dx.roundToInt()
                     params.y = startY + dy.roundToInt()
+                    // The system will not draw an overlay past the screen's edge anyway; a position held
+                    // past it is a dead zone the next drag has to undo before the window moves at all.
+                    if (!isCompact) {
+                        params.x = keepInside(params.x, params.width, screen.first)
+                        params.y = keepInside(params.y, params.height, screen.second)
+                    }
                     applyLayout(params)
                     true
                 }
@@ -420,3 +430,6 @@ internal fun snapToEdgeX(x: Int, width: Int, screenWidth: Int, margin: Int): Int
     val right = (screenWidth - width - margin).coerceAtLeast(margin)
     return if (x + width / 2 < screenWidth / 2) margin else right
 }
+
+/** An offset that keeps a window [size] long wholly inside a screen [screen] long, where it fits. */
+internal fun keepInside(offset: Int, size: Int, screen: Int): Int = offset.coerceIn(0, (screen - size).coerceAtLeast(0))
