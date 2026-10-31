@@ -78,6 +78,14 @@ class MapCountdownTest {
     }
 
     @Test
+    fun theLastMinuteAlwaysCountsSeconds() {
+        val now = 1_756_000_000_000L
+        assertEquals("45s", mapCountdownLabel((now + 45_000L).toString(), now, minutePrecision = true))
+        assertEquals("59s", mapCountdownLabel((now + 59_000L).toString(), now, minutePrecision = true))
+        assertEquals("2m", mapCountdownLabel((now + 61_000L).toString(), now, minutePrecision = true))
+    }
+
+    @Test
     fun refreshKeyIntervalFollowsTheAdaptiveClock() {
         // Crowded map: labels refresh once a minute, so the key must use minute buckets.
         assertEquals(

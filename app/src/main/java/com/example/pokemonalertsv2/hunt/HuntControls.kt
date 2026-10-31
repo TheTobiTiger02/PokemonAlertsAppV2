@@ -146,6 +146,8 @@ fun HuntControls(
             explanation = "Face down during a hunt blacks out the screen. Long press it to turn off."
         )
 
+        SpacialRendSwitch()
+
         // The tick on the floating window sits between the two step arrows, on a
         // map being read while walking, and it retires the alert for good. This is
         // the way back from a mis-tap -- one of four, all going through the same

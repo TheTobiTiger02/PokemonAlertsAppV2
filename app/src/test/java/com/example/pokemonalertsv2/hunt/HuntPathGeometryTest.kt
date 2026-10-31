@@ -55,8 +55,11 @@ class HuntPathGeometryTest {
         assertEquals(CatchPoint(c.latitude, c.longitude), path.rest.last())
         assertEquals(42L, path.calculatedAtMillis)
         assertEquals(listOf("a", "b", "c"), path.stopIds)
-        // A missing leg draws nothing rather than half a route.
-        assertEquals(HuntPath.None, huntPathFrom(chain, legs - key(a, b), 42L))
+        // A leg still on its way is drawn straight rather than dropping the whole line.
+        val pending = huntPathFrom(chain, legs - key(a, b), 42L) as HuntPath.Resolved
+        assertEquals(line(origin, a), pending.next)
+        assertEquals(listOf(CatchPoint(a.latitude, a.longitude), CatchPoint(b.latitude, b.longitude)) + line(b, c).drop(1), pending.rest)
+        assertEquals(HuntPath.None, huntPathFrom(listOf(origin), legs, 42L))
     }
 
     private fun response(points: List<RouteMatrixPoint>, coordinates: (RouteMatrixPoint, RouteMatrixPoint) -> List<List<Double>>) =

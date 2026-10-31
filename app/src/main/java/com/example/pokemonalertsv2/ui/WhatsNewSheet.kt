@@ -30,12 +30,13 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.24"
+internal const val WHATS_NEW_RELEASE = "1.25"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Tappables have their own tab in Filters, next to Quests.",
-    "It lists only what Tappables have actually given lately: the loot, like Rare Candy, and the Pokémon they spawn, each with its picture.",
-    "Tap a reward to show or hide it; All and None switch every Tappable reward at once."
+    "Hunt: a hunt limited to an area can still show the matches outside it, dimmed. Tap one to walk there; the hunt never suggests them.",
+    "Spacial Rend can be switched on and off from the floating map's ⋯ menu and from Map tools, for an 80 m in-range circle.",
+    "The floating map keeps pins and your position clear of its buttons, counts seconds in a target's last minute, and keeps its route line while a new one loads.",
+    "Drag the floating map by its top row or sides, not only the card at the bottom. The undo strip after a catch now leaves after 8 seconds."
 )
 
 /**

@@ -43,6 +43,8 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
 ) {
     private val cacheMutex = Mutex()
     private val legs = mutableMapOf<HuntLegKey, List<CatchPoint>>()
+    /** [legs] as last written, for [pathFor], which readers call outside the lock. */
+    @Volatile private var drawable: Map<HuntLegKey, List<CatchPoint>> = emptyMap()
     private val legExpiry = mutableMapOf<HuntLegKey, Long>()
     private var inFlight: CompletableDeferred<Unit>? = null
     private var lastRequestAtMillis: Long? = null
@@ -58,15 +60,15 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
     fun snapshot(): HuntPath = published.value
 
     /**
-     * The published path if it walks exactly [stops], as the chain [request] would build them, else
-     * [HuntPath.None]. The plan re-orders far more often than a path can be fetched, and a line through an
-     * older order contradicts the numbered pins; no line is the honest answer until the new one lands.
+     * The path through exactly [stops], in their order, from where [request] last anchored the trainer.
+     *
+     * Built here rather than handed out from the last fetch: the plan re-orders far more often than a path
+     * can be fetched, and a line through an older order contradicts the numbered pins. Legs already held are
+     * drawn along the streets and the rest straight until theirs arrive, so the line never blinks out.
      */
     fun pathFor(stops: List<HuntRoutePoint>): HuntPath {
         val origin = anchor ?: return HuntPath.None
-        val path = published.value as? HuntPath.Resolved ?: return HuntPath.None
-        val expected = huntPathChain(origin, stops).drop(1).map { it.id }
-        return if (expected.isNotEmpty() && path.stopIds == expected) path else HuntPath.None
+        return huntPathFrom(huntPathChain(origin, stops), drawable, nowMillis())
     }
 
     /**
@@ -99,8 +101,8 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
         cacheMutex.withLock {
             val current = nowMillis()
             prune(current)
-            if (force) evictOriginLegsLocked(chain.first())
-            val missing = huntPathRequestSpan(chain, legs.keys)
+            if (force) expireOriginLegsLocked(chain.first(), current)
+            val missing = huntPathRequestSpan(chain, freshLegsLocked(current))
             if (missing == null) {
                 publishLocked(chain, current)
                 return true
@@ -122,7 +124,7 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
         }
 
         own.await()
-        return cacheMutex.withLock { huntPathRequestSpan(chain, legs.keys) == null }
+        return cacheMutex.withLock { huntPathRequestSpan(chain, freshLegsLocked(nowMillis())) == null }
     }
 
     private suspend fun fetchAndPublish(chain: List<HuntRoutePoint>, span: IntRange, deferred: CompletableDeferred<Unit>) {
@@ -152,6 +154,7 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
                             legs[key] = line
                             legExpiry[key] = current + legTtlMillis
                         }
+                        drawable = legs.toMap()
                         consecutiveFailures = 0
                         HuntRoutingGate.clear()
                         publishLocked(chain, current)
@@ -176,17 +179,24 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
         published.value = huntPathFrom(chain, legs, current)
     }
 
-    private fun evictOriginLegsLocked(origin: HuntRoutePoint) {
+    /** Recalculate: the trainer's legs are asked again, and keep being drawn until the answer lands. */
+    private fun expireOriginLegsLocked(origin: HuntRoutePoint, current: Long) {
         val node = huntLegNode(origin.latitude, origin.longitude)
-        val touchesOrigin = { key: HuntLegKey -> key.from == node || key.to == node }
-        legs.keys.removeAll(touchesOrigin)
-        legExpiry.keys.removeAll(touchesOrigin)
+        legExpiry.keys.filter { it.from == node || it.to == node }.forEach { legExpiry[it] = current }
     }
 
+    private fun freshLegsLocked(current: Long): Set<HuntLegKey> =
+        legs.keys.filterTo(HashSet()) { (legExpiry[it] ?: 0L) > current }
+
+    /**
+     * Forgets legs long past their refresh. A leg that is merely due is kept: it is asked for again, and the
+     * line keeps following its streets until the new one lands rather than disappearing at the deadline.
+     */
     private fun prune(current: Long) {
-        legExpiry.entries.removeAll { (key, expiry) ->
-            (expiry <= current).also { if (it) legs.remove(key) }
+        val removed = legExpiry.entries.removeAll { (key, expiry) ->
+            (expiry + legTtlMillis * STALE_LEG_KEEP_TTLS <= current).also { if (it) legs.remove(key) }
         }
+        if (removed) drawable = legs.toMap()
     }
 
     /** Forgets everything; the hunt ended. */
@@ -194,6 +204,7 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
         cacheMutex.withLock {
             legs.clear()
             legExpiry.clear()
+            drawable = emptyMap()
             inFlight = null
             lastRequestAtMillis = null
             consecutiveFailures = 0
@@ -209,6 +220,8 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
         @VisibleForTesting internal const val BASE_BACKOFF_MILLIS = 2_000L
         @VisibleForTesting internal const val MAX_BACKOFF_MILLIS = 60_000L
         private const val BACKOFF_SHIFT_CAP = 5
+        /** A leg is drawn for this many lifetimes past its refresh while its replacement is pending. */
+        private const val STALE_LEG_KEEP_TTLS = 3
 
         @Volatile
         private var instance: HuntPathCache? = null

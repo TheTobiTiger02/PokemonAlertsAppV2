@@ -59,6 +59,7 @@ import com.example.pokemonalertsv2.ui.components.PanelIcon
 import com.example.pokemonalertsv2.ui.components.PanelNavRow
 import com.example.pokemonalertsv2.ui.components.PanelPages
 import com.example.pokemonalertsv2.ui.components.PanelSectionLabel
+import com.example.pokemonalertsv2.ui.components.PanelSwitchRow
 import com.example.pokemonalertsv2.ui.alerts.mappanel.FiltersState
 import com.example.pokemonalertsv2.ui.alerts.mappanel.TypeEditor
 import com.example.pokemonalertsv2.ui.alerts.mappanel.TypeEditorBody
@@ -321,6 +322,9 @@ private fun HuntPages(
                                 icon = { PanelIcon(R.drawable.ic_map) }
                             )
                         }
+                        if (area.isArea()) {
+                            item { OutsideAreaSwitch() }
+                        }
                         item {
                             // The areas saved in the picker, shared with catch routes, one tap each.
                             Box(Modifier.padding(horizontal = PanelGutter, vertical = 4.dp)) { SavedAreaChips(area) { onAreaChange(it) } }
@@ -472,4 +476,20 @@ private fun QuestFilterRules.summary(): String = when {
     exactPairs.size > 1 -> "${exactPairs.size} exact quests"
     facetEnabled -> "By task and reward"
     else -> "Any quest"
+}
+
+/** Shows the matches outside the area, dimmed: tap one to walk there, but the hunt never picks them. */
+@Composable
+private fun OutsideAreaSwitch() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repository = remember(context) { HuntRepository.getInstance(context) }
+    val shown by repository.showOutsideArea.collectAsStateWithLifecycle(initialValue = false)
+    PanelSwitchRow(
+        title = "Show alerts outside the area",
+        subtitle = "Dimmed on the map. Tap one to route to it; it is never suggested.",
+        checked = shown,
+        onCheckedChange = { on -> scope.launch { repository.setShowOutsideArea(on) } },
+        modifier = Modifier.testTag("hunt_row_outside_area")
+    )
 }

@@ -102,6 +102,16 @@ class HuntRepository private constructor(context: Context) {
         dataStore.edit { it[batterySaverKey] = enabled }
     }
 
+    /**
+     * Whether a hunt limited to an area still draws the matches outside it. They are never suggested or
+     * planned, only shown dimmed, so one can still be tapped and walked to. Applies to every hunt.
+     */
+    private val showOutsideAreaKey = androidx.datastore.preferences.core.booleanPreferencesKey("show_outside_area")
+    val showOutsideArea: Flow<Boolean> = dataStore.data.map { it[showOutsideAreaKey] ?: false }.distinctUntilChanged()
+    suspend fun setShowOutsideArea(enabled: Boolean) {
+        dataStore.edit { it[showOutsideAreaKey] = enabled }
+    }
+
     val sessionFlow: Flow<HuntSession?> = dataStore.data
         .map { preferences -> preferences[ACTIVE_HUNT_KEY]?.decodeSession() }
         .distinctUntilChanged()

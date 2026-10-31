@@ -24,6 +24,12 @@ private const val TAG = "CatchUndo"
  */
 const val CATCH_UNDO_WINDOW_MILLIS = 120_000L
 
+/**
+ * How long the floating map keeps its "Caught X · UNDO" strip. The strip covers the map, so it only
+ * stays long enough to catch a mis-tap; the notification and the in-app panel keep the full window.
+ */
+const val OVERLAY_UNDO_DISPLAY_MILLIS = 8_000L
+
 /** Whether the offer is still worth showing. A record with no timestamp never is. */
 internal fun isUndoOfferLive(
     caught: CaughtAlert?,

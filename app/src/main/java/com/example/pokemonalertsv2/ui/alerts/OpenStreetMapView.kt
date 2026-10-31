@@ -107,7 +107,9 @@ internal data class OpenStreetMapMarker(
     val icon: MapMarkerIcon,
     val labelId: String? = null,
     val labelBitmap: Bitmap? = null,
-    val zIndex: Float = 0f
+    val zIndex: Float = 0f,
+    /** Shown for reference only, such as a hunt match outside the hunt's area: drawn faded. */
+    val dimmed: Boolean = false
 ) {
     val kind: String
         get() = when {
@@ -473,6 +475,7 @@ internal class OpenStreetMapController {
     private fun alertSymbolLayer(layerId: String, kind: String): SymbolLayer =
         SymbolLayer(layerId, ALERT_SOURCE).withProperties(
             iconImage(Expression.get(ALERT_ICON_PROPERTY)),
+            iconOpacity(Expression.coalesce(Expression.get(ALERT_OPACITY_PROPERTY), Expression.literal(1f))),
             iconAllowOverlap(true),
             iconIgnorePlacement(true),
             iconAnchor(
@@ -490,6 +493,7 @@ internal class OpenStreetMapController {
     private fun alertLabelLayer(layerId: String, kind: String): SymbolLayer =
         SymbolLayer(layerId, ALERT_SOURCE).withProperties(
             iconImage(Expression.get(ALERT_LABEL_PROPERTY)),
+            iconOpacity(Expression.coalesce(Expression.get(ALERT_OPACITY_PROPERTY), Expression.literal(1f))),
             iconAllowOverlap(true),
             iconIgnorePlacement(true),
             iconAnchor(Property.ICON_ANCHOR_TOP)
@@ -561,17 +565,9 @@ internal class OpenStreetMapController {
                     .build()
                 // Bounds framing replaces the map's own padding, so the chrome insets are added
                 // here; otherwise the fit lands under the top bar and the chip rail.
-                val insets = pendingContentInsets
-                currentMap.animateCamera(
-                    CameraUpdateFactory.newLatLngBounds(
-                        bounds,
-                        insets.left + paddingPx,
-                        insets.top + paddingPx,
-                        insets.right + paddingPx,
-                        insets.bottom + paddingPx
-                    ),
-                    750
-                )
+                val (left, top, right, bottom) =
+                    fitBoundsPadding(pendingContentInsets, paddingPx, currentMap.width, currentMap.height)
+                currentMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, left, top, right, bottom), 750)
             }
         }
     }
@@ -693,6 +689,7 @@ internal class OpenStreetMapController {
                 addStringProperty(ALERT_KIND_PROPERTY, model.kind)
                 addStringProperty(ALERT_ICON_PROPERTY, model.iconId)
                 if (labelId != null) addStringProperty(ALERT_LABEL_PROPERTY, labelId)
+                if (model.dimmed) addNumberProperty(ALERT_OPACITY_PROPERTY, DIMMED_MARKER_OPACITY)
             }
             markerIndex[id] = model.item
         }
@@ -858,6 +855,8 @@ internal class OpenStreetMapController {
         const val ALERT_KIND_PROPERTY = "kind"
         const val ALERT_ICON_PROPERTY = "icon"
         const val ALERT_LABEL_PROPERTY = "label"
+        const val ALERT_OPACITY_PROPERTY = "opacity"
+        const val DIMMED_MARKER_OPACITY = 0.45f
 
         /**
          * Roughly two screenfuls of distinct artwork. Large enough that panning around a city
@@ -1511,3 +1510,23 @@ private fun createOpenStreetMapClusterIcon(
         openStreetMapClusterIconCache.put(cacheKey, it)
     }
 }
+
+/**
+ * Per-side padding for a bounds fit: the chrome [insets] plus [extraPx] margin, shrunk in proportion on any
+ * axis where it would leave less than a quarter of the map for the bounds. On a small map -- the floating
+ * window -- the full padding can exceed the map itself, and MapLibre then zooms out to the whole region.
+ */
+internal fun fitBoundsPadding(insets: MapContentInsets, extraPx: Int, widthPx: Float, heightPx: Float): IntArray {
+    fun axis(start: Int, end: Int, size: Float): Pair<Int, Int> {
+        val total = start + end
+        val allowed = (size * MAX_FIT_PADDING_FRACTION).toInt()
+        if (size <= 0f || total <= allowed) return start to end
+        val scale = allowed.toFloat() / total
+        return (start * scale).toInt() to (end * scale).toInt()
+    }
+    val (left, right) = axis(insets.left + extraPx, insets.right + extraPx, widthPx)
+    val (top, bottom) = axis(insets.top + extraPx, insets.bottom + extraPx, heightPx)
+    return intArrayOf(left, top, right, bottom)
+}
+
+private const val MAX_FIT_PADDING_FRACTION = 0.75f
