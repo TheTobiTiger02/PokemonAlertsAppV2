@@ -42,7 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 
-private val DISTANCE_CHOICES = listOf(0, 300, 500, 1_000, 2_000, 5_000)
+private val DISTANCE_CHOICES = listOf(0, 50, 100, 300, 500, 1_000, 2_000, 5_000)
 
 /**
  * The Live list's quick filters, the same small sheet as History's: one row of chips each for

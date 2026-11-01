@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /** One line of the events widget's list. */
@@ -37,65 +38,110 @@ internal sealed interface EventsWidgetRow {
 }
 
 /**
- * What the widget lists: running events under "Now" (ending soonest first), then upcoming ones
- * under "Upcoming" (starting soonest first), limited to [shownTypes] when the trainer picked
- * any. The same grouping as the Events tab, so both agree on what is running.
+ * What the widget lists: running events under "Now" (ending soonest first), then every upcoming
+ * one under "Upcoming" (starting soonest first), minus the types the trainer hid. The same
+ * grouping as the Events tab, so both agree on what is running. The list scrolls, so upcoming
+ * events are not capped.
  */
 internal fun eventsWidgetRows(
     events: List<GameEvent>,
     nowMillis: Long,
-    shownTypes: Set<String>?,
+    hiddenTypes: Set<String>,
     zone: ZoneId = ZoneId.systemDefault(),
-    maxUpcoming: Int = EVENTS_WIDGET_MAX_UPCOMING
+    locale: Locale = Locale.getDefault()
 ): List<EventsWidgetRow> {
-    val hidden = if (shownTypes == null) emptySet() else events.map { it.eventType }.toSet() - shownTypes
-    val sections = groupEvents(events, nowMillis, hidden, zone)
-    val upcoming = sections.upcoming.flatMap { it.second }.take(maxUpcoming)
+    val sections = groupEvents(events, nowMillis, hiddenTypes, zone)
+    val upcoming = sections.upcoming.flatMap { it.second }
     return buildList {
         if (sections.now.isNotEmpty()) {
             add(EventsWidgetRow.Header("Now"))
             sections.now.forEach { event ->
-                add(EventsWidgetRow.Event(event, running = true, detail = "Ends in ${durationLabel(event.endMillis - nowMillis)}"))
+                add(EventsWidgetRow.Event(event, running = true, detail = runningWhen(event, nowMillis, zone, locale)))
             }
         }
         if (upcoming.isNotEmpty()) {
             add(EventsWidgetRow.Header("Upcoming"))
             upcoming.forEach { event ->
-                add(EventsWidgetRow.Event(event, running = false, detail = upcomingWhen(event, zone)))
+                add(EventsWidgetRow.Event(event, running = false, detail = upcomingWhen(event, nowMillis, zone, locale)))
             }
         }
     }
 }
 
-/** "Sat 14:00 – 17:00", or "Sat 10:00 – Mon 20:00" across days, in the event's display zone. */
-private fun upcomingWhen(event: GameEvent, deviceZone: ZoneId): String {
+/** "Ends Sun 3 Nov 20:00 · 2 d 4 h left", in the event's display zone. */
+internal fun runningWhen(event: GameEvent, nowMillis: Long, deviceZone: ZoneId, locale: Locale): String {
+    val zone = event.displayZone(deviceZone)
+    val end = Instant.ofEpochMilli(event.endMillis).atZone(zone)
+    val date = DateTimeFormatter.ofPattern("EEE d MMM HH:mm", locale)
+    return "Ends ${end.format(date)} · ${durationLabel(event.endMillis - nowMillis)} left"
+}
+
+/**
+ * "Sat 9 Nov 14:00 – 17:00 · in 8 days", or "Sat 9 Nov 10:00 – Mon 11 Nov 20:00 · tomorrow"
+ * across days. Days are counted by calendar date in the event's display zone, so an event
+ * tomorrow morning is "tomorrow" even when it is less than 24 hours away.
+ */
+internal fun upcomingWhen(event: GameEvent, nowMillis: Long, deviceZone: ZoneId, locale: Locale): String {
     val zone = event.displayZone(deviceZone)
     val start = Instant.ofEpochMilli(event.startMillis).atZone(zone)
     val end = Instant.ofEpochMilli(event.endMillis).atZone(zone)
-    val day = DateTimeFormatter.ofPattern("EEE", Locale.getDefault())
-    val time = DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault())
-    val endText = if (end.toLocalDate() == start.toLocalDate()) end.format(time) else "${end.format(day)} ${end.format(time)}"
-    return "${start.format(day)} ${start.format(time)} – $endText"
+    val date = DateTimeFormatter.ofPattern("EEE d MMM", locale)
+    val time = DateTimeFormatter.ofPattern("HH:mm", locale)
+    val endText = if (end.toLocalDate() == start.toLocalDate()) end.format(time) else "${end.format(date)} ${end.format(time)}"
+    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    val days = ChronoUnit.DAYS.between(today, start.toLocalDate())
+    val relative = when {
+        days <= 0L -> "today, in ${durationLabel(event.startMillis - nowMillis)}"
+        days == 1L -> "tomorrow"
+        else -> "in $days days"
+    }
+    return "${start.format(date)} ${start.format(time)} – $endText · $relative"
 }
 
-internal const val EVENTS_WIDGET_MAX_UPCOMING = 12
-
-/** Per-widget event-type choice, stored with the app's other preferences. Null means every type. */
+/**
+ * Per-widget event-type choice, stored with the app's other preferences as the types the
+ * trainer hid, so event types that appear after the widget was set up show up by default.
+ * Widgets set up before 1.26 stored the shown types instead; those are converted on first read.
+ */
 internal object EventsWidgetSettings {
-    private fun key(appWidgetId: Int) = stringPreferencesKey("events_widget_types_$appWidgetId")
+    private fun legacyShownKey(appWidgetId: Int) = stringPreferencesKey("events_widget_types_$appWidgetId")
+    private fun hiddenKey(appWidgetId: Int) = stringPreferencesKey("events_widget_hidden_$appWidgetId")
 
-    suspend fun shownTypes(context: Context, appWidgetId: Int): Set<String>? =
-        context.alertPreferencesDataStore.data.first()[key(appWidgetId)]
-            ?.let { stored -> stored.split(',').filter(String::isNotBlank).toSet() }
+    private fun decode(stored: String): Set<String> = stored.split(',').filter(String::isNotBlank).toSet()
 
-    suspend fun setShownTypes(context: Context, appWidgetId: Int, types: Set<String>?) {
+    /** The hidden types; [knownTypes] are the types a legacy allow-list is measured against. */
+    suspend fun hiddenTypes(context: Context, appWidgetId: Int, knownTypes: () -> Collection<String>): Set<String> {
+        val prefs = context.alertPreferencesDataStore.data.first()
+        prefs[hiddenKey(appWidgetId)]?.let { return decode(it) }
+        val legacy = prefs[legacyShownKey(appWidgetId)] ?: return emptySet()
+        val hidden = knownTypes().toSet() - decode(legacy)
+        setHiddenTypes(context, appWidgetId, hidden)
+        return hidden
+    }
+
+    suspend fun setHiddenTypes(context: Context, appWidgetId: Int, types: Set<String>) {
         context.alertPreferencesDataStore.edit { prefs ->
-            if (types == null) prefs.remove(key(appWidgetId)) else prefs[key(appWidgetId)] = types.sorted().joinToString(",")
+            prefs.remove(legacyShownKey(appWidgetId))
+            prefs[hiddenKey(appWidgetId)] = types.sorted().joinToString(",")
         }
     }
 
-    suspend fun remove(context: Context, appWidgetId: Int) = setShownTypes(context, appWidgetId, null)
+    suspend fun remove(context: Context, appWidgetId: Int) {
+        context.alertPreferencesDataStore.edit { prefs ->
+            prefs.remove(legacyShownKey(appWidgetId))
+            prefs.remove(hiddenKey(appWidgetId))
+        }
+    }
 }
+
+/** Types seen in the calendar plus the common ones, so a quiet week still offers them. */
+internal fun knownEventTypes(events: List<GameEvent>): List<String> =
+    (events.map { it.eventType } + COMMON_EVENT_TYPES).distinct().sortedBy(::eventTypeName)
+
+internal val COMMON_EVENT_TYPES = listOf(
+    "community-day", "pokemon-spotlight-hour", "raid-hour", "raid-day", "raid-battles",
+    "max-battles", "max-mondays", "go-battle-league", "event", "season"
+)
 
 /**
  * Home-screen list of current and upcoming game events. Tapping an event opens it in the app's

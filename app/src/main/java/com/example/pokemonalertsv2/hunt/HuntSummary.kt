@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.catchroutes.CatchPoint
+import com.example.pokemonalertsv2.wear.WatchSample
+import com.example.pokemonalertsv2.wear.WatchStats
 import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -13,8 +16,21 @@ data class HuntCatch(
     val id: String,
     val name: String,
     val imageUrl: String? = null,
-    val atMillis: Long
-)
+    val atMillis: Long,
+    // Added in 1.26: what the alert said about it, for the history. Absent in older hunts.
+    val pokedexId: Int? = null,
+    val shiny: Boolean = false,
+    /** IV percentage, 0-100, when the alert had it. */
+    val iv: Int? = null,
+    val cp: Int? = null,
+    val level: Double? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+) {
+    val point: CatchPoint? get() =
+        if (latitude != null && longitude != null) CatchPoint(latitude, longitude).takeIf { it.valid } else null
+    val isHundo: Boolean get() = iv == 100
+}
 
 /**
  * What a running hunt has done so far.
@@ -32,8 +48,15 @@ data class HuntStats(
     val pausedTotalMillis: Long = 0L,
     /** Where distance was last measured from; see [withFix]. */
     val anchorLatitude: Double? = null,
-    val anchorLongitude: Double? = null
+    val anchorLongitude: Double? = null,
+    /** The walked path, see [HuntTrack]. */
+    val track: String = "",
+    /** What a connected watch measured; null when none was connected. */
+    val watch: WatchStats? = null,
 ) {
+    fun withWatchSample(sample: WatchSample, deviceName: String?): HuntStats =
+        copy(watch = (watch ?: WatchStats()).withSample(sample, deviceName))
+
     fun withCatch(catch: HuntCatch): HuntStats =
         copy(catches = catches.filterNot { it.id == catch.id } + catch)
 
@@ -63,7 +86,7 @@ data class HuntStats(
         val fromLatitude = anchorLatitude
         val fromLongitude = anchorLongitude
         if (fromLatitude == null || fromLongitude == null) {
-            return copy(anchorLatitude = latitude, anchorLongitude = longitude)
+            return copy(anchorLatitude = latitude, anchorLongitude = longitude, track = HuntTrack.append(track, CatchPoint(latitude, longitude)))
         }
         val step = huntDistanceMeters(fromLatitude, fromLongitude, latitude, longitude)
         if (step < maxOf(accuracyMeters.toDouble(), HUNT_DISTANCE_MIN_STEP_METERS)) return this
@@ -74,7 +97,8 @@ data class HuntStats(
         return copy(
             distanceMeters = distanceMeters + step,
             anchorLatitude = latitude,
-            anchorLongitude = longitude
+            anchorLongitude = longitude,
+            track = HuntTrack.append(track, CatchPoint(latitude, longitude))
         )
     }
 }
@@ -93,8 +117,14 @@ data class HuntSummary(
      * The raid whose hundo CP and counters were still showing when the hunt stopped, so the
      * summary can offer to dismiss them. Null when there was none.
      */
-    val raidWatchStillShowing: String? = null
-)
+    val raidWatchStillShowing: String? = null,
+    /** The walked path, see [HuntTrack]; empty for hunts from before 1.26. */
+    val track: String = "",
+    val watch: WatchStats? = null,
+) {
+    val trackPoints: List<CatchPoint> get() = HuntTrack.decode(track)
+    val averageKmh: Double get() = if (activeMillis <= 0L) 0.0 else distanceMeters / 1000.0 / (activeMillis / 3_600_000.0)
+}
 
 /** Every hunt in the history, added up. */
 internal data class HuntHistoryTotals(
@@ -135,7 +165,9 @@ internal fun huntSummary(
         activeMillis = (nowMillis - session.startedAtMillis - settled.pausedTotalMillis).coerceAtLeast(0L),
         distanceMeters = settled.distanceMeters,
         catches = settled.catches,
-        raidWatchStillShowing = raidWatchStillShowing
+        raidWatchStillShowing = raidWatchStillShowing,
+        track = settled.track,
+        watch = settled.watch?.takeIf { it.hasData }
     )
 }
 

@@ -11,6 +11,9 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import java.time.ZoneId
 
 /** The backend's event calendar (LeekDuck via ScrapedDuck, plus hand-entered events). */
@@ -44,8 +47,25 @@ interface EventsService {
     val hasPage: Boolean = false,
     val sectionKeys: List<String> = emptyList(),
 ) {
-    val startMillis: Long get() = runCatching { Instant.parse(startAt).toEpochMilli() }.getOrDefault(0L)
-    val endMillis: Long get() = runCatching { Instant.parse(endAt).toEpochMilli() }.getOrDefault(0L)
+    val startMillis: Long get() = parseEventTime(startAt, localTime)
+    val endMillis: Long get() = parseEventTime(endAt, localTime)
+}
+
+/**
+ * Epoch millis for a feed time, or 0 when it can't be read. The feed mostly sends instants
+ * ("2026-11-09T14:00:00Z"), but hand-entered and wall-clock events can come without an offset
+ * ("2026-11-09T14:00:00") or as a bare date; those were silently dropped before. A time without
+ * an offset is read in Berlin for wall-clock events (matching [displayZone]) and as UTC otherwise.
+ */
+internal fun parseEventTime(text: String, localTime: Boolean?): Long {
+    val trimmed = text.trim()
+    if (trimmed.isEmpty()) return 0L
+    runCatching { return Instant.parse(trimmed).toEpochMilli() }
+    runCatching { return OffsetDateTime.parse(trimmed).toInstant().toEpochMilli() }
+    val zone = if (localTime == true) BERLIN else ZoneOffset.UTC
+    runCatching { return LocalDateTime.parse(trimmed.replace(' ', 'T')).atZone(zone).toInstant().toEpochMilli() }
+    runCatching { return LocalDate.parse(trimmed).atStartOfDay(zone).toInstant().toEpochMilli() }
+    return 0L
 }
 
 /** An event's LeekDuck page: its sections as LeekDuck shows them, each a list of typed blocks. */

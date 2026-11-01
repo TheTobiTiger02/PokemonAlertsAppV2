@@ -330,11 +330,12 @@ const val MAX_FILTER_PROFILE_NAME = 40
 const val MAX_FILTER_DISTANCE_METERS = 50_000
 
 /**
- * The scale every straight-line distance slider snaps to: 100 m steps below 1 km, then 1 km
+ * The scale every straight-line distance slider snaps to: 10 m steps below 100 m (for alerts
+ * only worth it when they are practically next to you), 100 m steps below 1 km, then 1 km
  * steps up to [MAX_FILTER_DISTANCE_METERS]. Index 0 is Unlimited; the slider value is the index.
  */
 val ALERT_DISTANCE_STEPS_METERS: List<Int> =
-    listOf(0) + (100..900 step 100) + (1000..MAX_FILTER_DISTANCE_METERS step 1000)
+    listOf(0) + (10..90 step 10) + (100..900 step 100) + (1000..MAX_FILTER_DISTANCE_METERS step 1000)
 
 /** Nearest position of [meters] on [ALERT_DISTANCE_STEPS_METERS], for placing a slider thumb. */
 fun distanceStepIndex(meters: Int): Int {

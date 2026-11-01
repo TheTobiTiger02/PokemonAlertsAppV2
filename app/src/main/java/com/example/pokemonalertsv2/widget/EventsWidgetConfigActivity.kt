@@ -68,8 +68,11 @@ class EventsWidgetConfigActivity : ComponentActivity() {
             val dark = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())
             PokemonAlertsV2Theme(darkTheme = dark) {
                 EventTypePicker(
-                    loadTypes = { knownEventTypes() },
-                    loadShown = { EventsWidgetSettings.shownTypes(applicationContext, appWidgetId) },
+                    loadTypes = { knownTypes() },
+                    loadShown = {
+                        val types = knownTypes()
+                        types.toSet() - EventsWidgetSettings.hiddenTypes(applicationContext, appWidgetId) { types }
+                    },
                     onCancel = { finish() },
                     onSave = { shown -> save(shown) }
                 )
@@ -77,15 +80,13 @@ class EventsWidgetConfigActivity : ComponentActivity() {
         }
     }
 
-    /** Types seen in the calendar plus the common ones, so a quiet week still offers them. */
-    private suspend fun knownEventTypes(): List<String> {
-        val seen = EventsRepository(applicationContext).cached().map { it.eventType }
-        return (seen + COMMON_EVENT_TYPES).distinct().sortedBy(::eventTypeName)
-    }
+    private suspend fun knownTypes(): List<String> = knownEventTypes(EventsRepository(applicationContext).cached())
 
     private fun save(shown: Set<String>?) {
         lifecycleScope.launch {
-            EventsWidgetSettings.setShownTypes(applicationContext, appWidgetId, shown)
+            // Store what was unticked, so types that appear later are shown rather than hidden.
+            val hidden = if (shown == null) emptySet() else knownTypes().toSet() - shown
+            EventsWidgetSettings.setHiddenTypes(applicationContext, appWidgetId, hidden)
             EventsWidgetProvider.update(applicationContext, appWidgetId)
             setResult(RESULT_OK, resultIntent())
             finish()
@@ -93,13 +94,6 @@ class EventsWidgetConfigActivity : ComponentActivity() {
     }
 
     private fun resultIntent() = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-
-    private companion object {
-        val COMMON_EVENT_TYPES = listOf(
-            "community-day", "pokemon-spotlight-hour", "raid-hour", "raid-day", "raid-battles",
-            "max-battles", "max-mondays", "go-battle-league", "event", "season"
-        )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
