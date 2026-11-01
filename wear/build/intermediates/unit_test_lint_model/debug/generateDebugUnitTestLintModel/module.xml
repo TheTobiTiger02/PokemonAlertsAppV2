@@ -1,0 +1,18 @@
+<lint-module
+    format="1"
+    dir="/home/user/PokemonAlertsAppV2/wear"
+    name=":wear"
+    type="APP"
+    maven="PokemonAlertsV2:wear:unspecified"
+    agpVersion="8.9.1"
+    buildFolder="build"
+    bootClassPath="/root/android-sdk/platforms/android-36/android.jar:/root/android-sdk/build-tools/35.0.0/core-lambda-stubs.jar"
+    javaSourceLevel="11"
+    compileTarget="android-36">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="debug"/>
+</lint-module>

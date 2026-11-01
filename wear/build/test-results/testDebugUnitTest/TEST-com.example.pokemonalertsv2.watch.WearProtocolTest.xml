@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.pokemonalertsv2.watch.WearProtocolTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-01T15:23:13" hostname="vm" time="0.356">
+  <properties/>
+  <testcase name="samples use the phone's field names" classname="com.example.pokemonalertsv2.watch.WearProtocolTest" time="0.116"/>
+  <testcase name="formats the clock and distance" classname="com.example.pokemonalertsv2.watch.WearProtocolTest" time="0.09"/>
+  <testcase name="reads the phone's session JSON, ignoring fields it does not know" classname="com.example.pokemonalertsv2.watch.WearProtocolTest" time="0.144"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

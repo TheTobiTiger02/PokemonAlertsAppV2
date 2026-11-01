@@ -53,6 +53,13 @@ import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.coroutines.launch
 import java.text.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.graphics.Color
 import java.util.Date
 
 /**
@@ -140,21 +147,38 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                 }
             }
             item {
+                val shinies = remember(history) { history.sumOf { hunt -> hunt.catches.count { it.shiny } } }
                 Text(
-                    text = "${formatHuntDuration(totals.activeMillis)} hunted in total",
+                    text = "${formatHuntDuration(totals.activeMillis)} hunted in total" +
+                        if (shinies > 0) " · $shinies shiny" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                    modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
             }
-            items(history, key = { it.startedAtMillis }) { hunt ->
-                HuntHistoryRow(hunt, onClick = { opened = hunt })
+            val months = history.groupBy { monthLabel(it.startedAtMillis) }
+            months.forEach { (month, hunts) ->
+                item(key = "month-$month") {
+                    Text(
+                        text = month,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp)
+                    )
+                }
+                items(hunts, key = { it.startedAtMillis }) { hunt ->
+                    HuntHistoryRow(hunt, onClick = { opened = hunt })
+                }
             }
         }
     }
 
     opened?.let { summary ->
-        HuntSummarySheet(summary, doneLabel = "Close") { opened = null }
+        HuntSummarySheet(
+            summary,
+            doneLabel = "Close",
+            title = DateFormat.getDateInstance(DateFormat.FULL).format(Date(summary.startedAtMillis))
+        ) { opened = null }
     }
 
     if (confirmClear) {
@@ -175,32 +199,75 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
 
 @Composable
 private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit) {
-    val started = remember(hunt.startedAtMillis) {
-        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(hunt.startedAtMillis))
-    }
+    val track = remember(hunt.track) { hunt.trackPoints }
+    val catchPoints = remember(hunt.catches) { hunt.catches.mapNotNull { it.point } }
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("hunt_history_row")
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text(
-                text = hunt.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = started,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = hunt.headline(),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 4.dp)
-            )
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                DateBadge(hunt.startedAtMillis)
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = hunt.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = huntTimeRange(hunt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (track.size >= 2 || catchPoints.size >= 2) {
+                    HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatPill("${hunt.catches.size} caught")
+                StatPill(formatHuntDistance(hunt.distanceMeters), icon = Icons.Filled.LocationOn)
+                StatPill(formatHuntDuration(hunt.activeMillis))
+                hunt.watch?.averageHeartRate?.let {
+                    StatPill("$it", icon = Icons.Filled.Favorite, tint = HeartRed,
+                        container = MaterialTheme.colorScheme.surfaceContainerHighest)
+                }
+            }
+            if (hunt.catches.isNotEmpty()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CatchSpriteStack(hunt.catches, Modifier.weight(1f, fill = false))
+                    val shinies = hunt.catches.count { it.shiny }
+                    val hundos = hunt.catches.count { it.isHundo }
+                    if (shinies > 0) StatPill("$shinies", icon = Icons.Filled.Star, tint = Color.Black, container = ShinyGold)
+                    if (hundos > 0) StatPill("$hundos × 100%", tint = Color.White, container = HundoPink)
+                }
+            }
         }
     }
 }
+
+/** The hunt's day as a calendar tile: "SAT" over "9". */
+@Composable
+private fun DateBadge(millis: Long) {
+    val day = remember(millis) { SimpleDateFormat("d", Locale.getDefault()).format(Date(millis)) }
+    val weekday = remember(millis) { SimpleDateFormat("EEE", Locale.getDefault()).format(Date(millis)).uppercase(Locale.getDefault()) }
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+        Column(
+            Modifier.size(width = 52.dp, height = 56.dp).padding(vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(weekday, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(day, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+
+/** "November 2026", for the history's month headers. */
+internal fun monthLabel(millis: Long): String =
+    SimpleDateFormat("LLLL yyyy", Locale.getDefault()).format(Date(millis))
+        .replaceFirstChar { it.titlecase(Locale.getDefault()) }

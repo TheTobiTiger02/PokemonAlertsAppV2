@@ -70,6 +70,7 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
             Text("Teal: where you walked · blue: the last planned route",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        summary.watch?.let { com.example.pokemonalertsv2.hunt.WatchStatsSection(it) }
     }
 }
 

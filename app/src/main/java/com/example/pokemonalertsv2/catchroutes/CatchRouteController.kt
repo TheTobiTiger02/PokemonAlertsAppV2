@@ -141,6 +141,13 @@ class CatchRouteController private constructor(private val context: Context) {
         }
         outOfDate.value = missed || offPathSince?.let { now - it >= OFF_PATH_MILLIS } == true
     }
+    /** A reading from a connected watch; kept with the walk for its summary. */
+    fun onWatchSample(sample: com.example.pokemonalertsv2.wear.WatchSample, deviceName: String?) = scope.launch { command {
+        val s = mutable.value ?: return@command
+        if (s.finished) return@command
+        mutable.value = s.copy(watch = (s.watch ?: com.example.pokemonalertsv2.wear.WatchStats()).withSample(sample, deviceName))
+        if (System.currentTimeMillis() - lastPersist > 10_000) persist()
+    } }
     fun recalculate() = scope.launch { command { recalculateLocked() } }
     private fun recalculateLocked() {
         val s = mutable.value ?: return

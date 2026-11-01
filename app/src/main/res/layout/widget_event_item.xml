@@ -50,7 +50,7 @@
             android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="@color/widget_primary"
-            android:maxLines="1"
+            android:maxLines="2"
             android:ellipsize="end" />
     </LinearLayout>
 </LinearLayout>

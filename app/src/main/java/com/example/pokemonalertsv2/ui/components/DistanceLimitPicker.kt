@@ -23,7 +23,7 @@ import com.example.pokemonalertsv2.data.distanceStepIndex
 import kotlin.math.roundToInt
 
 /** The limits people actually pick; the slider below covers everything in between. */
-private val DISTANCE_PRESETS_METERS = listOf(0, 300, 500, 1_000, 2_000, 5_000, 10_000)
+private val DISTANCE_PRESETS_METERS = listOf(0, 50, 100, 300, 500, 1_000, 2_000, 5_000, 10_000)
 
 /**
  * A straight-line distance limit: one-tap presets plus a slider for any other step.

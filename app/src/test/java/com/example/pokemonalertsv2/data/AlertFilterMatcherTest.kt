@@ -260,15 +260,20 @@ class AlertFilterMatcherTest {
     }
 
     @Test
-    fun distanceScaleStepsOneHundredMetersBelowOneKilometerThenKilometers() {
+    fun distanceScaleStepsTenMetersBelowOneHundredThenHundredsThenKilometers() {
         assertTrue(ALERT_DISTANCE_STEPS_METERS.first() == 0)
-        assertTrue(ALERT_DISTANCE_STEPS_METERS[1] == 100)
-        assertTrue(ALERT_DISTANCE_STEPS_METERS[9] == 900)
-        assertTrue(ALERT_DISTANCE_STEPS_METERS[10] == 1_000)
-        assertTrue(ALERT_DISTANCE_STEPS_METERS[11] == 2_000)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[1] == 10)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[4] == 40)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[9] == 90)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[10] == 100)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[18] == 900)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[19] == 1_000)
+        assertTrue(ALERT_DISTANCE_STEPS_METERS[20] == 2_000)
         assertTrue(ALERT_DISTANCE_STEPS_METERS.last() == MAX_FILTER_DISTANCE_METERS)
         assertTrue(ALERT_DISTANCE_STEPS_METERS.zipWithNext().all { (a, b) -> a < b })
-        assertTrue(distanceStepIndex(500) == 5)
+        assertTrue(distanceStepIndex(500) == 14)
+        assertTrue(distanceStepIndex(40) == 4)
+        assertTrue(distanceLabel(40) == "40 m")
         assertTrue(distanceLabel(500) == "500 m")
         assertTrue(distanceLabel(3_000) == "3 km")
         assertTrue(distanceLabel(0) == "Unlimited")

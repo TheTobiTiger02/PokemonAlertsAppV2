@@ -237,6 +237,10 @@ class HuntRepository private constructor(context: Context) {
 
     suspend fun forgetCatch(id: String) = editStats { it.withoutCatch(id) }
 
+    /** Adds a reading from a connected watch to the running hunt; ignored when no hunt runs. */
+    suspend fun recordWatchSample(sample: com.example.pokemonalertsv2.wear.WatchSample, deviceName: String?) =
+        editStats { it.withWatchSample(sample, deviceName) }
+
     /** Feeds one accepted fix into the distance walked. */
     suspend fun recordFix(latitude: Double, longitude: Double, accuracyMeters: Float) =
         editStats { it.withFix(latitude, longitude, accuracyMeters) }

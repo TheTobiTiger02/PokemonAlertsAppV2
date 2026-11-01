@@ -73,7 +73,14 @@ suspend fun recordHuntCatch(
                 id = alert.uniqueId,
                 name = displayName,
                 imageUrl = alert.thumbnailUrl?.takeIf { it.isNotBlank() } ?: alert.imageUrl?.takeIf { it.isNotBlank() },
-                atMillis = nowMillis
+                atMillis = nowMillis,
+                pokedexId = alert.pokedexId,
+                shiny = alert.isShiny == true,
+                iv = huntCatchIv(alert),
+                cp = alert.cp,
+                level = alert.level,
+                latitude = alert.latitude,
+                longitude = alert.longitude
             )
         )
     }.onFailure { Log.w(TAG, "Could not add the catch to the hunt", it) }
@@ -134,4 +141,13 @@ private suspend fun retargetHunt(context: Context, restored: PokemonAlert?, nowM
     val alert = restored?.takeIf { it.isEligibleArrivalDestination(nowMillis) } ?: return
     ArrivalTrackingRepository.getInstance(context).startTracking(alert, nowMillis)
     huntRepository.setTarget(alert.uniqueId)
+}
+
+/** The alert's IV as a whole percentage: from the three stats when given, else the IV text ("97", "97.8%"). */
+internal fun huntCatchIv(alert: PokemonAlert): Int? {
+    val a = alert.ivAttack
+    val d = alert.ivDefense
+    val s = alert.ivStamina
+    if (a != null && d != null && s != null) return Math.round((a + d + s) * 100.0 / 45.0).toInt().coerceIn(0, 100)
+    return alert.iv?.trim()?.removeSuffix("%")?.trim()?.toDoubleOrNull()?.let { Math.round(it).toInt() }?.takeIf { it in 0..100 }
 }

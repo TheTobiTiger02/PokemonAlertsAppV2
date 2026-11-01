@@ -186,6 +186,8 @@ fun catchTimeAt(settings: CatchRouteSettings, meters: Double, waits: List<CatchW
     /** The settings the trainer started with; replans swap the itinerary's settings for a remainder. */
     val originalSettings: CatchRouteSettings? = null,
     val replans: Int = 0,
+    /** What a connected watch measured during the walk; null when none was connected. */
+    val watch: com.example.pokemonalertsv2.wear.WatchStats? = null,
 ) {
     fun wasVisited(opportunity: SpawnOpportunity): Boolean = visits.any { sameCycle(it.opportunity, opportunity, it.visitedAt) }
     /** Every planned window not yet visited, including ones already walked past or despawned. */

@@ -71,6 +71,46 @@ The widget shows:
 - Tap an alert to open details
 - Tap refresh button to update
 
+### Events widget
+
+- **Now** lists running events with their end day, date and time, and how long is left
+  (e.g. "Ends Sun 3 Nov 20:00 · 2 d 4 h left").
+- **Upcoming** lists every future event, with its date and how far away it is
+  (e.g. "Sat 9 Nov 14:00 – 17:00 · in 8 days"). The list scrolls.
+- Long-press → reconfigure to hide event types. New kinds of events always show up until you hide them.
+
+## 📏 Distance limits
+
+The maximum-distance slider moves in 10 m steps below 100 m (10, 20 … 90 m), then 100 m steps
+up to 1 km, then 1 km steps. There are quick chips for 50 m and 100 m.
+
+## 🥾 Hunt history
+
+**Tools → Hunt history** groups your hunts by month. Each card shows the date, time, catches
+(sprites, shinies and hundos), distance, duration and a small sketch of the path you walked. Tap
+a hunt for its map, pace, best IV and every catch with its IV, CP and time.
+
+The path is recorded during the hunt from the GPS fixes the app already uses (about 1 point
+every 8 m, a few KB per hunt, stored only on your phone). The map in a hunt's summary loads its
+tiles when you open it; the list's sketches need no data at all.
+
+## ⌚ Galaxy Watch (Wear OS)
+
+A companion watch app (Galaxy Watch4 or newer, or any Wear OS 3+ watch) shows the running hunt or
+catch route and adds heart rate, steps and calories to its summary.
+
+1. Download `pokemon-alerts-watch.apk` from the same GitHub release as the phone app.
+2. Install it on the watch: enable **Developer options → ADB debugging** and **Debug over Wi-Fi** on
+   the watch, then run `adb connect <watch-ip>:<port>` and `adb install pokemon-alerts-watch.apk`
+   (or use a sideloading app such as *Bugjaeger* or *Wear Installer*).
+3. Start a hunt or catch route on the phone. The watch shows a notification; tap it (or open the app)
+   and allow the sensor permissions.
+
+On the watch: the elapsed time, catches, distance, current target/next stop and live heart rate;
+**Got it** (hunt) or **Skip** (route), **Pause/Go**, and **End**. Everything travels over the
+phone–watch Bluetooth link, not mobile data. The watch and phone apps must come from the same
+release so they share a signing key.
+
 ## 📜 Viewing History
 
 1. Open the **Alerts** tab and choose **History** at the top

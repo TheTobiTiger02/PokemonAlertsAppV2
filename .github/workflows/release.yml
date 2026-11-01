@@ -117,6 +117,20 @@ jobs:
 
           sha256sum "$APK" > "$APK.sha256"
 
+          # The Galaxy Watch / Wear OS companion: same id and signing key as the phone app,
+          # or the watch and phone cannot talk to each other.
+          WEAR_APK="wear/build/outputs/apk/release/wear-release.apk"
+          test -s "$WEAR_APK"
+          "$APKSIGNER" verify --verbose "$WEAR_APK"
+          PHONE_CERT=$("$APKSIGNER" verify --print-certs "$APK" | grep -m1 "SHA-256 digest")
+          WEAR_CERT=$("$APKSIGNER" verify --print-certs "$WEAR_APK" | grep -m1 "SHA-256 digest")
+          if [ "$PHONE_CERT" != "$WEAR_CERT" ]; then
+            echo "::error::The watch APK is not signed with the phone app's key."
+            exit 1
+          fi
+          cp "$WEAR_APK" wear/build/outputs/apk/release/pokemon-alerts-watch.apk
+          sha256sum wear/build/outputs/apk/release/pokemon-alerts-watch.apk > wear/build/outputs/apk/release/pokemon-alerts-watch.apk.sha256
+
       # Publish the Release and attach the APK asset
       - name: Create GitHub Release
         if: steps.tag_check.outputs.exists == 'false'
@@ -127,6 +141,8 @@ jobs:
           files: |
             app/build/outputs/apk/release/app-release.apk
             app/build/outputs/apk/release/app-release.apk.sha256
+            wear/build/outputs/apk/release/pokemon-alerts-watch.apk
+            wear/build/outputs/apk/release/pokemon-alerts-watch.apk.sha256
           draft: false
           prerelease: false
         env:

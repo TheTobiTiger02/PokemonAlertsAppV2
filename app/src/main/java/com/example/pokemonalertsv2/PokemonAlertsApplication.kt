@@ -58,6 +58,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             com.example.pokemonalertsv2.work.EventReminderWorker.schedule(this)
             resyncPushTopicsOnFilterChanges()
             WidgetUpdateCoordinator.start(this)
+            com.example.pokemonalertsv2.wear.WearBridge.start(this)
             warmGoogleMaps()
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)

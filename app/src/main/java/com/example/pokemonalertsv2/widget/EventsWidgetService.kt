@@ -50,8 +50,8 @@ private class EventsFactory(
             runBlocking {
                 palette = resolveWidgetThemePalette(context)
                 val events = EventsRepository(context).cached()
-                val shown = EventsWidgetSettings.shownTypes(context, appWidgetId)
-                rows = eventsWidgetRows(events, System.currentTimeMillis(), shown)
+                val hidden = EventsWidgetSettings.hiddenTypes(context, appWidgetId) { knownEventTypes(events) }
+                rows = eventsWidgetRows(events, System.currentTimeMillis(), hidden)
                 // Artwork is loaded here, off the per-row call, and kept while the image URLs stay.
                 val wanted = rows.mapNotNull { (it as? EventsWidgetRow.Event)?.event?.image }.toSet()
                 images.keys.retainAll(wanted)

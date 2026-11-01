@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +55,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 internal fun HuntSummarySheet(
     summary: HuntSummary,
     doneLabel: String = "Done",
+    /** Null for "Hunt finished"; the history passes the hunt's date. */
+    title: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -80,15 +83,15 @@ internal fun HuntSummarySheet(
         ) {
             Column {
                 Text(
-                    text = "Hunt finished",
+                    text = title ?: "Hunt finished",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = summary.name,
+                    text = summary.name + " · " + huntTimeRange(summary),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -98,6 +101,34 @@ internal fun HuntSummarySheet(
                 StatTile(formatHuntDistance(summary.distanceMeters), "Walked", Modifier.weight(1f))
                 StatTile(formatHuntDuration(summary.activeMillis), "Hunted", Modifier.weight(1f))
             }
+            val shinies = summary.catches.count { it.shiny }
+            val pace = formatHuntPace(summary)
+            val bestIv = summary.catches.mapNotNull { it.iv }.maxOrNull()
+            if (pace != null || shinies > 0 || bestIv != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (pace != null) StatTile(pace, "Pace", Modifier.weight(1f))
+                    if (shinies > 0) StatTile(shinies.toString(), "Shiny", Modifier.weight(1f))
+                    if (bestIv != null) StatTile("$bestIv%", "Best IV", Modifier.weight(1f))
+                }
+            }
+
+            val track = remember(summary.track) { summary.trackPoints }
+            val catchPoints = remember(summary.catches) { summary.catches.mapNotNull { it.point } }
+            if (track.size >= 2 || catchPoints.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    HuntPathMap(
+                        track, catchPoints,
+                        Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(16.dp)).testTag("hunt_summary_map")
+                    )
+                    Text(
+                        text = if (track.size >= 2) "Teal: your walk · gold: where you caught" else "Gold: where you caught",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            summary.watch?.let { WatchStatsSection(it) }
 
             if (summary.catches.isEmpty()) {
                 Text(
@@ -106,7 +137,7 @@ internal fun HuntSummarySheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Caught", style = MaterialTheme.typography.titleSmall)
                     val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
                     summary.catches.forEach { catch ->
@@ -171,39 +202,34 @@ internal fun StatTile(value: String, label: String, modifier: Modifier = Modifie
 
 @Composable
 private fun CatchRow(catch: HuntCatch, time: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (catch.imageUrl != null) {
-                AsyncImage(
-                    model = catch.imageUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(34.dp)
+            CatchAvatar(catch, 44.dp)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = catch.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            } else {
-                Text(catch.name.take(1), style = MaterialTheme.typography.titleMedium)
+                if (catch.shiny || catch.iv != null || catch.cp != null) CatchBadges(catch)
             }
+            Text(
+                text = time,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        Text(
-            text = catch.name,
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = time,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
+}
+
+/** "14:05 – 15:20" on the hunt's day. */
+internal fun huntTimeRange(summary: HuntSummary): String {
+    val time = DateFormat.getTimeInstance(DateFormat.SHORT)
+    return "${time.format(Date(summary.startedAtMillis))} – ${time.format(Date(summary.endedAtMillis))}"
 }
