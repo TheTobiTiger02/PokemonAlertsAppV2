@@ -101,7 +101,7 @@ class WorkoutService : Service() {
             check(wanted.isNotEmpty()) { "Walking exercise supports none of the wanted data" }
             // Another app's workout (e.g. Samsung Health) would be ended by ours; leave it be.
             val info = exerciseClient.getCurrentExerciseInfoAsync().await()
-            check(info.exerciseTrackedStatus != androidx.health.services.client.data.ExerciseTrackedStatus.OTHER_APP_IN_PROGRESS) {
+            check(info.exerciseTrackedStatus != OTHER_APP_IN_PROGRESS) {
                 "Another app is tracking a workout"
             }
             exerciseClient.setUpdateCallback(exerciseCallback)
@@ -179,6 +179,8 @@ class WorkoutService : Service() {
         private const val CHANNEL = "workout"
         private const val NOTIFICATION_ID = 11
         private const val SEND_EVERY_MILLIS = 15_000L
+        /** ExerciseTrackedStatus.OTHER_APP_IN_PROGRESS; the library marks its constant restricted. */
+        private const val OTHER_APP_IN_PROGRESS = 1
         const val ACTION_STOP = "com.example.pokemonalertsv2.watch.STOP_WORKOUT"
 
         @Volatile var running = false
