@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string-array name="android_wear_capabilities" translatable="false">
-        <item>pokealerts_watch</item>
-    </string-array>
-    <color name="launcher_background">#F7F8FB</color>
-    <color name="launcher_primary">#0057D9</color>
-    <string name="app_name">Pokémon Alerts</string>
-</resources>
