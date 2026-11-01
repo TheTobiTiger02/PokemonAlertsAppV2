@@ -70,7 +70,13 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
             Text("Teal: where you walked · blue: the last planned route",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        summary.watch?.let { com.example.pokemonalertsv2.hunt.WatchStatsSection(it) }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        com.example.pokemonalertsv2.health.WatchDataPanel(
+            startMillis = summary.startedAtMillis,
+            endMillis = summary.endedAtMillis,
+            stored = summary.watch,
+            onRead = { CatchRouteStore.get(context).updateHistory(summary.copy(watch = it)) }
+        )
     }
 }
 

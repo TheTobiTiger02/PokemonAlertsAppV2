@@ -237,10 +237,6 @@ class HuntRepository private constructor(context: Context) {
 
     suspend fun forgetCatch(id: String) = editStats { it.withoutCatch(id) }
 
-    /** Adds a reading from a connected watch to the running hunt; ignored when no hunt runs. */
-    suspend fun recordWatchSample(sample: com.example.pokemonalertsv2.wear.WatchSample, deviceName: String?) =
-        editStats { it.withWatchSample(sample, deviceName) }
-
     /** Feeds one accepted fix into the distance walked. */
     suspend fun recordFix(latitude: Double, longitude: Double, accuracyMeters: Float) =
         editStats { it.withFix(latitude, longitude, accuracyMeters) }
@@ -287,6 +283,27 @@ class HuntRepository private constructor(context: Context) {
     val history: Flow<List<HuntSummary>> = dataStore.data
         .map { preferences -> preferences[HUNT_HISTORY_KEY].decodeHistory() }
         .distinctUntilChanged()
+
+    /**
+     * Stores what Health Connect had for the hunt that started at [startedAtMillis], in its
+     * history entry and, if it is the summary still waiting to be seen, there too.
+     */
+    suspend fun updateWatchStats(startedAtMillis: Long, stats: com.example.pokemonalertsv2.health.WatchStats) {
+        dataStore.edit { preferences ->
+            val history = preferences[HUNT_HISTORY_KEY].decodeHistory()
+            if (history.any { it.startedAtMillis == startedAtMillis }) {
+                preferences[HUNT_HISTORY_KEY] = history
+                    .map { if (it.startedAtMillis == startedAtMillis) it.copy(watch = stats) else it }
+                    .encodeHistory()
+            }
+            val last = preferences[LAST_SUMMARY_KEY]?.let { raw ->
+                runCatching { json.decodeFromString(HuntSummary.serializer(), raw) }.getOrNull()
+            }
+            if (last != null && last.startedAtMillis == startedAtMillis) {
+                preferences[LAST_SUMMARY_KEY] = json.encodeToString(HuntSummary.serializer(), last.copy(watch = stats))
+            }
+        }
+    }
 
     suspend fun clearHistory() {
         dataStore.edit { preferences -> preferences.remove(HUNT_HISTORY_KEY) }

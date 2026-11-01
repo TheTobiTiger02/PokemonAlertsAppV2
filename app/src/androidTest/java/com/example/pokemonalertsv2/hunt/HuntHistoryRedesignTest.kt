@@ -12,7 +12,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.pokemonalertsv2.data.FilterDefinition
-import com.example.pokemonalertsv2.wear.WatchSample
+import com.example.pokemonalertsv2.health.WatchStats
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -23,7 +24,7 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * A finished hunt with a walked path, a shiny, a hundo and watch readings shows up in the
+ * A finished hunt with a walked path, a shiny, a hundo and watch data shows up in the
  * redesigned history, and its summary opens with the map and the watch section.
  */
 @RunWith(AndroidJUnit4::class)
@@ -50,18 +51,21 @@ class HuntHistoryRedesignTest {
             repository.recordCatch(HuntCatch("b", "Larvitar", null, start + 25 * 60_000L, pokedexId = 246, iv = 100, cp = 701,
                 latitude = 49.7600, longitude = 8.6118))
             repository.recordCatch(HuntCatch("c", "Gible", null, start + 40 * 60_000L, pokedexId = 443, iv = 76, cp = 455))
-            for (minute in 0..20) {
-                repository.recordWatchSample(
-                    WatchSample(start + minute * 60_000L, heartRate = 95 + minute, stepsTotal = minute * 110L, caloriesTotal = minute * 4.5),
-                    "Galaxy Watch6"
-                )
+            repository.finish(nowMillis = start + 45 * 60_000L)?.also { finished ->
+                // What Health Connect would hand back for the walk.
+                val watch = WatchStats.fromSamples(
+                    finished.startedAtMillis, finished.endedAtMillis,
+                    heartRates = (0..20).map { minute -> start + minute * 60_000L to 95 + minute },
+                    steps = 2200, calories = 90.0, deviceName = "Galaxy Watch6",
+                    fetchedAtMillis = System.currentTimeMillis()
+                )!!
+                repository.updateWatchStats(finished.startedAtMillis, watch)
             }
-            repository.finish(nowMillis = start + 45 * 60_000L)
         }
         requireNotNull(summary)
         assertTrue(summary.trackPoints.size >= 20)
         assertEquals(3, summary.catches.size)
-        assertEquals(2200L, summary.watch?.steps)
+        assertEquals(2200L, runBlocking { repository.history.first() }.first().watch?.steps)
 
         ActivityScenario.launch(HuntHistoryActivity::class.java).use {
             composeRule.waitUntil(10_000) { composeRule.onAllNodesWithTag("hunt_history_row").fetchSemanticsNodes().isNotEmpty() }

@@ -90,6 +90,17 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
     var opened by remember { mutableStateOf<HuntSummary?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
+    // Fills in heart rate for recent hunts from Health Connect, so the cards can show it; only
+    // reads while connected and only hunts whose watch data may still be incomplete.
+    androidx.compose.runtime.LaunchedEffect(history.size) {
+        val reader = com.example.pokemonalertsv2.health.HealthDataReader(context.applicationContext)
+        if (reader.availability() != com.example.pokemonalertsv2.health.HealthDataReader.Availability.AVAILABLE) return@LaunchedEffect
+        if (!reader.isConnected()) return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        history.filter { com.example.pokemonalertsv2.health.needsHealthRead(it.endedAtMillis, it.watch, now) }.forEach { hunt ->
+            reader.read(hunt.startedAtMillis, hunt.endedAtMillis, now)?.let { repository.updateWatchStats(hunt.startedAtMillis, it) }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.testTag("hunt_history"),

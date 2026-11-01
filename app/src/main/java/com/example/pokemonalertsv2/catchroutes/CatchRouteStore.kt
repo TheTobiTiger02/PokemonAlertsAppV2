@@ -81,6 +81,9 @@ class CatchRouteStore private constructor(context: Context) {
         dao.addHistory(CatchHistoryEntity(summary.id, summary.endedAtMillis, json.encodeToString(summary)))
         dao.trimHistory(CATCH_ROUTE_HISTORY_CAP)
     }
+    /** Rewrites one history entry in place, e.g. once the watch's data has been read for it. */
+    suspend fun updateHistory(summary: CatchRouteSummary) =
+        dao.addHistory(CatchHistoryEntity(summary.id, summary.endedAtMillis, json.encodeToString(summary)))
     suspend fun deleteHistory(id: String) = dao.deleteHistory(id)
     suspend fun clearHistory() = dao.clearHistory()
     companion object {

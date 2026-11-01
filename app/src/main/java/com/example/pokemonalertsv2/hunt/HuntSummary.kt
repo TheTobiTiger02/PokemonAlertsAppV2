@@ -1,8 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
-import com.example.pokemonalertsv2.wear.WatchSample
-import com.example.pokemonalertsv2.wear.WatchStats
+import com.example.pokemonalertsv2.health.WatchStats
 import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -51,12 +50,7 @@ data class HuntStats(
     val anchorLongitude: Double? = null,
     /** The walked path, see [HuntTrack]. */
     val track: String = "",
-    /** What a connected watch measured; null when none was connected. */
-    val watch: WatchStats? = null,
 ) {
-    fun withWatchSample(sample: WatchSample, deviceName: String?): HuntStats =
-        copy(watch = (watch ?: WatchStats()).withSample(sample, deviceName))
-
     fun withCatch(catch: HuntCatch): HuntStats =
         copy(catches = catches.filterNot { it.id == catch.id } + catch)
 
@@ -120,6 +114,7 @@ data class HuntSummary(
     val raidWatchStillShowing: String? = null,
     /** The walked path, see [HuntTrack]; empty for hunts from before 1.26. */
     val track: String = "",
+    /** Heart rate, steps and calories from Health Connect (e.g. a Galaxy Watch); null until read. */
     val watch: WatchStats? = null,
 ) {
     val trackPoints: List<CatchPoint> get() = HuntTrack.decode(track)
@@ -166,8 +161,7 @@ internal fun huntSummary(
         distanceMeters = settled.distanceMeters,
         catches = settled.catches,
         raidWatchStillShowing = raidWatchStillShowing,
-        track = settled.track,
-        watch = settled.watch?.takeIf { it.hasData }
+        track = settled.track
     )
 }
 

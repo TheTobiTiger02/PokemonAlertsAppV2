@@ -94,22 +94,20 @@ The path is recorded during the hunt from the GPS fixes the app already uses (ab
 every 8 m, a few KB per hunt, stored only on your phone). The map in a hunt's summary loads its
 tiles when you open it; the list's sketches need no data at all.
 
-## ⌚ Galaxy Watch (Wear OS)
+## ⌚ Galaxy Watch data (Health Connect)
 
-A companion watch app (Galaxy Watch4 or newer, or any Wear OS 3+ watch) shows the running hunt or
-catch route and adds heart rate, steps and calories to its summary.
+Hunts and catch routes can show your heart rate (with a per-minute chart), steps and calories.
+There is no app on the watch: the data comes from **Health Connect**, where your Galaxy Watch's
+readings end up via Samsung Health. It works the same with any watch or ring that syncs to Health Connect.
 
-1. Download `pokemon-alerts-watch.apk` from the same GitHub release as the phone app.
-2. Install it on the watch: enable **Developer options → ADB debugging** and **Debug over Wi-Fi** on
-   the watch, then run `adb connect <watch-ip>:<port>` and `adb install pokemon-alerts-watch.apk`
-   (or use a sideloading app such as *Bugjaeger* or *Wear Installer*).
-3. Start a hunt or catch route on the phone. The watch shows a notification; tap it (or open the app)
-   and allow the sensor permissions.
+1. In **Samsung Health** → Settings → **Health Connect**, allow it to share heart rate, steps and calories.
+2. In Pokémon Alerts → **Settings → Map & tracking → Watch & health data**, tap **Connect** and allow access
+   (read-only). A hunt or route summary also offers **Connect** directly.
+3. After a walk, open its summary. The numbers appear once the watch has synced, usually within a few
+   minutes; opening Samsung Health speeds that up. **Check again** reads them again.
 
-On the watch: the elapsed time, catches, distance, current target/next stop and live heart rate;
-**Got it** (hunt) or **Skip** (route), **Pause/Go**, and **End**. Everything travels over the
-phone–watch Bluetooth link, not mobile data. The watch and phone apps must come from the same
-release so they share a signing key.
+The app only reads the time each walk was running, only while the app is open, and keeps the
+numbers with the hunt or route history on your phone.
 
 ## 📜 Viewing History
 

@@ -30,20 +30,10 @@ googleServices = "4.4.4"
 benchmark = "1.4.1"
 uiautomator = "2.3.0"
 profileinstaller = "1.4.1"
-playServicesWearable = "19.0.0"
-wearCompose = "1.4.1"
-healthServices = "1.1.0-alpha05"
-concurrentFutures = "1.2.0"
-guava = "33.3.1-android"
+healthConnect = "1.1.0"
 
 [libraries]
-play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "playServicesWearable" }
-kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "coroutines" }
-wear-compose-material = { group = "androidx.wear.compose", name = "compose-material", version.ref = "wearCompose" }
-wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wearCompose" }
-health-services-client = { group = "androidx.health", name = "health-services-client", version.ref = "healthServices" }
-guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
-androidx-concurrent-futures-ktx = { group = "androidx.concurrent", name = "concurrent-futures-ktx", version.ref = "concurrentFutures" }
+androidx-health-connect-client = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
