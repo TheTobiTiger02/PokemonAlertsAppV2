@@ -340,17 +340,6 @@ class ArrivalTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        if (intent?.action == ACTION_PAUSE_HUNT) {
-            // From a connected watch: the same as parking the route in the floating window.
-            pauseHuntRoute()
-            return START_NOT_STICKY
-        }
-
-        if (intent?.action == ACTION_RESUME_HUNT) {
-            recalculateHuntRoute()
-            return START_NOT_STICKY
-        }
-
         if (intent?.action == ACTION_UNDO_CATCH) {
             // Everything the undo does to the journey is a write to the destination
             // store, which destinationJob is already collecting -- so there is
@@ -2289,8 +2278,6 @@ class ArrivalTrackingService : Service() {
         const val ACTION_GOT_IT = "com.example.pokemonalertsv2.tracking.GOT_IT"
             const val ACTION_SHOW_MAP = "com.example.pokemonalertsv2.tracking.SHOW_MAP"
         const val ACTION_UNDO_CATCH = "com.example.pokemonalertsv2.tracking.UNDO_CATCH"
-        const val ACTION_PAUSE_HUNT = "com.example.pokemonalertsv2.tracking.PAUSE_HUNT"
-        const val ACTION_RESUME_HUNT = "com.example.pokemonalertsv2.tracking.RESUME_HUNT"
         const val ACTION_TOGGLE_GOING_MAP = "com.example.pokemonalertsv2.tracking.TOGGLE_GOING_MAP"
         const val ACTION_RETARGET_HUNT = "com.example.pokemonalertsv2.tracking.RETARGET_HUNT"
         private const val EXTRA_ALERT_JSON = "alert_json"

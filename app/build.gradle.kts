@@ -81,8 +81,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 94
-        versionName = "1.26.0"
+        versionCode = 95
+        versionName = "1.27.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -217,9 +217,8 @@ dependencies {
     implementation(libs.google.maps.compose)
     implementation(libs.maplibre.android)
     implementation(libs.google.play.services.location)
-    // Galaxy Watch / Wear OS companion: session state out, buttons and heart rate in.
-    implementation(libs.play.services.wearable)
-    implementation(libs.kotlinx.coroutines.play.services)
+    // Heart rate, steps and calories a watch synced to Health Connect (e.g. Galaxy Watch via Samsung Health).
+    implementation(libs.androidx.health.connect.client)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     

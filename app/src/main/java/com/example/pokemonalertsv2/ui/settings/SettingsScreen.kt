@@ -515,6 +515,9 @@ internal fun SettingsScreen(
                         Text("200 m", style = MaterialTheme.typography.labelSmall)
                     }
                 }
+                    SettingsSection(title = "Watch & health data") {
+                        com.example.pokemonalertsv2.health.WatchDataSettings()
+                    }
                 }
 
 

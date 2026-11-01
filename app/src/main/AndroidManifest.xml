@@ -3,6 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Read-only Health Connect access: what a watch recorded during a hunt or catch route. -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
     <!-- Queried directly by the Pokebattler offline-cache interceptor; not relying on a
          merged-in permission from another library. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -37,6 +42,7 @@
     <!-- Route export opens Google Maps directly when it is installed; without this the package is
          invisible on API 30+ and every export would fall back to the browser. -->
     <queries>
+        <package android:name="com.google.android.apps.healthdata" />
         <package android:name="com.google.android.apps.maps" />
     </queries>
 
@@ -143,15 +149,28 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-        <!-- Messages from the Wear OS companion app (buttons, heart rate, steps). -->
-        <service
-            android:name=".wear.WearListenerService"
-            android:exported="true">
+        <!--
+            Health Connect: why the app reads heart rate, steps and calories. Shown from the
+            permission dialog (rationale action) and from Android 14+'s permission settings (alias).
+        -->
+        <activity
+            android:name=".health.HealthPermissionsRationaleActivity"
+            android:exported="true"
+            android:theme="@style/Theme.PokemonAlertsV2">
             <intent-filter>
-                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
-                <data android:scheme="wear" android:host="*" android:pathPrefix="/pokealerts" />
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
-        </service>
+        </activity>
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:targetActivity=".health.HealthPermissionsRationaleActivity"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
         <service
             android:name=".tracking.ArrivalTrackingService"
             android:exported="false"

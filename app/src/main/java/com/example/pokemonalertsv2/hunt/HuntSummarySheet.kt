@@ -128,7 +128,12 @@ internal fun HuntSummarySheet(
                 }
             }
 
-            summary.watch?.let { WatchStatsSection(it) }
+            com.example.pokemonalertsv2.health.WatchDataPanel(
+                startMillis = summary.startedAtMillis,
+                endMillis = summary.endedAtMillis,
+                stored = summary.watch,
+                onRead = { HuntRepository.getInstance(context).updateWatchStats(summary.startedAtMillis, it) }
+            )
 
             if (summary.catches.isEmpty()) {
                 Text(

@@ -30,8 +30,8 @@ data class CatchRouteSummary(
     val track: List<CatchPoint> = emptyList(),
     /** The last planned route, thinned for drawing. */
     val plannedPath: List<CatchPoint> = emptyList(),
-    /** What a connected watch measured; null when none was connected. */
-    val watch: com.example.pokemonalertsv2.wear.WatchStats? = null,
+    /** Heart rate, steps and calories from Health Connect (e.g. a Galaxy Watch); null until read. */
+    val watch: com.example.pokemonalertsv2.health.WatchStats? = null,
 ) {
     /** Kilometres per hour over the active time; null when too short to mean anything. */
     val averageKmh: Double? get() = if (activeMillis < 60_000 || walkedMeters < 50) null else walkedMeters / (activeMillis / 1000.0) * 3.6
@@ -67,7 +67,6 @@ internal fun catchRouteSummary(session: CatchSession, original: CatchRouteSettin
         settings = original,
         track = session.track,
         plannedPath = thinCatchPath(session.itinerary.path.map { it.point }),
-        watch = session.watch?.takeIf { it.hasData },
     )
 }
 

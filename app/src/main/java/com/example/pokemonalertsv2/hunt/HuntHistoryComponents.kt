@@ -39,7 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
-import com.example.pokemonalertsv2.wear.WatchStats
+import com.example.pokemonalertsv2.health.WatchStats
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.max
