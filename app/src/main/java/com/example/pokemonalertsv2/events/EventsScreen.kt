@@ -1,5 +1,10 @@
 package com.example.pokemonalertsv2.events
 
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.rememberScrollState
@@ -8,7 +13,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -146,8 +150,16 @@ fun EventsContent(
     val upcomingDays = if (view == EventView.NOW) emptyList()
     else sections.upcoming.map { (day, events) -> day to events.inView() }.filter { it.second.isNotEmpty() }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item {
+        // Staggered: a card with a Pokémon row is taller than one without, and a plain grid
+        // would leave a gap beside every short card.
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Adaptive(Dimens.GridCardMinWidth),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalItemSpacing = 10.dp,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item(span = StaggeredGridItemSpan.FullLine) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                     TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
@@ -173,7 +185,7 @@ fun EventsContent(
                 }
             }
             // One row of quick views; which event types show is the filter button above.
-            item {
+            item(span = StaggeredGridItemSpan.FullLine) {
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -185,8 +197,8 @@ fun EventsContent(
                     }
                 }
             }
-            state.error?.let { message -> item { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
-            if (nowEvents.isEmpty() && upcomingDays.isEmpty() && !state.loading) item {
+            state.error?.let { message -> item(span = StaggeredGridItemSpan.FullLine) { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
+            if (nowEvents.isEmpty() && upcomingDays.isEmpty() && !state.loading) item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
                     if (view == EventView.STARRED) "No starred events. Tap the star on an event to be reminded of it."
                     else "No events to show.",
@@ -195,18 +207,18 @@ fun EventsContent(
                 )
             }
             if (nowEvents.isNotEmpty()) {
-                item { SectionTitle("Happening now") }
+                item(span = StaggeredGridItemSpan.FullLine) { SectionTitle("Happening now") }
                 items(nowEvents, key = { "now-${it.id}" }) { event ->
                     EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
                 }
             }
             upcomingDays.forEach { (day, events) ->
-                item(key = "day-$day") { SectionTitle(dayLabel(day, state.nowMillis)) }
+                item(key = "day-$day", span = StaggeredGridItemSpan.FullLine) { SectionTitle(dayLabel(day, state.nowMillis)) }
                 items(events, key = { it.id }) { event ->
                     EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
                 }
             }
-            item {
+            item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
                     "Event data from LeekDuck. Times are shown in your time zone.",
                     style = MaterialTheme.typography.bodySmall,

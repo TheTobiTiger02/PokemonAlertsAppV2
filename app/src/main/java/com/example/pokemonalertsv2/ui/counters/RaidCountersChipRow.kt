@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -85,10 +86,10 @@ internal fun RaidCountersChipRow(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = { CountersTopBar(state, onBack) }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f).testTag("counters_list"),
-                contentPadding = countersListPadding(),
+                modifier = Modifier.fillMaxSize().testTag("counters_list"),
+                contentPadding = countersListPadding(maxWidth),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item(key = "boss") {

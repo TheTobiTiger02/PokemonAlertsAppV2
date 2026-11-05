@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import android.app.AlarmManager
 import android.appwidget.AppWidgetManager
 import android.content.Context
@@ -222,10 +223,10 @@ private fun WidgetStudioConfiguration(
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("Widget configuration") }) },
         bottomBar = {
-            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp).heightIn(min = 52.dp)) { Text("Save widget") }
+            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.navigationBarsPadding().padding(16.dp).readableWidth().heightIn(min = 52.dp)) { Text("Save widget") }
         }
     ) { padding ->
-        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp).readableWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("A view of your own", style = MaterialTheme.typography.headlineSmall)
             Text("This widget has independent alert rules. Link a reusable profile or keep a local copy.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Open Filter Studio") }

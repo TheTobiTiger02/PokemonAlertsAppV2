@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import androidx.compose.foundation.layout.BoxWithConstraints
 import com.example.pokemonalertsv2.ui.alerts.shortLabel
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.res.painterResource
@@ -188,7 +190,7 @@ internal fun SettingsOverview(
             }
         }
 
-        SettingsOverviewGroup("Alerts") {
+        val alertsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Alerts") {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Notifications),
                 title = "Notifications & permissions",
@@ -202,8 +204,8 @@ internal fun SettingsOverview(
                 summary = "What the feed, map, widgets and notifications show",
                 onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
             )
-        }
-        SettingsOverviewGroup("Display") {
+        } }
+        val displayGroup: @Composable () -> Unit = { SettingsOverviewGroup("Display") {
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_theme),
                 title = "Appearance",
@@ -217,8 +219,8 @@ internal fun SettingsOverview(
                 summary = "Marker grouping and arrival radius",
                 onClick = { onDestinationSelected(SettingsDestination.MAP_TRACKING) }
             )
-        }
-        SettingsOverviewGroup("Accounts") {
+        } }
+        val accountsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Accounts") {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.AccountCircle),
                 title = "GoDex checklist",
@@ -233,14 +235,37 @@ internal fun SettingsOverview(
                 summary = raidCountersSummary,
                 onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
             )
-        }
-        SettingsOverviewGroup("App") {
+        } }
+        val appGroup: @Composable () -> Unit = { SettingsOverviewGroup("App") {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Info),
                 title = "Backup & about",
                 summary = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME} · export or restore settings",
                 onClick = { onDestinationSelected(SettingsDestination.ABOUT_UPDATES) }
             )
+        } }
+        // Two columns of groups on a wide screen, so the overview is not four full-width
+        // strips with a lone arrow at the far edge of each row.
+        BoxWithConstraints {
+            if (maxWidth >= Dimens.TwoColumnBreakpoint) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        alertsGroup()
+                        displayGroup()
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        accountsGroup()
+                        appGroup()
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    alertsGroup()
+                    displayGroup()
+                    accountsGroup()
+                    appGroup()
+                }
+            }
         }
     }
 }

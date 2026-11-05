@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.example.pokemonalertsv2.ui.components.KeepAlive
@@ -158,7 +159,7 @@ private data class NavDestination(
 internal enum class NavigationLayoutMode { BOTTOM_BAR, RAIL }
 
 internal fun navigationLayoutModeForWidth(width: Dp): NavigationLayoutMode =
-    if (width >= 600.dp) NavigationLayoutMode.RAIL else NavigationLayoutMode.BOTTOM_BAR
+    if (width >= Dimens.NavigationRailBreakpoint) NavigationLayoutMode.RAIL else NavigationLayoutMode.BOTTOM_BAR
 
 // Screen ids. They predate History moving into the Alerts tab and stay stable because
 // notification PendingIntents and widgets already on the home screen carry them.

@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.material3.IconButton
 import com.example.pokemonalertsv2.ui.alerts.shortLabel
 import android.Manifest
@@ -352,10 +354,19 @@ internal fun SettingsScreen(
                 }
             } else
             Column(
+                // The scroll takes the whole width; only the content is capped and centred,
+                // wider on the overview, whose groups sit in two columns there.
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .readableWidth(
+                        if (animatedDestination == SettingsDestination.OVERVIEW) {
+                            Dimens.WideContentWidth
+                        } else {
+                            Dimens.ReadableContentWidth
+                        }
+                    ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (animatedDestination == SettingsDestination.OVERVIEW) {

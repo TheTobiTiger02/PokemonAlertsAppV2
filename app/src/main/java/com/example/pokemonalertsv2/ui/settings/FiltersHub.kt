@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -289,7 +291,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
             )
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.9f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
+        Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.9f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 if (isSpecies) {
@@ -364,7 +366,7 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
     val taskOptions = (catalog.map { it.task } + current.tasks.values).distinctBy(::normalizeFilterToken)
     val rewardOptions = (catalog.map { it.reward } + current.rewards.values).distinctBy(::normalizeFilterToken)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(10.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
+        Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.92f).padding(10.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
             Text("Quest rules", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             PrimaryTabRow(tab) { listOf("Exact quests", "Tasks", "Rewards").forEachIndexed { index, label -> Tab(tab == index, { tab = index }, text = { Text(label) }) } }
             if (tab == 0) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

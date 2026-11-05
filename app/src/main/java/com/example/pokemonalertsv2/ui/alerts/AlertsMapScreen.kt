@@ -1,7 +1,8 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.catchroutes.SpawnpointSelection
 import com.example.pokemonalertsv2.catchroutes.SpawnpointDetailSheet
@@ -88,7 +89,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -1812,7 +1812,7 @@ internal fun AlertsMapScreenContent(
                 if (compactPictureInPicture) "map_pip_content" else "map_full_content"
             )
     ) {
-        val useSidePanel = !compactPictureInPicture && maxWidth >= 840.dp
+        val useSidePanel = !compactPictureInPicture && maxWidth >= Dimens.TwoColumnBreakpoint
         val controlsEndPadding = if (useSidePanel) 392.dp else 16.dp
         // Everything the rail cannot express, so the "Filters" chip can say how much is hidden
         // behind it. Alert types are deliberately excluded: the rail already shows those.
@@ -1864,9 +1864,9 @@ internal fun AlertsMapScreenContent(
             )
         }
         val visibleCoordinates = remember(renderedAlerts) { resolveFitAllCoordinates(renderedAlerts) }
-        val configuration = LocalConfiguration.current
-        val viewportWidthDp = configuration.screenWidthDp.toFloat()
-        val viewportHeightDp = configuration.screenHeightDp.toFloat()
+        // The map box, not the screen: on a tablet the navigation rail takes part of the width.
+        val viewportWidthDp = maxWidth.value
+        val viewportHeightDp = maxHeight.value
         val cameraAnchor = if (mapSource == MapDisplaySource.GOOGLE) {
             googleCameraAnchor
         } else {

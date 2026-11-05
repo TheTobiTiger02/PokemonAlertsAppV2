@@ -1,5 +1,10 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import android.app.Application
 import android.content.Context
 import android.content.Intent
@@ -17,8 +22,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -123,8 +126,9 @@ class PokeGenieRosterActivity : ComponentActivity() {
                                 value = query,
                                 onValueChange = viewModel::updateQuery,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .widthIn(max = Dimens.ReadableContentWidth)
+                                    .fillMaxWidth(),
                                 placeholder = { Text("Search name or move…") },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                 trailingIcon = {
@@ -186,12 +190,14 @@ class PokeGenieRosterActivity : ComponentActivity() {
                             )
                         }
                     } else {
-                        LazyColumn(
+                        LazyVerticalGrid(
+                            columns = AdaptiveCardColumns,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(innerPadding),
                             contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(rows, key = { it.key }) { entry ->
                                 RosterRow(

@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import com.example.pokemonalertsv2.util.rememberOffMain
 import android.Manifest
 import android.app.DatePickerDialog
@@ -14,7 +15,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -450,10 +449,9 @@ internal fun AlertHistoryPage(
                 onOpenInsights = onOpenInsights
             )
             }
-            BoxWithConstraints(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
-            val columns = if (maxWidth >= 840.dp) 2 else 1
+            Box(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
+                columns = AdaptiveCardColumns,
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.os.Bundle
@@ -119,7 +120,7 @@ private fun EventTypePicker(
         topBar = { CenterAlignedTopAppBar(title = { Text("Events widget") }) },
         bottomBar = {
             Row(
-                Modifier.fillMaxWidth().padding(16.dp),
+                Modifier.readableWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
@@ -130,7 +131,7 @@ private fun EventTypePicker(
             }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        Column(Modifier.fillMaxSize().padding(padding).readableWidth()) {
             Text(
                 "Show these event types",
                 style = MaterialTheme.typography.titleSmall,

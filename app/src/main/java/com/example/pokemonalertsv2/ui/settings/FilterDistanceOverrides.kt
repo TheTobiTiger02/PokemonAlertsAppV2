@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +46,7 @@ internal fun DistanceOverridesDialog(
     var addingSpecies by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.92f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
+        Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.92f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
             Column(Modifier.padding(16.dp)) {
                 Text("Distance limits", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
@@ -169,7 +171,7 @@ private fun SpeciesPickerDialog(
             .toList()
     }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxWidth().fillMaxHeight(.85f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
+        Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.85f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
             Column(Modifier.padding(16.dp)) {
                 Text("Add species limit", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp), label = { Text("Search species") }, singleLine = true)

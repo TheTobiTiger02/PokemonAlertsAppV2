@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import com.example.pokemonalertsv2.util.rememberOffMain
 import com.example.pokemonalertsv2.util.PerfTrace
 import com.example.pokemonalertsv2.data.AlertCardStyle
@@ -23,7 +24,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -850,10 +849,9 @@ internal fun AlertsList(
             onStartManualRaid = onStartManualRaid
         )
         }
-        BoxWithConstraints(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
-        val columns = if (maxWidth >= 840.dp) 2 else 1
+        Box(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+            columns = AdaptiveCardColumns,
             state = gridState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
