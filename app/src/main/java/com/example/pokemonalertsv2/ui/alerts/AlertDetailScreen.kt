@@ -2,6 +2,10 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
 import android.annotation.SuppressLint
 import android.location.Location
 import androidx.compose.animation.AnimatedContent
@@ -174,19 +178,30 @@ fun AlertDetailScreen(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                // On a wide screen the picture or map takes the left and the details a pane on
+                // the right, instead of a 240 dp strip over a scroll that runs the full width.
+                val splitPane = detailSplitPaneWidth(maxWidth)
+                val heroModifier = if (splitPane != null) {
+                    Modifier.width(maxWidth - splitPane).fillMaxHeight()
+                } else {
+                    Modifier.fillMaxWidth().height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
+                }
+                val bodyModifier = if (splitPane != null) {
+                    Modifier.width(splitPane).fillMaxHeight().statusBarsPadding()
+                } else {
+                    Modifier.fillMaxWidth().height(maxHeight - ALERT_DETAIL_HERO_IMAGE_HEIGHT)
+                }
+                val paneAlignment = if (splitPane != null) Alignment.BottomEnd else Alignment.BottomCenter
+                val paneWidth = if (splitPane != null) Modifier.width(splitPane) else Modifier
+                SplitOrStack(split = splitPane != null, modifier = Modifier.fillMaxSize()) {
                     // Hero image section
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(ALERT_DETAIL_HERO_IMAGE_HEIGHT)
+                        modifier = heroModifier
                     ) {
                         AlertImage(
                             alert = alert,
@@ -344,9 +359,7 @@ fun AlertDetailScreen(
 
                     // Content section - scrollable
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f) // Fill remaining space
+                        modifier = bodyModifier
                             .verticalScroll(rememberScrollState())
                             .background(MaterialTheme.colorScheme.background)
                             .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -522,7 +535,7 @@ fun AlertDetailScreen(
                     }
                 }
                 AlertDetailActionBar(
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier = Modifier.align(paneAlignment).then(paneWidth),
                     accent = categoryAccent,
                     isGoing = isGoing,
                     goingEnabled = alert.isEligibleArrivalDestination(),
@@ -532,7 +545,8 @@ fun AlertDetailScreen(
                 SnackbarHost(
                     hostState = snackbarHostState,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(paneAlignment)
+                        .then(paneWidth)
                         .padding(start = 16.dp, end = 16.dp, bottom = actionBarClearance)
                 )
             }
@@ -754,6 +768,16 @@ internal fun ExpandedAlertImageViewer(
             }
         }
     }
+}
+
+/** The details pane's width beside the hero, or null when the screen is too narrow to split. */
+internal fun detailSplitPaneWidth(availableWidth: Dp): Dp? =
+    if (availableWidth >= Dimens.TwoColumnBreakpoint) minOf(560.dp, availableWidth * 0.45f) else null
+
+/** A row when [split], else a column; the children size themselves for either. */
+@Composable
+private fun SplitOrStack(split: Boolean, modifier: Modifier, content: @Composable () -> Unit) {
+    if (split) Row(modifier) { content() } else Column(modifier) { content() }
 }
 
 @Composable

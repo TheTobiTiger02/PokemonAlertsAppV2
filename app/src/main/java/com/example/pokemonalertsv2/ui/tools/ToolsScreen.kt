@@ -1,5 +1,10 @@
 package com.example.pokemonalertsv2.ui.tools
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -112,12 +116,16 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
     val matches = remember(query) { findTools(query) }
     val pinned = remember(pins) { pins.mapNotNull { id -> TOOL_ENTRIES.firstOrNull { it.id == id } } }
 
-    LazyColumn(
+    // Groups sit side by side once there is room for two, so a tablet shows two columns of
+    // rows instead of one row stretched across the whole screen.
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Adaptive(Dimens.GridGroupMinWidth),
         modifier = Modifier.fillMaxSize().testTag("tools_screen"),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalItemSpacing = 16.dp,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
+        item(span = StaggeredGridItemSpan.FullLine) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
                 Text(
                     text = "Tools",
@@ -130,7 +138,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                 }
             }
         }
-        item {
+        item(span = StaggeredGridItemSpan.FullLine) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -138,12 +146,15 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth().testTag("tools_search")
+                modifier = Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().testTag("tools_search")
             )
         }
         if (query.isBlank() && pinned.isNotEmpty()) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            item(span = StaggeredGridItemSpan.FullLine) {
+                Column(
+                    modifier = Modifier.widthIn(max = Dimens.ReadableContentWidth),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
                         text = "Quick access",
                         style = MaterialTheme.typography.labelLarge,
@@ -164,7 +175,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
             }
         }
         if (matches.isEmpty()) {
-            item {
+            item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
                     text = "No tool matches “${query.trim()}”.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -215,7 +226,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                 }
             }
         }
-        item {
+        item(span = StaggeredGridItemSpan.FullLine) {
             Text(
                 text = "Star up to four tools to keep them one tap away.",
                 style = MaterialTheme.typography.bodySmall,

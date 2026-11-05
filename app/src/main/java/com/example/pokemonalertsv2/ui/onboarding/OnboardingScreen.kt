@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -92,7 +93,8 @@ fun OnboardingScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 32.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp)
+                .readableWidth(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(

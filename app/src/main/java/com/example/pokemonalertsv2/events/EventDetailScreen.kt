@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.events
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.example.pokemonalertsv2.ui.components.readableHorizontalPadding
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -60,14 +63,16 @@ fun EventDetailScreen(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize().testTag("event_detail")) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.readableWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) { Text("Close") }
                     Spacer(Modifier.weight(1f))
                     event.link?.let { link ->
                         TextButton(onClick = { onOpenLink(link) }, modifier = Modifier.testTag("event_open_link")) { Text("Open on LeekDuck") }
                     }
                 }
-                LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                val sidePadding = readableHorizontalPadding(maxWidth)
+                LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(start = sidePadding, end = sidePadding, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item(key = "header") {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -116,6 +121,7 @@ fun EventDetailScreen(
                         val open = expanded[section.key] ?: (section.key !in COLLAPSED_SECTIONS)
                         SectionCard(section, open, onToggle = { expanded[section.key] = !open })
                     }
+                }
                 }
             }
         }

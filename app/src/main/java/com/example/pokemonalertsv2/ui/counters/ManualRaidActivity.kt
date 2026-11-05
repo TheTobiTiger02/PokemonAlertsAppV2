@@ -1,5 +1,10 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
@@ -20,8 +25,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -274,7 +277,7 @@ internal fun ManualRaidBossPickerScreen(
             OutlinedTextField(
                 value = search,
                 onValueChange = { search = it },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).testTag("manual_raid_search"),
+                modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().testTag("manual_raid_search"),
                 label = { Text("Search boss or tier") },
                 singleLine = true
             )
@@ -308,9 +311,11 @@ internal fun ManualRaidBossPickerScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                else -> LazyColumn(
+                else -> LazyVerticalGrid(
+                    columns = AdaptiveCardColumns,
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(visible, key = { "${it.catalogue.raidLevel}|${it.catalogue.pokemonId}" }) { boss ->
                         ManualRaidBossRow(

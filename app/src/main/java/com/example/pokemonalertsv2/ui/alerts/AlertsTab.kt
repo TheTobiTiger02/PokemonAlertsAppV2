@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
@@ -85,10 +86,13 @@ fun AlertsTab(
                     modifier = Modifier.weight(1f)
                 )
             } else {
+                // Capped, so on a tablet the switch stays a switch rather than two buttons
+                // half a screen wide; the actions still sit at the far end.
+                Box(modifier = Modifier.weight(1f)) {
                 SpringSegmentedRow(
                     selectedIndex = SWITCH_SECTIONS.indexOf(section),
                     segmentCount = SWITCH_SECTIONS.size,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.widthIn(max = SegmentedSwitchMaxWidth)
                 ) {
                     SWITCH_SECTIONS.forEach { entry ->
                         SegmentedChoice(
@@ -99,6 +103,7 @@ fun AlertsTab(
                             onClick = { onSectionChange(entry) }
                         )
                     }
+                }
                 }
                 IconButton(
                     onClick = onRefresh,
@@ -131,3 +136,6 @@ fun AlertsTab(
         }
     }
 }
+
+/** Widest the Live / History switch grows; past this its labels float in empty pills. */
+private val SegmentedSwitchMaxWidth = 480.dp

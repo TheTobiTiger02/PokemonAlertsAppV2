@@ -1,5 +1,11 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -8,8 +14,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -48,13 +52,14 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                         IconButton(onClick = ::finish) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                     }, actions = { if (history.isNotEmpty()) TextButton(onClick = { clearing = true }) { Text("Clear") } })
                 }) { padding ->
-                    LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("catch_history"), contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (history.isEmpty()) item {
+                    LazyVerticalGrid(columns = AdaptiveCardColumns, modifier = Modifier.fillMaxSize().padding(padding).testTag("catch_history"),
+                        contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (history.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                             Text("Finished routes appear here, with what you caught and where you walked.",
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else item {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        } else item(span = { GridItemSpan(maxLineSpan) }) {
+                            Row(Modifier.widthIn(max = Dimens.ReadableContentWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 StatTile(history.size.toString(), "Routes", Modifier.weight(1f))
                                 StatTile(history.sumOf { it.caught }.toString(), "Caught", Modifier.weight(1f))
                                 StatTile(formatCatchKm(history.sumOf { it.walkedMeters }), "Walked", Modifier.weight(1f))

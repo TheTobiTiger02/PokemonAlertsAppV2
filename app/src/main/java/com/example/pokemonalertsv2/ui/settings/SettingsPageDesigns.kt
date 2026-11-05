@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
@@ -776,6 +777,7 @@ private fun PageColumn(modifier: Modifier, content: @Composable () -> Unit) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
+            .readableWidth()
             .padding(bottom = Spacing.xl)
     ) { content() }
 }

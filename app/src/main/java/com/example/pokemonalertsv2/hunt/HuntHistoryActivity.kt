@@ -1,5 +1,11 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.ui.theme.Dimens
+import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,8 +20,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -145,19 +149,24 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             return@Scaffold
         }
         val totals = remember(history) { huntHistoryTotals(history) }
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = AdaptiveCardColumns,
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(
+                    modifier = Modifier.widthIn(max = Dimens.ReadableContentWidth),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     StatTile(totals.hunts.toString(), "Hunts", Modifier.weight(1f))
                     StatTile(totals.caught.toString(), "Caught", Modifier.weight(1f))
                     StatTile(formatHuntDistance(totals.distanceMeters), "Walked", Modifier.weight(1f))
                 }
             }
-            item {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 val shinies = remember(history) { history.sumOf { hunt -> hunt.catches.count { it.shiny } } }
                 Text(
                     text = "${formatHuntDuration(totals.activeMillis)} hunted in total" +
@@ -169,7 +178,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             }
             val months = history.groupBy { monthLabel(it.startedAtMillis) }
             months.forEach { (month, hunts) ->
-                item(key = "month-$month") {
+                item(key = "month-$month", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         text = month,
                         style = MaterialTheme.typography.titleSmall,

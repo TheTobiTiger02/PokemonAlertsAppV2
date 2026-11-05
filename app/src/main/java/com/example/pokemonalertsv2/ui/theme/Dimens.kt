@@ -33,8 +33,26 @@ object Dimens {
     /** Bottom bar below this width, navigation rail at or above it. */
     val NavigationRailBreakpoint = 600.dp
 
-    /** Single-column feed below this width, two columns at or above it. */
+    /** Split layouts (map side panel, alert detail beside its map) at or above this width. */
     val TwoColumnBreakpoint = 840.dp
+
+    /**
+     * Narrowest a card may get in an adaptive grid: one column on a phone or a portrait
+     * tablet, three on a landscape tablet, without any screen naming a device.
+     */
+    val GridCardMinWidth = 320.dp
+
+    /** Narrowest a group of settings or tool rows may get when groups sit side by side. */
+    val GridGroupMinWidth = 400.dp
+
+    /**
+     * Widest a column of text, settings rows or form fields may grow. Past this a row's label
+     * and its trailing control drift so far apart that the eye loses the line between them.
+     */
+    val ReadableContentWidth = 720.dp
+
+    /** Widest a page of side-by-side groups (settings overview) may grow. */
+    val WideContentWidth = 1120.dp
 }
 
 /**

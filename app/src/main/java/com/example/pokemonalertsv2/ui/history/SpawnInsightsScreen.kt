@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.filled.Search
@@ -124,7 +125,8 @@ private fun AlertInsights(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(16.dp)
+            .readableWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
@@ -441,7 +443,7 @@ private fun SpawnActivityTabsPane(
     var sub by rememberSaveable { mutableIntStateOf(0) }
     var notes by rememberSaveable { mutableStateOf(false) }
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).testTag("insights_tabs"),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).readableWidth().testTag("insights_tabs"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         SpawnScope(state, onRangeChange, onAreaChange) {

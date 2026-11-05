@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.ui.components.readableHorizontalPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -63,9 +64,13 @@ fun RaidCountersScreen(
 
 /** The list's padding: the screen gutter, and room for the navigation bar under the last row. */
 @Composable
-internal fun countersListPadding(top: androidx.compose.ui.unit.Dp = 8.dp): PaddingValues = PaddingValues(
-    start = 16.dp,
-    end = 16.dp,
+internal fun countersListPadding(
+    availableWidth: androidx.compose.ui.unit.Dp,
+    top: androidx.compose.ui.unit.Dp = 8.dp
+): PaddingValues = PaddingValues(
+    // One centred column on a tablet: a counter row's name, moves and numbers read as a line.
+    start = readableHorizontalPadding(availableWidth),
+    end = readableHorizontalPadding(availableWidth),
     top = top,
     bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 )
