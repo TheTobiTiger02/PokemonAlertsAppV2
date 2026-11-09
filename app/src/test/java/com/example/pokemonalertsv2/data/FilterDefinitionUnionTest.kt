@@ -5,6 +5,28 @@ import org.junit.Test
 
 class FilterDefinitionUnionTest {
 
+    private val hundoAlerts = FilterDefinition(alertTypes = FilterSelection.only(listOf(FilterAlertType.HUNDO.name)))
+    private val raidAlerts = FilterDefinition(alertTypes = FilterSelection.only(listOf(FilterAlertType.RAID.name)))
+    private val questAlerts = FilterDefinition(alertTypes = FilterSelection.only(listOf(FilterAlertType.QUEST.name)))
+    private val surfaces = FilterStateDocument(
+        feed = FilterAssignment.local(raidAlerts),
+        map = FilterAssignment.local(questAlerts),
+        notifications = FilterAssignment.local(hundoAlerts)
+    )
+
+    @Test
+    fun backgroundDelivery_idleCoversNotificationsOnly() {
+        assertEquals(listOf(hundoAlerts), surfaces.backgroundDeliveryDefinitions(trackingActive = false))
+    }
+
+    @Test
+    fun backgroundDelivery_huntOrJourneyCoversEverySurface() {
+        assertEquals(
+            setOf(raidAlerts, questAlerts, hundoAlerts),
+            surfaces.backgroundDeliveryDefinitions(trackingActive = true).toSet()
+        )
+    }
+
     @Test
     fun union_allAbsorbsEverything() {
         val union = FilterSelection.only(listOf("HUNDO")).union(FilterSelection.All)

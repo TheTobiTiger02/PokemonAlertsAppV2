@@ -81,6 +81,10 @@ class FcmAlertWorker(
         private const val WORK_NAME_PREFIX = "pokemon_fcm_alert_"
         private const val PUSH_KEY = "pushKey"
         private const val MAX_RUN_ATTEMPTS = 3
+        private const val PUSH_RECEIPT_MIN_GAP_MILLIS = 60_000L
+
+        @Volatile
+        private var lastRecordedPushMillis = 0L
 
         @VisibleForTesting
         internal val workPolicy = ExistingWorkPolicy.KEEP
@@ -118,11 +122,19 @@ class FcmAlertWorker(
          * user, not part of delivery.
          */
         private suspend fun FcmAlertWorker.recordPushReceived() {
+            val now = System.currentTimeMillis()
+            if (!isPushReceiptDue(lastRecordedPushMillis, now)) return
+            lastRecordedPushMillis = now
             runCatching {
                 AlertPreferences(applicationContext.alertPreferencesDataStore)
-                    .updateLastPushReceivedMillis(System.currentTimeMillis())
+                    .updateLastPushReceivedMillis(now)
             }.onFailure { Log.w(TAG, "Could not record push receipt time", it) }
         }
+
+        /** Each stamp rewrites the whole preferences file, and "a minute ago" is precise enough. */
+        @VisibleForTesting
+        internal fun isPushReceiptDue(lastRecordedMillis: Long, nowMillis: Long): Boolean =
+            nowMillis - lastRecordedMillis >= PUSH_RECEIPT_MIN_GAP_MILLIS
 
         @VisibleForTesting
         internal fun shouldRetry(runAttemptCount: Int): Boolean =

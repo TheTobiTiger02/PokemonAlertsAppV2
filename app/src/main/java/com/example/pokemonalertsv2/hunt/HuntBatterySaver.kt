@@ -52,6 +52,15 @@ internal class HuntBatterySaver(private val context: Context, private val onEsca
         override fun onReceive(context: Context?, intent: Intent?) {
             orientation.reset()
             hide()
+            if (!running) return
+            // Turning the phone over only means something with the display on.
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                sensors.unregisterListener(this@HuntBatterySaver)
+            } else {
+                sensor(this@HuntBatterySaver.context)?.let {
+                    sensors.registerListener(this@HuntBatterySaver, it, SensorManager.SENSOR_DELAY_NORMAL)
+                }
+            }
         }
     }
 

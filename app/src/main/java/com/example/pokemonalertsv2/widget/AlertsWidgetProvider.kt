@@ -14,7 +14,6 @@ import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.VisibleForTesting
-import androidx.core.app.AlarmManagerCompat
 import com.example.pokemonalertsv2.MainActivity
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.AlertPreferences
@@ -93,7 +92,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 updateMutex.withLock {
                     val nowMillis = System.currentTimeMillis()
                     runCatching {
-                        PokemonAlertsRepository.create(context).clearExpiredAlerts(nowMillis)
+                        PokemonAlertsRepository.create(context).clearExpiredAlertsThrottled(nowMillis)
                     }.onFailure { exception ->
                         Log.w(TAG, "Expired alert cleanup failed during resize", exception)
                     }
@@ -113,8 +112,15 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         super.onReceive(context, intent)
         when (intent.action) {
             ACTION_REFRESH,
+            ACTION_DATA_CHANGED,
             ACTION_TIMER_TICK,
             AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
+                if (intent.action == ACTION_TIMER_TICK && !context.isScreenInteractive()) {
+                    // Nobody can see the countdown. The next alarm still has to exist, for the
+                    // case where this process is gone by the time the screen comes back on.
+                    scheduleNextUpdate(context, screenOff = true)
+                    return
+                }
                 if (intent.action == ACTION_REFRESH) showRefreshingFeedback(context)
                 val pending = goAsync()
                 CoroutineScope(Dispatchers.IO).launch {
@@ -133,7 +139,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                         val prefs = AlertPreferences(context.alertPreferencesDataStore)
                         prefs.addDismissedAlert(alertId)
                         updateAllSerialized(context, scheduleNext = true)
-                        NearbyRadarWidgetProvider.sendUpdateBroadcast(context)
+                        NearbyRadarWidgetProvider.sendDataChangedBroadcast(context)
                     } finally {
                         try { pending.finish() } catch (_: Throwable) {}
                     }
@@ -206,7 +212,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val nowMillis = System.currentTimeMillis()
         try {
             runCatching {
-                PokemonAlertsRepository.create(context).clearExpiredAlerts(nowMillis)
+                PokemonAlertsRepository.create(context).clearExpiredAlertsThrottled(nowMillis)
             }.onFailure { exception ->
                 Log.w(TAG, "Expired alert cleanup failed", exception)
             }
@@ -538,7 +544,11 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    private fun scheduleNextUpdate(context: Context) {
+    /**
+     * Non-wakeup on purpose: these alarms only exist to redraw a widget someone can see, so they
+     * wait for the device to be awake and fire at once when it is.
+     */
+    private fun scheduleNextUpdate(context: Context, screenOff: Boolean = false) {
         val ids = AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
         if (ids.isEmpty()) {
@@ -551,23 +561,27 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         val pi = PendingIntent.getBroadcast(context, REQUEST_CODE, intent, PendingIntent.FLAG_CANCEL_CURRENT or mutableFlag())
         val nowMillis = System.currentTimeMillis()
         val hasActiveAlerts = (lastCadenceAlertCount ?: 1) > 0
-        val delayMillis = calculateNextUpdateDelay(
-            nowMillis = nowMillis,
-            hasActiveAlerts = hasActiveAlerts,
-            nextExpirationMillis = WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis)
-        )
+        val delayMillis = if (screenOff) {
+            UPDATE_INTERVAL_MS
+        } else {
+            calculateNextUpdateDelay(
+                nowMillis = nowMillis,
+                hasActiveAlerts = hasActiveAlerts,
+                nextExpirationMillis = WidgetAlertSnapshotStore.nextExpirationMillis(nowMillis)
+            )
+        }
         val triggerAt = nowMillis + delayMillis
 
         try {
             if (shouldScheduleExactWidgetAlarm(hasActiveAlerts, canScheduleExact(am))) {
-                AlarmManagerCompat.setExactAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                am.setExact(AlarmManager.RTC, triggerAt, pi)
             } else {
-                AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                am.set(AlarmManager.RTC, triggerAt, pi)
             }
         } catch (exception: SecurityException) {
             Log.w(TAG, "Exact widget alarm denied; using inexact fallback.", exception)
             runCatching {
-                AlarmManagerCompat.setAndAllowWhileIdle(am, AlarmManager.RTC_WAKEUP, triggerAt, pi)
+                am.set(AlarmManager.RTC, triggerAt, pi)
             }.onFailure {
                 Log.w(TAG, "Failed to schedule fallback widget alarm.", it)
             }
@@ -591,6 +605,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     companion object {
         private const val TAG = "AlertsWidget"
         private const val ACTION_REFRESH = "com.example.pokemonalertsv2.widget.ACTION_REFRESH"
+        private const val ACTION_DATA_CHANGED = "com.example.pokemonalertsv2.widget.ACTION_DATA_CHANGED"
         private const val ACTION_TIMER_TICK = "com.example.pokemonalertsv2.widget.ACTION_TIMER_TICK"
         const val ACTION_DISMISS_WIDGET = "com.example.pokemonalertsv2.widget.ACTION_DISMISS_WIDGET"
         const val ACTION_NAVIGATE = "com.example.pokemonalertsv2.widget.ACTION_NAVIGATE"
@@ -626,6 +641,14 @@ class AlertsWidgetProvider : AppWidgetProvider() {
 
         internal fun sendUpdateBroadcast(context: Context) {
             context.sendBroadcast(Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_REFRESH })
+        }
+
+        /** New data, as opposed to the trainer tapping refresh: no "Refreshing…" flash. */
+        internal fun sendDataChangedBroadcast(context: Context) {
+            val ids = AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
+            if (ids.isEmpty()) return
+            context.sendBroadcast(Intent(context, AlertsWidgetProvider::class.java).apply { action = ACTION_DATA_CHANGED })
         }
 
         fun requestUpdate(context: Context) {

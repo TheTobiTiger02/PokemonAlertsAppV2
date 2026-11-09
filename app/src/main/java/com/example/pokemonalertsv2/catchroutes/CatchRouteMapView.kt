@@ -299,6 +299,12 @@ class CatchRouteMapView(context: Context) : FrameLayout(context) {
     }
     override fun onAttachedToWindow() { super.onAttachedToWindow(); if (!started) { view?.onStart(); view?.onResume(); started = true } }
     override fun onDetachedFromWindow() { if (started) { view?.onPause(); view?.onStop(); started = false }; super.onDetachedFromWindow() }
+    /** Stops drawing while nobody can see the map, as with the display off. */
+    fun setRendering(rendering: Boolean) {
+        if (rendering == started) return
+        if (rendering) { view?.onStart(); view?.onResume() } else { view?.onPause(); view?.onStop() }
+        started = rendering
+    }
     fun destroy() { if (started) { view?.onPause(); view?.onStop(); started = false }; view?.onDestroy(); view = null; map = null }
 
     /**

@@ -8,6 +8,33 @@ class WidgetAlertLoaderRouteGateTest {
     private val alertIds = setOf("alert-1", "alert-2", "alert-3")
 
     @Test
+    fun youngLocationIsReusedWhateverTheAlertsDid() {
+        assertTrue(
+            WidgetAlertLoader.shouldReuseLocation(
+                hasLocation = true,
+                locationAtMillis = 1_000L,
+                nowMillis = 1_000L + WidgetAlertLoader.ROUTE_DATA_MAX_AGE_MILLIS - 1
+            )
+        )
+    }
+
+    @Test
+    fun expiredLocationIsNotReused() {
+        assertFalse(
+            WidgetAlertLoader.shouldReuseLocation(
+                hasLocation = true,
+                locationAtMillis = 1_000L,
+                nowMillis = 1_000L + WidgetAlertLoader.ROUTE_DATA_MAX_AGE_MILLIS
+            )
+        )
+    }
+
+    @Test
+    fun missingLocationIsNeverReused() {
+        assertFalse(WidgetAlertLoader.shouldReuseLocation(hasLocation = false, locationAtMillis = 1_000L, nowMillis = 1_001L))
+    }
+
+    @Test
     fun freshSnapshotWithUnchangedAlertsIsReused() {
         assertTrue(
             WidgetAlertLoader.shouldReuseRouteData(

@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.atomic.AtomicLong
 
 class PokemonAlertsRepository @VisibleForTesting internal constructor(
     private val service: PokemonAlertsService,
@@ -304,11 +305,31 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         fetchMutex.withLock { clearExpiredAlertsLocked(nowMillis) }
     }
 
+    /**
+     * [clearExpiredAlerts] for paths that run per push or per widget redraw. The sweep decodes the
+     * whole table, and an expired row is harmless for a minute: every reader checks the end time.
+     * The window is process-wide because repositories are created per call.
+     */
+    suspend fun clearExpiredAlertsThrottled(nowMillis: Long = System.currentTimeMillis()) {
+        val last = lastExpirySweepMillis.get()
+        if (!isExpirySweepDue(last, nowMillis) || !lastExpirySweepMillis.compareAndSet(last, nowMillis)) return
+        clearExpiredAlerts(nowMillis)
+    }
+
+    /** Marks every cached alert seen, so a later background sync does not notify them. */
+    suspend fun markCachedAlertsAsSeen() {
+        markAlertsAsSeen(getLocalAlerts().filterNot { it.isLiveSighting })
+    }
+
     private suspend fun clearExpiredAlertsLocked(nowMillis: Long = System.currentTimeMillis()) {
         val cachedAlerts = alertDao.getAllAlerts()
         val activeAlerts = cachedAlerts.filter { entity ->
             val endMillis = TimeUtils.parseEndTimeToMillis(entity.endTime)
-            !entity.toDomain().isInvalidated && (endMillis == null || endMillis > nowMillis)
+            // The columns behind isInvalidated: toDomain() would JSON-decode every row for them.
+            val invalidated = entity.invalidatedAt != null ||
+                entity.invalidationReason != null ||
+                entity.invalidatedByAlertId != null
+            !invalidated && (endMillis == null || endMillis > nowMillis)
         }
         if (activeAlerts.size != cachedAlerts.size) {
             alertDao.replaceAll(activeAlerts)
@@ -387,7 +408,14 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         private const val SEEN_EXPIRY_MARGIN_MILLIS = 60 * 60 * 1000L
         private const val UNKNOWN_END_SEEN_MILLIS = 24 * 60 * 60 * 1000L
 
+        private const val EXPIRY_SWEEP_MIN_GAP_MILLIS = 60_000L
+
         private val fetchMutex = Mutex()
+        private val lastExpirySweepMillis = AtomicLong(0L)
+
+        @VisibleForTesting
+        internal fun isExpirySweepDue(lastSweepMillis: Long, nowMillis: Long): Boolean =
+            nowMillis - lastSweepMillis >= EXPIRY_SWEEP_MIN_GAP_MILLIS
 
         // Serializes seen-set read-modify-write across repository instances
         // (FCM worker, poll worker, and UI each build their own instance).

@@ -96,12 +96,29 @@ internal class CatchRouteWindow(context: Context) {
         update(session, location)
         // A window opened to walk by follows the walk, not the whole route.
         routeMap.follow()
-        pose = MapLocationTracker(context, onPose = { p ->
+        startPose()
+        return true
+    }
+
+    private fun startPose() {
+        if (pose != null) return
+        pose = MapLocationTracker(window.themedContext, onPose = { p ->
             val point = CatchPoint(p.location.latitude, p.location.longitude)
             posePoint = point
             map?.setPose(point, p.headingDegrees, p.location.accuracy.takeIf { p.location.hasAccuracy() })
         }, onStatus = {}).also { it.start() }
-        return true
+    }
+
+    /** The route's own location request keeps running; this is only what the window draws with. */
+    fun setScreenOn(on: Boolean) {
+        if (root == null) return
+        map?.setRendering(on)
+        if (on) {
+            startPose()
+        } else {
+            pose?.stop()
+            pose = null
+        }
     }
 
     fun update(session: CatchSession, location: CatchPoint?, outOfDate: Boolean = false, replanning: Boolean = false) {

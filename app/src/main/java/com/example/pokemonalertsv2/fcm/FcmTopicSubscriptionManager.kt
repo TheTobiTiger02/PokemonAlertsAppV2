@@ -10,9 +10,12 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
 import com.example.pokemonalertsv2.data.PokemonSpeciesRepository
 import com.example.pokemonalertsv2.data.PushTopicsRepository
-import com.example.pokemonalertsv2.data.surfaceDefinitions
+import com.example.pokemonalertsv2.data.backgroundDeliveryDefinitions
 import com.example.pokemonalertsv2.data.unionOf
+import com.example.pokemonalertsv2.hunt.HuntRepository
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
+import com.example.pokemonalertsv2.widget.NearbyRadarWidgetProvider
 import com.example.pokemonalertsv2.widget.WidgetConfigurationStore
 import com.example.pokemonalertsv2.widget.legacyFilterDefinition
 import com.google.firebase.FirebaseApp
@@ -72,21 +75,26 @@ object FcmTopicSubscriptionManager {
         prefs(context).getStringSet(APPLIED_TOPICS_KEY, null)?.toSet()
 
     /**
-     * The union of every surface that can show an alert. FCM is the only thing that wakes the
-     * app in the background, so a topic nobody subscribed to leaves the feed, map, widgets and
-     * history unaware of the alert until the next foreground refresh — not merely un-notified.
+     * The union of everything that acts on an alert while the app is closed. Each topic here
+     * wakes the device once per alert, so Feed and Map are left out unless a hunt or journey is
+     * running: they refresh themselves whenever they are on screen.
      */
     private suspend fun unionDefinition(context: Context): FilterDefinition {
         val document = AlertPreferences(context.alertPreferencesDataStore).filterStateDocument.first()
-        return unionOf(document.surfaceDefinitions() + widgetDefinitions(context, document))
+        return unionOf(document.backgroundDeliveryDefinitions(isTrackingActive(context)) + widgetDefinitions(context, document))
     }
+
+    private suspend fun isTrackingActive(context: Context): Boolean =
+        HuntRepository.getInstance(context).sessionFlow.first() != null ||
+            ArrivalTrackingRepository.getInstance(context).currentDestination() != null
 
     private fun widgetDefinitions(
         context: Context,
         document: com.example.pokemonalertsv2.data.FilterStateDocument
     ): List<FilterDefinition> = runCatching {
         val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java))
+        val ids = manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java)) +
+            manager.getAppWidgetIds(ComponentName(context, NearbyRadarWidgetProvider::class.java))
         ids.map { id ->
             val configuration = WidgetConfigurationStore.get(context, id)
             configuration.filterAssignment?.resolve(document)

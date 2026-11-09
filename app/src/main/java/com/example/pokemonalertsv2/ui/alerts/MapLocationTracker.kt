@@ -235,7 +235,7 @@ internal class MapLocationTracker(
             .setMaxUpdateDelayMillis(cadence.maxDelayMillis)
             // Only worth waiting for when the fix is being watched; while standing
             // by it just delays the first pose the window has to draw.
-            .setWaitForAccurateLocation(cadence.priority == Priority.PRIORITY_HIGH_ACCURACY)
+            .setWaitForAccurateLocation(cadence == MapPoseCadence.Live)
             .setGranularity(Granularity.GRANULARITY_PERMISSION_LEVEL)
             .build()
         runCatching {

@@ -16,7 +16,11 @@ internal object WidgetAlertSnapshotStore {
         val distanceUnavailable: Boolean,
         val walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap(),
         /** When `location`/`walkingRoutes` were actually fetched, not when published -- reuse republishes with the original stamp. */
-        val routeDataAtMillis: Long = 0L
+        val routeDataAtMillis: Long = 0L,
+        /** When `location` was actually fetched. A reused location keeps its original stamp. */
+        val locationAtMillis: Long = 0L,
+        /** Every cached alert this was built from, before the widget's filters hid any of them. */
+        val sourceAlertIds: Set<String> = emptySet()
     )
 
     private val cadenceSnapshots = ConcurrentHashMap<Int, List<PokemonAlert>>()
@@ -56,7 +60,9 @@ internal object WidgetAlertSnapshotStore {
         location: Location?,
         distanceUnavailable: Boolean = false,
         walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap(),
-        routeDataAtMillis: Long = System.currentTimeMillis()
+        routeDataAtMillis: Long = System.currentTimeMillis(),
+        locationAtMillis: Long = routeDataAtMillis,
+        sourceAlertIds: Set<String> = emptySet()
     ): RenderSnapshot {
         return RenderSnapshot(
             generation = nextGeneration.incrementAndGet(),
@@ -64,7 +70,9 @@ internal object WidgetAlertSnapshotStore {
             location = location?.let(::Location),
             distanceUnavailable = distanceUnavailable,
             walkingRoutes = walkingRoutes.toMap(),
-            routeDataAtMillis = routeDataAtMillis
+            routeDataAtMillis = routeDataAtMillis,
+            locationAtMillis = locationAtMillis,
+            sourceAlertIds = sourceAlertIds
         ).also { renderSnapshots[appWidgetId] = it }
     }
 

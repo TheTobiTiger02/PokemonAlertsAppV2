@@ -22,6 +22,13 @@ abstract class AlertDao {
     @Query("SELECT * FROM alerts ORDER BY endTime DESC")
     abstract suspend fun getAllAlerts(): List<AlertEntity>
 
+    /**
+     * Emits after every write to the table without loading a row, for callers that only need to
+     * know something changed. Room does not de-duplicate, so an unchanged result still emits.
+     */
+    @Query("SELECT 1 FROM alerts LIMIT 1")
+    abstract fun observeTableWrites(): Flow<Int?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insertAlerts(alerts: List<AlertEntity>)
 

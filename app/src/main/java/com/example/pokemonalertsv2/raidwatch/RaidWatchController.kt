@@ -12,7 +12,7 @@ import android.util.Log
 import androidx.core.app.AlarmManagerCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import coil.ImageLoader
+import com.example.pokemonalertsv2.PokemonAlertsApplication
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
@@ -131,7 +131,7 @@ object RaidWatchController {
                     // Hardware bitmaps cannot cross into a notification.
                     .allowHardware(false)
                     .build()
-                val result = ImageLoader(context).execute(request)
+                val result = PokemonAlertsApplication.imageLoader(context).execute(request)
                 (result as? SuccessResult)
                     ?.drawable
                     ?.let { it as? android.graphics.drawable.BitmapDrawable }

@@ -7,6 +7,8 @@ import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import android.location.Location
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -86,7 +88,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch {
             // Latest wins: Room re-emits on every write, and a burst of pushes must not queue
             // up behind one another while the list on screen goes stale.
-            repository.alerts.collectLatest { alerts ->
+            // Only while some activity of the app is started, PiP included. A ViewModel outlives
+            // its screen, and every push would otherwise decode and deep-compare the whole table
+            // for nobody until Android finally destroys the activity.
+            repository.alerts.flowWithLifecycle(ProcessLifecycleOwner.get().lifecycle).collectLatest { alerts ->
                 val now = System.currentTimeMillis()
                 // Parse once per alert and sort on the parsed value: endTime is an ISO string,
                 // so sorting it directly ordered lexicographically, not chronologically.
