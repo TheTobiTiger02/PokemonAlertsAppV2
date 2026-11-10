@@ -55,17 +55,23 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onCreate() {
         super<Application>.onCreate()
+        com.example.pokemonalertsv2.util.CrashLog.install(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+        // Each step on its own: one failing must not silently skip the ones after it.
+        initStep("notification channel") { AlertNotifier.ensureChannel(this) }
+        initStep("push topic sync") { PushTopicSyncWorker.schedule(this) }
+        initStep("event reminder channel") { com.example.pokemonalertsv2.work.EventReminderNotifyWorker.ensureChannel(this) }
+        initStep("event reminders") { com.example.pokemonalertsv2.work.EventReminderWorker.schedule(this) }
+        initStep("filter topic resync") { resyncPushTopicsOnFilterChanges() }
+        initStep("tracking topic resync") { resyncPushTopicsOnTrackingChanges() }
+        initStep("widget updates") { WidgetUpdateCoordinator.start(this) }
+    }
+
+    private inline fun initStep(name: String, step: () -> Unit) {
         try {
-            AlertNotifier.ensureChannel(this)
-            PushTopicSyncWorker.schedule(this)
-            com.example.pokemonalertsv2.work.EventReminderNotifyWorker.ensureChannel(this)
-            com.example.pokemonalertsv2.work.EventReminderWorker.schedule(this)
-            resyncPushTopicsOnFilterChanges()
-            resyncPushTopicsOnTrackingChanges()
-            WidgetUpdateCoordinator.start(this)
+            step()
         } catch (e: Exception) {
-            Log.e("PokemonAlertsApp", "Error during application initialization", e)
+            Log.e("PokemonAlertsApp", "Startup step failed: $name", e)
         }
     }
 

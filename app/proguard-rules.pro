@@ -50,9 +50,16 @@
 # Retrofit and OkHttp
 -dontwarn okhttp3.**
 -dontwarn retrofit2.**
--keep class retrofit2.** { *; }
+# Retrofit ships its own consumer rules; only the service interfaces need keeping.
+-keep,allowobfuscation,allowshrinking interface * { @retrofit2.http.* <methods>; }
 -keepattributes Signature
 -keepattributes Exceptions
+
+# Debug and verbose logging never reaches release builds.
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}
 
 # Coil
 -dontwarn coil.**

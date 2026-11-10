@@ -200,6 +200,14 @@ object InAppUpdateManager {
                     }
                 }
 
+                // CI publishes <apk>.sha256 beside every APK. A download that does not match
+                // it (truncated, corrupted, or swapped in transit) is never handed to the installer.
+                val expected = fetchExpectedSha256(pendingInstall.apkUrl)
+                if (sha256Hex(outputFile) != expected) {
+                    outputFile.delete()
+                    throw IOException("The downloaded update failed its checksum")
+                }
+
                 _updateState.value = UpdateState.Installing
                 withContext(Dispatchers.Main) {
                     if (canRequestInstall(context)) {
@@ -282,6 +290,15 @@ object InAppUpdateManager {
         context.startActivity(intent)
     }
 
+    private fun fetchExpectedSha256(apkUrl: String): String {
+        val request = Request.Builder().url("$apkUrl.sha256").header("User-Agent", USER_AGENT).build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("The update's checksum is unavailable (${response.code})")
+            return parseSha256(response.body?.string().orEmpty())
+                ?: throw IOException("The update's checksum file is malformed")
+        }
+    }
+
     private const val UPDATE_APK_NAME = "pokemon-alerts-update.apk"
     private const val USER_AGENT = "PokemonAlertsApp"
     private const val TAG = "InAppUpdateManager"
@@ -346,3 +363,20 @@ internal fun releaseWithoutDetails(owner: String, repo: String, tag: String) = G
 )
 
 private const val RELEASE_APK_NAME = "app-release.apk"
+
+/** The hash from a `sha256sum` line ("<64 hex>  <file>"), lower-cased; null when there is none. */
+internal fun parseSha256(text: String): String? =
+    Regex("(?<![0-9a-fA-F])[0-9a-fA-F]{64}(?![0-9a-fA-F])").find(text)?.value?.lowercase()
+
+internal fun sha256Hex(file: java.io.File): String {
+    val digest = java.security.MessageDigest.getInstance("SHA-256")
+    file.inputStream().use { input ->
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            digest.update(buffer, 0, read)
+        }
+    }
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
