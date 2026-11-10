@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.fcm
 
+import androidx.core.content.edit
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
@@ -35,6 +36,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 object FcmTopicSubscriptionManager {
     private const val TAG = "FcmTopicSubscriber"
     private const val PREFS_NAME = "fcm_topic_state"
+    private const val INSTALL_ID_KEY = "install_id"
     private const val APPLIED_TOPICS_KEY = "applied_topics"
 
     suspend fun sync(context: Context) {
@@ -50,11 +52,12 @@ object FcmTopicSubscriptionManager {
             val liveTopics = PushTopicPlanner.liveSightingTopics(catalog, notifications, dexNumbers)
             val desired = PushTopicPlanner.plan(catalog, unionDefinition(appContext)) + liveTopics
             // Renewed on every sync, even when nothing changed: the server lets a registration lapse after a week.
-            if (liveTopics.isNotEmpty()) {
-                runCatching {
-                    PokemonAlertsApi.pushTopicsService.registerLiveSightings(PushTopicPlanner.liveSightingRegistration(liveTopics))
-                }.onFailure { Log.w(TAG, "Could not register live sightings; retrying next sync", it) }
-            }
+            // Sent even when empty, so the server drops whatever this install asked for before.
+            runCatching {
+                PokemonAlertsApi.pushTopicsService.registerLiveSightings(
+                    PushTopicPlanner.liveSightingRegistration(liveTopics).copy(installId = installId(appContext))
+                )
+            }.onFailure { Log.w(TAG, "Could not register live sightings; retrying next sync", it) }
             apply(appContext, desired, legacyTopic)
         }.onFailure { exception ->
             Log.w(TAG, "FCM topic sync failed; leaving the current subscription in place", exception)
@@ -68,6 +71,18 @@ object FcmTopicSubscriptionManager {
      */
     fun forgetAppliedTopics(context: Context) {
         prefs(context).edit().putStringSet(APPLIED_TOPICS_KEY, emptySet()).apply()
+    }
+
+    /**
+     * A random id for this install, created on first use. It lives in the topic-state preferences,
+     * which are not backed up, so a restored or second device gets its own.
+     */
+    internal fun installId(context: Context): String {
+        val preferences = prefs(context)
+        preferences.getString(INSTALL_ID_KEY, null)?.let { return it }
+        val created = java.util.UUID.randomUUID().toString()
+        preferences.edit { putString(INSTALL_ID_KEY, created) }
+        return created
     }
 
     /** What this device is believed to be subscribed to, or null when it has never synced. */

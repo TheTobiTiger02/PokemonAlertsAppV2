@@ -201,11 +201,20 @@ interface PushTopicsService {
 
     /** Tells the server which live sightings to push at all; unregistered species are never sent. */
     @POST("api/push-topics/live")
-    suspend fun registerLiveSightings(@Body registration: LiveSightingRegistration): Response<Unit>
+    suspend fun registerLiveSightings(
+        @Body registration: LiveSightingRegistration,
+        /** Omitted when the build has no key; the server only checks it once told to. */
+        @Header("X-App-Key") appKey: String? = BuildConfig.APP_API_KEY.takeIf { it.isNotBlank() }
+    ): Response<Unit>
 }
 
 @Serializable
 data class LiveSightingRegistration(
+    /**
+     * This install's random id. With it the server replaces this phone's previous set, so a
+     * species dropped here stops being pushed; without it registrations only ever add up.
+     */
+    val installId: String? = null,
     val all: Boolean = false,
     val species: List<Int> = emptyList(),
     /** Pokémon from Tappables, registered apart from wild sightings. */
