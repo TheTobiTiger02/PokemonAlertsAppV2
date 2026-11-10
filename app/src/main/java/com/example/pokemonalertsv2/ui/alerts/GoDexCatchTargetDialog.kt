@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -410,9 +411,9 @@ internal fun GoDexCaughtControl(
 ): GoDexCaughtState? {
     val context = LocalContext.current
     val repository = remember(context) { GoDexRepository.getInstance(context) }
-    val config by repository.config.collectAsState()
-    val entries by repository.entries.collectAsState()
-    val pendingEntryKeys by repository.pendingEntryKeys.collectAsState()
+    val config by repository.config.collectAsStateWithLifecycle()
+    val entries by repository.entries.collectAsStateWithLifecycle()
+    val pendingEntryKeys by repository.pendingEntryKeys.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     var showCatchDialog by remember(alert.uniqueId) { mutableStateOf(false) }

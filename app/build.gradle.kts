@@ -81,8 +81,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 97
-        versionName = "1.28.1"
+        versionCode = 100
+        versionName = "1.28.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -134,6 +134,8 @@ android {
         checkDependencies = false
         // Version-staleness checks change with every library release, not with our code.
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
+        // Timber arrives transitively and brings this check, but the app does not use Timber.
+        disable += "LogNotTimber"
     }
 
     compileOptions {

@@ -428,16 +428,22 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             }
         }
 
-        fun create(context: Context): PokemonAlertsRepository {
-            val appContext = context.applicationContext
-            val preferences = AlertPreferences(appContext.alertPreferencesDataStore)
-            val database = AppDatabase.getDatabase(appContext)
-            return PokemonAlertsRepository(
-                service = PokemonAlertsApi.service,
-                preferences = preferences,
-                alertDao = database.alertDao(),
-                historyAlertDao = database.historyAlertDao()
-            )
-        }
+        @Volatile
+        private var shared: PokemonAlertsRepository? = null
+
+        /** The process-wide repository. It is stateless apart from the shared mutexes above. */
+        fun create(context: Context): PokemonAlertsRepository =
+            shared ?: synchronized(this) {
+                shared ?: run {
+                    val appContext = context.applicationContext
+                    val database = AppDatabase.getDatabase(appContext)
+                    PokemonAlertsRepository(
+                        service = PokemonAlertsApi.service,
+                        preferences = AlertPreferences(appContext.alertPreferencesDataStore),
+                        alertDao = database.alertDao(),
+                        historyAlertDao = database.historyAlertDao()
+                    ).also { shared = it }
+                }
+            }
     }
 }

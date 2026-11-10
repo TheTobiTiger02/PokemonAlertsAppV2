@@ -137,7 +137,7 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
         action: RadarAction
     ) {
         val pending = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        widgetWork.launch {
             try {
                 updateMutex.withLock {
                     appWidgetIds.forEach { appWidgetId ->
