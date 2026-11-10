@@ -61,8 +61,16 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
+        if (intent.action == ACTION_TIMER_TICK && !context.isScreenInteractive()) {
+            // Nobody can see it. The next alarm still has to exist, for the case where this
+            // process is gone by the time the screen comes back on.
+            scheduleNextUpdate(context, hasAlerts = true)
+            return
+        }
         val action = when (intent.action) {
-            ACTION_REFRESH, ACTION_TIMER_TICK -> RadarAction.RENDER
+            ACTION_REFRESH -> RadarAction.USER_REFRESH
+            ACTION_TIMER_TICK -> RadarAction.TICK
+            ACTION_DATA_CHANGED -> RadarAction.RENDER
             ACTION_NEXT_ALERT -> RadarAction.NEXT
             ACTION_TOGGLE_VIEW -> RadarAction.TOGGLE_VIEW
             else -> return
@@ -157,7 +165,8 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
         val loaded = WidgetAlertLoader.load(
             context = context,
             appWidgetId = appWidgetId,
-            highAccuracyLocation = action == RadarAction.RENDER
+            highAccuracyLocation = action == RadarAction.USER_REFRESH || action == RadarAction.TICK,
+            forceFreshData = action == RadarAction.USER_REFRESH
         )
         val renderSnapshot = WidgetAlertSnapshotStore.currentRenderSnapshot(
             appWidgetId = appWidgetId,
@@ -170,7 +179,7 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
         )
         val storedState = RadarWidgetStateStore.get(context, appWidgetId)
         val requestedState = when (action) {
-            RadarAction.RENDER -> storedState
+            RadarAction.RENDER, RadarAction.TICK, RadarAction.USER_REFRESH -> storedState
             RadarAction.NEXT -> advanceRadarSelection(orderedAlerts, storedState)
             RadarAction.TOGGLE_VIEW -> storedState.copy(
                 viewMode = when (storedState.viewMode) {
@@ -485,12 +494,8 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
             Intent(context, NearbyRadarWidgetProvider::class.java).apply { action = ACTION_TIMER_TICK },
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
-        val triggerAt = SystemClock.elapsedRealtime() + delay
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME, triggerAt, pendingIntent)
-        } else {
-            alarmManager.set(AlarmManager.ELAPSED_REALTIME, triggerAt, pendingIntent)
-        }
+        // Non-wakeup and not allowed while idle: it waits for the device to be awake anyway.
+        alarmManager.set(AlarmManager.ELAPSED_REALTIME, SystemClock.elapsedRealtime() + delay, pendingIntent)
     }
 
     private fun cancelScheduledUpdate(context: Context) {
@@ -508,7 +513,12 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
     }
 
     private enum class RadarAction {
+        /** New data or a system update: redraw, with whatever location is already held. */
         RENDER,
+        /** The per-minute tick. Only runs with the screen on, so a fix here is worth its cost. */
+        TICK,
+        /** The trainer tapped refresh: always a fresh fix. */
+        USER_REFRESH,
         NEXT,
         TOGGLE_VIEW
     }
@@ -516,6 +526,8 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
     companion object {
         internal const val ACTION_REFRESH =
             "com.example.pokemonalertsv2.widget.ACTION_REFRESH_RADAR"
+        internal const val ACTION_DATA_CHANGED =
+            "com.example.pokemonalertsv2.widget.ACTION_DATA_CHANGED_RADAR"
         internal const val ACTION_TIMER_TICK =
             "com.example.pokemonalertsv2.widget.ACTION_TIMER_TICK_RADAR"
         internal const val ACTION_NEXT_ALERT =
@@ -527,10 +539,14 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
         private const val TAG = "NearbyRadarWidget"
         private val updateMutex = Mutex()
 
-        internal fun sendUpdateBroadcast(context: Context) {
+        /** New data, as opposed to the trainer tapping refresh: no "Refreshing…", no forced GPS. */
+        internal fun sendDataChangedBroadcast(context: Context) {
+            val ids = AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(ComponentName(context, NearbyRadarWidgetProvider::class.java))
+            if (ids.isEmpty()) return
             context.sendBroadcast(
                 Intent(context, NearbyRadarWidgetProvider::class.java).apply {
-                    action = ACTION_REFRESH
+                    action = ACTION_DATA_CHANGED
                 }
             )
         }

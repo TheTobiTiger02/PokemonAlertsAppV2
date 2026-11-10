@@ -22,7 +22,7 @@ internal object FcmAlertHandler {
         return FcmAlertProcessor(
             detectNew = { alert -> repository.detectNewAlerts(listOf(alert)).isNotEmpty() },
             processIncoming = { alert -> repository.processIncomingAlert(alert) },
-            clearExpired = { repository.clearExpiredAlerts() },
+            clearExpired = { repository.clearExpiredAlertsThrottled() },
             notify = { alert -> AlertNotifier.notifyAlerts(appContext, listOf(alert)) },
             markSeen = { alert -> repository.markAlertsAsSeen(listOf(alert)) },
             requestWidgetUpdate = { AlertsWidgetProvider.updateFromWorker(appContext) }

@@ -4,11 +4,11 @@ package com.example.pokemonalertsv2.data
  * Combining the filters of every surface into the one question push subscription can ask:
  * *could any part of this app want this alert?*
  *
- * FCM is the only path that wakes the app in the background — [com.example.pokemonalertsv2.work.AlertWorker]
- * runs on demand, never on a schedule — so an alert on no subscribed topic does not merely
- * skip a notification: the feed, map, widget and history never learn about it until the next
- * foreground refresh. Narrowing therefore has to be driven by the union of Feed, Map,
- * Notifications and every configured widget, not by the notification filter alone.
+ * FCM is the only path that wakes the app in the background —
+ * [com.example.pokemonalertsv2.work.AlertWorker] runs on demand, never on a schedule — so every
+ * subscribed topic costs a device wakeup per alert. Only what acts while the app is closed earns
+ * one: see [backgroundDeliveryDefinitions]. Feed and Map poll while visible and delta-sync when
+ * opened, so they do not need pushes of their own.
  */
 
 fun FilterSelection.union(other: FilterSelection): FilterSelection = when {
@@ -55,3 +55,13 @@ fun unionOf(definitions: List<FilterDefinition>): FilterDefinition {
 /** The Feed, Map and Notifications definitions this document currently resolves to. */
 fun FilterStateDocument.surfaceDefinitions(): List<FilterDefinition> =
     FilterSurface.entries.map { surface -> assignment(surface).resolve(this) }
+
+/**
+ * The surfaces that need alerts delivered while the app is in the background.
+ *
+ * Notifications always do. A hunt or journey also reads the local cache from its foreground
+ * service with the app closed, for new targets and for alerts that get invalidated, so while one
+ * is running ([trackingActive]) every surface counts. Placed widgets are added by the caller.
+ */
+fun FilterStateDocument.backgroundDeliveryDefinitions(trackingActive: Boolean): List<FilterDefinition> =
+    if (trackingActive) surfaceDefinitions() else listOf(assignment(FilterSurface.NOTIFICATIONS).resolve(this))

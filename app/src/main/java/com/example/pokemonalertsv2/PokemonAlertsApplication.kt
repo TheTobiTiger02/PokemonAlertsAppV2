@@ -12,19 +12,24 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
+import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.notifications.AlertNotifier
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
+import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingService
 import com.example.pokemonalertsv2.ui.alerts.trimMapBitmapCaches
 import com.example.pokemonalertsv2.util.InAppUpdateManager
 import com.example.pokemonalertsv2.util.PendingInstallStore
 import com.example.pokemonalertsv2.util.UpdateCheckSource
 import com.example.pokemonalertsv2.widget.WidgetUpdateCoordinator
+import com.example.pokemonalertsv2.work.AlertWorker
 import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 import com.google.android.gms.maps.MapsInitializer
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +41,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
     DefaultLifecycleObserver {
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var foregroundWarmupDone = false
 
     /**
      * The map's bitmap caches are process-wide and used to hold their full budget for the life
@@ -52,13 +58,12 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         try {
             AlertNotifier.ensureChannel(this)
-            PushTopicSyncWorker.triggerSync(this, delaySeconds = 0)
             PushTopicSyncWorker.schedule(this)
             com.example.pokemonalertsv2.work.EventReminderNotifyWorker.ensureChannel(this)
             com.example.pokemonalertsv2.work.EventReminderWorker.schedule(this)
             resyncPushTopicsOnFilterChanges()
+            resyncPushTopicsOnTrackingChanges()
             WidgetUpdateCoordinator.start(this)
-            warmGoogleMaps()
         } catch (e: Exception) {
             Log.e("PokemonAlertsApp", "Error during application initialization", e)
         }
@@ -69,8 +74,11 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
      *
      * Watching the document in one place beats calling into the sync from every editor: the feed
      * sheet, the map sheet, the filter studio, a profile edit and a backup restore all land here.
-     * The first emission is the current state, which [PushTopicSyncWorker.triggerSync] in
-     * `onCreate` has already covered.
+     * The first emission is the current state, which the first [onStart] covers.
+     *
+     * Alerts already cached are marked seen first. Pushes no longer cover the whole feed, so a
+     * cached alert may never have been offered to the notifier, and widening a filter must not
+     * turn the next background sync into a notification for each of them.
      */
     private fun resyncPushTopicsOnFilterChanges() {
         applicationScope.launch(Dispatchers.IO) {
@@ -78,7 +86,34 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
                 AlertPreferences(alertPreferencesDataStore).filterStateDocument
                     .drop(1)
                     .distinctUntilChanged()
-                    .collect { PushTopicSyncWorker.triggerSync(this@PokemonAlertsApplication) }
+                    .collect {
+                        runCatching { PokemonAlertsRepository.create(this@PokemonAlertsApplication).markCachedAlertsAsSeen() }
+                        PushTopicSyncWorker.triggerSync(this@PokemonAlertsApplication)
+                    }
+            }
+        }
+    }
+
+    /**
+     * A running hunt or journey needs every alert while the app is closed, so the subscription
+     * follows it. Starting one also backfills what the narrower subscription did not deliver.
+     *
+     * Both sources start as "none" until DataStore answers, so a process restarted during a hunt
+     * re-syncs once. That costs one request and subscribes nothing new.
+     */
+    private fun resyncPushTopicsOnTrackingChanges() {
+        applicationScope.launch(Dispatchers.IO) {
+            runCatching {
+                combine(
+                    HuntRepository.getInstance(this@PokemonAlertsApplication).activeHunt,
+                    ArrivalTrackingRepository.getInstance(this@PokemonAlertsApplication).activeDestination
+                ) { hunt, destination -> hunt != null || destination != null }
+                    .distinctUntilChanged()
+                    .drop(1)
+                    .collect { trackingActive ->
+                        PushTopicSyncWorker.triggerSync(this@PokemonAlertsApplication, delaySeconds = 0)
+                        if (trackingActive) AlertWorker.triggerImmediateSync(this@PokemonAlertsApplication)
+                    }
             }
         }
     }
@@ -103,6 +138,13 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onStart(owner: LifecycleOwner) {
         if (PendingInstallStore.hasPending(this)) return
+        // Once per process, and only when the trainer opens the app: widget alarms and pushes
+        // start this process too, and should not pay for a catalog request or the Maps module.
+        if (!foregroundWarmupDone) {
+            foregroundWarmupDone = true
+            PushTopicSyncWorker.triggerSync(this, delaySeconds = 0)
+            warmGoogleMaps()
+        }
         ArrivalTrackingService.resumeIfActive(this)
         applicationScope.launch {
             // Re-post the watched raid and re-arm its tick: an alarm can be dropped when

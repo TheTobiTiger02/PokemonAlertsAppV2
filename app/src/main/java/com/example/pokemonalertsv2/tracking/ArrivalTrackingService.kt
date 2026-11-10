@@ -5,13 +5,16 @@ import com.example.pokemonalertsv2.hunt.huntTargetDetail
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.IBinder
 import android.os.Build
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
@@ -190,6 +193,16 @@ class ArrivalTrackingService : Service() {
     private var appMapVisible = false
     private var appMapVisibilityJob: Job? = null
 
+    /** With the display off the window is drawing for nobody; the journey's own fixes carry on. */
+    private var screenOn = true
+    private val floatingMapHidden: Boolean get() = appMapVisible || !screenOn
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            screenOn = intent.action == Intent.ACTION_SCREEN_ON
+            applyFloatingMapVisibility()
+        }
+    }
+
     /** The stored theme mode, kept so a system night-mode change can be applied on its own. */
     private var storedThemeMode = 0
     private var themeJob: Job? = null
@@ -295,6 +308,16 @@ class ArrivalTrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         ArrivalTrackingNotifications.ensureChannels(this)
+        screenOn = getSystemService(PowerManager::class.java)?.isInteractive ?: true
+        ContextCompat.registerReceiver(
+            this,
+            screenReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         batterySaverJob = serviceScope.launch {
             kotlinx.coroutines.flow.combine(huntRepository.sessionFlow, huntRepository.batterySaverEnabled) { session, enabled ->
                 session != null && enabled
@@ -392,7 +415,7 @@ class ArrivalTrackingService : Service() {
                 InAppMapVisibility.visible.collect { visible ->
                     if (visible == appMapVisible) return@collect
                     appMapVisible = visible
-                    applyAppMapVisibility()
+                    applyFloatingMapVisibility()
                 }
             }
         }
@@ -563,6 +586,7 @@ class ArrivalTrackingService : Service() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(screenReceiver)
         batterySaverJob?.cancel()
         batterySaver.close()
         stopLocationUpdates()
@@ -1312,8 +1336,8 @@ class ArrivalTrackingService : Service() {
         floatingMap.setPaused(huntPaused)
         floatingMap.setRouteLine(showHuntPath)
         floatingMap.setNotice(endedNote())
-        floatingMap.setSuppressed(appMapVisible)
-        if (floatingMap.isMinimized || appMapVisible) {
+        floatingMap.setSuppressed(floatingMapHidden)
+        if (floatingMap.isMinimized || floatingMapHidden) {
             stopPoseTracking()
         } else {
             startPoseTracking(wantedPoseCadence())
@@ -1340,12 +1364,12 @@ class ArrivalTrackingService : Service() {
         }
     }
 
-    /** Steps the window aside while the app's own Map tab shows the same hunt. */
-    private fun applyAppMapVisibility() {
+    /** Steps the window aside while the app's own Map tab shows the same hunt, or the display is off. */
+    private fun applyFloatingMapVisibility() {
         if (!floatingMap.isShowing) return
-        floatingMap.setSuppressed(appMapVisible)
+        floatingMap.setSuppressed(floatingMapHidden)
         when {
-            appMapVisible -> stopPoseTracking()
+            floatingMapHidden -> stopPoseTracking()
             !floatingMap.isMinimized -> revealFloatingMap()
         }
     }
@@ -1847,6 +1871,7 @@ class ArrivalTrackingService : Service() {
     }
 
     private fun startPoseTracking(cadence: MapPoseCadence = MapPoseCadence.Live) {
+        if (!screenOn) return
         if (poseTracker != null && poseCadence == cadence) return
         // A cadence change means a new request, and the old one has to go first or
         // the fast one keeps running underneath the slow one.

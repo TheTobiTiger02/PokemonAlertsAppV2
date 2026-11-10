@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 
 class CatchRouteService : Service() {
@@ -43,6 +45,18 @@ class CatchRouteService : Service() {
         // The switch is the hunt's: one Battery Saver setting for both kinds of walk.
         HuntBatterySaver(this) { scope.launch { HuntRepository.getInstance(applicationContext).setBatterySaverEnabled(false) } }
     }
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            window.setScreenOn(intent.action == Intent.ACTION_SCREEN_ON)
+        }
+    }
+    override fun onCreate() {
+        super.onCreate()
+        ContextCompat.registerReceiver(this, screenReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }, ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         latestStartId = startId
@@ -61,9 +75,16 @@ class CatchRouteService : Service() {
                     controller.message.value = "Precise location permission is required for guidance."
                     stopSelfResult(latestStartId); return@launch
                 }
-                locationSource.start(ArrivalCadence.Approach, { fix -> scope.launch { controller.onFix(fix) } }, { available ->
-                    if (!available) controller.message.value = "Waiting for location. Visits are paused until fresh fixes arrive."
-                })
+                launch {
+                    // A paused route counts no visits, so it only needs a current position for
+                    // the moment it resumes. The rate is fixed per request, hence stop then start.
+                    controller.session.filterNotNull().filter { !it.finished }.map { it.paused }.distinctUntilChanged().collect { paused ->
+                        locationSource.stop()
+                        locationSource.start(if (paused) ArrivalCadence.Standby else ArrivalCadence.Approach, { fix -> scope.launch { controller.onFix(fix) } }, { available ->
+                            if (!available) controller.message.value = "Waiting for location. Visits are paused until fresh fixes arrive."
+                        })
+                    }
+                }
                 if (batterySaverJob?.isActive != true) batterySaverJob = scope.launch {
                     combine(controller.session.map { it != null && !it.finished }.distinctUntilChanged(),
                         HuntRepository.getInstance(applicationContext).batterySaverEnabled) { walking, enabled -> walking && enabled }
@@ -144,6 +165,7 @@ class CatchRouteService : Service() {
     private fun preferences() = AlertPreferences(applicationContext.alertPreferencesDataStore)
 
     override fun onDestroy() {
+        unregisterReceiver(screenReceiver)
         scope.cancel()
         locationSource.stop()
         batterySaver.close()

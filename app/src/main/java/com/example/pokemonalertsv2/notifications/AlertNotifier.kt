@@ -169,6 +169,17 @@ object AlertNotifier {
         
         val notificationManager = NotificationManagerCompat.from(context)
         val imageLoader = PokemonAlertsApplication.imageLoader(context)
+        val goDexStatuses = alerts.associateWith { alert ->
+            if (alert.hasType("hundo")) {
+                goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
+            } else {
+                GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
+            }
+        }
+        // An unknown distance never hides an alert, so anything failing here fails on type, area
+        // or species alone and no location could save it. Most pushes end here, without a fix.
+        if (alerts.none { settings.shouldNotify(it, goDexStatuses.getValue(it).status) }) return
+
         // Shared app-wide source so notifications and widgets compute distances from the
         // same fix during the same refresh instead of disagreeing.
         val userLocation = CachedLocationProvider.get(context, timeoutMs = 4000)
@@ -195,11 +206,7 @@ object AlertNotifier {
                     )
                 }
 
-                val goDexStatus = if (alert.hasType("hundo")) {
-                    goDexRepository.match(alert, goDexEntries, goDexConfig.isConnected)
-                } else {
-                    GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED)
-                }
+                val goDexStatus = goDexStatuses.getValue(alert)
 
                 // Check non-routing filters (area, species, raid tier, etc.) using straight-line distance
                 if (!settings.shouldNotify(

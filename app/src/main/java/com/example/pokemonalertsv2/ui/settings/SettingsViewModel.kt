@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.example.pokemonalertsv2.data.AlertPreferences
 import com.example.pokemonalertsv2.data.MAX_FILTER_DISTANCE_METERS
@@ -155,7 +157,9 @@ class SettingsViewModel(
         viewModelScope.launch {
             // Latest wins: each pass may wait on routing, and the Filter Studio counts must
             // follow the newest alerts rather than work through a backlog of old ones.
-            filterableAlerts.collectLatest { alerts ->
+            // Only while some activity of the app is started: a ViewModel outlives its screen,
+            // and each pass costs a location, a routing batch and a catalog for nobody otherwise.
+            filterableAlerts.flowWithLifecycle(ProcessLifecycleOwner.get().lifecycle).collectLatest { alerts ->
                 // Distance contexts for 1000+ alerts are derived off the main thread: the
                 // per-alert route join and straight-line math used to run here on Main and
                 // stalled every screen that collected this flow while alerts were arriving.

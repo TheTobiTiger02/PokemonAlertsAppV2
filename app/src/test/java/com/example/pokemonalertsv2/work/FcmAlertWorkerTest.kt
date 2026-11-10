@@ -100,6 +100,12 @@ class FcmAlertWorkerTest {
     }
 
     @Test
+    fun pushReceiptIsStampedAtMostOncePerMinute() {
+        assertTrue(FcmAlertWorker.isPushReceiptDue(lastRecordedMillis = 0L, nowMillis = 60_000L))
+        assertFalse(FcmAlertWorker.isPushReceiptDue(lastRecordedMillis = 1_000L, nowMillis = 60_999L))
+    }
+
+    @Test
     fun duplicateMessagesKeepAlreadyEnqueuedWork() {
         assertEquals(ExistingWorkPolicy.KEEP, FcmAlertWorker.workPolicy)
     }

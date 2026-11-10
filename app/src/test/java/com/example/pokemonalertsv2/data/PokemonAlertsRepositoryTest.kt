@@ -12,6 +12,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -466,6 +467,12 @@ class PokemonAlertsRepositoryTest {
         )
 
         assertEquals(listOf("Visible"), repository.getLocalAlerts().map { it.name })
+    }
+
+    @Test
+    fun expirySweepRunsAtMostOncePerMinute() {
+        assertTrue(PokemonAlertsRepository.isExpirySweepDue(lastSweepMillis = 0L, nowMillis = 60_000L))
+        assertFalse(PokemonAlertsRepository.isExpirySweepDue(lastSweepMillis = 1_000L, nowMillis = 60_999L))
     }
 
     @Test
@@ -1007,6 +1014,8 @@ class PokemonAlertsRepositoryTest {
         var clearCalls = 0
 
         override fun observeAllAlerts(): Flow<List<AlertEntity>> = alerts.asStateFlow()
+
+        override fun observeTableWrites(): Flow<Int?> = alerts.asStateFlow().map { 1 }
 
         override suspend fun getAllAlerts(): List<AlertEntity> = alerts.value
 
