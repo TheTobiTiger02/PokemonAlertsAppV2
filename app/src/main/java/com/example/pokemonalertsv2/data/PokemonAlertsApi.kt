@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import com.example.pokemonalertsv2.data.net.Http
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.http.GET
@@ -264,15 +265,6 @@ interface PokemonAlertsService {
     @GET("api/current-weather")
     suspend fun getCurrentWeather(@Query("area") area: String): CurrentWeatherResponse
 
-    @GET("api/history/all")
-    suspend fun getHistory(
-        @Query("type") type: String? = null,
-        @Query("date") date: String? = null,
-        @Query("startDate") startDate: String? = null,
-        @Query("endDate") endDate: String? = null,
-        @Query("q") q: String? = null
-    ): HistoryResponse
-
     @GET("api/history")
     suspend fun getHistoryPaged(
         @Query("limit") limit: Int,
@@ -338,71 +330,32 @@ interface PokemonAlertsService {
 }
 
 object PokemonAlertsApi {
-    val catchRoutesService: com.example.pokemonalertsv2.catchroutes.CatchRoutesService by lazy {
-        Retrofit.Builder().baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client).build().create(com.example.pokemonalertsv2.catchroutes.CatchRoutesService::class.java)
-    }
-    val eventsService: com.example.pokemonalertsv2.events.EventsService by lazy {
-        Retrofit.Builder().baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client).build().create(com.example.pokemonalertsv2.events.EventsService::class.java)
-    }
-    val liveSpeciesService: com.example.pokemonalertsv2.megaboost.LiveSpeciesService by lazy {
-        Retrofit.Builder().baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client).build().create(com.example.pokemonalertsv2.megaboost.LiveSpeciesService::class.java)
-    }
-    val goRoutesService: com.example.pokemonalertsv2.catchroutes.GoRoutesService by lazy {
-        Retrofit.Builder().baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client).build().create(com.example.pokemonalertsv2.catchroutes.GoRoutesService::class.java)
-    }
     private val json = Json {
         ignoreUnknownKeys = true
-        isLenient = true
         explicitNulls = false
         coerceInputValues = true
     }
 
     private val client: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
-            level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BASIC
-            } else {
-                HttpLoggingInterceptor.Level.NONE
-            }
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
         }
-
-        OkHttpClient.Builder()
-            .addInterceptor(logging)
-            .build()
+        Http.base.newBuilder().addInterceptor(logging).build()
     }
 
-    val service: PokemonAlertsService by lazy {
+    private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .client(client)
             .build()
-            .create()
     }
 
-    val pushTopicsService: PushTopicsService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client)
-            .build()
-            .create()
-    }
-
-    val catalogService: FilterCatalogService by lazy {
-        Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .client(client)
-            .build()
-            .create()
-    }
+    val service: PokemonAlertsService by lazy { retrofit.create() }
+    val pushTopicsService: PushTopicsService by lazy { retrofit.create() }
+    val catalogService: FilterCatalogService by lazy { retrofit.create() }
+    val catchRoutesService: com.example.pokemonalertsv2.catchroutes.CatchRoutesService by lazy { retrofit.create() }
+    val eventsService: com.example.pokemonalertsv2.events.EventsService by lazy { retrofit.create() }
+    val liveSpeciesService: com.example.pokemonalertsv2.megaboost.LiveSpeciesService by lazy { retrofit.create() }
+    val goRoutesService: com.example.pokemonalertsv2.catchroutes.GoRoutesService by lazy { retrofit.create() }
 }

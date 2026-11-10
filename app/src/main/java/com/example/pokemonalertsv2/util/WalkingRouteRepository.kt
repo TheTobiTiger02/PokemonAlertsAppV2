@@ -226,8 +226,8 @@ class WalkingRouteRepository @VisibleForTesting internal constructor(
                 }
                 if (response == null) {
                     consecutiveFailures++
-                    val delay = BASE_BACKOFF_MILLIS shl (consecutiveFailures - 1).coerceAtMost(BACKOFF_SHIFT_CAP)
-                    backoffUntilMillis = current + delay.coerceAtMost(MAX_BACKOFF_MILLIS)
+                    val delay = exponentialBackoffMillis(consecutiveFailures, BASE_BACKOFF_MILLIS, MAX_BACKOFF_MILLIS, BACKOFF_SHIFT_CAP)
+                    backoffUntilMillis = current + delay
                 } else {
                     consecutiveFailures = 0
                     backoffUntilMillis = 0L

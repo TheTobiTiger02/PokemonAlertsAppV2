@@ -769,8 +769,10 @@ object AlertNotifier {
                 } else {
                     null
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
-                // Log or silently fail - notifications will still show without image
+                // The notification still shows, just without the picture.
                 null
             }
         }

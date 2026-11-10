@@ -161,11 +161,6 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         return affectedUniqueIds.toSet()
     }
 
-    suspend fun getHistory(q: String? = null): List<PokemonAlert> {
-        val response = service.getHistory(q = normalizedHistoryQuery(q))
-        return response.data
-    }
-
     // ── History (offline-first with pagination + server-side filtering) ──
 
     /** Observe the locally-cached history alerts (Room). */

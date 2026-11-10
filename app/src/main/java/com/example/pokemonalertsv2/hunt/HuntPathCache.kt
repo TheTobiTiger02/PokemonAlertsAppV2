@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.catchroutes.catchBody
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
 import com.example.pokemonalertsv2.data.RouteMatrixPoint
 import com.example.pokemonalertsv2.data.RouteMatrixRequest
+import com.example.pokemonalertsv2.util.exponentialBackoffMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -162,8 +163,8 @@ internal class HuntPathCache @VisibleForTesting internal constructor(
                     retryAtMillis > 0 -> HuntRoutingGate.blockUntil(retryAtMillis)
                     transportFailure -> {
                         consecutiveFailures++
-                        val delay = BASE_BACKOFF_MILLIS shl (consecutiveFailures - 1).coerceAtMost(BACKOFF_SHIFT_CAP)
-                        HuntRoutingGate.blockUntil(current + delay.coerceAtMost(MAX_BACKOFF_MILLIS))
+                        val delay = exponentialBackoffMillis(consecutiveFailures, BASE_BACKOFF_MILLIS, MAX_BACKOFF_MILLIS, BACKOFF_SHIFT_CAP)
+                        HuntRoutingGate.blockUntil(current + delay)
                     }
                 }
             }

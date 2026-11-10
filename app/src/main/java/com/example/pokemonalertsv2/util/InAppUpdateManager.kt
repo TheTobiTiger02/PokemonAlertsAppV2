@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
+import com.example.pokemonalertsv2.data.net.Http
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
@@ -55,7 +56,10 @@ object InAppUpdateManager {
         coerceInputValues = true
     }
 
-    private val client by lazy { OkHttpClient.Builder().build() }
+    // No overall call timeout: an APK download on a slow connection legitimately takes minutes.
+    private val client by lazy {
+        Http.base.newBuilder().callTimeout(0, java.util.concurrent.TimeUnit.SECONDS).readTimeout(60, java.util.concurrent.TimeUnit.SECONDS).build()
+    }
     /** For reading where github.com's "latest release" page redirects, without following it. */
     private val redirectClient by lazy { client.newBuilder().followRedirects(false).followSslRedirects(false).build() }
 

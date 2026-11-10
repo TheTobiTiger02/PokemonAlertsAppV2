@@ -26,7 +26,15 @@ class GoDexHistoryAuditTest {
         assumeTrue("A synced GoDex catalog is required for this audit", entries.isNotEmpty())
 
         val alerts = try {
-            PokemonAlertsApi.service.getHistory(type = "Hundo").data
+            // The unbounded export is dashboard-only; page through the public endpoint instead.
+            buildList<com.example.pokemonalertsv2.data.PokemonAlert> {
+                var offset = 0
+                do {
+                    val page = PokemonAlertsApi.service.getHistoryPaged(limit = 500, offset = offset, type = "Hundo").data
+                    addAll(page)
+                    offset += page.size
+                } while (page.size == 500)
+            }
         } catch (error: Throwable) {
             if (error is IOException || error is HttpException) {
                 assumeNoException("The Hundo history endpoint is unavailable", error)

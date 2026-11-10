@@ -10,6 +10,7 @@ import okhttp3.CacheControl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.example.pokemonalertsv2.data.net.Http
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -63,7 +64,7 @@ object PokebattlerApi {
             redactHeader("X-Authorization")
         }
 
-        val client = OkHttpClient.Builder()
+        val client = Http.base.newBuilder()
             .cache(Cache(File(appContext.cacheDir, CACHE_DIR), CACHE_BYTES))
             .addInterceptor(UserAgentInterceptor())
             .addInterceptor(OfflineCacheInterceptor(appContext))

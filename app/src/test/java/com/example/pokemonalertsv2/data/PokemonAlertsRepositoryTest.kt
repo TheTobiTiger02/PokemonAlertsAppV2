@@ -740,8 +740,6 @@ class PokemonAlertsRepositoryTest {
                 headers
             )
         }
-        override suspend fun getHistory(type: String?, date: String?, startDate: String?, endDate: String?, q: String?): HistoryResponse =
-            historyResponse
         override suspend fun getHistoryPaged(
             limit: Int,
             offset: Int,

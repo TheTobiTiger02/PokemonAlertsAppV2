@@ -14,13 +14,14 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.example.pokemonalertsv2.data.net.Http
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import java.io.IOException
 
 class GoDexLivewireClient(
-    private val client: OkHttpClient = OkHttpClient()
+    private val client: OkHttpClient = Http.base
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 

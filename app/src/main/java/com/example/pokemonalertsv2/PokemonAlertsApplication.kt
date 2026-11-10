@@ -190,7 +190,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
                     // five concurrent requests per host by default. A screen of quest pins
                     // therefore trickled in five at a time however fast the network was.
                     .okHttpClient {
-                        okhttp3.OkHttpClient.Builder()
+                        com.example.pokemonalertsv2.data.net.Http.base.newBuilder()
                             .dispatcher(
                                 okhttp3.Dispatcher().apply {
                                     maxRequests = 64
