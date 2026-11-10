@@ -125,6 +125,17 @@ android {
     sourceSets {
         getByName("staging").baselineProfiles.srcDir("src/release/generated/baselineProfiles")
     }
+    lint {
+        // Existing findings live in lint-baseline.xml; anything new fails the build.
+        // Regenerate with ./gradlew :app:updateLintBaseline after fixing old ones.
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+        warningsAsErrors = true
+        checkDependencies = false
+        // Version-staleness checks change with every library release, not with our code.
+        disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -192,7 +203,7 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
-        implementation(libs.androidx.activity.ktx)
+    implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
