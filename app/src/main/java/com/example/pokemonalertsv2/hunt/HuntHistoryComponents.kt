@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.ui.theme.HeartRed
+import com.example.pokemonalertsv2.ui.theme.HundoPink
+import com.example.pokemonalertsv2.ui.theme.ShinyGold
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -45,9 +48,6 @@ import kotlin.math.cos
 import kotlin.math.max
 
 /** Shiny gold, readable on both light and dark surfaces. */
-internal val ShinyGold = Color(0xFFE0A800)
-internal val HundoPink = Color(0xFFE5407A)
-internal val HeartRed = Color(0xFFE53935)
 
 /** A small rounded label with an optional leading icon: "3 caught", "1.2 km", "♥ 112". */
 @Composable

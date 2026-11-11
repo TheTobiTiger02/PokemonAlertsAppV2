@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.ui.theme.HeartRed
+import com.example.pokemonalertsv2.ui.theme.HundoPink
+import com.example.pokemonalertsv2.ui.theme.ShinyGold
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import androidx.compose.foundation.layout.widthIn

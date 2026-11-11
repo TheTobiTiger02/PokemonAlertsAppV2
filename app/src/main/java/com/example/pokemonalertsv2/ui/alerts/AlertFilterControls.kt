@@ -957,38 +957,3 @@ internal fun LoadingState() {
         }
     }
 }
-
-@Composable
-internal fun EmptyState(onRefresh: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_placeholder),
-            contentDescription = null,
-            modifier = Modifier.size(96.dp),
-            tint = Color.Unspecified
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(id = R.string.alerts_empty_title),
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(id = R.string.no_alerts_message),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        FilledTonalButton(onClick = onRefresh, shape = RoundedCornerShape(18.dp)) {
-            Text(text = stringResource(id = R.string.alerts_empty_cta))
-        }
-    }
-}

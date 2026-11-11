@@ -6,7 +6,8 @@ Pokémon Alerts uses a static, One UI-inspired Material 3 design system built fo
 
 - Follow the system light/dark setting; dynamic wallpaper color is disabled.
 - Light roles: background `#F7F8FB`, surface `#FFFFFF`, container `#EEF1F6`, outline `#D8DEE8`, primary `#0057D9`.
-- Dark roles: background `#090B0F`, surface `#12151B`, container `#191D25`, raised container `#202631`, outline `#323946`, primary `#7FA7FF`.
+- Dark roles: background `#11141A`, surface `#181C23`, container `#20252E`, raised container `#2A303B`, outline `#414A59`, primary `#7FA7FF`.
+- Fixed accents (`ui/theme/Color.kt`): shiny `ShinyGold #E0A800`, hundo `HundoPink #E5407A`, heart rate `HeartRed #E53935`, and `OnBrightAccent #171A20` for text on bright category colours.
 - Electric blue is the only brand accent. Red, amber, and green are reserved for destructive, urgent, and successful states.
 - Use system sans-serif typography, tabular/monospace figures only for countdowns, opaque containers, 20dp screen margins, 24dp cards, and 48dp touch targets.
 - Do not use ambient background animation, decorative grids, glass surfaces, or category rainbow palettes. Motion is allowed, but it must explain a change rather than decorate one (see Motion).

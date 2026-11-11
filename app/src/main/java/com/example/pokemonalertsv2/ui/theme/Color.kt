@@ -32,3 +32,11 @@ val AppDarkOnPrimaryContainer = Color(0xFFD8E7FF)
 val SuccessGreen = Color(0xFF2E7D5B)
 val WarningAmber = Color(0xFF9A6200)
 val DangerRed = Color(0xFFBA1A1A)
+
+// Accents with a fixed meaning across screens.
+/** Shiny Pokémon, everywhere a shiny is marked. */
+val ShinyGold = Color(0xFFE0A800)
+val HundoPink = Color(0xFFE5407A)
+val HeartRed = Color(0xFFE53935)
+/** Text and icons on a bright category accent, where white would be unreadable. */
+val OnBrightAccent = Color(0xFF171A20)
