@@ -159,7 +159,6 @@ class LiveSightingsTest {
         nundosEnabled = true,
         kecleonEnabled = true,
         rocketEnabled = true,
-        vibrateEnabled = true,
         silenceUntil = 0L,
         maxWalkingMinutes = 0,
         quietHoursEnabled = false,

@@ -107,7 +107,7 @@ class UnifiedFilterMatrixTest {
     private fun notificationSettings(definition: FilterDefinition) = AlertNotifier.NotificationSettings(
         notificationsEnabled = true, raidsEnabled = true, spawnsEnabled = true, questsEnabled = true,
         hundosEnabled = true, pvpEnabled = true, nundosEnabled = true, kecleonEnabled = true,
-        rocketEnabled = true, vibrateEnabled = false, silenceUntil = 0L, maxWalkingMinutes = 0,
+        rocketEnabled = true, silenceUntil = 0L, maxWalkingMinutes = 0,
         quietHoursEnabled = false, quietHoursStartMinute = 0, quietHoursEndMinute = 0,
         selectedArea = "All", maxDistance = 0, excludedHundoTypes = emptySet(),
         excludedNundoTypes = emptySet(), excludedPvpTypes = emptySet(), excludedSpawnTypes = emptySet(),

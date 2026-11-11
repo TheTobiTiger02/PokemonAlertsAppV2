@@ -18,6 +18,8 @@
     <uses-permission
         android:name="android.permission.ACCESS_BACKGROUND_LOCATION"
         tools:targetApi="29" />
+    <!-- Lets Settings ask to exempt the app from battery optimisation (sideloaded, not Play). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS"
         tools:targetApi="33" />

@@ -171,7 +171,6 @@ class AlertNotifierSettingsTest {
         nundosEnabled = true,
         kecleonEnabled = true,
         rocketEnabled = rocketEnabled,
-        vibrateEnabled = true,
         silenceUntil = silenceUntil,
         maxWalkingMinutes = maxWalkingMinutes,
         quietHoursEnabled = quietHoursEnabled,

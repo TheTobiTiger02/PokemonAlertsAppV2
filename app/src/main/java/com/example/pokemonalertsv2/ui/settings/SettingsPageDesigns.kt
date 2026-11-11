@@ -1,6 +1,8 @@
 package com.example.pokemonalertsv2.ui.settings
 
 import com.example.pokemonalertsv2.ui.components.readableWidth
+import android.content.Intent
+import androidx.core.net.toUri
 import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
@@ -111,7 +113,6 @@ internal fun NotificationsPageDesign(
     modifier: Modifier = Modifier
 ) {
     val enabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
-    val vibrate by viewModel.notificationVibrate.collectAsStateWithLifecycle()
     val overlay by viewModel.journeyOverlayEnabled.collectAsStateWithLifecycle()
     val lastPush by viewModel.lastPushReceived.collectAsStateWithLifecycle()
     val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle()
@@ -135,10 +136,8 @@ internal fun NotificationsPageDesign(
     val deliveryRows: @Composable () -> Unit = {
         DeliveryRows(
             enabled = enabled,
-            vibrate = vibrate,
             overlay = overlay,
             onEnabledChange = viewModel::updateNotificationsEnabled,
-            onVibrateChange = viewModel::updateNotificationVibrate,
             onOverlayChange = viewModel::updateJourneyOverlayEnabled
         )
     }
@@ -242,6 +241,7 @@ private fun PermissionRows(
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
+    BatteryOptimizationRow()
     // Permissions can all read allowed while push is dead; this row shows delivery working.
     val stale = lastPush <= 0L || now - lastPush >= PUSH_STALE_MILLIS
     InfoRow(
@@ -252,13 +252,41 @@ private fun PermissionRows(
     )
 }
 
+/**
+ * Battery optimisation can hold back pushes while the phone sleeps. Re-read on every resume,
+ * since the answer changes in a system dialog.
+ */
+@Composable
+private fun BatteryOptimizationRow() {
+    val context = LocalContext.current
+    val powerManager = remember { context.getSystemService(android.os.PowerManager::class.java) }
+    var exempt by remember { mutableStateOf(powerManager.isIgnoringBatteryOptimizations(context.packageName)) }
+    androidx.lifecycle.compose.LifecycleResumeEffect(Unit) {
+        exempt = powerManager.isIgnoringBatteryOptimizations(context.packageName)
+        onPauseOrDispose { }
+    }
+    PermissionRow(
+        title = "Battery optimisation",
+        granted = exempt,
+        summary = if (exempt) "Alerts arrive while asleep" else "Alerts may be late while asleep",
+        icon = Icons.Filled.Notifications,
+        onClick = {
+            @android.annotation.SuppressLint("BatteryLife")
+            val intent = if (exempt) {
+                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            } else {
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, "package:${context.packageName}".toUri())
+            }
+            context.startActivity(intent)
+        }
+    )
+}
+
 @Composable
 private fun DeliveryRows(
     enabled: Boolean,
-    vibrate: Boolean,
     overlay: Boolean,
     onEnabledChange: (Boolean) -> Unit,
-    onVibrateChange: (Boolean) -> Unit,
     onOverlayChange: (Boolean) -> Unit
 ) {
     PanelSectionLabel("Delivery")
@@ -271,12 +299,18 @@ private fun DeliveryRows(
     )
     AnimatedVisibility(visible = enabled) {
         Column {
-            PanelSwitchRow(
-                title = "Vibration",
-                subtitle = "Vibrate with each alert",
-                checked = vibrate,
-                onCheckedChange = onVibrateChange,
-                modifier = Modifier.testTag("settings_vibration"),
+            // Android decides sound and vibration per channel; an in-app switch could not.
+            val context = LocalContext.current
+            PanelNavRow(
+                title = "Sound & vibration",
+                summary = "Per alert type, in Android settings",
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    )
+                },
+                modifier = Modifier.testTag("settings_sound_vibration"),
                 icon = { Icon(Icons.Filled.Phone, null, Modifier.size(20.dp)) }
             )
             JourneyOverlaySwitchRow(enabled = overlay, onEnabledChange = onOverlayChange)
