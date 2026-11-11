@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.ui.theme.HeartRed
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.pokemonalertsv2.hunt.HeartRed
 import com.example.pokemonalertsv2.hunt.WatchStatsSection
 import kotlinx.coroutines.launch
 

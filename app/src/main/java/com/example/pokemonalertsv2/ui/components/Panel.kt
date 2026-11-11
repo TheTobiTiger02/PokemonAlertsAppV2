@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.components
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
@@ -116,7 +118,10 @@ internal fun PanelSectionLabel(text: String) {
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = PanelGutter, end = PanelGutter, top = Spacing.xl, bottom = Spacing.xs)
+        // Lets TalkBack users jump section to section.
+        modifier = Modifier
+            .padding(start = PanelGutter, end = PanelGutter, top = Spacing.xl, bottom = Spacing.xs)
+            .semantics { heading() }
     )
 }
 

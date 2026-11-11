@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
 import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -87,7 +88,7 @@ internal fun CompactAlertCard(
     val subtitle = remember(alert) { formatAlertSubtitle(alert) }
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val accent = Color(visualStyle.category.accentArgb)
-    val onAccent = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
+    val onAccent = if (accent.luminance() > 0.55f) OnBrightAccent else Color.White
     // Derived: the card recomposes when these flip, not on every countdown tick.
     val isExpired by remember(endMillis, countdownClock) {
         derivedStateOf { endMillis?.let { it <= countdownClock.value } ?: false }

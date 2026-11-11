@@ -26,7 +26,6 @@
     <string name="notification_channel_quests_name">Field Research</string>
     <string name="notification_channel_quests_description">Notifications for Field Research</string>
     <string name="notification_default_body">New Pok&#x00E9;mon alert available</string>
-    <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
     <string name="background_location_title">Background location access</string>
     <string name="background_location_message">To keep distances and location-based features accurate in the background, open app settings, choose Permissions, then Location, and select Allow all the time.</string>
@@ -130,8 +129,6 @@
     <string name="alert_filter_favorites">Favorites</string>
     <string name="alerts_nearby_permission_hint">Enable location access to sort alerts by distance.</string>
     <string name="alerts_toolbar_tagline">Live Pokémon GO intel</string>
-    <string name="alerts_empty_title">All caught up</string>
-    <string name="alerts_empty_cta">Refresh feed</string>
     <string name="alert_expired">Expired</string>
     <string name="widget_description">Shows active Pokémon alerts with countdown timers, distance info, and quick actions.</string>
     <plurals name="widget_active_count">

@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
 import androidx.compose.runtime.derivedStateOf
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -158,7 +159,6 @@ import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
 import com.example.pokemonalertsv2.ui.components.RollingNumberText
-import com.example.pokemonalertsv2.ui.components.GradientText
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
@@ -202,7 +202,7 @@ internal fun AlertCard(
     val cardEndMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val questPresentation = remember(alert) { questAlertPresentation(alert) }
     val categoryAccent = Color(visualStyle.category.accentArgb)
-    val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
+    val categoryOnAccent = if (categoryAccent.luminance() > 0.55f) OnBrightAccent else Color.White
     val displayIv = if (alert.isWeatherChange && alert.newIv != null) alert.newIv else alert.formattedIv
     val resolvedCp = alert.displayCp
     LinearModernCard(
