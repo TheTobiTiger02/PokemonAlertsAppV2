@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
-
+
+import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
 import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star as OutlinedStar
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
@@ -87,7 +90,7 @@ internal fun CompactAlertCard(
     val subtitle = remember(alert) { formatAlertSubtitle(alert) }
     val endMillis = remember(alert.endTime) { TimeUtils.parseEndTimeToMillis(alert.endTime) }
     val accent = Color(visualStyle.category.accentArgb)
-    val onAccent = if (accent.luminance() > 0.55f) Color(0xFF171A20) else Color.White
+    val onAccent = if (accent.luminance() > 0.55f) OnBrightAccent else Color.White
     // Derived: the card recomposes when these flip, not on every countdown tick.
     val isExpired by remember(endMillis, countdownClock) {
         derivedStateOf { endMillis?.let { it <= countdownClock.value } ?: false }
@@ -97,7 +100,8 @@ internal fun CompactAlertCard(
         isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
         hasGoingAction = onGoingClick != null,
-        isDismissed = isDismissed
+        isDismissed = isDismissed,
+        isFavorite = LocalFavoriteAlerts.current?.ids?.contains(alert.uniqueId)
     )
     val lateWarning by remember(endMillis, distanceInfo.walkingDurationSeconds, countdownClock) {
         derivedStateOf {
@@ -142,13 +146,23 @@ internal fun CompactAlertCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (LocalFavoriteAlerts.current?.ids?.contains(alert.uniqueId) == true) {
+                            Icon(
+                                Icons.Filled.Star,
+                                contentDescription = "Favourite",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp).padding(end = 2.dp)
+                            )
+                        }
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     if (subtitle.isNotEmpty()) {
                         Text(
                             text = subtitle,
@@ -260,6 +274,8 @@ internal val AlertSecondaryAction.menuLabel: String
         AlertSecondaryAction.SHARE -> "Share"
         AlertSecondaryAction.DISMISS -> "Dismiss"
         AlertSecondaryAction.RESTORE -> "Restore"
+        AlertSecondaryAction.FAVORITE -> "Add to favourites"
+        AlertSecondaryAction.UNFAVORITE -> "Remove from favourites"
     }
 
 /** The leading icon both alert menus use, so every entry carries one. */
@@ -271,6 +287,8 @@ internal fun AlertSecondaryActionIcon(action: AlertSecondaryAction) {
         AlertSecondaryAction.SHARE -> Icon(Icons.Filled.Share, contentDescription = null)
         AlertSecondaryAction.DISMISS -> Icon(Icons.Filled.Close, contentDescription = null)
         AlertSecondaryAction.RESTORE -> Icon(Icons.Filled.Refresh, contentDescription = null)
+        AlertSecondaryAction.FAVORITE -> Icon(Icons.Outlined.OutlinedStar, contentDescription = null)
+        AlertSecondaryAction.UNFAVORITE -> Icon(Icons.Filled.Star, contentDescription = null)
     }
 }
 

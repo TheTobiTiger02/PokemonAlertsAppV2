@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press launcher shortcuts; each opens a deep link MainActivity already handles. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="map"
+        android:enabled="true"
+        android:icon="@drawable/ic_map"
+        android:shortcutShortLabel="@string/shortcut_map">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pokemonalerts://map"
+            android:targetPackage="com.example.pokemonalertsv2"
+            android:targetClass="com.example.pokemonalertsv2.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="history"
+        android:enabled="true"
+        android:icon="@drawable/ic_poke_notification"
+        android:shortcutShortLabel="@string/shortcut_history">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pokemonalerts://history"
+            android:targetPackage="com.example.pokemonalertsv2"
+            android:targetClass="com.example.pokemonalertsv2.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="events"
+        android:enabled="true"
+        android:icon="@drawable/ic_tools"
+        android:shortcutShortLabel="@string/shortcut_events">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="pokemonalerts://events"
+            android:targetPackage="com.example.pokemonalertsv2"
+            android:targetClass="com.example.pokemonalertsv2.MainActivity" />
+    </shortcut>
+</shortcuts>

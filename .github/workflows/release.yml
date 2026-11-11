@@ -73,6 +73,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          APP_API_KEY: ${{ secrets.APP_API_KEY }}
         run: |
           echo "storeFile=keystore/pokemon-alerts-release.jks" > keystore.properties
           echo "storePassword=$STORE_PASSWORD" >> keystore.properties
@@ -80,6 +81,7 @@ jobs:
           echo "keyPassword=$KEY_PASSWORD" >> keystore.properties
           
           echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY" > local.properties
+          echo "APP_API_KEY=$APP_API_KEY" >> local.properties
 
       - name: Test and build release APK
         if: steps.tag_check.outputs.exists == 'false'

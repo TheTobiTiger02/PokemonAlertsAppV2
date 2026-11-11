@@ -93,9 +93,7 @@ class CatchRoutesActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
         setContent {
-            // The app's own light/dark choice, as the rest of the app uses it, not only the system's.
-            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }.collectAsStateWithLifecycle(initialValue = 0)
-            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) { PlannerScreen() }
+            PokemonAlertsV2Theme(darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()) { PlannerScreen() }
         }
         lifecycleScope.launch {
             model.controller.ready()
@@ -136,7 +134,15 @@ class CatchRoutesActivity : ComponentActivity() {
      * screen, which is what hides the promoted status-bar chip.
      */
     private fun floatingWindow() {
-        if (!Settings.canDrawOverlays(this)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        if (!Settings.canDrawOverlays(this)) {
+            // Without a word the jump to a system list of apps looks like a mistake.
+            android.widget.Toast.makeText(
+                this,
+                "Allow \"Display over other apps\" for Pokémon Alerts to use the floating route window",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
         else startService(Intent(this, CatchRouteService::class.java).setAction("map"))
     }
     private fun pickTime() {

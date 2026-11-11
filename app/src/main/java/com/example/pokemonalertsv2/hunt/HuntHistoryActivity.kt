@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.ui.theme.HeartRed
+import com.example.pokemonalertsv2.ui.theme.HundoPink
+import com.example.pokemonalertsv2.ui.theme.ShinyGold
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import androidx.compose.foundation.layout.widthIn
@@ -23,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -75,9 +79,7 @@ class HuntHistoryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }
-                .collectAsStateWithLifecycle(initialValue = 0)
-            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) {
+            PokemonAlertsV2Theme(darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()) {
                 HuntHistoryScreen(onBack = ::finish)
             }
         }
@@ -89,7 +91,9 @@ class HuntHistoryActivity : ComponentActivity() {
 internal fun HuntHistoryScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val repository = remember(context) { HuntRepository.getInstance(context) }
-    val history by repository.history.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Null until the first read, so "No hunts yet" does not flash before the list arrives.
+    val loaded by repository.history.collectAsStateWithLifecycle<List<HuntSummary>?>(initialValue = null)
+    val history = loaded.orEmpty()
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<HuntSummary?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -106,8 +110,10 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
         }
     }
 
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
     Scaffold(
         modifier = Modifier.testTag("hunt_history"),
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("Hunt history") },
@@ -137,7 +143,9 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        if (history.isEmpty()) {
+        if (loaded == null) {
+            Box(Modifier.fillMaxSize().padding(padding))
+        } else if (history.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
                     text = "No hunts yet. Finished hunts show up here with what you caught.",
@@ -149,6 +157,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             return@Scaffold
         }
         val totals = remember(history) { huntHistoryTotals(history) }
+        val months = remember(history) { history.groupBy { monthLabel(it.startedAtMillis) } }
         LazyVerticalGrid(
             columns = AdaptiveCardColumns,
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -176,7 +185,6 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
             }
-            val months = history.groupBy { monthLabel(it.startedAtMillis) }
             months.forEach { (month, hunts) ->
                 item(key = "month-$month", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
@@ -187,7 +195,14 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     )
                 }
                 items(hunts, key = { it.startedAtMillis }) { hunt ->
-                    HuntHistoryRow(hunt, onClick = { opened = hunt })
+                    HuntHistoryRow(hunt, onClick = { opened = hunt }, onDelete = {
+                        scope.launch {
+                            repository.deleteHistoryEntry(hunt.startedAtMillis)
+                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = "Undo",
+                                duration = androidx.compose.material3.SnackbarDuration.Short)
+                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) repository.restoreHistoryEntry(hunt)
+                        }
+                    })
                 }
             }
         }
@@ -218,7 +233,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit) {
+private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit, onDelete: () -> Unit) {
     val track = remember(hunt.track) { hunt.trackPoints }
     val catchPoints = remember(hunt.catches) { hunt.catches.mapNotNull { it.point } }
     Surface(
@@ -245,6 +260,9 @@ private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit) {
                 }
                 if (track.size >= 2 || catchPoints.size >= 2) {
                     HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.testTag("hunt_history_delete")) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${hunt.name}")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.alerts
 import android.content.Context
 import android.util.Log
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.data.net.Http
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
 import org.maplibre.android.module.http.HttpRequestUtil
@@ -34,18 +35,7 @@ internal object MapLibreInitializer {
                 val appContext = context.applicationContext
                 MapLibre.getInstance(appContext)
                 val client = OpenStreetMapTileCache.install(
-                    OkHttpClient.Builder()
-                        .addInterceptor { chain ->
-                            chain.proceed(
-                                chain.request().newBuilder()
-                                    .header(
-                                        "User-Agent",
-                                        "PokemonAlertsV2/${BuildConfig.VERSION_NAME} " +
-                                            "(Android; ${BuildConfig.APPLICATION_ID})"
-                                    )
-                                    .build()
-                            )
-                        },
+                    Http.base.newBuilder(),
                     appContext
                 ).build()
                 tileClient = client

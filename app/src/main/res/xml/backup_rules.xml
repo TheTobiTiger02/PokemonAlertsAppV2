@@ -1,11 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Auto Backup (Android 11 and lower). Only settings that are meaningful on a
+    new device are restored:
+    - The alert preferences DataStore: filters, notification and map settings.
+    - Widget filter choices.
+    Left out on purpose: Pokebattler credentials (Keystore-encrypted, so they
+    cannot be decrypted on another device), FCM topic state (the new install
+    must subscribe again), pending update installs, server caches, hunt and
+    journey sessions, and the Room databases (re-synced from the backend).
+    Keep in step with data_extraction_rules.xml.
 -->
 <full-backup-content>
-    <include domain="sharedpref" path="."/>
-    <include domain="file" path="datastore/"/>
+    <include domain="file" path="datastore/pokemon_alerts_preferences.preferences_pb"/>
+    <include domain="sharedpref" path="widget_filter_prefs.xml"/>
 </full-backup-content>

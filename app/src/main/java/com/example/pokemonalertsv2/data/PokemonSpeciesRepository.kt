@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
+import com.example.pokemonalertsv2.data.net.Http
+import android.util.Log
 import retrofit2.Retrofit
 
 class PokemonSpeciesRepository private constructor(context: Context) {
@@ -20,7 +21,7 @@ class PokemonSpeciesRepository private constructor(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://pokeapi.co/")
-        .client(OkHttpClient.Builder().build())
+        .client(Http.base)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()
 
@@ -39,8 +40,10 @@ class PokemonSpeciesRepository private constructor(context: Context) {
                         )
                     }
                     speciesDao.insertAll(entities)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.w("PokemonSpecies", "Species sync failed; retried on next start", e)
                 }
             }
         }

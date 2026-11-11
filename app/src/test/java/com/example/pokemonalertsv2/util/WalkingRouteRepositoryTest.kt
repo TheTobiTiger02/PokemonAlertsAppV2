@@ -385,14 +385,6 @@ class WalkingRouteRepositoryTest {
 
         override suspend fun getCurrentWeather(area: String): CurrentWeatherResponse = CurrentWeatherResponse()
 
-        override suspend fun getHistory(
-            type: String?,
-            date: String?,
-            startDate: String?,
-            endDate: String?,
-            q: String?
-        ): HistoryResponse = HistoryResponse()
-
         override suspend fun getHistoryPaged(
             limit: Int,
             offset: Int,

@@ -18,6 +18,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.example.pokemonalertsv2.data.net.Http
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -315,6 +316,6 @@ class GoDexImporter(
             return parsed.newBuilder().query(null).fragment(null).build().toString().trimEnd('/')
         }
 
-        private fun defaultClient(): OkHttpClient = OkHttpClient()
+        private fun defaultClient(): OkHttpClient = Http.base
     }
 }

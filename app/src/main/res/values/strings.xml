@@ -26,7 +26,6 @@
     <string name="notification_channel_quests_name">Field Research</string>
     <string name="notification_channel_quests_description">Notifications for Field Research</string>
     <string name="notification_default_body">New Pok&#x00E9;mon alert available</string>
-    <string name="no_alerts_message">No active alerts right now. Tap the refresh button to check again.</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
     <string name="background_location_title">Background location access</string>
     <string name="background_location_message">To keep distances and location-based features accurate in the background, open app settings, choose Permissions, then Location, and select Allow all the time.</string>
@@ -130,8 +129,6 @@
     <string name="alert_filter_favorites">Favorites</string>
     <string name="alerts_nearby_permission_hint">Enable location access to sort alerts by distance.</string>
     <string name="alerts_toolbar_tagline">Live Pokémon GO intel</string>
-    <string name="alerts_empty_title">All caught up</string>
-    <string name="alerts_empty_cta">Refresh feed</string>
     <string name="alert_expired">Expired</string>
     <string name="widget_description">Shows active Pokémon alerts with countdown timers, distance info, and quick actions.</string>
     <plurals name="widget_active_count">
@@ -192,4 +189,18 @@
     <string name="widget_radar_next_default_cd">Next alert</string>
     <string name="widget_radar_next_cd">Next alert. Showing %1$d of %2$d.</string>
     <string name="widget_alert_image_cd">Alert image</string>
+    <string name="notification_channel_hundos_name">Hundos &amp; nundos</string>
+    <string name="notification_channel_hundos_description">Perfect and zero IV Pokémon</string>
+    <string name="notification_channel_pvp_name">PvP</string>
+    <string name="notification_channel_pvp_description">Top-ranked Pokémon for Great and Ultra League</string>
+    <string name="notification_channel_rocket_name">Team GO Rocket</string>
+    <string name="notification_channel_rocket_description">Rocket grunts and leaders at PokéStops</string>
+    <string name="notification_channel_kecleon_name">Kecleon</string>
+    <string name="notification_channel_kecleon_description">Kecleon hiding at PokéStops</string>
+    <string name="tile_silence_label">Silence alerts</string>
+    <string name="tile_silence_until">Until %1$s</string>
+    <string name="tile_silence_off">Tap to silence for 1 hour</string>
+    <string name="shortcut_map">Map</string>
+    <string name="shortcut_history">Alert history</string>
+    <string name="shortcut_events">Events</string>
 </resources>

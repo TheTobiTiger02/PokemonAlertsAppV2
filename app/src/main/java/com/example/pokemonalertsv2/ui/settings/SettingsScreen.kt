@@ -49,7 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -187,21 +187,6 @@ internal fun SettingsScreen(
         else -> pendingPokeGenieImport
     }
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val raidsNotifications by viewModel.raidsNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val spawnsNotifications by viewModel.spawnsNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val questsNotifications by viewModel.questsNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val hundosNotifications by viewModel.hundosNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val pvpNotifications by viewModel.pvpNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val nundosNotifications by viewModel.nundosNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val kecleonNotifications by viewModel.kecleonNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val rocketNotifications by viewModel.rocketNotifications.collectAsStateWithLifecycle(initialValue = true)
-    val notificationVibrate by viewModel.notificationVibrate.collectAsStateWithLifecycle(initialValue = true)
-    val journeyOverlayEnabled by viewModel.journeyOverlayEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val lastPushReceived by viewModel.lastPushReceived.collectAsStateWithLifecycle(initialValue = 0L)
-    val silenceUntil by viewModel.silenceUntil.collectAsStateWithLifecycle(initialValue = 0L)
-    val quietHoursEnabled by viewModel.quietHoursEnabled.collectAsStateWithLifecycle()
-    val quietHoursStart by viewModel.quietHoursStartMinute.collectAsStateWithLifecycle()
-    val quietHoursEnd by viewModel.quietHoursEndMinute.collectAsStateWithLifecycle()
     val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
     val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle(initialValue = 0)
@@ -210,15 +195,11 @@ internal fun SettingsScreen(
     )
     val cardStyle by viewModel.cardStyle.collectAsStateWithLifecycle()
     
-    // Excluded types for granular filtering
-    val excludedHundoTypes by viewModel.excludedHundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
-    val excludedNundoTypes by viewModel.excludedNundoTypes.collectAsStateWithLifecycle(initialValue = emptySet())
-    val excludedPvpTypes by viewModel.excludedPvpTypes.collectAsStateWithLifecycle(initialValue = emptySet())
-    val excludedSpawnTypes by viewModel.excludedSpawnTypes.collectAsStateWithLifecycle(initialValue = emptySet())
-    val excludedRocketTypes by viewModel.excludedRocketTypes.collectAsStateWithLifecycle(initialValue = emptySet())
-    val excludedRaidTiers by viewModel.excludedRaidTiers.collectAsStateWithLifecycle(initialValue = emptySet())
+    // Excluded types for granular filtering))))))
     val goDexConfig by viewModel.goDexConfig.collectAsStateWithLifecycle()
     val goDexEntries by viewModel.goDexEntries.collectAsStateWithLifecycle()
+    // Counted once per change of the list, not on every recomposition of the overview.
+    val goDexNeededCount = remember(goDexEntries) { goDexEntries.count { it.needed } }
     val goDexSyncUiState by viewModel.goDexSyncUiState.collectAsStateWithLifecycle()
     val goDexPendingEntryKeys by viewModel.goDexPendingEntryKeys.collectAsStateWithLifecycle()
     var goDexUrlInput by rememberSaveable { mutableStateOf("") }
@@ -383,10 +364,10 @@ internal fun SettingsScreen(
                         goDexSummary = when {
                             !goDexConfig.isConnected -> "Not connected"
                             goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-                                "${goDexEntries.count { it.needed }} still needed · sign in again"
+                                "$goDexNeededCount still needed · sign in again"
                             goDexConfig.hasWriteBackUrl ->
-                                "${goDexEntries.count { it.needed }} still needed · two-way sync"
-                            else -> "${goDexEntries.count { it.needed }} still needed · read-only"
+                                "$goDexNeededCount still needed · two-way sync"
+                            else -> "$goDexNeededCount still needed · read-only"
                         },
                         goDexBadge = when {
                             !goDexConfig.isConnected -> "Connect"
@@ -581,8 +562,17 @@ internal fun SettingsScreen(
                                 }
                             }
                         }
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val crashReport = androidx.compose.runtime.remember { com.example.pokemonalertsv2.util.CrashLog.latest(context) }
+                        if (crashReport != null) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                com.example.pokemonalertsv2.util.CrashLog.shareIntent(context)?.let(context::startActivity)
+                            }) {
+                                Text("Share last crash report")
+                            }
+                        }
                         Text(
-                            text = "\u00A9 openrouteservice.org by HeiGIT | Map data \u00A9 OpenStreetMap contributors",
+                            text = "Walking routes by Valhalla | Map data \u00A9 OpenStreetMap contributors",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

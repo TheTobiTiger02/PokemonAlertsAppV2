@@ -91,10 +91,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         setContent {
-            val themeMode by repository.observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
-            val darkTheme = AppThemeMode.fromStored(themeMode)
-                .resolveDark(isSystemInDarkTheme())
+            val darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 val rows by viewModel.visible.collectAsStateWithLifecycle()
                 val total by viewModel.total.collectAsStateWithLifecycle()

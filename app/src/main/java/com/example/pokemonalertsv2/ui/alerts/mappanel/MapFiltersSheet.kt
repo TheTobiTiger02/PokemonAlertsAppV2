@@ -160,17 +160,37 @@ internal fun MapFiltersSheet(
 /** Title, how many alerts the filters leave, and Reset when anything is set. */
 @Composable
 internal fun FiltersHeader(state: FiltersState) {
+    // What Reset replaced, offered back for a few seconds as Undo.
+    var beforeReset by remember { mutableStateOf<FilterDefinition?>(null) }
+    androidx.compose.runtime.LaunchedEffect(beforeReset) {
+        if (beforeReset != null) {
+            kotlinx.coroutines.delay(UNDO_WINDOW_MILLIS)
+            beforeReset = null
+        }
+    }
     PanelHeader(
         title = "Filters",
         subtitle = "${state.visibleCount} of ${state.totalCount} alerts shown",
         actions = {
-            // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
-            if (state.definition != FilterDefinition()) {
-                TextButton(onClick = { state.onDefinitionChange(FilterDefinition()) }) { Text("Reset") }
+            val previous = beforeReset
+            when {
+                previous != null && state.definition == FilterDefinition() ->
+                    TextButton(onClick = {
+                        state.onDefinitionChange(previous)
+                        beforeReset = null
+                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text("Undo") }
+                // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
+                state.definition != FilterDefinition() ->
+                    TextButton(onClick = {
+                        beforeReset = state.definition
+                        state.onDefinitionChange(FilterDefinition())
+                    }) { Text("Reset") }
             }
         }
     )
 }
+
+private const val UNDO_WINDOW_MILLIS = 8_000L
 
 /** One removable chip per rule in force; nothing at all when the filters are the defaults. */
 @Composable
@@ -195,6 +215,61 @@ internal fun ActiveFiltersRow(state: FiltersState, modifier: Modifier = Modifier
                     )
                 },
                 shape = RoundedCornerShape(16.dp)
+            )
+        }
+    }
+}
+
+/** "IV 90%+ · CP 1500+ · L30+" for the active-filter chip. */
+internal fun statsLabel(stats: com.example.pokemonalertsv2.data.StatFilterRules): String = listOfNotNull(
+    stats.minIvPercent.takeIf { it > 0 }?.let { "IV $it%+" },
+    stats.minCp.takeIf { it > 0 }?.let { "CP $it+" },
+    stats.minLevel.takeIf { it > 0 }?.let { "L$it+" }
+).joinToString(" · ")
+
+/** Minimum IV, CP and level for Pokémon alerts. Alerts without the value are never hidden. */
+@Composable
+internal fun StatsEditor(state: FiltersState) {
+    val stats = state.definition.stats
+    val update: (com.example.pokemonalertsv2.data.StatFilterRules) -> Unit = {
+        state.onDefinitionChange(state.definition.copy(stats = it))
+    }
+    Column(
+        modifier = Modifier.panelGutter().padding(top = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+    ) {
+        ValueLine("Minimum IV", if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else "Any" }) {
+            update(stats.copy(minIvPercent = it))
+        }
+        ValueLine("Minimum CP", if (stats.minCp > 0) "${stats.minCp}" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else "Any" }) {
+            update(stats.copy(minCp = it))
+        }
+        ValueLine("Minimum level", if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else "Any" }) {
+            update(stats.copy(minLevel = it))
+        }
+        Text(
+            "Sightings nobody has checked carry no IV and stay visible. Hundos and nundos ignore the IV limit.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PresetChips(values: List<Int>, selectedValue: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        values.forEach { value ->
+            val selected = value == selectedValue
+            FilterChip(
+                selected = selected,
+                onClick = { onSelect(value) },
+                label = { Text(label(value)) },
+                leadingIcon = if (selected) {
+                    { Icon(Icons.Filled.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null
             )
         }
     }

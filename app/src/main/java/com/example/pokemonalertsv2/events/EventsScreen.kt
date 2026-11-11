@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
@@ -72,7 +74,7 @@ fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
     fun refresh() = scope.launch {
         loading = true; error = null
         try { events = repository.refresh() } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            error = e.message ?: "Events could not be loaded."
+            error = if (events.isEmpty()) "Events could not be loaded." else "Could not refresh; showing saved events."
         } finally { loading = false }
     }
     LaunchedEffect(Unit) { events = repository.cached() }
@@ -145,10 +147,22 @@ fun EventsContent(
     val hiddenTypeCount = types.count { it in state.settings.hiddenTypes }
     var view by rememberSaveable { mutableStateOf(EventView.ALL) }
     val starred = state.settings.starredIds
-    fun List<GameEvent>.inView() = if (view == EventView.STARRED) filter { it.id in starred } else this
-    val nowEvents = if (view == EventView.UPCOMING) emptyList() else sections.now.inView()
-    val upcomingDays = if (view == EventView.NOW) emptyList()
-    else sections.upcoming.map { (day, events) -> day to events.inView() }.filter { it.second.isNotEmpty() }
+    var query by rememberSaveable { mutableStateOf("") }
+    val needle = query.trim()
+    fun List<GameEvent>.inView() = filter { event ->
+        (view != EventView.STARRED || event.id in starred) &&
+            (needle.isEmpty() || event.name.contains(needle, ignoreCase = true) ||
+                event.heading?.contains(needle, ignoreCase = true) == true ||
+                event.featured.any { it.name.contains(needle, ignoreCase = true) } ||
+                event.raidBosses.any { it.name.contains(needle, ignoreCase = true) })
+    }
+    val nowEvents = remember(sections, view, starred, needle) {
+        if (view == EventView.UPCOMING) emptyList() else sections.now.inView()
+    }
+    val upcomingDays = remember(sections, view, starred, needle) {
+        if (view == EventView.NOW) emptyList()
+        else sections.upcoming.map { (day, events) -> day to events.inView() }.filter { it.second.isNotEmpty() }
+    }
     PullToRefreshBox(isRefreshing = state.loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize().testTag("events_screen")) {
         // Staggered: a card with a Pokémon row is taller than one without, and a plain grid
         // would leave a gap beside every short card.
@@ -197,11 +211,34 @@ fun EventsContent(
                     }
                 }
             }
-            state.error?.let { message -> item(span = StaggeredGridItemSpan.FullLine) { Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.testTag("events_error")) } }
+            item(span = StaggeredGridItemSpan.FullLine) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search events or Pokémon") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    trailingIcon = if (query.isNotEmpty()) {
+                        { IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") } }
+                    } else null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("events_search")
+                )
+            }
+            state.error?.let { message ->
+                item(span = StaggeredGridItemSpan.FullLine) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("events_error")) {
+                        Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                        TextButton(onClick = onRefresh) { Text("Retry") }
+                    }
+                }
+            }
             if (nowEvents.isEmpty() && upcomingDays.isEmpty() && !state.loading) item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
-                    if (view == EventView.STARRED) "No starred events. Tap the star on an event to be reminded of it."
-                    else "No events to show.",
+                    when {
+                        needle.isNotEmpty() -> "No events match \"$needle\"."
+                        view == EventView.STARRED -> "No starred events. Tap the star on an event to be reminded of it."
+                        else -> "No events to show."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -307,9 +344,18 @@ private fun EventCard(event: GameEvent, state: EventsUiState, onClick: () -> Uni
 @Composable
 internal fun StarButton(event: GameEvent, settings: EventSettings, onToggleStar: (String) -> Unit) {
     val starred = event.id in settings.starredIds
-    IconButton(onClick = { onToggleStar(event.id) }, modifier = Modifier.testTag("event_star_${event.id}")) {
-        Icon(Icons.Filled.Star, contentDescription = if (starred) "Don't remind me" else "Remind me",
-            tint = if (starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+    // A toggle, so TalkBack reads "Remind me, on/off"; filled and outlined, so the state is not colour alone.
+    androidx.compose.material3.IconToggleButton(
+        checked = starred,
+        onCheckedChange = { onToggleStar(event.id) },
+        modifier = Modifier.testTag("event_star_${event.id}")
+    ) {
+        val tint = if (starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        if (starred) {
+            Icon(Icons.Filled.Star, contentDescription = "Remind me", tint = tint)
+        } else {
+            Icon(painterResource(R.drawable.ic_star_outline), contentDescription = "Remind me", tint = tint)
+        }
     }
 }
 

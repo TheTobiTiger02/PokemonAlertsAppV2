@@ -111,6 +111,7 @@ internal fun HuntTargetSheet(
     // row instead of leaving a near-duplicate beside it.
     var editingId by remember { mutableStateOf(editing?.savedHuntId) }
     var renaming by remember { mutableStateOf<SavedHunt?>(null) }
+    var deleting by remember { mutableStateOf<SavedHunt?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // Every selection starts empty, not "all".
     //
@@ -163,10 +164,7 @@ internal fun HuntTargetSheet(
                     area = saved.area
                 },
                 onRenameSaved = { renaming = it },
-                onDeleteSaved = { saved ->
-                    scope.launch { huntRepository.deleteSavedHunt(saved.id) }
-                    if (editingId == saved.id) editingId = null
-                },
+                onDeleteSaved = { saved -> deleting = saved },
                 startLabel = when {
                     !ready -> "Pick something to hunt"
                     editing != null -> "Update hunt"
@@ -176,6 +174,22 @@ internal fun HuntTargetSheet(
                 onStart = { onStart(huntName(hunt, catalog), hunt, editingId, area) }
             )
         }
+    }
+
+    deleting?.let { target ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete \"${target.name}\"?") },
+            text = { Text("The saved hunt and its targets are removed. Past hunts in your history stay.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    scope.launch { huntRepository.deleteSavedHunt(target.id) }
+                    if (editingId == target.id) editingId = null
+                    deleting = null
+                }) { Text("Delete") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("Cancel") } }
+        )
     }
 
     renaming?.let { target ->

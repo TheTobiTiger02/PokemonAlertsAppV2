@@ -12,10 +12,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import com.example.pokemonalertsv2.notifications.QuietHours
 import com.example.pokemonalertsv2.util.TravelTime
 
 private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
+
+// DataStores whose legacy filter migration has already run in this process, by identity.
+private val filterMigrationsDone: MutableSet<DataStore<Preferences>> =
+    java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(java.util.IdentityHashMap()))
 internal val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
 private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
@@ -419,15 +424,28 @@ interface AlertPreferencesStore {
 
 class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPreferencesStore {
 
+    // Every write to this DataStore (seen alerts, settings, ...) re-emits it. Decoding the filter
+    // JSON is only needed when that JSON changed, and the legacy migration only once per process.
     override val filterStateDocument: Flow<FilterStateDocument> = flow {
-        dataStore.edit { preferences ->
-            if (FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) == null) {
-                preferences[FILTER_STATE_KEY] = FilterStateCodec.encode(migrateLegacyFilterState(preferences))
+        if (filterMigrationsDone.add(dataStore)) {
+            try {
+                dataStore.edit { preferences ->
+                    if (FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) == null) {
+                        preferences[FILTER_STATE_KEY] = FilterStateCodec.encode(migrateLegacyFilterState(preferences))
+                    }
+                }
+            } catch (error: Throwable) {
+                filterMigrationsDone.remove(dataStore)
+                throw error
             }
         }
-        emitAll(dataStore.data.map { preferences ->
-            FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) ?: migrateLegacyFilterState(preferences)
-        })
+        emitAll(
+            dataStore.data
+                .distinctUntilChangedBy { preferences -> preferences[FILTER_STATE_KEY] }
+                .map { preferences ->
+                    FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) ?: migrateLegacyFilterState(preferences)
+                }
+        )
     }
 
     override suspend fun updateFilterStateDocument(

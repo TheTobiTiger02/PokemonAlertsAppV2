@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
+import com.example.pokemonalertsv2.ui.theme.ShinyGold
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -333,7 +335,7 @@ fun AlertDetailScreen(
                                     .align(Alignment.BottomStart)
                                     .padding(16.dp),
                                 shape = MaterialTheme.shapes.small,
-                                color = Color(0xFFFFB300).copy(alpha = 0.20f)
+                                color = ShinyGold.copy(alpha = 0.20f)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -344,13 +346,13 @@ fun AlertDetailScreen(
                                         imageVector = Icons.Filled.Star,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
-                                        tint = Color(0xFFFFB300)
+                                        tint = ShinyGold
                                     )
                                     Text(
                                         text = "SHINY",
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFFFB300)
+                                        color = ShinyGold
                                     )
                                 }
                             }
@@ -858,7 +860,7 @@ internal fun AlertDetailActionBar(
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = accent,
                         contentColor = if (accent.luminance() > 0.55f) {
-                            Color(0xFF171A20)
+                            OnBrightAccent
                         } else {
                             Color.White
                         }

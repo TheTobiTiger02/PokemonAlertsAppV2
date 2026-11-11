@@ -161,11 +161,6 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         return affectedUniqueIds.toSet()
     }
 
-    suspend fun getHistory(q: String? = null): List<PokemonAlert> {
-        val response = service.getHistory(q = normalizedHistoryQuery(q))
-        return response.data
-    }
-
     // ── History (offline-first with pagination + server-side filtering) ──
 
     /** Observe the locally-cached history alerts (Room). */
@@ -282,6 +277,39 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             hitCap = rows.size >= maxRows && rows.size < total
         )
     }
+
+    /**
+     * Every history row matching the History tab's filters, paged 500 at a time, for export.
+     * Stops at [maxRows]; [ExportedHistory.hitCap] says whether there was more.
+     */
+    suspend fun fetchHistoryForExport(
+        date: String?,
+        type: String?,
+        q: String?,
+        area: String?,
+        maxRows: Int = EXPORT_MAX_ROWS
+    ): ExportedHistory {
+        val rows = mutableListOf<PokemonAlert>()
+        var offset = 0
+        var total = Int.MAX_VALUE
+        while (rows.size < maxRows && offset < total) {
+            val response = service.getHistoryPaged(
+                limit = minOf(INSIGHTS_PAGE_SIZE, maxRows - rows.size),
+                offset = offset,
+                type = type,
+                date = date,
+                q = normalizedHistoryQuery(q),
+                area = area
+            )
+            if (response.data.isEmpty()) break
+            rows += response.data
+            total = response.total ?: rows.size
+            offset = (response.offset ?: offset) + response.data.size
+        }
+        return ExportedHistory(rows, hitCap = rows.size >= maxRows && rows.size < total)
+    }
+
+    data class ExportedHistory(val alerts: List<PokemonAlert>, val hitCap: Boolean)
 
     private fun normalizedHistoryQuery(q: String?): String? = q?.trim()?.takeIf { it.isNotEmpty() }
 
@@ -404,6 +432,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
          */
         const val INSIGHTS_MAX_ROWS = 3_000
         const val INSIGHTS_PAGE_SIZE = 500
+        const val EXPORT_MAX_ROWS = 5_000
         private const val ETAG_HEADER = "ETag"
         private const val SEEN_EXPIRY_MARGIN_MILLIS = 60 * 60 * 1000L
         private const val UNKNOWN_END_SEEN_MILLIS = 24 * 60 * 60 * 1000L
@@ -428,16 +457,22 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
             }
         }
 
-        fun create(context: Context): PokemonAlertsRepository {
-            val appContext = context.applicationContext
-            val preferences = AlertPreferences(appContext.alertPreferencesDataStore)
-            val database = AppDatabase.getDatabase(appContext)
-            return PokemonAlertsRepository(
-                service = PokemonAlertsApi.service,
-                preferences = preferences,
-                alertDao = database.alertDao(),
-                historyAlertDao = database.historyAlertDao()
-            )
-        }
+        @Volatile
+        private var shared: PokemonAlertsRepository? = null
+
+        /** The process-wide repository. It is stateless apart from the shared mutexes above. */
+        fun create(context: Context): PokemonAlertsRepository =
+            shared ?: synchronized(this) {
+                shared ?: run {
+                    val appContext = context.applicationContext
+                    val database = AppDatabase.getDatabase(appContext)
+                    PokemonAlertsRepository(
+                        service = PokemonAlertsApi.service,
+                        preferences = AlertPreferences(appContext.alertPreferencesDataStore),
+                        alertDao = database.alertDao(),
+                        historyAlertDao = database.historyAlertDao()
+                    ).also { shared = it }
+                }
+            }
     }
 }

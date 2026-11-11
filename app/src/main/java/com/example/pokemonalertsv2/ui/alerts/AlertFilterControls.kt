@@ -423,7 +423,8 @@ internal fun HistoryListControls(
     selectedDateLabel: String?,
     onOpenDateFilter: () -> Unit,
     onClearDateFilter: () -> Unit,
-    onOpenInsights: (() -> Unit)? = null
+    onOpenInsights: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -457,6 +458,11 @@ internal fun HistoryListControls(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onExport != null) {
+                        IconButton(onClick = onExport, modifier = Modifier.testTag("export_history_csv")) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export history as CSV")
+                        }
+                    }
                     if (onOpenInsights != null) {
                         IconButton(
                             onClick = onOpenInsights,
@@ -948,41 +954,6 @@ internal fun LoadingState() {
     ) {
         repeat(3) {
             ShimmerAlertCard()
-        }
-    }
-}
-
-@Composable
-internal fun EmptyState(onRefresh: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.ic_placeholder),
-            contentDescription = null,
-            modifier = Modifier.size(96.dp),
-            tint = Color.Unspecified
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Text(
-            text = stringResource(id = R.string.alerts_empty_title),
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(id = R.string.no_alerts_message),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        FilledTonalButton(onClick = onRefresh, shape = RoundedCornerShape(18.dp)) {
-            Text(text = stringResource(id = R.string.alerts_empty_cta))
         }
     }
 }

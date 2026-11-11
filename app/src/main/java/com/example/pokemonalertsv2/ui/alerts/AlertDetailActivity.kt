@@ -70,10 +70,7 @@ class AlertDetailActivity : ComponentActivity() {
         canEnterPictureInPicture =
             packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
         setContent {
-            val themeMode by repository.observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
-            val darkTheme = AppThemeMode.fromStored(themeMode)
-                .resolveDark(isSystemInDarkTheme())
+            val darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

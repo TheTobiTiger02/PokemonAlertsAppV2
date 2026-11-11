@@ -158,7 +158,6 @@ import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import com.example.pokemonalertsv2.ui.components.LinearModernCard
 import com.example.pokemonalertsv2.ui.components.RollingNumberText
-import com.example.pokemonalertsv2.ui.components.GradientText
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
@@ -215,8 +214,18 @@ internal enum class AlertSecondaryAction {
     PICTURE_IN_PICTURE,
     SHARE,
     DISMISS,
-    RESTORE
+    RESTORE,
+    FAVORITE,
+    UNFAVORITE
 }
+
+/**
+ * The live feed's favourites. Provided only around the live list, so history and other
+ * surfaces neither show the menu entry nor the star.
+ */
+internal class FavoriteAlerts(val ids: Set<String>, val toggle: (String) -> Unit)
+
+internal val LocalFavoriteAlerts = androidx.compose.runtime.compositionLocalOf<FavoriteAlerts?> { null }
 
 /**
  * A wall clock that only ever reports whole tick boundaries.
@@ -273,7 +282,9 @@ internal fun alertActionPolicy(
     isExpired: Boolean,
     snoozeEnabled: Boolean,
     hasGoingAction: Boolean,
-    isDismissed: Boolean = false
+    isDismissed: Boolean = false,
+    /** Null where favourites are not offered. */
+    isFavorite: Boolean? = null
 ): AlertActionPolicy {
     val isLiveAndActive = context == AlertCardContext.LIVE && !isExpired
     return AlertActionPolicy(
@@ -282,6 +293,7 @@ internal fun alertActionPolicy(
         overflowActions = buildList {
             if (isLiveAndActive && snoozeEnabled) add(AlertSecondaryAction.SNOOZE)
             if (!isExpired) add(AlertSecondaryAction.PICTURE_IN_PICTURE)
+            if (isFavorite != null) add(if (isFavorite) AlertSecondaryAction.UNFAVORITE else AlertSecondaryAction.FAVORITE)
             add(AlertSecondaryAction.SHARE)
             // Swiping is not the only way: a menu entry is the path for anyone who cannot or
             // does not swipe, and it is what onboarding promises for a long press.
