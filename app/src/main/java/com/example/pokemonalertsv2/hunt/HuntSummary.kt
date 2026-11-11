@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.hunt
 
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.health.WatchStats
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlinx.serialization.Serializable
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -82,7 +83,7 @@ data class HuntStats(
         if (fromLatitude == null || fromLongitude == null) {
             return copy(anchorLatitude = latitude, anchorLongitude = longitude, track = HuntTrack.append(track, CatchPoint(latitude, longitude)))
         }
-        val step = huntDistanceMeters(fromLatitude, fromLongitude, latitude, longitude)
+        val step = haversineMeters(fromLatitude, fromLongitude, latitude, longitude)
         if (step < maxOf(accuracyMeters.toDouble(), HUNT_DISTANCE_MIN_STEP_METERS)) return this
         // A jump no walker makes between two fixes is a GPS teleport, not a walk.
         if (step > HUNT_DISTANCE_MAX_STEP_METERS) {
@@ -182,15 +183,6 @@ internal fun formatHuntDuration(millis: Long): String {
 /** The one-line readout the notification and the sheet share. */
 internal fun HuntSummary.headline(): String =
     "${catches.size} caught · ${formatHuntDistance(distanceMeters)} · ${formatHuntDuration(activeMillis)}"
-
-private fun huntDistanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val earthRadius = 6_371_000.0
-    val dLat = (lat2 - lat1) * PI / 180
-    val dLon = (lon2 - lon1) * PI / 180
-    val a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(lat1 * PI / 180) * cos(lat2 * PI / 180) * sin(dLon / 2) * sin(dLon / 2)
-    return earthRadius * 2 * atan2(sqrt(a), sqrt(1 - a))
-}
 
 internal const val HUNT_DISTANCE_MAX_ACCURACY_METERS = 25f
 internal const val HUNT_DISTANCE_MIN_STEP_METERS = 5.0

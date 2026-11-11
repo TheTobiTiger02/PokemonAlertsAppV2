@@ -1,6 +1,5 @@
 package com.example.pokemonalertsv2.util
 
-import android.location.Location
 import java.util.Locale
 import kotlin.math.ceil
 
@@ -63,17 +62,8 @@ object WalkingRouteUtils {
         destinationLatitude: Double,
         destinationLongitude: Double
     ): Float? {
-        val results = FloatArray(1)
-        runCatching {
-            Location.distanceBetween(
-                originLatitude,
-                originLongitude,
-                destinationLatitude,
-                destinationLongitude,
-                results
-            )
-        }.getOrNull() ?: return null
-        return results.getOrNull(0)?.takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
+        return haversineMeters(originLatitude, originLongitude, destinationLatitude, destinationLongitude)
+            .toFloat().takeIf { it >= 0f && !it.isNaN() && !it.isInfinite() }
     }
 
     fun buildRouteDisplayInfo(

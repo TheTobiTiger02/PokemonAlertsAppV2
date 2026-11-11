@@ -38,6 +38,7 @@ import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.pokemonalertsv2.ui.components.RollingNumberText
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.BuildConfig
 
@@ -302,17 +303,7 @@ internal fun resolveMapAlertDistanceInfo(
     alert: PokemonAlert,
     routeInfo: WalkingRouteInfo? = null,
     distanceBetween: (AlertMapCoordinates, AlertMapCoordinates) -> Float? = { origin, destination ->
-        val results = FloatArray(1)
-        runCatching {
-            android.location.Location.distanceBetween(
-                origin.latitude,
-                origin.longitude,
-                destination.latitude,
-                destination.longitude,
-                results
-            )
-            results[0]
-        }.getOrNull()
+        haversineMeters(origin.latitude, origin.longitude, destination.latitude, destination.longitude).toFloat()
     }
 ): AlertDistanceInfo? {
     val origin = validMapCoordinates(userLatitude, userLongitude) ?: return null

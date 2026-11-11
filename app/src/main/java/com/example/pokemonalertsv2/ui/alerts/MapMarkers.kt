@@ -99,6 +99,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.min
@@ -1424,36 +1425,16 @@ val SCANNED_AREAS: List<String> = AREA_CENTRES.keys.toList()
 val AREA_FILTER_OPTIONS: List<String> = listOf("All") + SCANNED_AREAS
 
 private const val AREA_RADIUS_METERS = 15_000.0
-private const val EARTH_RADIUS_METERS = 6_371_000.0
 
 /** The nearest scanned area the user is standing in, or null when they are outside all of them. */
 internal fun areaAtLocation(latitude: Double, longitude: Double): String? = AREA_CENTRES
     .mapNotNull { (area, centre) ->
-        val distance = metersBetween(latitude, longitude, centre.first, centre.second)
+        val distance = haversineMeters(latitude, longitude, centre.first, centre.second)
         if (distance <= AREA_RADIUS_METERS) area to distance else null
     }
     .minByOrNull { it.second }
     ?.first
 
-/**
- * Great-circle distance, so the area check stays a pure function.
- *
- * `Location.distanceBetween` would do the same job but only on a device, which would put an
- * emulator between this rule and any test of it.
- */
-private fun metersBetween(
-    latitude: Double,
-    longitude: Double,
-    otherLatitude: Double,
-    otherLongitude: Double
-): Double {
-    val deltaLat = Math.toRadians(otherLatitude - latitude)
-    val deltaLon = Math.toRadians(otherLongitude - longitude)
-    val a = sin(deltaLat / 2).pow(2) +
-        cos(Math.toRadians(latitude)) * cos(Math.toRadians(otherLatitude)) *
-        sin(deltaLon / 2).pow(2)
-    return 2 * EARTH_RADIUS_METERS * asin(min(1.0, sqrt(a)))
-}
 internal const val MAP_FULL_MARKER_SIZE_DP = 48f
 internal const val MAP_PIP_MARKER_SIZE_DP = 36f
 internal const val MAP_PIP_EMPHASIZED_MARKER_SIZE_DP = 44f

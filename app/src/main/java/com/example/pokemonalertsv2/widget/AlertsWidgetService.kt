@@ -25,6 +25,7 @@ import com.example.pokemonalertsv2.ui.alerts.questAlertPresentation
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 import com.example.pokemonalertsv2.util.validAlertCoordinates
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
@@ -163,11 +164,7 @@ private class AlertsFactory(
             val latitude = alert.latitude
             val longitude = alert.longitude
             if (latitude == null || longitude == null) return@let null
-            val results = FloatArray(1)
-            runCatching {
-                Location.distanceBetween(loc.latitude, loc.longitude, latitude, longitude, results)
-            }.getOrNull()
-            results.getOrNull(0)?.takeUnless { it.isNaN() }
+            haversineMeters(loc.latitude, loc.longitude, latitude, longitude).toFloat().takeUnless { it.isNaN() }
         }
         val routeDisplayInfo = WalkingRouteUtils.buildRouteDisplayInfo(
             straightLineDistanceMeters = distanceMeters,
