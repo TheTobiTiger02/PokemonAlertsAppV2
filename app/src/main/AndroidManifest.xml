@@ -100,6 +100,16 @@
             android:exported="false"
             android:label="Sign in to Pokébattler"
             android:theme="@style/Theme.PokemonAlertsV2" />
+        <service
+            android:name=".notifications.SilenceTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_poke_notification"
+            android:label="@string/tile_silence_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -113,6 +123,9 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <!--
                 Deep links onto the same destinations the notification/widget
                 EXTRA_INITIAL_TAB extras already reach, so the app is linkable from

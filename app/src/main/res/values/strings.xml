@@ -192,4 +192,10 @@
     <string name="widget_radar_next_default_cd">Next alert</string>
     <string name="widget_radar_next_cd">Next alert. Showing %1$d of %2$d.</string>
     <string name="widget_alert_image_cd">Alert image</string>
+    <string name="tile_silence_label">Silence alerts</string>
+    <string name="tile_silence_until">Until %1$s</string>
+    <string name="tile_silence_off">Tap to silence for 1 hour</string>
+    <string name="shortcut_map">Map</string>
+    <string name="shortcut_history">Alert history</string>
+    <string name="shortcut_events">Events</string>
 </resources>
