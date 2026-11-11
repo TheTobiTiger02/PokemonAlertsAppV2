@@ -200,6 +200,61 @@ internal fun ActiveFiltersRow(state: FiltersState, modifier: Modifier = Modifier
     }
 }
 
+/** "IV 90%+ · CP 1500+ · L30+" for the active-filter chip. */
+internal fun statsLabel(stats: com.example.pokemonalertsv2.data.StatFilterRules): String = listOfNotNull(
+    stats.minIvPercent.takeIf { it > 0 }?.let { "IV $it%+" },
+    stats.minCp.takeIf { it > 0 }?.let { "CP $it+" },
+    stats.minLevel.takeIf { it > 0 }?.let { "L$it+" }
+).joinToString(" · ")
+
+/** Minimum IV, CP and level for Pokémon alerts. Alerts without the value are never hidden. */
+@Composable
+internal fun StatsEditor(state: FiltersState) {
+    val stats = state.definition.stats
+    val update: (com.example.pokemonalertsv2.data.StatFilterRules) -> Unit = {
+        state.onDefinitionChange(state.definition.copy(stats = it))
+    }
+    Column(
+        modifier = Modifier.panelGutter().padding(top = Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+    ) {
+        ValueLine("Minimum IV", if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else "Any" }) {
+            update(stats.copy(minIvPercent = it))
+        }
+        ValueLine("Minimum CP", if (stats.minCp > 0) "${stats.minCp}" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else "Any" }) {
+            update(stats.copy(minCp = it))
+        }
+        ValueLine("Minimum level", if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else "Any" }) {
+            update(stats.copy(minLevel = it))
+        }
+        Text(
+            "Sightings nobody has checked carry no IV and stay visible. Hundos and nundos ignore the IV limit.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun PresetChips(values: List<Int>, selectedValue: Int, label: (Int) -> String, onSelect: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        values.forEach { value ->
+            val selected = value == selectedValue
+            FilterChip(
+                selected = selected,
+                onClick = { onSelect(value) },
+                label = { Text(label(value)) },
+                leadingIcon = if (selected) {
+                    { Icon(Icons.Filled.Check, null, Modifier.size(FilterChipDefaults.IconSize)) }
+                } else null
+            )
+        }
+    }
+}
+
 /** Max distance, walking time, and the per-type limits behind them. */
 @Composable
 internal fun DistanceEditor(state: FiltersState) {

@@ -47,6 +47,15 @@ internal fun activeFilterChips(
             )
         )
     }
+    if (definition.stats.isActive) {
+        add(
+            ActiveFilterChip(
+                id = "stats",
+                label = statsLabel(definition.stats),
+                clear = { it.copy(stats = com.example.pokemonalertsv2.data.StatFilterRules.None) }
+            )
+        )
+    }
     if (definition.maxWalkingMinutes > 0) {
         add(
             ActiveFilterChip(
