@@ -22,6 +22,7 @@ import com.example.pokemonalertsv2.widget.legacyFilterDefinition
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.android.gms.tasks.Task
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -118,38 +119,68 @@ object FcmTopicSubscriptionManager {
     }.getOrDefault(emptyList())
 
     private suspend fun apply(context: Context, desired: Set<String>, legacyTopic: String) {
-        val messaging = FirebaseMessaging.getInstance()
         val applied = appliedTopics(context)
         if (applied == desired) {
             Log.d(TAG, "FCM topics already current: ${desired.sorted()}")
             return
         }
+        val messaging = FirebaseMessaging.getInstance()
+        val current = reconcileTopics(
+            applied = applied,
+            desired = desired,
+            legacyTopic = legacyTopic,
+            subscribe = { messaging.subscribeToTopic(it).awaitCompletion() },
+            unsubscribe = { messaging.unsubscribeFromTopic(it).awaitCompletion() },
+        )
+        prefs(context).edit().putStringSet(APPLIED_TOPICS_KEY, current).apply()
+        Log.d(TAG, "FCM topics now ${current.sorted()} (wanted ${desired.sorted()})")
+    }
 
-        // A never-synced install is either fresh or an upgrade from the build that subscribed to
-        // the legacy topic unconditionally. Assuming the latter is what lets the first sync take
-        // the device off it; on a fresh install the unsubscribe is a harmless no-op. Leaving a
-        // device on both the legacy and the derived topics would deliver some alerts twice.
+    /**
+     * Moves the subscription from [applied] towards [desired] and returns what the device is
+     * subscribed to afterwards. A call that throws leaves its topic as it was, so the returned
+     * set is exactly what the next sync must start from.
+     *
+     * A never-synced install ([applied] null) is either fresh or an upgrade from the build that
+     * subscribed to [legacyTopic] unconditionally. Assuming the latter is what lets the first sync
+     * take the device off it; on a fresh install the unsubscribe is a harmless no-op. Leaving a
+     * device on both the legacy and the derived topics would deliver some alerts twice.
+     */
+    internal suspend fun reconcileTopics(
+        applied: Set<String>?,
+        desired: Set<String>,
+        legacyTopic: String,
+        subscribe: suspend (String) -> Unit,
+        unsubscribe: suspend (String) -> Unit,
+        warn: (String, Throwable) -> Unit = { message, error -> Log.w(TAG, message, error) },
+    ): Set<String> {
         val current = (applied ?: emptySet()).toMutableSet()
-        val stale = ((applied ?: setOf(legacyTopic)) - desired).toMutableSet()
+        val stale = (applied ?: setOf(legacyTopic)) - desired
 
         // Subscribe before unsubscribing: the overlap costs a duplicate message, which the
         // pushKey dedup absorbs, whereas the reverse order opens a window with no coverage.
         (desired - current).forEach { topic ->
-            runCatching { messaging.subscribeToTopic(topic).awaitCompletion() }
-                .onSuccess { current += topic }
-                .onFailure { Log.w(TAG, "Failed to subscribe to $topic; retrying next sync", it) }
+            try {
+                subscribe(topic)
+                current += topic
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                warn("Failed to subscribe to $topic; retrying next sync", e)
+            }
         }
         stale.forEach { topic ->
-            runCatching { messaging.unsubscribeFromTopic(topic).awaitCompletion() }
-                .onSuccess { current -= topic }
-                .onFailure {
-                    Log.w(TAG, "Failed to unsubscribe from $topic; retrying next sync", it)
-                    current += topic
-                }
+            try {
+                unsubscribe(topic)
+                current -= topic
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                warn("Failed to unsubscribe from $topic; retrying next sync", e)
+                current += topic
+            }
         }
-
-        prefs(context).edit().putStringSet(APPLIED_TOPICS_KEY, current).apply()
-        Log.d(TAG, "FCM topics now ${current.sorted()} (wanted ${desired.sorted()})")
+        return current
     }
 
     private fun prefs(context: Context) =
