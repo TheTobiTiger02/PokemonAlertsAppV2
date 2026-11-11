@@ -94,6 +94,7 @@ internal fun FiltersTabs(
             when (tab) {
                 FiltersTab.NEARBY -> ScrollingTab {
                     DistanceEditor(state)
+                    StatsEditor(state)
                     state.nearbyExtras?.invoke()
                     state.openFilterStudio?.let { open ->
                         PanelSectionLabel("More")

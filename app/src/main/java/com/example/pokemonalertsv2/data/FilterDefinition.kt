@@ -228,6 +228,8 @@ data class FilterDefinition(
     /** One list for both kinds of Tappable: species ("Gengar") and loot items ("Rare Candy"). */
     val tappableSpecies: FilterSelection = FilterSelection.All,
     val quests: QuestFilterRules = QuestFilterRules(),
+    /** Minimum IV, CP and level for Pokémon alerts; off by default and absent from older documents. */
+    val stats: StatFilterRules = StatFilterRules.None,
     /** Retained when a legacy feed preset is promoted into the reusable library. */
     val feedSort: String? = null,
     val schemaVersion: Int = CURRENT_FILTER_SCHEMA_VERSION
@@ -238,7 +240,7 @@ data class FilterDefinition(
             raidSpecies, raidTiers, rocketTypes, tappableSpecies
         ).count { it.mode != FilterSelectionMode.ALL } +
             (if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0) +
-            distanceOverrides.ruleCount
+            distanceOverrides.ruleCount + stats.ruleCount
 
     /** True when any distance limit is in play, so callers know whether to prefetch walking routes. */
     val usesDistanceRules: Boolean
@@ -558,6 +560,9 @@ object AlertFilterMatcher {
         return alert.filterAlertTypes().any { type ->
             if (!definition.alertTypes.contains(type.name)) return@any false
             if (!matchesAdvanced(type, alert, definition)) return@any false
+            if (type in STAT_FILTERED_TYPES &&
+                !definition.stats.accepts(alert, applyIvFloor = type !in IV_DEFINED_TYPES)
+            ) return@any false
 
             val isInRange = context.directDistanceMeters != null &&
                 context.directDistanceMeters.isFinite() &&
@@ -619,6 +624,15 @@ object AlertFilterMatcher {
         if (!distance.isFinite()) return true
         return distance <= limitMeters
     }
+
+    /** Alert types that are a Pokémon with stats; raids, quests and Rockets are not filtered by them. */
+    private val STAT_FILTERED_TYPES = setOf(
+        FilterAlertType.SPAWN, FilterAlertType.COMMON, FilterAlertType.HUNDO, FilterAlertType.NUNDO,
+        FilterAlertType.PVP, FilterAlertType.TAPPABLE
+    )
+
+    /** Types defined by their IV, so an IV floor would contradict choosing them. */
+    private val IV_DEFINED_TYPES = setOf(FilterAlertType.HUNDO, FilterAlertType.NUNDO)
 
     private fun matchesAdvanced(type: FilterAlertType, alert: PokemonAlert, definition: FilterDefinition): Boolean = when (type) {
         FilterAlertType.SPAWN -> definition.spawnSpecies.contains(alert.filterSpecies())
