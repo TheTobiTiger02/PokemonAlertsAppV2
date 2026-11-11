@@ -149,6 +149,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             return@Scaffold
         }
         val totals = remember(history) { huntHistoryTotals(history) }
+        val months = remember(history) { history.groupBy { monthLabel(it.startedAtMillis) } }
         LazyVerticalGrid(
             columns = AdaptiveCardColumns,
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -176,7 +177,6 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
                 )
             }
-            val months = history.groupBy { monthLabel(it.startedAtMillis) }
             months.forEach { (month, hunts) ->
                 item(key = "month-$month", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
