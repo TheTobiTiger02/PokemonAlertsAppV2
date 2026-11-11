@@ -141,6 +141,35 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    /**
+     * Writes the history matching the current filters to [uri] as CSV and reports the outcome
+     * as a short message for a toast.
+     */
+    fun exportCsv(uri: android.net.Uri, onDone: (String) -> Unit) {
+        val state = _uiState.value
+        viewModelScope.launch {
+            val message = runCatching {
+                val exported = repository.fetchHistoryForExport(
+                    date = state.selectedDate,
+                    type = state.selectedType,
+                    q = state.searchQuery,
+                    area = state.selectedArea
+                )
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { writer ->
+                        com.example.pokemonalertsv2.data.AlertCsv.write(exported.alerts, writer)
+                    } ?: error("Could not open the file")
+                }
+                val count = exported.alerts.size
+                if (exported.hitCap) "Exported the first $count alerts" else "Exported $count alerts"
+            }.getOrElse { error ->
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                "Export failed: the history could not be loaded or saved"
+            }
+            onDone(message)
+        }
+    }
+
     // ── Pagination ───────────────────────────────────────────────────────
 
     /**

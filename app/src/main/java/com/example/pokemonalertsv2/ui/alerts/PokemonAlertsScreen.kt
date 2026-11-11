@@ -355,7 +355,8 @@ fun AlertHistoryRoute(
     onTypeChanged: (String?) -> Unit,
     onSearchChanged: (String) -> Unit,
     onAreaChanged: (String?) -> Unit = {},
-    onOpenInsights: (() -> Unit)? = null
+    onOpenInsights: (() -> Unit)? = null,
+    onExportCsv: ((android.net.Uri, (String) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
     AlertHistoryPage(
@@ -369,7 +370,8 @@ fun AlertHistoryRoute(
         onAlertClick = { alert ->
             context.startActivity(AlertDetailActivity.createIntent(context, alert))
         },
-        onOpenInsights = onOpenInsights
+        onOpenInsights = onOpenInsights,
+        onExportCsv = onExportCsv
     )
 }
 

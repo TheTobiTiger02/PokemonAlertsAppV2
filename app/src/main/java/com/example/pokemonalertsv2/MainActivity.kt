@@ -1137,7 +1137,8 @@ private fun MainScaffold(
                                         onTypeChanged = historyViewModel::setTypeFilter,
                                         onSearchChanged = historyViewModel::setSearchQuery,
                                         onAreaChanged = historyViewModel::setAreaFilter,
-                                        onOpenInsights = { changeSection(AlertsSection.INSIGHTS) }
+                                        onOpenInsights = { changeSection(AlertsSection.INSIGHTS) },
+                                        onExportCsv = historyViewModel::exportCsv
                                     )
                                 },
                                 insights = {
