@@ -72,13 +72,7 @@ class GoDexLoginActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // Same theme preference the rest of the app resolves; without it this screen
-            // stayed light in a dark app.
-            val themeMode by PokemonAlertsRepository.create(applicationContext)
-                .observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
-            val darkTheme = AppThemeMode.fromStored(themeMode)
-                .resolveDark(isSystemInDarkTheme())
+            val darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
             val scope = rememberCoroutineScope()
             val repository = GoDexRepository.getInstance(applicationContext)

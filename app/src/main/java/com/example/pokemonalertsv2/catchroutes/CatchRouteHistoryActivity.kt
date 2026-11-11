@@ -43,8 +43,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }.collectAsStateWithLifecycle(initialValue = 0)
-            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) {
+            PokemonAlertsV2Theme(darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()) {
                 // Null until the first read, so "no routes yet" does not flash before the list arrives.
                 val loaded by store.history.collectAsStateWithLifecycle<List<CatchRouteSummary>?>(initialValue = null)
                 val history = loaded.orEmpty()

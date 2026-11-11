@@ -168,10 +168,8 @@ class ManualRaidActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by themeRepository.observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
             PokemonAlertsV2Theme(
-                darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())
+                darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             ) {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 ManualRaidBossPickerScreen(

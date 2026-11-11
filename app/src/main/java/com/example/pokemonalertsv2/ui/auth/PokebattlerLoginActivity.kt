@@ -82,13 +82,7 @@ class PokebattlerLoginActivity : ComponentActivity() {
             ?: PokebattlerLoginProvider.GOOGLE
 
         setContent {
-            // Every other activity resolves the user's app-level theme preference; without
-            // this the login screen stayed light in a dark app.
-            val themeMode by PokemonAlertsRepository.create(this)
-                .observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
-            val darkTheme = AppThemeMode.fromStored(themeMode)
-                .resolveDark(isSystemInDarkTheme())
+            val darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 var loading by remember { mutableStateOf(true) }
                 var status by remember { mutableStateOf<String?>(null) }

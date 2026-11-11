@@ -57,6 +57,8 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         super<Application>.onCreate()
         com.example.pokemonalertsv2.data.net.Http.cacheDirectory = cacheDir
         com.example.pokemonalertsv2.util.CrashLog.install(this)
+        // Read the theme once now, so no screen opens in the wrong theme.
+        com.example.pokemonalertsv2.ui.theme.AppThemeModeStore.start(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         // Each step on its own: one failing must not silently skip the ones after it.
         initStep("notification channel") { AlertNotifier.ensureChannel(this) }
