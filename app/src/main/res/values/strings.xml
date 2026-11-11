@@ -200,4 +200,10 @@
     <string name="notification_channel_rocket_description">Rocket grunts and leaders at PokéStops</string>
     <string name="notification_channel_kecleon_name">Kecleon</string>
     <string name="notification_channel_kecleon_description">Kecleon hiding at PokéStops</string>
+    <string name="tile_silence_label">Silence alerts</string>
+    <string name="tile_silence_until">Until %1$s</string>
+    <string name="tile_silence_off">Tap to silence for 1 hour</string>
+    <string name="shortcut_map">Map</string>
+    <string name="shortcut_history">Alert history</string>
+    <string name="shortcut_events">Events</string>
 </resources>
