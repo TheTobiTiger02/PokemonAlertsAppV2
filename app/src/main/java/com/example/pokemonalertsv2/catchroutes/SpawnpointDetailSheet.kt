@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -195,13 +197,13 @@ internal fun SpawnpointDetailSheet(
             .padding(horizontal = 20.dp).padding(bottom = 24.dp).testTag("spawnpoint_detail_sheet"),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(if (selections.size == 1) "Spawnpoint" else "${selections.size} spawnpoints",
+                Text(if (selections.size == 1) stringResource(R.string.catchroutes_spawnpoint) else "${selections.size} spawnpoints",
                     style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text("Close") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_close)) }
             }
             selections.forEachIndexed { index, selection ->
                 if (index > 0) HorizontalDivider()
-                if (selections.size > 1) Text("Spawnpoint ${index + 1}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                if (selections.size > 1) Text(stringResource(R.string.catchroutes_spawnpoint_x, index + 1), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 SpawnpointSection(selection, itinerary, now, loadDetail)
             }
         }
@@ -246,7 +248,7 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // "Never" only once the backend has answered; before that, or without it, it is unknown.
-            val unknown = if (detail == null) "—" else "Never"
+            val unknown = if (detail == null) "—" else stringResource(R.string.catchroutes_never)
             Fact("Last verified", parseInstant(schedule?.lastVerifiedAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
             Fact("Seen live", parseInstant(detail?.liveLastSeenAt ?: primary?.liveLastSeenAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
             Fact("Last active", parseInstant(detail?.lastActiveAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
@@ -259,8 +261,8 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
                     Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Reach it at ${clock(e.arrivalMillis)}", style = MaterialTheme.typography.titleSmall)
-                            Text("${e.meters.toInt()} m along the route · ${TimeUtils.formatDurationShort(e.opportunity.despawnAt - e.arrivalMillis)} to spare",
+                            Text(stringResource(R.string.catchroutes_reach_it_at_x, clock(e.arrivalMillis)), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.catchroutes_x_m_along_the_route_x, e.meters.toInt(), TimeUtils.formatDurationShort(e.opportunity.despawnAt - e.arrivalMillis)),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         if (wait != null) Pill("Wait ${TimeUtils.formatDurationShort(wait.millis)}", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
@@ -296,7 +298,7 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
             if (primary?.timingConflict == true || detail?.timingConflict == true) add("Scanners disagree about this spawnpoint's timing.")
         }
         warnings.forEach { WarningRow(it) }
-        if (failed) Text("More details are unavailable right now.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (failed) Text(stringResource(R.string.catchroutes_more_details_are_unavailable_right_now), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         EvidenceSection(selection, primary, detail)
     }
@@ -308,8 +310,8 @@ private fun EvidenceSection(selection: SpawnpointSelection, primary: SpawnOpport
     Column {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { open = !open }.padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text("Evidence", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-            Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = if (open) "Hide evidence" else "Show evidence")
+            Text(stringResource(R.string.catchroutes_evidence), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+            Icon(if (open) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown, contentDescription = if (open) stringResource(R.string.catchroutes_hide_evidence) else stringResource(R.string.catchroutes_show_evidence))
         }
         AnimatedVisibility(open) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -378,7 +380,7 @@ private fun HourBarView(bar: HourBar, now: Long) {
                     modifier = Modifier.weight(1f), textAlign = when (i) { 0 -> androidx.compose.ui.text.style.TextAlign.Start; 4 -> androidx.compose.ui.text.style.TextAlign.End; else -> androidx.compose.ui.text.style.TextAlign.Center })
             }
         }
-        Text(if (bar.segments.isEmpty()) "Schedule not learned yet" else if (bar.certain) "Shaded: when a Pokémon is there · dot: now" else "Shaded: estimated window · dot: now",
+        Text(if (bar.segments.isEmpty()) stringResource(R.string.catchroutes_schedule_not_learned_yet) else if (bar.certain) stringResource(R.string.catchroutes_shaded_when_a_pok_mon_is) else stringResource(R.string.catchroutes_shaded_estimated_window_dot_now),
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

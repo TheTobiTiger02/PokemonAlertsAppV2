@@ -138,8 +138,8 @@ internal fun MapChromeState.countLabel(): String =
 @Composable
 internal fun fitDescription(hunt: MapChromeHunt?): String = when {
     hunt == null -> stringResource(R.string.map_show_all_alerts)
-    hunt.focus == HuntMapFocus.TARGET -> "Show Hunt route"
-    else -> "Focus Hunt target"
+    hunt.focus == HuntMapFocus.TARGET -> stringResource(R.string.alerts_show_hunt_route)
+    else -> stringResource(R.string.alerts_focus_hunt_target)
 }
 
 internal fun MapChromeHunt.title(): String = target?.let(::huntTargetTitle) ?: "Hunting $name"

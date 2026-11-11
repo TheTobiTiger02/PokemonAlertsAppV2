@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.Manifest

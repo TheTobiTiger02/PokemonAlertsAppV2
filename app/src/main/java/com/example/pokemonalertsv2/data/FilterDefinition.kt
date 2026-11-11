@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.WalkingRouteUtils

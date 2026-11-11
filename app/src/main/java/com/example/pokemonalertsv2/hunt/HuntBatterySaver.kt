@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent

@@ -298,8 +298,8 @@ fun PokemonAlertsRoute(
                     onFiltersCleared = { undo ->
                         scope.launch {
                             val result = snackbarHostState.showSnackbar(
-                                message = "Filters cleared",
-                                actionLabel = "Undo",
+                                message = context.getString(R.string.alerts_filters_cleared),
+                                actionLabel = context.getString(R.string.mainscaffoldkt_undo),
                                 duration = SnackbarDuration.Short
                             )
                             if (result == SnackbarResult.ActionPerformed) undo()
@@ -309,8 +309,8 @@ fun PokemonAlertsRoute(
                         viewModel.dismissAlert(alertId)
                         scope.launch {
                             val result = snackbarHostState.showSnackbar(
-                                message = "Alert dismissed",
-                                actionLabel = "Undo",
+                                message = context.getString(R.string.alerts_alert_dismissed),
+                                actionLabel = context.getString(R.string.mainscaffoldkt_undo),
                                 duration = SnackbarDuration.Short
                             )
                             if (result == SnackbarResult.ActionPerformed) {
@@ -322,7 +322,7 @@ fun PokemonAlertsRoute(
                         viewModel.undoDismissAlert(alertId)
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                message = "Alert restored",
+                                message = context.getString(R.string.alerts_alert_restored),
                                 duration = SnackbarDuration.Short
                             )
                         }
@@ -601,8 +601,8 @@ fun PokemonAlertsPage(
         when (state) {
             FeedContentState.LOADING -> LoadingState()
             FeedContentState.EMPTY -> AnimatedEmptyState(
-                    title = "All caught up",
-                    message = "No active alerts right now. Tap below to check again.",
+                    title = stringResource(R.string.alerts_all_caught_up),
+                    message = stringResource(R.string.alerts_no_active_alerts_right_now_tap),
                     ctaText = "Refresh feed",
                     onAction = onRefresh
                 )
@@ -765,7 +765,7 @@ internal fun SyncStatusBanner(
                         TextButton(
                             onClick = onRetry,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer)
-                        ) { Text("Retry", fontWeight = FontWeight.SemiBold) }
+                        ) { Text(stringResource(R.string.events_retry), fontWeight = FontWeight.SemiBold) }
                     }
                 }
             }
@@ -873,7 +873,7 @@ internal fun AlertsList(
             },
             showDismissed = showDismissed,
             onShowDismissedChanged = onShowDismissedChanged,
-            selectedArea = if (unifiedDefinition == null) selectedArea else "All",
+            selectedArea = if (unifiedDefinition == null) selectedArea else stringResource(R.string.alerts_all),
             onClearAreaFilter = onClearAreaFilter,
             maxDistance = if (unifiedDefinition == null) maxDistance else 0,
             onClearDistanceFilter = onClearDistanceFilter,
@@ -915,7 +915,7 @@ internal fun AlertsList(
                             textAlign = TextAlign.Center
                         )
                         if (activeFilterCount > 0) {
-                            OutlinedButton(onClick = if (unifiedDefinition == null) onClearAllFilters else onOpenFilterStudio) { Text(if (unifiedDefinition == null) "Clear all filters" else "Edit filters") }
+                            OutlinedButton(onClick = if (unifiedDefinition == null) onClearAllFilters else onOpenFilterStudio) { Text(if (unifiedDefinition == null) stringResource(R.string.alerts_clear_all_filters) else stringResource(R.string.alerts_edit_filters)) }
                         }
                     }
                 }
@@ -971,7 +971,7 @@ internal fun AlertsList(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Refresh,
-                                    contentDescription = "Restore",
+                                    contentDescription = stringResource(R.string.alerts_restore),
                                     tint = MaterialTheme.colorScheme.onTertiary,
                                     modifier = Modifier.size(28.dp)
                                 )
@@ -990,7 +990,7 @@ internal fun AlertsList(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Close,
-                                    contentDescription = "Dismiss",
+                                    contentDescription = stringResource(R.string.alerts_dismiss),
                                     tint = MaterialTheme.colorScheme.onError,
                                     modifier = Modifier.size(28.dp)
                                 )

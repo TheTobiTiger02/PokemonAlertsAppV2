@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,7 +36,7 @@ internal fun BatterySaverSwitch(description: String, explanation: String, modifi
     var problem by remember { mutableStateOf<String?>(null) }
     Column(modifier) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Battery Saver", modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.hunt_battery_saver), modifier = Modifier.weight(1f))
             Switch(
                 checked = enabled,
                 onCheckedChange = { on ->
@@ -51,7 +53,7 @@ internal fun BatterySaverSwitch(description: String, explanation: String, modifi
                 TextButton(onClick = {
                     context.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         android.net.Uri.parse("package:${context.packageName}")))
-                }) { Text("Allow display over other apps") }
+                }) { Text(stringResource(R.string.hunt_allow_display_over_other_apps)) }
             }
         }
     }

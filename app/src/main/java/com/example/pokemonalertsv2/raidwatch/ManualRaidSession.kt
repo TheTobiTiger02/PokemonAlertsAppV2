@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.raidwatch
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.RaidTier

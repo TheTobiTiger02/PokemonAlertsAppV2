@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.*
 import android.content.*

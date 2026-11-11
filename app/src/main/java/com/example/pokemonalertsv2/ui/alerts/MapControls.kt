@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -98,11 +100,11 @@ internal fun OfflineTilesSection(centre: MapCameraSnapshot, modifier: Modifier =
                                 onProgress = { done, total -> status = "saving $done / $total…" }
                             )
                             refreshSize()
-                            status = if (stored == 0) "could not save right now" else null
+                            status = if (stored == 0) context.getString(R.string.alerts_could_not_save_right_now) else null
                             busy = false
                         }
                     }
-                ) { Text("Save this area") }
+                ) { Text(stringResource(R.string.alerts_save_this_area)) }
                 TextButton(
                     enabled = !busy,
                     onClick = {
@@ -114,7 +116,7 @@ internal fun OfflineTilesSection(centre: MapCameraSnapshot, modifier: Modifier =
                             busy = false
                         }
                     }
-                ) { Text("Clear") }
+                ) { Text(stringResource(R.string.catchroutes_clear)) }
             }
         }
     }
@@ -236,7 +238,7 @@ internal fun MapAlertCountdown(
         }
     ) {
         RollingNumberText(
-            text = if (isExpired) "Expired" else "Ends in ${TimeUtils.formatDurationShort(remaining)}",
+            text = if (isExpired) stringResource(R.string.alerts_expired) else stringResource(R.string.alerts_ends_in_x, TimeUtils.formatDurationShort(remaining)),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Medium),
             color = if (isExpired) {
                 MaterialTheme.colorScheme.onErrorContainer

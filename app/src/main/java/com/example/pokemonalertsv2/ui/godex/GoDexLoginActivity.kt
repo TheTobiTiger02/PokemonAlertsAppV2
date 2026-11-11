@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.godex
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.accounts.AccountManager
 import android.app.Activity
@@ -124,7 +126,7 @@ class GoDexLoginActivity : ComponentActivity() {
                         },
                         navigationIcon = {
                             IconButton(onClick = { finish() }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_close))
                             }
                         },
                         actions = {
@@ -132,7 +134,7 @@ class GoDexLoginActivity : ComponentActivity() {
                                 IconButton(onClick = { pickGoogleAccount() }) {
                                     Icon(
                                         Icons.Filled.AccountCircle,
-                                        contentDescription = "Choose Google account"
+                                        contentDescription = stringResource(R.string.godex_choose_google_account)
                                     )
                                 }
                                 TextButton(
@@ -148,7 +150,7 @@ class GoDexLoginActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    Text("Use another account")
+                                    Text(stringResource(R.string.godex_use_another_account))
                                 }
                             }
                         }

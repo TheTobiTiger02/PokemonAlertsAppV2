@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.horizontalScroll
@@ -119,7 +120,7 @@ internal fun RaidCountersChipRow(
         CounterSetupSheet(
             state = state,
             actions = actions,
-            title = "More setup",
+            title = stringResource(R.string.counters_more_setup),
             excluded = setOf(SetupItem.WEATHER, SetupItem.LEVEL, SetupItem.SORT, SetupItem.OWNED),
             onDismiss = { setupOpen = false }
         )
@@ -154,15 +155,15 @@ private fun QuickChipRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             QuickChip(
-                label = if (hiddenChanges > 0) "Setup · $hiddenChanges" else "Setup",
+                label = if (hiddenChanges > 0) stringResource(R.string.counters_setup_x, hiddenChanges) else stringResource(R.string.counters_setup),
                 icon = R.drawable.ic_tune,
                 active = hiddenChanges > 0,
                 onClick = onOpenSetup,
                 tag = "quick_chip_setup"
             )
             QuickChip(
-                label = (if (options.weather == PokebattlerWeather.NONE) "No weather" else options.weather.tileLabel) +
-                    if (state.weatherUnconfirmed) " · unconfirmed" else "",
+                label = (if (options.weather == PokebattlerWeather.NONE) stringResource(R.string.alerts_no_weather) else options.weather.tileLabel) +
+                    if (state.weatherUnconfirmed) stringResource(R.string.counters_unconfirmed) else "",
                 icon = options.weather.icon,
                 active = options.weather != defaults.weather,
                 open = editing == QuickSetting.WEATHER,
@@ -171,7 +172,7 @@ private fun QuickChipRow(
             )
             QuickChip(
                 // My Pokémon ranks each copy at its own level, so this one does not apply there.
-                label = if (state.showingPersonal) "Your levels" else "Level ${options.attackerLevel}",
+                label = if (state.showingPersonal) stringResource(R.string.counters_your_levels) else stringResource(R.string.counters_level_x, options.attackerLevel),
                 active = !state.showingPersonal && options.attackerLevel != defaults.attackerLevel,
                 open = editing == QuickSetting.LEVEL,
                 enabled = !state.showingPersonal,
@@ -187,7 +188,7 @@ private fun QuickChipRow(
             )
             if (state.pokeGenieCount > 0 && !state.showingPersonal) {
                 QuickChip(
-                    label = "Owned only",
+                    label = stringResource(R.string.counters_owned_only),
                     active = state.ownedOnly,
                     onClick = { actions.onOwnedOnlyChanged(!state.ownedOnly) },
                     tag = "quick_chip_owned"
@@ -251,9 +252,9 @@ private fun QuickEditor(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = when (setting) {
-                            QuickSetting.WEATHER -> "Weather"
-                            QuickSetting.LEVEL -> "Attacker level"
-                            QuickSetting.SORT -> "Rank by"
+                            QuickSetting.WEATHER -> stringResource(R.string.alerts_weather)
+                            QuickSetting.LEVEL -> stringResource(R.string.counters_attacker_level)
+                            QuickSetting.SORT -> stringResource(R.string.counters_rank_by)
                         },
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold
@@ -269,7 +270,7 @@ private fun QuickEditor(
                     }
                 }
                 IconButton(onClick = onClose) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close")
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.catchroutes_close))
                 }
             }
             val tiles = Modifier.padding(end = Spacing.md)
@@ -311,7 +312,7 @@ private fun CountersTopBar(
     title: @Composable () -> Unit = {
         Column {
             Text(
-                text = "Best counters",
+                text = stringResource(R.string.counters_best_counters),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -336,7 +337,7 @@ private fun CountersTopBar(
         title = title,
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
             }
         },
         actions = {
@@ -392,12 +393,12 @@ internal fun RaidTimePill(endMillis: Long) {
         ) {
             Icon(
                 painterResource(R.drawable.ic_timer),
-                contentDescription = "Time remaining",
+                contentDescription = stringResource(R.string.counters_time_remaining),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp)
             )
             Text(
-                text = if (remaining > 0L) TimeUtils.formatDurationShort(remaining) else "Ended",
+                text = if (remaining > 0L) TimeUtils.formatDurationShort(remaining) else stringResource(R.string.counters_ended),
                 style = MetricTextStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1

@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -92,8 +94,8 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                 )
             }
             GroupingOption(
-                title = "Custom",
-                description = "Tune it yourself.",
+                title = stringResource(R.string.alerts_custom),
+                description = stringResource(R.string.alerts_tune_it_yourself),
                 selected = custom,
                 onClick = { scope.launch { preferences.select(CUSTOM_PRESET) } }
             )
@@ -105,8 +107,8 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.md)
             ) {
                 HorizontalDivider()
-                Text("Fine-tune", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Group by", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.alerts_fine_tune), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.alerts_group_by), style = MaterialTheme.typography.labelLarge)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs)
@@ -140,11 +142,11 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                     change(config.copy(closeLimit = it))
                 }
                 Text(
-                    text = "Markers drawn on screen before extra grouping kicks in.",
+                    text = stringResource(R.string.alerts_markers_drawn_on_screen_before_extra),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                TextButton(onClick = { scope.launch { preferences.reset() } }) { Text("Reset to default") }
+                TextButton(onClick = { scope.launch { preferences.reset() } }) { Text(stringResource(R.string.alerts_reset_to_default)) }
             }
         }
     }

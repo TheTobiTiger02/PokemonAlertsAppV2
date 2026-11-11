@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -67,7 +69,7 @@ internal fun WhatsNewSheetHost() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                "What’s new in ${BuildConfig.VERSION_NAME}",
+                stringResource(R.string.ui_what_s_new_in_x, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
@@ -77,7 +79,7 @@ internal fun WhatsNewSheetHost() {
                     Text(point, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Button(onClick = dismiss, modifier = Modifier.fillMaxWidth()) { Text("Got it") }
+            Button(onClick = dismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ui_got_it)) }
         }
     }
 }

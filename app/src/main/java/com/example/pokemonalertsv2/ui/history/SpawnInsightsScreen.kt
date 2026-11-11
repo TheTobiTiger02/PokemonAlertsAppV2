@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.AssistChip
@@ -130,28 +132,28 @@ private fun AlertInsights(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            "When and where a Pokémon has turned up recently.",
+            stringResource(R.string.history_when_and_where_a_pok_mon),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            label = { Text("Species") },
-            placeholder = { Text("e.g. Dratini") },
+            label = { Text(stringResource(R.string.history_species)) },
+            placeholder = { Text(stringResource(R.string.history_e_g_dratini)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { if (state.query.isNotBlank()) onRun() }),
             trailingIcon = {
                 IconButton(onClick = onRun, enabled = !state.isLoading && state.query.isNotBlank()) {
-                    Icon(Icons.Filled.Search, contentDescription = "Look back")
+                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.history_look_back))
                 }
             },
             modifier = Modifier.fillMaxWidth()
         )
 
         if (suggestions.isNotEmpty() && !state.hasRun) {
-            Text("Seen today", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.history_seen_today), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -184,13 +186,13 @@ private fun AlertInsights(
             )
 
             state.insights == null -> Text(
-                "Type a species, or pick one seen today, to see its busiest hours and places.",
+                stringResource(R.string.history_type_a_species_or_pick_one),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             state.insights.isEmpty -> Text(
-                "Nothing matching turned up in the last ${state.range.label}.",
+                stringResource(R.string.history_nothing_matching_turned_up_in_the, state.range.label),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -243,7 +245,7 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
                 } else {
                     "Unusual: ${flagged.joinToString()}"
                 },
-                if (showNotes && summary.unscanned > 0) "${summary.unscanned} day(s) before live scanning are left out." else null
+                if (showNotes && summary.unscanned > 0) stringResource(R.string.history_x_day_s_before_live_scanning, summary.unscanned) else null
             ).joinToString(" "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -282,7 +284,7 @@ private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiSt
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text("Whole range") })
+                    FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text(stringResource(R.string.history_whole_range)) })
                     species.perDay.asReversed().forEach { day ->
                         FilterChip(
                             selected = search.day == day.day,
@@ -294,13 +296,13 @@ private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiSt
             } else {
                 val day = search.day
                 if (day == null) {
-                    Text("Tap a bar to see that day.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.history_tap_a_bar_to_see_that), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     InputChip(
                         selected = true,
                         onClick = { onDayChange(null) },
                         label = { Text(shortDay(day)) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Show the whole range", modifier = Modifier.size(16.dp)) },
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.history_show_the_whole_range), modifier = Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("insights_picked_day")
                     )
                 }
@@ -314,13 +316,13 @@ private fun SpeciesSearch(search: SpawnActivityUiState, onSearchChange: (String)
     OutlinedTextField(
         value = search.search,
         onValueChange = onSearchChange,
-        label = { Text("Search species") },
-        placeholder = { Text("Name or Pokédex #") },
+        label = { Text(stringResource(R.string.history_search_species)) },
+        placeholder = { Text(stringResource(R.string.history_name_or_pok_dex)) },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (search.search.isNotEmpty()) {
-                IconButton(onClick = { onSearchChange("") }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                IconButton(onClick = { onSearchChange("") }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.events_clear_search)) }
             }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -345,7 +347,7 @@ private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState
         ) { CircularProgressIndicator() }
         search.search.isBlank() && result != null -> Section("Most seen species$on") {
             Text(
-                "${numbers.format(result.totals.sightings)} sightings of ${numbers.format(result.totals.species)} species$on",
+                stringResource(R.string.history_x_sightings_of_x_species_x, numbers.format(result.totals.sightings), numbers.format(result.totals.species), on),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -401,9 +403,9 @@ private fun SpawnScope(state: SpawnActivityUiState, onRangeChange: (SpawnRange) 
         val areas = state.activity?.days?.areas.orEmpty()
         if (areas.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
+                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text(stringResource(R.string.history_all_areas)) })
                 areas.forEach { area ->
-                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
+                    val label = if (area.equals("Unknown", ignoreCase = true)) stringResource(R.string.history_outside_named_areas) else area
                     FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
                 }
             }
@@ -420,7 +422,7 @@ private fun SpawnLoading(state: SpawnActivityUiState, onRetry: () -> Unit) {
         ) { CircularProgressIndicator() }
         state.errorMessage != null && state.activity == null -> Column {
             Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
-            TextButton(onClick = onRetry) { Text("Try again") }
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.history_try_again)) }
         }
     }
 }
@@ -448,7 +450,7 @@ private fun SpawnActivityTabsPane(
     ) {
         SpawnScope(state, onRangeChange, onAreaChange) {
             IconButton(onClick = { notes = !notes }, modifier = Modifier.testTag("insights_info")) {
-                Icon(Icons.Filled.Info, contentDescription = if (notes) "Hide notes" else "About these numbers")
+                Icon(Icons.Filled.Info, contentDescription = if (notes) stringResource(R.string.catchroutes_hide_notes) else stringResource(R.string.history_about_these_numbers))
             }
         }
         if (notes) {
@@ -471,7 +473,7 @@ private fun SpawnActivityTabsPane(
         }
         SpawnLoading(state, onRetry)
         state.activity?.let { activity ->
-            if (state.isLoading) Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (state.isLoading) Text(stringResource(R.string.history_updating), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sub == 0) {
                 SpawnpointsSection(activity, showNotes = notes, detailDay = state.detailDay, onOpenDay = onOpenDay)
                 SpawnDayDetailSection(state, onOpenHour = onOpenHour, onRetry = { state.detailDay?.let(onOpenDay) })
@@ -565,7 +567,7 @@ private fun InsightsBody(insights: SpawnInsights) {
 
     insights.topArea?.let { top ->
         Text(
-            "Most often in ${top.area} (${top.count} of ${insights.totalSightings})",
+            stringResource(R.string.history_most_often_in_x_x_of, top.area, top.count, insights.totalSightings),
             style = MaterialTheme.typography.bodyMedium
         )
     }
@@ -611,7 +613,7 @@ private fun InsightsBody(insights: SpawnInsights) {
 
     if (insights.hundoCount > 0) {
         Text(
-            "${insights.hundoCount} of them were 100%.",
+            stringResource(R.string.history_x_of_them_were_100, insights.hundoCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

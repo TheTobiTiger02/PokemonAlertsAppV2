@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.auth
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Context
@@ -134,8 +136,8 @@ class PokebattlerLoginActivity : ComponentActivity() {
                                 Icon(Icons.Filled.AccountCircle, contentDescription = null)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    if (googleAccount == null) "Choose Google account"
-                                    else "Change Google account"
+                                    if (googleAccount == null) stringResource(R.string.godex_choose_google_account)
+                                    else stringResource(R.string.auth_change_google_account)
                                 )
                             }
                             googleAccount?.let { email ->

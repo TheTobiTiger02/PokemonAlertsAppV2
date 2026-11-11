@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.isSystemInDarkTheme
 import com.example.pokemonalertsv2.ui.theme.AppThemeMode
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -247,7 +249,7 @@ class CatchRoutesActivity : ComponentActivity() {
                         guidance = session?.takeIf { walking }?.let { catchGuidance(it, stops, now) },
                         navigation = {
                             IconButton(onClick = { finish() }) {
-                                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                Icon(androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
                             }
                         },
                         actions = {
@@ -255,7 +257,7 @@ class CatchRoutesActivity : ComponentActivity() {
                                 var menu by remember { mutableStateOf(false) }
                                 Box {
                                     IconButton(onClick = { menu = true }, modifier = Modifier.testTag("catch_session_menu")) {
-                                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = "Route actions")
+                                        Icon(androidx.compose.material.icons.Icons.Filled.MoreVert, contentDescription = stringResource(R.string.catchroutes_route_actions))
                                     }
                                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                                         WalkingMenuItems(model, session, plannerState, actions, frame.openOptions) { menu = false }
@@ -263,22 +265,22 @@ class CatchRoutesActivity : ComponentActivity() {
                                 }
                             } else IconButton(onClick = { startActivity(Intent(this@CatchRoutesActivity, CatchRouteHistoryActivity::class.java)) },
                                 modifier = Modifier.testTag("catch_route_history")) {
-                                Icon(androidx.compose.material.icons.Icons.Filled.DateRange, contentDescription = "Route history")
+                                Icon(androidx.compose.material.icons.Icons.Filled.DateRange, contentDescription = stringResource(R.string.catchroutes_route_history))
                             }
                         })
                     if (showSettings && !settings.fixed) Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp, modifier = Modifier.padding(start = Spacing.xs)) {
-                        Text(if (picking == "end") "Tap the map to set the finish" else "Tap the map to set the start",
+                        Text(if (picking == "end") stringResource(R.string.catchroutes_tap_the_map_to_set_the) else stringResource(R.string.catchroutes_tap_the_map_to_set_the_2),
                             Modifier.padding(horizontal = Spacing.md, vertical = 6.dp), style = MaterialTheme.typography.labelMedium)
                     }
                 }
                 if (mapFailed) Surface(Modifier.align(Alignment.Center), shape = MaterialTheme.shapes.medium, shadowElevation = 2.dp) {
-                    Text("Map unavailable. Check connection.", Modifier.padding(12.dp))
+                    Text(stringResource(R.string.catchroutes_map_unavailable_check_connection), Modifier.padding(12.dp))
                 }
                 // Fit shows the whole route; Follow (a walk only) keeps you and the next stop in view.
                 Column(Modifier.align(Alignment.BottomEnd).padding(end = Spacing.lg, bottom = frame.bottomInset + Spacing.lg),
                     verticalArrangement = Arrangement.spacedBy(Spacing.md), horizontalAlignment = Alignment.End) {
-                    if (plan != null) MapFitButton(contentDescription = "Show whole route", onClick = { mapView?.overview() },
+                    if (plan != null) MapFitButton(contentDescription = stringResource(R.string.catchroutes_show_whole_route), onClick = { mapView?.overview() },
                         modifier = Modifier.testTag("catch_route_fit"))
                     if (walking) MapLocateButton(state = if (following) MapLocateState.FOLLOWING else MapLocateState.IDLE,
                         onClick = { mapView?.follow() })
@@ -292,12 +294,12 @@ class CatchRoutesActivity : ComponentActivity() {
         if (goRoutesOpen) GoRoutePicker(model.goRoutes, around = location ?: settings.start, onDismiss = { goRoutesOpen = false },
             onWalk = { record, reverse -> model.importFixed(record, reverse); goRoutesOpen = false; mapView?.fit() },
             onGuide = { record -> model.importGuide(record); goRoutesOpen = false; mapView?.fit() })
-        if (areaOpen) CatchAreaPicker(initial = settings.area, center = settings.start, title = "Route area",
+        if (areaOpen) CatchAreaPicker(initial = settings.area, center = settings.start, title = stringResource(R.string.catchroutes_route_area),
             onDismiss = { areaOpen = false }, onDone = { model.edit(model.settings.copy(area = it)); areaOpen = false })
         summary?.let { finished ->
             CatchRouteSummarySheet(finished, onDismiss = { summary = null }, onWalkAgain = { summary = null; walkAgain(finished) })
         }
-        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text("Delete ${setup.name}?") }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text("Cancel") } }) }
+        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, setup.name)) }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text(stringResource(R.string.catchroutes_delete)) } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }) }
     }
 
     /** The map's top bar: the route's name and where the walk stands, or the planner's title. */

@@ -251,12 +251,12 @@ internal fun rememberGoDexStatus(alert: PokemonAlert): GoDexMatchResult {
 internal fun GoDexStatusPill(result: GoDexMatchResult) {
     when (result.status) {
         GoDexMatchStatus.NEEDED -> AlertPill(
-            text = "Needed in GoDex",
+            text = stringResource(R.string.alerts_needed_in_godex),
             icon = Icons.Filled.Star,
             isPrimary = true
         )
         GoDexMatchStatus.COLLECTED -> AlertPill(
-            text = "Already collected",
+            text = stringResource(R.string.alerts_already_collected),
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -277,7 +277,7 @@ internal fun GoDexStatusPill(result: GoDexMatchResult) {
             isPrimary = true
         )
         GoDexMatchStatus.UNKNOWN -> AlertPill(
-            text = "GoDex form unknown",
+            text = stringResource(R.string.alerts_godex_form_unknown),
             icon = Icons.Filled.Warning,
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -310,7 +310,7 @@ fun SnoozeDurationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Snooze alert") },
+        title = { Text(stringResource(R.string.alerts_snooze_alert)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 FlowRow(
@@ -341,7 +341,7 @@ fun SnoozeDurationDialog(
                         customText = value.filter { it.isDigit() }.take(4)
                     },
                     singleLine = true,
-                    label = { Text("Custom minutes") },
+                    label = { Text(stringResource(R.string.alerts_custom_minutes)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
             }
@@ -351,12 +351,12 @@ fun SnoozeDurationDialog(
                 enabled = customMinutes != null,
                 onClick = { customMinutes?.let(onConfirm) }
             ) {
-                Text("Snooze")
+                Text(stringResource(R.string.alerts_snooze))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.mainscaffoldkt_cancel))
             }
         }
     )
@@ -373,7 +373,7 @@ suspend fun snoozeAlertFromUi(context: Context, alert: PokemonAlert, minutes: In
 @Composable
 internal fun ShinyBadge() {
     AlertPill(
-        text = "Shiny",
+        text = stringResource(R.string.alerts_shiny_2),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
     )
@@ -401,7 +401,7 @@ internal fun CpBadge(cp: Int, level: Double?) {
         if (it == it.toLong().toDouble()) " L${it.toLong()}" else " L$it"
     }.orEmpty()
     AlertPill(
-        text = "CP $cp$levelText",
+        text = stringResource(R.string.alerts_cp_x_x, cp, levelText),
         containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         contentColor = MaterialTheme.colorScheme.onSurface
     )
@@ -410,7 +410,7 @@ internal fun CpBadge(cp: Int, level: Double?) {
 @Composable
 internal fun WeatherBoostBadge() {
     AlertPill(
-        text = "Boost",
+        text = stringResource(R.string.alerts_boost),
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
     )

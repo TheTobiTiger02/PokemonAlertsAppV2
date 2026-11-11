@@ -358,8 +358,8 @@ internal fun AlertCountdownBadge(
     val endMillis = remember(endTime) { TimeUtils.parseEndTimeToMillis(endTime) }
     val remaining = endMillis?.minus(countdownClock.value)
     val countdown = when {
-        remaining == null -> "TIME --"
-        remaining <= 0 -> "EXPIRED"
+        remaining == null -> stringResource(R.string.alerts_time)
+        remaining <= 0 -> stringResource(R.string.alerts_expired_2)
         else -> TimeUtils.formatDurationShort(remaining)
     }
     Surface(
@@ -540,7 +540,7 @@ internal fun WeatherChangeCardSummary(alert: PokemonAlert) {
             }
             if (alert.affectedAlerts.isNotEmpty()) {
                 Text(
-                    text = "Affected Pokémon (${alert.affectedAlerts.size})",
+                    text = stringResource(R.string.alerts_affected_pok_mon_x, alert.affectedAlerts.size),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -555,7 +555,7 @@ internal fun WeatherChangeCardSummary(alert: PokemonAlert) {
                 }
                 if (overflow > 0) {
                     Text(
-                        text = "+$overflow more",
+                        text = stringResource(R.string.alerts_x_more, overflow),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary

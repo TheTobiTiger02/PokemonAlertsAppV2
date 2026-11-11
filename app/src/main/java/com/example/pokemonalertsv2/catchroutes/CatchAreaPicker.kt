@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -47,36 +49,36 @@ internal fun CatchAreaPicker(
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
                     Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                     TextButton(onClick = { onDone(if (corners.isArea()) corners else emptyList()) },
-                        enabled = corners.isEmpty() || corners.isArea(), modifier = Modifier.testTag("area_done")) { Text("Done") }
+                        enabled = corners.isEmpty() || corners.isArea(), modifier = Modifier.testTag("area_done")) { Text(stringResource(R.string.catchroutes_done)) }
                 }
                 // Controls sit under the title: a dialog's bottom edge can end up under the gesture bar.
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilterChip(selected = !drawing, onClick = { drawing = false }, label = { Text("Corners") }, modifier = Modifier.testTag("area_mode_corners"))
-                    FilterChip(selected = drawing, onClick = { drawing = true }, label = { Text("Draw") }, modifier = Modifier.testTag("area_mode_draw"))
-                    TextButton(onClick = { corners = history.removeAt(history.lastIndex) }, enabled = history.isNotEmpty()) { Text("Undo") }
-                    TextButton(onClick = { change(emptyList()) }, enabled = corners.isNotEmpty()) { Text("Clear") }
+                    FilterChip(selected = !drawing, onClick = { drawing = false }, label = { Text(stringResource(R.string.catchroutes_corners)) }, modifier = Modifier.testTag("area_mode_corners"))
+                    FilterChip(selected = drawing, onClick = { drawing = true }, label = { Text(stringResource(R.string.catchroutes_draw)) }, modifier = Modifier.testTag("area_mode_draw"))
+                    TextButton(onClick = { corners = history.removeAt(history.lastIndex) }, enabled = history.isNotEmpty()) { Text(stringResource(R.string.mainscaffoldkt_undo)) }
+                    TextButton(onClick = { change(emptyList()) }, enabled = corners.isNotEmpty()) { Text(stringResource(R.string.catchroutes_clear)) }
                     Box {
-                        TextButton(onClick = { savedOpen = true }, modifier = Modifier.testTag("area_saved")) { Text("Saved (${saved.size})") }
+                        TextButton(onClick = { savedOpen = true }, modifier = Modifier.testTag("area_saved")) { Text(stringResource(R.string.catchroutes_saved_x, saved.size)) }
                         DropdownMenu(expanded = savedOpen, onDismissRequest = { savedOpen = false }) {
-                            if (saved.isEmpty()) DropdownMenuItem(text = { Text("No saved areas yet") }, onClick = { savedOpen = false }, enabled = false)
+                            if (saved.isEmpty()) DropdownMenuItem(text = { Text(stringResource(R.string.catchroutes_no_saved_areas_yet)) }, onClick = { savedOpen = false }, enabled = false)
                             saved.forEach { area ->
                                 DropdownMenuItem(text = { Text(area.name) }, onClick = {
                                     savedOpen = false; drawing = false; change(area.corners); view?.fitArea(area.corners)
-                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text("Delete") } })
+                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text(stringResource(R.string.catchroutes_delete)) } })
                             }
                         }
                     }
-                    TextButton(onClick = { naming = true }, enabled = corners.isArea(), modifier = Modifier.testTag("area_save")) { Text("Save") }
+                    TextButton(onClick = { naming = true }, enabled = corners.isArea(), modifier = Modifier.testTag("area_save")) { Text(stringResource(R.string.catchroutes_save)) }
                 }
                 Text(when {
-                    drawing -> "Draw the outline with one finger. It becomes corners you can adjust."
-                    corners.isEmpty() -> "Tap the map to add corners, or switch to Draw"
+                    drawing -> stringResource(R.string.catchroutes_draw_the_outline_with_one_finger)
+                    corners.isEmpty() -> stringResource(R.string.catchroutes_tap_the_map_to_add_corners)
                     corners.size < 3 -> "${corners.size} corner${if (corners.size == 1) "" else "s"} · add at least ${3 - corners.size} more"
-                    else -> "${corners.size} corners · drag one to move it, tap it to remove, pull + to add"
+                    else -> stringResource(R.string.catchroutes_x_corners_drag_one_to_move, corners.size)
                 }, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     AndroidView(
@@ -102,17 +104,17 @@ internal fun CatchAreaPicker(
     }
     if (naming) {
         var name by remember { mutableStateOf("") }
-        AlertDialog(onDismissRequest = { naming = false }, title = { Text("Save area") },
-            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, label = { Text("Name") }, singleLine = true,
+        AlertDialog(onDismissRequest = { naming = false }, title = { Text(stringResource(R.string.catchroutes_save_area)) },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it.take(40) }, label = { Text(stringResource(R.string.catchroutes_name)) }, singleLine = true,
                 modifier = Modifier.testTag("area_name")) },
             confirmButton = { TextButton(onClick = { val corners = corners; scope.launch { store.saveArea(name, corners) }; naming = false },
-                enabled = name.isNotBlank(), modifier = Modifier.testTag("area_name_save")) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { naming = false }) { Text("Cancel") } })
+                enabled = name.isNotBlank(), modifier = Modifier.testTag("area_name_save")) { Text(stringResource(R.string.catchroutes_save)) } },
+            dismissButton = { TextButton(onClick = { naming = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
     deleting?.let { area ->
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${area.name}?") },
-            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text("Delete") } },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, area.name)) },
+            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text(stringResource(R.string.catchroutes_delete)) } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
 }
 

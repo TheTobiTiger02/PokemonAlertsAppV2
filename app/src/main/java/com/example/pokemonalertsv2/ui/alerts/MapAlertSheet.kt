@@ -107,7 +107,7 @@ internal fun MapAlertSheetContent(
                 onShare = onShare,
                 onDismissAlert = onDismissAlert.takeUnless { isDismissed },
                 onRestoreAlert = onRestoreAlert.takeIf { isDismissed },
-                contentDescription = "More map alert actions"
+                contentDescription = stringResource(R.string.alerts_more_map_alert_actions)
             )
             if (showCloseButton) {
                 IconButton(onClick = onDismiss) {
@@ -131,7 +131,7 @@ internal fun MapAlertSheetContent(
         ) {
             if (companions.isNotEmpty()) {
                 Text(
-                    text = "Also here",
+                    text = stringResource(R.string.alerts_also_here),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.testTag("same_stop_companions")
@@ -160,7 +160,7 @@ internal fun MapAlertSheetContent(
                     PanelRowIcon { Icon(Icons.Filled.Info, contentDescription = null, modifier = Modifier.size(20.dp)) }
                     Spacer(Modifier.width(Spacing.md))
                     Column(Modifier.weight(1f)) {
-                        Text("Open details", style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.alerts_open_details), style = MaterialTheme.typography.titleMedium)
                         Text(
                             text = mapSheetDetailsSummary(alert),
                             style = MaterialTheme.typography.bodyMedium,

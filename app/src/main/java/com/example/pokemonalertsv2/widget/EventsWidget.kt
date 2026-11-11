@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.widget
 
+import androidx.compose.ui.res.stringResource
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider

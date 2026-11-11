@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import androidx.compose.foundation.layout.widthIn
@@ -106,7 +108,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
                     topBar = {
                         Column {
                             TopAppBar(
-                                title = { Text("Imported Pokémon ($total)") },
+                                title = { Text(stringResource(R.string.settings_imported_pok_mon_x, total)) },
                                 navigationIcon = {
                                     IconButton(onClick = { finish() }) {
                                         Icon(
@@ -126,7 +128,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
                                     .padding(horizontal = 16.dp, vertical = 8.dp)
                                     .widthIn(max = Dimens.ReadableContentWidth)
                                     .fillMaxWidth(),
-                                placeholder = { Text("Search name or move…") },
+                                placeholder = { Text(stringResource(R.string.settings_search_name_or_move)) },
                                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                                 trailingIcon = {
                                     AnimatedContent(
@@ -136,7 +138,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
                                     ) { showClear ->
                                         if (showClear) {
                                             IconButton(onClick = { viewModel.updateQuery("") }) {
-                                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_clear))
                                             }
                                         }
                                     }
@@ -162,7 +164,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
                                 FilterChip(
                                     selected = hideUnranked,
                                     onClick = { viewModel.toggleHideUnranked() },
-                                    label = { Text("L${MIN_PERSONAL_LEVEL.toInt()}+ only") }
+                                    label = { Text(stringResource(R.string.settings_l_x_only, MIN_PERSONAL_LEVEL.toInt())) }
                                 )
                             }
                         }
@@ -258,14 +260,14 @@ private fun RosterRow(
                 MoveChips(entry.moves, moveTypes)
                 if (entry.synthesized) {
                     Text(
-                        text = "Base form, added from your Mega",
+                        text = stringResource(R.string.settings_base_form_added_from_your_mega),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
                 if (entry.belowRankingLevel) {
                     Text(
-                        text = "Below L${MIN_PERSONAL_LEVEL.toInt()} — not ranked",
+                        text = stringResource(R.string.settings_below_l_x_not_ranked, MIN_PERSONAL_LEVEL.toInt()),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

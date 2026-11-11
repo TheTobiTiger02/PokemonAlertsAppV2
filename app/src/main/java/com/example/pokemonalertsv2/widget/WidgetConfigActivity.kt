@@ -218,20 +218,20 @@ private fun WidgetStudioConfiguration(
 ) {
     var priority by remember { mutableStateOf(initialConfiguration.priority) }
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Widget configuration") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.widget_widget_configuration)) }) },
         bottomBar = {
-            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.navigationBarsPadding().padding(16.dp).readableWidth().heightIn(min = 52.dp)) { Text("Save widget") }
+            Button(onClick = { onConfirm(initialConfiguration.copy(priority = priority)) }, modifier = Modifier.navigationBarsPadding().padding(16.dp).readableWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.widget_save_widget)) }
         }
     ) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp).readableWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("A view of your own", style = MaterialTheme.typography.headlineSmall)
-            Text("This widget has independent alert rules. Link a reusable profile or keep a local copy.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text("Open Filter Studio") }
-            Text("Display priority", style = MaterialTheme.typography.titleMedium)
-            Text("Sorting only changes the order, never which alerts qualify.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.widget_a_view_of_your_own), style = MaterialTheme.typography.headlineSmall)
+            Text(stringResource(R.string.widget_this_widget_has_independent_alert_rules), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.widget_open_filter_studio)) }
+            Text(stringResource(R.string.widget_display_priority), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.widget_sorting_only_changes_the_order_never), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 WidgetPriority.entries.forEach { option ->
-                    FilterChip(selected = priority == option, onClick = { priority = option }, label = { Text(when (option) { WidgetPriority.APP_DEFAULT -> "App default"; WidgetPriority.NEAREST -> "Nearest"; WidgetPriority.ENDING_SOON -> "Ending soon"; WidgetPriority.NEWEST -> "Newest" }) })
+                    FilterChip(selected = priority == option, onClick = { priority = option }, label = { Text(when (option) { WidgetPriority.APP_DEFAULT -> "App default"; WidgetPriority.NEAREST -> "Nearest"; WidgetPriority.ENDING_SOON -> "Ending soon"; WidgetPriority.NEWEST -> stringResource(R.string.alerts_newest) }) })
                 }
             }
         }

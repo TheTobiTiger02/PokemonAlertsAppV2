@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -29,8 +31,8 @@ internal fun CatchRouteSummarySheet(summary: CatchRouteSummary, onDismiss: () ->
         Column(Modifier.keepScrollInSheet().verticalScroll(rememberScrollState())) {
             CatchRouteSummaryContent(summary, Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (onWalkAgain != null) OutlinedButton(onClick = onWalkAgain, modifier = Modifier.weight(1f).testTag("catch_summary_again")) { Text("Walk again") }
-                Button(onClick = onDismiss, modifier = Modifier.weight(1f).testTag("catch_summary_done")) { Text("Done") }
+                if (onWalkAgain != null) OutlinedButton(onClick = onWalkAgain, modifier = Modifier.weight(1f).testTag("catch_summary_again")) { Text(stringResource(R.string.catchroutes_walk_again)) }
+                Button(onClick = onDismiss, modifier = Modifier.weight(1f).testTag("catch_summary_done")) { Text(stringResource(R.string.catchroutes_done)) }
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -43,7 +45,7 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
         Text(summary.name, style = MaterialTheme.typography.headlineSmall)
         val format = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
         Text("${format.format(Date(summary.startedAtMillis))} · ${(summary.activeMillis / 60_000)} min walking" +
-            (if (summary.replans > 0) " · replanned ${summary.replans}×" else ""),
+            (if (summary.replans > 0) stringResource(R.string.catchroutes_replanned_x, summary.replans) else ""),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatTile(summary.caught.toString(), "Caught", Modifier.weight(1f).testTag("catch_summary_caught"))
@@ -67,7 +69,7 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
                 onRelease = { it.destroy() },
                 modifier = Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(16.dp)).testTag("catch_summary_map"),
             )
-            Text("Teal: where you walked · blue: the last planned route",
+            Text(stringResource(R.string.catchroutes_teal_where_you_walked_blue_the),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         val context = androidx.compose.ui.platform.LocalContext.current

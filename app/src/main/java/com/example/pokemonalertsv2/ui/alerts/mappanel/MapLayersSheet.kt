@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -143,8 +144,8 @@ internal fun MapLayersSheet(
                             item("show_label") { PanelSectionLabel("Show on map") }
                             item("countdowns") {
                                 PanelSwitchRow(
-                                    title = "Countdown labels",
-                                    subtitle = "Time left under every marker",
+                                    title = stringResource(R.string.alerts_countdown_labels),
+                                    subtitle = stringResource(R.string.alerts_time_left_under_every_marker),
                                     checked = showTimeLabels,
                                     onCheckedChange = { onToggleTimeLabels() },
                                     icon = { PanelIcon(R.drawable.ic_timer) }
@@ -152,8 +153,8 @@ internal fun MapLayersSheet(
                             }
                             item("weather") {
                                 PanelSwitchRow(
-                                    title = "Weather cells",
-                                    subtitle = "The game's weather over each area",
+                                    title = stringResource(R.string.alerts_weather_cells),
+                                    subtitle = stringResource(R.string.alerts_the_game_s_weather_over_each),
                                     checked = showWeatherCells,
                                     onCheckedChange = { onToggleWeatherCells() },
                                     icon = { PanelIcon(R.drawable.ic_cloud) }
@@ -161,8 +162,8 @@ internal fun MapLayersSheet(
                             }
                             item("hunt_path") {
                                 PanelSwitchRow(
-                                    title = "Hunt path",
-                                    subtitle = "The walk to your hunt's targets",
+                                    title = stringResource(R.string.alerts_hunt_path),
+                                    subtitle = stringResource(R.string.alerts_the_walk_to_your_hunt_s),
                                     checked = showHuntPath,
                                     onCheckedChange = { onToggleHuntPath() },
                                     icon = { PanelIcon(R.drawable.ic_route) }
@@ -170,8 +171,8 @@ internal fun MapLayersSheet(
                             }
                             item("radius") {
                                 PanelSwitchRow(
-                                    title = "Spawn radius",
-                                    subtitle = "The 40 m circle a spawn can be in",
+                                    title = stringResource(R.string.alerts_spawn_radius),
+                                    subtitle = stringResource(R.string.alerts_the_40_m_circle_a_spawn),
                                     checked = showSpawnRadius,
                                     onCheckedChange = { onToggleSpawnRadius() },
                                     icon = { PanelIcon(R.drawable.ic_radius) }
@@ -179,7 +180,7 @@ internal fun MapLayersSheet(
                             }
                             item("spawnpoints") {
                                 PanelSwitchRow(
-                                    title = "Spawnpoints",
+                                    title = stringResource(R.string.alerts_spawnpoints),
                                     subtitle = if (mapStyle == MapStylePreference.OPENSTREETMAP) {
                                         "Where spawns appear, coloured by their hourly timer"
                                     } else {
@@ -196,8 +197,8 @@ internal fun MapLayersSheet(
                             item("spacial_rend") {
                                 AnimatedVisibility(visible = showSpawnRadius) {
                                     PanelSwitchRow(
-                                        title = "Spacial Rend",
-                                        subtitle = "Widen the circle to 80 m",
+                                        title = stringResource(R.string.hunt_spacial_rend),
+                                        subtitle = stringResource(R.string.alerts_widen_the_circle_to_80_m),
                                         checked = spacialRendEnabled,
                                         onCheckedChange = { onToggleSpacialRend() },
                                         modifier = Modifier.testTag("map_spacial_rend")
@@ -206,8 +207,8 @@ internal fun MapLayersSheet(
                             }
                             item("dismissed") {
                                 PanelSwitchRow(
-                                    title = "Dismissed alerts",
-                                    subtitle = "Keep them on the map after you dismiss them",
+                                    title = stringResource(R.string.alerts_dismissed_alerts),
+                                    subtitle = stringResource(R.string.alerts_keep_them_on_the_map_after),
                                     checked = showDismissed,
                                     onCheckedChange = { onToggleDismissed() },
                                     modifier = Modifier.testTag("map_show_dismissed"),
@@ -231,8 +232,8 @@ internal fun MapLayersSheet(
                                 item("leave_label") { PanelSectionLabel("When you leave the app") }
                                 item("auto_pip") {
                                     PanelSwitchRow(
-                                        title = "Floating map automatically",
-                                        subtitle = "Shrink the map into a window over other apps",
+                                        title = stringResource(R.string.alerts_floating_map_automatically),
+                                        subtitle = stringResource(R.string.alerts_shrink_the_map_into_a_window),
                                         checked = autoEnterPictureInPicture,
                                         onCheckedChange = { onToggleAutoEnterPictureInPicture() },
                                         modifier = Modifier.testTag("map_auto_pip"),
@@ -256,7 +257,7 @@ internal fun MapLayersSheet(
                 }
             }
         }
-        PanelFooterButton(text = "Done", onClick = onDismiss)
+        PanelFooterButton(text = stringResource(R.string.catchroutes_done), onClick = onDismiss)
     }
 }
 

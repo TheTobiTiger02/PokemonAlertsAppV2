@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,12 +52,12 @@ internal fun GoRoutePicker(
         Surface(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Text("Pokémon GO routes nearby", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
+                    Text(stringResource(R.string.catchroutes_pok_mon_go_routes_nearby), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 }
                 if (routes == null || loadingDetail) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).testTag("go_route_error")) }
-                if (routes?.isEmpty() == true && error == null) Text("No routes start within 3 km of your start.", Modifier.padding(16.dp))
+                if (routes?.isEmpty() == true && error == null) Text(stringResource(R.string.catchroutes_no_routes_start_within_3_km), Modifier.padding(16.dp))
                 LazyColumn(Modifier.fillMaxSize().testTag("go_route_list"), contentPadding = PaddingValues(bottom = 24.dp)) {
                     items(routes.orEmpty(), key = { it.id }) { route ->
                         val open = selected == route.id
@@ -71,13 +73,13 @@ internal fun GoRoutePicker(
                             if (open) {
                                 if (route.reversible == 1) Row(verticalAlignment = Alignment.CenterVertically) {
                                     Checkbox(checked = reverse, onCheckedChange = { reverse = it })
-                                    Text("Walk it in reverse", style = MaterialTheme.typography.bodyMedium)
+                                    Text(stringResource(R.string.catchroutes_walk_it_in_reverse), style = MaterialTheme.typography.bodyMedium)
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                                     Button(onClick = { use(route.id) { onWalk(it, reverse && it.canReverse) } }, enabled = !loadingDetail,
-                                        modifier = Modifier.weight(1f).testTag("go_route_walk")) { Text("Walk it as-is") }
+                                        modifier = Modifier.weight(1f).testTag("go_route_walk")) { Text(stringResource(R.string.catchroutes_walk_it_as_is)) }
                                     OutlinedButton(onClick = { use(route.id, onGuide) }, enabled = !loadingDetail,
-                                        modifier = Modifier.weight(1f).testTag("go_route_guide")) { Text("Use as guide") }
+                                        modifier = Modifier.weight(1f).testTag("go_route_guide")) { Text(stringResource(R.string.catchroutes_use_as_guide)) }
                                 }
                             }
                         }

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
 import androidx.compose.runtime.derivedStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -150,7 +151,7 @@ internal fun CompactAlertCard(
                         if (LocalFavoriteAlerts.current?.ids?.contains(alert.uniqueId) == true) {
                             Icon(
                                 Icons.Filled.Star,
-                                contentDescription = "Favourite",
+                                contentDescription = stringResource(R.string.alerts_favourite),
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp).padding(end = 2.dp)
                             )
@@ -173,10 +174,10 @@ internal fun CompactAlertCard(
                         )
                     }
                     val statusPrefix = when {
-                        isGoing -> "Going"
-                        huntTarget -> "Hunt target"
-                        distanceInfo.isInRange -> "In range"
-                        lateWarning -> "Ends before you arrive"
+                        isGoing -> stringResource(R.string.alerts_going)
+                        huntTarget -> stringResource(R.string.alerts_hunt_target)
+                        distanceInfo.isInRange -> stringResource(R.string.alerts_in_range)
+                        lateWarning -> stringResource(R.string.alerts_ends_before_you_arrive)
                         else -> null
                     }
                     val line = listOfNotNull(statusPrefix, details.takeIf { it.isNotEmpty() })
@@ -234,7 +235,7 @@ internal fun CompactAlertCard(
                         ) {
                             Icon(
                                 painter = painterResource(id = R.drawable.ic_map),
-                                contentDescription = "Navigate to ${alert.cleanPokemonName}"
+                                contentDescription = stringResource(R.string.alerts_navigate_to_x, alert.cleanPokemonName)
                             )
                         }
                     }
@@ -243,7 +244,7 @@ internal fun CompactAlertCard(
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 if (policy.showGoing && onGoingClick != null) {
                     DropdownMenuItem(
-                        text = { Text(if (isGoing) "Stop going" else "I’m going") },
+                        text = { Text(if (isGoing) stringResource(R.string.alerts_stop_going) else stringResource(R.string.alerts_i_m_going)) },
                         leadingIcon = { Icon(Icons.Filled.LocationOn, contentDescription = null) },
                         onClick = {
                             menuOpen = false

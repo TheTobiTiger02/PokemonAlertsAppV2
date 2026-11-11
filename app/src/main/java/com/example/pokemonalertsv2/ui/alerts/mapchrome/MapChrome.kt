@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts.mapchrome
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +116,7 @@ private fun MapTopBar(state: MapChromeState, actions: MapChromeActions, modifier
                 .clickable(
                     enabled = state.syncStatus.isProblem,
                     role = Role.Button,
-                    onClickLabel = "Retry loading alerts",
+                    onClickLabel = stringResource(R.string.alerts_retry_loading_alerts),
                     onClick = actions.onRefresh
                 )
                 .padding(start = Spacing.lg, end = Spacing.xs),
@@ -143,19 +144,19 @@ private fun MapTopBar(state: MapChromeState, actions: MapChromeActions, modifier
         IconButton(onClick = actions.onOpenFilters, modifier = Modifier.testTag("map_open_filters")) {
             BadgedIcon(
                 icon = painterResource(R.drawable.ic_filter),
-                contentDescription = "Filters",
+                contentDescription = stringResource(R.string.alerts_filters),
                 count = state.advancedFilterRuleCount
             )
         }
         IconButton(onClick = actions.onOpenLayers, modifier = Modifier.testTag("map_open_layers")) {
-            Icon(painterResource(R.drawable.ic_layers), contentDescription = "Map layers")
+            Icon(painterResource(R.drawable.ic_layers), contentDescription = stringResource(R.string.alerts_map_layers))
         }
         actions.onOpenSettings?.let { openSettings ->
             IconButton(
                 onClick = openSettings,
                 modifier = Modifier.padding(end = Spacing.xxs).testTag("open_settings")
             ) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.events_settings))
             }
         }
     }
@@ -185,7 +186,7 @@ private fun MapToolsPill(state: MapChromeState, onClick: () -> Unit, modifier: M
             onClick = onClick,
             modifier = modifier.widthIn(max = 300.dp).testTag("open_map_tools"),
             trailing = {
-                Icon(painterResource(R.drawable.ic_tools), contentDescription = "Hunt controls",
+                Icon(painterResource(R.drawable.ic_tools), contentDescription = stringResource(R.string.alerts_hunt_controls),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         )
@@ -199,6 +200,6 @@ private fun MapToolsPill(state: MapChromeState, onClick: () -> Unit, modifier: M
     ) {
         Icon(painterResource(R.drawable.ic_tools), contentDescription = null)
         Spacer(Modifier.width(Spacing.md))
-        Text("Tools")
+        Text(stringResource(R.string.alerts_tools))
     }
 }

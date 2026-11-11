@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -64,15 +66,15 @@ internal class StudioBodyState(
 @Composable
 private fun ProfileRows(state: StudioBodyState) {
     PanelNavRow(
-        title = "Profile",
+        title = stringResource(R.string.settings_profile),
         summary = state.profileSummary,
         onClick = state.openProfiles,
         modifier = Modifier.testTag("studio_profiles"),
         icon = { Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(20.dp)) }
     )
     PanelNavRow(
-        title = "Save as profile",
-        summary = "Keep these rules to reuse or link",
+        title = stringResource(R.string.settings_save_as_profile),
+        summary = stringResource(R.string.settings_keep_these_rules_to_reuse_or),
         onClick = state.saveProfile,
         icon = { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(20.dp)) }
     )

@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,7 +128,7 @@ internal fun MapFiltersSheet(
         }
         // The count is read before the sheet closes rather than after.
         PanelFooterButton(
-            text = if (visibleCount > 0) "Show $visibleCount alerts" else "Done",
+            text = if (visibleCount > 0) stringResource(R.string.alerts_show_x_alerts, visibleCount) else stringResource(R.string.catchroutes_done),
             onClick = onDismiss
         )
     }
@@ -169,8 +170,8 @@ internal fun FiltersHeader(state: FiltersState) {
         }
     }
     PanelHeader(
-        title = "Filters",
-        subtitle = "${state.visibleCount} of ${state.totalCount} alerts shown",
+        title = stringResource(R.string.alerts_filters),
+        subtitle = stringResource(R.string.alerts_x_of_x_alerts_shown, state.visibleCount, state.totalCount),
         actions = {
             val previous = beforeReset
             when {
@@ -178,13 +179,13 @@ internal fun FiltersHeader(state: FiltersState) {
                     TextButton(onClick = {
                         state.onDefinitionChange(previous)
                         beforeReset = null
-                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text("Undo") }
+                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text(stringResource(R.string.mainscaffoldkt_undo)) }
                 // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
                 state.definition != FilterDefinition() ->
                     TextButton(onClick = {
                         beforeReset = state.definition
                         state.onDefinitionChange(FilterDefinition())
-                    }) { Text("Reset") }
+                    }) { Text(stringResource(R.string.alerts_reset)) }
             }
         }
     )
@@ -210,7 +211,7 @@ internal fun ActiveFiltersRow(state: FiltersState, modifier: Modifier = Modifier
                 trailingIcon = {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Remove ${chip.label}",
+                        contentDescription = stringResource(R.string.alerts_remove_x, chip.label),
                         modifier = Modifier.size(InputChipDefaults.IconSize)
                     )
                 },
@@ -251,7 +252,7 @@ internal fun StatsEditor(state: FiltersState) {
             update(stats.copy(minLevel = it))
         }
         Text(
-            "Sightings nobody has checked carry no IV and stay visible. Hundos and nundos ignore the IV limit.",
+            stringResource(R.string.alerts_sightings_nobody_has_checked_carry_no),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -281,7 +282,7 @@ internal fun DistanceEditor(state: FiltersState) {
     val definition = state.definition
     Column {
         Column(modifier = Modifier.panelGutter(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            ValueLine("Max distance", if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else "Any")
+            ValueLine("Max distance", if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else stringResource(R.string.hunt_any))
             DistanceLimitPicker(
                 meters = definition.maxDistanceMeters,
                 onChange = { state.onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
@@ -308,11 +309,11 @@ internal fun DistanceEditor(state: FiltersState) {
         }
         val count = definition.distanceOverrides.ruleCount
         PanelNavRow(
-            title = "Limits per type & species",
+            title = stringResource(R.string.alerts_limits_per_type_species),
             summary = when (count) {
-                0 -> "Same limit for everything"
-                1 -> "1 custom limit"
-                else -> "$count custom limits"
+                0 -> stringResource(R.string.alerts_same_limit_for_everything)
+                1 -> stringResource(R.string.alerts_1_custom_limit)
+                else -> stringResource(R.string.alerts_x_custom_limits, count)
             },
             active = count > 0,
             onClick = state.openDistanceOverrides,

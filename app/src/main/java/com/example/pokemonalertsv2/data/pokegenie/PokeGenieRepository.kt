@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data.pokegenie
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns

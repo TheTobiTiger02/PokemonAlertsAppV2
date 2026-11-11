@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
@@ -62,8 +63,8 @@ internal fun FiltersHubContent(
         requestedEditor?.let { editing = it.name; viewModel.consumeRequestedFilterEditor() }
     }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Filter Studio", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Each surface has its own rules. Start simple, then tune only the alert types that matter.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.settings_filter_studio), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.settings_each_surface_has_its_own_rules), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FilterSurface.entries.forEach { surface ->
             val assignment = document.assignment(surface)
             val profileName = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == assignment.profileId }?.name
@@ -72,7 +73,7 @@ internal fun FiltersHubContent(
         SummaryCard("Widgets", "Independent rules per widget • sorting stays with each widget", Icons.Default.Settings, null) { showWidgets = !showWidgets }
         AnimatedVisibility(showWidgets) { WidgetFiltersSection() }
         TextButton(onClick = onOpenFullNotificationSettings) {
-            Icon(Icons.Default.Notifications, null); Spacer(Modifier.width(8.dp)); Text("Notification delivery, quiet hours and vibration")
+            Icon(Icons.Default.Notifications, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_notification_delivery_quiet_hours_and_vibration))
         }
     }
     editing?.let { name -> FilterSurface.entries.firstOrNull { it.name == name }?.let { FilterStudioDialog(it, viewModel) { editing = null } } }
@@ -81,19 +82,19 @@ internal fun FiltersHubContent(
 @Composable
 private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignment, definition: FilterDefinition, matchCount: Int, profileName: String?, onClick: () -> Unit) {
     val typeSummary = when (definition.alertTypes.mode) {
-        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) "1 alert type" else "$it alert types" }
+        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_alert_type) else stringResource(R.string.hunt_x_alert_types, it) }
     }
     val location = buildList {
         if (definition.areas.mode == FilterSelectionMode.NONE) add("No areas")
-        if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) "1 area" else "$it areas" })
+        if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_area) else "$it areas" })
         if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
-        definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) "1 distance override" else "$it distance overrides") }
+        definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) stringResource(R.string.settings_1_distance_override) else stringResource(R.string.settings_x_distance_overrides, it)) }
         if (definition.maxWalkingMinutes > 0) add("${definition.maxWalkingMinutes} min walk")
     }.ifEmpty { listOf("Anywhere") }.joinToString(" • ")
     SummaryCard(
         surface.label, "$typeSummary • $location",
         when (surface) { FilterSurface.FEED -> Icons.Default.List; FilterSurface.MAP -> Icons.Default.LocationOn; FilterSurface.NOTIFICATIONS -> Icons.Default.Notifications },
-        "$matchCount live" + (if (definition.advancedRuleCount > 0) " • ${definition.advancedRuleCount} advanced" else "") + (if (assignment.mode == FilterAssignmentMode.LINKED) " • Linked: ${profileName ?: "profile"}" else " • Custom rules"), onClick
+        "$matchCount live" + (if (definition.advancedRuleCount > 0) stringResource(R.string.settings_x_advanced, definition.advancedRuleCount) else "") + (if (assignment.mode == FilterAssignmentMode.LINKED) " • Linked: ${profileName ?: "profile"}" else stringResource(R.string.settings_custom_rules)), onClick
     )
 }
 
@@ -175,8 +176,8 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
         Surface(Modifier.fillMaxWidth().height(viewportHeight), color = MaterialTheme.colorScheme.background) {
             Scaffold(
                 contentWindowInsets = WindowInsets(0),
-                topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text("Filter Studio", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text("Copy from") } }) },
-                bottomBar = { Surface(shadowElevation = 8.dp) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text("$matchCount of ${alerts.size} live alerts match", style = MaterialTheme.typography.labelLarge); Text("Draft changes apply together", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Button(onClick = applyDraft) { Text("Apply") } } } }
+                topBar = { TopAppBar(windowInsets = WindowInsets(0), title = { Column { Text(editorTitle); Text(stringResource(R.string.settings_filter_studio), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) } }, navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Cancel") } }, actions = { TextButton(onClick = { showProfiles = true }) { Text(stringResource(R.string.settings_copy_from)) } }) },
+                bottomBar = { Surface(shadowElevation = 8.dp) { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text(stringResource(R.string.settings_x_of_x_live_alerts_match, matchCount, alerts.size), style = MaterialTheme.typography.labelLarge); Text(stringResource(R.string.settings_draft_changes_apply_together), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; Button(onClick = applyDraft) { Text(stringResource(R.string.settings_apply)) } } } }
             ) { padding ->
                 val body = StudioBodyState(
                     draft = draft,
@@ -208,13 +209,13 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     if (showSave) NameDialog("Save profile", { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
-        title = { Text("Update linked profile?") },
-        text = { Text("Editing ${linkedProfile.name} also changes: ${(document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString()}. These consumers stay linked.") },
+        title = { Text(stringResource(R.string.settings_update_linked_profile)) },
+        text = { Text(stringResource(R.string.settings_editing_x_also_changes_x_these, linkedProfile.name, (document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString())) },
         confirmButton = { Button(onClick = {
             if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
             else { viewModel.applyLinkedFilter(surface, linkedProfile, draft); onDismiss() }
-        }) { Text("Apply to all") } },
-        dismissButton = { TextButton(onClick = applyLocal) { Text("Only this surface") } }
+        }) { Text(stringResource(R.string.settings_apply_to_all)) } },
+        dismissButton = { TextButton(onClick = applyLocal) { Text(stringResource(R.string.settings_only_this_surface)) } }
     )
 }
 
@@ -222,8 +223,8 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
 @Composable
 internal fun AreaChipsEditor(definition: FilterDefinition, areas: List<String>, onChange: (FilterDefinition) -> Unit, modifier: Modifier = Modifier) {
     FlowRow(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text("All") })
-        FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text("None") })
+        FilterChip(definition.areas.mode == FilterSelectionMode.ALL, { onChange(definition.copy(areas = FilterSelection.All)) }, label = { Text(stringResource(R.string.alerts_all)) })
+        FilterChip(definition.areas.mode == FilterSelectionMode.NONE, { onChange(definition.copy(areas = FilterSelection.None)) }, label = { Text(stringResource(R.string.alerts_none)) })
         (areas + definition.areas.values).distinctBy(::normalizeFilterToken).forEach { area ->
             val only = definition.areas.mode == FilterSelectionMode.ONLY
             val picked = only && definition.areas.contains(area)
@@ -300,14 +301,14 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                         onClick = {
                             sortOrder = if (sortOrder == SpeciesSortOrder.DEX_NUMBER) SpeciesSortOrder.NAME_AZ else SpeciesSortOrder.DEX_NUMBER
                         },
-                        label = { Text("Sort: ${sortOrder.label}") }
+                        label = { Text(stringResource(R.string.alerts_sort_x, sortOrder.label)) }
                     )
                 }
             }
             FlowRow(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterSelectionMode.entries.forEach { candidate ->
                     FilterChip(selected = mode == candidate, onClick = { mode = candidate }, label = {
-                        Text(when (candidate) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> "Selected (${selected.size})" })
+                        Text(when (candidate) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> stringResource(R.string.settings_selected_x, selected.size) })
                     })
                 }
             }
@@ -315,12 +316,12 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                 value = query,
                 onValueChange = { query = it; onQueryChanged(it) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(if (isSpecies) "Search name or Dex #" else "Search") },
+                label = { Text(if (isSpecies) stringResource(R.string.alerts_search_name_or_dex) else stringResource(R.string.alerts_search)) },
                 leadingIcon = { Icon(Icons.Default.Search, null) },
                 singleLine = true
             )
-            Text(if (mode == FilterSelectionMode.ONLY) "${selected.size} selected • selected entries first" else if (mode == FilterSelectionMode.NONE) "Nothing in this selector will match" else "Every value, including newly discovered entries", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (current.mode == FilterSelectionMode.ONLY && current.values.any { key -> candidates.none { normalizeFilterToken(it) == normalizeFilterToken(key) } }) Text("Unavailable selections are preserved", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top = 8.dp))
+            Text(if (mode == FilterSelectionMode.ONLY) stringResource(R.string.settings_x_selected_selected_entries_first, selected.size) else if (mode == FilterSelectionMode.NONE) stringResource(R.string.settings_nothing_in_this_selector_will_match) else stringResource(R.string.settings_every_value_including_newly_discovered_entries), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (current.mode == FilterSelectionMode.ONLY && current.values.any { key -> candidates.none { normalizeFilterToken(it) == normalizeFilterToken(key) } }) Text(stringResource(R.string.settings_unavailable_selections_are_preserved), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top = 8.dp))
             if (isSpecies) {
                 // Compact cells fit roughly twice as many species per screen. Selection reads from
                 // the border plus a corner badge instead of a full-size checkbox.
@@ -339,7 +340,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                                     Text("#${dexNum.toString().padStart(3, '0')}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                                 }
                                 Text(value, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (unavailable) Text("Unavailable", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1)
+                                if (unavailable) Text(stringResource(R.string.alerts_unavailable), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, maxLines = 1)
                             }
                         }
                     }
@@ -347,7 +348,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
             } else {
                 LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(vertical = 8.dp)) { items(display, key = { it.first }) { (key, value) -> val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected); Row(Modifier.fillMaxWidth().clickable(enabled = mode == FilterSelectionMode.ONLY) { selected = if (key in selected) selected - key else selected + key }.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, null); Text(value, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis) } } }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { onSave(when (mode) { FilterSelectionMode.ALL -> FilterSelection.All; FilterSelectionMode.NONE -> FilterSelection.None; FilterSelectionMode.ONLY -> FilterSelection.only(selected) }) }) { Text("Done") } }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }; Button(onClick = { onSave(when (mode) { FilterSelectionMode.ALL -> FilterSelection.All; FilterSelectionMode.NONE -> FilterSelection.None; FilterSelectionMode.ONLY -> FilterSelection.only(selected) }) }) { Text(stringResource(R.string.catchroutes_done)) } }
         } }
     }
 }
@@ -367,22 +368,22 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
     val rewardOptions = (catalog.map { it.reward } + current.rewards.values).distinctBy(::normalizeFilterToken)
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.92f).padding(10.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
-            Text("Quest rules", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.settings_quest_rules), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             PrimaryTabRow(tab) { listOf("Exact quests", "Tasks", "Rewards").forEachIndexed { index, label -> Tab(tab == index, { tab = index }, text = { Text(label) }) } }
             if (tab == 0) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterSelectionMode.entries.forEach { mode ->
-                    FilterChip(exactMode == mode, { exactMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All quests"; FilterSelectionMode.NONE -> "No exact pairs"; FilterSelectionMode.ONLY -> "Selected (${exact.size})" }) })
+                    FilterChip(exactMode == mode, { exactMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All quests"; FilterSelectionMode.NONE -> "No exact pairs"; FilterSelectionMode.ONLY -> stringResource(R.string.settings_selected_x, exact.size) }) })
                 }
             }
             if (tab != 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Text("Use task + reward rule", Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = "Use task and reward facets" }) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.settings_use_task_reward_rule), Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = "Use task and reward facets" }) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterSelectionMode.entries.forEach { mode ->
-                        FilterChip(selected = (if (tab == 1) taskMode else rewardMode) == mode, onClick = { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; if (tab == 1) taskMode = mode else rewardMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> "Selected" }) })
+                        FilterChip(selected = (if (tab == 1) taskMode else rewardMode) == mode, onClick = { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; if (tab == 1) taskMode = mode else rewardMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> stringResource(R.string.alerts_selected) }) })
                     }
                 }
             }
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 10.dp), label = { Text("Search task or reward") }, leadingIcon = { Icon(Icons.Default.Search, null) })
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 10.dp), label = { Text(stringResource(R.string.settings_search_task_or_reward)) }, leadingIcon = { Icon(Icons.Default.Search, null) })
             LazyColumn(Modifier.weight(1f)) { when (tab) {
                 0 -> {
                     val groups = allQuests
@@ -411,8 +412,8 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
                 1 -> items(taskOptions.filter { it.contains(query, true) }) { task -> val key = normalizeFilterToken(task); ChoiceRow(task, taskMode == FilterSelectionMode.ALL || (taskMode == FilterSelectionMode.ONLY && key in tasks)) { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; taskMode = FilterSelectionMode.ONLY; tasks = if (key in tasks) tasks - key else tasks + key } }
                 else -> items(rewardOptions.filter { it.contains(query, true) }) { reward -> val key = normalizeFilterToken(reward); ChoiceRow(reward, rewardMode == FilterSelectionMode.ALL || (rewardMode == FilterSelectionMode.ONLY && key in rewards)) { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; rewardMode = FilterSelectionMode.ONLY; rewards = if (key in rewards) rewards - key else rewards + key } }
             } }
-            Text("Exact pairs are alternatives to the task + reward facet rule.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { onSave(QuestFilterRules(exact, facetEnabled, FilterSelection(taskMode, tasks), FilterSelection(rewardMode, rewards), exactMode)) }) { Text("Done") } }
+            Text(stringResource(R.string.settings_exact_pairs_are_alternatives_to_the), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }; Button(onClick = { onSave(QuestFilterRules(exact, facetEnabled, FilterSelection(taskMode, tasks), FilterSelection(rewardMode, rewards), exactMode)) }) { Text(stringResource(R.string.catchroutes_done)) } }
         } }
     }
 }
@@ -461,11 +462,11 @@ private fun QuestRewardGroup(
                     )
                 }
                 TextButton(onClick = { onToggleAll(rules, selectedCount < rules.size) }) {
-                    Text(if (selectedCount < rules.size) "All" else "None")
+                    Text(if (selectedCount < rules.size) stringResource(R.string.alerts_all) else stringResource(R.string.alerts_none))
                 }
                 Icon(
                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse $rewardLabel" else "Expand $rewardLabel"
+                    contentDescription = if (expanded) stringResource(R.string.settings_collapse_x, rewardLabel) else stringResource(R.string.settings_expand_x, rewardLabel)
                 )
             }
             AnimatedVisibility(expanded) {
@@ -482,7 +483,7 @@ private fun QuestRewardGroup(
                             label = {
                                 Column {
                                     Text(quest.task.ifBlank { quest.taskKey }, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    if (!quest.active) Text("Previously seen", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
+                                    if (!quest.active) Text(stringResource(R.string.settings_previously_seen), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
                                 }
                             }
                         )
@@ -528,7 +529,7 @@ private fun questRewardIconRes(reward: String?, knownSpecies: Set<String>): Int 
     QuestRewardKind.ITEM -> R.drawable.ic_reward_item
 }
 
-@Composable private fun ChoiceRow(label: String, checked: Boolean, active: Boolean = true, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, null); Column(Modifier.weight(1f)) { Text(label); if (!active) Text("Previously seen", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary) } } }
+@Composable private fun ChoiceRow(label: String, checked: Boolean, active: Boolean = true, onClick: () -> Unit) { Row(Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, null); Column(Modifier.weight(1f)) { Text(label); if (!active) Text(stringResource(R.string.settings_previously_seen), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary) } } }
 
 @Composable
 internal fun ProfilePickerDialog(
@@ -544,38 +545,38 @@ internal fun ProfilePickerDialog(
     var deleting by remember { mutableStateOf<FilterProfile?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Profiles") },
+        title = { Text(stringResource(R.string.settings_profiles)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 profiles.forEach { profile ->
                     val builtIn = BuiltInFilterProfiles.all.any { it.id == profile.id }
                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Text(profile.name, fontWeight = FontWeight.SemiBold)
-                        Text(if (builtIn) "Read-only starter • duplicate to edit" else "${profile.definition.advancedRuleCount} advanced rules", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (builtIn) stringResource(R.string.settings_read_only_starter_duplicate_to_edit) else stringResource(R.string.settings_x_advanced_rules, profile.definition.advancedRuleCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row {
-                            TextButton(onClick = { onChoose(profile, true) }) { Text("Link") }
-                            TextButton(onClick = { onChoose(profile, false) }) { Text("Copy") }
-                            TextButton(onClick = { onSave("${profile.name} copy", profile.definition, null) }) { Text("Duplicate") }
+                            TextButton(onClick = { onChoose(profile, true) }) { Text(stringResource(R.string.settings_link)) }
+                            TextButton(onClick = { onChoose(profile, false) }) { Text(stringResource(R.string.settings_copy)) }
+                            TextButton(onClick = { onSave("${profile.name} copy", profile.definition, null) }) { Text(stringResource(R.string.settings_duplicate)) }
                         }
                         if (!builtIn) Row {
-                            TextButton(onClick = { renaming = profile }) { Text("Rename") }
-                            TextButton(onClick = { deleting = profile }) { Text("Delete") }
+                            TextButton(onClick = { renaming = profile }) { Text(stringResource(R.string.hunt_rename)) }
+                            TextButton(onClick = { deleting = profile }) { Text(stringResource(R.string.catchroutes_delete)) }
                         }
                         HorizontalDivider()
                     }
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_close)) } }
     )
     renaming?.let { profile -> NameDialog("Rename profile", { renaming = null }, initialValue = profile.name) { name -> onSave(name, profile.definition, profile.id); renaming = null } }
     deleting?.let { profile ->
         val consumers = document.consumersOf(profile.id).map { it.label } + widgetConsumers(profile.id)
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${profile.name}?") }, text = { Text(if (consumers.isEmpty()) "This profile is not linked to any surface." else "${consumers.joinToString()} will keep independent copies of these rules before the profile is deleted.") }, dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text("Delete profile") } })
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, profile.name)) }, text = { Text(if (consumers.isEmpty()) stringResource(R.string.settings_this_profile_is_not_linked_to) else stringResource(R.string.settings_x_will_keep_independent_copies_of, consumers.joinToString())) }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text(stringResource(R.string.settings_delete_profile)) } })
     }
 }
 
-@Composable private fun NameDialog(title: String, onDismiss: () -> Unit, initialValue: String = "", onSave: (String) -> Unit) { var value by rememberSaveable { mutableStateOf(initialValue) }; AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it.take(MAX_FILTER_PROFILE_NAME) }, label = { Text("Unique name") }, supportingText = { Text("${value.length}/$MAX_FILTER_PROFILE_NAME") }, singleLine = true) }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }, confirmButton = { Button(onClick = { onSave(value) }, enabled = value.isNotBlank()) { Text("Save") } }) }
+@Composable private fun NameDialog(title: String, onDismiss: () -> Unit, initialValue: String = "", onSave: (String) -> Unit) { var value by rememberSaveable { mutableStateOf(initialValue) }; AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it.take(MAX_FILTER_PROFILE_NAME) }, label = { Text(stringResource(R.string.settings_unique_name)) }, supportingText = { Text("${value.length}/$MAX_FILTER_PROFILE_NAME") }, singleLine = true) }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onSave(value) }, enabled = value.isNotBlank()) { Text(stringResource(R.string.catchroutes_save)) } }) }
 
 @Composable
 private fun WidgetFiltersSection() {
@@ -592,7 +593,7 @@ private fun WidgetFiltersSection() {
         }
     }
     SettingsSection("Widget instances") {
-        if (placed.isEmpty()) Text("No widgets placed. Add one from the home screen to give it an independent filter.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) "Legacy rules • migrates when edited" else "Unified filter • instance #$id", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Customize") } } } }
+        if (placed.isEmpty()) Text(stringResource(R.string.settings_no_widgets_placed_add_one_from), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) stringResource(R.string.settings_legacy_rules_migrates_when_edited) else stringResource(R.string.settings_unified_filter_instance_x, id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text(stringResource(R.string.settings_customize)) } } } }
     }
 }

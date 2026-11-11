@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,7 +57,7 @@ internal fun MapToolsContent(
         // Every device can hunt: the hunt's floating map is an overlay window, not
         // picture-in-picture, so it no longer waits on PiP support.
         Text(
-            text = "Hunt",
+            text = stringResource(R.string.alerts_hunt),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.primary
@@ -67,31 +68,31 @@ internal fun MapToolsContent(
         )
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         ToolRow(
-            title = "Catch route",
-            subtitle = "Plan a walk past the most spawnpoints",
+            title = stringResource(R.string.alerts_catch_route),
+            subtitle = stringResource(R.string.alerts_plan_a_walk_past_the_most),
             icon = { Icon(painterResource(R.drawable.ic_navigate), contentDescription = null) },
             onClick = onOpenCatchRoutes,
             modifier = Modifier.testTag("open_catch_routes")
         )
         ToolRow(
-            title = "Mega boost",
-            subtitle = "Which Mega boosts the most live spawns",
+            title = stringResource(R.string.alerts_mega_boost),
+            subtitle = stringResource(R.string.alerts_which_mega_boosts_the_most_live),
             icon = { Icon(painterResource(R.drawable.ic_insights), contentDescription = null) },
             onClick = onOpenMegaBoost,
             modifier = Modifier.testTag("open_mega_boost")
         )
         if (onEnterPictureInPicture != null) {
             ToolRow(
-                title = "Floating map",
-                subtitle = "Keep the map on top of Pokémon GO",
+                title = stringResource(R.string.catchroutes_floating_map),
+                subtitle = stringResource(R.string.alerts_keep_the_map_on_top_of),
                 icon = { Icon(painterResource(R.drawable.ic_pip), contentDescription = null) },
                 onClick = onEnterPictureInPicture,
                 modifier = Modifier.semantics { contentDescription = "Open map in picture-in-picture" }
             )
         }
         ToolRow(
-            title = "Refresh alerts",
-            subtitle = "The map also refreshes every 30 seconds",
+            title = stringResource(R.string.alerts_refresh_alerts),
+            subtitle = stringResource(R.string.alerts_the_map_also_refreshes_every_30),
             icon = { AnimatedRefreshIcon(refreshing = refreshing, contentDescription = "") },
             onClick = onRefresh
         )
@@ -140,7 +141,7 @@ internal fun MapToolsSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Map tools",
+                text = stringResource(R.string.alerts_map_tools),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )

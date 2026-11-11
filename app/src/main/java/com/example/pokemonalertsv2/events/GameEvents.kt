@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.events
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement

@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -37,7 +39,7 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
                         Modifier.fillMaxSize().padding(padding).padding(24.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("Watch data in Pokémon Alerts", style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.health_watch_data_in_pok_mon_alerts), style = MaterialTheme.typography.headlineSmall)
                         Text(
                             "The app reads your heart rate, steps and calories from Health Connect only for the time a " +
                                 "hunt or catch route was running, and shows them in that walk's summary. A Galaxy Watch " +
@@ -50,7 +52,7 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
                                 "revoke access any time in Health Connect.",
                             style = MaterialTheme.typography.bodyMedium
                         )
-                        Button(onClick = ::finish) { Text("OK") }
+                        Button(onClick = ::finish) { Text(stringResource(R.string.health_ok)) }
                     }
                 }
             }

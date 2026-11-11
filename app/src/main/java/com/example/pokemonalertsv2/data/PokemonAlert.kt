@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory

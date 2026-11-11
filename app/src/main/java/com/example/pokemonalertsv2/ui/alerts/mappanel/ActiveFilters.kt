@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition

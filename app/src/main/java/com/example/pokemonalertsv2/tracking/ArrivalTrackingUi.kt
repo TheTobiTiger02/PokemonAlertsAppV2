@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.NotificationManager
 import android.content.Context
@@ -129,7 +131,7 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
     replacementAlert?.let { alert ->
         AlertDialog(
             onDismissRequest = { replacementAlert = null },
-            title = { Text("Switch destination?") },
+            title = { Text(stringResource(R.string.tracking_switch_destination)) },
             text = {
                 Text(
                     "Stop tracking ${activeDestination?.alert?.pokemon ?: activeDestination?.alert?.name ?: "the current alert"} " +
@@ -143,11 +145,11 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
                         requestStart(alert)
                     }
                 ) {
-                    Text("Switch")
+                    Text(stringResource(R.string.tracking_switch))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { replacementAlert = null }) { Text("Cancel") }
+                TextButton(onClick = { replacementAlert = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
             }
         )
     }
@@ -207,7 +209,7 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
                         pendingAlert = null
                     }
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.mainscaffoldkt_cancel))
                 }
             }
         )

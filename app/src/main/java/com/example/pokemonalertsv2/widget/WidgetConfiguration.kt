@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.content.Context
 import com.example.pokemonalertsv2.ui.alerts.FILTERABLE_ALERT_CATEGORIES
 import com.example.pokemonalertsv2.ui.alerts.legacyWidgetTokenToCategory

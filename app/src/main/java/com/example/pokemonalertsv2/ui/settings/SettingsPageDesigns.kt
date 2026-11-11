@@ -172,15 +172,15 @@ internal fun NotificationsPageDesign(
                         Column {
                             PanelSectionLabel("Quiet time")
                             PanelNavRow(
-                                title = "Quiet hours",
-                                summary = if (quietEnabled) "Every day $quietSummary" else "Off",
+                                title = stringResource(R.string.settings_quiet_hours),
+                                summary = if (quietEnabled) stringResource(R.string.settings_every_day_x, quietSummary) else stringResource(R.string.settings_off),
                                 active = quietEnabled,
                                 onClick = { open(NotificationsPage.QUIET_HOURS) },
                                 icon = { Icon(Icons.Filled.DateRange, null, Modifier.size(20.dp)) }
                             )
                             PanelNavRow(
-                                title = "Silence now",
-                                summary = if (silenced) "Silenced until ${clockTime(silenceUntil, now)}" else "Pause every alert for a while",
+                                title = stringResource(R.string.settings_silence_now),
+                                summary = if (silenced) stringResource(R.string.settings_silenced_until_x, clockTime(silenceUntil, now)) else stringResource(R.string.settings_pause_every_alert_for_a_while),
                                 active = silenced,
                                 onClick = { open(NotificationsPage.SILENCE) },
                                 modifier = Modifier.testTag("settings_silence_now"),
@@ -190,7 +190,7 @@ internal fun NotificationsPageDesign(
                     }
                     PanelSectionLabel("Alerts")
                     PanelNavRow(
-                        title = "What notifies",
+                        title = stringResource(R.string.settings_what_notifies),
                         summary = definition.notifiedTypeSummary(),
                         onClick = onOpenFilterStudio,
                         icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
@@ -203,7 +203,7 @@ internal fun NotificationsPageDesign(
                 }
 
                 NotificationsPage.SILENCE -> {
-                    PanelHeader("Silence now", subtitle = "Every alert waits until it ends", onBack = back)
+                    PanelHeader("Silence now", subtitle = stringResource(R.string.settings_every_alert_waits_until_it_ends), onBack = back)
                     silenceRows(back)
                 }
             }
@@ -221,23 +221,23 @@ private fun PermissionRows(
 ) {
     PanelSectionLabel("Permissions")
     PermissionRow(
-        title = "Notifications",
+        title = stringResource(R.string.onboarding_notifications),
         granted = grants.notifications,
-        summary = if (grants.notifications) "Alerts arrive" else "Alerts can not arrive",
+        summary = if (grants.notifications) stringResource(R.string.settings_alerts_arrive) else stringResource(R.string.settings_alerts_can_not_arrive),
         icon = Icons.Filled.Notifications,
         onClick = onManageNotifications
     )
     PermissionRow(
-        title = "Location in use",
+        title = stringResource(R.string.settings_location_in_use),
         granted = grants.foregroundLocation,
-        summary = if (grants.foregroundLocation) "Distances, map" else "No distances",
+        summary = if (grants.foregroundLocation) stringResource(R.string.settings_distances_map) else stringResource(R.string.settings_no_distances),
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
     PermissionRow(
-        title = "Background location",
+        title = stringResource(R.string.settings_background_location),
         granted = grants.backgroundLocation,
-        summary = if (grants.backgroundLocation) "Fresh while closed" else "Stale while closed",
+        summary = if (grants.backgroundLocation) stringResource(R.string.settings_fresh_while_closed) else stringResource(R.string.settings_stale_while_closed),
         icon = Icons.Filled.LocationOn,
         onClick = onManageLocation
     )
@@ -245,8 +245,8 @@ private fun PermissionRows(
     // Permissions can all read allowed while push is dead; this row shows delivery working.
     val stale = lastPush <= 0L || now - lastPush >= PUSH_STALE_MILLIS
     InfoRow(
-        title = "Last push",
-        summary = if (stale) "${pushAge(lastPush, now)} · pull to refresh to catch up" else pushAge(lastPush, now),
+        title = stringResource(R.string.settings_last_push),
+        summary = if (stale) stringResource(R.string.settings_x_pull_to_refresh_to_catch, pushAge(lastPush, now)) else pushAge(lastPush, now),
         problem = stale,
         icon = { PanelIcon(R.drawable.ic_cloud) }
     )
@@ -266,9 +266,9 @@ private fun BatteryOptimizationRow() {
         onPauseOrDispose { }
     }
     PermissionRow(
-        title = "Battery optimisation",
+        title = stringResource(R.string.settings_battery_optimisation),
         granted = exempt,
-        summary = if (exempt) "Alerts arrive while asleep" else "Alerts may be late while asleep",
+        summary = if (exempt) stringResource(R.string.settings_alerts_arrive_while_asleep) else stringResource(R.string.settings_alerts_may_be_late_while_asleep),
         icon = Icons.Filled.Notifications,
         onClick = {
             @android.annotation.SuppressLint("BatteryLife")
@@ -291,8 +291,8 @@ private fun DeliveryRows(
 ) {
     PanelSectionLabel("Delivery")
     PanelSwitchRow(
-        title = "Notifications",
-        subtitle = "Alerts for new Pokémon nearby",
+        title = stringResource(R.string.onboarding_notifications),
+        subtitle = stringResource(R.string.settings_alerts_for_new_pok_mon_nearby),
         checked = enabled,
         onCheckedChange = onEnabledChange,
         icon = { Icon(Icons.Filled.Notifications, null, Modifier.size(20.dp)) }
@@ -302,8 +302,8 @@ private fun DeliveryRows(
             // Android decides sound and vibration per channel; an in-app switch could not.
             val context = LocalContext.current
             PanelNavRow(
-                title = "Sound & vibration",
-                summary = "Per alert type, in Android settings",
+                title = stringResource(R.string.settings_sound_vibration),
+                summary = stringResource(R.string.settings_per_alert_type_in_android_settings),
                 onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
@@ -337,7 +337,7 @@ private fun JourneyOverlaySwitchRow(enabled: Boolean, onEnabledChange: (Boolean)
     if (enabled && !granted) {
         ActionRow(
             title = stringResource(R.string.journey_overlay_permission_needed),
-            summary = "Allow display over other apps",
+            summary = stringResource(R.string.hunt_allow_display_over_other_apps),
             problem = true,
             onClick = { prompt = true },
             icon = { Icon(Icons.Filled.Warning, null, Modifier.size(20.dp)) }
@@ -356,8 +356,8 @@ private fun QuietHoursRows(
 ) {
     var editing by rememberSaveable { mutableStateOf<QuietHoursEdge?>(null) }
     PanelSwitchRow(
-        title = "Quiet hours",
-        subtitle = "Mute alerts at the same time every day",
+        title = stringResource(R.string.settings_quiet_hours),
+        subtitle = stringResource(R.string.settings_mute_alerts_at_the_same_time),
         checked = enabled,
         onCheckedChange = onEnabledChange,
         icon = { Icon(Icons.Filled.DateRange, null, Modifier.size(20.dp)) }
@@ -371,16 +371,16 @@ private fun QuietHoursRows(
             OutlinedButton(
                 onClick = { editing = QuietHoursEdge.START },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("quiet_from")
-            ) { Text("From ${QuietHours.format(startMinute)}", maxLines = 1) }
+            ) { Text(stringResource(R.string.settings_from_x, QuietHours.format(startMinute)), maxLines = 1) }
             OutlinedButton(
                 onClick = { editing = QuietHoursEdge.END },
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("quiet_to")
-            ) { Text("To ${QuietHours.format(endMinute)}", maxLines = 1) }
+            ) { Text(stringResource(R.string.settings_to_x, QuietHours.format(endMinute)), maxLines = 1) }
         }
     }
     editing?.let { edge ->
         ClockTimeDialog(
-            title = if (edge == QuietHoursEdge.START) "Quiet hours start" else "Quiet hours end",
+            title = if (edge == QuietHoursEdge.START) stringResource(R.string.settings_quiet_hours_start) else stringResource(R.string.settings_quiet_hours_end),
             initialMinute = if (edge == QuietHoursEdge.START) startMinute else endMinute,
             onDismiss = { editing = null },
             onPick = { picked ->
@@ -411,12 +411,12 @@ private fun SilenceRows(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Silenced until ${clockTime(silenceUntil, now)}",
+                text = stringResource(R.string.settings_silenced_until_x, clockTime(silenceUntil, now)),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f)
             )
-            OutlinedButton(onClick = onClear) { Text("End now", maxLines = 1) }
+            OutlinedButton(onClick = onClear) { Text(stringResource(R.string.settings_end_now), maxLines = 1) }
         }
     }
     // One tile per common length, then any length ("For…", such as 40 minutes) or any date and
@@ -490,8 +490,8 @@ private fun ClockTimeDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { TimePicker(state = state) },
-        confirmButton = { TextButton(onClick = { onPick(state.hour * 60 + state.minute) }) { Text("Set") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { TextButton(onClick = { onPick(state.hour * 60 + state.minute) }) { Text(stringResource(R.string.settings_set)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
     )
 }
 
@@ -569,21 +569,21 @@ internal fun GoDexPageContent(
 
     val checklistRows: @Composable () -> Unit = {
         PanelNavRow(
-            title = "Collection",
-            summary = if (needed == 0) "Complete · $total caught" else "$needed needed of $total",
+            title = stringResource(R.string.settings_collection),
+            summary = if (needed == 0) stringResource(R.string.settings_complete_x_caught, total) else stringResource(R.string.settings_x_needed_of_x, needed, total),
             active = needed > 0,
             onClick = actions.onOpenCollection,
             icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
         )
         PanelSwitchRow(
-            title = "Only notify needed",
-            subtitle = "Hundos you have stay quiet. Unknown forms still notify.",
+            title = stringResource(R.string.settings_only_notify_needed),
+            subtitle = stringResource(R.string.settings_hundos_you_have_stay_quiet_unknown),
             checked = config.notificationFilterEnabled,
             onCheckedChange = actions.onNotifyNeededChange,
             icon = { Icon(Icons.Filled.Notifications, null, Modifier.size(20.dp)) }
         )
         ActionRow(
-            title = if (sync.isSyncing) "Syncing…" else "Sync now",
+            title = if (sync.isSyncing) stringResource(R.string.settings_syncing) else stringResource(R.string.settings_sync_now),
             summary = syncLine.first,
             problem = syncLine.second,
             enabled = !sync.isSyncing,
@@ -610,7 +610,7 @@ internal fun GoDexPageContent(
                         checklistRows()
                         PanelSectionLabel("Account")
                         PanelNavRow(
-                            title = "Account",
+                            title = stringResource(R.string.settings_account),
                             summary = account.first,
                             active = !account.second && config.hasSession,
                             onClick = { open(GoDexPage.ACCOUNT) },
@@ -637,7 +637,7 @@ internal fun GoDexPageContent(
                 }
 
                 GoDexPage.PUBLIC_LINK -> {
-                    PanelHeader("Public link", subtitle = "Read-only: catches stay in GoDex", onBack = back)
+                    PanelHeader("Public link", subtitle = stringResource(R.string.settings_read_only_catches_stay_in_godex), onBack = back)
                     Column(
                         modifier = Modifier.panelGutter().padding(top = Spacing.md),
                         verticalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -646,7 +646,7 @@ internal fun GoDexPageContent(
                             value = urlInput,
                             onValueChange = onUrlInputChange,
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Public collection link") },
+                            label = { Text(stringResource(R.string.settings_public_collection_link)) },
                             placeholder = { Text("https://godex.site/public-collection/…") },
                             singleLine = true,
                             enabled = !sync.isSyncing
@@ -658,7 +658,7 @@ internal fun GoDexPageContent(
                             onClick = { actions.onConnect(urlInput) },
                             enabled = urlInput.isNotBlank() && !sync.isSyncing,
                             modifier = Modifier.fillMaxWidth().height(52.dp)
-                        ) { Text(if (sync.isSyncing) "Connecting…" else "Connect") }
+                        ) { Text(if (sync.isSyncing) stringResource(R.string.settings_connecting) else stringResource(R.string.health_connect)) }
                     }
                 }
             }
@@ -672,19 +672,19 @@ private fun GoDexNotConnected(onSignIn: () -> Unit, onPublicLink: () -> Unit) {
         modifier = Modifier.panelGutter().padding(top = Spacing.lg, bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
-        Text("Not connected", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.settings_not_connected), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            "Connect your GoDex Hundo checklist to see what you still need and keep alerts for Hundos you have quiet.",
+            stringResource(R.string.settings_connect_your_godex_hundo_checklist_to),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Sign in to GoDex", maxLines = 1)
+            Text(stringResource(R.string.settings_sign_in_to_godex), maxLines = 1)
         }
     }
     PanelNavRow(
-        title = "Use a public link instead",
-        summary = "Read-only: catches stay in GoDex",
+        title = stringResource(R.string.settings_use_a_public_link_instead),
+        summary = stringResource(R.string.settings_read_only_catches_stay_in_godex),
         onClick = onPublicLink,
         icon = { Icon(Icons.Filled.Info, null, Modifier.size(20.dp)) }
     )
@@ -701,7 +701,7 @@ private fun GoDexStatusHeader(title: String, needed: Int, total: Int, syncLine: 
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = if (needed == 0) "Complete · $total caught" else "$needed still needed · ${total - needed} caught",
+            text = if (needed == 0) stringResource(R.string.settings_complete_x_caught, total) else stringResource(R.string.settings_x_still_needed_x_caught, needed, total - needed),
             style = MaterialTheme.typography.bodyLarge
         )
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = Spacing.xs)) {
@@ -736,27 +736,27 @@ private fun GoDexAccountRows(
 ) {
     if (config.hasSession) {
         ActionRow(
-            title = if (config.hasWriteBackUrl) "Change checklist" else "Choose checklist",
+            title = if (config.hasWriteBackUrl) stringResource(R.string.settings_change_checklist) else stringResource(R.string.settings_choose_checklist),
             summary = if (config.hasWriteBackUrl) "Sending catches to ${config.writeBackUrl.substringAfterLast("/")}"
-            else "Signed in, but no checklist is chosen",
+            else stringResource(R.string.settings_signed_in_but_no_checklist_is),
             problem = !config.hasWriteBackUrl,
             onClick = onPickChecklist,
             icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
         )
         ActionRow(
-            title = "Sign out",
-            summary = "Stop sending catches; keep the checklist here",
+            title = stringResource(R.string.settings_sign_out),
+            summary = stringResource(R.string.settings_stop_sending_catches_keep_the_checklist),
             onClick = onSignOut,
             icon = { Icon(Icons.Filled.AccountCircle, null, Modifier.size(20.dp)) }
         )
     } else {
         val expired = sync.sessionState == GoDexSessionState.REAUTH_REQUIRED
         ActionRow(
-            title = if (expired) "Sign in again" else "Sign in for two-way sync",
+            title = if (expired) stringResource(R.string.settings_sign_in_again) else stringResource(R.string.settings_sign_in_for_two_way_sync),
             summary = when {
-                expired && sync.pendingCount > 0 -> "${changes(sync.pendingCount)} wait to be sent"
-                expired -> "Your session expired"
-                else -> "Mark catches here and send them to GoDex"
+                expired && sync.pendingCount > 0 -> stringResource(R.string.settings_x_wait_to_be_sent, changes(sync.pendingCount))
+                expired -> stringResource(R.string.settings_your_session_expired)
+                else -> stringResource(R.string.settings_mark_catches_here_and_send_them)
             },
             problem = expired,
             onClick = onSignIn,
@@ -764,8 +764,8 @@ private fun GoDexAccountRows(
         )
     }
     ActionRow(
-        title = "Disconnect",
-        summary = "Remove the checklist from this app",
+        title = stringResource(R.string.settings_disconnect),
+        summary = stringResource(R.string.settings_remove_the_checklist_from_this_app),
         destructive = true,
         enabled = !sync.isSyncing,
         onClick = onDisconnect,
@@ -843,7 +843,7 @@ private fun PermissionRow(
             contentColor = if (granted) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
         ) {
             Text(
-                text = if (granted) "Allowed" else "Off",
+                text = if (granted) stringResource(R.string.onboarding_allowed) else stringResource(R.string.settings_off),
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 1,
                 modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 2.dp)

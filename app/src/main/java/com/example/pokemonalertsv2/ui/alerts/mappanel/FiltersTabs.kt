@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -99,8 +100,8 @@ internal fun FiltersTabs(
                     state.openFilterStudio?.let { open ->
                         PanelSectionLabel("More")
                         PanelNavRow(
-                            title = "Advanced rules",
-                            summary = "Areas, presets and more in Filter Studio",
+                            title = stringResource(R.string.alerts_advanced_rules),
+                            summary = stringResource(R.string.alerts_areas_presets_and_more_in_filter),
                             onClick = open,
                             modifier = Modifier.testTag("map_filter_studio"),
                             icon = { PanelIcon(R.drawable.ic_tools) }
@@ -180,8 +181,8 @@ private fun AllNoneRow(onAll: () -> Unit, onNone: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(end = Spacing.sm),
         horizontalArrangement = Arrangement.End
     ) {
-        TextButton(onClick = onAll) { Text("All") }
-        TextButton(onClick = onNone) { Text("None") }
+        TextButton(onClick = onAll) { Text(stringResource(R.string.alerts_all)) }
+        TextButton(onClick = onNone) { Text(stringResource(R.string.alerts_none)) }
     }
 }
 

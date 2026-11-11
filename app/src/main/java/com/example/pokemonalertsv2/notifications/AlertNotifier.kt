@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.notifications
 
+import androidx.compose.ui.res.stringResource
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent

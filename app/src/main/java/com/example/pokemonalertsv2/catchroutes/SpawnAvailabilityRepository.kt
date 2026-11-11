@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.data.RouteMatrixRequest
 import com.example.pokemonalertsv2.data.RouteMatrixResponse
 import kotlinx.coroutines.ensureActive

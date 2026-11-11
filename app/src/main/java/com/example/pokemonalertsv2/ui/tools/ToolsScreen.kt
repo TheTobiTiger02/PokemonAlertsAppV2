@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.tools
 
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -128,13 +129,13 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
         item(span = StaggeredGridItemSpan.FullLine) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
                 Text(
-                    text = "Tools",
+                    text = stringResource(R.string.alerts_tools),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
                 IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
-                    Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                    Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.events_settings))
                 }
             }
         }
@@ -142,7 +143,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Search tools") },
+                placeholder = { Text(stringResource(R.string.tools_search_tools)) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(28.dp),
@@ -156,7 +157,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Quick access",
+                        text = stringResource(R.string.tools_quick_access),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 12.dp)
@@ -177,7 +178,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
         if (matches.isEmpty()) {
             item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
-                    text = "No tool matches “${query.trim()}”.",
+                    text = stringResource(R.string.tools_no_tool_matches_x, query.trim()),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
@@ -228,7 +229,7 @@ internal fun ToolsScreen(onOpen: (String) -> Unit, onOpenSettings: () -> Unit) {
         }
         item(span = StaggeredGridItemSpan.FullLine) {
             Text(
-                text = "Star up to four tools to keep them one tap away.",
+                text = stringResource(R.string.tools_star_up_to_four_tools_to),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp)

@@ -296,7 +296,7 @@ fun AlertDetailScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(id = R.drawable.ic_pip),
-                                        contentDescription = "Open in picture-in-picture"
+                                        contentDescription = stringResource(R.string.alerts_open_in_picture_in_picture)
                                     )
                                 }
                             }
@@ -317,14 +317,14 @@ fun AlertDetailScreen(
                             )
                             if (!alert.isExpiredAt(System.currentTimeMillis())) {
                                 FilledIconButton(onClick = { showSnoozeDialog = true }, colors = overlayColors) {
-                                    Icon(Icons.Filled.Notifications, contentDescription = "Snooze alert")
+                                    Icon(Icons.Filled.Notifications, contentDescription = stringResource(R.string.alerts_snooze_alert))
                                 }
                             }
                             FilledIconButton(
                                 onClick = { scope.launch { AlertShareCard.share(context, alert) } },
                                 colors = overlayColors
                             ) {
-                                Icon(Icons.Filled.Share, contentDescription = "Share alert")
+                                Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.alerts_share_alert))
                             }
                         }
 
@@ -349,7 +349,7 @@ fun AlertDetailScreen(
                                         tint = ShinyGold
                                     )
                                     Text(
-                                        text = "SHINY",
+                                        text = stringResource(R.string.alerts_shiny),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = ShinyGold
@@ -391,14 +391,14 @@ fun AlertDetailScreen(
                                 GoDexStatusPill(goDexStatus)
                                 goDexStatus.evolutionTargets.forEach { target ->
                                     Text(
-                                        text = "Evolution needed: ${target.displayName}",
+                                        text = stringResource(R.string.alerts_evolution_needed_x, target.displayName),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                                 goDexStatus.formChangeTargets.forEach { target ->
                                     Text(
-                                        text = "Form change needed: ${target.displayName}",
+                                        text = stringResource(R.string.alerts_form_change_needed_x, target.displayName),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -453,7 +453,7 @@ fun AlertDetailScreen(
                             Column(modifier = Modifier.padding(16.dp)) {
                                 val statusClock = rememberCountdownClock()
                                 Text(
-                                    text = "Status",
+                                    text = stringResource(R.string.alerts_status),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -602,22 +602,22 @@ internal fun InvalidationBanner(alert: PokemonAlert) {
             ) {
                 Icon(Icons.Filled.Warning, contentDescription = null)
                 Text(
-                    text = "Invalidated by weather",
+                    text = stringResource(R.string.alerts_invalidated_by_weather),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
             alert.invalidatedAt?.takeIf { it.isNotBlank() }?.let { raw ->
                 DetailValueRow(
-                    label = "Removed",
+                    label = stringResource(R.string.alerts_removed),
                     value = TimeUtils.formatTimestamp(raw) ?: raw
                 )
             }
             alert.invalidationReason?.takeIf { it.isNotBlank() }?.let { reason ->
-                DetailValueRow(label = "Reason", value = reason)
+                DetailValueRow(label = stringResource(R.string.alerts_reason), value = reason)
             }
             alert.invalidatedByAlertId?.let { alertId ->
-                DetailValueRow(label = "Weather alert", value = "#$alertId")
+                DetailValueRow(label = stringResource(R.string.alerts_weather_alert), value = "#$alertId")
             }
         }
     }
@@ -637,7 +637,7 @@ internal fun WeatherTransitionCard(alert: PokemonAlert) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "Weather change",
+                text = stringResource(R.string.alerts_weather_change),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -844,7 +844,7 @@ internal fun AlertDetailActionBar(
                             label = "detail_going_action"
                         ) { going ->
                             Text(
-                                text = if (going) "Stop" else "I\u2019m going",
+                                text = if (going) stringResource(R.string.tracking_stop) else stringResource(R.string.alerts_i_m_going),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1
@@ -877,7 +877,7 @@ internal fun AlertDetailActionBar(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Navigate",
+                            text = stringResource(R.string.alerts_navigate),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1

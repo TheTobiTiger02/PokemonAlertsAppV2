@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.events
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -74,7 +75,7 @@ fun EventsRoute(onOpenSettings: (() -> Unit)? = null) {
     fun refresh() = scope.launch {
         loading = true; error = null
         try { events = repository.refresh() } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            error = if (events.isEmpty()) "Events could not be loaded." else "Could not refresh; showing saved events."
+            error = if (events.isEmpty()) context.getString(R.string.events_events_could_not_be_loaded) else context.getString(R.string.events_could_not_refresh_showing_saved_events)
         } finally { loading = false }
     }
     LaunchedEffect(Unit) { events = repository.cached() }
@@ -175,8 +176,8 @@ fun EventsContent(
         ) {
             item(span = StaggeredGridItemSpan.FullLine) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Events", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text("Reminders") }
+                    Text(stringResource(R.string.events_events), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { reminderSettingsOpen = true }, modifier = Modifier.testTag("events_reminder_settings")) { Text(stringResource(R.string.events_reminders)) }
                     if (types.isNotEmpty()) {
                         IconButton(onClick = { typesOpen = true }, modifier = Modifier.testTag("events_filter")) {
                             BadgedBox(badge = { if (hiddenTypeCount > 0) Badge() }) {
@@ -193,7 +194,7 @@ fun EventsContent(
                     }
                     if (onOpenSettings != null) {
                         IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
-                            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                            Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.events_settings))
                         }
                     }
                 }
@@ -215,10 +216,10 @@ fun EventsContent(
                 androidx.compose.material3.OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Search events or Pokémon") },
+                    placeholder = { Text(stringResource(R.string.events_search_events_or_pok_mon)) },
                     leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                     trailingIcon = if (query.isNotEmpty()) {
-                        { IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") } }
+                        { IconButton(onClick = { query = "" }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.events_clear_search)) } }
                     } else null,
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("events_search")
@@ -228,16 +229,16 @@ fun EventsContent(
                 item(span = StaggeredGridItemSpan.FullLine) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("events_error")) {
                         Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
-                        TextButton(onClick = onRefresh) { Text("Retry") }
+                        TextButton(onClick = onRefresh) { Text(stringResource(R.string.events_retry)) }
                     }
                 }
             }
             if (nowEvents.isEmpty() && upcomingDays.isEmpty() && !state.loading) item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
                     when {
-                        needle.isNotEmpty() -> "No events match \"$needle\"."
-                        view == EventView.STARRED -> "No starred events. Tap the star on an event to be reminded of it."
-                        else -> "No events to show."
+                        needle.isNotEmpty() -> stringResource(R.string.events_no_events_match_x, needle)
+                        view == EventView.STARRED -> stringResource(R.string.events_no_starred_events_tap_the_star)
+                        else -> stringResource(R.string.events_no_events_to_show)
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -257,7 +258,7 @@ fun EventsContent(
             }
             item(span = StaggeredGridItemSpan.FullLine) {
                 Text(
-                    "Event data from LeekDuck. Times are shown in your time zone.",
+                    stringResource(R.string.events_event_data_from_leekduck_times_are),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -268,12 +269,12 @@ fun EventsContent(
     if (typesOpen) ModalBottomSheet(onDismissRequest = { typesOpen = false }) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Event types", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.events_event_types), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
                 TextButton(onClick = onShowAllTypes, enabled = hiddenTypeCount > 0, modifier = Modifier.testTag("events_types_all")) {
-                    Text("Show all")
+                    Text(stringResource(R.string.events_show_all))
                 }
             }
-            Text("Untick a type to hide it from the list.", style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.events_untick_a_type_to_hide_it), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 types.forEach { type ->
@@ -329,7 +330,7 @@ private fun EventCard(event: GameEvent, state: EventsUiState, onClick: () -> Uni
                     LinearProgressIndicator(progress = { event.progress(state.nowMillis) }, modifier = Modifier.fillMaxWidth())
                     Text("${durationLabel(event.endMillis - state.nowMillis)} left", style = MaterialTheme.typography.labelMedium)
                 } else {
-                    Text("Starts in ${durationLabel(event.startMillis - state.nowMillis)}", style = MaterialTheme.typography.labelMedium)
+                    Text(stringResource(R.string.events_starts_in_x, durationLabel(event.startMillis - state.nowMillis)), style = MaterialTheme.typography.labelMedium)
                 }
                 val pokemon = event.featured.ifEmpty { event.raidBosses }
                 if (pokemon.isNotEmpty()) PokemonRow(pokemon)
@@ -352,9 +353,9 @@ internal fun StarButton(event: GameEvent, settings: EventSettings, onToggleStar:
     ) {
         val tint = if (starred) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
         if (starred) {
-            Icon(Icons.Filled.Star, contentDescription = "Remind me", tint = tint)
+            Icon(Icons.Filled.Star, contentDescription = stringResource(R.string.events_remind_me), tint = tint)
         } else {
-            Icon(painterResource(R.drawable.ic_star_outline), contentDescription = "Remind me", tint = tint)
+            Icon(painterResource(R.drawable.ic_star_outline), contentDescription = stringResource(R.string.events_remind_me), tint = tint)
         }
     }
 }
@@ -366,7 +367,7 @@ internal fun PokemonRow(pokemon: List<EventPokemon>) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
                 AsyncImage(model = p.image, contentDescription = p.name, modifier = Modifier.size(44.dp).clip(CircleShape))
                 Text(p.name, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (p.shinyAvailable) Text("✨ shiny", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (p.shinyAvailable) Text(stringResource(R.string.events_shiny), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -376,8 +377,8 @@ internal fun PokemonRow(pokemon: List<EventPokemon>) {
 @OptIn(ExperimentalLayoutApi::class)
 private fun ReminderSettings(settings: EventSettings, types: List<String>, onToggleReminderType: (String) -> Unit, onLeadMinutes: (Int) -> Unit) {
     Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Event reminders", style = MaterialTheme.typography.headlineSmall)
-        Text("Get a notification before every event of these types. Star single events to be reminded of them too.",
+        Text(stringResource(R.string.events_event_reminders), style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.events_get_a_notification_before_every_event),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             types.forEach { type ->
@@ -385,7 +386,7 @@ private fun ReminderSettings(settings: EventSettings, types: List<String>, onTog
                     label = { Text(eventTypeName(type)) }, modifier = Modifier.testTag("events_remind_$type"))
             }
         }
-        Text("How long before", style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.events_how_long_before), style = MaterialTheme.typography.titleSmall)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             REMINDER_LEAD_CHOICES.forEach { minutes ->
                 FilterChip(selected = settings.leadMinutes == minutes, onClick = { onLeadMinutes(minutes) }, label = { Text("$minutes min") })

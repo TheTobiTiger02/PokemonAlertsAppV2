@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.material3.IconButton
@@ -254,7 +256,7 @@ internal fun SettingsScreen(
                                     if (destination != SettingsDestination.OVERVIEW) goBack()
                                     else onClose?.invoke()
                                 }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
                                 }
                             }
                         }
@@ -362,17 +364,17 @@ internal fun SettingsScreen(
                         systemNotificationsGranted = systemNotificationsGranted,
                         cardStyle = cardStyle,
                         goDexSummary = when {
-                            !goDexConfig.isConnected -> "Not connected"
+                            !goDexConfig.isConnected -> stringResource(R.string.settings_not_connected)
                             goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-                                "$goDexNeededCount still needed · sign in again"
+                                stringResource(R.string.settings_x_still_needed_sign_in_again, goDexNeededCount)
                             goDexConfig.hasWriteBackUrl ->
-                                "$goDexNeededCount still needed · two-way sync"
-                            else -> "$goDexNeededCount still needed · read-only"
+                                stringResource(R.string.settings_x_still_needed_two_way_sync, goDexNeededCount)
+                            else -> stringResource(R.string.settings_x_still_needed_read_only, goDexNeededCount)
                         },
                         goDexBadge = when {
-                            !goDexConfig.isConnected -> "Connect"
-                            goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED -> "Sign in"
-                            goDexSyncUiState.errorMessage != null -> "Sync issue"
+                            !goDexConfig.isConnected -> stringResource(R.string.health_connect)
+                            goDexSyncUiState.sessionState == GoDexSessionState.REAUTH_REQUIRED -> stringResource(R.string.settings_sign_in)
+                            goDexSyncUiState.errorMessage != null -> stringResource(R.string.settings_sync_issue)
                             else -> null
                         },
                         raidCountersSummary = buildString {
@@ -404,16 +406,16 @@ internal fun SettingsScreen(
                 }
 
                 if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
-                SettingsSection(title = "Theme") {
+                SettingsSection(title = stringResource(R.string.settings_theme)) {
                     SegmentedSetting(
                         options = listOf("System", "Light", "Dark"),
                         selectedIndex = themeMode.coerceIn(0, 2),
                         onSelected = { viewModel.updateThemeMode(it) }
                     )
                 }
-                SettingsSection(title = "Alert list") {
+                SettingsSection(title = stringResource(R.string.settings_alert_list)) {
                     Text(
-                        text = "Row style",
+                        text = stringResource(R.string.settings_row_style),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -423,13 +425,13 @@ internal fun SettingsScreen(
                         onSelected = { viewModel.updateCardStyle(com.example.pokemonalertsv2.data.AlertCardStyle.entries[it]) }
                     )
                     Text(
-                        text = "Compact fits about six alerts on screen. Large adds a map preview and buttons to every alert.",
+                        text = stringResource(R.string.settings_compact_fits_about_six_alerts_on),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     HorizontalDivider()
                     Text(
-                        text = "Default sort",
+                        text = stringResource(R.string.settings_default_sort),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -441,7 +443,7 @@ internal fun SettingsScreen(
                     )
                     SegmentedSetting(
                         // Four equal segments on a phone: "Ending soon" would not fit.
-                        options = sortOptions.map { if (it == SortPreference.TIME_REMAINING) "Ending" else it.shortLabel },
+                        options = sortOptions.map { if (it == SortPreference.TIME_REMAINING) stringResource(R.string.settings_ending) else it.shortLabel },
                         selectedIndex = sortOptions.indexOf(savedSortPreference).coerceAtLeast(0),
                         onSelected = { viewModel.updateSortPreference(sortOptions[it]) }
                     )
@@ -456,17 +458,17 @@ internal fun SettingsScreen(
                 }
 
                 if (animatedDestination == SettingsDestination.MAP_TRACKING) {
-                    SettingsSection(title = "Map markers") {
+                    SettingsSection(title = stringResource(R.string.settings_map_markers)) {
                         com.example.pokemonalertsv2.ui.alerts.MapGroupingEditor()
                     }
-                    SettingsSection(title = "Arrival tracking") {
+                    SettingsSection(title = stringResource(R.string.settings_arrival_tracking)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Other alert radius",
+                            text = stringResource(R.string.settings_other_alert_radius),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -503,11 +505,11 @@ internal fun SettingsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text("20 m", style = MaterialTheme.typography.labelSmall)
-                        Text("40 m default", style = MaterialTheme.typography.labelSmall)
+                        Text(stringResource(R.string.settings_40_m_default), style = MaterialTheme.typography.labelSmall)
                         Text("200 m", style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                    SettingsSection(title = "Watch & health data") {
+                    SettingsSection(title = stringResource(R.string.settings_watch_health_data)) {
                         com.example.pokemonalertsv2.health.WatchDataSettings()
                     }
                 }
@@ -517,11 +519,11 @@ internal fun SettingsScreen(
 
                 
                 if (animatedDestination == SettingsDestination.ABOUT_UPDATES) {
-                SettingsSection(title = "Backup") {
+                SettingsSection(title = stringResource(R.string.settings_backup)) {
                     SettingsBackupCard(snackbarHostState = snackbarHostState)
                 }
 
-                SettingsSection(title = "App information") {
+                SettingsSection(title = stringResource(R.string.settings_app_information)) {
                     val coroutineScope = rememberCoroutineScope()
                     val updateState by InAppUpdateManager.updateState.collectAsStateWithLifecycle(initialValue = UpdateState.Idle)
 
@@ -535,7 +537,7 @@ internal fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME}",
+                                text = stringResource(R.string.settings_version_x, com.example.pokemonalertsv2.BuildConfig.VERSION_NAME),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -556,9 +558,9 @@ internal fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Checking...")
+                                    Text(stringResource(R.string.settings_checking))
                                 } else {
-                                    Text("Check for Updates")
+                                    Text(stringResource(R.string.settings_check_for_updates))
                                 }
                             }
                         }
@@ -568,11 +570,11 @@ internal fun SettingsScreen(
                             androidx.compose.material3.TextButton(onClick = {
                                 com.example.pokemonalertsv2.util.CrashLog.shareIntent(context)?.let(context::startActivity)
                             }) {
-                                Text("Share last crash report")
+                                Text(stringResource(R.string.settings_share_last_crash_report))
                             }
                         }
                         Text(
-                            text = "Walking routes by Valhalla | Map data \u00A9 OpenStreetMap contributors",
+                            text = stringResource(R.string.settings_walking_routes_by_valhalla_map_data),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -591,7 +593,7 @@ internal fun SettingsScreen(
     if (showGoDexDisconnectConfirmation) {
         AlertDialog(
             onDismissRequest = { showGoDexDisconnectConfirmation = false },
-            title = { Text("Disconnect GoDex?") },
+            title = { Text(stringResource(R.string.settings_disconnect_godex)) },
             text = { Text(goDexDisconnectMessage(goDexSyncUiState.pendingCount)) },
             confirmButton = {
                 TextButton(
@@ -600,12 +602,12 @@ internal fun SettingsScreen(
                         viewModel.disconnectGoDex()
                     }
                 ) {
-                    Text("Disconnect")
+                    Text(stringResource(R.string.settings_disconnect))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showGoDexDisconnectConfirmation = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.mainscaffoldkt_cancel))
                 }
             }
         )

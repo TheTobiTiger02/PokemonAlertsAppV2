@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import android.appwidget.AppWidgetManager
 import android.content.Intent
@@ -116,29 +118,29 @@ private fun EventTypePicker(
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Events widget") }) },
+        topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.widget_events_widget)) }) },
         bottomBar = {
             Row(
                 Modifier.readableWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
-                TextButton(onClick = onCancel) { Text("Cancel") }
+                TextButton(onClick = onCancel) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
                 Button(
                     onClick = { scope.launch { onSave(if (chosen.containsAll(types)) null else chosen) } },
                     enabled = selected != null && chosen.isNotEmpty()
-                ) { Text("Save") }
+                ) { Text(stringResource(R.string.catchroutes_save)) }
             }
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).readableWidth()) {
             Text(
-                "Show these event types",
+                stringResource(R.string.widget_show_these_event_types),
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             Row(Modifier.padding(horizontal = 8.dp)) {
-                TextButton(onClick = { selected = types.toSet() }) { Text("All") }
-                TextButton(onClick = { selected = emptySet() }) { Text("None") }
+                TextButton(onClick = { selected = types.toSet() }) { Text(stringResource(R.string.alerts_all)) }
+                TextButton(onClick = { selected = emptySet() }) { Text(stringResource(R.string.alerts_none)) }
             }
             LazyColumn(Modifier.fillMaxWidth()) {
                 items(types, key = { it }) { type ->

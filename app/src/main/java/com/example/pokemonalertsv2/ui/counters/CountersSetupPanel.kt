@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -101,7 +102,7 @@ internal fun CounterSetupPanel(
 
                 SetupPage.MOVESET -> live?.let { (state, actions) ->
                     Column(pageModifier) {
-                        PanelHeader(title = "Boss moveset", onBack = back)
+                        PanelHeader(title = stringResource(R.string.counters_boss_moveset), onBack = back)
                         val entries = buildList {
                             add(null to "Average moveset")
                             state.bossMovesets.filterNot { it.isRandom }.forEach { add(it to it.displayName) }
@@ -115,7 +116,7 @@ internal fun CounterSetupPanel(
                 }
 
                 SetupPage.LEVEL -> Column(pageModifier) {
-                    PanelHeader(title = "Attacker level", onBack = back)
+                    PanelHeader(title = stringResource(R.string.counters_attacker_level), onBack = back)
                     if (live?.state?.showingPersonal == true) {
                         PageNote("My Pokémon ranks each of yours at its own level; this level is for the Pokébattler list.")
                     }
@@ -127,7 +128,7 @@ internal fun CounterSetupPanel(
                 }
 
                 SetupPage.FRIENDSHIP -> Column(pageModifier) {
-                    PanelHeader(title = "Friendship", onBack = back)
+                    PanelHeader(title = stringResource(R.string.counters_friendship), onBack = back)
                     ChoiceList(
                         entries = PokebattlerFriendship.entries.map { it to it.label },
                         isSelected = { it == options.friendship },
@@ -136,7 +137,7 @@ internal fun CounterSetupPanel(
                 }
 
                 SetupPage.STRATEGY -> Column(pageModifier) {
-                    PanelHeader(title = "Attack strategy", onBack = back)
+                    PanelHeader(title = stringResource(R.string.counters_attack_strategy), onBack = back)
                     ChoiceList(
                         entries = PokebattlerAttackStrategy.entries.map { it to it.label },
                         isSelected = { it == options.attackStrategy },
@@ -145,7 +146,7 @@ internal fun CounterSetupPanel(
                 }
 
                 SetupPage.SORT -> Column(pageModifier) {
-                    PanelHeader(title = "Rank by", onBack = back)
+                    PanelHeader(title = stringResource(R.string.counters_rank_by), onBack = back)
                     ChoiceList(
                         entries = PokebattlerSort.entries.map { it to it.label },
                         isSelected = { it == options.sort },
@@ -155,7 +156,7 @@ internal fun CounterSetupPanel(
 
                 SetupPage.MOVES -> live?.let { (state, actions) ->
                     Column(pageModifier) {
-                        PanelHeader(title = "My Pokémon moves", onBack = back)
+                        PanelHeader(title = stringResource(R.string.counters_my_pok_mon_moves), onBack = back)
                         ChoiceList(
                             entries = PersonalMovesMode.entries.map { it to it.label },
                             isSelected = { it == state.personalMovesMode },
@@ -173,7 +174,7 @@ internal fun CounterSetupPanel(
 
                 SetupPage.MEGA -> live?.let { (state, actions) ->
                     Column {
-                        PanelHeader(title = "Active mega", onBack = back)
+                        PanelHeader(title = stringResource(R.string.counters_active_mega), onBack = back)
                         ActiveMegaSheet(
                             state = state,
                             showTitle = false,
@@ -214,7 +215,7 @@ private fun SetupList(
     PanelSectionLabel("Battle")
     if (state != null) {
         PanelNavRow(
-            title = "Boss moveset",
+            title = stringResource(R.string.counters_boss_moveset),
             summary = state.selectedBossMoveset?.displayName ?: "Average",
             active = state.selectedBossMoveset != null,
             onClick = { open(SetupPage.MOVESET) },
@@ -223,7 +224,7 @@ private fun SetupList(
     }
     if (SetupItem.LEVEL !in excluded) {
         PanelNavRow(
-            title = "Attacker level",
+            title = stringResource(R.string.counters_attacker_level),
             summary = if (state?.showingPersonal == true) {
                 "Level ${options.attackerLevel} · yours use their own"
             } else {
@@ -235,14 +236,14 @@ private fun SetupList(
         ) { PanelIcon(R.drawable.ic_insights) }
     }
     PanelNavRow(
-        title = "Friendship",
+        title = stringResource(R.string.counters_friendship),
         summary = options.friendship.label,
         active = options.friendship != defaults.friendship,
         onClick = { open(SetupPage.FRIENDSHIP) },
         modifier = Modifier.testTag("setup_row_friendship")
     ) { PanelIcon(R.drawable.ic_group) }
     PanelNavRow(
-        title = "Attack strategy",
+        title = stringResource(R.string.counters_attack_strategy),
         summary = options.attackStrategy.label,
         active = options.attackStrategy != defaults.attackStrategy,
         onClick = { open(SetupPage.STRATEGY) },
@@ -250,7 +251,7 @@ private fun SetupList(
     ) { PanelIcon(R.drawable.ic_tune) }
     if (SetupItem.SORT !in excluded) {
         PanelNavRow(
-            title = "Rank by",
+            title = stringResource(R.string.counters_rank_by),
             summary = options.sort.label,
             active = options.sort != defaults.sort,
             onClick = { open(SetupPage.SORT) },
@@ -258,7 +259,7 @@ private fun SetupList(
         ) { PanelIcon(R.drawable.ic_filter) }
     }
     PanelSwitchRow(
-        title = "Party Power",
+        title = stringResource(R.string.counters_party_power),
         checked = options.partyPower,
         onCheckedChange = { onOptionsChanged(options.copy(partyPower = it)) },
         icon = { PanelIcon(R.drawable.ic_timer) }
@@ -266,19 +267,19 @@ private fun SetupList(
 
     PanelSectionLabel("Include")
     PanelSwitchRow(
-        title = "Megas",
+        title = stringResource(R.string.counters_megas),
         checked = options.includeMegas,
         onCheckedChange = { onOptionsChanged(options.copy(includeMegas = it)) },
         icon = { PanelIcon(R.drawable.ic_reward_mega_energy) }
     )
     PanelSwitchRow(
-        title = "Shadows",
+        title = stringResource(R.string.counters_shadows),
         checked = options.includeShadow,
         onCheckedChange = { onOptionsChanged(options.copy(includeShadow = it)) },
         icon = { PanelIcon(R.drawable.ic_visibility) }
     )
     PanelSwitchRow(
-        title = "Legendaries",
+        title = stringResource(R.string.counters_legendaries),
         checked = options.includeLegendary,
         onCheckedChange = { onOptionsChanged(options.copy(includeLegendary = it)) },
         icon = { PanelIcon(R.drawable.ic_star_border) }
@@ -290,8 +291,8 @@ private fun SetupList(
     PanelSectionLabel("My Pokémon")
     if (showOwned) {
         PanelSwitchRow(
-            title = "Owned only",
-            subtitle = "Pokébattler list keeps only Pokémon you have",
+            title = stringResource(R.string.counters_owned_only),
+            subtitle = stringResource(R.string.counters_pok_battler_list_keeps_only_pok),
             checked = state.ownedOnly,
             onCheckedChange = actions.onOwnedOnlyChanged,
             icon = { PanelIcon(R.drawable.ic_species) }
@@ -300,14 +301,14 @@ private fun SetupList(
     if (state.hasPersonalSource) {
         val mega = state.activeMegaId?.let { id -> state.megaOptions.firstOrNull { it.pokemonId == id } }
         PanelNavRow(
-            title = "Active mega",
+            title = stringResource(R.string.counters_active_mega),
             summary = mega?.displayName ?: "None",
             active = mega != null,
             onClick = { open(SetupPage.MEGA) },
             modifier = Modifier.testTag("setup_row_mega")
         ) { PanelIcon(R.drawable.ic_reward_mega_energy) }
         PanelNavRow(
-            title = "Moves",
+            title = stringResource(R.string.alerts_moves),
             summary = state.personalMovesMode.label,
             onClick = { open(SetupPage.MOVES) },
             modifier = Modifier.testTag("setup_row_moves")
@@ -498,7 +499,7 @@ internal fun ColumnScope.SetupSheetFooter(onSaveAsDefault: () -> Unit, onDone: (
     TextButton(
         onClick = onSaveAsDefault,
         modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = Spacing.md)
-    ) { Text("Save as default") }
-    com.example.pokemonalertsv2.ui.components.PanelFooterButton(text = "Done", onClick = onDone)
+    ) { Text(stringResource(R.string.counters_save_as_default)) }
+    com.example.pokemonalertsv2.ui.components.PanelFooterButton(text = stringResource(R.string.catchroutes_done), onClick = onDone)
     Spacer(Modifier.size(Spacing.lg))
 }

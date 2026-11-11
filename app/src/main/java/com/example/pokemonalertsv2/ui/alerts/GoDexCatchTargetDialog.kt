@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -127,7 +129,7 @@ fun GoDexCatchTargetDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add to GoDex checklist") },
+        title = { Text(stringResource(R.string.alerts_add_to_godex_checklist)) },
         text = {
             Column(
                 modifier = Modifier
@@ -136,7 +138,7 @@ fun GoDexCatchTargetDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Which missing checklist entry does this Hundo fill?",
+                    text = stringResource(R.string.alerts_which_missing_checklist_entry_does_this),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -145,7 +147,7 @@ fun GoDexCatchTargetDialog(
                         title = option.displayName,
                         subtitle = option.supportingLabel,
                         selected = selectedKey == option.entryKey,
-                        actionLabel = "Mark caught",
+                        actionLabel = stringResource(R.string.alerts_mark_caught),
                         onClick = { selectedKey = option.entryKey }
                     )
                 }
@@ -159,11 +161,11 @@ fun GoDexCatchTargetDialog(
                     contentDescription = "Confirm GoDex caught change"
                 }
             ) {
-                Text("Mark caught")
+                Text(stringResource(R.string.alerts_mark_caught))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
         }
     )
 }
@@ -179,7 +181,7 @@ fun GoDexUncatchTargetDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Mark as still needed") },
+        title = { Text(stringResource(R.string.alerts_mark_as_still_needed)) },
         text = {
             Column(
                 modifier = Modifier
@@ -188,7 +190,7 @@ fun GoDexUncatchTargetDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Choose the exact GoDex entry to put back on your needed list.",
+                    text = stringResource(R.string.alerts_choose_the_exact_godex_entry_to),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -201,7 +203,7 @@ fun GoDexUncatchTargetDialog(
                         title = entry.displayName,
                         subtitle = variant.ifBlank { "Caught in GoDex" },
                         selected = selectedKey == entry.entryKey,
-                        actionLabel = "Mark needed",
+                        actionLabel = stringResource(R.string.alerts_mark_needed),
                         onClick = { selectedKey = entry.entryKey }
                     )
                 }
@@ -215,11 +217,11 @@ fun GoDexUncatchTargetDialog(
                     contentDescription = "Confirm GoDex needed change"
                 }
             ) {
-                Text("Mark needed")
+                Text(stringResource(R.string.alerts_mark_needed))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
         }
     )
 }
@@ -274,7 +276,7 @@ private fun GoDexTargetRow(
                 )
             }
             Text(
-                text = if (selected) "Selected" else actionLabel,
+                text = if (selected) stringResource(R.string.alerts_selected) else actionLabel,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.SemiBold
@@ -453,17 +455,17 @@ internal fun GoDexCaughtControl(
         ?: caughtEntries.singleOrNull()?.displayName
     val actionLabel = when {
         isPending && config.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-            "Queued \u2022 Sign in to sync"
-        isPending -> "Sending to GoDex\u2026"
-        hasUncatchAction -> "Mark as still needed"
+            stringResource(R.string.alerts_queued_sign_in_to_sync)
+        isPending -> stringResource(R.string.alerts_sending_to_godex)
+        hasUncatchAction -> stringResource(R.string.alerts_mark_as_still_needed)
         catchOptions.size == 1 -> "Mark ${targetName ?: "target"} caught"
-        else -> "Choose caught target"
+        else -> stringResource(R.string.alerts_choose_caught_target)
     }
     val contentDescription = when {
-        isPending -> "GoDex checklist change pending"
+        isPending -> stringResource(R.string.alerts_godex_checklist_change_pending)
         hasUncatchAction -> "Mark ${targetName ?: "Pokémon"} as needed in GoDex"
         catchOptions.size == 1 -> "Mark ${targetName ?: "Pokémon"} as caught in GoDex"
-        else -> "Choose which GoDex entry to mark as caught"
+        else -> stringResource(R.string.alerts_choose_which_godex_entry_to_mark)
     }
     val onClick = {
         when {

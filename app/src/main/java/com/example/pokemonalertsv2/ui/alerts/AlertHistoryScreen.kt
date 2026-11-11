@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import com.example.pokemonalertsv2.util.haversineMeters
 import com.example.pokemonalertsv2.util.rememberOffMain
@@ -476,11 +478,11 @@ internal fun AlertHistoryPage(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    if (uiState.alerts.isEmpty()) "Unable to load history" else "Showing saved history · $message",
+                                    if (uiState.alerts.isEmpty()) stringResource(R.string.alerts_unable_to_load_history) else stringResource(R.string.alerts_showing_saved_history_x, message),
                                     modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                TextButton(onClick = onRefresh) { Text("Retry") }
+                                TextButton(onClick = onRefresh) { Text(stringResource(R.string.events_retry)) }
                             }
                         }
                 }
@@ -534,7 +536,7 @@ internal fun AlertHistoryPage(
                             )
                             Icon(
                                 imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                contentDescription = if (isExpanded) stringResource(R.string.alerts_collapse) else stringResource(R.string.alerts_expand),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -589,8 +591,8 @@ internal fun AlertHistoryPage(
             } else if (filteredAlerts.isEmpty() && !uiState.isLoading) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     AnimatedEmptyState(
-                        title = "No history found",
-                        message = "No alerts match your search or filters. Try changing the search, area, date, or type.",
+                        title = stringResource(R.string.alerts_no_history_found),
+                        message = stringResource(R.string.alerts_no_alerts_match_your_search_or),
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -672,8 +674,8 @@ internal fun AlertHistoryPage(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Couldn't load more history", color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = onLoadMore) { Text("Retry") }
+                        Text(stringResource(R.string.alerts_couldn_t_load_more_history), color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = onLoadMore) { Text(stringResource(R.string.events_retry)) }
                     }
                 }
             }
@@ -690,13 +692,13 @@ internal fun AlertHistoryPage(
                     .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Filter history", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Alert type", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.alerts_filter_history), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.alerts_alert_type), style = MaterialTheme.typography.titleSmall)
                 HistoryTypeFilterRow(
                     selectedFilter = selectedTypeFilter,
                     onFilterChanged = applyHistoryTypeFilter
                 )
-                Text("Area", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.hunt_area), style = MaterialTheme.typography.titleSmall)
                 HistoryAreaFilterRow(
                     selectedFilter = selectedAreaFilter,
                     onFilterChanged = {
@@ -704,7 +706,7 @@ internal fun AlertHistoryPage(
                         selectedAreaFilter = it
                     }
                 )
-                Text("Date", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.alerts_date), style = MaterialTheme.typography.titleSmall)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         FilterChip(
@@ -713,7 +715,7 @@ internal fun AlertHistoryPage(
                                 selectedDateMillis = null
                                 onDateChanged(null)
                             },
-                            label = { Text("All") }
+                            label = { Text(stringResource(R.string.alerts_all)) }
                         )
                     }
                     item {
@@ -723,7 +725,7 @@ internal fun AlertHistoryPage(
                                 selectedDateMillis = historyDateMillis(0)
                                 onDateChanged(historyDateString(0))
                             },
-                            label = { Text("Today") }
+                            label = { Text(stringResource(R.string.alerts_today)) }
                         )
                     }
                     item {
@@ -733,7 +735,7 @@ internal fun AlertHistoryPage(
                                 selectedDateMillis = historyDateMillis(1)
                                 onDateChanged(historyDateString(1))
                             },
-                            label = { Text("Yesterday") }
+                            label = { Text(stringResource(R.string.alerts_yesterday)) }
                         )
                     }
                     item {
@@ -742,7 +744,7 @@ internal fun AlertHistoryPage(
                                 uiState.selectedDate != historyDateString(0) &&
                                 uiState.selectedDate != historyDateString(1),
                             onClick = showHistoryDatePicker,
-                            label = { Text("Custom") },
+                            label = { Text(stringResource(R.string.alerts_custom)) },
                             leadingIcon = { Icon(Icons.Filled.DateRange, contentDescription = null) }
                         )
                     }
@@ -757,14 +759,14 @@ internal fun AlertHistoryPage(
                             onSearchChanged("")
                         }
                     ) {
-                        Text("Clear all filters")
+                        Text(stringResource(R.string.alerts_clear_all_filters))
                     }
                 }
                 Button(
                     onClick = { showHistoryFilterSheet = false },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Show results")
+                    Text(stringResource(R.string.alerts_show_results))
                 }
             }
         }

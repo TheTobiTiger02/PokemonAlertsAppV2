@@ -77,10 +77,10 @@ fun AlertsTab(
         ) {
             if (section == AlertsSection.INSIGHTS) {
                 IconButton(onClick = onInsightsBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to history")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.alerts_back_to_history))
                 }
                 Text(
-                    text = "Spawn insights",
+                    text = stringResource(R.string.alerts_spawn_insights),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -118,7 +118,7 @@ fun AlertsTab(
                 }
             }
             IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.events_settings))
             }
         }
         Crossfade(

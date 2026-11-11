@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,12 +132,12 @@ internal fun MapSetAllRow(
         TextButton(onClick = onAll, contentPadding = PaddingValues(horizontal = Spacing.sm)) {
             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.xxs))
-            Text("All")
+            Text(stringResource(R.string.alerts_all))
         }
         TextButton(onClick = onNone, contentPadding = PaddingValues(horizontal = Spacing.sm)) {
             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.xxs))
-            Text("None")
+            Text(stringResource(R.string.alerts_none))
         }
     }
 }
@@ -298,12 +300,12 @@ internal fun SpeciesPickerContent(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search name or Dex #", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    placeholder = { Text(stringResource(R.string.alerts_search_name_or_dex), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_clear))
                             }
                         }
                     },
@@ -339,17 +341,17 @@ internal fun SpeciesPickerContent(
                                 SpeciesSortOrder.DEX_NUMBER
                             }
                         },
-                        label = { Text("Sort: ${sortOrder.label}") },
+                        label = { Text(stringResource(R.string.alerts_sort_x, sortOrder.label)) },
                         shape = RoundedCornerShape(16.dp)
                     )
                     TextButton(
                         onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
                         contentPadding = PaddingValues(horizontal = Spacing.sm)
-                    ) { Text("All") }
+                    ) { Text(stringResource(R.string.alerts_all)) }
                     TextButton(
                         onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) },
                         contentPadding = PaddingValues(horizontal = Spacing.sm)
-                    ) { Text("None") }
+                    ) { Text(stringResource(R.string.alerts_none)) }
                 }
             }
         }
@@ -461,7 +463,7 @@ private fun SpeciesTile(
             )
             if (unavailable) {
                 Text(
-                    text = "Unavailable",
+                    text = stringResource(R.string.alerts_unavailable),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                     maxLines = 1

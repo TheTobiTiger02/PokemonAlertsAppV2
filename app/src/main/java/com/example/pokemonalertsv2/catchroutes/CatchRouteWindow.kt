@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceDistance
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteBadge

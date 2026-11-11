@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.HeartRed
 import com.example.pokemonalertsv2.ui.theme.HundoPink
 import com.example.pokemonalertsv2.ui.theme.ShinyGold
@@ -167,7 +169,7 @@ internal fun WatchStatsSection(watch: WatchStats, modifier: Modifier = Modifier)
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed, modifier = Modifier.size(18.dp))
-                Text("From your watch", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.hunt_from_your_watch), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 watch.deviceName?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -182,7 +184,7 @@ internal fun WatchStatsSection(watch: WatchStats, modifier: Modifier = Modifier)
             if (watch.heartRatePerMinute.count { it > 0 } >= 2) {
                 HeartRateChart(watch.heartRatePerMinute, Modifier.fillMaxWidth().height(72.dp))
                 Text(
-                    "Heart rate per minute · ${watch.minHeartRate}–${watch.maxHeartRate} bpm",
+                    stringResource(R.string.hunt_heart_rate_per_minute_x_x, watch.minHeartRate, watch.maxHeartRate),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

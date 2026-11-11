@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -202,7 +203,7 @@ internal fun UnresolvedState(state: RaidCountersUiState, actions: RaidCountersAc
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        TextButton(onClick = actions.onRetry) { Text("Retry") }
+        TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
     }
 }
 
@@ -214,7 +215,7 @@ internal fun ErrorState(state: RaidCountersUiState, actions: RaidCountersActions
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        TextButton(onClick = actions.onRetry) { Text("Retry") }
+        TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
     }
 }
 

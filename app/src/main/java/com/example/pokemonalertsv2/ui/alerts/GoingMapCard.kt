@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +64,7 @@ internal fun GoingMapCard(alert: PokemonAlert, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AlertPill(
-                text = "Arrival tracking active",
+                text = stringResource(R.string.alerts_arrival_tracking_active),
                 icon = Icons.Filled.LocationOn,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -71,7 +72,7 @@ internal fun GoingMapCard(alert: PokemonAlert, modifier: Modifier = Modifier) {
             FilterChip(
                 selected = showMap,
                 onClick = { scope.launch { repository.setShowGoingMap(!showMap) } },
-                label = { Text("Map") },
+                label = { Text(stringResource(R.string.alerts_map)) },
                 leadingIcon = { Icon(painterResource(R.drawable.ic_map), contentDescription = null) },
                 modifier = Modifier.testTag("going_map_toggle")
             )
@@ -171,7 +172,7 @@ private fun GoingMap(alert: PokemonAlert) {
             shape = MaterialTheme.shapes.extraSmall
         ) {
             Text(
-                text = "© OpenStreetMap contributors",
+                text = stringResource(R.string.alerts_openstreetmap_contributors),
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
             )
@@ -180,7 +181,7 @@ private fun GoingMap(alert: PokemonAlert) {
             onClick = { frame() },
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
         ) {
-            Icon(painterResource(R.drawable.ic_fit_map), contentDescription = "Show me and the target")
+            Icon(painterResource(R.drawable.ic_fit_map), contentDescription = stringResource(R.string.alerts_show_me_and_the_target))
         }
     }
 }

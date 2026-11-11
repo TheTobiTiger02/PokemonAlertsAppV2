@@ -2354,19 +2354,19 @@ internal fun AlertsMapScreenContent(
                                     )
                                 } else {
                                     Text(
-                                        text = "Map couldn\u2019t be loaded",
+                                        text = stringResource(R.string.alerts_map_couldn_t_be_loaded),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Check your connection, retry, or use the other map provider.",
+                                        text = stringResource(R.string.alerts_check_your_connection_retry_or_use),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Button(onClick = ::retryMapLoad) {
                                         Icon(Icons.Filled.Refresh, contentDescription = null)
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Retry")
+                                        Text(stringResource(R.string.events_retry))
                                     }
                                     TextButton(onClick = ::toggleMapSource) {
                                         Text(
@@ -2464,7 +2464,7 @@ internal fun AlertsMapScreenContent(
         if (!compactPictureInPicture && preparedMarkers.markerLimitActive) {
             Surface(modifier = Modifier.align(Alignment.TopCenter).padding(top = topChromeInset + Spacing.lg),
                 shape = MaterialTheme.shapes.small) {
-                Text("Marker limit active", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
+                Text(stringResource(R.string.alerts_marker_limit_active), modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelSmall)
             }
         }
         if (!compactPictureInPicture && showMapTools) {
@@ -2827,7 +2827,7 @@ internal fun MapClusterMemberList(
     ) {
         item(key = "heading") {
             Text(
-                "${sortedAlerts.size} alerts at this location",
+                stringResource(R.string.alerts_x_alerts_at_this_location, sortedAlerts.size),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 4.dp)
@@ -2898,7 +2898,7 @@ internal fun MapClusterMemberList(
                         ) {
                             alert.displayCp?.let { cp ->
                                 Text(
-                                    text = "CP $cp",
+                                    text = stringResource(R.string.alerts_cp_x, cp),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
