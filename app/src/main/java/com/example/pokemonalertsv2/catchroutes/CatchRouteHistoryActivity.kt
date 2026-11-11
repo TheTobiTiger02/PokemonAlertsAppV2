@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
@@ -75,7 +76,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                             HistoryRow(summary, onDelete = {
                                 lifecycleScope.launch {
                                     store.deleteHistory(summary.id)
-                                    val result = snackbar.showSnackbar("Route deleted", actionLabel = "Undo",
+                                    val result = snackbar.showSnackbar("Route deleted", actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
                                         duration = androidx.compose.material3.SnackbarDuration.Short)
                                     if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) store.addHistory(summary)
                                 }
@@ -106,7 +107,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                     Text("${summary.headline()} · ${formatCatchSpeed(summary.averageKmh)}", style = MaterialTheme.typography.bodyMedium)
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("catch_history_delete_${summary.id}")) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${summary.name}")
+                    Icon(Icons.Filled.Delete, contentDescription = AppText.get(R.string.catchroutes_delete_x_2, summary.name))
                 }
             }
         }

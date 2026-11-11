@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -135,8 +137,8 @@ enum class SortPreference {
 
 /** How feed and history rows are drawn: dense rows, or the original cards with a map preview. */
 enum class AlertCardStyle(val label: String) {
-    COMPACT("Compact"),
-    LARGE("Large with map");
+    COMPACT(AppText.get(R.string.data_compact)),
+    LARGE(AppText.get(R.string.data_large_with_map));
 
     companion object {
         fun fromStored(value: String?): AlertCardStyle = entries.firstOrNull { it.name == value } ?: COMPACT

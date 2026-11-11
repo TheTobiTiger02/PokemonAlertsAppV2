@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.horizontalScroll
@@ -68,7 +69,7 @@ internal fun CatchAreaPicker(
                             saved.forEach { area ->
                                 DropdownMenuItem(text = { Text(area.name) }, onClick = {
                                     savedOpen = false; drawing = false; change(area.corners); view?.fitArea(area.corners)
-                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text("Delete") } })
+                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text(AppText.get(R.string.catchroutes_delete)) } })
                             }
                         }
                     }
@@ -112,8 +113,8 @@ internal fun CatchAreaPicker(
             dismissButton = { TextButton(onClick = { naming = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
     deleting?.let { area ->
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${area.name}?") },
-            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text("Delete") } },
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(AppText.get(R.string.catchroutes_delete_x, area.name)) },
+            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text(AppText.get(R.string.catchroutes_delete)) } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
 }

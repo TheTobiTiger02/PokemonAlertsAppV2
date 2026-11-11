@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedContent
@@ -84,9 +85,9 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 internal enum class GoDexCollectionFilter(val label: String) {
-    NEEDED("Still needed"),
-    CAUGHT("Caught"),
-    ALL("All")
+    NEEDED(AppText.get(R.string.settings_still_needed_2)),
+    CAUGHT(AppText.get(R.string.hunt_caught)),
+    ALL(AppText.get(R.string.alerts_all))
 }
 
 internal data class GoDexCollectionSelection(
@@ -107,7 +108,7 @@ internal fun goDexEntryVariantLabel(entry: GoDexEntryEntity): String = buildList
 
 /** The variant line, never blank: a form named only in the title still reads as one. */
 internal fun goDexEntryVariantLine(entry: GoDexEntryEntity): String =
-    goDexEntryVariantLabel(entry).ifBlank { if (entry.formSlug == null) "Base form" else "Alternate form" }
+    goDexEntryVariantLabel(entry).ifBlank { if (entry.formSlug == null) AppText.get(R.string.settings_base_form) else AppText.get(R.string.settings_alternate_form) }
 
 internal fun toggleGoDexCollectionSelection(
     current: GoDexCollectionSelection?,
@@ -535,10 +536,10 @@ private fun GoDexCollectionEntryTile(
             .semantics(mergeDescendants = true) {
                 contentDescription = accessibilityDescription
                 stateDescription = when {
-                    selected -> "Selected"
-                    isPending -> "Sync pending"
-                    caught -> "Caught"
-                    else -> "Needed"
+                    selected -> AppText.get(R.string.alerts_selected)
+                    isPending -> AppText.get(R.string.alerts_sync_pending)
+                    caught -> AppText.get(R.string.hunt_caught)
+                    else -> AppText.get(R.string.alerts_needed)
                 }
             },
         colors = CardDefaults.cardColors(containerColor = containerColor),

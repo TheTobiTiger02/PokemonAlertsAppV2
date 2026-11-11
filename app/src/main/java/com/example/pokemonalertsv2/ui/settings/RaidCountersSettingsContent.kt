@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -246,7 +247,7 @@ fun RaidCountersSettingsContent(
             },
             confirmButton = {
                 Button(onClick = onConfirmImport) {
-                    Text(if (settings.pokeGenieCount > 0) "Replace roster" else stringResource(R.string.settings_import))
+                    Text(if (settings.pokeGenieCount > 0) AppText.get(R.string.settings_replace_roster) else stringResource(R.string.settings_import))
                 }
             },
             dismissButton = {

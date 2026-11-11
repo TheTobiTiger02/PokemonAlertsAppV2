@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.foundation.layout.widthIn
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
@@ -37,9 +38,9 @@ import androidx.compose.animation.core.tween
  * a button on the history screen and has its own back arrow.
  */
 enum class AlertsSection(val label: String) {
-    LIVE("Live"),
-    HISTORY("History"),
-    INSIGHTS("Insights")
+    LIVE(AppText.get(R.string.alerts_live)),
+    HISTORY(AppText.get(R.string.alerts_history)),
+    INSIGHTS(AppText.get(R.string.alerts_insights))
 }
 
 /** The two sections the Live | History switch offers, in display order. */

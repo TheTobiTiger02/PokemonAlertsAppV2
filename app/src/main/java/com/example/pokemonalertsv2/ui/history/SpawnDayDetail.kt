@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
@@ -268,7 +269,7 @@ internal fun alertTypes(byType: Map<String, Int>, total: Int): String {
     if (total == 0) return "No alerts received this day."
     val sorted = byType.entries.filter { it.value > 0 }.sortedByDescending { it.value }
     val shown = sorted.take(4).joinToString(" · ") { "${it.key} ${it.value}" }
-    return if (sorted.size > 4) "$shown · +${sorted.size - 4} more" else shown
+    return if (sorted.size > 4) AppText.get(R.string.history_x_x_more, shown, sorted.size - 4) else shown
 }
 
 private val LONG_DAY: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)

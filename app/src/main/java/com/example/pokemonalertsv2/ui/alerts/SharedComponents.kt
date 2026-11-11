@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.util.PerfTrace
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -437,9 +438,9 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
             ?.takeIf { it.isNotBlank() }
             ?.replaceFirstChar { it.uppercaseChar() }
         return when {
-            gruntLabel == null || gruntLabel.equals("rocket", ignoreCase = true) -> "Team Rocket"
+            gruntLabel == null || gruntLabel.equals("rocket", ignoreCase = true) -> AppText.get(R.string.alerts_team_rocket)
             gruntLabel.endsWith("rocket", ignoreCase = true) -> gruntLabel
-            else -> "$gruntLabel Rocket"
+            else -> AppText.get(R.string.alerts_x_rocket, gruntLabel)
         }
     }
     
@@ -471,10 +472,10 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     
     if (bestPvp != null) {
         val leagueName = when {
-            bestPvp.league?.contains("great", ignoreCase = true) == true -> "Great"
-            bestPvp.league?.contains("ultra", ignoreCase = true) == true -> "Ultra"
-            bestPvp.league?.contains("master", ignoreCase = true) == true -> "Master"
-            bestPvp.league?.contains("little", ignoreCase = true) == true -> "Little"
+            bestPvp.league?.contains("great", ignoreCase = true) == true -> AppText.get(R.string.alerts_great)
+            bestPvp.league?.contains("ultra", ignoreCase = true) == true -> AppText.get(R.string.alerts_ultra)
+            bestPvp.league?.contains("master", ignoreCase = true) == true -> AppText.get(R.string.alerts_master)
+            bestPvp.league?.contains("little", ignoreCase = true) == true -> AppText.get(R.string.alerts_little)
             else -> bestPvp.league?.replaceFirstChar { it.uppercaseChar() }
         }
         prefixParts.add("$leagueName #${bestPvp.rank}")

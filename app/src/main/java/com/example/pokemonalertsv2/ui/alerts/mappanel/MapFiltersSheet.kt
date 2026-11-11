@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -239,16 +240,16 @@ internal fun StatsEditor(state: FiltersState) {
         modifier = Modifier.panelGutter().padding(top = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
     ) {
-        ValueLine(stringResource(R.string.alerts_minimum_iv), if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_iv), if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minIvPercent = it))
         }
-        ValueLine(stringResource(R.string.alerts_minimum_cp), if (stats.minCp > 0) "${stats.minCp}" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_cp), if (stats.minCp > 0) "${stats.minCp}" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minCp = it))
         }
-        ValueLine(stringResource(R.string.alerts_minimum_level), if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_level), if (stats.minLevel > 0) "${stats.minLevel}" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minLevel = it))
         }
         Text(

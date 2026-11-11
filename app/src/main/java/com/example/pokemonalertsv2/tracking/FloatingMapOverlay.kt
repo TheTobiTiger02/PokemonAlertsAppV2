@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.alerts.RouteLineStyle
 import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
@@ -562,7 +563,7 @@ internal class FloatingMapOverlay(context: Context) {
 
     private fun renderNoticeStrip() {
         val undo = undoName
-        noticeText?.text = if (undo != null) "Caught $undo" else noticeMessage
+        noticeText?.text = if (undo != null) AppText.get(R.string.mainscaffoldkt_caught_x, undo) else noticeMessage
         undoAction?.isVisible = undo != null
         val shown = undo != null || noticeMessage != null
         if (noticeStrip?.isVisible != shown) {
@@ -652,7 +653,7 @@ internal class FloatingMapOverlay(context: Context) {
 
     fun setPaused(paused: Boolean) {
         this.paused = paused
-        pauseItem?.text = if (paused) "▶  Resume route" else "❚❚  Pause route"
+        pauseItem?.text = if (paused) AppText.get(R.string.tracking_resume_route) else AppText.get(R.string.tracking_pause_route)
     }
 
     /** Folds the window into the bubble. Closing the panel first, so it is not open on return. */
@@ -799,14 +800,14 @@ internal class FloatingMapOverlay(context: Context) {
         val kit = OverlayChrome(themedContext, window) { painter -> painters += painter; painter(colors) }
         fun add(view: View, gravity: Int, l: Int = 0, t: Int = 0, r: Int = 0, b: Int = 0, w: Int = -2, h: Int = -2) =
             addView(view, FrameLayout.LayoutParams(w, h, gravity).apply { setMargins(dp(l), dp(t), dp(r), dp(b)) })
-        val previous = OverlayAction("Previous target", icon = R.drawable.ic_pip_prev) { onPrevious() }
-        val gotIt = OverlayAction("Got it", icon = R.drawable.ic_check) { onGotIt() }
-        val nextTarget = OverlayAction("Next target", icon = R.drawable.ic_pip_next) { onNext() }
-        val more = OverlayAction("More options", glyph = "⋯") { setMenuOpen(menuPanel?.isVisible != true) }
-        val minimize = OverlayAction("Minimize map", glyph = "–") { minimize() }
-        val close = OverlayAction(if (huntMode) "Stop hunt" else "Hide map", icon = R.drawable.ic_close_small) { onClose() }
-        val follow = OverlayAction("Follow my location", icon = R.drawable.ic_my_location) { onRecenter() }
-        val fit = OverlayAction("Focus Hunt target or route", icon = R.drawable.ic_fit_map) { onFit() }
+        val previous = OverlayAction(AppText.get(R.string.tracking_previous_target), icon = R.drawable.ic_pip_prev) { onPrevious() }
+        val gotIt = OverlayAction(AppText.get(R.string.ui_got_it), icon = R.drawable.ic_check) { onGotIt() }
+        val nextTarget = OverlayAction(AppText.get(R.string.tracking_next_target), icon = R.drawable.ic_pip_next) { onNext() }
+        val more = OverlayAction(AppText.get(R.string.tracking_more_options), glyph = "⋯") { setMenuOpen(menuPanel?.isVisible != true) }
+        val minimize = OverlayAction(AppText.get(R.string.tracking_minimize_map), glyph = "–") { minimize() }
+        val close = OverlayAction(if (huntMode) AppText.get(R.string.hunt_stop_hunt) else AppText.get(R.string.tracking_hide_map), icon = R.drawable.ic_close_small) { onClose() }
+        val follow = OverlayAction(AppText.get(R.string.tracking_follow_my_location), icon = R.drawable.ic_my_location) { onRecenter() }
+        val fit = OverlayAction(AppText.get(R.string.tracking_focus_hunt_target_or_route), icon = R.drawable.ic_fit_map) { onFit() }
         fun huntOnly(view: View) = view.also { huntOnlyViews += it }
 
         // Handles first, so every button drawn after them still takes its own touches: the whole top
@@ -824,7 +825,7 @@ internal class FloatingMapOverlay(context: Context) {
         val followButton = kit.circle(follow, 30)
         followView = { on ->
             kit.setCircleOn(followButton, on, colors)
-            followButton.contentDescription = if (on) "Following your location" else "Follow my location"
+            followButton.contentDescription = if (on) AppText.get(R.string.tracking_following_your_location) else AppText.get(R.string.tracking_follow_my_location)
         }
         add(kit.row(followButton, kit.circle(fit, 30)), Gravity.BOTTOM or Gravity.START, l = 2, b = above)
         add(window.buildResizeGrip(colors), Gravity.BOTTOM or Gravity.END, r = 6, b = above, w = dp(GRIP_DP), h = dp(GRIP_DP))
@@ -914,7 +915,7 @@ internal class FloatingMapOverlay(context: Context) {
             addView(buildSpacialRendRow())
             addView(menuItem("✎  Edit targets") { setMenuOpen(false); onEditTargets() }.also { huntOnlyViews += it })
             addView(menuItem("⟳  Recalculate route") { setMenuOpen(false); onRecalculate() }.also { huntOnlyViews += it })
-            addView(menuItem(if (paused) "▶  Resume route" else "❚❚  Pause route") {
+            addView(menuItem(if (paused) AppText.get(R.string.tracking_resume_route) else AppText.get(R.string.tracking_pause_route)) {
                 setMenuOpen(false)
                 onPauseToggle()
             }.also { pauseItem = it; huntOnlyViews += it })

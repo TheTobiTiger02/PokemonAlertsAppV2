@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.util
 
+import com.example.pokemonalertsv2.R
 import java.util.concurrent.TimeUnit
 
 /**
@@ -57,5 +58,5 @@ object TravelTime {
     val PRESET_MINUTES: List<Int> = listOf(NO_LIMIT, 5, 10, 15, 30, 60)
 
     fun label(minutes: Int): String =
-        if (minutes <= NO_LIMIT) "Any" else "$minutes min"
+        if (minutes <= NO_LIMIT) AppText.get(R.string.hunt_any) else "$minutes min"
 }

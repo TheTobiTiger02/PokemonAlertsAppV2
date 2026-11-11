@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.util.AppText
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
@@ -91,9 +92,9 @@ internal fun upcomingWhen(event: GameEvent, nowMillis: Long, deviceZone: ZoneId,
     val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
     val days = ChronoUnit.DAYS.between(today, start.toLocalDate())
     val relative = when {
-        days <= 0L -> "today, in ${durationLabel(event.startMillis - nowMillis)}"
+        days <= 0L -> AppText.get(R.string.widget_today_in_x, durationLabel(event.startMillis - nowMillis))
         days == 1L -> "tomorrow"
-        else -> "in $days days"
+        else -> AppText.get(R.string.widget_in_x_days, days)
     }
     return "${start.format(date)} ${start.format(time)} – $endText · $relative"
 }

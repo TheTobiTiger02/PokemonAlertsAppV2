@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.util.TimeUtils
@@ -152,9 +154,9 @@ fun floatingBubbleReadout(
     waiting: Boolean,
     paused: Boolean
 ): String = when {
-    !hasTarget -> if (paused) "Paused" else "Searching"
-    inRange -> "In range"
-    waiting || distanceMeters == null -> "Locating"
+    !hasTarget -> if (paused) AppText.get(R.string.tracking_paused) else AppText.get(R.string.tracking_searching)
+    inRange -> AppText.get(R.string.alerts_in_range)
+    waiting || distanceMeters == null -> AppText.get(R.string.tracking_locating)
     else -> formatJourneyDistance(distanceMeters)
 }
 
@@ -163,6 +165,6 @@ fun floatingBubbleReadout(
  * spawn "despawned", and where the walk goes now when there is somewhere to go.
  */
 fun endedTargetNote(name: String, isRaid: Boolean, nextName: String?): String {
-    val ended = if (isRaid) "$name raid ended" else "$name despawned"
-    return if (nextName.isNullOrBlank()) ended else "$ended · next: $nextName"
+    val ended = if (isRaid) AppText.get(R.string.tracking_x_raid_ended, name) else "$name despawned"
+    return if (nextName.isNullOrBlank()) ended else AppText.get(R.string.tracking_x_next_x, ended, nextName)
 }

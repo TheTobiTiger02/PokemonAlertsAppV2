@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.foundation.layout.widthIn
@@ -85,11 +86,11 @@ private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignm
         FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_alert_type) else stringResource(R.string.hunt_x_alert_types, it) }
     }
     val location = buildList {
-        if (definition.areas.mode == FilterSelectionMode.NONE) add("No areas")
+        if (definition.areas.mode == FilterSelectionMode.NONE) add(AppText.get(R.string.settings_no_areas))
         if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_area) else "$it areas" })
         if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
         definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) stringResource(R.string.settings_1_distance_override) else stringResource(R.string.settings_x_distance_overrides, it)) }
-        if (definition.maxWalkingMinutes > 0) add("${definition.maxWalkingMinutes} min walk")
+        if (definition.maxWalkingMinutes > 0) add(AppText.get(R.string.walk_minutes, definition.maxWalkingMinutes))
     }.ifEmpty { listOf("Anywhere") }.joinToString(" • ")
     SummaryCard(
         surface.label, "$typeSummary • $location",
@@ -209,7 +210,7 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     if (showSave) NameDialog(stringResource(R.string.settings_save_profile), { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
-        title = { Text("Update linked profile?") },
+        title = { Text(AppText.get(R.string.settings_update_linked_profile)) },
         text = { Text(stringResource(R.string.settings_editing_x_also_changes_x_these, linkedProfile.name, (document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString())) },
         confirmButton = { Button(onClick = {
             if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
@@ -246,8 +247,8 @@ internal fun AreaChipsEditor(definition: FilterDefinition, areas: List<String>, 
 
 /** "All areas", "Darmstadt", "3 areas" or "No areas". */
 internal fun FilterDefinition.areaSummary(): String = when (areas.mode) {
-    FilterSelectionMode.ALL -> "All areas"
-    FilterSelectionMode.NONE -> "No areas"
+    FilterSelectionMode.ALL -> AppText.get(R.string.history_all_areas)
+    FilterSelectionMode.NONE -> AppText.get(R.string.settings_no_areas)
     FilterSelectionMode.ONLY -> if (areas.selectedCount == 1) areas.values.first() else "${areas.selectedCount} areas"
 }
 
@@ -330,7 +331,7 @@ internal fun SelectionDialog(title: String, candidates: List<String>, current: F
                         val checked = mode == FilterSelectionMode.ALL || (mode == FilterSelectionMode.ONLY && key in selected)
                         val unavailable = key !in availableKeys
                         val dexNum = extractDex(key)
-                        OutlinedCard(onClick = { selected = if (key in selected) selected - key else selected + key }, enabled = mode == FilterSelectionMode.ONLY, colors = CardDefaults.outlinedCardColors(disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant), border = BorderStroke(if (checked) 2.dp else 1.dp, if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.semantics { contentDescription = if (checked) "$value, selected" else value }) {
+                        OutlinedCard(onClick = { selected = if (key in selected) selected - key else selected + key }, enabled = mode == FilterSelectionMode.ONLY, colors = CardDefaults.outlinedCardColors(disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant), border = BorderStroke(if (checked) 2.dp else 1.dp, if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.semantics { contentDescription = if (checked) AppText.get(R.string.settings_x_selected, value) else value }) {
                             Column(Modifier.fillMaxWidth().heightIn(min = 80.dp).padding(horizontal = 4.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Box(contentAlignment = Alignment.TopEnd) {
                                     AsyncImage(artwork[key], contentDescription = null, modifier = Modifier.size(40.dp))
@@ -560,7 +561,7 @@ internal fun ProfilePickerDialog(
                         }
                         if (!builtIn) Row {
                             TextButton(onClick = { renaming = profile }) { Text(stringResource(R.string.hunt_rename)) }
-                            TextButton(onClick = { deleting = profile }) { Text("Delete") }
+                            TextButton(onClick = { deleting = profile }) { Text(AppText.get(R.string.catchroutes_delete)) }
                         }
                         HorizontalDivider()
                     }
@@ -572,7 +573,7 @@ internal fun ProfilePickerDialog(
     renaming?.let { profile -> NameDialog(stringResource(R.string.settings_rename_profile), { renaming = null }, initialValue = profile.name) { name -> onSave(name, profile.definition, profile.id); renaming = null } }
     deleting?.let { profile ->
         val consumers = document.consumersOf(profile.id).map { it.label } + widgetConsumers(profile.id)
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${profile.name}?") }, text = { Text(if (consumers.isEmpty()) stringResource(R.string.settings_this_profile_is_not_linked_to) else stringResource(R.string.settings_x_will_keep_independent_copies_of, consumers.joinToString())) }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text("Delete profile") } })
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(AppText.get(R.string.catchroutes_delete_x, profile.name)) }, text = { Text(if (consumers.isEmpty()) stringResource(R.string.settings_this_profile_is_not_linked_to) else stringResource(R.string.settings_x_will_keep_independent_copies_of, consumers.joinToString())) }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text(AppText.get(R.string.settings_delete_profile)) } })
     }
 }
 

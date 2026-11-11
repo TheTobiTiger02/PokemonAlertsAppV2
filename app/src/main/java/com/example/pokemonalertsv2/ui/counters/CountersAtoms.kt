@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
@@ -199,7 +200,7 @@ internal fun RankBadge(rank: Int, highlighted: Boolean = false) {
 internal fun UnresolvedState(state: RaidCountersUiState, actions: RaidCountersActions) {
     Column {
         Text(
-            text = "Couldn't match ${state.unresolvedBossName} to a Pokebattler raid boss.",
+            text = AppText.get(R.string.counters_couldn_t_match_x_to_a, state.unresolvedBossName),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -469,7 +470,7 @@ internal fun CounterRowShell(
             .clickable(onClick = onClick)
             .semantics {
                 role = Role.Button
-                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                stateDescription = if (expanded) AppText.get(R.string.counters_expanded) else AppText.get(R.string.counters_collapsed)
             }
     ) {
         // Inside the Surface, so the card's own shape clips it. Painting this on the

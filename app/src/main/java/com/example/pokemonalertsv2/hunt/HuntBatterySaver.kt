@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -168,8 +170,8 @@ internal class HuntBatterySaver(private val context: Context, private val onEsca
                 ?: manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         }
         fun unavailableReason(context: Context): String? = when {
-            sensor(context) == null -> "Battery Saver needs a gravity sensor or accelerometer."
-            !Settings.canDrawOverlays(context) -> "Allow display over other apps to use Battery Saver, including over Pokémon GO."
+            sensor(context) == null -> AppText.get(R.string.hunt_battery_saver_needs_a_gravity_sensor)
+            !Settings.canDrawOverlays(context) -> AppText.get(R.string.hunt_allow_display_over_other_apps_to)
             else -> null
         }
     }

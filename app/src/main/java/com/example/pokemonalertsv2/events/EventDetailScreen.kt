@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.events
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -233,7 +234,7 @@ private fun BonusRows(bonuses: List<EventBonus>) {
 
 /** "CP 389–422" for a Pokémon reward, "×20" for an item. */
 internal fun rewardCaption(reward: EventReward): String? = when {
-    reward.minCp != null && reward.maxCp != null -> "CP ${reward.minCp}–${reward.maxCp}"
+    reward.minCp != null && reward.maxCp != null -> AppText.get(R.string.events_cp_x_x, reward.minCp, reward.maxCp)
     reward.quantity != null -> "×${reward.quantity}"
     else -> null
 }

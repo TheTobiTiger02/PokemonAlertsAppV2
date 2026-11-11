@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
@@ -75,8 +76,8 @@ import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
  * a reward's tasks, or a task's rewards.
  */
 private enum class QuestView(val label: String, val unit: String, val other: String) {
-    REWARDS("Rewards", "reward", "task"),
-    TASKS("Tasks", "task", "reward")
+    REWARDS(AppText.get(R.string.alerts_rewards), "reward", "task"),
+    TASKS(AppText.get(R.string.alerts_tasks), "task", "reward")
 }
 
 /** One reward or one task, with every quest pairing it with the other side, index for index. */
@@ -106,8 +107,8 @@ private fun groupQuests(quests: List<FilterCatalogQuest>, view: QuestView): List
 private fun countLabel(group: QuestGroup, selectedCount: Int, noun: String): String {
     val total = group.rules.size
     return when {
-        !group.active -> "Not live"
-        selectedCount in 1 until total -> "$selectedCount of $total ${noun}s"
+        !group.active -> AppText.get(R.string.alerts_not_live)
+        selectedCount in 1 until total -> AppText.get(R.string.alerts_x_of_x_x_s, selectedCount, total, noun)
         total == 1 -> "1 $noun"
         else -> "$total ${noun}s"
     }

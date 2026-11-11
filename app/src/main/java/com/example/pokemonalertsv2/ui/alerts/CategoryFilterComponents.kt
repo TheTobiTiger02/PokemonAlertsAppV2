@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
@@ -170,8 +171,8 @@ private fun CategoryFilterCard(
 }
 
 private fun countText(count: Int): String = when {
-    count <= 0 -> "none active"
-    count == 1 -> "1 active"
+    count <= 0 -> AppText.get(R.string.alerts_none_active)
+    count == 1 -> AppText.get(R.string.alerts_1_active)
     else -> "$count active"
 }
 

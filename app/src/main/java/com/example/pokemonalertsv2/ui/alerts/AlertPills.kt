@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -289,7 +290,7 @@ internal fun GoDexStatusPill(result: GoDexMatchResult) {
 fun formatSnoozeDurationLabel(minutes: Int): String {
     return if (minutes >= 60 && minutes % 60 == 0) {
         val hours = minutes / 60
-        if (hours == 1) "1 hr" else "$hours hrs"
+        if (hours == 1) AppText.get(R.string.alerts_1_hr) else "$hours hrs"
     } else {
         "$minutes min"
     }

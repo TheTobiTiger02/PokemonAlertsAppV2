@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
@@ -40,15 +41,15 @@ import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
 internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
-    SPAWN("IV spawn species", "IV spawns"),
-    HUNDO("Hundo species", "100%"),
-    PVP("PvP species", "PvP"),
-    COMMON("Common species", "Common"),
-    NUNDO("Nundo species", "0%"),
-    RAID_SPECIES("Raid species", "Raid Bosses"),
-    RAID_TIERS("Raid tiers", "Tiers"),
-    ROCKET("Rocket types", "Rockets"),
-    TAPPABLE("Tappable species and loot", "Tappables")
+    SPAWN(AppText.get(R.string.alerts_iv_spawn_species), "IV spawns"),
+    HUNDO(AppText.get(R.string.alerts_hundo_species), "100%"),
+    PVP(AppText.get(R.string.alerts_pvp_species), "PvP"),
+    COMMON(AppText.get(R.string.alerts_common_species), "Common"),
+    NUNDO(AppText.get(R.string.alerts_nundo_species), "0%"),
+    RAID_SPECIES(AppText.get(R.string.alerts_raid_species), "Raid Bosses"),
+    RAID_TIERS(AppText.get(R.string.alerts_raid_tiers), "Tiers"),
+    ROCKET(AppText.get(R.string.alerts_rocket_types), "Rockets"),
+    TAPPABLE(AppText.get(R.string.alerts_tappable_species_and_loot), "Tappables")
 }
 
 internal val SPECIES_TARGETS = listOf(
@@ -406,7 +407,7 @@ private fun SpeciesTile(
             width = if (checked) 2.dp else 1.dp,
             color = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = Modifier.semantics { contentDescription = if (checked) "$name, selected" else name }
+        modifier = Modifier.semantics { contentDescription = if (checked) AppText.get(R.string.settings_x_selected, name) else name }
     ) {
         Column(
             modifier = Modifier
@@ -476,8 +477,8 @@ private fun SpeciesTile(
 // ---------------------------------------------------------------------------- summaries
 
 internal fun FilterSelection.summaryLabel(): String = when (mode) {
-    FilterSelectionMode.ALL -> "all selected"
-    FilterSelectionMode.NONE -> "none selected"
+    FilterSelectionMode.ALL -> AppText.get(R.string.alerts_all_selected)
+    FilterSelectionMode.NONE -> AppText.get(R.string.alerts_none_selected)
     FilterSelectionMode.ONLY -> "$selectedCount selected"
 }
 

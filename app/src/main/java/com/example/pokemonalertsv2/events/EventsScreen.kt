@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.events
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -296,10 +297,10 @@ fun EventsContent(
 
 /** Which slice of the event list is showing. Not persisted: it is a way of looking, not a setting. */
 private enum class EventView(val label: String) {
-    ALL("All"),
-    NOW("Now"),
-    UPCOMING("Upcoming"),
-    STARRED("Starred")
+    ALL(AppText.get(R.string.alerts_all)),
+    NOW(AppText.get(R.string.catchroutes_now)),
+    UPCOMING(AppText.get(R.string.events_upcoming)),
+    STARRED(AppText.get(R.string.events_starred))
 }
 
 @Composable
@@ -408,8 +409,8 @@ internal fun timeRange(event: GameEvent): String {
 private fun dayLabel(day: LocalDate, nowMillis: Long): String {
     val today = Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault()).toLocalDate()
     return when (day) {
-        today -> "Today"
-        today.plusDays(1) -> "Tomorrow"
+        today -> AppText.get(R.string.alerts_today)
+        today.plusDays(1) -> AppText.get(R.string.events_tomorrow)
         else -> DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.getDefault()).format(day)
     }
 }

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteGuidanceInfo
 import androidx.compose.foundation.background
@@ -89,15 +90,15 @@ import androidx.compose.runtime.setValue
 
 /** The planner's editor pages. Rows and Map + sheet reach them from rows; Steps from its steps. */
 internal enum class PlanPage(val title: String) {
-    ROOT("Plan a route"),
-    START("Start"),
-    FINISH("Finish"),
-    AREA("Area"),
-    WHEN("When"),
-    SUGGEST("Let the app choose"),
-    INCLUDES("Includes"),
-    ADVANCED("Advanced"),
-    SAVED("Saved routes")
+    ROOT(AppText.get(R.string.catchroutes_plan_a_route)),
+    START(AppText.get(R.string.catchroutes_start)),
+    FINISH(AppText.get(R.string.onboarding_finish)),
+    AREA(AppText.get(R.string.hunt_area)),
+    WHEN(AppText.get(R.string.catchroutes_when)),
+    SUGGEST(AppText.get(R.string.catchroutes_let_the_app_choose)),
+    INCLUDES(AppText.get(R.string.catchroutes_includes)),
+    ADVANCED(AppText.get(R.string.catchroutes_advanced)),
+    SAVED(AppText.get(R.string.catchroutes_saved_routes))
 }
 
 /** What the planner shows: the route being planned or walked, and the clock that ages it. */
@@ -136,26 +137,26 @@ internal fun catchClock(millis: Long): String =
 
 internal fun startSummary(model: CatchRoutesViewModel, s: CatchRouteSettings): String = when {
     s.fixed -> "${s.sourceRouteName ?: "GO route"}, as drawn"
-    !model.hasStart -> "Not set"
+    !model.hasStart -> AppText.get(R.string.catchroutes_not_set)
     s.sourceRouteId != null -> "${model.startLabel} · near ${s.sourceRouteName ?: "a GO route"}"
     else -> model.startLabel
 }
 
 internal fun finishSummary(s: CatchRouteSettings): String = when {
-    s.fixed -> "End of the GO route"
-    s.finish == CatchFinish.ROUND_TRIP -> "Back to start"
-    s.finish == CatchFinish.ANYWHERE -> "End anywhere"
-    s.end != null -> "Pinned on the map"
-    else -> "Tap the map to pin it"
+    s.fixed -> AppText.get(R.string.catchroutes_end_of_the_go_route)
+    s.finish == CatchFinish.ROUND_TRIP -> AppText.get(R.string.catchroutes_back_to_start)
+    s.finish == CatchFinish.ANYWHERE -> AppText.get(R.string.catchroutes_end_anywhere)
+    s.end != null -> AppText.get(R.string.catchroutes_pinned_on_the_map)
+    else -> AppText.get(R.string.catchroutes_tap_the_map_to_pin_it)
 }
 
-internal fun areaSummary(s: CatchRouteSettings): String = if (s.area.isArea()) "Inside ${s.area.size} corners" else "None"
+internal fun areaSummary(s: CatchRouteSettings): String = if (s.area.isArea()) AppText.get(R.string.catchroutes_inside_x_corners, s.area.size) else AppText.get(R.string.alerts_none)
 
 internal fun whenSummary(model: CatchRoutesViewModel, s: CatchRouteSettings): String =
     "${if (model.useNow) "Now" else catchClock(s.startAtMillis)}, ${s.durationMinutes} min"
 
 internal fun includesSummary(s: CatchRouteSettings): String =
-    listOfNotNull(if (s.includeEventSpawns) "Events on" else "Events off", "Spacial Rend".takeIf { s.spacialRend }).joinToString(" · ")
+    listOfNotNull(if (s.includeEventSpawns) AppText.get(R.string.catchroutes_events_on) else AppText.get(R.string.catchroutes_events_off), "Spacial Rend".takeIf { s.spacialRend }).joinToString(" · ")
 
 internal fun advancedSummary(s: CatchRouteSettings): String = listOfNotNull(
     String.format(Locale.getDefault(), "%.1f km/h", s.speedMps * 3.6),
@@ -164,10 +165,10 @@ internal fun advancedSummary(s: CatchRouteSettings): String = listOfNotNull(
 ).joinToString(" · ")
 
 private fun predictionLabel(p: CatchPrediction) = when (p) {
-    CatchPrediction.AUTOMATIC -> "Automatic (learned timing)"
-    CatchPrediction.THIRTY_MINUTES -> "Assume 30-minute spawns"
-    CatchPrediction.SIXTY_MINUTES -> "Assume 60-minute spawns"
-    CatchPrediction.SUPPORTED_ONLY -> "Supported windows only"
+    CatchPrediction.AUTOMATIC -> AppText.get(R.string.catchroutes_automatic_learned_timing)
+    CatchPrediction.THIRTY_MINUTES -> AppText.get(R.string.catchroutes_assume_30_minute_spawns)
+    CatchPrediction.SIXTY_MINUTES -> AppText.get(R.string.catchroutes_assume_60_minute_spawns)
+    CatchPrediction.SUPPORTED_ONLY -> AppText.get(R.string.catchroutes_supported_windows_only)
 }
 
 /** The settings as rows, each saying what is set and opening its page. */
@@ -282,7 +283,7 @@ internal fun FinishEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, ac
     if (s.fixed) { PageNote(stringResource(R.string.catchroutes_a_go_route_walked_as_drawn)); return }
     CatchFinish.entries.forEach { finish ->
         ChoiceRow(
-            title = when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> stringResource(R.string.catchroutes_end_at_a_pin) },
+            title = when (finish) { CatchFinish.ROUND_TRIP -> AppText.get(R.string.catchroutes_back_to_start); CatchFinish.ANYWHERE -> AppText.get(R.string.catchroutes_end_anywhere); CatchFinish.PIN -> stringResource(R.string.catchroutes_end_at_a_pin) },
             selected = s.finish == finish,
             onClick = { model.edit(s.copy(finish = finish)); actions.pickOnMap(finish == CatchFinish.PIN) },
             tag = "finish_${finish.name}",
@@ -404,7 +405,7 @@ internal fun SavedEditor(model: CatchRoutesViewModel, saved: List<CatchSetupEnti
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { model.load(setup); onDone() }.padding(start = PanelGutter, end = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
             Text(setup.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            IconButton(onClick = { actions.deleteSetup(setup) }) { Icon(Icons.Filled.Close, contentDescription = "Delete ${setup.name}") }
+            IconButton(onClick = { actions.deleteSetup(setup) }) { Icon(Icons.Filled.Close, contentDescription = AppText.get(R.string.catchroutes_delete_x_2, setup.name)) }
         }
     }
 }
@@ -589,11 +590,11 @@ internal fun catchGuidance(session: CatchSession, stops: List<List<CatchEncounte
             // To the stop's badge, where the map's bold leg ends.
             val distance = ((session.nextLegEnd(now) ?: first.meters) - session.progressMeters).coerceAtLeast(0.0)
             val opens = group.minOf { it.opportunity.availableFrom }
-            val open = if (now >= opens) "open now" else "opens ${catchClock(opens)}"
+            val open = if (now >= opens) AppText.get(R.string.catchroutes_open_now) else "opens ${catchClock(opens)}"
             RouteGuidanceInfo(RouteBadge.Number("${next + 1}"), "Stop ${next + 1} · ${group.size} Pokémon",
                 "${formatCatchKm(distance)} · due ${catchClock(first.arrivalMillis)} · $open", progress)
         }
-        else -> RouteGuidanceInfo(RouteBadge.Number("F"), if (session.paused) "Paused · no stops ahead" else "Back to the finish",
+        else -> RouteGuidanceInfo(RouteBadge.Number("F"), if (session.paused) AppText.get(R.string.catchroutes_paused_no_stops_ahead) else AppText.get(R.string.catchroutes_back_to_the_finish),
             "${formatCatchKm((session.itinerary.distanceMeters - session.progressMeters).coerceAtLeast(0.0))} left · ${session.caught} caught",
             progress)
     }

@@ -1,4 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
+
 
 
 sealed interface SyncStatus {
@@ -19,9 +22,9 @@ internal fun AlertsUiState.toSyncStatus(): SyncStatus = when {
 }
 
 internal fun SyncStatus.alertsStatusMessage(): String? = when (this) {
-    SyncStatus.Loading -> "Loading live alerts…"
-    SyncStatus.Refreshing -> "Refreshing…"
+    SyncStatus.Loading -> AppText.get(R.string.alerts_loading_live_alerts)
+    SyncStatus.Refreshing -> AppText.get(R.string.alerts_refreshing)
     is SyncStatus.Live -> null
-    is SyncStatus.Cached -> "Offline · showing cached alerts"
-    is SyncStatus.Failed -> "Unable to load alerts"
+    is SyncStatus.Cached -> AppText.get(R.string.alerts_offline_showing_cached_alerts)
+    is SyncStatus.Failed -> AppText.get(R.string.alerts_unable_to_load_alerts)
 }

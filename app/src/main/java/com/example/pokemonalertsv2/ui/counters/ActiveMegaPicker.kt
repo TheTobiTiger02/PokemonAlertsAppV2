@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
@@ -313,7 +314,7 @@ private fun MegaTile(
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = Modifier.semantics {
-            contentDescription = if (selected) "$label, selected" else label
+            contentDescription = if (selected) AppText.get(R.string.settings_x_selected, label) else label
         }
     ) {
         Column(

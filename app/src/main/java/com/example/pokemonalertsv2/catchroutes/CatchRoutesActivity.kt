@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -299,7 +300,7 @@ class CatchRoutesActivity : ComponentActivity() {
         summary?.let { finished ->
             CatchRouteSummarySheet(finished, onDismiss = { summary = null }, onWalkAgain = { summary = null; walkAgain(finished) })
         }
-        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text("Delete ${setup.name}?") }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }) }
+        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text(AppText.get(R.string.catchroutes_delete_x, setup.name)) }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text(AppText.get(R.string.catchroutes_delete)) } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }) }
     }
 
     /** The map's top bar: the route's name and where the walk stands, or the planner's title. */

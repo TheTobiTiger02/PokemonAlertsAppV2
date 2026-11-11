@@ -44,7 +44,7 @@ internal fun CatchRouteSummaryContent(summary: CatchRouteSummary, modifier: Modi
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(summary.name, style = MaterialTheme.typography.headlineSmall)
         val format = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-        Text("${format.format(Date(summary.startedAtMillis))} · ${(summary.activeMillis / 60_000)} min walking" +
+        Text("${format.format(Date(summary.startedAtMillis))} · " + stringResource(R.string.walk_minutes_active, summary.activeMillis / 60_000) +
             (if (summary.replans > 0) stringResource(R.string.catchroutes_replanned_x, summary.replans) else ""),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

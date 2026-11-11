@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.derivedStateOf
 import android.widget.Toast
@@ -189,7 +190,7 @@ internal fun MapAlertSheetContent(
                     val scheduled = snoozeAlertFromUi(context, alert, minutes)
                     Toast.makeText(
                         context,
-                        if (scheduled) "Snoozed for ${formatSnoozeDurationLabel(minutes)}" else "Alert ends before that snooze time",
+                        if (scheduled) AppText.get(R.string.alerts_snoozed_for_x, formatSnoozeDurationLabel(minutes)) else AppText.get(R.string.alerts_alert_ends_before_that_snooze_time),
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -200,11 +201,11 @@ internal fun MapAlertSheetContent(
 
 /** What the full detail adds, so the row says why to open it. */
 internal fun mapSheetDetailsSummary(alert: PokemonAlert): String = when {
-    !alert.pvpRankings.isNullOrEmpty() -> "PvP ranks, stats and location"
-    alert.hasTypeContaining("raid") -> "Counters, moves and location"
-    !alert.pokemonRewards.isNullOrEmpty() || !alert.gruntType.isNullOrBlank() -> "Possible rewards and location"
-    alert.hasTypeContaining("quest") -> "Reward, task and location"
-    else -> "Stats, moves and location"
+    !alert.pvpRankings.isNullOrEmpty() -> AppText.get(R.string.alerts_pvp_ranks_stats_and_location)
+    alert.hasTypeContaining("raid") -> AppText.get(R.string.alerts_counters_moves_and_location)
+    !alert.pokemonRewards.isNullOrEmpty() || !alert.gruntType.isNullOrBlank() -> AppText.get(R.string.alerts_possible_rewards_and_location)
+    alert.hasTypeContaining("quest") -> AppText.get(R.string.alerts_reward_task_and_location)
+    else -> AppText.get(R.string.alerts_stats_moves_and_location)
 }
 
 /** One other alert at the same stop: its sprite and a short name. */

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import android.content.Intent
 import androidx.core.net.toUri
@@ -785,7 +786,7 @@ private fun goDexSyncLine(config: GoDexConfig, sync: GoDexSyncUiState, now: Long
     return when {
         sync.isSyncing -> "Fetching the latest checklist" to false
         sync.sessionState == GoDexSessionState.REAUTH_REQUIRED ->
-            (if (sync.pendingCount > 0) "Sign in again · ${changes(sync.pendingCount)} waiting" else "Sign in again to sync") to true
+            (if (sync.pendingCount > 0) AppText.get(R.string.settings_sign_in_again_x_waiting, changes(sync.pendingCount)) else AppText.get(R.string.settings_sign_in_again_to_sync)) to true
         sync.errorMessage != null -> "Sync failed · ${sync.errorMessage}" to true
         sync.pendingCount > 0 -> "Sending ${changes(sync.pendingCount)}" to false
         stale -> "Synced $last · update recommended" to true
@@ -800,7 +801,7 @@ private fun goDexAccountLine(config: GoDexConfig, sync: GoDexSyncUiState): Pair<
     else -> "Public link · read-only" to false
 }
 
-private fun changes(count: Int) = if (count == 1) "1 change" else "$count changes"
+private fun changes(count: Int) = if (count == 1) AppText.get(R.string.settings_1_change) else "$count changes"
 
 // ---- Shared parts ----
 
@@ -944,11 +945,11 @@ private fun clockTime(millis: Long, now: Long): String {
 private fun pushAge(lastPush: Long, now: Long): String {
     val elapsed = now - lastPush
     return when {
-        lastPush <= 0L -> "none yet"
-        elapsed < 60_000L -> "just now"
-        elapsed < 3_600_000L -> "${elapsed / 60_000L} min ago"
-        elapsed < 86_400_000L -> "${elapsed / 3_600_000L} h ago"
-        else -> "${elapsed / 86_400_000L} d ago"
+        lastPush <= 0L -> AppText.get(R.string.settings_none_yet)
+        elapsed < 60_000L -> AppText.get(R.string.settings_just_now)
+        elapsed < 3_600_000L -> AppText.get(R.string.settings_x_min_ago, elapsed / 60_000L)
+        elapsed < 86_400_000L -> AppText.get(R.string.settings_x_h_ago, elapsed / 3_600_000L)
+        else -> AppText.get(R.string.settings_x_d_ago, elapsed / 86_400_000L)
     }
 }
 
@@ -961,5 +962,5 @@ private fun FilterDefinition.notifiedTypeSummary(): String {
         FilterSelectionMode.NONE -> 0
         FilterSelectionMode.ONLY -> alertTypes.selectedCount.coerceAtMost(total)
     }
-    return if (count == total) "All $total alert types" else "$count of $total alert types"
+    return if (count == total) AppText.get(R.string.settings_all_x_alert_types, total) else AppText.get(R.string.settings_x_of_x_alert_types, count, total)
 }

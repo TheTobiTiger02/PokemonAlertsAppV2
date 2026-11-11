@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.content.Context
 import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -78,7 +80,7 @@ internal object WidgetAlertLoader {
         val dismissedIds = runCatching {
             repo.alertPreferences.dismissedAlertIds.first()
         }.getOrElse { emptySet() }
-        val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { "All" }
+        val selectedArea = runCatching { repo.alertPreferences.selectedArea.first() }.getOrElse { AppText.get(R.string.alerts_all) }
         val maxDistance = runCatching { repo.alertPreferences.maxDistance.first() }.getOrElse { 0 }
         val sortPreference = runCatching { repo.alertPreferences.sortPreference.first() }
             .getOrElse { com.example.pokemonalertsv2.data.SortPreference.POSTED_TIME }
@@ -124,7 +126,7 @@ internal object WidgetAlertLoader {
         }.getOrNull() ?: fallbackLocation
         val criteria = WidgetAlertFilter.Criteria(
             dismissedAlertIds = dismissedIds,
-            selectedArea = if (unifiedDefinition == null) effectiveArea else "All",
+            selectedArea = if (unifiedDefinition == null) effectiveArea else AppText.get(R.string.alerts_all),
             maxDistanceMeters = if (unifiedDefinition == null) when (val mode = configuration.distance) {
                     WidgetDistanceMode.InheritApp -> maxDistance
                     WidgetDistanceMode.Unlimited -> 0

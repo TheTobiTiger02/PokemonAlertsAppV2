@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.HeartRed
@@ -103,11 +104,11 @@ fun WatchDataPanel(
             }
             when {
                 availability == HealthDataReader.Availability.NEEDS_UPDATE -> {
-                    Text("Update Health Connect to see heart rate, steps and calories from your watch.",
+                    Text(AppText.get(R.string.health_update_health_connect_to_see_heart),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilledTonalButton(onClick = {
                         try { context.startActivity(reader.installIntent()) } catch (_: ActivityNotFoundException) {}
-                    }) { Text("Update Health Connect") }
+                    }) { Text(AppText.get(R.string.health_update_health_connect)) }
                 }
                 connected == false -> {
                     Text(stringResource(R.string.health_see_heart_rate_steps_and_calories),

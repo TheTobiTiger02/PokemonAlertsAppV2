@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import android.Manifest
@@ -228,8 +229,8 @@ class MainActivity : ComponentActivity() {
     private val backgroundLocationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             showMessage(
-                if (isGranted) "Background location access granted"
-                else "Background location access was not granted"
+                if (isGranted) AppText.get(R.string.mainactivitykt_background_location_access_granted)
+                else AppText.get(R.string.mainactivitykt_background_location_access_was_not_granted)
             )
             finishPermissionFlow()
         }
@@ -238,8 +239,8 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             val granted = hasBackgroundLocationPermission()
             showMessage(
-                if (granted) "Background location access granted"
-                else "Background location access was not granted"
+                if (granted) AppText.get(R.string.mainactivitykt_background_location_access_granted)
+                else AppText.get(R.string.mainactivitykt_background_location_access_was_not_granted)
             )
             finishPermissionFlow()
         }

@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import kotlinx.coroutines.ensureActive
 
 import android.app.Application
@@ -507,11 +509,11 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                         isLoading = false,
                         rateLimited = error is CountersError.RateLimited,
                         errorMessage = when (error) {
-                            CountersError.RateLimited -> "Pokebattler is busy. Try again in a moment."
-                            CountersError.ServerTimeout -> "Pokébattler took too long to answer. Try again."
-                            CountersError.Offline -> "Couldn't load counters. Check your connection."
+                            CountersError.RateLimited -> AppText.get(R.string.counters_pokebattler_is_busy_try_again_in)
+                            CountersError.ServerTimeout -> AppText.get(R.string.counters_pok_battler_took_too_long_to)
+                            CountersError.Offline -> AppText.get(R.string.counters_couldn_t_load_counters_check_your)
                             is CountersError.Unexpected -> error.message
-                            null -> "Couldn't load counters."
+                            null -> AppText.get(R.string.counters_couldn_t_load_counters)
                         },
                         pokebattlerWebUrl = PokebattlerUrls.webUrl(resolution.pokemonId)
                     )
@@ -562,7 +564,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                     personal = null,
                     personalLoading = false,
                     personalProgress = null,
-                    personalError = "Import a Poké Genie CSV to rank your Pokémon with Pokébattler."
+                    personalError = AppText.get(R.string.counters_import_a_pok_genie_csv_to)
                 )
             }
             return
@@ -644,7 +646,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                         _uiState.update {
                             it.copy(
                                 personalError = when (val error = (throwable as? CountersException)?.error) {
-                                    CountersError.RateLimited -> "Pokébattler is busy. Retry in a moment."
+                                    CountersError.RateLimited -> AppText.get(R.string.counters_pok_battler_is_busy_retry_in)
                                     // Pokébox ranking does this every time for a large box:
                                     // the request is fine, Pokébattler's own server gives up.
                                     CountersError.ServerTimeout ->
@@ -655,7 +657,7 @@ class RaidCountersViewModel(application: Application) : AndroidViewModel(applica
                                         } else {
                                             "Pokébattler took too long to answer. Retry in a moment."
                                         }
-                                    CountersError.Offline -> "Pokébattler could not be reached. Check your connection and retry."
+                                    CountersError.Offline -> AppText.get(R.string.counters_pok_battler_could_not_be_reached)
                                     is CountersError.Unexpected -> error.message
                                     null -> throwable.message ?: "Pokébattler could not rank your Pokémon."
                                 }

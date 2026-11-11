@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -168,7 +169,7 @@ internal fun HuntTargetSheet(
                 onDeleteSaved = { saved -> deleting = saved },
                 startLabel = when {
                     !ready -> stringResource(R.string.hunt_pick_something_to_hunt)
-                    editing != null -> "Update hunt"
+                    editing != null -> AppText.get(R.string.hunt_update_hunt)
                     else -> stringResource(R.string.hunt_hunt_x, huntName(hunt, catalog))
                 },
                 ready = ready,
@@ -180,14 +181,14 @@ internal fun HuntTargetSheet(
     deleting?.let { target ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete \"${target.name}\"?") },
+            title = { Text(AppText.get(R.string.hunt_delete_x, target.name)) },
             text = { Text(stringResource(R.string.hunt_the_saved_hunt_and_its_targets)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     scope.launch { huntRepository.deleteSavedHunt(target.id) }
                     if (editingId == target.id) editingId = null
                     deleting = null
-                }) { Text("Delete") }
+                }) { Text(AppText.get(R.string.catchroutes_delete)) }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
         )
@@ -242,12 +243,12 @@ private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = 
     FilterAlertType.PVP -> definition.pvpSpecies.summary()
     FilterAlertType.NUNDO -> definition.nundoSpecies.summary()
     FilterAlertType.COMMON -> definition.commonSpecies.summary()
-    FilterAlertType.RAID -> if (definition.raidTiers.mode != FilterSelectionMode.ONLY && definition.raidSpecies.mode != FilterSelectionMode.ONLY) "Any"
+    FilterAlertType.RAID -> if (definition.raidTiers.mode != FilterSelectionMode.ONLY && definition.raidSpecies.mode != FilterSelectionMode.ONLY) AppText.get(R.string.hunt_any)
         else "Tiers: ${definition.raidTiers.summary()} · bosses: ${definition.raidSpecies.summary()}"
     FilterAlertType.ROCKET -> definition.rocketTypes.summary()
     FilterAlertType.QUEST -> definition.quests.summary()
     FilterAlertType.TAPPABLE -> definition.tappableSpecies.summary()
-    else -> "Any"
+    else -> AppText.get(R.string.hunt_any)
 }
 
 /**
@@ -432,7 +433,7 @@ private fun SavedHuntRow(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Delete") },
+                    text = { Text(AppText.get(R.string.catchroutes_delete)) },
                     onClick = {
                         menuOpen = false
                         onDelete()
@@ -481,16 +482,16 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 private fun FilterSelection.summary(): String = when {
-    mode != FilterSelectionMode.ONLY -> "Any"
+    mode != FilterSelectionMode.ONLY -> AppText.get(R.string.hunt_any)
     selectedCount == 1 -> values.first()
     else -> "$selectedCount chosen"
 }
 
 private fun QuestFilterRules.summary(): String = when {
-    exactPairs.size == 1 -> "1 exact quest"
-    exactPairs.size > 1 -> "${exactPairs.size} exact quests"
-    facetEnabled -> "By task and reward"
-    else -> "Any quest"
+    exactPairs.size == 1 -> AppText.get(R.string.hunt_1_exact_quest)
+    exactPairs.size > 1 -> AppText.get(R.string.hunt_x_exact_quests, exactPairs.size)
+    facetEnabled -> AppText.get(R.string.hunt_by_task_and_reward)
+    else -> AppText.get(R.string.hunt_any_quest)
 }
 
 /** Shows the matches outside the area, dimmed: tap one to walk there, but the hunt never picks them. */

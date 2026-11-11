@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
@@ -279,10 +280,10 @@ private fun RosterRow(
 
 /** How the roster is ordered. */
 enum class RosterSort(val label: String) {
-    LEVEL("Level"),
+    LEVEL(AppText.get(R.string.alerts_level)),
     CP("CP"),
     IV("IV"),
-    NAME("Name")
+    NAME(AppText.get(R.string.catchroutes_name))
 }
 
 /** One roster row, with everything the list needs pre-derived. */

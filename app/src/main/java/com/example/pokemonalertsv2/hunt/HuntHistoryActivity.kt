@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.HeartRed
@@ -200,7 +201,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     HuntHistoryRow(hunt, onClick = { opened = hunt }, onDelete = {
                         scope.launch {
                             repository.deleteHistoryEntry(hunt.startedAtMillis)
-                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = "Undo",
+                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
                                 duration = androidx.compose.material3.SnackbarDuration.Short)
                             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) repository.restoreHistoryEntry(hunt)
                         }
@@ -264,7 +265,7 @@ private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit, onDelete: () 
                     HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("hunt_history_delete")) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${hunt.name}")
+                    Icon(Icons.Filled.Delete, contentDescription = AppText.get(R.string.catchroutes_delete_x_2, hunt.name))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

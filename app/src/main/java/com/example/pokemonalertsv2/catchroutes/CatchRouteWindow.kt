@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceDistance
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteBadge
@@ -73,7 +74,7 @@ internal class CatchRouteWindow(context: Context) {
 
         val routeMap = CatchRouteMapView(context)
         map = routeMap
-        routeMap.onFollowChanged = { following -> followLabel?.text = if (following) "Following" else "Follow" }
+        routeMap.onFollowChanged = { following -> followLabel?.text = if (following) AppText.get(R.string.catchroutes_following) else AppText.get(R.string.catchroutes_follow) }
 
         val layer = FrameLayout(context)
         val container = FrameLayout(context).apply {
@@ -129,7 +130,7 @@ internal class CatchRouteWindow(context: Context) {
         map?.setSpawns(session.ahead(now).map { it.opportunity to (now >= it.opportunity.availableFrom) })
         map?.setNextStop(catchNextStopIndex(session, now))
         guidanceViews?.bind(catchOverlayGuidance(session, now, outOfDate, replanning), colors)
-        pauseLabel?.text = if (session.paused) "Resume" else "Pause"
+        pauseLabel?.text = if (session.paused) AppText.get(R.string.catchroutes_resume) else AppText.get(R.string.catchroutes_pause)
     }
 
     /**
@@ -142,11 +143,11 @@ internal class CatchRouteWindow(context: Context) {
         fun add(view: View, gravity: Int, r: Int = 0, b: Int = 0, w: Int = -2, h: Int = -2) =
             layer.addView(view, FrameLayout.LayoutParams(w, h, gravity).apply { setMargins(0, 0, dp(r), dp(b)) })
 
-        val pause = OverlayAction("Pause", glyph = "❚❚") { onPause() }
-        val replan = OverlayAction("Replan", icon = R.drawable.ic_refresh) { onReplan() }
-        val follow = OverlayAction("Follow", icon = R.drawable.ic_my_location) { routeMap.follow() }
-        val route = OverlayAction("Whole route", icon = R.drawable.ic_route, label = "Route") { routeMap.overview() }
-        val close = OverlayAction("Close", icon = R.drawable.ic_close_small) { onClose() }
+        val pause = OverlayAction(AppText.get(R.string.catchroutes_pause), glyph = "❚❚") { onPause() }
+        val replan = OverlayAction(AppText.get(R.string.catchroutes_replan), icon = R.drawable.ic_refresh) { onReplan() }
+        val follow = OverlayAction(AppText.get(R.string.catchroutes_follow), icon = R.drawable.ic_my_location) { routeMap.follow() }
+        val route = OverlayAction(AppText.get(R.string.catchroutes_whole_route), icon = R.drawable.ic_route, label = AppText.get(R.string.catchroutes_route)) { routeMap.overview() }
+        val close = OverlayAction(AppText.get(R.string.catchroutes_close), icon = R.drawable.ic_close_small) { onClose() }
 
         val (banner, views) = kit.banner(BANNER_DP, kit.circle(close, 30, OverlayChrome.Look.BANNER))
         guidanceViews = views
@@ -210,13 +211,13 @@ internal fun catchOverlayGuidance(session: CatchSession, now: Long, outOfDate: B
     val info = catchGuidance(session, catchStops(session.itinerary.encounters), now)
     val pace = catchPaceHint(session, now)
     val advice = when {
-        replanning -> "Replanning…"
-        outOfDate -> "Route out of date, tap Replan"
+        replanning -> AppText.get(R.string.catchroutes_replanning)
+        outOfDate -> AppText.get(R.string.catchroutes_route_out_of_date_tap_replan)
         else -> null
     }
     return OverlayGuidance(
         badge = (info.badge as? RouteBadge.Number)?.label,
-        title = (if (session.paused && !session.finished) "Paused · " else "") + info.title,
+        title = (if (session.paused && !session.finished) AppText.get(R.string.catchroutes_paused) else "") + info.title,
         headline = guidanceDistance(info.detail),
         detail = listOfNotNull(guidanceRest(info.detail).takeIf { it.isNotBlank() }, pace, advice).joinToString(" · "),
         progress = info.progress,
@@ -228,8 +229,8 @@ internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean 
     if (session.finished) return "Route finished"
     val remaining = session.ahead(now).sortedBy { it.meters }
     val tally = "${remaining.size} left · ${session.caught} caught"
-    if (remaining.isEmpty()) return (if (session.paused) "Paused · no stops ahead" else "No stops ahead") + "\n" + tally +
-        (if (replanning) " · Replanning…" else if (session.remaining.isNotEmpty()) " · tap Replan for more" else "")
+    if (remaining.isEmpty()) return (if (session.paused) AppText.get(R.string.catchroutes_paused_no_stops_ahead) else AppText.get(R.string.catchroutes_no_stops_ahead)) + "\n" + tally +
+        (if (replanning) AppText.get(R.string.catchroutes_replanning_2) else if (session.remaining.isNotEmpty()) AppText.get(R.string.catchroutes_tap_replan_for_more) else "")
     val next = remaining.first()
     val group = remaining.takeWhile { it.meters - next.meters < CATCH_STOP_SPAN_METERS }
     val stops = catchStops(session.itinerary.encounters)
@@ -240,7 +241,7 @@ internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean 
     val margin = ((group.minOf { it.opportunity.despawnAt } - now) / 60_000).coerceAtLeast(0)
     val wait = session.itinerary.waits.firstOrNull { kotlin.math.abs(it.meters - next.meters) <= settings.radius * 2 }
     return buildString {
-        if (session.paused) append("Paused · ")
+        if (session.paused) append(AppText.get(R.string.catchroutes_paused))
         if (number > 0) append("Stop $number · ")
         append("${walk.roundToInt()} m · ")
         append(String.format(Locale.getDefault(), "%tR", arrival))
@@ -249,7 +250,7 @@ internal fun catchGuidance(session: CatchSession, now: Long, outOfDate: Boolean 
         append("\n").append(tally)
         catchPaceHint(session, now)?.let { append(" · ").append(it) }
         // Advice, never an automatic change: the route stays put until the trainer asks.
-        if (replanning) append(" · Replanning…") else if (outOfDate) append(" · Route out of date, tap Replan")
+        if (replanning) append(AppText.get(R.string.catchroutes_replanning_2)) else if (outOfDate) append(" · Route out of date, tap Replan")
     }
 }
 
@@ -261,5 +262,5 @@ internal fun catchPaceHint(session: CatchSession, now: Long): String? {
     val delta = catchScheduleDelta(session, now) ?: return null
     if (abs(delta) < CATCH_PACE_HINT_MILLIS) return null
     val minutes = (abs(delta) / 60_000).coerceAtLeast(1)
-    return if (delta > 0) "$minutes min behind, speed up" else "$minutes min early, slow down"
+    return if (delta > 0) AppText.get(R.string.catchroutes_x_min_behind_speed_up, minutes) else AppText.get(R.string.catchroutes_x_min_early_slow_down, minutes)
 }

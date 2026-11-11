@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -157,16 +158,16 @@ private val Neutral = Color(0xFF6C7480)
 internal fun raidTierLook(token: String): TokenLook {
     val tier = RaidTier.entries.firstOrNull { normalizeFilterToken(it.displayLabel) == normalizeFilterToken(token) }
     return when (tier) {
-        RaidTier.TIER_1, RaidTier.TIER_2 -> TokenLook("Tier ${tier.displayLabel}", RaidPink, tier.displayLabel)
-        RaidTier.TIER_3, RaidTier.TIER_4 -> TokenLook("Tier ${tier.displayLabel}", RaidAmber, tier.displayLabel)
-        RaidTier.TIER_5, RaidTier.TIER_6 -> TokenLook("Tier ${tier.displayLabel}", RaidSlate, tier.displayLabel)
-        RaidTier.MEGA -> TokenLook("Mega", RaidMega, "M")
-        RaidTier.MEGA_LEGENDARY -> TokenLook("Mega Legendary", RaidMega, "M★")
-        RaidTier.PRIMAL -> TokenLook("Primal", RaidPrimal, "P")
+        RaidTier.TIER_1, RaidTier.TIER_2 -> TokenLook(AppText.get(R.string.alerts_tier_x, tier.displayLabel), RaidPink, tier.displayLabel)
+        RaidTier.TIER_3, RaidTier.TIER_4 -> TokenLook(AppText.get(R.string.alerts_tier_x, tier.displayLabel), RaidAmber, tier.displayLabel)
+        RaidTier.TIER_5, RaidTier.TIER_6 -> TokenLook(AppText.get(R.string.alerts_tier_x, tier.displayLabel), RaidSlate, tier.displayLabel)
+        RaidTier.MEGA -> TokenLook(AppText.get(R.string.alerts_mega), RaidMega, "M")
+        RaidTier.MEGA_LEGENDARY -> TokenLook(AppText.get(R.string.alerts_mega_legendary), RaidMega, "M★")
+        RaidTier.PRIMAL -> TokenLook(AppText.get(R.string.alerts_primal), RaidPrimal, "P")
         RaidTier.SHADOW_1, RaidTier.SHADOW_3, RaidTier.SHADOW_5 ->
             TokenLook(tier.displayLabel, RaidShadow, tier.displayLabel.substringAfter(' '))
-        RaidTier.ELITE -> TokenLook("Elite", RaidSpecial, "★")
-        RaidTier.ULTRA_BEAST -> TokenLook("Ultra Beast", RaidSpecial, "UB")
+        RaidTier.ELITE -> TokenLook(AppText.get(R.string.alerts_elite), RaidSpecial, "★")
+        RaidTier.ULTRA_BEAST -> TokenLook(AppText.get(R.string.alerts_ultra_beast), RaidSpecial, "UB")
         null -> TokenLook(token, Neutral, token.take(1).uppercase())
     }
 }

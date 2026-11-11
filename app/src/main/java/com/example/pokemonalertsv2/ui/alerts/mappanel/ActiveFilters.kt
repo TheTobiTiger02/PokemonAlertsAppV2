@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
@@ -69,7 +71,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "overrides",
-                label = if (count == 1) "1 distance rule" else "$count distance rules",
+                label = if (count == 1) AppText.get(R.string.alerts_1_distance_rule) else AppText.get(R.string.alerts_x_distance_rules, count),
                 clear = { it.copy(distanceOverrides = Defaults.distanceOverrides) }
             )
         )

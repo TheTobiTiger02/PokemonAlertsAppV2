@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -302,7 +303,7 @@ private fun SetupList(
         val mega = state.activeMegaId?.let { id -> state.megaOptions.firstOrNull { it.pokemonId == id } }
         PanelNavRow(
             title = stringResource(R.string.counters_active_mega),
-            summary = mega?.displayName ?: "None",
+            summary = mega?.displayName ?: AppText.get(R.string.alerts_none),
             active = mega != null,
             onClick = { open(SetupPage.MEGA) },
             modifier = Modifier.testTag("setup_row_mega")
@@ -318,9 +319,9 @@ private fun SetupList(
 
 /** Where the raid's weather came from, when it did not come from the user. */
 internal fun weatherSourceNote(state: RaidCountersUiState): String? = when {
-    state.weatherFromAlert && state.weatherUnconfirmed -> "From the raid, not confirmed yet"
-    state.weatherFromAlert -> "From the raid"
-    state.weatherUnconfirmed -> "Not confirmed yet"
+    state.weatherFromAlert && state.weatherUnconfirmed -> AppText.get(R.string.counters_from_the_raid_not_confirmed_yet)
+    state.weatherFromAlert -> AppText.get(R.string.counters_from_the_raid)
+    state.weatherUnconfirmed -> AppText.get(R.string.counters_not_confirmed_yet)
     else -> null
 }
 
@@ -362,14 +363,14 @@ private fun <T> ChoiceList(
 /** Short tile names; the long labels are for lists. */
 internal val PokebattlerWeather.tileLabel: String
     get() = when (this) {
-        PokebattlerWeather.NONE -> "None"
-        PokebattlerWeather.CLEAR -> "Sunny"
-        PokebattlerWeather.RAINY -> "Rain"
-        PokebattlerWeather.PARTLY_CLOUDY -> "Partly cloudy"
-        PokebattlerWeather.OVERCAST -> "Cloudy"
-        PokebattlerWeather.WINDY -> "Windy"
-        PokebattlerWeather.SNOW -> "Snow"
-        PokebattlerWeather.FOG -> "Fog"
+        PokebattlerWeather.NONE -> AppText.get(R.string.alerts_none)
+        PokebattlerWeather.CLEAR -> AppText.get(R.string.counters_sunny)
+        PokebattlerWeather.RAINY -> AppText.get(R.string.alerts_rain)
+        PokebattlerWeather.PARTLY_CLOUDY -> AppText.get(R.string.alerts_partly_cloudy)
+        PokebattlerWeather.OVERCAST -> AppText.get(R.string.alerts_cloudy)
+        PokebattlerWeather.WINDY -> AppText.get(R.string.alerts_windy)
+        PokebattlerWeather.SNOW -> AppText.get(R.string.alerts_snow)
+        PokebattlerWeather.FOG -> AppText.get(R.string.alerts_fog)
     }
 
 internal val PokebattlerWeather.icon: Int

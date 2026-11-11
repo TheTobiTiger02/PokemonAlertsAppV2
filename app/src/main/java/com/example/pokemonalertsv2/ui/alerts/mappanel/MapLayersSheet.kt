@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
@@ -61,8 +62,8 @@ import androidx.compose.ui.text.style.TextOverflow
 
 /** The Layers sheet's pages: the list, and the marker grouping editor. */
 internal enum class LayersPage(val title: String) {
-    ROOT("Map layers"),
-    GROUPING("Marker grouping")
+    ROOT(AppText.get(R.string.alerts_map_layers)),
+    GROUPING(AppText.get(R.string.alerts_marker_grouping))
 }
 
 /**
@@ -272,8 +273,8 @@ private fun localWeatherLabel(location: android.location.Location?, cells: List<
 }
 
 private fun MapStylePreference.label(): String = when (this) {
-    MapStylePreference.GOOGLE_STANDARD -> "Standard"
-    MapStylePreference.GOOGLE_SATELLITE -> "Satellite"
+    MapStylePreference.GOOGLE_STANDARD -> AppText.get(R.string.alerts_standard)
+    MapStylePreference.GOOGLE_SATELLITE -> AppText.get(R.string.alerts_satellite)
     MapStylePreference.OPENSTREETMAP -> "OpenStreetMap"
 }
 

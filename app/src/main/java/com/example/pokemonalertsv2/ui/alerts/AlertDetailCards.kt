@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -120,7 +121,7 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Replacing ${alert.oldSpecies}",
+                            text = AppText.get(R.string.alerts_replacing_x, alert.oldSpecies),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface

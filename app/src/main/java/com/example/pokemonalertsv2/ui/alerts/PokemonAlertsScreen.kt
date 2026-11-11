@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import com.example.pokemonalertsv2.util.rememberOffMain
 import com.example.pokemonalertsv2.util.PerfTrace
@@ -397,9 +398,9 @@ internal fun hasForegroundLocationPermission(context: Context): Boolean =
         ) == PackageManager.PERMISSION_GRANTED
 
 internal enum class HistoryAreaFilter(val label: String, val area: String?) {
-    BOTH("Both", null),
-    ALSBACH("Alsbach", "Alsbach"),
-    DARMSTADT("Darmstadt", "Darmstadt");
+    BOTH(AppText.get(R.string.alerts_both), null),
+    ALSBACH(AppText.get(R.string.alerts_alsbach), "Alsbach"),
+    DARMSTADT(AppText.get(R.string.alerts_darmstadt), "Darmstadt");
 
     fun includes(alert: PokemonAlert): Boolean =
         area == null || AlertFilterMatcher.matchesArea(FilterSelection.only(listOf(area)), alert.area)

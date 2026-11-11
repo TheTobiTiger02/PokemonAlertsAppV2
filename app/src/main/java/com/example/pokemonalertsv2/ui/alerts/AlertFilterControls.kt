@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.automirrored.filled.List
@@ -593,18 +594,18 @@ internal fun alertEmptyStateMessage(
     showDismissed: Boolean,
     locationAvailable: Boolean
 ): String = when {
-    searchQuery.isNotBlank() -> "No alerts match ‘${searchQuery.trim()}’. Try a different search."
+    searchQuery.isNotBlank() -> AppText.get(R.string.alerts_no_alerts_match_x_try_a, searchQuery.trim())
     mutedCategories.isNotEmpty() -> {
         val hidden = FILTERABLE_ALERT_CATEGORIES
             .filter { it in mutedCategories }
             .joinToString(", ") { it.filterLabel.lowercase() }
         "Every ${hidden} alert is hidden by your filters. Tap a “No …” chip above to bring it back."
     }
-    selectedArea != "All" -> "No active alerts are available in $selectedArea right now."
-    maxDistance > 0 && !locationAvailable -> "Distance filtering needs location access. Enable location or clear the distance limit."
-    maxDistance > 0 -> "No active alerts are within ${distanceLabel(maxDistance)}."
-    showDismissed -> "There are no dismissed alerts to show."
-    else -> "No alerts match the current filters."
+    selectedArea != "All" -> AppText.get(R.string.alerts_no_active_alerts_are_available_in, selectedArea)
+    maxDistance > 0 && !locationAvailable -> AppText.get(R.string.alerts_distance_filtering_needs_location_access_enable)
+    maxDistance > 0 -> AppText.get(R.string.alerts_no_active_alerts_are_within_x, distanceLabel(maxDistance))
+    showDismissed -> AppText.get(R.string.alerts_there_are_no_dismissed_alerts_to)
+    else -> AppText.get(R.string.alerts_no_alerts_match_the_current_filters)
 }
 
 @Composable
@@ -673,9 +674,9 @@ internal fun AlertSearchBar(
 /** Short name for each sort order, shown on the sort chip itself. */
 internal val SortPreference.shortLabel: String
     get() = when (this) {
-        SortPreference.POSTED_TIME -> "Newest"
-        SortPreference.DISTANCE -> "Nearest"
-        SortPreference.TIME_REMAINING -> "Ending soon"
+        SortPreference.POSTED_TIME -> AppText.get(R.string.alerts_newest)
+        SortPreference.DISTANCE -> AppText.get(R.string.alerts_nearest)
+        SortPreference.TIME_REMAINING -> AppText.get(R.string.alerts_ending_soon)
         SortPreference.NAME -> "A–Z"
     }
 
@@ -836,10 +837,10 @@ internal fun HistoryTypeFilterRow(
             }
     ) {
         items(AlertFilter.entries, key = { it.name }) { filter ->
-            // "All" has no alert category; its fallback accent is a neutral grey that made the
+            // "All" has no alert category; its fallback accent is a neutral grey that made the
             // selected chip read as disabled.
             val chipAccent = if (filter == AlertFilter.ALL) MaterialTheme.colorScheme.primary
-                else Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
+                else Color(resolveAlertVisualStyle(filter.name).category.accentArgb)
             ElevatedAssistChip(
                 onClick = { onFilterChanged(filter) },
                 label = { Text(text = filter.label) },

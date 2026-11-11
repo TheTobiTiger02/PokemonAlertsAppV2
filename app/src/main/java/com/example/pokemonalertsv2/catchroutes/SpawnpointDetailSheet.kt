@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
@@ -71,32 +72,32 @@ internal fun spawnStatus(windows: List<SpawnOpportunity>, now: Long): SpawnStatu
     if (next != null) {
         val wait = next.availableFrom - now
         return SpawnStatus(SpawnState.UPCOMING,
-            if (wait <= 60 * 60_000L) "Spawns in ${TimeUtils.formatDurationShort(wait)}" else "Next at ${clock(next.availableFrom)}")
+            if (wait <= 60 * 60_000L) AppText.get(R.string.catchroutes_spawns_in_x, TimeUtils.formatDurationShort(wait)) else AppText.get(R.string.catchroutes_next_at_x, clock(next.availableFrom)))
     }
     return SpawnStatus(SpawnState.ENDED, "No window in range")
 }
 
 /** How much to trust the timing, in words, from the backend's probability and basis. */
 internal fun confidenceLabel(o: SpawnOpportunity): String = when {
-    o.observed -> "Seen live"
-    o.expectedCatch >= 0.8 -> "Verified schedule"
-    o.expectedCatch >= 0.5 -> "Likely"
-    else -> "Uncertain"
+    o.observed -> AppText.get(R.string.catchroutes_seen_live)
+    o.expectedCatch >= 0.8 -> AppText.get(R.string.catchroutes_verified_schedule)
+    o.expectedCatch >= 0.5 -> AppText.get(R.string.catchroutes_likely)
+    else -> AppText.get(R.string.catchroutes_uncertain)
 }
 
 internal fun basisLabel(basis: String): String = when (basis) {
-    "observed_encounter" -> "Seen live by a scanner"
-    "recurring_schedule" -> "Learned hourly schedule"
-    "inferred_lifetime" -> "Estimated 60-minute lifetime"
-    "assumed_duration" -> "Known despawn, assumed duration"
-    "unverified_encounter" -> "Seen live, despawn unverified"
+    "observed_encounter" -> AppText.get(R.string.catchroutes_seen_live_by_a_scanner)
+    "recurring_schedule" -> AppText.get(R.string.catchroutes_learned_hourly_schedule)
+    "inferred_lifetime" -> AppText.get(R.string.catchroutes_estimated_60_minute_lifetime)
+    "assumed_duration" -> AppText.get(R.string.catchroutes_known_despawn_assumed_duration)
+    "unverified_encounter" -> AppText.get(R.string.catchroutes_seen_live_despawn_unverified)
     else -> basis.replace('_', ' ')
 }
 
 internal fun durationLabel(schedule: SpawnSchedule?): String = when (schedule?.durationBasis) {
-    "observed_60" -> "60 min"
-    "observed_30" -> "30 min"
-    else -> "Unknown"
+    "observed_60" -> AppText.get(R.string.catchroutes_60_min)
+    "observed_30" -> AppText.get(R.string.catchroutes_30_min)
+    else -> AppText.get(R.string.catchroutes_unknown)
 }
 
 /** Minute:second of the hour, the way a spawnpoint's schedule reads: ":23:40". */
@@ -123,9 +124,9 @@ private val uncertaintyText = mapOf(
 
 /** Event types, the way players say them. */
 internal fun eventTypeLabel(type: String): String = when (type) {
-    "pokemon-spotlight-hour" -> "Spotlight Hours"
-    "community-day" -> "Community Days"
-    "wild-area" -> "Wild Area events"
+    "pokemon-spotlight-hour" -> AppText.get(R.string.catchroutes_spotlight_hours)
+    "community-day" -> AppText.get(R.string.catchroutes_community_days)
+    "wild-area" -> AppText.get(R.string.catchroutes_wild_area_events)
     "event" -> "events"
     else -> type.replace('-', ' ')
 }
@@ -145,9 +146,9 @@ internal fun activityNotice(pattern: String?, eventTypes: List<String>, nextEven
             if (e.featured.isNotEmpty()) append(" Featured: ${e.featured.joinToString(", ")}.")
         }
     }
-    pattern == "likely_event" -> "Likely event spawnpoint: it appears only during some periods."
+    pattern == "likely_event" -> AppText.get(R.string.catchroutes_likely_event_spawnpoint_it_appears_only)
     pattern == "dormant" || reason == "dormant_spawnpoint" -> "Inactive: nothing has spawned here recently, although nearby spawns were scanned."
-    reason == "catalogue_only" -> "Only known from the WingullMap catalogue. Routes wait until the live scanner sees it."
+    reason == "catalogue_only" -> AppText.get(R.string.catchroutes_only_known_from_the_wingullmap_catalogue)
     else -> null
 }
 
@@ -242,7 +243,7 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
         SectionLabel(stringResource(R.string.catchroutes_every_hour))
         HourBarView(hourBar(schedule, primary), now)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Fact(stringResource(R.string.catchroutes_despawns), schedule?.despawnSecondOfHour?.let(::secondOfHourLabel) ?: primary?.let { clock(it.despawnAt) } ?: "Unknown", Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_despawns), schedule?.despawnSecondOfHour?.let(::secondOfHourLabel) ?: primary?.let { clock(it.despawnAt) } ?: AppText.get(R.string.catchroutes_unknown), Modifier.weight(1f))
             Fact(stringResource(R.string.catchroutes_lasts), durationLabel(schedule), Modifier.weight(1f))
             Fact(stringResource(R.string.catchroutes_agreeing_cycles), schedule?.supportCycles?.let { s -> schedule.totalCycles?.let { "$s of $it" } ?: "$s" } ?: "—", Modifier.weight(1f))
         }
@@ -250,7 +251,7 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
             // "Never" only once the backend has answered; before that, or without it, it is unknown.
             val unknown = if (detail == null) "—" else stringResource(R.string.catchroutes_never)
             Fact(stringResource(R.string.catchroutes_last_verified), parseInstant(schedule?.lastVerifiedAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
-            Fact("Seen live", parseInstant(detail?.liveLastSeenAt ?: primary?.liveLastSeenAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
+            Fact(AppText.get(R.string.catchroutes_seen_live), parseInstant(detail?.liveLastSeenAt ?: primary?.liveLastSeenAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
             Fact(stringResource(R.string.catchroutes_last_active), parseInstant(detail?.lastActiveAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
         }
 

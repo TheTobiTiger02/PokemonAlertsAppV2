@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import android.content.ActivityNotFoundException
@@ -78,7 +79,7 @@ fun WatchDataSettings() {
                         }) { Text(stringResource(R.string.health_connect)) }
                     }
                 HealthDataReader.Availability.NEEDS_UPDATE ->
-                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text("Update Health Connect") }
+                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(AppText.get(R.string.health_update_health_connect)) }
                 HealthDataReader.Availability.UNAVAILABLE ->
                     FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(stringResource(R.string.health_get_health_connect)) }
             }

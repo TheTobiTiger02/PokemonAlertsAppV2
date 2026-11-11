@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,13 +45,13 @@ import androidx.compose.ui.unit.dp
 
 /** The Filters tabs, in the order PogoMapper-style mappers use: where, then what. */
 private enum class FiltersTab(val label: String) {
-    NEARBY("Nearby"),
-    TYPES("Types"),
-    POKEMON("Pokémon"),
-    RAIDS("Raids"),
-    ROCKET("Rocket"),
-    QUESTS("Quests"),
-    TAPPABLES("Tappables")
+    NEARBY(AppText.get(R.string.alerts_nearby)),
+    TYPES(AppText.get(R.string.alerts_types)),
+    POKEMON(AppText.get(R.string.alerts_pok_mon)),
+    RAIDS(AppText.get(R.string.data_raids)),
+    ROCKET(AppText.get(R.string.alerts_rocket)),
+    QUESTS(AppText.get(R.string.data_quests)),
+    TAPPABLES(AppText.get(R.string.data_tappables))
 }
 
 /**

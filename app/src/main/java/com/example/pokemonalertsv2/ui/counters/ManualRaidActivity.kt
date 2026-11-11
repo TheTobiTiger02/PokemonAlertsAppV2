@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
@@ -121,13 +122,13 @@ class ManualRaidViewModel(application: Application) : AndroidViewModel(applicati
                 _uiState.value = ManualRaidPickerUiState(
                     loading = false,
                     bosses = bosses,
-                    error = if (bosses.isEmpty()) "No current raid bosses were returned." else null
+                    error = if (bosses.isEmpty()) AppText.get(R.string.counters_no_current_raid_bosses_were_returned) else null
                 )
             }.onFailure {
                 _uiState.update { state ->
                     state.copy(
                         loading = false,
-                        error = "Couldn't load the current raid bosses. Check your connection and retry."
+                        error = AppText.get(R.string.counters_couldn_t_load_the_current_raid)
                     )
                 }
             }

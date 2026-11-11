@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -217,14 +219,14 @@ internal fun formatRadarLocationAge(
     accuracyMeters: Float?,
     nowMillis: Long
 ): String = when {
-    locationTimeMillis == null -> "Location unavailable"
-    locationTimeMillis <= 0L -> "Location updated"
+    locationTimeMillis == null -> AppText.get(R.string.widget_location_unavailable)
+    locationTimeMillis <= 0L -> AppText.get(R.string.widget_location_updated)
     nowMillis - locationTimeMillis < 60_000L -> {
-        if ((accuracyMeters ?: 0f) > 100f) "Approximate location · now" else "Location · now"
+        if ((accuracyMeters ?: 0f) > 100f) AppText.get(R.string.widget_approximate_location_now) else AppText.get(R.string.widget_location_now)
     }
     else -> {
         val minutes = ((nowMillis - locationTimeMillis) / 60_000L).coerceAtLeast(1L)
-        val prefix = if ((accuracyMeters ?: 0f) > 100f) "Approximate" else "Location"
+        val prefix = if ((accuracyMeters ?: 0f) > 100f) AppText.get(R.string.widget_approximate) else AppText.get(R.string.alerts_location)
         "$prefix · ${minutes}m ago"
     }
 }

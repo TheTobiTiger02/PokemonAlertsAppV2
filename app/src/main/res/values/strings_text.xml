@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Text built in formatters; edited by hand. -->
+<resources>
+    <string name="walk_minutes">%1$s min walk</string>
+    <string name="walk_minutes_active">%1$s min walking</string>
+</resources>

@@ -122,6 +122,6 @@ object WalkingRouteUtils {
 
     fun formatWalkingDurationSeconds(seconds: Long): String {
         val minutes = ceil(seconds / 60.0).toInt().coerceAtLeast(1)
-        return String.format(Locale.getDefault(), "%d min walk", minutes)
+        return AppText.get(com.example.pokemonalertsv2.R.string.walk_minutes, minutes)
     }
 }

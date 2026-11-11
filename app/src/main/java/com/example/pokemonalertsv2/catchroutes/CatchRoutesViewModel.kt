@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Application
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
@@ -54,7 +56,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun save(duplicate: Boolean = false) = viewModelScope.launch {
         selectedId = store.save(settings.copy(startAtMillis = 0), if (duplicate) null else selectedId)
-        progress = if (duplicate) "Copy saved" else "Setup saved"
+        progress = if (duplicate) AppText.get(R.string.catchroutes_copy_saved) else AppText.get(R.string.catchroutes_setup_saved)
     }
     fun delete(entity: CatchSetupEntity) = viewModelScope.launch {
         store.delete(entity.id)

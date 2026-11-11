@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
@@ -78,15 +79,15 @@ import androidx.compose.ui.text.style.TextOverflow
 
 // Names are part of the pokemonalerts://settings/<name> deep-link contract; titles are free.
 internal enum class SettingsDestination(val title: String) {
-    OVERVIEW("Settings"),
-    APPEARANCE_BEHAVIOR("Appearance"),
-    MAP_TRACKING("Map & tracking"),
-    ALERT_FILTERS("Filters"),
-    GODEX("GoDex checklist"),
-    GODEX_COLLECTION("GoDex collection"),
-    RAID_COUNTERS("Raid counters"),
-    NOTIFICATIONS("Notifications & permissions"),
-    ABOUT_UPDATES("Backup & about")
+    OVERVIEW(AppText.get(R.string.events_settings)),
+    APPEARANCE_BEHAVIOR(AppText.get(R.string.settings_appearance)),
+    MAP_TRACKING(AppText.get(R.string.settings_map_tracking)),
+    ALERT_FILTERS(AppText.get(R.string.alerts_filters)),
+    GODEX(AppText.get(R.string.settings_godex_checklist)),
+    GODEX_COLLECTION(AppText.get(R.string.settings_godex_collection)),
+    RAID_COUNTERS(AppText.get(R.string.settings_raid_counters)),
+    NOTIFICATIONS(AppText.get(R.string.settings_notifications_permissions)),
+    ABOUT_UPDATES(AppText.get(R.string.settings_backup_about))
 }
 
 internal fun goDexDisconnectMessage(pendingCount: Int): String =

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.raidwatch
 
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -150,7 +151,7 @@ internal object RaidWatchNotifications {
      */
     internal fun headlineLine(alert: PokemonAlert, endMillis: Long, nowMillis: Long): String {
         val remaining = RaidWatchTiming.remainingMillis(nowMillis, endMillis)
-        val time = if (remaining > 0L) TimeUtils.formatDurationShort(remaining) else "Raid ended"
+        val time = if (remaining > 0L) TimeUtils.formatDurationShort(remaining) else AppText.get(R.string.raidwatch_raid_ended)
         return listOfNotNull(alert.moves?.formatted(), time).joinToString(" · ")
     }
 
@@ -176,7 +177,7 @@ internal object RaidWatchNotifications {
         nowMillis: Long
     ): String {
         return when {
-            team == null -> "Building your team…"
+            team == null -> AppText.get(R.string.raidwatch_building_your_team)
             !team.hasTeam -> team.note ?: "No team to suggest for this boss."
             else -> team.members.mapIndexed { index, member ->
                 "${index + 1}. ${member.displayName} ×${member.count}  ·  " +

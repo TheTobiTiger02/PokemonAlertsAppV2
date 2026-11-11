@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableHorizontalPadding
@@ -118,8 +119,8 @@ internal fun rememberCopyTeam(
                 // the fallback: an exact query silently matches nothing if the roster
                 // has moved on since the import.
                 val result = snackbarHostState.showSnackbar(
-                    message = "Copied ${state.team.sumOf { it.count }} Pokémon",
-                    actionLabel = if (format == CopyTeamFormat.EXACT) "Species only" else null,
+                    message = AppText.get(R.string.counters_copied_x_pok_mon, state.team.sumOf { it.count }),
+                    actionLabel = if (format == CopyTeamFormat.EXACT) AppText.get(R.string.counters_species_only) else null,
                     withDismissAction = true
                 )
                 if (result == SnackbarResult.ActionPerformed) {

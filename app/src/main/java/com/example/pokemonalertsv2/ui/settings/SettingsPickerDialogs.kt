@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
@@ -873,7 +874,7 @@ internal fun CustomDatePickerDialog(
             FilledTonalButton(
                 onClick = { onDateSelected(selectedYear, selectedMonth, selectedDay) }
             ) {
-                Text("Select")
+                Text(AppText.get(R.string.settings_select))
             }
         },
         dismissButton = {

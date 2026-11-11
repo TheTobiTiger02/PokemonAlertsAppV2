@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.megaboost
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.content.Context
 import com.example.pokemonalertsv2.catchroutes.catchBody
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
@@ -68,7 +70,7 @@ class MegaBoostController(context: Context, private val scope: CoroutineScope) {
                         ?: live.areas.maxByOrNull { it.total }?.area ?: ALL_AREAS
                     current.copy(live = live, types = current.types + types, area = area)
                 }
-                if (state.value.megas.isEmpty()) state.update { it.copy(error = "Mega data is not downloaded yet. Check your connection and try again.") }
+                if (state.value.megas.isEmpty()) state.update { it.copy(error = AppText.get(R.string.megaboost_mega_data_is_not_downloaded_yet)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,9 +60,9 @@ import com.example.pokemonalertsv2.data.godex.GoDexSessionState
 import kotlinx.coroutines.launch
 
 internal enum class GoDexCatchTargetKind(val label: String) {
-    DIRECT("This Pokémon"),
-    EVOLUTION("Evolution"),
-    FORM_CHANGE("Form change")
+    DIRECT(AppText.get(R.string.alerts_this_pok_mon)),
+    EVOLUTION(AppText.get(R.string.alerts_evolution)),
+    FORM_CHANGE(AppText.get(R.string.alerts_form_change))
 }
 
 internal data class GoDexCatchOption(
@@ -74,8 +75,8 @@ internal data class GoDexCatchOption(
         get() = when (kind) {
             GoDexCatchTargetKind.DIRECT -> kind.label
             GoDexCatchTargetKind.EVOLUTION ->
-                if (distance <= 1) "Evolution" else "$distance evolutions away"
-            GoDexCatchTargetKind.FORM_CHANGE -> "Form change"
+                if (distance <= 1) AppText.get(R.string.alerts_evolution) else AppText.get(R.string.alerts_x_evolutions_away, distance)
+            GoDexCatchTargetKind.FORM_CHANGE -> AppText.get(R.string.alerts_form_change)
         }
 }
 
@@ -309,9 +310,9 @@ internal fun GoDexCaughtAction(
     val semanticsModifier = modifier.semantics {
         this.contentDescription = control.contentDescription
         stateDescription = when {
-            isPending -> "Sync pending"
-            hasUncatchAction -> "Caught"
-            else -> "Needed"
+            isPending -> AppText.get(R.string.alerts_sync_pending)
+            hasUncatchAction -> AppText.get(R.string.hunt_caught)
+            else -> AppText.get(R.string.alerts_needed)
         }
     }
     when (presentation) {

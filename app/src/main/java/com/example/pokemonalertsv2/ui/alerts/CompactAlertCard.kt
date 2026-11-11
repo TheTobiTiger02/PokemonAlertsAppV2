@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.OnBrightAccent
 import androidx.compose.runtime.derivedStateOf
@@ -270,13 +271,13 @@ internal fun CompactAlertCard(
 
 internal val AlertSecondaryAction.menuLabel: String
     get() = when (this) {
-        AlertSecondaryAction.SNOOZE -> "Snooze"
-        AlertSecondaryAction.PICTURE_IN_PICTURE -> "Open in picture-in-picture"
-        AlertSecondaryAction.SHARE -> "Share"
-        AlertSecondaryAction.DISMISS -> "Dismiss"
-        AlertSecondaryAction.RESTORE -> "Restore"
-        AlertSecondaryAction.FAVORITE -> "Add to favourites"
-        AlertSecondaryAction.UNFAVORITE -> "Remove from favourites"
+        AlertSecondaryAction.SNOOZE -> AppText.get(R.string.alerts_snooze)
+        AlertSecondaryAction.PICTURE_IN_PICTURE -> AppText.get(R.string.alerts_open_in_picture_in_picture)
+        AlertSecondaryAction.SHARE -> AppText.get(R.string.alerts_share)
+        AlertSecondaryAction.DISMISS -> AppText.get(R.string.alerts_dismiss)
+        AlertSecondaryAction.RESTORE -> AppText.get(R.string.alerts_restore)
+        AlertSecondaryAction.FAVORITE -> AppText.get(R.string.alerts_add_to_favourites)
+        AlertSecondaryAction.UNFAVORITE -> AppText.get(R.string.alerts_remove_from_favourites)
     }
 
 /** The leading icon both alert menus use, so every entry carries one. */

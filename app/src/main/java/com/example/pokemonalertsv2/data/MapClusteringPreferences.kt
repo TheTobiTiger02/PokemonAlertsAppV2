@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -36,11 +38,11 @@ data class MapClusteringConfig(
 
 /** Stored by [name]; [label] and [description] are free to change. */
 enum class MapClusteringPreset(val label: String, val description: String, val config: MapClusteringConfig) {
-    LESS("Less clustering", "Pins separate early; groups only where crowded.", MapClusteringConfig()),
-    CURRENT("Classic grouping", "Groups nearby pins until you zoom in close.", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
-    OVERLAP("Overlap only", "Groups only pins that would overlap.", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
-    STACKS("Same-location stacks", "Stacks only alerts at the exact same spot.", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
-    PERFORMANCE("Performance", "Fewest markers; smoothest on busy maps.", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150))
+    LESS(AppText.get(R.string.data_less_clustering), "Pins separate early; groups only where crowded.", MapClusteringConfig()),
+    CURRENT(AppText.get(R.string.data_classic_grouping), "Groups nearby pins until you zoom in close.", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
+    OVERLAP(AppText.get(R.string.data_overlap_only), "Groups only pins that would overlap.", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
+    STACKS(AppText.get(R.string.data_same_location_stacks), "Stacks only alerts at the exact same spot.", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
+    PERFORMANCE(AppText.get(R.string.data_performance), "Fewest markers; smoothest on busy maps.", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150))
 }
 
 @Serializable
@@ -50,8 +52,8 @@ data class MapClusteringSettings(
 ) {
     val config: MapClusteringConfig get() = if (preset == "CUSTOM") custom.normalized()
         else MapClusteringPreset.entries.firstOrNull { it.name == preset }?.config ?: MapClusteringConfig()
-    val label: String get() = if (preset == "CUSTOM") "Custom" else
-        MapClusteringPreset.entries.firstOrNull { it.name == preset }?.label ?: "Less clustering"
+    val label: String get() = if (preset == "CUSTOM") AppText.get(R.string.alerts_custom) else
+        MapClusteringPreset.entries.firstOrNull { it.name == preset }?.label ?: AppText.get(R.string.data_less_clustering)
 }
 
 /** Uses the existing preference store so normal settings backups include both preset and custom values. */

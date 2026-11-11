@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
@@ -557,22 +558,22 @@ internal fun AlertHistoryPage(
                                     StatRow(stringResource(R.string.data_quests), statistics["quests"] ?: 0, Color(AlertCategory.QUEST.accentArgb))
                                 }
                                 if ((statistics["rares"] ?: 0) > 0) {
-                                    StatRow("Common", statistics["rares"] ?: 0, Color(AlertCategory.COMMON.accentArgb))
+                                    StatRow(AppText.get(R.string.alerts_common), statistics["rares"] ?: 0, Color(AlertCategory.COMMON.accentArgb))
                                 }
                                 if ((statistics["hundos"] ?: 0) > 0) {
                                     StatRow(stringResource(R.string.data_hundos), statistics["hundos"] ?: 0, Color(AlertCategory.HUNDO.accentArgb))
                                 }
                                 if ((statistics["pvp"] ?: 0) > 0) {
-                                    StatRow("PvP", statistics["pvp"] ?: 0, Color(AlertCategory.PVP.accentArgb))
+                                    StatRow(AppText.get(R.string.alerts_pvp), statistics["pvp"] ?: 0, Color(AlertCategory.PVP.accentArgb))
                                 }
                                 if ((statistics["nundos"] ?: 0) > 0) {
                                     StatRow(stringResource(R.string.data_nundos), statistics["nundos"] ?: 0, Color(AlertCategory.NUNDO.accentArgb))
                                 }
                                 if ((statistics["rocket"] ?: 0) > 0) {
-                                    StatRow("Rocket", statistics["rocket"] ?: 0, Color(AlertCategory.ROCKET.accentArgb))
+                                    StatRow(AppText.get(R.string.alerts_rocket), statistics["rocket"] ?: 0, Color(AlertCategory.ROCKET.accentArgb))
                                 }
                                 if ((statistics["kecleon"] ?: 0) > 0) {
-                                    StatRow("Kecleon", statistics["kecleon"] ?: 0, Color(AlertCategory.KECLEON.accentArgb))
+                                    StatRow(AppText.get(R.string.alerts_kecleon), statistics["kecleon"] ?: 0, Color(AlertCategory.KECLEON.accentArgb))
                                 }
                                 if ((statistics["other"] ?: 0) > 0) {
                                     StatRow(stringResource(R.string.data_other), statistics["other"] ?: 0, Color(AlertCategory.GENERIC.accentArgb))
@@ -797,8 +798,8 @@ internal fun historyDayLabel(
     val date = java.time.Instant.ofEpochMilli(timestamp).atZone(zone).toLocalDate()
     val today = java.time.Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
     return when (date) {
-        today -> "Today"
-        today.minusDays(1) -> "Yesterday"
+        today -> AppText.get(R.string.alerts_today)
+        today.minusDays(1) -> AppText.get(R.string.alerts_yesterday)
         else -> date.format(HISTORY_DAY_FORMATTER)
     }
 }

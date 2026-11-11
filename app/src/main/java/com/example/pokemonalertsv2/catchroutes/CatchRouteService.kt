@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
 import android.Manifest
 import android.app.*
 import android.content.*
@@ -104,7 +105,7 @@ class CatchRouteService : Service() {
         }
         return START_STICKY
     }
-    private fun readout(s: CatchSession?): String = if (s == null) "Restoring route…" else
+    private fun readout(s: CatchSession?): String = if (s == null) AppText.get(R.string.catchroutes_restoring_route) else
         "${if (s.paused) "Paused · " else ""}${s.ahead(System.currentTimeMillis()).size} ahead · ${s.caught} caught"
     private fun notification(s: CatchSession?): Notification {
         val open = PendingIntent.getActivity(this, 70, Intent(this, CatchRoutesActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -112,7 +113,7 @@ class CatchRouteService : Service() {
             .setContentTitle(s?.itinerary?.settings?.name ?: "Catch route").setContentText(readout(s))
             .setStyle(NotificationCompat.BigTextStyle().bigText("${readout(s)}\nPotential encounters; walking time only. ${controller.message.value.orEmpty()}"))
             .setContentIntent(open).setOnlyAlertOnce(true).setOngoing(true).setCategory(NotificationCompat.CATEGORY_NAVIGATION)
-        listOf("pause" to if (s?.paused == true) "Resume" else "Pause", "map" to "Map").forEachIndexed { i, (action, label) ->
+        listOf("pause" to if (s?.paused == true) AppText.get(R.string.catchroutes_resume) else AppText.get(R.string.catchroutes_pause), "map" to "Map").forEachIndexed { i, (action, label) ->
             builder.addAction(0, label, PendingIntent.getService(this, 71 + i, Intent(this, CatchRouteService::class.java).setAction(action), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         }
         return builder.build()

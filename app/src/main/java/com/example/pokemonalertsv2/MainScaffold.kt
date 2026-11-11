@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
@@ -255,8 +256,8 @@ internal fun MainScaffold(
         if (caught.id == lastOfferedCatchId) return@LaunchedEffect
         lastOfferedCatchId = caught.id
         val result = snackbarHostState.showSnackbar(
-            message = "Caught ${caught.displayName}",
-            actionLabel = "Undo",
+            message = AppText.get(R.string.mainscaffoldkt_caught_x, caught.displayName),
+            actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
             duration = SnackbarDuration.Long
         )
         if (result == SnackbarResult.ActionPerformed) undoLastCatch(context)
@@ -571,7 +572,7 @@ internal fun MainScaffold(
             is UpdateState.UpdateAvailable -> {
                 AlertDialog(
                     onDismissRequest = { InAppUpdateManager.resetState() },
-                    title = { Text("Update Available") },
+                    title = { Text(AppText.get(R.string.mainscaffoldkt_update_available)) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.mainscaffoldkt_a_new_version_of_pokemonalerts_x, state.release.tagName))
@@ -596,7 +597,7 @@ internal fun MainScaffold(
                                 }
                             }
                         ) {
-                            Text("Update")
+                            Text(AppText.get(R.string.mainscaffoldkt_update))
                         }
                     },
                     dismissButton = {

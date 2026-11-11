@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.util
 
+import com.example.pokemonalertsv2.R
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
@@ -117,12 +118,12 @@ object TimeUtils {
         val seconds = totalSeconds % 60
         
         return when {
-            years > 0 -> if (years == 1L) "1 year ago" else "$years years ago"
-            months > 0 -> if (months == 1L) "1 month ago" else "$months months ago"
-            days > 0 -> if (days == 1L) "1 day ago" else "$days days ago"
-            hours > 0 -> if (hours == 1L) "1 hour ago" else "$hours hours ago"
-            minutes > 0 -> if (minutes == 1L) "1 min ago" else "$minutes mins ago"
-            else -> if (seconds <= 5) "just now" else "$seconds secs ago"
+            years > 0 -> if (years == 1L) AppText.get(R.string.util_1_year_ago) else AppText.get(R.string.util_x_years_ago, years)
+            months > 0 -> if (months == 1L) AppText.get(R.string.util_1_month_ago) else AppText.get(R.string.util_x_months_ago, months)
+            days > 0 -> if (days == 1L) AppText.get(R.string.util_1_day_ago) else AppText.get(R.string.util_x_days_ago, days)
+            hours > 0 -> if (hours == 1L) AppText.get(R.string.util_1_hour_ago) else AppText.get(R.string.util_x_hours_ago, hours)
+            minutes > 0 -> if (minutes == 1L) AppText.get(R.string.util_1_min_ago) else AppText.get(R.string.util_x_mins_ago, minutes)
+            else -> if (seconds <= 5) AppText.get(R.string.settings_just_now) else AppText.get(R.string.util_x_secs_ago, seconds)
         }
     }
 
@@ -133,8 +134,8 @@ object TimeUtils {
         val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
         val time = end.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
         return when (end.toLocalDate()) {
-            today -> "Ends today at $time"
-            today.plusDays(1) -> "Ends tomorrow at $time"
+            today -> AppText.get(R.string.util_ends_today_at_x, time)
+            today.plusDays(1) -> AppText.get(R.string.util_ends_tomorrow_at_x, time)
             else -> "Ends ${end.format(DateTimeFormatter.ofPattern("EEE, d MMM"))} at $time"
         }
     }
