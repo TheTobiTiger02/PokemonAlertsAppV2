@@ -55,6 +55,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onCreate() {
         super<Application>.onCreate()
+        com.example.pokemonalertsv2.data.net.Http.cacheDirectory = cacheDir
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         try {
             AlertNotifier.ensureChannel(this)

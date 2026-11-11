@@ -1,8 +1,11 @@
 package com.example.pokemonalertsv2.data.net
 
 import com.example.pokemonalertsv2.BuildConfig
+import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.brotli.BrotliInterceptor
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 /**
@@ -14,6 +17,7 @@ import java.util.concurrent.TimeUnit
  * ranking calls, the APK download) overrides them on its own builder.
  */
 object Http {
+    private const val CACHE_BYTES = 20L * 1024 * 1024
     val userAgent: String =
         "PokemonAlertsV2/${BuildConfig.VERSION_NAME} (Android; ${BuildConfig.APPLICATION_ID})"
 
@@ -25,8 +29,17 @@ object Http {
         )
     }
 
+    /** Set by the Application before any request, so responses can be cached on disk. */
+    @Volatile
+    var cacheDirectory: File? = null
+
     val base: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // Honours Cache-Control and ETags (the backend's waypoints and routes, events).
+            .apply { cacheDirectory?.let { cache(Cache(File(it, "http"), CACHE_BYTES)) } }
+            // Asks for Brotli as well as gzip. Cloudflare serves the full alert feed about a
+            // third smaller as Brotli (186 kB against 284 kB for ~5,000 alerts).
+            .addInterceptor(BrotliInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             // Bounds the whole call, so a server that trickles bytes cannot hold a worker forever.

@@ -219,6 +219,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp.logging)
+    implementation(libs.okhttp.brotli)
     implementation(libs.jsoup)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.work.runtime)
