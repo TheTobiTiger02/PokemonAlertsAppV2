@@ -1,7 +1,7 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.catchroutes.SpawnpointSelection
@@ -15,12 +15,7 @@ import android.os.Build
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color as AndroidColor
-import android.graphics.Paint
 import android.location.Location
-import android.util.LruCache
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,36 +25,21 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -68,9 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -89,7 +66,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -103,10 +79,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.MapChrome
 import com.example.pokemonalertsv2.ui.alerts.mappanel.MapFiltersSheet
@@ -138,20 +110,15 @@ import com.example.pokemonalertsv2.hunt.huntTargets
 import com.example.pokemonalertsv2.hunt.huntTargetTitle
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.JourneyOverlay
-import com.example.pokemonalertsv2.tracking.JourneyReadoutSurface
 import com.example.pokemonalertsv2.tracking.resolveJourneyReadoutSurface
 import com.example.pokemonalertsv2.tracking.shouldLabelJourneyOnMap
 import com.example.pokemonalertsv2.tracking.journeyDetailText
-import com.example.pokemonalertsv2.data.AlertFilterMatcher
 import com.example.pokemonalertsv2.data.FilterCatalog
 import com.example.pokemonalertsv2.data.FilterDefinition
-import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.tracking.MapPipArrivalTracker
-import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.tracking.rememberMapPipArrivalTracker
 import com.example.pokemonalertsv2.tracking.rememberArrivalTrackingUiController
 import com.example.pokemonalertsv2.util.CachedLocationProvider
-import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -160,16 +127,10 @@ import com.example.pokemonalertsv2.data.godex.GoDexConfig
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
-import com.example.pokemonalertsv2.data.godex.GoDexMatcher
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import coil.compose.AsyncImage
 import com.example.pokemonalertsv2.ui.components.AnimatedEmptyState
 import com.example.pokemonalertsv2.ui.theme.LocalAppDarkTheme
 import com.example.pokemonalertsv2.ui.theme.Spacing
-import com.example.pokemonalertsv2.ui.components.AnimatedRefreshIcon
 import com.example.pokemonalertsv2.ui.motion.appCollapseOut
 import com.example.pokemonalertsv2.ui.motion.appExpandIn
 import com.example.pokemonalertsv2.ui.motion.appFadeIn
@@ -192,170 +153,22 @@ import com.google.maps.android.compose.Polyline
 import com.google.android.gms.maps.model.JointType
 import com.google.android.gms.maps.model.RoundCap
 import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.MarkerInfoWindowContent
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import androidx.compose.material3.OutlinedButton
-import com.example.pokemonalertsv2.BuildConfig
-import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 // The pose tracker fires up to 2 Hz; the route repository would answer unchanged for
 // movement under 75 m anyway, so re-ranking every alert per fix is pure waste.
 private const val MAP_ROUTE_REFRESH_METERS = 50f
-
-internal fun mapCountdownRefreshKey(
-    showTimeLabels: Boolean,
-    nowMillis: Long,
-    refreshIntervalMillis: Long = if (showTimeLabels) 1_000L else 30_000L
-): Long = nowMillis / refreshIntervalMillis.coerceAtLeast(1L)
-
-/**
- * [coarsenBeyondWindow] is for labels drawn into marker bitmaps, where a ticking seconds figure
- * costs a rasterization per marker per second. Single chips pass false and keep their seconds.
- */
-internal fun mapCountdownLabel(
-    endTime: String?,
-    nowMillis: Long,
-    minutePrecision: Boolean = false,
-    coarsenBeyondWindow: Boolean = false
-): String {
-    val remaining = (TimeUtils.parseEndTimeToMillis(endTime) ?: Long.MAX_VALUE) - nowMillis
-    if (remaining <= 0L) return "Expired"
-    // The last minute always counts seconds: "1m" there says nothing about whether it is worth running.
-    if (remaining <= 59_000L) return TimeUtils.formatDurationShort(remaining)
-    // A ticking seconds figure earns its cost near the despawn and nowhere else. Beyond the
-    // window, minute precision holds the label - and therefore the marker's icon cache key -
-    // steady for a minute at a time, so a screen of pins no longer re-rasterizes every second
-    // to advance digits nobody is watching.
-    if (minutePrecision || (coarsenBeyondWindow && remaining > MAP_SECOND_PRECISION_WINDOW_MS)) {
-        // Rounds up like the seconds countdown does; the label only changes once a minute,
-        // which is what lets a crowded map skip per-second marker bitmap rebuilds.
-        val minutes = ((remaining + 59_999) / 60_000).toInt().coerceAtLeast(1)
-        return if (minutes >= 60) {
-            String.format("%dh %02dm", minutes / 60, minutes % 60)
-        } else {
-            "${minutes}m"
-        }
-    }
-    return TimeUtils.formatDurationShort(remaining)
-}
-
-/**
- * Above this marker count, marker countdowns drop to minute precision to stay smooth.
- * Every second-precision marker re-renders its bitmap once a second, so the ceiling is
- * deliberately conservative: a dense Darmstadt rocket field crosses it easily.
- */
-internal const val ADAPTIVE_COUNTDOWN_PRECISION_THRESHOLD = 48
-
-/**
- * How close to despawn a marker must be to show a seconds countdown.
- *
- * The count threshold above is all-or-nothing: one marker too many and every countdown on the
- * map coarsens. This bounds the cost by remaining time instead, so the pins that are actually
- * about to expire keep their seconds however busy the map is.
- */
-internal const val MAP_SECOND_PRECISION_WINDOW_MS = 15 * 60 * 1000L
-
-enum class MapPresentationMode {
-    FULL,
-    COMPACT_PICTURE_IN_PICTURE,
-
-    /**
-     * A hunt's own window. Shares the compact chrome with
-     * [COMPACT_PICTURE_IN_PICTURE] but browses the hunt's targets instead of the
-     * map's filter, and trades the follow toggle for "Got it" — the existing map
-     * PiP is deliberately left exactly as it was.
-     */
-    COMPACT_HUNT_PICTURE_IN_PICTURE
-}
-
-internal fun mapAlertsForPresentation(
-    filteredAlerts: List<PokemonAlert>,
-    trackedAlert: PokemonAlert?,
-    compactPictureInPicture: Boolean,
-    nowMillis: Long
-): List<PokemonAlert> {
-    if (!compactPictureInPicture || trackedAlert == null) return filteredAlerts
-    val trackedIsActiveAndMappable = trackedAlert.mapCoordinatesOrNull() != null &&
-        !trackedAlert.isInvalidated &&
-        (TimeUtils.parseEndTimeToMillis(trackedAlert.endTime) ?: Long.MAX_VALUE) > nowMillis
-    if (!trackedIsActiveAndMappable || filteredAlerts.any { it.uniqueId == trackedAlert.uniqueId }) {
-        return filteredAlerts
-    }
-    return filteredAlerts + trackedAlert
-}
-
-/**
- * The alerts the floating window keeps out of clustering, so each is drawn as its own marker:
- * the destination being walked to, and the one the browse cursor is on. Emphasis only lands on
- * individual markers, so without this, stepping onto an alert that shares a spot with its
- * neighbours would leave the window showing a numbered bubble and nothing highlighted.
- *
- * Both are matched against [renderedAlerts]: an id that has expired or been filtered away
- * reserves nothing.
- *
- * A running hunt gets the same treatment on the full map, but for the tracked
- * alert only: there, the browse cursor is the ordinary tap-to-open selection, and
- * emphasizing it would fire on every tap.
- */
-internal fun mapPipProtectedAlertIds(
-    compactPictureInPicture: Boolean,
-    trackedAlertId: String?,
-    browsedAlertId: String?,
-    renderedAlerts: List<PokemonAlert>,
-    huntActive: Boolean = false
-): Set<String> {
-    if (!compactPictureInPicture && !huntActive) return emptySet()
-    val available = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
-    return setOfNotNull(
-        trackedAlertId?.takeIf { it in available },
-        browsedAlertId?.takeIf { compactPictureInPicture && it in available }
-    )
-}
-
-internal fun mapPipEmphasizedAlertIds(
-    compactPictureInPicture: Boolean,
-    trackedAlertId: String?,
-    browsedAlertId: String?,
-    huntActive: Boolean = false
-): Set<String> = when {
-    compactPictureInPicture -> setOfNotNull(trackedAlertId, browsedAlertId)
-    huntActive -> setOfNotNull(trackedAlertId)
-    else -> emptySet()
-}
-
-internal fun initialMapPipBrowsedAlertId(
-    selectedAlertId: String?,
-    trackedAlertId: String?,
-    renderedAlerts: List<PokemonAlert>
-): String? {
-    val availableIds = renderedAlerts.mapTo(mutableSetOf(), PokemonAlert::uniqueId)
-    return selectedAlertId?.takeIf { it in availableIds }
-        ?: trackedAlertId?.takeIf { it in availableIds }
-}
-
-internal fun normalizeMapPictureInPictureZoom(zoom: Double?): Double =
-    zoom?.takeIf(Double::isFinite)?.coerceIn(3.0, 20.0) ?: USER_LOCATION_ZOOM.toDouble()
-
-internal fun mapPictureInPictureZoom(
-    mapSource: MapDisplaySource,
-    googleMapZoom: Double,
-    retainedZoom: Double
-): Double = normalizeMapPictureInPictureZoom(
-    if (mapSource == MapDisplaySource.GOOGLE) googleMapZoom else retainedZoom
-)
 
 @Composable
 fun AlertsMapRoute(
@@ -2753,178 +2566,4 @@ internal fun AlertsMapScreenContent(
         }
     }
 }
-
-/**
- * The markers the map should draw: mappable, still valid and unexpired alerts, minus the ones
- * the user dismissed unless [showDismissed] opts them back in, narrowed to the map's own
- * [selectedCategories] (independent of the feed's selection).
- */
-internal fun visibleMapAlerts(
-    alerts: List<PokemonAlert>,
-    selectedCategories: Set<AlertCategory>,
-    filterDefinition: FilterDefinition? = null,
-    dismissedAlertIds: Set<String>,
-    showDismissed: Boolean,
-    nowMillis: Long,
-    userLatitude: Double? = null,
-    userLongitude: Double? = null,
-    walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
-): List<PokemonAlert> =
-    alerts.filter { alert ->
-        val coordinates = alert.mapCoordinatesOrNull() ?: return@filter false
-        if (alert.isInvalidated) return@filter false
-        if (!showDismissed && alert.uniqueId in dismissedAlertIds) return@filter false
-        val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: Long.MAX_VALUE
-        if (end <= nowMillis) return@filter false
-        if (!matchesCategorySelection(alert, selectedCategories)) return@filter false
-        if (filterDefinition == null) return@filter true
-
-        val distance = if (userLatitude != null && userLongitude != null) {
-            haversineMeters(userLatitude, userLongitude, coordinates.latitude, coordinates.longitude)
-                .toFloat().takeUnless(Float::isNaN)
-        } else null
-        val route = walkingRoutes[alert.uniqueId]
-        AlertFilterMatcher.matches(
-            alert,
-            filterDefinition,
-            FilterMatchContext(
-                effectiveDistanceMeters = route?.distanceMeters?.toFloat() ?: distance,
-                walkingDurationSeconds = route?.durationSeconds,
-                directDistanceMeters = distance
-            )
-        )
-    }
-
-internal enum class MapLoadState {
-    LOADING,
-    READY,
-    ERROR
-}
-
-internal fun resolveMapLoadState(loaded: Boolean, failed: Boolean): MapLoadState = when {
-    loaded -> MapLoadState.READY
-    failed -> MapLoadState.ERROR
-    else -> MapLoadState.LOADING
-}
-
-/** A virtualized list displaying rich rows for every member of an overlapping cluster or stack. */
-@Composable
-internal fun MapClusterMemberList(
-    alerts: List<PokemonAlert>,
-    countdownClock: State<Long>,
-    onSelect: (PokemonAlert) -> Unit
-) {
-    val sortedAlerts = remember(alerts) {
-        alerts.sortedWith(::compareAlertPriority)
-    }
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .keepScrollInSheet()
-            .testTag("map_cluster_members"),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        item(key = "heading") {
-            Text(
-                stringResource(R.string.alerts_x_alerts_at_this_location, sortedAlerts.size),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
-        }
-        items(sortedAlerts, key = { it.uniqueId }) { alert ->
-            val visualStyle = resolveAlertVisualStyle(alert)
-            Surface(
-                onClick = { onSelect(alert) },
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                tonalElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth().testTag("map_cluster_member_${alert.uniqueId}")
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    val imageUrl = alert.thumbnailUrl ?: alert.imageUrl
-                    if (imageUrl != null) {
-                        AsyncImage(
-                            model = imageUrl,
-                            contentDescription = alert.name,
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(
-                                    1.5.dp,
-                                    Color(visualStyle.category.accentArgb.toInt()),
-                                    CircleShape
-                                )
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(Color(visualStyle.category.accentArgb.toInt())),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = alert.name.take(2).uppercase(),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        Text(
-                            text = alert.name,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            alert.displayCp?.let { cp ->
-                                Text(
-                                    text = stringResource(R.string.alerts_cp_x, cp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            alert.ivPercentage?.let { iv ->
-                                Text(
-                                    text = "$iv%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (iv == 100) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (iv == 100) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Text(
-                                text = visualStyle.shortCode,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(visualStyle.category.accentArgb.toInt()),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    MapCountdownText(alert.endTime, countdownClock)
-                }
-            }
-        }
-    }
-}
-
 private const val SPAWNPOINT_LOAD_DEBOUNCE_MILLIS = 300L
