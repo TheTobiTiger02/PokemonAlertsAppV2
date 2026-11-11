@@ -70,8 +70,7 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
         "settings" -> {
             val name = tail.firstOrNull()
                 ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
-            val destination = SettingsDestination.entries
-                .firstOrNull { it.name.equals(name, ignoreCase = true) }
+            val destination = settingsDestinationFor(name)
                 ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
             DeepLinkTarget.Settings(destination)
         }
@@ -83,3 +82,19 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
         else -> null
     }
 }
+
+/** Short names people type, besides the enum names (`about` for ABOUT_UPDATES and so on). */
+private val SETTINGS_ALIASES = mapOf(
+    "about" to SettingsDestination.ABOUT_UPDATES,
+    "updates" to SettingsDestination.ABOUT_UPDATES,
+    "backup" to SettingsDestination.ABOUT_UPDATES,
+    "appearance" to SettingsDestination.APPEARANCE_BEHAVIOR,
+    "map" to SettingsDestination.MAP_TRACKING,
+    "filters" to SettingsDestination.ALERT_FILTERS,
+    "counters" to SettingsDestination.RAID_COUNTERS,
+    "collection" to SettingsDestination.GODEX_COLLECTION,
+)
+
+internal fun settingsDestinationFor(name: String): SettingsDestination? =
+    SettingsDestination.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        ?: SETTINGS_ALIASES[name.lowercase()]

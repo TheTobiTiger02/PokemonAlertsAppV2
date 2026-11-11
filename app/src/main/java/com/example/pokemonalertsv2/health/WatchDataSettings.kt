@@ -44,7 +44,10 @@ fun WatchDataSettings() {
         availability = reader.availability()
         connected = availability == HealthDataReader.Availability.AVAILABLE && reader.isConnected()
     }
-    fun start(intent: android.content.Intent) = try { context.startActivity(intent) } catch (_: ActivityNotFoundException) {}
+    val unavailable = {
+        android.widget.Toast.makeText(context, "Health Connect could not be opened on this phone", android.widget.Toast.LENGTH_LONG).show()
+    }
+    fun start(intent: android.content.Intent) = try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { unavailable() }
 
     Column(Modifier.testTag("watch_data_settings"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -69,7 +72,7 @@ fun WatchDataSettings() {
                         OutlinedButton(onClick = { start(reader.manageIntent()) }) { Text("Manage access") }
                     } else {
                         FilledTonalButton(onClick = {
-                            try { launcher.launch(HealthDataReader.PERMISSIONS) } catch (_: ActivityNotFoundException) {}
+                            try { launcher.launch(HealthDataReader.PERMISSIONS) } catch (_: ActivityNotFoundException) { unavailable() }
                         }) { Text("Connect") }
                     }
                 HealthDataReader.Availability.NEEDS_UPDATE ->

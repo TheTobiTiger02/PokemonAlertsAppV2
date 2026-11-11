@@ -144,7 +144,7 @@ fun OnboardingScreen(
                                 title = "The map",
                                 points = listOf(
                                     "The chips along the top show or hide each alert type.",
-                                    "The filter button holds filters, map style and overlays; the gear opens Settings.",
+                                    "The filter button holds filters, the layers button map style and overlays; the gear opens Settings.",
                                     "The tools button starts a hunt, plans a catch route or opens the floating map."
                                 )
                             )
