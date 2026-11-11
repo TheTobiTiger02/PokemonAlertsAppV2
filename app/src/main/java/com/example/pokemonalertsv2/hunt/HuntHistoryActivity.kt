@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.HeartRed
 import com.example.pokemonalertsv2.ui.theme.HundoPink
 import com.example.pokemonalertsv2.ui.theme.ShinyGold
@@ -116,21 +119,21 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
-                title = { Text("Hunt history") },
+                title = { Text(stringResource(R.string.hunt_hunt_history)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
                     }
                 },
                 actions = {
                     if (history.isNotEmpty()) {
                         Box {
                             IconButton(onClick = { menuOpen = true }) {
-                                Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.hunt_more))
                             }
                             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                                 DropdownMenuItem(
-                                    text = { Text("Clear history") },
+                                    text = { Text(stringResource(R.string.hunt_clear_history)) },
                                     onClick = {
                                         menuOpen = false
                                         confirmClear = true
@@ -148,7 +151,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
         } else if (history.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    text = "No hunts yet. Finished hunts show up here with what you caught.",
+                    text = stringResource(R.string.hunt_no_hunts_yet_finished_hunts_show),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -179,7 +182,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                 val shinies = remember(history) { history.sumOf { hunt -> hunt.catches.count { it.shiny } } }
                 Text(
                     text = "${formatHuntDuration(totals.activeMillis)} hunted in total" +
-                        if (shinies > 0) " · $shinies shiny" else "",
+                        if (shinies > 0) stringResource(R.string.hunt_x_shiny, shinies) else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
@@ -198,7 +201,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     HuntHistoryRow(hunt, onClick = { opened = hunt }, onDelete = {
                         scope.launch {
                             repository.deleteHistoryEntry(hunt.startedAtMillis)
-                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = "Undo",
+                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
                                 duration = androidx.compose.material3.SnackbarDuration.Short)
                             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) repository.restoreHistoryEntry(hunt)
                         }
@@ -211,7 +214,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
     opened?.let { summary ->
         HuntSummarySheet(
             summary,
-            doneLabel = "Close",
+            doneLabel = stringResource(R.string.catchroutes_close),
             title = DateFormat.getDateInstance(DateFormat.FULL).format(Date(summary.startedAtMillis))
         ) { opened = null }
     }
@@ -219,15 +222,15 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Clear hunt history?") },
-            text = { Text("Every past hunt and its catches are removed. This cannot be undone.") },
+            title = { Text(stringResource(R.string.hunt_clear_hunt_history)) },
+            text = { Text(stringResource(R.string.hunt_every_past_hunt_and_its_catches)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
                     scope.launch { repository.clearHistory() }
-                }) { Text("Clear") }
+                }) { Text(stringResource(R.string.catchroutes_clear)) }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
         )
     }
 }
@@ -262,7 +265,7 @@ private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit, onDelete: () 
                     HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("hunt_history_delete")) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${hunt.name}")
+                    Icon(Icons.Filled.Delete, contentDescription = AppText.get(R.string.catchroutes_delete_x_2, hunt.name))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

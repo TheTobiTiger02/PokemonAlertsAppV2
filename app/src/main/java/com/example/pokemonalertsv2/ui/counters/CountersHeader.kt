@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,9 +63,9 @@ internal fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCounte
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         val statusLabel = when {
-            state.rateLimited -> "Pokébattler is busy"
-            state.isLoading -> "Refreshing counters…"
-            else -> "Showing cached counters"
+            state.rateLimited -> stringResource(R.string.counters_pok_battler_is_busy)
+            state.isLoading -> stringResource(R.string.counters_refreshing_counters)
+            else -> stringResource(R.string.counters_showing_cached_counters)
         }
         // The status flips between three strings in the same spot. Crossing them over
         // reads as one line changing its mind; a hard swap reads as a glitch.
@@ -80,7 +82,7 @@ internal fun InlineRefreshStatus(state: RaidCountersUiState, actions: RaidCounte
             )
         }
         if (state.rateLimited || state.isStale) {
-            TextButton(onClick = actions.onRetry) { Text("Retry") }
+            TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
         }
     }
 }
@@ -122,14 +124,14 @@ internal fun SourceSelector(
         segmentCount = 2
     ) {
         SegmentedChoice(
-            label = "Pokébattler",
+            label = stringResource(R.string.counters_pok_battler),
             selected = state.source == CounterSourceId.ALL_POKEMON,
             modifier = Modifier.weight(1f),
             transparent = true,
             onClick = { actions.onSourceChanged(CounterSourceId.ALL_POKEMON) }
         )
         SegmentedChoice(
-            label = "My Pokémon",
+            label = stringResource(R.string.counters_my_pok_mon),
             selected = state.showingPersonal,
             enabled = hasPersonalSource,
             modifier = Modifier.weight(1f),
@@ -160,7 +162,7 @@ internal fun SourceSelector(
             modifier = Modifier.padding(top = if (showTopLevel) 6.dp else 0.dp)
         ) {
             SegmentedChoice(
-                label = "PokéGenie CSV",
+                label = stringResource(R.string.counters_pok_genie_csv),
                 selected = state.source == CounterSourceId.POKE_GENIE,
                 modifier = Modifier.weight(1f),
                 transparent = true,
@@ -232,7 +234,7 @@ internal fun CountersFooter(state: RaidCountersUiState) {
                         )
                     }
                 }
-            ) { Text("Open on Pokébattler") }
+            ) { Text(stringResource(R.string.counters_open_on_pok_battler)) }
         }
     }
 }
@@ -266,7 +268,7 @@ internal fun ShareCountersButton(state: RaidCountersUiState) {
     ) {
         Icon(
             imageVector = Icons.Default.Share,
-            contentDescription = "Share these counters",
+            contentDescription = stringResource(R.string.counters_share_these_counters),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp)
         )
@@ -309,7 +311,7 @@ fun RaidCountersTeaser(
             .clickable(
                 enabled = !failed,
                 role = Role.Button,
-                onClickLabel = "Open best counters",
+                onClickLabel = stringResource(R.string.counters_open_best_counters),
                 onClick = onOpen
             )
     ) {
@@ -328,7 +330,7 @@ fun RaidCountersTeaser(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Best counters",
+                    text = stringResource(R.string.counters_best_counters),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -344,7 +346,7 @@ fun RaidCountersTeaser(
                     names.isEmpty() && state.isLoading -> TeaserSkeletonLine()
 
                     names.isEmpty() -> Text(
-                        text = "No counters available",
+                        text = stringResource(R.string.counters_no_counters_available),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -363,7 +365,7 @@ fun RaidCountersTeaser(
                 }
             }
             if (failed) {
-                TextButton(onClick = actions.onRetry) { Text("Retry") }
+                TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
             } else {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,

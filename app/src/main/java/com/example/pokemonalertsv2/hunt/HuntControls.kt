@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.layout.Arrangement
@@ -76,7 +77,7 @@ fun HuntControls(
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Start a hunt", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.hunt_start_a_hunt), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         } else {
             Column(
@@ -85,7 +86,7 @@ fun HuntControls(
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "Hunting ${active.name}",
+                        text = stringResource(R.string.hunt_hunting_x, active.name),
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -121,7 +122,7 @@ fun HuntControls(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("Edit targets", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(R.string.hunt_edit_targets), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     OutlinedButton(
                         onClick = {
@@ -135,15 +136,15 @@ fun HuntControls(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("Stop hunt", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(stringResource(R.string.hunt_stop_hunt), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
         }
 
         BatterySaverSwitch(
-            description = "Hunt Battery Saver",
-            explanation = "Face down during a hunt blacks out the screen. Long press it to turn off."
+            description = stringResource(R.string.hunt_hunt_battery_saver),
+            explanation = stringResource(R.string.hunt_face_down_during_a_hunt_blacks)
         )
 
         SpacialRendSwitch()

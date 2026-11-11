@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.util.formatMeters
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
 import com.example.pokemonalertsv2.health.WatchStats
 import com.example.pokemonalertsv2.util.haversineMeters
@@ -171,8 +172,7 @@ internal fun HuntSummary.isWorthShowing(): Boolean =
     catches.isNotEmpty() || activeMillis >= HUNT_SUMMARY_MIN_ACTIVE_MILLIS
 
 /** "2.4 km", or metres under one kilometre. */
-internal fun formatHuntDistance(meters: Double): String =
-    if (meters < 1000) "${meters.toInt()} m" else String.format(java.util.Locale.US, "%.1f km", meters / 1000)
+internal fun formatHuntDistance(meters: Double): String = formatMeters(meters)
 
 /** "52 min", or "1 h 05 min". */
 internal fun formatHuntDuration(millis: Long): String {

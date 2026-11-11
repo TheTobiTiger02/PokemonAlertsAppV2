@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -92,14 +94,14 @@ internal fun SheetPlanner(model: CatchRoutesViewModel, state: PlannerState, acti
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text("Plan a route", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.catchroutes_plan_a_route), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 val s = state.settings
                                 Text(listOf(startSummary(model, s), finishSummary(s), whenSummary(model, s)).joinToString(" · "),
                                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                             }
                             Icon(if (expanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowUp,
-                                contentDescription = if (expanded) "Show less" else "Show all settings")
+                                contentDescription = if (expanded) stringResource(R.string.catchroutes_show_less) else stringResource(R.string.catchroutes_show_all_settings))
                         }
                         GenerateStatus(model, state.now)
                         GenerateButton(model, state.now, Modifier.fillMaxWidth().panelGutter().padding(top = Spacing.sm, bottom = Spacing.sm))

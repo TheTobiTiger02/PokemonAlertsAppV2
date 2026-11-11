@@ -158,7 +158,7 @@ internal fun SettingsOverview(
     cardStyle: com.example.pokemonalertsv2.data.AlertCardStyle = com.example.pokemonalertsv2.data.AlertCardStyle.COMPACT
 ) {
     val themeLabel = listOf("System", "Light", "Dark").getOrElse(themeMode) { "System" }
-    val notificationSummary = if (notificationsEnabled) "On" else "Off"
+    val notificationSummary = if (notificationsEnabled) stringResource(R.string.alerts_on) else stringResource(R.string.settings_off)
     val missingPermissions = buildList {
         if (!systemNotificationsGranted) add("notifications")
         if (!foregroundLocationGranted) add("location")
@@ -172,20 +172,20 @@ internal fun SettingsOverview(
         androidx.compose.material3.OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            placeholder = { Text("Search settings") },
+            placeholder = { Text(stringResource(R.string.settings_search_settings)) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = if (query.isNotEmpty()) {
-                { androidx.compose.material3.IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear search") } }
+                { androidx.compose.material3.IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.events_clear_search)) } }
             } else null,
             singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("settings_search")
         )
         if (query.isNotBlank()) {
             if (results.isEmpty()) {
-                Text("No setting matches \"${query.trim()}\".", style = MaterialTheme.typography.bodyMedium,
+                Text(stringResource(R.string.settings_no_setting_matches_x, query.trim()), style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                SettingsOverviewGroup("Results") {
+                SettingsOverviewGroup(stringResource(R.string.settings_results)) {
                     results.forEachIndexed { index, entry ->
                         if (index > 0) OverviewDivider()
                         SettingsOverviewRow(
@@ -215,7 +215,7 @@ internal fun SettingsOverview(
                 ) {
                     Icon(Icons.Default.Warning, contentDescription = null)
                     Column(Modifier.weight(1f)) {
-                        Text("Permissions needed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.settings_permissions_needed), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Text(
                             "Allow ${missingPermissions.joinToString(" and ")} for alerts and distances to work.",
                             style = MaterialTheme.typography.bodySmall
@@ -226,40 +226,40 @@ internal fun SettingsOverview(
             }
         }
 
-        val alertsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Alerts") {
+        val alertsGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.history_alerts)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Notifications),
-                title = "Notifications & permissions",
+                title = stringResource(R.string.settings_notifications_permissions),
                 summary = notificationSummary,
                 onClick = { onDestinationSelected(SettingsDestination.NOTIFICATIONS) }
             )
             OverviewDivider()
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_filter),
-                title = "Filters",
-                summary = "What the feed, map, widgets and notifications show",
+                title = stringResource(R.string.alerts_filters),
+                summary = stringResource(R.string.settings_what_the_feed_map_widgets_and),
                 onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
             )
         } }
-        val displayGroup: @Composable () -> Unit = { SettingsOverviewGroup("Display") {
+        val displayGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_display)) {
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_theme),
-                title = "Appearance",
-                summary = "$themeLabel theme · ${cardStyle.label} rows · ${sortPreference.shortLabel} first",
+                title = stringResource(R.string.settings_appearance),
+                summary = stringResource(R.string.settings_x_theme_x_rows_x_first, themeLabel, cardStyle.label, sortPreference.shortLabel),
                 onClick = { onDestinationSelected(SettingsDestination.APPEARANCE_BEHAVIOR) }
             )
             OverviewDivider()
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_map),
-                title = "Map & tracking",
-                summary = "Marker grouping and arrival radius",
+                title = stringResource(R.string.settings_map_tracking),
+                summary = stringResource(R.string.settings_marker_grouping_and_arrival_radius),
                 onClick = { onDestinationSelected(SettingsDestination.MAP_TRACKING) }
             )
         } }
-        val accountsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Accounts") {
+        val accountsGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_accounts)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.AccountCircle),
-                title = "GoDex checklist",
+                title = stringResource(R.string.settings_godex_checklist),
                 summary = goDexSummary,
                 statusBadge = goDexBadge,
                 onClick = { onDestinationSelected(SettingsDestination.GODEX) }
@@ -267,16 +267,16 @@ internal fun SettingsOverview(
             OverviewDivider()
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_insights),
-                title = "Raid counters",
+                title = stringResource(R.string.settings_raid_counters),
                 summary = raidCountersSummary,
                 onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
             )
         } }
-        val appGroup: @Composable () -> Unit = { SettingsOverviewGroup("App") {
+        val appGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_app)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Info),
-                title = "Backup & about",
-                summary = "Version ${com.example.pokemonalertsv2.BuildConfig.VERSION_NAME} · export or restore settings",
+                title = stringResource(R.string.settings_backup_about),
+                summary = stringResource(R.string.settings_version_x_export_or_restore_settings, com.example.pokemonalertsv2.BuildConfig.VERSION_NAME),
                 onClick = { onDestinationSelected(SettingsDestination.ABOUT_UPDATES) }
             )
         } }
@@ -555,7 +555,7 @@ internal fun SettingsBackupCard(snackbarHostState: SnackbarHostState) {
                     exportLauncher.launch(SettingsBackupRepository.suggestedFileName())
                 },
                 modifier = Modifier.weight(1f)
-            ) { Text("Export") }
+            ) { Text(stringResource(R.string.settings_export)) }
             OutlinedButton(
                 onClick = {
                     // Some file pickers hand back a generic MIME type for .json, so accept
@@ -563,14 +563,14 @@ internal fun SettingsBackupCard(snackbarHostState: SnackbarHostState) {
                     importLauncher.launch(arrayOf(SettingsBackup.MIME_TYPE, "text/plain", "*/*"))
                 },
                 modifier = Modifier.weight(1f)
-            ) { Text("Restore") }
+            ) { Text(stringResource(R.string.alerts_restore)) }
         }
     }
 
     pending?.let { backup ->
         AlertDialog(
             onDismissRequest = { pending = null },
-            title = { Text("Restore settings?") },
+            title = { Text(stringResource(R.string.settings_restore_settings)) },
             text = {
                 Text(
                     "This backup holds ${backup.entries.size} settings" +
@@ -594,10 +594,10 @@ internal fun SettingsBackupCard(snackbarHostState: SnackbarHostState) {
                                 }
                         }
                     }
-                ) { Text("Restore") }
+                ) { Text(stringResource(R.string.alerts_restore)) }
             },
             dismissButton = {
-                TextButton(onClick = { pending = null }) { Text("Cancel") }
+                TextButton(onClick = { pending = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
             }
         )
     }

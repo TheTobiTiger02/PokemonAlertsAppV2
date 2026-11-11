@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -71,9 +72,9 @@ object AlertShareCard {
             displayCp?.takeIf { it.isNotBlank() }?.let { add(ShareStat("CP", it)) }
             alert.level?.let {
                 val level = if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString()
-                add(ShareStat("Level", level))
+                add(ShareStat(AppText.get(R.string.alerts_level), level))
             }
-            bestPvpLabel(alert)?.let { add(ShareStat("PvP", it)) }
+            bestPvpLabel(alert)?.let { add(ShareStat(AppText.get(R.string.alerts_pvp), it)) }
         }.take(4)
 
         val tags = buildList {
@@ -85,8 +86,8 @@ object AlertShareCard {
         val endMillis = TimeUtils.parseEndTimeToMillis(alert.endTime)
         val endLabel = when {
             endMillis == null -> "Ends: ${alert.endTime.ifBlank { "unknown" }}"
-            endMillis <= nowMillis -> "Expired"
-            else -> "Ends in ${TimeUtils.formatDurationShort(endMillis - nowMillis)}"
+            endMillis <= nowMillis -> AppText.get(R.string.alerts_expired)
+            else -> AppText.get(R.string.alerts_ends_in_x, TimeUtils.formatDurationShort(endMillis - nowMillis))
         }
 
         return ShareCardContent(

@@ -53,8 +53,15 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         trimMapBitmapCaches(level)
     }
 
+    // Before content providers start, so any label read during their setup is already translated.
+    override fun attachBaseContext(base: android.content.Context) {
+        super.attachBaseContext(base)
+        com.example.pokemonalertsv2.util.AppText.init(base)
+    }
+
     override fun onCreate() {
         super<Application>.onCreate()
+        com.example.pokemonalertsv2.util.AppText.init(this)
         com.example.pokemonalertsv2.data.net.Http.cacheDirectory = cacheDir
         com.example.pokemonalertsv2.util.CrashLog.install(this)
         // Read the theme once now, so no screen opens in the wrong theme.

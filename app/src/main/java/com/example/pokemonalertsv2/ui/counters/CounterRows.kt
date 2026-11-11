@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -95,7 +96,7 @@ internal fun TeamSection(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SectionLabel("Suggested team")
+            SectionLabel(stringResource(R.string.counters_suggested_team))
             Spacer(modifier = Modifier.weight(1f))
             CopyTeamButton(enabled = team.isNotEmpty(), onCopy = onCopyTeam)
         }
@@ -269,13 +270,13 @@ internal fun PersonalRow(
                 )
                 if (counter.movesetAssumed) {
                     RowNote(
-                        text = "Assumed move(s)",
+                        text = stringResource(R.string.counters_assumed_move_s),
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
                 if (counter.movesetUnlisted) {
                     RowNote(
-                        text = "Pokébattler doesn't rank your moveset — scored at its floor",
+                        text = stringResource(R.string.counters_pok_battler_doesn_t_rank_your),
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
@@ -409,7 +410,7 @@ internal fun TeamSlots(team: List<PersonalTeamSlot>, spriteUrls: Map<String, Lis
                                     .height(66.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("Empty", style = MaterialTheme.typography.labelSmall)
+                                Text(stringResource(R.string.counters_empty), style = MaterialTheme.typography.labelSmall)
                             }
                         } else {
                             Column(
@@ -520,6 +521,6 @@ internal enum class CopyTeamFormat { EXACT, SPECIES }
 @Composable
 private fun CopyTeamButton(enabled: Boolean, onCopy: (CopyTeamFormat) -> Unit) {
     TextButton(onClick = { onCopy(CopyTeamFormat.EXACT) }, enabled = enabled) {
-        Text("Copy for GO", style = MaterialTheme.typography.labelMedium)
+        Text(stringResource(R.string.counters_copy_for_go), style = MaterialTheme.typography.labelMedium)
     }
 }

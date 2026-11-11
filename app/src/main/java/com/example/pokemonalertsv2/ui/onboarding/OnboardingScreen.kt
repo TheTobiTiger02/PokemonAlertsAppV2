@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.onboarding
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -107,7 +109,7 @@ fun OnboardingScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "QUICK SETUP",
+                        stringResource(R.string.onboarding_quick_setup),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
@@ -132,7 +134,7 @@ fun OnboardingScreen(
                             0 -> SetupIntro()
                             1 -> TourCard(
                                 icon = Icons.Filled.Notifications,
-                                title = "Alerts: live, history and insights",
+                                title = stringResource(R.string.onboarding_alerts_live_history_and_insights),
                                 points = listOf(
                                     "Live lists every active alert, newest first. Tap one for details and directions.",
                                     "Long press an alert for I’m going, snooze, share or dismiss. Swipe left to dismiss.",
@@ -141,7 +143,7 @@ fun OnboardingScreen(
                             )
                             2 -> TourCard(
                                 icon = Icons.Filled.LocationOn,
-                                title = "The map",
+                                title = stringResource(R.string.onboarding_the_map),
                                 points = listOf(
                                     "The chips along the top show or hide each alert type.",
                                     "The filter button holds filters, the layers button map style and overlays; the gear opens Settings.",
@@ -150,7 +152,7 @@ fun OnboardingScreen(
                             )
                             3 -> TourCard(
                                 icon = Icons.Filled.Settings,
-                                title = "Filters, per place",
+                                title = stringResource(R.string.onboarding_filters_per_place),
                                 points = listOf(
                                     "The feed, the map, notifications and each widget keep their own filter.",
                                     "The filter button on the feed or the map edits that one in place.",
@@ -174,9 +176,9 @@ fun OnboardingScreen(
                     ) {
                         // The tour is optional; everything after it is setup.
                         if (step in 1 until STEP_AREA) {
-                            OutlinedButton(onClick = { step = STEP_AREA }, modifier = Modifier.fillMaxWidth()) { Text("Skip tour") }
+                            OutlinedButton(onClick = { step = STEP_AREA }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.onboarding_skip_tour)) }
                         } else {
-                            OutlinedButton(onClick = { step-- }, modifier = Modifier.fillMaxWidth()) { Text("Back") }
+                            OutlinedButton(onClick = { step-- }, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.catchroutes_back)) }
                         }
                     }
                     Button(
@@ -195,7 +197,7 @@ fun OnboardingScreen(
                             transitionSpec = { appFadeThrough() },
                             label = "onboarding_primary_action"
                         ) { finishing ->
-                            Text(if (finishing) "Finish" else "Continue")
+                            Text(if (finishing) stringResource(R.string.onboarding_finish) else stringResource(R.string.onboarding_continue))
                         }
                     }
                 }
@@ -205,7 +207,7 @@ fun OnboardingScreen(
                     exit = appSinkOut()
                 ) {
                     Text(
-                        "You can change any of these later in Settings › Notifications & permissions.",
+                        stringResource(R.string.onboarding_you_can_change_any_of_these),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -226,7 +228,7 @@ private fun SetupIntro() {
     )
     // Says what the next minute holds, rather than leaving most of the first page empty.
     Text(
-        "In the next steps",
+        stringResource(R.string.onboarding_in_the_next_steps),
         style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface
@@ -246,7 +248,7 @@ private fun SetupIntro() {
 @Composable
 private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onDistance: (Int) -> Unit) {
     SetupHeader(Icons.Filled.LocationOn, "Choose your alert area", "These choices can be changed at any time in Filters.")
-    Text("Area", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+    Text(stringResource(R.string.hunt_area), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         AREA_FILTER_OPTIONS.forEach { value ->
             FilterChip(
@@ -260,7 +262,7 @@ private fun AreaSetup(area: String, distance: Int, onArea: (String) -> Unit, onD
         }
     }
     Text(
-        "Distance: ${distanceLabel(distance)}",
+        stringResource(R.string.onboarding_distance_x, distanceLabel(distance)),
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface
     )
@@ -344,8 +346,8 @@ private fun PermissionSetup() {
         "Each one is optional. The app works without them, with fewer features."
     )
     PermissionRow(
-        title = "Notifications",
-        description = "Get new alerts even when the app is closed.",
+        title = stringResource(R.string.onboarding_notifications),
+        description = stringResource(R.string.onboarding_get_new_alerts_even_when_the),
         granted = notifications,
         onAllow = {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -354,8 +356,8 @@ private fun PermissionSetup() {
         }
     )
     PermissionRow(
-        title = "Location",
-        description = "Show distances and walking times, and find you on the map.",
+        title = stringResource(R.string.alerts_location),
+        description = stringResource(R.string.onboarding_show_distances_and_walking_times_and),
         granted = location,
         onAllow = {
             locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
@@ -363,9 +365,9 @@ private fun PermissionSetup() {
     )
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         PermissionRow(
-            title = "Location all the time",
-            description = if (location) "Keeps distances right in notifications and widgets. Choose \u201CAllow all the time\u201D."
-            else "Allow location first.",
+            title = stringResource(R.string.onboarding_location_all_the_time),
+            description = if (location) stringResource(R.string.onboarding_keeps_distances_right_in_notifications_and)
+            else stringResource(R.string.onboarding_allow_location_first),
             granted = background,
             enabled = location,
             onAllow = { backgroundLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) }
@@ -390,10 +392,10 @@ private fun PermissionRow(title: String, description: String, granted: Boolean, 
                 Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             when {
-                granted -> Icon(Icons.Filled.CheckCircle, contentDescription = "Allowed", tint = MaterialTheme.colorScheme.primary)
+                granted -> Icon(Icons.Filled.CheckCircle, contentDescription = stringResource(R.string.onboarding_allowed), tint = MaterialTheme.colorScheme.primary)
                 // A greyed-out button still read as tappable; the description says what comes first.
                 !enabled -> Unit
-                else -> Button(onClick = onAllow) { Text("Allow") }
+                else -> Button(onClick = onAllow) { Text(stringResource(R.string.onboarding_allow)) }
             }
         }
     }

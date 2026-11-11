@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.alertDetailLines
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
@@ -82,7 +84,7 @@ internal fun huntInRangeLines(
         }
         if (AlertCategory.ROCKET in categories) {
             val grunt = alert.gruntType?.trim()?.takeIf { it.isNotEmpty() }
-            add(if (grunt != null) "$grunt grunt" else "Team GO Rocket")
+            add(if (grunt != null) "$grunt grunt" else AppText.get(R.string.alerts_team_go_rocket))
         }
         if (AlertCategory.KECLEON in categories) add("Kecleon")
         // The venue is the title for these, so it is only worth a line when the

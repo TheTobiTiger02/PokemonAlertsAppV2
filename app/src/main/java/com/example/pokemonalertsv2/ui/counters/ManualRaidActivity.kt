@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import androidx.compose.foundation.layout.widthIn
@@ -119,13 +122,13 @@ class ManualRaidViewModel(application: Application) : AndroidViewModel(applicati
                 _uiState.value = ManualRaidPickerUiState(
                     loading = false,
                     bosses = bosses,
-                    error = if (bosses.isEmpty()) "No current raid bosses were returned." else null
+                    error = if (bosses.isEmpty()) AppText.get(R.string.counters_no_current_raid_bosses_were_returned) else null
                 )
             }.onFailure {
                 _uiState.update { state ->
                     state.copy(
                         loading = false,
-                        error = "Couldn't load the current raid bosses. Check your connection and retry."
+                        error = AppText.get(R.string.counters_couldn_t_load_the_current_raid)
                     )
                 }
             }
@@ -247,9 +250,9 @@ internal fun ManualRaidBossPickerScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(if (countersOnly) "Raid counters" else "Start Raid Live Update", fontWeight = FontWeight.SemiBold)
+                        Text(if (countersOnly) stringResource(R.string.settings_raid_counters) else stringResource(R.string.counters_start_raid_live_update), fontWeight = FontWeight.SemiBold)
                         Text(
-                            if (countersOnly) "Choose a boss to see recommended counters" else "Choose a current raid boss",
+                            if (countersOnly) stringResource(R.string.counters_choose_a_boss_to_see_recommended) else stringResource(R.string.counters_choose_a_current_raid_boss),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -257,12 +260,12 @@ internal fun ManualRaidBossPickerScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onRetry, enabled = !state.loading) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "Refresh raid bosses")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.counters_refresh_raid_bosses))
                     }
                 }
             )
@@ -276,12 +279,12 @@ internal fun ManualRaidBossPickerScreen(
                 value = search,
                 onValueChange = { search = it },
                 modifier = Modifier.padding(horizontal = 16.dp).widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().testTag("manual_raid_search"),
-                label = { Text("Search boss or tier") },
+                label = { Text(stringResource(R.string.counters_search_boss_or_tier)) },
                 singleLine = true
             )
             if (countersOnly && onStartLiveUpdate != null) {
                 androidx.compose.material3.TextButton(onClick = onStartLiveUpdate, modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Text("Start Raid Live Update")
+                    Text(stringResource(R.string.counters_start_raid_live_update))
                 }
             }
             when {
@@ -292,7 +295,7 @@ internal fun ManualRaidBossPickerScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator()
-                        Text("Loading current raid bosses…", modifier = Modifier.padding(top = 12.dp))
+                        Text(stringResource(R.string.counters_loading_current_raid_bosses), modifier = Modifier.padding(top = 12.dp))
                     }
                 }
                 state.error != null && state.bosses.isEmpty() -> {
@@ -304,7 +307,7 @@ internal fun ManualRaidBossPickerScreen(
                 }
                 visible.isEmpty() -> {
                     Text(
-                        "No raid bosses match “$query”.",
+                        stringResource(R.string.counters_no_raid_bosses_match_x, query),
                         modifier = Modifier.padding(24.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -367,7 +370,7 @@ private fun ManualRaidBossRow(
                 )
                 Text(
                     boss.hundoCP?.formatted()?.let { "100% catch CP · $it" }
-                        ?: if (countersOnly) "View recommended counters" else "Catch CP unavailable · can't start",
+                        ?: if (countersOnly) stringResource(R.string.counters_view_recommended_counters) else stringResource(R.string.counters_catch_cp_unavailable_can_t_start),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )

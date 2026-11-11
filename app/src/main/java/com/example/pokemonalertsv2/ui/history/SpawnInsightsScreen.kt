@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableWidth
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.AssistChip
@@ -130,28 +132,28 @@ private fun AlertInsights(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            "When and where a Pokémon has turned up recently.",
+            stringResource(R.string.history_when_and_where_a_pok_mon),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
-            label = { Text("Species") },
-            placeholder = { Text("e.g. Dratini") },
+            label = { Text(stringResource(R.string.history_species)) },
+            placeholder = { Text(stringResource(R.string.history_e_g_dratini)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { if (state.query.isNotBlank()) onRun() }),
             trailingIcon = {
                 IconButton(onClick = onRun, enabled = !state.isLoading && state.query.isNotBlank()) {
-                    Icon(Icons.Filled.Search, contentDescription = "Look back")
+                    Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.history_look_back))
                 }
             },
             modifier = Modifier.fillMaxWidth()
         )
 
         if (suggestions.isNotEmpty() && !state.hasRun) {
-            Text("Seen today", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.history_seen_today), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -184,13 +186,13 @@ private fun AlertInsights(
             )
 
             state.insights == null -> Text(
-                "Type a species, or pick one seen today, to see its busiest hours and places.",
+                stringResource(R.string.history_type_a_species_or_pick_one),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             state.insights.isEmpty -> Text(
-                "Nothing matching turned up in the last ${state.range.label}.",
+                stringResource(R.string.history_nothing_matching_turned_up_in_the, state.range.label),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -212,11 +214,11 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val summary = remember(activity.days) { summarizeSpawnActivity(activity.days) }
     val days = activity.days.summary
-    Section("Active spawnpoints per day") {
+    Section(stringResource(R.string.history_active_spawnpoints_per_day)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Headline("Today so far", summary.today?.let(numbers::format) ?: "—", Modifier.weight(1f))
-            Headline("Usual day", summary.usual?.let(numbers::format) ?: "—", Modifier.weight(1f))
-            Headline("Busiest", summary.busiest?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_today_so_far), summary.today?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_usual_day), summary.usual?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_busiest), summary.busiest?.let(numbers::format) ?: "—", Modifier.weight(1f))
         }
         if (days.isNotEmpty()) {
             StackedColumns(
@@ -226,7 +228,7 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
                 selected = days.indexOfFirst { it.day == detailDay }.takeIf { it >= 0 },
                 flagged = summary.flagged,
                 reference = summary.usual,
-                referenceLabel = "Usual",
+                referenceLabel = stringResource(R.string.history_usual),
                 // A label every few days on long ranges; the opened day always has its own.
                 labelEvery = if (days.size > 10) (days.size + 6) / 7 else 1,
                 onSelect = { onOpenDay(days[it].day) }
@@ -243,7 +245,7 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
                 } else {
                     "Unusual: ${flagged.joinToString()}"
                 },
-                if (showNotes && summary.unscanned > 0) "${summary.unscanned} day(s) before live scanning are left out." else null
+                if (showNotes && summary.unscanned > 0) stringResource(R.string.history_x_day_s_before_live_scanning, summary.unscanned) else null
             ).joinToString(" "),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -259,10 +261,10 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
 private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiState, onDayChange: (String?) -> Unit, dayChips: Boolean) {
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val species = activity.species
-    Section("Wild spawns") {
+    Section(stringResource(R.string.history_wild_spawns)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Headline("Sightings", numbers.format(species.totals.sightings), Modifier.weight(1f))
-            Headline("Species", numbers.format(species.totals.species), Modifier.weight(1f))
+            Headline(stringResource(R.string.history_sightings), numbers.format(species.totals.sightings), Modifier.weight(1f))
+            Headline(stringResource(R.string.history_species), numbers.format(species.totals.species), Modifier.weight(1f))
         }
         if (species.perDay.size > 1) {
             val picked = species.perDay.indexOfFirst { it.day == search.day }
@@ -282,7 +284,7 @@ private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiSt
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text("Whole range") })
+                    FilterChip(selected = search.day == null, onClick = { onDayChange(null) }, label = { Text(stringResource(R.string.history_whole_range)) })
                     species.perDay.asReversed().forEach { day ->
                         FilterChip(
                             selected = search.day == day.day,
@@ -294,13 +296,13 @@ private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiSt
             } else {
                 val day = search.day
                 if (day == null) {
-                    Text("Tap a bar to see that day.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.history_tap_a_bar_to_see_that), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
                     InputChip(
                         selected = true,
                         onClick = { onDayChange(null) },
                         label = { Text(shortDay(day)) },
-                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = "Show the whole range", modifier = Modifier.size(16.dp)) },
+                        trailingIcon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.history_show_the_whole_range), modifier = Modifier.size(16.dp)) },
                         modifier = Modifier.testTag("insights_picked_day")
                     )
                 }
@@ -314,13 +316,13 @@ private fun SpeciesSearch(search: SpawnActivityUiState, onSearchChange: (String)
     OutlinedTextField(
         value = search.search,
         onValueChange = onSearchChange,
-        label = { Text("Search species") },
-        placeholder = { Text("Name or Pokédex #") },
+        label = { Text(stringResource(R.string.history_search_species)) },
+        placeholder = { Text(stringResource(R.string.history_name_or_pok_dex)) },
         singleLine = true,
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
         trailingIcon = {
             if (search.search.isNotEmpty()) {
-                IconButton(onClick = { onSearchChange("") }) { Icon(Icons.Filled.Close, contentDescription = "Clear search") }
+                IconButton(onClick = { onSearchChange("") }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.events_clear_search)) }
             }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -343,9 +345,9 @@ private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState
             modifier = Modifier.fillMaxWidth().height(80.dp),
             contentAlignment = Alignment.Center
         ) { CircularProgressIndicator() }
-        search.search.isBlank() && result != null -> Section("Most seen species$on") {
+        search.search.isBlank() && result != null -> Section(stringResource(R.string.history_most_seen_species_x, on)) {
             Text(
-                "${numbers.format(result.totals.sightings)} sightings of ${numbers.format(result.totals.species)} species$on",
+                stringResource(R.string.history_x_sightings_of_x_species_x, numbers.format(result.totals.sightings), numbers.format(result.totals.species), on),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -373,12 +375,12 @@ private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState
                         )
                     }
                 }
-                Section("Matching species$on") {
+                Section(stringResource(R.string.history_matching_species_x, on)) {
                     SpeciesRows(result.species, total, numbers)
                 }
             }
         }
-        species.species.isNotEmpty() -> Section("Most seen species") {
+        species.species.isNotEmpty() -> Section(stringResource(R.string.history_most_seen_species)) {
             SpeciesRows(species.species.take(30), total, numbers)
         }
     }
@@ -401,9 +403,9 @@ private fun SpawnScope(state: SpawnActivityUiState, onRangeChange: (SpawnRange) 
         val areas = state.activity?.days?.areas.orEmpty()
         if (areas.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text("All areas") })
+                FilterChip(selected = state.area == null, onClick = { onAreaChange(null) }, label = { Text(stringResource(R.string.history_all_areas)) })
                 areas.forEach { area ->
-                    val label = if (area.equals("Unknown", ignoreCase = true)) "Outside named areas" else area
+                    val label = if (area.equals("Unknown", ignoreCase = true)) stringResource(R.string.history_outside_named_areas) else area
                     FilterChip(selected = state.area == area, onClick = { onAreaChange(area) }, label = { Text(label) })
                 }
             }
@@ -420,7 +422,7 @@ private fun SpawnLoading(state: SpawnActivityUiState, onRetry: () -> Unit) {
         ) { CircularProgressIndicator() }
         state.errorMessage != null && state.activity == null -> Column {
             Text(state.errorMessage, color = MaterialTheme.colorScheme.error)
-            TextButton(onClick = onRetry) { Text("Try again") }
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.history_try_again)) }
         }
     }
 }
@@ -448,7 +450,7 @@ private fun SpawnActivityTabsPane(
     ) {
         SpawnScope(state, onRangeChange, onAreaChange) {
             IconButton(onClick = { notes = !notes }, modifier = Modifier.testTag("insights_info")) {
-                Icon(Icons.Filled.Info, contentDescription = if (notes) "Hide notes" else "About these numbers")
+                Icon(Icons.Filled.Info, contentDescription = if (notes) stringResource(R.string.catchroutes_hide_notes) else stringResource(R.string.history_about_these_numbers))
             }
         }
         if (notes) {
@@ -471,7 +473,7 @@ private fun SpawnActivityTabsPane(
         }
         SpawnLoading(state, onRetry)
         state.activity?.let { activity ->
-            if (state.isLoading) Text("Updating…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (state.isLoading) Text(stringResource(R.string.history_updating), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (sub == 0) {
                 SpawnpointsSection(activity, showNotes = notes, detailDay = state.detailDay, onOpenDay = onOpenDay)
                 SpawnDayDetailSection(state, onOpenHour = onOpenHour, onRetry = { state.detailDay?.let(onOpenDay) })
@@ -554,10 +556,10 @@ private fun InsightsBody(insights: SpawnInsights) {
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Headline("Sightings", insights.totalSightings.toString(), Modifier.weight(1f))
-        Headline("Per day", String.format("%.1f", insights.perDayAverage), Modifier.weight(1f))
+        Headline(stringResource(R.string.history_sightings), insights.totalSightings.toString(), Modifier.weight(1f))
+        Headline(stringResource(R.string.history_per_day), String.format("%.1f", insights.perDayAverage), Modifier.weight(1f))
         Headline(
-            "Busiest",
+            stringResource(R.string.history_busiest),
             insights.busiestHour?.let { formatHour(it) } ?: "—",
             Modifier.weight(1f)
         )
@@ -565,23 +567,23 @@ private fun InsightsBody(insights: SpawnInsights) {
 
     insights.topArea?.let { top ->
         Text(
-            "Most often in ${top.area} (${top.count} of ${insights.totalSightings})",
+            stringResource(R.string.history_most_often_in_x_x_of, top.area, top.count, insights.totalSightings),
             style = MaterialTheme.typography.bodyMedium
         )
     }
 
-    Section("By hour of day") {
+    Section(stringResource(R.string.history_by_hour_of_day)) {
         // One label per six hours: a label under every bar has a 24th of the
         // width to live in, which is not enough for "12h" and silently clips it.
         BarRow(values = insights.byHour, labels = (0..18 step 6).map(::formatHour))
     }
 
-    Section("By day of week") {
+    Section(stringResource(R.string.history_by_day_of_week)) {
         BarRow(values = insights.byWeekday, labels = WEEKDAYS)
     }
 
     if (insights.byArea.isNotEmpty()) {
-        Section("By area") {
+        Section(stringResource(R.string.history_by_area)) {
             val max = insights.byArea.first().count.coerceAtLeast(1)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 insights.byArea.take(8).forEach { entry ->
@@ -611,7 +613,7 @@ private fun InsightsBody(insights: SpawnInsights) {
 
     if (insights.hundoCount > 0) {
         Text(
-            "${insights.hundoCount} of them were 100%.",
+            stringResource(R.string.history_x_of_them_were_100, insights.hundoCount),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

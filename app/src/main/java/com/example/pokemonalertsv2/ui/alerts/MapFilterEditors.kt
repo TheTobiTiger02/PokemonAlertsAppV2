@@ -2,6 +2,9 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,15 +41,15 @@ import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
 internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
-    SPAWN("IV spawn species", "IV spawns"),
-    HUNDO("Hundo species", "100%"),
-    PVP("PvP species", "PvP"),
-    COMMON("Common species", "Common"),
-    NUNDO("Nundo species", "0%"),
-    RAID_SPECIES("Raid species", "Raid Bosses"),
-    RAID_TIERS("Raid tiers", "Tiers"),
-    ROCKET("Rocket types", "Rockets"),
-    TAPPABLE("Tappable species and loot", "Tappables")
+    SPAWN(AppText.get(R.string.alerts_iv_spawn_species), "IV spawns"),
+    HUNDO(AppText.get(R.string.alerts_hundo_species), "100%"),
+    PVP(AppText.get(R.string.alerts_pvp_species), "PvP"),
+    COMMON(AppText.get(R.string.alerts_common_species), "Common"),
+    NUNDO(AppText.get(R.string.alerts_nundo_species), "0%"),
+    RAID_SPECIES(AppText.get(R.string.alerts_raid_species), "Raid Bosses"),
+    RAID_TIERS(AppText.get(R.string.alerts_raid_tiers), "Tiers"),
+    ROCKET(AppText.get(R.string.alerts_rocket_types), "Rockets"),
+    TAPPABLE(AppText.get(R.string.alerts_tappable_species_and_loot), "Tappables")
 }
 
 internal val SPECIES_TARGETS = listOf(
@@ -130,12 +133,12 @@ internal fun MapSetAllRow(
         TextButton(onClick = onAll, contentPadding = PaddingValues(horizontal = Spacing.sm)) {
             Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.xxs))
-            Text("All")
+            Text(stringResource(R.string.alerts_all))
         }
         TextButton(onClick = onNone, contentPadding = PaddingValues(horizontal = Spacing.sm)) {
             Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.xxs))
-            Text("None")
+            Text(stringResource(R.string.alerts_none))
         }
     }
 }
@@ -298,12 +301,12 @@ internal fun SpeciesPickerContent(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search name or Dex #", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    placeholder = { Text(stringResource(R.string.alerts_search_name_or_dex), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_clear))
                             }
                         }
                     },
@@ -339,17 +342,17 @@ internal fun SpeciesPickerContent(
                                 SpeciesSortOrder.DEX_NUMBER
                             }
                         },
-                        label = { Text("Sort: ${sortOrder.label}") },
+                        label = { Text(stringResource(R.string.alerts_sort_x, sortOrder.label)) },
                         shape = RoundedCornerShape(16.dp)
                     )
                     TextButton(
                         onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.All)) },
                         contentPadding = PaddingValues(horizontal = Spacing.sm)
-                    ) { Text("All") }
+                    ) { Text(stringResource(R.string.alerts_all)) }
                     TextButton(
                         onClick = { onDefinitionChange(definition.withSelection(target, FilterSelection.None)) },
                         contentPadding = PaddingValues(horizontal = Spacing.sm)
-                    ) { Text("None") }
+                    ) { Text(stringResource(R.string.alerts_none)) }
                 }
             }
         }
@@ -404,7 +407,7 @@ private fun SpeciesTile(
             width = if (checked) 2.dp else 1.dp,
             color = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
-        modifier = Modifier.semantics { contentDescription = if (checked) "$name, selected" else name }
+        modifier = Modifier.semantics { contentDescription = if (checked) AppText.get(R.string.settings_x_selected, name) else name }
     ) {
         Column(
             modifier = Modifier
@@ -461,7 +464,7 @@ private fun SpeciesTile(
             )
             if (unavailable) {
                 Text(
-                    text = "Unavailable",
+                    text = stringResource(R.string.alerts_unavailable),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                     maxLines = 1
@@ -474,8 +477,8 @@ private fun SpeciesTile(
 // ---------------------------------------------------------------------------- summaries
 
 internal fun FilterSelection.summaryLabel(): String = when (mode) {
-    FilterSelectionMode.ALL -> "all selected"
-    FilterSelectionMode.NONE -> "none selected"
+    FilterSelectionMode.ALL -> AppText.get(R.string.alerts_all_selected)
+    FilterSelectionMode.NONE -> AppText.get(R.string.alerts_none_selected)
     FilterSelectionMode.ONLY -> "$selectedCount selected"
 }
 

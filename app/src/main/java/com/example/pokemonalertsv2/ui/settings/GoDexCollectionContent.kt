@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -82,9 +85,9 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 internal enum class GoDexCollectionFilter(val label: String) {
-    NEEDED("Still needed"),
-    CAUGHT("Caught"),
-    ALL("All")
+    NEEDED(AppText.get(R.string.settings_still_needed_2)),
+    CAUGHT(AppText.get(R.string.hunt_caught)),
+    ALL(AppText.get(R.string.alerts_all))
 }
 
 internal data class GoDexCollectionSelection(
@@ -105,7 +108,7 @@ internal fun goDexEntryVariantLabel(entry: GoDexEntryEntity): String = buildList
 
 /** The variant line, never blank: a form named only in the title still reads as one. */
 internal fun goDexEntryVariantLine(entry: GoDexEntryEntity): String =
-    goDexEntryVariantLabel(entry).ifBlank { if (entry.formSlug == null) "Base form" else "Alternate form" }
+    goDexEntryVariantLabel(entry).ifBlank { if (entry.formSlug == null) AppText.get(R.string.settings_base_form) else AppText.get(R.string.settings_alternate_form) }
 
 internal fun toggleGoDexCollectionSelection(
     current: GoDexCollectionSelection?,
@@ -264,7 +267,7 @@ internal fun GoDexCollectionContent(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search name or number", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    label = { Text(stringResource(R.string.settings_search_name_or_number), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingIcon = {
                         Icon(Icons.Filled.Search, contentDescription = null)
                     },
@@ -365,13 +368,13 @@ private fun GoDexCollectionProgressCard(
             ) {
                 Column {
                     Text(
-                        text = "$neededCount still needed",
+                        text = stringResource(R.string.settings_x_still_needed, neededCount),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = "$caughtCount caught out of $totalCount",
+                        text = stringResource(R.string.settings_x_caught_out_of_x, caughtCount, totalCount),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -487,8 +490,8 @@ private fun GoDexCollectionEntryTile(
     }
     val pendingDescription = when {
         !isPending -> ""
-        sessionState == GoDexSessionState.REAUTH_REQUIRED -> ", sync queued until sign-in"
-        else -> ", sync pending"
+        sessionState == GoDexSessionState.REAUTH_REQUIRED -> stringResource(R.string.settings_sync_queued_until_sign_in)
+        else -> stringResource(R.string.settings_sync_pending)
     }
     val accessibilityDescription = buildString {
         append(entry.displayName)
@@ -496,7 +499,7 @@ private fun GoDexCollectionEntryTile(
         append(entry.pokedexId)
         append(", ")
         append(variant)
-        append(if (caught) ", caught" else ", still needed")
+        append(if (caught) stringResource(R.string.settings_caught) else stringResource(R.string.settings_still_needed))
         append(pendingDescription)
         if (canEdit) {
             append(". Select to ")
@@ -533,10 +536,10 @@ private fun GoDexCollectionEntryTile(
             .semantics(mergeDescendants = true) {
                 contentDescription = accessibilityDescription
                 stateDescription = when {
-                    selected -> "Selected"
-                    isPending -> "Sync pending"
-                    caught -> "Caught"
-                    else -> "Needed"
+                    selected -> AppText.get(R.string.alerts_selected)
+                    isPending -> AppText.get(R.string.alerts_sync_pending)
+                    caught -> AppText.get(R.string.hunt_caught)
+                    else -> AppText.get(R.string.alerts_needed)
                 }
             },
         colors = CardDefaults.cardColors(containerColor = containerColor),
@@ -748,7 +751,7 @@ private fun GoDexCollectionConfirmationBar(
             )
             if (isPending) {
                 Text(
-                    text = "Confirming replaces the pending GoDex state for this exact entry.",
+                    text = stringResource(R.string.settings_confirming_replaces_the_pending_godex_state),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -761,7 +764,7 @@ private fun GoDexCollectionConfirmationBar(
                     onClick = onCancel,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.mainscaffoldkt_cancel))
                 }
                 Button(
                     onClick = onConfirm,
@@ -776,7 +779,7 @@ private fun GoDexCollectionConfirmationBar(
                         }
                 ) {
                     Text(
-                        if (entry.needed) "Mark caught" else "Mark needed"
+                        if (entry.needed) stringResource(R.string.alerts_mark_caught) else stringResource(R.string.alerts_mark_needed)
                     )
                 }
             }
@@ -813,10 +816,10 @@ private fun GoDexCollectionEmptyState(
         )
         Text(
             text = when {
-                hasQuery -> "No matching Pokémon"
-                filter == GoDexCollectionFilter.NEEDED -> "You caught everything in this checklist"
-                filter == GoDexCollectionFilter.CAUGHT -> "No caught Pokémon yet"
-                else -> "No synced Pokémon"
+                hasQuery -> stringResource(R.string.settings_no_matching_pok_mon)
+                filter == GoDexCollectionFilter.NEEDED -> stringResource(R.string.settings_you_caught_everything_in_this_checklist)
+                filter == GoDexCollectionFilter.CAUGHT -> stringResource(R.string.settings_no_caught_pok_mon_yet)
+                else -> stringResource(R.string.settings_no_synced_pok_mon)
             },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold

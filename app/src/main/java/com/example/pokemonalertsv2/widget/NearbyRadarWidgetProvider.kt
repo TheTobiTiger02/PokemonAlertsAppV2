@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.widget
 
+import com.example.pokemonalertsv2.util.AppText
 import android.Manifest
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -316,8 +317,8 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(
                 R.id.radar_alert_title,
                 when (loaded.state) {
-                    WidgetLoadState.ERROR -> "Refresh failed"
-                    WidgetLoadState.LOCATION_UNAVAILABLE -> "Location unavailable"
+                    WidgetLoadState.ERROR -> AppText.get(R.string.widget_refresh_failed)
+                    WidgetLoadState.LOCATION_UNAVAILABLE -> AppText.get(R.string.widget_location_unavailable)
                     else -> context.getString(R.string.widget_empty_title)
                 }
             )
@@ -442,8 +443,8 @@ class NearbyRadarWidgetProvider : AppWidgetProvider() {
         append(
             when {
                 loaded.location != null -> radarLocationAgeLabel(loaded.location)
-                !hasLocationPermission(context) -> "Enable location · tap here"
-                else -> "Location unavailable · tap to retry"
+                !hasLocationPermission(context) -> AppText.get(R.string.widget_enable_location_tap_here)
+                else -> AppText.get(R.string.widget_location_unavailable_tap_to_retry)
             }
         )
         if (!snapshot.mapAvailable) append(" · Map unavailable")

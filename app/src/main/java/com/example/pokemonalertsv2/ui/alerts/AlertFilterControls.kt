@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.automirrored.filled.List
@@ -242,7 +243,7 @@ internal fun AlertListControls(
                     IconButton(onClick = { onSearchExpandedChange(!searchExpanded) }) {
                         Icon(
                             imageVector = if (searchExpanded) Icons.Filled.Close else Icons.Filled.Search,
-                            contentDescription = if (searchExpanded) "Close search" else "Search alerts"
+                            contentDescription = if (searchExpanded) stringResource(R.string.alerts_close_search) else stringResource(R.string.alerts_search_alerts)
                         )
                     }
                     SortingButton(currentSort = sortPreference, onSortChanged = onSortChanged)
@@ -250,7 +251,7 @@ internal fun AlertListControls(
                         IconButton(onClick = onOpenFilters) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter),
-                                contentDescription = "Filter alerts"
+                                contentDescription = stringResource(R.string.alerts_filter_alerts)
                             )
                         }
                         AnimatedContent(
@@ -302,12 +303,12 @@ internal fun AlertListControls(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Location is approximate. Enable Precise location for walking routes.",
+                        text = stringResource(R.string.alerts_location_is_approximate_enable_precise_location),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f)
                     )
-                    TextButton(onClick = onRequestLocationPermission) { Text("Improve") }
+                    TextButton(onClick = onRequestLocationPermission) { Text(stringResource(R.string.alerts_improve)) }
                 }
             }
             AnimatedVisibility(
@@ -325,7 +326,7 @@ internal fun AlertListControls(
                                 FilterChip(
                                     selected = true,
                                     onClick = { onCategoryEnabled(mutedCategory) },
-                                    label = { Text("No ${mutedCategory.filterLabel.lowercase()}") },
+                                    label = { Text(stringResource(R.string.alerts_no_x, mutedCategory.filterLabel.lowercase())) },
                                     trailingIcon = {
                                         Icon(
                                             Icons.Filled.Close,
@@ -341,7 +342,7 @@ internal fun AlertListControls(
                             FilterChip(
                                 selected = true,
                                 onClick = { onShowDismissedChanged(false) },
-                                label = { Text("Dismissed") },
+                                label = { Text(stringResource(R.string.alerts_dismissed)) },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, "Remove dismissed filter", Modifier.size(16.dp))
                                 }
@@ -365,7 +366,7 @@ internal fun AlertListControls(
                             FilterChip(
                                 selected = true,
                                 onClick = onClearDistanceFilter,
-                                label = { Text("Within ${distanceLabel(maxDistance)}") },
+                                label = { Text(stringResource(R.string.alerts_within_x, distanceLabel(maxDistance))) },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, "Clear distance filter", Modifier.size(16.dp))
                                 }
@@ -377,7 +378,7 @@ internal fun AlertListControls(
                             FilterChip(
                                 selected = true,
                                 onClick = onClearWalkingFilter,
-                                label = { Text("Under $maxWalkingMinutes min walk") },
+                                label = { Text(stringResource(R.string.alerts_under_x_min_walk, maxWalkingMinutes)) },
                                 trailingIcon = {
                                     Icon(Icons.Filled.Close, "Clear walking time filter", Modifier.size(16.dp))
                                 }
@@ -460,7 +461,7 @@ internal fun HistoryListControls(
                 ) {
                     if (onExport != null) {
                         IconButton(onClick = onExport, modifier = Modifier.testTag("export_history_csv")) {
-                            Icon(Icons.Filled.Share, contentDescription = "Export history as CSV")
+                            Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.alerts_export_history_as_csv))
                         }
                     }
                     if (onOpenInsights != null) {
@@ -470,7 +471,7 @@ internal fun HistoryListControls(
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_insights),
-                                contentDescription = "Spawn insights"
+                                contentDescription = stringResource(R.string.alerts_spawn_insights)
                             )
                         }
                     }
@@ -489,7 +490,7 @@ internal fun HistoryListControls(
                         IconButton(onClick = onOpenFilters) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_filter),
-                                contentDescription = "Filter history"
+                                contentDescription = stringResource(R.string.alerts_filter_history)
                             )
                         }
                         if (activeFilterCount > 0) {
@@ -517,7 +518,7 @@ internal fun HistoryListControls(
                 AlertSearchBar(
                     query = searchQuery,
                     onQueryChanged = onSearchChanged,
-                    placeholder = "Search history…"
+                    placeholder = stringResource(R.string.alerts_search_history)
                 )
             }
             AnimatedVisibility(
@@ -593,18 +594,18 @@ internal fun alertEmptyStateMessage(
     showDismissed: Boolean,
     locationAvailable: Boolean
 ): String = when {
-    searchQuery.isNotBlank() -> "No alerts match ‘${searchQuery.trim()}’. Try a different search."
+    searchQuery.isNotBlank() -> AppText.get(R.string.alerts_no_alerts_match_x_try_a, searchQuery.trim())
     mutedCategories.isNotEmpty() -> {
         val hidden = FILTERABLE_ALERT_CATEGORIES
             .filter { it in mutedCategories }
             .joinToString(", ") { it.filterLabel.lowercase() }
         "Every ${hidden} alert is hidden by your filters. Tap a “No …” chip above to bring it back."
     }
-    selectedArea != "All" -> "No active alerts are available in $selectedArea right now."
-    maxDistance > 0 && !locationAvailable -> "Distance filtering needs location access. Enable location or clear the distance limit."
-    maxDistance > 0 -> "No active alerts are within ${distanceLabel(maxDistance)}."
-    showDismissed -> "There are no dismissed alerts to show."
-    else -> "No alerts match the current filters."
+    selectedArea != "All" -> AppText.get(R.string.alerts_no_active_alerts_are_available_in, selectedArea)
+    maxDistance > 0 && !locationAvailable -> AppText.get(R.string.alerts_distance_filtering_needs_location_access_enable)
+    maxDistance > 0 -> AppText.get(R.string.alerts_no_active_alerts_are_within_x, distanceLabel(maxDistance))
+    showDismissed -> AppText.get(R.string.alerts_there_are_no_dismissed_alerts_to)
+    else -> AppText.get(R.string.alerts_no_alerts_match_the_current_filters)
 }
 
 @Composable
@@ -637,7 +638,7 @@ internal fun AlertSearchBar(
         leadingIcon = {
             Icon(
                 imageVector = Icons.Filled.Search,
-                contentDescription = "Search",
+                contentDescription = stringResource(R.string.alerts_search),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
@@ -651,7 +652,7 @@ internal fun AlertSearchBar(
                     androidx.compose.material3.IconButton(onClick = { onQueryChanged("") }) {
                         Icon(
                             imageVector = Icons.Filled.Close,
-                            contentDescription = "Clear search",
+                            contentDescription = stringResource(R.string.events_clear_search),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -673,9 +674,9 @@ internal fun AlertSearchBar(
 /** Short name for each sort order, shown on the sort chip itself. */
 internal val SortPreference.shortLabel: String
     get() = when (this) {
-        SortPreference.POSTED_TIME -> "Newest"
-        SortPreference.DISTANCE -> "Nearest"
-        SortPreference.TIME_REMAINING -> "Ending soon"
+        SortPreference.POSTED_TIME -> AppText.get(R.string.alerts_newest)
+        SortPreference.DISTANCE -> AppText.get(R.string.alerts_nearest)
+        SortPreference.TIME_REMAINING -> AppText.get(R.string.alerts_ending_soon)
         SortPreference.NAME -> "A–Z"
     }
 
@@ -730,7 +731,7 @@ internal fun SortingButton(
                     },
                     leadingIcon = { SortIcon(option) },
                     trailingIcon = if (option == currentSort) {
-                        { Icon(Icons.Filled.Check, contentDescription = "Selected") }
+                        { Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.alerts_selected)) }
                     } else null
                 )
             }
@@ -748,12 +749,12 @@ private fun FeedOverflowMenu(
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = "More feed options")
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.alerts_more_feed_options))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (onStartManualRaid != null) {
                 DropdownMenuItem(
-                    text = { Text("Raid counters & hundo CP") },
+                    text = { Text(stringResource(R.string.alerts_raid_counters_hundo_cp)) },
                     leadingIcon = { Icon(Icons.Filled.Star, contentDescription = null) },
                     onClick = {
                         expanded = false
@@ -762,10 +763,10 @@ private fun FeedOverflowMenu(
                 )
             }
             DropdownMenuItem(
-                text = { Text("Show dismissed alerts") },
+                text = { Text(stringResource(R.string.alerts_show_dismissed_alerts)) },
                 leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                 trailingIcon = if (showDismissed) {
-                    { Icon(Icons.Filled.Check, contentDescription = "On") }
+                    { Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.alerts_on)) }
                 } else null,
                 onClick = {
                     expanded = false
@@ -836,10 +837,10 @@ internal fun HistoryTypeFilterRow(
             }
     ) {
         items(AlertFilter.entries, key = { it.name }) { filter ->
-            // "All" has no alert category; its fallback accent is a neutral grey that made the
+            // "All" has no alert category; its fallback accent is a neutral grey that made the
             // selected chip read as disabled.
             val chipAccent = if (filter == AlertFilter.ALL) MaterialTheme.colorScheme.primary
-                else Color(resolveAlertVisualStyle(filter.label).category.accentArgb)
+                else Color(resolveAlertVisualStyle(filter.name).category.accentArgb)
             ElevatedAssistChip(
                 onClick = { onFilterChanged(filter) },
                 label = { Text(text = filter.label) },

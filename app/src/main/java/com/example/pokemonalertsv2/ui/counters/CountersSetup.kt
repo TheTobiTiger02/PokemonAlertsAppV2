@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.SegmentedChoice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,9 +52,9 @@ internal fun BattleSetupSheet(
             .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Battle setup", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.counters_battle_setup), style = MaterialTheme.typography.headlineSmall)
         Text(
-            "These controls match the Pokébattler raid defaults. Results stay visible while a new query loads.",
+            stringResource(R.string.counters_these_controls_match_the_pok_battler),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -65,7 +67,7 @@ internal fun BattleSetupSheet(
             onSelect = actions.onBossMovesetChanged
         )
         OptionDropdown(
-            label = "Level ${options.attackerLevel}",
+            label = stringResource(R.string.counters_level_x, options.attackerLevel),
             entries = RaidCounterOptions.ATTACKER_LEVELS.map { it to "Level $it" },
             onSelect = { actions.onOptionsChanged(options.copy(attackerLevel = it)) },
             enabled = !state.showingPersonal
@@ -93,22 +95,22 @@ internal fun BattleSetupSheet(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        SheetSwitchRow("Party Power", options.partyPower) {
+        SheetSwitchRow(stringResource(R.string.counters_party_power), options.partyPower) {
             actions.onOptionsChanged(options.copy(partyPower = it))
         }
-        SheetSwitchRow("Include megas", options.includeMegas) {
+        SheetSwitchRow(stringResource(R.string.counters_include_megas), options.includeMegas) {
             actions.onOptionsChanged(options.copy(includeMegas = it))
         }
-        SheetSwitchRow("Include shadows", options.includeShadow) {
+        SheetSwitchRow(stringResource(R.string.counters_include_shadows), options.includeShadow) {
             actions.onOptionsChanged(options.copy(includeShadow = it))
         }
-        SheetSwitchRow("Include legendaries", options.includeLegendary) {
+        SheetSwitchRow(stringResource(R.string.counters_include_legendaries), options.includeLegendary) {
             actions.onOptionsChanged(options.copy(includeLegendary = it))
         }
-        SheetSwitchRow("Owned only", state.ownedOnly, actions.onOwnedOnlyChanged)
+        SheetSwitchRow(stringResource(R.string.counters_owned_only), state.ownedOnly, actions.onOwnedOnlyChanged)
 
         if (state.showingPersonal) {
-            Text("My Pokémon moves", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.counters_my_pok_mon_moves), style = MaterialTheme.typography.labelLarge)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -133,8 +135,8 @@ internal fun BattleSetupSheet(
             )
         }
 
-        TextButton(onClick = actions.onSaveAsDefault) { Text("Save as default") }
-        TextButton(onClick = onDismiss) { Text("Done") }
+        TextButton(onClick = actions.onSaveAsDefault) { Text(stringResource(R.string.counters_save_as_default)) }
+        TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_done)) }
     }
 }
 

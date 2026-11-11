@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts.mapchrome
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -124,22 +125,22 @@ internal val SyncStatus.isProblem: Boolean
 
 /** One line under the count: whether the alerts on screen are current. */
 internal fun SyncStatus.chromeSummary(): String = when (this) {
-    SyncStatus.Loading -> "Loading alerts…"
-    SyncStatus.Refreshing -> "Refreshing…"
-    is SyncStatus.Live -> "Up to date"
-    is SyncStatus.Cached -> "Offline · tap to retry"
-    is SyncStatus.Failed -> "Couldn't load · tap to retry"
+    SyncStatus.Loading -> AppText.get(R.string.alerts_loading_alerts)
+    SyncStatus.Refreshing -> AppText.get(R.string.alerts_refreshing)
+    is SyncStatus.Live -> AppText.get(R.string.alerts_up_to_date)
+    is SyncStatus.Cached -> AppText.get(R.string.alerts_offline_tap_to_retry)
+    is SyncStatus.Failed -> AppText.get(R.string.alerts_couldn_t_load_tap_to_retry)
 }
 
 internal fun MapChromeState.countLabel(): String =
-    if (visibleCount == totalCount) "$visibleCount on map" else "$visibleCount of $totalCount on map"
+    if (visibleCount == totalCount) AppText.get(R.string.alerts_x_on_map, visibleCount) else AppText.get(R.string.alerts_x_of_x_on_map, visibleCount, totalCount)
 
 /** Frames every visible alert, or, during a hunt, flips between its target and its route. */
 @Composable
 internal fun fitDescription(hunt: MapChromeHunt?): String = when {
     hunt == null -> stringResource(R.string.map_show_all_alerts)
-    hunt.focus == HuntMapFocus.TARGET -> "Show Hunt route"
-    else -> "Focus Hunt target"
+    hunt.focus == HuntMapFocus.TARGET -> stringResource(R.string.alerts_show_hunt_route)
+    else -> stringResource(R.string.alerts_focus_hunt_target)
 }
 
 internal fun MapChromeHunt.title(): String = target?.let(::huntTargetTitle) ?: "Hunting $name"

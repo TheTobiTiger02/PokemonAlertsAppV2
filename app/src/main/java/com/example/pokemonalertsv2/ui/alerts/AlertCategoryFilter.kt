@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.Immutable
 import com.example.pokemonalertsv2.data.PokemonAlert
 
@@ -31,18 +33,18 @@ val FILTERABLE_ALERT_CATEGORIES: List<AlertCategory> = listOf(
 /** Plural label used by every filter UI that lists categories. */
 val AlertCategory.filterLabel: String
     get() = when (this) {
-        AlertCategory.SPAWN -> "IV spawns"
-        AlertCategory.RAID -> "Raids"
-        AlertCategory.QUEST -> "Quests"
-        AlertCategory.ROCKET -> "Rocket"
-        AlertCategory.KECLEON -> "Kecleon"
-        AlertCategory.HUNDO -> "Hundos"
-        AlertCategory.NUNDO -> "Nundos"
-        AlertCategory.PVP -> "PvP"
-        AlertCategory.COMMON -> "Common"
-        AlertCategory.TAPPABLE -> "Tappables"
-        AlertCategory.WEATHER -> "Weather"
-        AlertCategory.GENERIC -> "Other"
+        AlertCategory.SPAWN -> AppText.get(R.string.data_iv_spawns)
+        AlertCategory.RAID -> AppText.get(R.string.data_raids)
+        AlertCategory.QUEST -> AppText.get(R.string.data_quests)
+        AlertCategory.ROCKET -> AppText.get(R.string.alerts_rocket)
+        AlertCategory.KECLEON -> AppText.get(R.string.alerts_kecleon)
+        AlertCategory.HUNDO -> AppText.get(R.string.data_hundos)
+        AlertCategory.NUNDO -> AppText.get(R.string.data_nundos)
+        AlertCategory.PVP -> AppText.get(R.string.alerts_pvp)
+        AlertCategory.COMMON -> AppText.get(R.string.alerts_common)
+        AlertCategory.TAPPABLE -> AppText.get(R.string.data_tappables)
+        AlertCategory.WEATHER -> AppText.get(R.string.alerts_weather)
+        AlertCategory.GENERIC -> AppText.get(R.string.data_other)
     }
 
 /**

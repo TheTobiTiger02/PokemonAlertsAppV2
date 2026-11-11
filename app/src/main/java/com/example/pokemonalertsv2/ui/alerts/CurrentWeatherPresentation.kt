@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.Immutable
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.counters.PokebattlerWeather
@@ -61,14 +63,14 @@ internal fun currentWeatherDisplay(
 
 /** The game's own wording, which is shorter than Pokebattler's option labels. */
 private fun weatherLabel(weather: PokebattlerWeather): String = when (weather) {
-    PokebattlerWeather.NONE -> "No weather"
-    PokebattlerWeather.CLEAR -> "Clear"
-    PokebattlerWeather.RAINY -> "Rain"
-    PokebattlerWeather.PARTLY_CLOUDY -> "Partly cloudy"
-    PokebattlerWeather.OVERCAST -> "Cloudy"
-    PokebattlerWeather.WINDY -> "Windy"
-    PokebattlerWeather.SNOW -> "Snow"
-    PokebattlerWeather.FOG -> "Fog"
+    PokebattlerWeather.NONE -> AppText.get(R.string.alerts_no_weather)
+    PokebattlerWeather.CLEAR -> AppText.get(R.string.catchroutes_clear)
+    PokebattlerWeather.RAINY -> AppText.get(R.string.alerts_rain)
+    PokebattlerWeather.PARTLY_CLOUDY -> AppText.get(R.string.alerts_partly_cloudy)
+    PokebattlerWeather.OVERCAST -> AppText.get(R.string.alerts_cloudy)
+    PokebattlerWeather.WINDY -> AppText.get(R.string.alerts_windy)
+    PokebattlerWeather.SNOW -> AppText.get(R.string.alerts_snow)
+    PokebattlerWeather.FOG -> AppText.get(R.string.alerts_fog)
 }
 
 private fun PokebattlerWeather?.glyph(): String = when (this) {

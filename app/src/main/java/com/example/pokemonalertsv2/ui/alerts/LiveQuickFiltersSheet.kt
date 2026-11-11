@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -70,9 +72,9 @@ internal fun LiveQuickFiltersSheet(
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Filter alerts", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.alerts_filter_alerts), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-            Text("Alert type", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.alerts_alert_type), style = MaterialTheme.typography.titleSmall)
             val allTypes = remember(Unit) { FilterAlertType.entries.map { it.name } }
             ChipRow(FilterAlertType.entries, key = { it.name }) { type ->
                 val shown = definition.alertTypes.contains(type.name)
@@ -86,7 +88,7 @@ internal fun LiveQuickFiltersSheet(
             }
 
             if (catalog.areas.isNotEmpty()) {
-                Text("Area", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.hunt_area), style = MaterialTheme.typography.titleSmall)
                 ChipRow(listOf<String?>(null) + catalog.areas, key = { it ?: "*all" }) { area ->
                     val selected = if (area == null) definition.areas.mode == FilterSelectionMode.ALL
                     else definition.areas.mode == FilterSelectionMode.ONLY && definition.areas.contains(area)
@@ -96,20 +98,20 @@ internal fun LiveQuickFiltersSheet(
                 }
             }
 
-            Text("Distance", style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(R.string.alerts_distance), style = MaterialTheme.typography.titleSmall)
             ChipRow(DISTANCE_CHOICES, key = { it }) { meters ->
-                QuickChip(label = if (meters == 0) "Any" else distanceLabel(meters), selected = definition.maxDistanceMeters == meters) {
+                QuickChip(label = if (meters == 0) stringResource(R.string.hunt_any) else distanceLabel(meters), selected = definition.maxDistanceMeters == meters) {
                     onDefinitionChange(definition.copy(maxDistanceMeters = meters))
                 }
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Show dismissed alerts", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                Text(stringResource(R.string.alerts_show_dismissed_alerts), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                 Switch(checked = showDismissed, onCheckedChange = onShowDismissedChange, modifier = Modifier.testTag("live_filters_dismissed"))
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onOpenFilterStudio, modifier = Modifier.testTag("live_filters_studio")) { Text("More filters") }
+                TextButton(onClick = onOpenFilterStudio, modifier = Modifier.testTag("live_filters_studio")) { Text(stringResource(R.string.alerts_more_filters)) }
                 if (definition != FilterDefinition() || showDismissed) {
                     TextButton(
                         onClick = {
@@ -117,11 +119,11 @@ internal fun LiveQuickFiltersSheet(
                             onShowDismissedChange(false)
                         },
                         modifier = Modifier.testTag("live_filters_clear")
-                    ) { Text("Clear all filters") }
+                    ) { Text(stringResource(R.string.alerts_clear_all_filters)) }
                 }
             }
             Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                Text(if (visibleCount == 1) "Show 1 alert" else "Show $visibleCount alerts")
+                Text(if (visibleCount == 1) stringResource(R.string.alerts_show_1_alert) else stringResource(R.string.alerts_show_x_alerts, visibleCount))
             }
         }
     }

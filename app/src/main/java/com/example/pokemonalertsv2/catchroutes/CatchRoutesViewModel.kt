@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Application
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
@@ -54,7 +57,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun save(duplicate: Boolean = false) = viewModelScope.launch {
         selectedId = store.save(settings.copy(startAtMillis = 0), if (duplicate) null else selectedId)
-        progress = if (duplicate) "Copy saved" else "Setup saved"
+        progress = if (duplicate) AppText.get(R.string.catchroutes_copy_saved) else AppText.get(R.string.catchroutes_setup_saved)
     }
     fun delete(entity: CatchSetupEntity) = viewModelScope.launch {
         store.delete(entity.id)
@@ -107,9 +110,7 @@ class CatchRoutesViewModel(app: Application) : AndroidViewModel(app) {
                 val found = search(PokemonAlertsApi.catchRoutesService, resolved) { if (epoch == generation) progress = it }
                 settings = found.settings
                 itinerary = found.itinerary
-                val zone = java.time.ZoneId.systemDefault()
-                fun describe(s: CatchRouteSettings) = java.time.Instant.ofEpochMilli(s.startAtMillis).atZone(zone)
-                    .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+                fun describe(s: CatchRouteSettings) = TimeUtils.formatClock(s.startAtMillis)
                 // Candidates were ranked on straight-line estimates; only the chosen route's numbers are real.
                 recommendation = "Best of ${found.compared} $what · leaving ${describe(found.settings)}"
                 progress = "Route ready"

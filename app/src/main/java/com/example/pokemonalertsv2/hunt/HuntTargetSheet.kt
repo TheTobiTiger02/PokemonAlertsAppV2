@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.util.AppText
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -153,7 +155,7 @@ internal fun HuntTargetSheet(
                     openQuests = { questsOpen = true },
                     openDistanceOverrides = {}
                 ),
-                areaSummary = if (area.isArea()) "Only inside your area (${area.size} corners)" else "Anywhere nearby",
+                areaSummary = if (area.isArea()) stringResource(R.string.hunt_only_inside_your_area_x_corners, area.size) else stringResource(R.string.hunt_anywhere_nearby),
                 area = area,
                 onAreaChange = { area = it },
                 onOpenArea = { areaOpen = true },
@@ -166,9 +168,9 @@ internal fun HuntTargetSheet(
                 onRenameSaved = { renaming = it },
                 onDeleteSaved = { saved -> deleting = saved },
                 startLabel = when {
-                    !ready -> "Pick something to hunt"
-                    editing != null -> "Update hunt"
-                    else -> "Hunt ${huntName(hunt, catalog)}"
+                    !ready -> stringResource(R.string.hunt_pick_something_to_hunt)
+                    editing != null -> AppText.get(R.string.hunt_update_hunt)
+                    else -> stringResource(R.string.hunt_hunt_x, huntName(hunt, catalog))
                 },
                 ready = ready,
                 onStart = { onStart(huntName(hunt, catalog), hunt, editingId, area) }
@@ -179,16 +181,16 @@ internal fun HuntTargetSheet(
     deleting?.let { target ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text("Delete \"${target.name}\"?") },
-            text = { Text("The saved hunt and its targets are removed. Past hunts in your history stay.") },
+            title = { Text(AppText.get(R.string.hunt_delete_x, target.name)) },
+            text = { Text(stringResource(R.string.hunt_the_saved_hunt_and_its_targets)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     scope.launch { huntRepository.deleteSavedHunt(target.id) }
                     if (editingId == target.id) editingId = null
                     deleting = null
-                }) { Text("Delete") }
+                }) { Text(AppText.get(R.string.catchroutes_delete)) }
             },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text("Cancel") } }
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
         )
     }
 
@@ -210,7 +212,7 @@ internal fun HuntTargetSheet(
         CatchAreaPicker(
             initial = area,
             center = center,
-            title = "Hunt area",
+            title = stringResource(R.string.hunt_hunt_area),
             onDismiss = { areaOpen = false },
             onDone = { area = it; areaOpen = false }
         )
@@ -241,12 +243,12 @@ private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = 
     FilterAlertType.PVP -> definition.pvpSpecies.summary()
     FilterAlertType.NUNDO -> definition.nundoSpecies.summary()
     FilterAlertType.COMMON -> definition.commonSpecies.summary()
-    FilterAlertType.RAID -> if (definition.raidTiers.mode != FilterSelectionMode.ONLY && definition.raidSpecies.mode != FilterSelectionMode.ONLY) "Any"
+    FilterAlertType.RAID -> if (definition.raidTiers.mode != FilterSelectionMode.ONLY && definition.raidSpecies.mode != FilterSelectionMode.ONLY) AppText.get(R.string.hunt_any)
         else "Tiers: ${definition.raidTiers.summary()} · bosses: ${definition.raidSpecies.summary()}"
     FilterAlertType.ROCKET -> definition.rocketTypes.summary()
     FilterAlertType.QUEST -> definition.quests.summary()
     FilterAlertType.TAPPABLE -> definition.tappableSpecies.summary()
-    else -> "Any"
+    else -> AppText.get(R.string.hunt_any)
 }
 
 /**
@@ -280,12 +282,12 @@ private fun HuntPages(
                         item {
                             Spacer(Modifier.height(8.dp))
                             PanelHeader(
-                                title = if (editing) "Edit hunt targets" else "What are you hunting?",
-                                subtitle = if (editing) "The hunt keeps running while you change it" else null
+                                title = if (editing) stringResource(R.string.hunt_edit_hunt_targets) else stringResource(R.string.hunt_what_are_you_hunting),
+                                subtitle = if (editing) stringResource(R.string.hunt_the_hunt_keeps_running_while_you) else null
                             )
                         }
                         if (savedHunts.isNotEmpty()) {
-                            item { PanelSectionLabel("Hunted before") }
+                            item { PanelSectionLabel(stringResource(R.string.hunt_hunted_before)) }
                             items(savedHunts, key = { it.id }) { saved ->
                                 Box(Modifier.padding(horizontal = PanelGutter)) {
                                     SavedHuntRow(
@@ -298,14 +300,14 @@ private fun HuntPages(
                                 }
                             }
                         }
-                        item { PanelSectionLabel("What") }
+                        item { PanelSectionLabel(stringResource(R.string.catchroutes_what)) }
                         item {
                             Box(Modifier.padding(horizontal = PanelGutter)) {
                                 AlertTypesSection(
                                     definition = filters.definition,
                                     categoryCounts = filters.categoryCounts,
                                     onDefinitionChange = filters.onDefinitionChange,
-                                    setAllLabel = "Pick one or more"
+                                    setAllLabel = stringResource(R.string.hunt_pick_one_or_more)
                                 )
                             }
                         }
@@ -313,7 +315,7 @@ private fun HuntPages(
                         // no business asking about raid tiers.
                         val editable = chosenTypes.mapNotNull { type -> type.editor()?.let { type to it } }
                         if (editable.isNotEmpty()) {
-                            item { PanelSectionLabel("Narrow it down") }
+                            item { PanelSectionLabel(stringResource(R.string.hunt_narrow_it_down)) }
                             items(editable, key = { it.first.name }) { (type, editor) ->
                                 PanelNavRow(
                                     title = type.label,
@@ -325,10 +327,10 @@ private fun HuntPages(
                                 )
                             }
                         }
-                        item { PanelSectionLabel("Where") }
+                        item { PanelSectionLabel(stringResource(R.string.catchroutes_where)) }
                         item {
                             PanelNavRow(
-                                title = "Area",
+                                title = stringResource(R.string.hunt_area),
                                 summary = areaSummary,
                                 active = area.isArea(),
                                 onClick = onOpenArea,
@@ -398,9 +400,9 @@ private fun SavedHuntRow(
             )
             Text(
                 text = when (val rules = hunt.definition.advancedRuleCount) {
-                    0 -> "Anything of that kind"
-                    1 -> "1 extra rule"
-                    else -> "$rules extra rules"
+                    0 -> stringResource(R.string.hunt_anything_of_that_kind)
+                    1 -> stringResource(R.string.hunt_1_extra_rule)
+                    else -> stringResource(R.string.hunt_x_extra_rules, rules)
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -412,26 +414,26 @@ private fun SavedHuntRow(
             IconButton(onClick = { menuOpen = true }) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "More for ${hunt.name}"
+                    contentDescription = stringResource(R.string.hunt_more_for_x, hunt.name)
                 )
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(
-                    text = { Text("Edit") },
+                    text = { Text(stringResource(R.string.catchroutes_edit)) },
                     onClick = {
                         menuOpen = false
                         onEdit()
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Rename") },
+                    text = { Text(stringResource(R.string.hunt_rename)) },
                     onClick = {
                         menuOpen = false
                         onRename()
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("Delete") },
+                    text = { Text(AppText.get(R.string.catchroutes_delete)) },
                     onClick = {
                         menuOpen = false
                         onDelete()
@@ -452,7 +454,7 @@ private fun HuntNameDialog(
     var value by remember(initial) { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename hunt") },
+        title = { Text(stringResource(R.string.hunt_rename_hunt)) },
         text = {
             OutlinedTextField(
                 value = value,
@@ -465,9 +467,9 @@ private fun HuntNameDialog(
             TextButton(
                 onClick = { onConfirm(value) },
                 enabled = value.isNotBlank()
-            ) { Text("Rename") }
+            ) { Text(stringResource(R.string.hunt_rename)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
     )
 }
 
@@ -480,16 +482,16 @@ private fun Section(title: String, content: @Composable () -> Unit) {
 }
 
 private fun FilterSelection.summary(): String = when {
-    mode != FilterSelectionMode.ONLY -> "Any"
+    mode != FilterSelectionMode.ONLY -> AppText.get(R.string.hunt_any)
     selectedCount == 1 -> values.first()
     else -> "$selectedCount chosen"
 }
 
 private fun QuestFilterRules.summary(): String = when {
-    exactPairs.size == 1 -> "1 exact quest"
-    exactPairs.size > 1 -> "${exactPairs.size} exact quests"
-    facetEnabled -> "By task and reward"
-    else -> "Any quest"
+    exactPairs.size == 1 -> AppText.get(R.string.hunt_1_exact_quest)
+    exactPairs.size > 1 -> AppText.get(R.string.hunt_x_exact_quests, exactPairs.size)
+    facetEnabled -> AppText.get(R.string.hunt_by_task_and_reward)
+    else -> AppText.get(R.string.hunt_any_quest)
 }
 
 /** Shows the matches outside the area, dimmed: tap one to walk there, but the hunt never picks them. */
@@ -500,8 +502,8 @@ private fun OutsideAreaSwitch() {
     val repository = remember(context) { HuntRepository.getInstance(context) }
     val shown by repository.showOutsideArea.collectAsStateWithLifecycle(initialValue = false)
     PanelSwitchRow(
-        title = "Show alerts outside the area",
-        subtitle = "Dimmed on the map. Tap one to route to it; it is never suggested.",
+        title = stringResource(R.string.hunt_show_alerts_outside_the_area),
+        subtitle = stringResource(R.string.hunt_dimmed_on_the_map_tap_one),
         checked = shown,
         onCheckedChange = { on -> scope.launch { repository.setShowOutsideArea(on) } },
         modifier = Modifier.testTag("hunt_row_outside_area")

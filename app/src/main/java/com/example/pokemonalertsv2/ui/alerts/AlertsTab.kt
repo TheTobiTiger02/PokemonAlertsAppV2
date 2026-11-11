@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.foundation.layout.widthIn
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
@@ -37,9 +38,9 @@ import androidx.compose.animation.core.tween
  * a button on the history screen and has its own back arrow.
  */
 enum class AlertsSection(val label: String) {
-    LIVE("Live"),
-    HISTORY("History"),
-    INSIGHTS("Insights")
+    LIVE(AppText.get(R.string.alerts_live)),
+    HISTORY(AppText.get(R.string.alerts_history)),
+    INSIGHTS(AppText.get(R.string.alerts_insights))
 }
 
 /** The two sections the Live | History switch offers, in display order. */
@@ -77,10 +78,10 @@ fun AlertsTab(
         ) {
             if (section == AlertsSection.INSIGHTS) {
                 IconButton(onClick = onInsightsBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to history")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.alerts_back_to_history))
                 }
                 Text(
-                    text = "Spawn insights",
+                    text = stringResource(R.string.alerts_spawn_insights),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
@@ -118,7 +119,7 @@ fun AlertsTab(
                 }
             }
             IconButton(onClick = onOpenSettings, modifier = Modifier.testTag("open_settings")) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+                Icon(Icons.Outlined.Settings, contentDescription = stringResource(R.string.events_settings))
             }
         }
         Crossfade(

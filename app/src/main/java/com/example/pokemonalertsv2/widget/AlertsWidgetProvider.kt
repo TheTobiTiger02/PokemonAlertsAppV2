@@ -437,7 +437,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         }
 
         // Last updated
-        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(nowMillis))
+        val time = TimeUtils.formatClock(nowMillis)
         views.setTextViewText(R.id.tv_last_updated, context.getString(R.string.widget_updated_at, time))
         views.setViewVisibility(
             R.id.tv_distance_status,

@@ -324,7 +324,7 @@ internal fun AlertCard(
 
                 questPresentation?.task?.let { task ->
                     Text(
-                        text = "Task: $task",
+                        text = stringResource(R.string.alerts_task_x, task),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Medium,
@@ -334,7 +334,7 @@ internal fun AlertCard(
                 }
                 questPresentation?.reward?.let { reward ->
                     Text(
-                        text = "Reward: $reward",
+                        text = stringResource(R.string.alerts_reward_x, reward),
                         style = MaterialTheme.typography.bodySmall,
                         color = categoryAccent,
                         maxLines = 1,
@@ -357,20 +357,20 @@ internal fun AlertCard(
                     // The one row in a feed of hundreds that the hunt is walking to.
                     if (huntTarget) {
                         AlertPill(
-                            text = "Hunt target",
+                            text = stringResource(R.string.alerts_hunt_target),
                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
                             contentColor = MaterialTheme.colorScheme.primary
                         )
                     }
                     displayIv?.let {
                         AlertPill(
-                            text = "IV $it",
+                            text = stringResource(R.string.alerts_iv_x, it),
                             isPrimary = true
                         )
                     }
                     resolvedCp?.let {
                         AlertPill(
-                            text = "CP $it",
+                            text = stringResource(R.string.alerts_cp_x, it),
                             containerColor = categoryAccent.copy(alpha = 0.16f),
                             contentColor = categoryAccent
                         )
@@ -399,7 +399,7 @@ internal fun AlertCard(
                     }
                     if (distanceInfo.isInRange) {
                         AlertPill(
-                            text = "In range",
+                            text = stringResource(R.string.alerts_in_range),
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -429,7 +429,7 @@ internal fun AlertCard(
                     }
                     if (endsBeforeArrival) {
                         AlertPill(
-                            text = "Ends before you arrive",
+                            text = stringResource(R.string.alerts_ends_before_you_arrive),
                             icon = Icons.Filled.Warning,
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -599,7 +599,7 @@ internal fun AlertCardPrimaryActions(
                     label = "alert_card_going_action"
                 ) { going ->
                     Text(
-                        if (going) "Stop" else "I\u2019m going",
+                        if (going) stringResource(R.string.tracking_stop) else stringResource(R.string.alerts_i_m_going),
                         style = MaterialTheme.typography.labelLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -622,7 +622,7 @@ internal fun AlertCardPrimaryActions(
                     contentDescription = stringResource(id = R.string.open_in_maps)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Navigate", style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stringResource(R.string.alerts_navigate), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

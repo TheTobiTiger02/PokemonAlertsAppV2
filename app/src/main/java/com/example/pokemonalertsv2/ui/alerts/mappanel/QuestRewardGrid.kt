@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,8 +76,8 @@ import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
  * a reward's tasks, or a task's rewards.
  */
 private enum class QuestView(val label: String, val unit: String, val other: String) {
-    REWARDS("Rewards", "reward", "task"),
-    TASKS("Tasks", "task", "reward")
+    REWARDS(AppText.get(R.string.alerts_rewards), "reward", "task"),
+    TASKS(AppText.get(R.string.alerts_tasks), "task", "reward")
 }
 
 /** One reward or one task, with every quest pairing it with the other side, index for index. */
@@ -105,8 +107,8 @@ private fun groupQuests(quests: List<FilterCatalogQuest>, view: QuestView): List
 private fun countLabel(group: QuestGroup, selectedCount: Int, noun: String): String {
     val total = group.rules.size
     return when {
-        !group.active -> "Not live"
-        selectedCount in 1 until total -> "$selectedCount of $total ${noun}s"
+        !group.active -> AppText.get(R.string.alerts_not_live)
+        selectedCount in 1 until total -> AppText.get(R.string.alerts_x_of_x_x_s, selectedCount, total, noun)
         total == 1 -> "1 $noun"
         else -> "$total ${noun}s"
     }
@@ -163,7 +165,7 @@ internal fun QuestRewardGrid(
                         },
                         shape = SegmentedButtonDefaults.itemShape(index = index, count = QuestView.entries.size),
                         modifier = Modifier.testTag("quest_view_${entry.name.lowercase()}")
-                    ) { Text("By ${entry.unit}") }
+                    ) { Text(stringResource(R.string.alerts_by_x, entry.unit)) }
                 }
             }
         }
@@ -172,11 +174,11 @@ internal fun QuestRewardGrid(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search rewards or tasks") },
+                placeholder = { Text(stringResource(R.string.alerts_search_rewards_or_tasks)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear") }
+                        IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_clear)) }
                     }
                 },
                 singleLine = true,
@@ -187,26 +189,26 @@ internal fun QuestRewardGrid(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = when (rules.exactMode) {
-                        FilterSelectionMode.ALL -> if (rules.facetEnabled) "Rule-based selection" else "All quests shown"
-                        FilterSelectionMode.NONE -> "No quests picked"
-                        FilterSelectionMode.ONLY -> "${selected.size} of ${universe.size} quests"
+                        FilterSelectionMode.ALL -> if (rules.facetEnabled) stringResource(R.string.alerts_rule_based_selection) else stringResource(R.string.alerts_all_quests_shown)
+                        FilterSelectionMode.NONE -> stringResource(R.string.alerts_no_quests_picked)
+                        FilterSelectionMode.ONLY -> stringResource(R.string.alerts_x_of_x_quests, selected.size, universe.size)
                     } + " · hold for ${view.other}s",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(onClick = { onRulesChange(rules.copy(exactPairs = emptySet(), exactMode = FilterSelectionMode.ALL)) }) {
-                    Text("All")
+                    Text(stringResource(R.string.alerts_all))
                 }
                 TextButton(onClick = { onRulesChange(rules.copy(exactPairs = emptySet(), exactMode = FilterSelectionMode.NONE)) }) {
-                    Text("None")
+                    Text(stringResource(R.string.alerts_none))
                 }
             }
         }
         if (groups.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
-                    text = "Quests load with the next refresh.",
+                    text = stringResource(R.string.alerts_quests_load_with_the_next_refresh),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(vertical = Spacing.lg)
@@ -227,7 +229,7 @@ internal fun QuestRewardGrid(
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             TextButton(onClick = onOpenRules, modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm)) {
-                Text("Task & reward rules…")
+                Text(stringResource(R.string.alerts_task_reward_rules))
             }
         }
     }
@@ -279,8 +281,8 @@ private fun QuestTile(
             modifier = Modifier
                 .combinedClickable(
                     role = Role.Button,
-                    onClickLabel = if (all) "Hide this ${view.unit}" else "Show this ${view.unit}",
-                    onLongClickLabel = "Pick ${view.other}s",
+                    onClickLabel = if (all) stringResource(R.string.alerts_hide_this_x, view.unit) else stringResource(R.string.alerts_show_this_x, view.unit),
+                    onLongClickLabel = stringResource(R.string.alerts_pick_x_s, view.other),
                     onLongClick = onOpenPairs,
                     onClick = onClick
                 )
@@ -341,7 +343,7 @@ private fun QuestTile(
             ) {
                 Icon(
                     painterResource(R.drawable.ic_tune),
-                    contentDescription = "Pick ${view.other}s for ${group.label}",
+                    contentDescription = stringResource(R.string.alerts_pick_x_s_for_x, view.other, group.label),
                     tint = scheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
@@ -394,13 +396,13 @@ private fun QuestPairsSheet(
             Column(modifier = Modifier.weight(1f).padding(start = if (byReward) Spacing.md else 0.dp)) {
                 Text(group.label, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2)
                 Text(
-                    text = "$chosen of ${group.rules.size} ${view.other}s shown",
+                    text = stringResource(R.string.alerts_x_of_x_x_s_shown, chosen, group.rules.size, view.other),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = { onSetPairs(group.rules, true) }) { Text("All") }
-            TextButton(onClick = { onSetPairs(group.rules, false) }) { Text("None") }
+            TextButton(onClick = { onSetPairs(group.rules, true) }) { Text(stringResource(R.string.alerts_all)) }
+            TextButton(onClick = { onSetPairs(group.rules, false) }) { Text(stringResource(R.string.alerts_none)) }
         }
         LazyColumn(
             modifier = Modifier.keepScrollInSheet(),
@@ -432,7 +434,7 @@ private fun QuestPairsSheet(
                         )
                         if (!quest.active) {
                             Text(
-                                "Not live right now",
+                                stringResource(R.string.alerts_not_live_right_now),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

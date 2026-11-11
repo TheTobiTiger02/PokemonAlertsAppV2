@@ -113,15 +113,11 @@ object WalkingRouteUtils {
     }
 
     fun formatDistanceMeters(meters: Float): String {
-        return if (meters >= 1000f) {
-            String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
-        } else {
-            String.format(Locale.getDefault(), "%.0f m", meters)
-        }
+        return formatMeters(meters.toDouble())
     }
 
     fun formatWalkingDurationSeconds(seconds: Long): String {
         val minutes = ceil(seconds / 60.0).toInt().coerceAtLeast(1)
-        return String.format(Locale.getDefault(), "%d min walk", minutes)
+        return AppText.get(com.example.pokemonalertsv2.R.string.walk_minutes, minutes)
     }
 }

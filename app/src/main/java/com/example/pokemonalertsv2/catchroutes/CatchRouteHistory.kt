@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.formatMeters
 import kotlinx.serialization.Serializable
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -86,5 +87,4 @@ internal fun formatCatchSpeed(kmh: Double?): String = kmh?.let { String.format(L
 internal fun CatchRouteSummary.headline(): String =
     "$caught caught · ${formatCatchKm(walkedMeters)} · ${(activeMillis / 60_000).toInt()} min"
 
-internal fun formatCatchKm(meters: Double): String =
-    if (meters < 1000) "${meters.roundToInt()} m" else String.format(Locale.getDefault(), "%.1f km", meters / 1000)
+internal fun formatCatchKm(meters: Double): String = formatMeters(meters)

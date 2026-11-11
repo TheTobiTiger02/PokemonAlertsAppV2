@@ -35,6 +35,20 @@ class GeoTest {
     }
 
     @Test
+    fun formatsMetresAndKilometres() {
+        val previous = java.util.Locale.getDefault()
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US)
+            assertEquals("850 m", formatMeters(849.6))
+            assertEquals("2.4 km", formatMeters(2_400.0))
+            java.util.Locale.setDefault(java.util.Locale.GERMANY)
+            assertEquals("2,4 km", formatMeters(2_400.0))
+        } finally {
+            java.util.Locale.setDefault(previous)
+        }
+    }
+
+    @Test
     fun walkingSpeedMatchesTheBackend() {
         // The backend's WALKING_SPEED_KMH (src/routing_providers.js) is 4.9 km/h; both sides
         // must estimate the same walk times.

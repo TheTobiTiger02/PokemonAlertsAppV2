@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import androidx.compose.foundation.layout.widthIn
@@ -51,16 +54,16 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                 var open by remember { mutableStateOf<CatchRouteSummary?>(null) }
                 var clearing by remember { mutableStateOf(false) }
                 Scaffold(snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) }, topBar = {
-                    TopAppBar(title = { Text("Route history") }, navigationIcon = {
-                        IconButton(onClick = ::finish) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-                    }, actions = { if (history.isNotEmpty()) TextButton(onClick = { clearing = true }) { Text("Clear") } })
+                    TopAppBar(title = { Text(stringResource(R.string.catchroutes_route_history)) }, navigationIcon = {
+                        IconButton(onClick = ::finish) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back)) }
+                    }, actions = { if (history.isNotEmpty()) TextButton(onClick = { clearing = true }) { Text(stringResource(R.string.catchroutes_clear)) } })
                 }) { padding ->
                     LazyVerticalGrid(columns = AdaptiveCardColumns, modifier = Modifier.fillMaxSize().padding(padding).testTag("catch_history"),
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (loaded == null) Unit
                         else if (history.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text("Finished routes appear here, with what you caught and where you walked.",
+                            Text(stringResource(R.string.catchroutes_finished_routes_appear_here_with_what),
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else item(span = { GridItemSpan(maxLineSpan) }) {
                             Row(Modifier.widthIn(max = Dimens.ReadableContentWidth), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -73,7 +76,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                             HistoryRow(summary, onDelete = {
                                 lifecycleScope.launch {
                                     store.deleteHistory(summary.id)
-                                    val result = snackbar.showSnackbar("Route deleted", actionLabel = "Undo",
+                                    val result = snackbar.showSnackbar("Route deleted", actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
                                         duration = androidx.compose.material3.SnackbarDuration.Short)
                                     if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) store.addHistory(summary)
                                 }
@@ -87,9 +90,9 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                         startActivity(walkAgainIntent(this, summary.id))
                     })
                 }
-                if (clearing) AlertDialog(onDismissRequest = { clearing = false }, title = { Text("Clear route history?") },
-                    confirmButton = { TextButton(onClick = { lifecycleScope.launch { store.clearHistory() }; clearing = false }) { Text("Clear") } },
-                    dismissButton = { TextButton(onClick = { clearing = false }) { Text("Cancel") } })
+                if (clearing) AlertDialog(onDismissRequest = { clearing = false }, title = { Text(stringResource(R.string.catchroutes_clear_route_history)) },
+                    confirmButton = { TextButton(onClick = { lifecycleScope.launch { store.clearHistory() }; clearing = false }) { Text(stringResource(R.string.catchroutes_clear)) } },
+                    dismissButton = { TextButton(onClick = { clearing = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
             }
         }
     }
@@ -104,7 +107,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                     Text("${summary.headline()} · ${formatCatchSpeed(summary.averageKmh)}", style = MaterialTheme.typography.bodyMedium)
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("catch_history_delete_${summary.id}")) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${summary.name}")
+                    Icon(Icons.Filled.Delete, contentDescription = AppText.get(R.string.catchroutes_delete_x_2, summary.name))
                 }
             }
         }

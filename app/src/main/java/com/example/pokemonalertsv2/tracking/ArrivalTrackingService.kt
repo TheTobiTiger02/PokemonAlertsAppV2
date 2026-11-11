@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
 import com.example.pokemonalertsv2.hunt.huntTargetDetail
 import android.Manifest
@@ -1107,7 +1109,7 @@ class ArrivalTrackingService : Service() {
         )
         // The designed windows name the target beside that readout; the distance is the readout's.
         floatingMap.setGuidance(
-            title = destination?.alert?.let(::huntTargetTitle) ?: if (huntPaused) "Hunt paused" else "Looking for targets",
+            title = destination?.alert?.let(::huntTargetTitle) ?: if (huntPaused) AppText.get(R.string.tracking_hunt_paused) else AppText.get(R.string.tracking_looking_for_targets),
             detail = destination?.let { guidanceRest(huntTargetDetail(it.alert, distanceMeters)) }.orEmpty()
         )
         val targetId = destination?.uniqueId

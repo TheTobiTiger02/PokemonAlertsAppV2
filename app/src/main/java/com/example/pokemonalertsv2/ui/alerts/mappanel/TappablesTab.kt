@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -75,11 +77,11 @@ internal fun TappablesTab(state: FiltersState) {
     val update = { next: FilterSelection -> state.onDefinitionChange(state.definition.copy(tappableSpecies = next)) }
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).testTag("map_tappables_list")) {
         Row(modifier = Modifier.fillMaxWidth().padding(end = Spacing.sm), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = { update(FilterSelection.All) }) { Text("All") }
-            TextButton(onClick = { update(FilterSelection.None) }) { Text("None") }
+            TextButton(onClick = { update(FilterSelection.All) }) { Text(stringResource(R.string.alerts_all)) }
+            TextButton(onClick = { update(FilterSelection.None) }) { Text(stringResource(R.string.alerts_none)) }
         }
         if (sections.all.isEmpty()) {
-            EditorNote("These load with the next refresh.")
+            EditorNote(stringResource(R.string.alerts_these_load_with_the_next_refresh))
             return@Column
         }
         listOf("Loot" to sections.loot, "Pokémon" to sections.pokemon).forEach { (title, tokens) ->

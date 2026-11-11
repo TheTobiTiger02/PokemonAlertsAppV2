@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -121,7 +123,7 @@ internal fun HuntSummarySheet(
                         Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(16.dp)).testTag("hunt_summary_map")
                     )
                     Text(
-                        text = if (track.size >= 2) "Teal: your walk · gold: where you caught" else "Gold: where you caught",
+                        text = if (track.size >= 2) stringResource(R.string.hunt_teal_your_walk_gold_where_you) else stringResource(R.string.hunt_gold_where_you_caught),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -137,13 +139,13 @@ internal fun HuntSummarySheet(
 
             if (summary.catches.isEmpty()) {
                 Text(
-                    text = "Nothing caught this time.",
+                    text = stringResource(R.string.hunt_nothing_caught_this_time),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Caught", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.hunt_caught), style = MaterialTheme.typography.titleSmall)
                     val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
                     summary.catches.forEach { catch ->
                         CatchRow(catch, timeFormat.format(Date(catch.atMillis)))
@@ -162,7 +164,7 @@ internal fun HuntSummarySheet(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Dismiss $raid raid info")
+                    Text(stringResource(R.string.hunt_dismiss_x_raid_info, raid))
                 }
             }
 

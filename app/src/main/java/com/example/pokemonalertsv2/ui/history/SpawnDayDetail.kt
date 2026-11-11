@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,7 +86,7 @@ internal fun SpawnDayDetailSection(state: SpawnActivityUiState, onOpenHour: (Lon
         DetailCard {
             Column {
                 val oddLength = spawns?.takeIf { it.complete && it.hours.size != 24 }?.let { " · ${it.hours.size}-hour day" }.orEmpty()
-                Text((if (isToday) "Today so far" else "Day") + oddLength, style = MaterialTheme.typography.labelMedium,
+                Text((if (isToday) stringResource(R.string.history_today_so_far) else stringResource(R.string.settings_day)) + oddLength, style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(longDay(day), style = MaterialTheme.typography.titleMedium)
             }
@@ -98,11 +101,11 @@ internal fun SpawnDayDetailSection(state: SpawnActivityUiState, onOpenHour: (Lon
                     InlineStat(detail.alerts?.let { numbers.format(it.total) } ?: "—", "Alerts", Modifier.weight(1f))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Active spawnpoints by hour")
+                    CardLabel(stringResource(R.string.history_active_spawnpoints_by_hour))
                     StackedColumns(
                         columns = spawns.hours.map { ColumnValue(it.live, it.catalogueOnly) },
                         labels = labels,
-                        descriptions = spawns.hours.mapIndexed { i, h -> "${labels[i]}:00, ${numbers.format(h.active)} active spawnpoints" },
+                        descriptions = spawns.hours.mapIndexed { i, h -> stringResource(R.string.history_x_00_x_active_spawnpoints, labels[i], numbers.format(h.active)) },
                         height = 140.dp,
                         selected = selected,
                         valueLabels = ValueLabels.SELECTED_AND_PEAK,
@@ -123,12 +126,12 @@ internal fun SpawnDayDetailSection(state: SpawnActivityUiState, onOpenHour: (Lon
         detail?.alerts?.let { alerts ->
             DetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Alerts by hour", trailing = "${numbers.format(alerts.total)} alerts")
+                    CardLabel(stringResource(R.string.history_alerts_by_hour), trailing = "${numbers.format(alerts.total)} alerts")
                     val alertLabels = hourLabels(alerts.hours.map { it.hour })
                     StackedColumns(
                         columns = alerts.hours.map { ColumnValue(it.count) },
                         labels = alertLabels,
-                        descriptions = alerts.hours.mapIndexed { i, h -> "${alertLabels[i]}:00, ${h.count} alerts" },
+                        descriptions = alerts.hours.mapIndexed { i, h -> stringResource(R.string.history_x_00_x_alerts, alertLabels[i], h.count) },
                         height = 110.dp,
                         selected = alerts.hours.indexOfFirst { it.start == state.hourStart }.takeIf { it >= 0 },
                         valueLabels = ValueLabels.SELECTED_AND_PEAK,
@@ -163,12 +166,12 @@ private fun HourCard(
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onOpenHour(starts[index - 1]) }, enabled = index > 0) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous hour")
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = stringResource(R.string.history_previous_hour))
                 }
                 Text("${labels[index]}:00–${"%02d".format((hour + 1) % 24)}:00", style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                 IconButton(onClick = { onOpenHour(starts[index + 1]) }, enabled = index < starts.lastIndex) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next hour")
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.history_next_hour))
                 }
             }
             Text(
@@ -188,15 +191,15 @@ private fun HourCard(
             hourDetail == null && state.hourError != null -> Failed(state.hourError) { onOpenHour(start) }
             hourDetail != null -> {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Pokémon first seen")
+                    CardLabel(stringResource(R.string.history_pok_mon_first_seen))
                     if (hourDetail.species.isEmpty()) {
-                        Text("No wild Pokémon were first seen in this hour.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.history_no_wild_pok_mon_were_first), style = MaterialTheme.typography.bodySmall)
                     } else {
                         SpeciesRows(hourDetail.species.take(10), hourDetail.sightings.coerceAtLeast(1), numbers, compact = true)
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Where they spawned")
+                    CardLabel(stringResource(R.string.history_where_they_spawned))
                     HourMap(hourDetail.points)
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         KeyItem(Color(android.graphics.Color.parseColor(SpawnHourMapView.LIVE_COLOR)), "Seen by our scanner", CircleShape)
@@ -245,7 +248,7 @@ private fun Loading(height: Int) {
 private fun Failed(message: String, onRetry: () -> Unit) {
     Column {
         Text(message, color = MaterialTheme.colorScheme.error)
-        TextButton(onClick = onRetry) { Text("Try again") }
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.history_try_again)) }
     }
 }
 
@@ -266,7 +269,7 @@ internal fun alertTypes(byType: Map<String, Int>, total: Int): String {
     if (total == 0) return "No alerts received this day."
     val sorted = byType.entries.filter { it.value > 0 }.sortedByDescending { it.value }
     val shown = sorted.take(4).joinToString(" · ") { "${it.key} ${it.value}" }
-    return if (sorted.size > 4) "$shown · +${sorted.size - 4} more" else shown
+    return if (sorted.size > 4) AppText.get(R.string.history_x_x_more, shown, sorted.size - 4) else shown
 }
 
 private val LONG_DAY: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL)

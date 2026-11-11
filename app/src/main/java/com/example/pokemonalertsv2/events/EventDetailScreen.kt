@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.events
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.example.pokemonalertsv2.ui.components.readableHorizontalPadding
 import com.example.pokemonalertsv2.ui.components.readableWidth
@@ -64,10 +67,10 @@ fun EventDetailScreen(
         Surface(Modifier.fillMaxSize().testTag("event_detail")) {
             Column(Modifier.fillMaxSize().systemBarsPadding()) {
                 Row(Modifier.readableWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) { Text("Close") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("event_detail_close")) { Text(stringResource(R.string.catchroutes_close)) }
                     Spacer(Modifier.weight(1f))
                     event.link?.let { link ->
-                        TextButton(onClick = { onOpenLink(link) }, modifier = Modifier.testTag("event_open_link")) { Text("Open on LeekDuck") }
+                        TextButton(onClick = { onOpenLink(link) }, modifier = Modifier.testTag("event_open_link")) { Text(stringResource(R.string.events_open_on_leekduck)) }
                     }
                 }
                 BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -84,7 +87,7 @@ fun EventDetailScreen(
                                 color = MaterialTheme.colorScheme.primary)
                             Text(event.name, style = MaterialTheme.typography.headlineSmall)
                             Text(timeRange(event), style = MaterialTheme.typography.bodyMedium)
-                            if (event.spawnRelevant) Text("Changes wild spawns", style = MaterialTheme.typography.labelMedium,
+                            if (event.spawnRelevant) Text(stringResource(R.string.events_changes_wild_spawns), style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.tertiary)
                         }
                     }
@@ -93,9 +96,9 @@ fun EventDetailScreen(
                             val reminded = event.id in state.settings.starredIds || event.eventType in state.settings.reminderTypes
                             // Reminders only fire before the start (eventsToRemind), so a running event gets none.
                             Text(when {
-                                    !reminded -> "No reminder"
-                                    event.startMillis <= System.currentTimeMillis() -> "Already started, so no reminder"
-                                    else -> "You'll be reminded ${state.settings.leadMinutes} min before it starts"
+                                    !reminded -> stringResource(R.string.events_no_reminder)
+                                    event.startMillis <= System.currentTimeMillis() -> stringResource(R.string.events_already_started_so_no_reminder)
+                                    else -> stringResource(R.string.events_you_ll_be_reminded_x_min, state.settings.leadMinutes)
                                 },
                                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                             StarButton(event, state.settings, onToggleStar)
@@ -132,16 +135,16 @@ fun EventDetailScreen(
 @Composable
 private fun FeedDetails(event: GameEvent) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (event.featured.isNotEmpty()) { SectionTitle("Featured Pokémon"); PokemonRow(event.featured) }
-        if (event.raidBosses.isNotEmpty()) { SectionTitle("Raid bosses"); PokemonRow(event.raidBosses) }
-        if (event.shinies.isNotEmpty()) { SectionTitle("Shinies"); PokemonRow(event.shinies) }
+        if (event.featured.isNotEmpty()) { SectionTitle(stringResource(R.string.events_featured_pok_mon)); PokemonRow(event.featured) }
+        if (event.raidBosses.isNotEmpty()) { SectionTitle(stringResource(R.string.events_raid_bosses)); PokemonRow(event.raidBosses) }
+        if (event.shinies.isNotEmpty()) { SectionTitle(stringResource(R.string.events_shinies)); PokemonRow(event.shinies) }
         if (event.bonuses.isNotEmpty()) {
-            SectionTitle("Bonuses")
+            SectionTitle(stringResource(R.string.events_bonuses))
             BonusRows(event.bonuses)
             event.bonusDisclaimers.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         if (event.featured.isEmpty() && event.raidBosses.isEmpty() && event.bonuses.isEmpty()) {
-            Text("LeekDuck has no further details for this event yet.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.events_leekduck_has_no_further_details_for), style = MaterialTheme.typography.bodyMedium)
         }
     }
 }
@@ -154,7 +157,7 @@ private fun SectionCard(section: EventSection, open: Boolean, onToggle: () -> Un
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 section.icon?.let { AsyncImage(model = it, contentDescription = null, modifier = Modifier.size(24.dp)) }
                 Text(section.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                Text(if (open) "Hide" else "Show", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(if (open) stringResource(R.string.events_hide) else stringResource(R.string.events_show), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             }
             if (open) section.blocks.forEach { EventBlockView(it) }
         }
@@ -231,7 +234,7 @@ private fun BonusRows(bonuses: List<EventBonus>) {
 
 /** "CP 389–422" for a Pokémon reward, "×20" for an item. */
 internal fun rewardCaption(reward: EventReward): String? = when {
-    reward.minCp != null && reward.maxCp != null -> "CP ${reward.minCp}–${reward.maxCp}"
+    reward.minCp != null && reward.maxCp != null -> AppText.get(R.string.events_cp_x_x, reward.minCp, reward.maxCp)
     reward.quantity != null -> "×${reward.quantity}"
     else -> null
 }
@@ -260,12 +263,12 @@ private fun ResearchStep(step: EventResearchStep) {
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(listOfNotNull(step.number?.let { "Step $it" }, step.name).joinToString(" · "),
                     style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-                Text(if (open) "Hide" else "${step.tasks.size} tasks", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(if (open) stringResource(R.string.events_hide) else "${step.tasks.size} tasks", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             if (open) {
                 step.tasks.forEach { ResearchTask(it) }
                 if (step.rewards.isNotEmpty()) {
-                    Text("Step rewards", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.events_step_rewards), style = MaterialTheme.typography.labelLarge)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         step.rewards.forEach { PokemonTile(it.name, it.image, it.type, it.shiny, rewardCaption(it)) }
                     }

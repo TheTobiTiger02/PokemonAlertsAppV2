@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.util.formatMeters
+import com.example.pokemonalertsv2.util.AppText
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -94,7 +96,7 @@ internal object ArrivalTrackingNotifications {
             .setContentTitle("Restoring alert journey")
             .setContentText("Waiting for the active destination")
             .setStyle(Notification.BigTextStyle().bigText("Waiting for the active destination"))
-            .apply { setShortCriticalText("Waiting") }
+            .apply { setShortCriticalText(AppText.get(R.string.tracking_waiting)) }
             .build()
     }
 
@@ -115,7 +117,7 @@ internal object ArrivalTrackingNotifications {
         /** "Mewtwo raid ended", when the target ran out moments ago. See [endedTargetNote]. */
         endedNote: String? = null
     ): Notification {
-        val title = if (paused) "Hunt paused: $huntName" else "Hunting $huntName"
+        val title = if (paused) AppText.get(R.string.tracking_hunt_paused_x, huntName) else AppText.get(R.string.hunt_hunting_x, huntName)
         val body = endedNote ?: if (paused) {
             "Tap a target on the map, or recalculate"
         } else {
@@ -130,7 +132,7 @@ internal object ArrivalTrackingNotifications {
                         addAction(R.drawable.ic_back, undoActionLabel(it), undoPendingIntent(context))
                     }
                 }
-                .addAction(0, "Stop hunt", stopPendingIntent(context))
+                .addAction(0, AppText.get(R.string.hunt_stop_hunt), stopPendingIntent(context))
                 .build()
         }
         return liveBuilder(context, alert = null)
@@ -151,11 +153,11 @@ internal object ArrivalTrackingNotifications {
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, R.drawable.ic_poke_notification),
-                    "Stop hunt",
+                    AppText.get(R.string.hunt_stop_hunt),
                     stopPendingIntent(context)
                 ).build()
             )
-            .apply { setShortCriticalText(if (paused) "Paused" else "Waiting") }
+            .apply { setShortCriticalText(if (paused) AppText.get(R.string.tracking_paused) else AppText.get(R.string.tracking_waiting)) }
             .build()
     }
 
@@ -203,7 +205,7 @@ internal object ArrivalTrackingNotifications {
         val chip = when {
             // Close enough to see it: the distance has stopped being the useful
             // number, so a hunt swaps in whatever decides the next tap instead.
-            inRange -> huntInRangeChipText(alert) ?: "In range"
+            inRange -> huntInRangeChipText(alert) ?: AppText.get(R.string.alerts_in_range)
             waitingForPreciseLocation -> null
             walkingRoute != null -> formatDistance(walkingRoute.distanceMeters.toFloat())
             distanceMeters != null -> formatDistance(distanceMeters)
@@ -244,7 +246,7 @@ internal object ArrivalTrackingNotifications {
                         // During a hunt this ends the hunt, not just this leg. Saying
                         // "Stop" while the hunt carried on and instantly picked a new
                         // target is what made stopping feel like it did nothing.
-                        if (huntActive) "Stop hunt" else "Stop",
+                        if (huntActive) AppText.get(R.string.hunt_stop_hunt) else AppText.get(R.string.tracking_stop),
                         stopPendingIntent(context)
                     ).build()
                 )
@@ -294,7 +296,7 @@ internal object ArrivalTrackingNotifications {
             }
             .addAction(
                 R.drawable.ic_poke_notification,
-                if (huntActive) "Stop hunt" else "Stop",
+                if (huntActive) AppText.get(R.string.hunt_stop_hunt) else AppText.get(R.string.tracking_stop),
                 stopPendingIntent(context)
             )
             .apply {
@@ -348,10 +350,10 @@ internal object ArrivalTrackingNotifications {
             routeDisplay.distanceText
         }
         val status = when {
-            inRange -> "In range"
-            waitingForPreciseLocation -> "Waiting for precise GPS"
-            distanceMeters == null -> "Finding your precise location"
-            else -> "Range at ${destination.radiusMeters} m direct"
+            inRange -> AppText.get(R.string.alerts_in_range)
+            waitingForPreciseLocation -> AppText.get(R.string.tracking_waiting_for_precise_gps)
+            distanceMeters == null -> AppText.get(R.string.tracking_finding_your_precise_location)
+            else -> AppText.get(R.string.tracking_range_at_x_m_direct, destination.radiusMeters)
         }
         return listOfNotNull(status, movement).joinToString(" \u2022 ")
     }
@@ -524,11 +526,11 @@ internal object ArrivalTrackingNotifications {
         val lead = when {
             alert.hasTypeContaining("raid") -> {
                 val gym = alert.gym?.takeIf { it.isNotBlank() }
-                if (gym != null) "You\u2019re at $gym." else "You\u2019re in range of the raid."
+                if (gym != null) AppText.get(R.string.tracking_you_re_at_x, gym) else AppText.get(R.string.tracking_you_re_in_range_of_the)
             }
             alert.hasTypeContaining("quest") -> {
                 val stop = alert.pokestop?.takeIf { it.isNotBlank() }
-                if (stop != null) "You\u2019re at $stop." else "You\u2019re in range of the Pok\u00e9Stop."
+                if (stop != null) AppText.get(R.string.tracking_you_re_at_x, stop) else AppText.get(R.string.tracking_you_re_in_range_of_the_2)
             }
             alert.pokemon != null ||
                 alert.hasTypeContaining("hundo") ||
@@ -536,7 +538,7 @@ internal object ArrivalTrackingNotifications {
                 alert.hasTypeContaining("pvp") -> {
                 "It should now be visible in Pok\u00e9mon GO."
             }
-            else -> "You\u2019re within $radiusMeters m of the alert."
+            else -> AppText.get(R.string.tracking_you_re_within_x_m_of, radiusMeters)
         }
 
         val metadata = alertDetailLines(alert, nowMillis)
@@ -630,7 +632,7 @@ internal object ArrivalTrackingNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
         )
 
-    internal fun goingMapActionLabel(shown: Boolean): String = if (shown) "Hide map" else "Show map"
+    internal fun goingMapActionLabel(shown: Boolean): String = if (shown) AppText.get(R.string.tracking_hide_map) else AppText.get(R.string.tracking_show_map)
 
     /**
      * Flips the journey map. Without the overlay grant the window cannot be drawn, so the
@@ -658,12 +660,7 @@ internal object ArrivalTrackingNotifications {
             ?: alert.name.takeIf { it.isNotBlank() }
             ?: "alert"
 
-    private fun formatDistance(distanceMeters: Float): String =
-        if (distanceMeters < 1_000f) {
-            "${distanceMeters.roundToInt()} m"
-        } else {
-            String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
-        }
+    private fun formatDistance(distanceMeters: Float): String = formatMeters(distanceMeters.toDouble())
 
     private fun immutableFlag(): Int = PendingIntent.FLAG_IMMUTABLE
 }

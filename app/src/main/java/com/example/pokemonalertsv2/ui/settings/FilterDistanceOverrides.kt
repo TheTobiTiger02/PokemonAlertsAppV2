@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.Dimens
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.BorderStroke
@@ -48,15 +50,15 @@ internal fun DistanceOverridesDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.92f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
             Column(Modifier.padding(16.dp)) {
-                Text("Distance limits", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_distance_limits), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    "Default is ${distanceLabel(definition.maxDistanceMeters)}. A species limit wins over an alert type limit, which wins over the default.",
+                    stringResource(R.string.settings_default_is_x_a_species_limit, distanceLabel(definition.maxDistanceMeters)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("By alert type", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.settings_by_alert_type), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                     FilterAlertType.entries.forEach { type ->
                         DistanceLimitRow(
                             label = type.label,
@@ -67,11 +69,11 @@ internal fun DistanceOverridesDialog(
                     }
                     Spacer(Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("By species", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { addingSpecies = true }) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text("Add species") }
+                        Text(stringResource(R.string.settings_by_species), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { addingSpecies = true }) { Icon(Icons.Default.Add, null); Spacer(Modifier.width(4.dp)); Text(stringResource(R.string.settings_add_species)) }
                     }
                     if (overrides.perSpecies.isEmpty()) {
-                        Text("No species limits yet. A species limit applies wherever that species appears, including as a quest reward.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.settings_no_species_limits_yet_a_species), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     overrides.perSpecies.entries.sortedBy { it.key }.forEach { (token, meters) ->
                         DistanceLimitRow(
@@ -84,8 +86,8 @@ internal fun DistanceOverridesDialog(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    Button(onClick = { onSave(overrides) }) { Text("Done") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
+                    Button(onClick = { onSave(overrides) }) { Text(stringResource(R.string.catchroutes_done)) }
                 }
             }
         }
@@ -126,15 +128,15 @@ private fun DistanceLimitRow(
                 Column(Modifier.weight(1f)) {
                     Text(label, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        if (meters == null) "Uses default — $fallbackLabel" else distanceLabel(meters),
+                        if (meters == null) stringResource(R.string.settings_uses_default_x, fallbackLabel) else distanceLabel(meters),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 if (meters == null) {
-                    TextButton(onClick = { onChange(DEFAULT_SEED_LIMIT_METERS) }, modifier = Modifier.semantics { contentDescription = "Set a limit for $label" }) { Text("Set limit") }
+                    TextButton(onClick = { onChange(DEFAULT_SEED_LIMIT_METERS) }, modifier = Modifier.semantics { contentDescription = "Set a limit for $label" }) { Text(stringResource(R.string.settings_set_limit)) }
                 } else {
-                    TextButton(onClick = { onChange(null) }, modifier = Modifier.semantics { contentDescription = "Use default for $label" }) { Text("Use default") }
+                    TextButton(onClick = { onChange(null) }, modifier = Modifier.semantics { contentDescription = "Use default for $label" }) { Text(stringResource(R.string.settings_use_default)) }
                 }
                 onRemove?.let {
                     IconButton(onClick = it, modifier = Modifier.semantics { contentDescription = "Remove $label limit" }) { Icon(Icons.Default.Close, null) }
@@ -144,7 +146,7 @@ private fun DistanceLimitRow(
                 com.example.pokemonalertsv2.ui.components.DistanceStepSlider(
                     meters = meters,
                     onChange = { onChange(it) },
-                    contentDescription = "$label distance limit"
+                    contentDescription = stringResource(R.string.settings_x_distance_limit, label)
                 )
             }
         }
@@ -173,8 +175,8 @@ private fun SpeciesPickerDialog(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.85f).padding(12.dp), shape = MaterialTheme.shapes.extraLarge) {
             Column(Modifier.padding(16.dp)) {
-                Text("Add species limit", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp), label = { Text("Search species") }, singleLine = true)
+                Text(stringResource(R.string.settings_add_species_limit), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(vertical = 8.dp), label = { Text(stringResource(R.string.history_search_species)) }, singleLine = true)
                 LazyColumn(Modifier.weight(1f)) {
                     items(display, key = { it }) { value ->
                         Row(
@@ -190,7 +192,7 @@ private fun SpeciesPickerDialog(
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
                 }
             }
         }

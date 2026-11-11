@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.components.readableHorizontalPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,7 +87,7 @@ internal fun LazyListScope.countersBody(
     val metric = state.options.sort.toCounterMetric()
     when (state.phase) {
         CountersPhase.UNRESOLVED -> item(key = "unresolved") { UnresolvedState(state, actions) }
-        CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList("Loading counters…") }
+        CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList(stringResource(R.string.counters_loading_counters)) }
         CountersPhase.ERROR -> item(key = "error") { ErrorState(state, actions) }
         CountersPhase.EMPTY -> item(key = "empty") { EmptyState(state) }
         CountersPhase.PERSONAL -> personalItems(state, actions, metric, copyTeam)
@@ -116,8 +119,8 @@ internal fun rememberCopyTeam(
                 // the fallback: an exact query silently matches nothing if the roster
                 // has moved on since the import.
                 val result = snackbarHostState.showSnackbar(
-                    message = "Copied ${state.team.sumOf { it.count }} Pokémon",
-                    actionLabel = if (format == CopyTeamFormat.EXACT) "Species only" else null,
+                    message = AppText.get(R.string.counters_copied_x_pok_mon, state.team.sumOf { it.count }),
+                    actionLabel = if (format == CopyTeamFormat.EXACT) AppText.get(R.string.counters_species_only) else null,
                     withDismissAction = true
                 )
                 if (result == SnackbarResult.ActionPerformed) {
@@ -170,7 +173,7 @@ internal fun BossSummary(
                 ?: state.selectedBossMoveset?.displayName
                 ?: "Average moveset"
             Text(
-                text = "Boss moveset · $movesetLabel",
+                text = stringResource(R.string.counters_boss_moveset_x, movesetLabel),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -214,7 +217,7 @@ internal fun ScreenNotices(
         // but say so, because the wrong boost reorders the counters.
         if (showWeather) {
             Text(
-                text = "Using ${state.options.weather.label} — this weather is not confirmed yet.",
+                text = stringResource(R.string.counters_using_x_this_weather_is_not, state.options.weather.label),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -260,7 +263,7 @@ internal fun LazyListScope.generalItems(state: RaidCountersUiState, metric: Coun
     if (state.pokeGenieCount > 0 && state.ownedMatchCount > 0) {
         item(key = "owned_note") {
             Text(
-                text = "Highlighted are ${state.ownedMatchCount} you already own.",
+                text = stringResource(R.string.counters_highlighted_are_x_you_already_own, state.ownedMatchCount),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -293,7 +296,7 @@ internal fun LazyListScope.personalItems(
             onCopyTeam = onCopyTeam
         )
     }
-    item(key = "personal_label") { SectionLabel("Your best counters") }
+    item(key = "personal_label") { SectionLabel(stringResource(R.string.counters_your_best_counters)) }
 
     val best = metric.bestOf(personal.ranked.map { it.metrics.valueFor(metric) })
     itemsIndexed(
@@ -330,13 +333,13 @@ private fun PersonalPlaceholder(state: RaidCountersUiState, actions: RaidCounter
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row {
-                TextButton(onClick = actions.onRetry) { Text("Retry") }
+                TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
                 // A failing Pokébox should not strand the user on it when their imported
                 // roster is right there and works.
                 if (state.source == CounterSourceId.POKEBATTLER_POKEBOX && state.pokeGenieCount > 0) {
                     TextButton(
                         onClick = { actions.onSourceChanged(CounterSourceId.POKE_GENIE) }
-                    ) { Text("Use Poké Genie CSV") }
+                    ) { Text(stringResource(R.string.counters_use_pok_genie_csv)) }
                 }
             }
         }
@@ -352,11 +355,11 @@ private fun PersonalPlaceholder(state: RaidCountersUiState, actions: RaidCounter
 
         personal == null -> Column {
             Text(
-                text = "No ranking yet.",
+                text = stringResource(R.string.counters_no_ranking_yet),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            TextButton(onClick = actions.onRetry) { Text("Retry") }
+            TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
         }
 
         else -> Column {
@@ -370,7 +373,7 @@ private fun PersonalPlaceholder(state: RaidCountersUiState, actions: RaidCounter
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            TextButton(onClick = actions.onRetry) { Text("Retry") }
+            TextButton(onClick = actions.onRetry) { Text(stringResource(R.string.events_retry)) }
         }
     }
 }
@@ -399,8 +402,8 @@ private fun PersonalNotices(state: RaidCountersUiState, personal: PersonalRankin
                     when (state.personalMovesMode) {
                         // The mode lives in the setup sheet, so a roster silently scored on
                         // ideal movesets is indistinguishable from a ranking bug. Name it.
-                        PersonalMovesMode.CURRENT -> "scored on your current moves"
-                        PersonalMovesMode.BEST_POTENTIAL -> "scored on best potential moves"
+                        PersonalMovesMode.CURRENT -> stringResource(R.string.counters_scored_on_your_current_moves)
+                        PersonalMovesMode.BEST_POTENTIAL -> stringResource(R.string.counters_scored_on_best_potential_moves)
                     },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.layout.Arrangement
@@ -58,32 +61,32 @@ fun WatchDataSettings() {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         val status = when {
-            availability == HealthDataReader.Availability.UNAVAILABLE -> "Health Connect is not available on this phone."
-            availability == HealthDataReader.Availability.NEEDS_UPDATE -> "Health Connect needs an update."
-            connected == true -> "Connected to Health Connect."
-            connected == false -> "Not connected."
-            else -> "Checking…"
+            availability == HealthDataReader.Availability.UNAVAILABLE -> stringResource(R.string.health_health_connect_is_not_available_on)
+            availability == HealthDataReader.Availability.NEEDS_UPDATE -> stringResource(R.string.health_health_connect_needs_an_update)
+            connected == true -> stringResource(R.string.health_connected_to_health_connect)
+            connected == false -> stringResource(R.string.health_not_connected)
+            else -> stringResource(R.string.health_checking)
         }
         Text(status, style = MaterialTheme.typography.titleSmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when (availability) {
                 HealthDataReader.Availability.AVAILABLE ->
                     if (connected == true) {
-                        OutlinedButton(onClick = { start(reader.manageIntent()) }) { Text("Manage access") }
+                        OutlinedButton(onClick = { start(reader.manageIntent()) }) { Text(stringResource(R.string.health_manage_access)) }
                     } else {
                         FilledTonalButton(onClick = {
                             try { launcher.launch(HealthDataReader.PERMISSIONS) } catch (_: ActivityNotFoundException) { unavailable() }
-                        }) { Text("Connect") }
+                        }) { Text(stringResource(R.string.health_connect)) }
                     }
                 HealthDataReader.Availability.NEEDS_UPDATE ->
-                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text("Update Health Connect") }
+                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(AppText.get(R.string.health_update_health_connect)) }
                 HealthDataReader.Availability.UNAVAILABLE ->
-                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text("Get Health Connect") }
+                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(stringResource(R.string.health_get_health_connect)) }
             }
         }
         SwitchSetting(
-            title = "Show watch data in summaries",
-            subtitle = "Heart rate chart, steps and calories under each hunt and catch route",
+            title = stringResource(R.string.health_show_watch_data_in_summaries),
+            subtitle = stringResource(R.string.health_heart_rate_chart_steps_and_calories),
             checked = show,
             onCheckedChange = { value -> scope.launch { HealthDataReader.setShowWatchStats(context, value) } }
         )

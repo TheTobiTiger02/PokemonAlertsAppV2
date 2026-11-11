@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Application
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -28,23 +30,23 @@ import java.time.format.DateTimeFormatter
 
 /** How far back to look. Kept short: these are the windows worth walking on. */
 enum class InsightsRange(val label: String, val days: Long) {
-    LAST_7("7 days", 7),
-    LAST_30("30 days", 30),
-    LAST_90("90 days", 90)
+    LAST_7(AppText.get(R.string.history_7_days), 7),
+    LAST_30(AppText.get(R.string.history_30_days), 30),
+    LAST_90(AppText.get(R.string.history_90_days), 90)
 }
 
 /** Insights has two tabs: a species' alert history, and what the live scanner saw spawn. */
 enum class InsightsTab(val label: String) {
-    ALERTS("Alerts"),
-    SPAWNS("Spawns")
+    ALERTS(AppText.get(R.string.history_alerts)),
+    SPAWNS(AppText.get(R.string.history_spawns))
 }
 
 /** Spawn-tab windows; the server keeps sightings for 30 days. */
 enum class SpawnRange(val label: String, val days: Int) {
-    TODAY("Today", 1),
-    LAST_7("7 days", 7),
-    LAST_14("14 days", 14),
-    LAST_30("30 days", 30)
+    TODAY(AppText.get(R.string.alerts_today), 1),
+    LAST_7(AppText.get(R.string.history_7_days), 7),
+    LAST_14(AppText.get(R.string.history_14_days), 14),
+    LAST_30(AppText.get(R.string.history_30_days), 30)
 }
 
 @Immutable
@@ -108,7 +110,7 @@ class SpawnInsightsViewModel(application: Application) : AndroidViewModel(applic
         val window = catalog.cached()?.observationWindow
         if (window != null && window.days > 0) {
             _uiState.update {
-                it.copy(coverageNote = "History covers about the last ${window.days} days")
+                it.copy(coverageNote = AppText.get(R.string.history_history_covers_about_the_last_x, window.days))
             }
         }
     }

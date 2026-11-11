@@ -1,12 +1,24 @@
 package com.example.pokemonalertsv2.hunt
 
 import com.example.pokemonalertsv2.data.FilterDefinition
+import java.util.Locale
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class HuntSummaryTest {
+    // Distances use the device's number format; pin it so "2.4 km" reads the same everywhere.
+    private val previousLocale = Locale.getDefault()
+
+    @Before
+    fun pinLocale() = Locale.setDefault(Locale.US)
+
+    @After
+    fun restoreLocale() = Locale.setDefault(previousLocale)
+
 
     private val start = 1_700_000_000_000L
     private val session = HuntSession(name = "Dragon grunts", definition = FilterDefinition(), startedAtMillis = start)

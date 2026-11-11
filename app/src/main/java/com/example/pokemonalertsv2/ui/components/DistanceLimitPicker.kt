@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.components
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -45,7 +47,7 @@ fun DistanceLimitPicker(
                 FilterChip(
                     selected = meters == preset,
                     onClick = { onChange(preset) },
-                    label = { Text(if (preset == 0) "Any" else distanceLabel(preset)) },
+                    label = { Text(if (preset == 0) stringResource(R.string.hunt_any) else distanceLabel(preset)) },
                     // The selected fill alone is faint in both themes; the check makes it obvious.
                     leadingIcon = if (meters == preset) {
                         { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }

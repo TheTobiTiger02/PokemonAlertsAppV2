@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.counters
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -93,7 +96,7 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClickLabel = "Choose active mega", onClick = onOpen),
+            .clickable(role = Role.Button, onClickLabel = stringResource(R.string.counters_choose_active_mega), onClick = onOpen),
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f)
     ) {
@@ -110,7 +113,7 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Active mega", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.counters_active_mega), style = MaterialTheme.typography.labelLarge)
                 Text(
                     text = active?.displayName ?: "None — no mega in the team",
                     style = MaterialTheme.typography.bodySmall,
@@ -120,7 +123,7 @@ internal fun ActiveMegaRow(state: RaidCountersUiState, onOpen: () -> Unit) {
                 )
             }
             Text(
-                text = "Change",
+                text = stringResource(R.string.counters_change),
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -173,7 +176,7 @@ internal fun ActiveMegaSheet(
     ) {
         item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
             Column {
-                if (showTitle) Text("Active mega", style = MaterialTheme.typography.headlineSmall)
+                if (showTitle) Text(stringResource(R.string.counters_active_mega), style = MaterialTheme.typography.headlineSmall)
                 Text(
                     "Only a mega you have already evolved can join a raid party, and only one at a " +
                         "time. This picks which one the suggested team may use.",
@@ -194,9 +197,9 @@ internal fun ActiveMegaSheet(
 
                 // Quick pick: the megas from the collection that help most against this boss, best first.
                 if (topMegas.isNotEmpty()) {
-                    Text("Best megas for this raid", style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.counters_best_megas_for_this_raid), style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "From your collection, ranked against this boss.",
+                        stringResource(R.string.counters_from_your_collection_ranked_against_this),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 6.dp)
@@ -230,12 +233,12 @@ internal fun ActiveMegaSheet(
                         FilterChip(
                             selected = rosterOnly,
                             onClick = { rosterOnly = true },
-                            label = { Text("In your roster (${owned.size})") }
+                            label = { Text(stringResource(R.string.counters_in_your_roster_x, owned.size)) }
                         )
                         FilterChip(
                             selected = !rosterOnly,
                             onClick = { rosterOnly = false },
-                            label = { Text("All megas") }
+                            label = { Text(stringResource(R.string.counters_all_megas)) }
                         )
                     }
                 }
@@ -243,14 +246,14 @@ internal fun ActiveMegaSheet(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Search") },
+                    label = { Text(stringResource(R.string.alerts_search)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                 )
 
                 if (matches.isEmpty()) {
                     Text(
-                        text = "No mega matches that.",
+                        text = stringResource(R.string.counters_no_mega_matches_that),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 12.dp)
@@ -262,7 +265,7 @@ internal fun ActiveMegaSheet(
             // Pinned in both modes: "no mega" is a real answer, not the absence of one.
             item(key = "none") {
                 MegaTile(
-                    label = "No mega",
+                    label = stringResource(R.string.counters_no_mega),
                     selected = state.activeMegaId == null,
                     sprite = null,
                     inRoster = false,
@@ -311,7 +314,7 @@ private fun MegaTile(
             color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = Modifier.semantics {
-            contentDescription = if (selected) "$label, selected" else label
+            contentDescription = if (selected) AppText.get(R.string.settings_x_selected, label) else label
         }
     ) {
         Column(
@@ -365,7 +368,7 @@ private fun MegaTile(
                 )
             } else if (inRoster) {
                 Text(
-                    text = "Owned",
+                    text = stringResource(R.string.counters_owned),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1

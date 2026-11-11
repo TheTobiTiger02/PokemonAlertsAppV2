@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -41,8 +43,8 @@ internal fun FilterDefinition.withType(type: FilterAlertType, shown: Boolean): F
     if (showsType(type) == shown) this else copy(alertTypes = alertTypes.toggled(type.name, ALL_TYPE_TOKENS))
 
 private fun FilterSelection.count(noun: String, plural: String = "${noun}s"): String = when (mode) {
-    FilterSelectionMode.ALL -> "All $plural"
-    FilterSelectionMode.NONE -> "No $plural"
+    FilterSelectionMode.ALL -> AppText.get(R.string.alerts_all_x, plural)
+    FilterSelectionMode.NONE -> AppText.get(R.string.alerts_no_x, plural)
     FilterSelectionMode.ONLY -> if (selectedCount == 1) values.first() else "$selectedCount $plural"
 }
 

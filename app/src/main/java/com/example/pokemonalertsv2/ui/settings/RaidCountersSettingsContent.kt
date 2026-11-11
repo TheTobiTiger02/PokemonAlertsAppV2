@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -73,13 +76,13 @@ fun RaidCountersSettingsContent(
     run {
         Column {
             Text(
-                text = "Counter defaults",
+                text = stringResource(R.string.settings_counter_defaults),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Used when a raid opens. You can still change them on the raid itself.",
+                text = stringResource(R.string.settings_used_when_a_raid_opens_you),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -93,7 +96,7 @@ fun RaidCountersSettingsContent(
         }
     }
 
-    SettingsSection(title = "My Pokémon") {
+    SettingsSection(title = stringResource(R.string.counters_my_pok_mon)) {
         Text(
             text = if (settings.pokeGenieCount > 0) {
                 "Pokébattler scores each imported Pokémon at its recorded level and moves. " +
@@ -110,7 +113,7 @@ fun RaidCountersSettingsContent(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
                     onClick = {},
-                    label = { Text("${settings.pokeGenieCount} Pokémon") }
+                    label = { Text(stringResource(R.string.settings_x_pok_mon, settings.pokeGenieCount)) }
                 )
                 settings.pokeGenieImportedAtMillis.takeIf { it > 0 }?.let { millis ->
                     AssistChip(
@@ -149,25 +152,25 @@ fun RaidCountersSettingsContent(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(onClick = { picker.launch(POKE_GENIE_MIME_TYPES) }) {
-                Text(if (settings.pokeGenieCount > 0) "Re-import CSV" else "Import CSV")
+                Text(if (settings.pokeGenieCount > 0) stringResource(R.string.settings_re_import_csv) else stringResource(R.string.settings_import_csv))
             }
             if (settings.pokeGenieCount > 0) {
                 OutlinedButton(
                     onClick = {
                         context.startActivity(PokeGenieRosterActivity.createIntent(context))
                     }
-                ) { Text("View roster") }
+                ) { Text(stringResource(R.string.settings_view_roster)) }
                 var confirmClear by remember { androidx.compose.runtime.mutableStateOf(false) }
-                OutlinedButton(onClick = { confirmClear = true }) { Text("Clear") }
+                OutlinedButton(onClick = { confirmClear = true }) { Text(stringResource(R.string.catchroutes_clear)) }
                 if (confirmClear) {
                     AlertDialog(
                         onDismissRequest = { confirmClear = false },
-                        title = { Text("Clear your Poké Genie roster?") },
-                        text = { Text("Counters go back to generic teams until you import a CSV again.") },
+                        title = { Text(stringResource(R.string.settings_clear_your_pok_genie_roster)) },
+                        text = { Text(stringResource(R.string.settings_counters_go_back_to_generic_teams)) },
                         confirmButton = {
-                            TextButton(onClick = { confirmClear = false; onClearPokeGenie() }) { Text("Clear") }
+                            TextButton(onClick = { confirmClear = false; onClearPokeGenie() }) { Text(stringResource(R.string.catchroutes_clear)) }
                         },
-                        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+                        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
                     )
                 }
             }
@@ -184,11 +187,11 @@ fun RaidCountersSettingsContent(
     pendingImport?.let { candidate ->
         AlertDialog(
             onDismissRequest = onCancelImport,
-            title = { Text("Review CSV import") },
+            title = { Text(stringResource(R.string.settings_review_csv_import)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(candidate.fileName ?: "Poké Genie export")
-                    Text("${candidate.summary.importedCount} Pokémon rows are ready to import.")
+                    Text(stringResource(R.string.settings_x_pok_mon_rows_are_ready, candidate.summary.importedCount))
                     if (candidate.summary.synthesizedBaseCount > 0) {
                         Text(
                             "${candidate.summary.synthesizedBaseCount} base forms were added " +
@@ -198,7 +201,7 @@ fun RaidCountersSettingsContent(
                         )
                     }
                     if (candidate.summary.skippedCount > 0) {
-                        Text("${candidate.summary.skippedCount} rows will be skipped.")
+                        Text(stringResource(R.string.settings_x_rows_will_be_skipped, candidate.summary.skippedCount))
                     }
                     // Named, not just counted: an unrecognised form is almost always a
                     // spelling this app has not learned yet, and the pair is what makes it
@@ -221,21 +224,21 @@ fun RaidCountersSettingsContent(
                         }
                         if (unmatched.size > 5) {
                             Text(
-                                "…and ${unmatched.size - 5} more.",
+                                stringResource(R.string.settings_and_x_more, unmatched.size - 5),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     } else if (!candidate.summary.formsChecked) {
                         Text(
-                            "Pokémon data hasn't downloaded yet, so forms couldn't be checked.",
+                            stringResource(R.string.settings_pok_mon_data_hasn_t_downloaded),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     if (settings.pokeGenieCount > 0) {
                         Text(
-                            "Confirming replaces the current ${settings.pokeGenieCount}-Pokémon roster.",
+                            stringResource(R.string.settings_confirming_replaces_the_current_x_pok, settings.pokeGenieCount),
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
                         )
@@ -244,18 +247,18 @@ fun RaidCountersSettingsContent(
             },
             confirmButton = {
                 Button(onClick = onConfirmImport) {
-                    Text(if (settings.pokeGenieCount > 0) "Replace roster" else "Import")
+                    Text(if (settings.pokeGenieCount > 0) AppText.get(R.string.settings_replace_roster) else stringResource(R.string.settings_import))
                 }
             },
             dismissButton = {
-                TextButton(onClick = onCancelImport) { Text("Cancel") }
+                TextButton(onClick = onCancelImport) { Text(stringResource(R.string.mainscaffoldkt_cancel)) }
             }
         )
 
     }
 
     Text(
-        text = "Pokébattler Pokébox (optional)",
+        text = stringResource(R.string.settings_pok_battler_pok_box_optional),
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Medium
     )
@@ -271,7 +274,7 @@ fun RaidCountersSettingsContent(
     )
     account?.let { linked ->
         Text(
-            text = "Signed in as ${linked.displayName ?: linked.userId}",
+            text = stringResource(R.string.settings_signed_in_as_x, linked.displayName ?: linked.userId),
             style = MaterialTheme.typography.bodyMedium
         )
     }
@@ -285,21 +288,21 @@ fun RaidCountersSettingsContent(
             }
         } else {
             var confirmSignOut by remember { androidx.compose.runtime.mutableStateOf(false) }
-            TextButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
+            TextButton(onClick = { confirmSignOut = true }) { Text(stringResource(R.string.settings_sign_out)) }
             if (confirmSignOut) {
                 AlertDialog(
                     onDismissRequest = { confirmSignOut = false },
-                    title = { Text("Sign out of Pokebattler?") },
-                    text = { Text("Pokébox counters need you to sign in again.") },
+                    title = { Text(stringResource(R.string.settings_sign_out_of_pokebattler)) },
+                    text = { Text(stringResource(R.string.settings_pok_box_counters_need_you_to)) },
                     confirmButton = {
                         TextButton(onClick = {
                             confirmSignOut = false
                             auth.signOut()
                             // Without this the WebView would silently sign straight back in.
                             PokebattlerLoginActivity.clearWebSession()
-                        }) { Text("Sign out") }
+                        }) { Text(stringResource(R.string.settings_sign_out)) }
                     },
-                    dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } }
+                    dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
                 )
             }
         }

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.notifications
 
+import com.example.pokemonalertsv2.util.AppText
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -97,7 +98,7 @@ object AlertNotifier {
             ?.takeIf { it > 0 }
             ?.let { (it + 59_999L) / 60_000L }
         return listOfNotNull(
-            if (isInRange) "In range" else null,
+            if (isInRange) AppText.get(R.string.alerts_in_range) else null,
             distanceText?.takeIf { it.isNotBlank() },
             walkingText?.takeIf { it.isNotBlank() },
             minutesLeft?.let { "$it min left" },
@@ -757,7 +758,7 @@ object AlertNotifier {
     private fun goDexNotificationSuffix(alert: PokemonAlert, result: GoDexMatchResult): String {
         if (!alert.hasType("hundo")) return ""
         return when (result.status) {
-            GoDexMatchStatus.NEEDED -> " \u2022 Needed in GoDex"
+            GoDexMatchStatus.NEEDED -> AppText.get(R.string.notifications_needed_in_godex)
             GoDexMatchStatus.EVOLUTION_NEEDED ->
                 " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
             GoDexMatchStatus.FORM_CHANGE_NEEDED ->
@@ -765,8 +766,8 @@ object AlertNotifier {
             GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED ->
                 " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
                     " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
-            GoDexMatchStatus.COLLECTED -> " \u2022 Already collected in GoDex"
-            GoDexMatchStatus.UNKNOWN -> " \u2022 GoDex form unknown"
+            GoDexMatchStatus.COLLECTED -> AppText.get(R.string.notifications_already_collected_in_godex)
+            GoDexMatchStatus.UNKNOWN -> AppText.get(R.string.notifications_godex_form_unknown)
             GoDexMatchStatus.NOT_CONFIGURED -> ""
         }
     }

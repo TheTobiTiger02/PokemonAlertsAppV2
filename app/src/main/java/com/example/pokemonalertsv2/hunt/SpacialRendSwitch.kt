@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,7 +35,7 @@ internal fun SpacialRendSwitch(modifier: Modifier = Modifier) {
     val enabled by preferences.spacialRendEnabled.collectAsStateWithLifecycle(initialValue = false)
     Column(modifier) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Spacial Rend", modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.hunt_spacial_rend), modifier = Modifier.weight(1f))
             Switch(
                 checked = enabled,
                 onCheckedChange = { on -> scope.launch { preferences.updateSpacialRendEnabled(on) } },
@@ -41,9 +43,7 @@ internal fun SpacialRendSwitch(modifier: Modifier = Modifier) {
             )
         }
         Text(
-            "Spawns count as in range from ${
-                if (enabled) ArrivalTrackingRepository.SPACIAL_REND_RADIUS_METERS else ArrivalTrackingRepository.SPAWN_RADIUS_METERS
-            } m.",
+            stringResource(R.string.hunt_spawns_count_as_in_range_from, if (enabled) ArrivalTrackingRepository.SPACIAL_REND_RADIUS_METERS else ArrivalTrackingRepository.SPAWN_RADIUS_METERS),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

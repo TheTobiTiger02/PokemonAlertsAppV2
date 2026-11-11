@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -92,8 +94,8 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                 )
             }
             GroupingOption(
-                title = "Custom",
-                description = "Tune it yourself.",
+                title = stringResource(R.string.alerts_custom),
+                description = stringResource(R.string.alerts_tune_it_yourself),
                 selected = custom,
                 onClick = { scope.launch { preferences.select(CUSTOM_PRESET) } }
             )
@@ -105,8 +107,8 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(Spacing.md)
             ) {
                 HorizontalDivider()
-                Text("Fine-tune", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Group by", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.alerts_fine_tune), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.alerts_group_by), style = MaterialTheme.typography.labelLarge)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs)
@@ -126,25 +128,25 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                     }
                 }
                 if (config.grouping != MapGrouping.COINCIDENT) {
-                    ClusterSlider("Grouping distance", config.distanceDp, 8..80, "dp") {
+                    ClusterSlider(stringResource(R.string.alerts_grouping_distance), config.distanceDp, 8..80, "dp") {
                         change(config.copy(distanceDp = it))
                     }
-                    ClusterSlider("Separate pins at zoom", config.zoomCutoff, 8..18, "") {
+                    ClusterSlider(stringResource(R.string.alerts_separate_pins_at_zoom), config.zoomCutoff, 8..18, "") {
                         change(config.copy(zoomCutoff = it))
                     }
                 }
-                ClusterSlider("Overview marker limit", config.overviewLimit, 25..600, "", 25) {
+                ClusterSlider(stringResource(R.string.alerts_overview_marker_limit), config.overviewLimit, 25..600, "", 25) {
                     change(config.copy(overviewLimit = it))
                 }
-                ClusterSlider("Close zoom marker limit", config.closeLimit, 50..1200, "", 50) {
+                ClusterSlider(stringResource(R.string.alerts_close_zoom_marker_limit), config.closeLimit, 50..1200, "", 50) {
                     change(config.copy(closeLimit = it))
                 }
                 Text(
-                    text = "Markers drawn on screen before extra grouping kicks in.",
+                    text = stringResource(R.string.alerts_markers_drawn_on_screen_before_extra),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                TextButton(onClick = { scope.launch { preferences.reset() } }) { Text("Reset to default") }
+                TextButton(onClick = { scope.launch { preferences.reset() } }) { Text(stringResource(R.string.alerts_reset_to_default)) }
             }
         }
     }

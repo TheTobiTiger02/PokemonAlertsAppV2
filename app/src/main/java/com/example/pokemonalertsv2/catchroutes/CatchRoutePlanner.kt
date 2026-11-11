@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.RouteMatrixPoint
 import com.example.pokemonalertsv2.data.RouteMatrixRequest
 import com.example.pokemonalertsv2.data.RouteMatrixResponse
@@ -69,7 +71,7 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
         withTimeoutOrNull(30_000) {
             val loaded = preloaded?.forRoute(settings) ?: availability.load(settings, progress)
             val data = loaded.copy(opportunities = loaded.opportunities.filterNot { o -> visits.any { sameCycle(it.opportunity, o, it.visitedAt) } })
-            if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) "No usable spawn windows. ${data.restrictedPointCount} spawnpoints require live confirmation; predictions cannot enable them." else "No usable spawn windows in this area and time. Try another start or enable predictions.")
+            if (data.opportunities.isEmpty()) throw CatchApiException(if (data.restrictedPointCount > 0) AppText.get(R.string.catchroutes_no_usable_spawn_windows_x_spawnpoints, data.restrictedPointCount) else AppText.get(R.string.catchroutes_no_usable_spawn_windows_in_this))
             val groups = candidateGroups(settings, data.opportunities)
             var matrixPoints = CATCH_MATRIX_MAX_POINTS
             for (seed in 0..2) {
@@ -153,8 +155,8 @@ class CatchRoutePlanner(private val service: CatchRoutesService) {
         }
         coroutineContext.ensureActive()
         best?.takeIf { it.encounters.isNotEmpty() }
-            ?: throw (lastError ?: CatchApiException(if (leftArea) "Every walking route found leaves the area. Draw a larger area or move the start."
-                else "No complete walking route found within 30 seconds. Try a shorter session or a nearby start."))
+            ?: throw (lastError ?: CatchApiException(if (leftArea) AppText.get(R.string.catchroutes_every_walking_route_found_leaves_the)
+                else AppText.get(R.string.catchroutes_no_complete_walking_route_found_within)))
     }
     private fun Long?.orZero() = this ?: 0L
     private fun request(points: List<CatchPoint>) = RouteMatrixRequest.pedestrian(points.mapIndexed { i, p -> RouteMatrixPoint("p$i", p.latitude, p.longitude) })

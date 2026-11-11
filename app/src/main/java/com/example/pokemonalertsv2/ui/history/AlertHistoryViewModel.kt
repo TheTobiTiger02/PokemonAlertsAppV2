@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.ui.history
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -161,7 +163,7 @@ class AlertHistoryViewModel(application: Application) : AndroidViewModel(applica
                     } ?: error("Could not open the file")
                 }
                 val count = exported.alerts.size
-                if (exported.hitCap) "Exported the first $count alerts" else "Exported $count alerts"
+                if (exported.hitCap) AppText.get(R.string.history_exported_the_first_x_alerts, count) else AppText.get(R.string.history_exported_x_alerts, count)
             }.getOrElse { error ->
                 if (error is kotlinx.coroutines.CancellationException) throw error
                 "Export failed: the history could not be loaded or saved"

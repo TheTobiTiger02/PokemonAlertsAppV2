@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.fcm
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import androidx.core.content.edit
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -114,7 +116,7 @@ object FcmTopicSubscriptionManager {
         ids.map { id ->
             val configuration = WidgetConfigurationStore.get(context, id)
             configuration.filterAssignment?.resolve(document)
-                ?: configuration.legacyFilterDefinition(appArea = "All", appDistanceMeters = 0)
+                ?: configuration.legacyFilterDefinition(appArea = AppText.get(R.string.alerts_all), appDistanceMeters = 0)
         }
     }.getOrDefault(emptyList())
 

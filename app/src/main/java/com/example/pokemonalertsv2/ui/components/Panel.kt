@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.components
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import androidx.activity.compose.BackHandler
@@ -85,7 +86,7 @@ internal fun PanelHeader(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.catchroutes_back))
             }
         }
         Column(modifier = Modifier.weight(1f)) {

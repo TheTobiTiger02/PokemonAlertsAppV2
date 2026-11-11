@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -192,7 +194,7 @@ internal fun MapWeatherSheet(
                 )
             }
             Text(
-                text = "The game reads weather per cell. The outline is the cell covering this area.",
+                text = stringResource(R.string.alerts_the_game_reads_weather_per_cell),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -201,8 +203,8 @@ internal fun MapWeatherSheet(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onHideWeather) { Text("Hide weather") }
-                Button(onClick = onDismiss) { Text("Done") }
+                TextButton(onClick = onHideWeather) { Text(stringResource(R.string.alerts_hide_weather)) }
+                Button(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_done)) }
             }
         }
     }

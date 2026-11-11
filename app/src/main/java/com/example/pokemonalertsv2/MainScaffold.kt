@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2
 
+import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateListOf
@@ -255,8 +256,8 @@ internal fun MainScaffold(
         if (caught.id == lastOfferedCatchId) return@LaunchedEffect
         lastOfferedCatchId = caught.id
         val result = snackbarHostState.showSnackbar(
-            message = "Caught ${caught.displayName}",
-            actionLabel = "Undo",
+            message = AppText.get(R.string.mainscaffoldkt_caught_x, caught.displayName),
+            actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
             duration = SnackbarDuration.Long
         )
         if (result == SnackbarResult.ActionPerformed) undoLastCatch(context)
@@ -571,13 +572,13 @@ internal fun MainScaffold(
             is UpdateState.UpdateAvailable -> {
                 AlertDialog(
                     onDismissRequest = { InAppUpdateManager.resetState() },
-                    title = { Text("Update Available") },
+                    title = { Text(AppText.get(R.string.mainscaffoldkt_update_available)) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("A new version of PokemonAlerts (${state.release.tagName}) is available. Would you like to download and install it?")
+                            Text(stringResource(R.string.mainscaffoldkt_a_new_version_of_pokemonalerts_x, state.release.tagName))
                             if (!state.release.body.isNullOrBlank()) {
                                 Text(
-                                    text = "Release Notes:\n${state.release.body}",
+                                    text = stringResource(R.string.mainscaffoldkt_release_notes_x, state.release.body),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier
@@ -596,12 +597,12 @@ internal fun MainScaffold(
                                 }
                             }
                         ) {
-                            Text("Update")
+                            Text(AppText.get(R.string.mainscaffoldkt_update))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { InAppUpdateManager.resetState() }) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.mainscaffoldkt_cancel))
                         }
                     }
                 )
@@ -611,7 +612,7 @@ internal fun MainScaffold(
                     // Not dismissable by tapping outside, but Cancel below is always
                     // reachable so a stalled download cannot trap the user.
                     onDismissRequest = {},
-                    title = { Text("Downloading Update") },
+                    title = { Text(stringResource(R.string.mainscaffoldkt_downloading_update)) },
                     text = {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
@@ -639,7 +640,7 @@ internal fun MainScaffold(
                                 InAppUpdateManager.cancelPendingInstall(context)
                             }
                         ) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.mainscaffoldkt_cancel))
                         }
                     }
                 )
@@ -647,20 +648,20 @@ internal fun MainScaffold(
             is UpdateState.AwaitingInstallPermission -> {
                 AlertDialog(
                     onDismissRequest = { InAppUpdateManager.cancelPendingInstall(context) },
-                    title = { Text("Install Permission Required") },
+                    title = { Text(stringResource(R.string.mainscaffoldkt_install_permission_required)) },
                     text = {
-                        Text("Allow Pokemon Alerts to install ${state.releaseTag}, then return here. Installation will continue automatically.")
+                        Text(stringResource(R.string.mainscaffoldkt_allow_pokemon_alerts_to_install_x, state.releaseTag))
                     },
                     confirmButton = {
                         TextButton(
                             onClick = onOpenUnknownSourcesSettings
                         ) {
-                            Text("Open Settings")
+                            Text(stringResource(R.string.mainscaffoldkt_open_settings))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { InAppUpdateManager.cancelPendingInstall(context) }) {
-                            Text("Cancel")
+                            Text(stringResource(R.string.mainscaffoldkt_cancel))
                         }
                     }
                 )
@@ -669,7 +670,7 @@ internal fun MainScaffold(
             is UpdateState.Installing -> {
                 AlertDialog(
                     onDismissRequest = {},
-                    title = { Text("Installing...") },
+                    title = { Text(stringResource(R.string.mainscaffoldkt_installing)) },
                     text = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -678,7 +679,7 @@ internal fun MainScaffold(
                             androidx.compose.material3.CircularProgressIndicator(
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Text("Launching installer...")
+                            Text(stringResource(R.string.mainscaffoldkt_launching_installer))
                         }
                     },
                     confirmButton = {}

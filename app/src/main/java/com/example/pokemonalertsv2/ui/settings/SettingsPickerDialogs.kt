@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.settings
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -61,7 +64,7 @@ internal fun DurationPickerDialog(
             )
         },
         title = {
-            Text("Silence for")
+            Text(stringResource(R.string.settings_silence_for))
         },
         text = {
             Column(
@@ -202,7 +205,7 @@ internal fun DurationPickerDialog(
 
                 // Quick presets
                 Text(
-                    text = "Quick select:",
+                    text = stringResource(R.string.settings_quick_select),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -268,12 +271,12 @@ internal fun DurationPickerDialog(
                 },
                 enabled = selectedHours > 0 || selectedMinutes > 0
             ) {
-                Text("Confirm")
+                Text(stringResource(R.string.settings_confirm))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.mainscaffoldkt_cancel))
             }
         }
     )
@@ -313,7 +316,7 @@ internal fun DateTimePickerDialog(
                 )
             },
             title = {
-                Text("Silence until")
+                Text(stringResource(R.string.settings_silence_until))
             },
             text = {
                 Column(
@@ -367,7 +370,7 @@ internal fun DateTimePickerDialog(
                                 if (isSameDay(selectedDate, date)) {
                                     Icon(
                                         imageVector = Icons.Default.DateRange,
-                                        contentDescription = "Selected",
+                                        contentDescription = stringResource(R.string.alerts_selected),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -386,7 +389,7 @@ internal fun DateTimePickerDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pick Custom Date")
+                        Text(stringResource(R.string.settings_pick_custom_date))
                     }
 
                     // Show currently selected date
@@ -406,12 +409,12 @@ internal fun DateTimePickerDialog(
             },
             confirmButton = {
                 FilledTonalButton(onClick = { showingDatePicker = false }) {
-                    Text("Next")
+                    Text(stringResource(R.string.settings_next))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.mainscaffoldkt_cancel))
                 }
             }
         )
@@ -431,7 +434,7 @@ internal fun DateTimePickerDialog(
                 )
             },
             title = {
-                Text("At what time")
+                Text(stringResource(R.string.settings_at_what_time))
             },
             text = {
                 Column(
@@ -585,12 +588,12 @@ internal fun DateTimePickerDialog(
                         }
                     }
                 ) {
-                    Text("Confirm")
+                    Text(stringResource(R.string.settings_confirm))
                 }
             },
             dismissButton = {
                 OutlinedButton(onClick = { showingDatePicker = true }) {
-                    Text("Back")
+                    Text(stringResource(R.string.catchroutes_back))
                 }
             }
         )
@@ -635,7 +638,7 @@ internal fun CustomDatePickerDialog(
             )
         },
         title = {
-            Text("Silence until")
+            Text(stringResource(R.string.settings_silence_until))
         },
         text = {
             Column(
@@ -662,7 +665,7 @@ internal fun CustomDatePickerDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Day",
+                                text = stringResource(R.string.settings_day),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -725,7 +728,7 @@ internal fun CustomDatePickerDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Month",
+                                text = stringResource(R.string.settings_month),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -798,7 +801,7 @@ internal fun CustomDatePickerDialog(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Year",
+                                text = stringResource(R.string.settings_year),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 8.dp)
@@ -871,12 +874,12 @@ internal fun CustomDatePickerDialog(
             FilledTonalButton(
                 onClick = { onDateSelected(selectedYear, selectedMonth, selectedDay) }
             ) {
-                Text("Select")
+                Text(AppText.get(R.string.settings_select))
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.mainscaffoldkt_cancel))
             }
         }
     )

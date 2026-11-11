@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data.godex
 
+
 data class GoDexConfig(
     val url: String = "",
     val collectionTitle: String = "",

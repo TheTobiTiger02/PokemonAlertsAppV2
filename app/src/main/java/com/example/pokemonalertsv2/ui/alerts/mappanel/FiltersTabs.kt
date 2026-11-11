@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,13 +45,13 @@ import androidx.compose.ui.unit.dp
 
 /** The Filters tabs, in the order PogoMapper-style mappers use: where, then what. */
 private enum class FiltersTab(val label: String) {
-    NEARBY("Nearby"),
-    TYPES("Types"),
-    POKEMON("Pokémon"),
-    RAIDS("Raids"),
-    ROCKET("Rocket"),
-    QUESTS("Quests"),
-    TAPPABLES("Tappables")
+    NEARBY(AppText.get(R.string.alerts_nearby)),
+    TYPES(AppText.get(R.string.alerts_types)),
+    POKEMON(AppText.get(R.string.alerts_pok_mon)),
+    RAIDS(AppText.get(R.string.data_raids)),
+    ROCKET(AppText.get(R.string.alerts_rocket)),
+    QUESTS(AppText.get(R.string.data_quests)),
+    TAPPABLES(AppText.get(R.string.data_tappables))
 }
 
 /**
@@ -97,10 +99,10 @@ internal fun FiltersTabs(
                     StatsEditor(state)
                     state.nearbyExtras?.invoke()
                     state.openFilterStudio?.let { open ->
-                        PanelSectionLabel("More")
+                        PanelSectionLabel(stringResource(R.string.hunt_more))
                         PanelNavRow(
-                            title = "Advanced rules",
-                            summary = "Areas, presets and more in Filter Studio",
+                            title = stringResource(R.string.alerts_advanced_rules),
+                            summary = stringResource(R.string.alerts_areas_presets_and_more_in_filter),
                             onClick = open,
                             modifier = Modifier.testTag("map_filter_studio"),
                             icon = { PanelIcon(R.drawable.ic_tools) }
@@ -180,8 +182,8 @@ private fun AllNoneRow(onAll: () -> Unit, onNone: () -> Unit) {
         modifier = Modifier.fillMaxWidth().padding(end = Spacing.sm),
         horizontalArrangement = Arrangement.End
     ) {
-        TextButton(onClick = onAll) { Text("All") }
-        TextButton(onClick = onNone) { Text("None") }
+        TextButton(onClick = onAll) { Text(stringResource(R.string.alerts_all)) }
+        TextButton(onClick = onNone) { Text(stringResource(R.string.alerts_none)) }
     }
 }
 
@@ -243,7 +245,7 @@ private fun TokenGridOrNote(
     look: (String) -> TokenLook
 ) {
     if (tokens.isEmpty()) {
-        EditorNote("These load with the next refresh.")
+        EditorNote(stringResource(R.string.alerts_these_load_with_the_next_refresh))
     } else {
         TokenTileGrid(
             tokens = tokens,

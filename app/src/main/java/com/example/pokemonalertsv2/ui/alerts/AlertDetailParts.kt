@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.alerts
 
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -145,7 +146,7 @@ internal fun AlertCountdownLine(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 remaining != null && remaining <= 0 -> Text(
-                    text = "Ended ${TimeUtils.formatTimeAgo(endMillis)}",
+                    text = stringResource(R.string.alerts_ended_x, TimeUtils.formatTimeAgo(endMillis)),
                     style = style,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.error,
@@ -153,7 +154,7 @@ internal fun AlertCountdownLine(
                     overflow = TextOverflow.Ellipsis
                 )
                 else -> RollingNumberText(
-                    text = "Ends in ${TimeUtils.formatDurationShort(remaining ?: 0L)}",
+                    text = stringResource(R.string.alerts_ends_in_x, TimeUtils.formatDurationShort(remaining ?: 0L)),
                     style = style.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -162,7 +163,7 @@ internal fun AlertCountdownLine(
         if (endMillis != null && remaining != null && remaining > 0) {
             Text(
                 text = TimeUtils.formatAlertEndTime(endMillis, now) +
-                    if (alert.expiryVerified == false) " (estimated)" else "",
+                    if (alert.expiryVerified == false) stringResource(R.string.alerts_estimated) else "",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -266,7 +267,7 @@ internal fun AlertPrimaryButtons(
         ) {
             Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(Spacing.sm))
-            Text(if (isGoing) "Stop" else "I’m going", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (isGoing) stringResource(R.string.tracking_stop) else stringResource(R.string.alerts_i_m_going), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Button(
             onClick = onNavigate,
@@ -277,7 +278,7 @@ internal fun AlertPrimaryButtons(
         ) {
             Icon(painterResource(R.drawable.ic_map), contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(Spacing.sm))
-            Text("Navigate", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.alerts_navigate), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

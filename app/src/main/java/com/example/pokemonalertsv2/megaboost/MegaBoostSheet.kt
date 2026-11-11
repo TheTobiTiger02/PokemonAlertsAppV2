@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.megaboost
 
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,11 +55,11 @@ internal fun MegaBoostContent(
             Column(Modifier.padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Best mega for catching", style = MaterialTheme.typography.headlineSmall)
-                        Text("Pokémon sharing a type with your active mega give extra candy.",
+                        Text(stringResource(R.string.megaboost_best_mega_for_catching), style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(R.string.megaboost_pok_mon_sharing_a_type_with),
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onRefresh, enabled = !state.loading, modifier = Modifier.testTag("mega_boost_refresh")) { Text("Refresh") }
+                    TextButton(onClick = onRefresh, enabled = !state.loading, modifier = Modifier.testTag("mega_boost_refresh")) { Text(stringResource(R.string.megaboost_refresh)) }
                 }
                 if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.testTag("mega_boost_error")) }
@@ -74,7 +76,7 @@ internal fun MegaBoostContent(
                             append(" · updated ").append(DateTimeFormatter.ofPattern("HH:mm", Locale.getDefault()).format(it.atZone(ZoneId.systemDefault())))
                         }
                     }, style = MaterialTheme.typography.labelLarge, modifier = Modifier.testTag("mega_boost_live"))
-                    if (live == 0) Text("Nothing live here right now.", style = MaterialTheme.typography.bodyMedium)
+                    if (live == 0) Text(stringResource(R.string.megaboost_nothing_live_here_right_now), style = MaterialTheme.typography.bodyMedium)
                 }
                 if (totals.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(totals, key = { it.first }) { (type, count) -> TypeChip(type, "$count") }
@@ -95,7 +97,7 @@ internal fun MegaBoostContent(
 @Composable
 private fun MegaBoostRowItem(row: MegaBoostRow, active: Boolean, urls: List<String>, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = "Set as active mega", onClick = onClick)
+        Modifier.fillMaxWidth().clickable(role = Role.Button, onClickLabel = stringResource(R.string.megaboost_set_as_active_mega), onClick = onClick)
             .padding(vertical = 8.dp).testTag("mega_boost_row_${row.mega.pokemonId}"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -109,7 +111,7 @@ private fun MegaBoostRowItem(row: MegaBoostRow, active: Boolean, urls: List<Stri
             }
             Text(
                 "Boosts ${row.boosted} of ${row.total} (${(row.share * 100).toInt()}%)" +
-                    (if (row.mega.owned) " · In your roster" else "") + (if (active) " · Active" else ""),
+                    (if (row.mega.owned) stringResource(R.string.megaboost_in_your_roster) else "") + (if (active) stringResource(R.string.megaboost_active) else ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
             )

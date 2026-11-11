@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.ui.godex
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import android.annotation.SuppressLint
 import android.accounts.AccountManager
 import android.app.Activity
@@ -78,7 +81,7 @@ class GoDexLoginActivity : ComponentActivity() {
             val repository = GoDexRepository.getInstance(applicationContext)
             val startAtPicker = intent.getBooleanExtra("EXTRA_START_AT_PICKER", false)
             var step by remember { mutableStateOf(if (startAtPicker) Step.PICK_CHECKLIST else Step.LOGIN) }
-            var statusText by remember { mutableStateOf(if (startAtPicker) "Select your checklist" else "Sign in with Google or Discord") }
+            var statusText by remember { mutableStateOf(if (startAtPicker) AppText.get(R.string.godex_select_your_checklist) else AppText.get(R.string.godex_sign_in_with_google_or_discord)) }
             var webView by remember { mutableStateOf<WebView?>(null) }
             // The Google account picked from the device, applied to Google's sign-in page
             // as login_hint. Session-only on purpose: this screen promises the app never
@@ -124,7 +127,7 @@ class GoDexLoginActivity : ComponentActivity() {
                         },
                         navigationIcon = {
                             IconButton(onClick = { finish() }) {
-                                Icon(Icons.Default.Close, contentDescription = "Close")
+                                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.catchroutes_close))
                             }
                         },
                         actions = {
@@ -132,7 +135,7 @@ class GoDexLoginActivity : ComponentActivity() {
                                 IconButton(onClick = { pickGoogleAccount() }) {
                                     Icon(
                                         Icons.Filled.AccountCircle,
-                                        contentDescription = "Choose Google account"
+                                        contentDescription = stringResource(R.string.godex_choose_google_account)
                                     )
                                 }
                                 TextButton(
@@ -140,7 +143,7 @@ class GoDexLoginActivity : ComponentActivity() {
                                         GoDexWebSessionCookies.clearAllWebViewCookies {
                                             runOnUiThread {
                                                 step = Step.LOGIN
-                                                statusText = "Sign in with Google or Discord"
+                                                statusText = AppText.get(R.string.godex_sign_in_with_google_or_discord)
                                                 webView?.loadUrl(
                                                     GoDexWebSessionCookies.GODEX_LOGIN_URL
                                                 )
@@ -148,7 +151,7 @@ class GoDexLoginActivity : ComponentActivity() {
                                         }
                                     }
                                 ) {
-                                    Text("Use another account")
+                                    Text(stringResource(R.string.godex_use_another_account))
                                 }
                             }
                         }
@@ -265,7 +268,7 @@ class GoDexLoginActivity : ComponentActivity() {
 
                                                     if (isOnGoDex && !isLoginPage && !isAuthCallback) {
                                                         step = Step.PICK_CHECKLIST
-                                                        statusText = "Select your checklist"
+                                                        statusText = AppText.get(R.string.godex_select_your_checklist)
                                                     }
                                                 }
 

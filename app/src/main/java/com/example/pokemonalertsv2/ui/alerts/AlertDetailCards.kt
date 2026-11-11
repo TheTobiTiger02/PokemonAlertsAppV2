@@ -2,6 +2,7 @@
 
 package com.example.pokemonalertsv2.ui.alerts
 
+import com.example.pokemonalertsv2.util.AppText
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -90,9 +91,9 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
         if (showTitle) {
             Text(
                 text = when {
-                    isReplacement -> "New species"
-                    isChanged -> "Updated stats"
-                    else -> "Stats"
+                    isReplacement -> stringResource(R.string.alerts_new_species)
+                    isChanged -> stringResource(R.string.alerts_updated_stats)
+                    else -> stringResource(R.string.alerts_stats)
                 },
                 style = MaterialTheme.typography.labelMedium,
                 color = if (isChanged) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
@@ -120,7 +121,7 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Replacing ${alert.oldSpecies}",
+                            text = AppText.get(R.string.alerts_replacing_x, alert.oldSpecies),
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -154,7 +155,7 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
             displayIv?.let { iv ->
                 val isNewIv = isChanged && alert.newIv != null
                 StatItem(
-                    label = if (isNewIv) "New IV" else "IV",
+                    label = if (isNewIv) stringResource(R.string.alerts_new_iv) else stringResource(R.string.alerts_iv),
                     value = iv,
                     subValue = if (isNewIv && alert.formattedIv != null) "was ${alert.formattedIv}" else alert.ivPercentage?.let { "$it%" },
                     highlight = alert.isPerfect,
@@ -166,7 +167,7 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
             displayCp?.let { cp ->
                 val isNewCp = isChanged && alert.newCp != null
                 StatItem(
-                    label = if (isNewCp) "New CP" else "CP",
+                    label = if (isNewCp) stringResource(R.string.alerts_new_cp) else stringResource(R.string.alerts_cp),
                     value = cp.toString(),
                     subValue = if (isNewCp && alert.cp != null) "was ${alert.cp}" else alert.hundoCP?.formatted(),
                     highlightColor = if (isNewCp) accentColor else null
@@ -195,7 +196,7 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
             if (!isChanged || isReplacement) {
                 alert.level?.let { level ->
                     StatItem(
-                        label = if (isReplacement) "New Level" else "Level",
+                        label = if (isReplacement) stringResource(R.string.alerts_new_level) else stringResource(R.string.alerts_level),
                         value = if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString(),
                         highlightColor = if (isReplacement) accentColor else null
                     )
@@ -210,9 +211,9 @@ internal fun StatsCardContent(alert: PokemonAlert, modifier: Modifier = Modifier
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                IvBar(label = "ATK", value = alert.ivAttack, maxValue = 15)
-                IvBar(label = "DEF", value = alert.ivDefense, maxValue = 15)
-                IvBar(label = "STA", value = alert.ivStamina, maxValue = 15)
+                IvBar(label = stringResource(R.string.alerts_atk), value = alert.ivAttack, maxValue = 15)
+                IvBar(label = stringResource(R.string.alerts_def), value = alert.ivDefense, maxValue = 15)
+                IvBar(label = stringResource(R.string.alerts_sta), value = alert.ivStamina, maxValue = 15)
             }
         }
     }
@@ -308,7 +309,7 @@ internal fun WeatherAndGenderCard(alert: PokemonAlert) {
         }
         if (alert.isWeatherBoosted == true) {
             AlertPill(
-                text = "Weather boosted",
+                text = stringResource(R.string.alerts_weather_boosted),
                 icon = Icons.Filled.Star,
                 containerColor = accent.copy(alpha = 0.16f),
                 contentColor = accent
@@ -336,7 +337,7 @@ internal fun MovesCard(moves: PokemonMoves) {
             ) {
                 Text(text = "⚔️", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Moves",
+                    text = stringResource(R.string.alerts_moves),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -354,7 +355,7 @@ internal fun MovesCard(moves: PokemonMoves) {
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = "FAST",
+                            text = stringResource(R.string.alerts_fast),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
@@ -381,7 +382,7 @@ internal fun MovesCard(moves: PokemonMoves) {
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     ) {
                         Text(
-                            text = "CHARGED",
+                            text = stringResource(R.string.alerts_charged),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold,
@@ -419,7 +420,7 @@ internal fun LocationCard(alert: PokemonAlert) {
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "Location",
+                    text = stringResource(R.string.alerts_location),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -481,7 +482,7 @@ internal fun LocationCard(alert: PokemonAlert) {
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Copy coordinates", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.alerts_copy_coordinates), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -505,7 +506,7 @@ internal fun QuestCard(alert: PokemonAlert) {
             ) {
                 Text(text = "📜", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "Quest",
+                    text = stringResource(R.string.alerts_quest),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -515,7 +516,7 @@ internal fun QuestCard(alert: PokemonAlert) {
                         color = MaterialTheme.colorScheme.primary
                     ) {
                         Text(
-                            text = "AR",
+                            text = stringResource(R.string.alerts_ar),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -527,7 +528,7 @@ internal fun QuestCard(alert: PokemonAlert) {
             questPresentation?.task?.let { task ->
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Task: $task",
+                    text = stringResource(R.string.alerts_task_x, task),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -536,7 +537,7 @@ internal fun QuestCard(alert: PokemonAlert) {
             questPresentation?.reward?.let { reward ->
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Reward: $reward",
+                    text = stringResource(R.string.alerts_reward_x, reward),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
@@ -570,7 +571,7 @@ internal fun RocketCard(
                 Text(text = "🚀", style = MaterialTheme.typography.headlineMedium)
                 Column {
                     Text(
-                        text = "Team GO Rocket",
+                        text = stringResource(R.string.alerts_team_go_rocket),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -590,7 +591,7 @@ internal fun RocketCard(
                 HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
 
                 Text(
-                    text = "Possible Rewards",
+                    text = stringResource(R.string.alerts_possible_rewards),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
@@ -686,7 +687,7 @@ internal fun PvpRankingsCard(rankings: List<com.example.pokemonalertsv2.data.Pvp
             ) {
                 Text(text = "⚔️", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    text = "PvP Rankings",
+                    text = stringResource(R.string.alerts_pvp_rankings),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -796,7 +797,7 @@ internal fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "CP",
+                        text = stringResource(R.string.alerts_cp),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -815,7 +816,7 @@ internal fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Level",
+                        text = stringResource(R.string.alerts_level),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -834,7 +835,7 @@ internal fun PvpRankingItem(ranking: com.example.pokemonalertsv2.data.PvpRanking
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "Stat Product",
+                        text = stringResource(R.string.alerts_stat_product),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -939,7 +940,7 @@ fun CountdownAndEndTimeRow(
             text = (endMillis?.let { TimeUtils.formatAlertEndTime(it, nowMillis) }
                 ?: stringResource(id = R.string.alert_end_time, alert.endTime)) +
                 // The map scanner could not confirm this despawn; it is its best guess.
-                if (alert.expiryVerified == false) " (estimated)" else "",
+                if (alert.expiryVerified == false) stringResource(R.string.alerts_estimated) else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

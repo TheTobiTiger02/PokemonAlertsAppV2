@@ -2,6 +2,8 @@
 
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
+import com.example.pokemonalertsv2.util.AppText
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -127,7 +129,7 @@ internal fun MapFiltersSheet(
         }
         // The count is read before the sheet closes rather than after.
         PanelFooterButton(
-            text = if (visibleCount > 0) "Show $visibleCount alerts" else "Done",
+            text = if (visibleCount > 0) stringResource(R.string.alerts_show_x_alerts, visibleCount) else stringResource(R.string.catchroutes_done),
             onClick = onDismiss
         )
     }
@@ -169,8 +171,8 @@ internal fun FiltersHeader(state: FiltersState) {
         }
     }
     PanelHeader(
-        title = "Filters",
-        subtitle = "${state.visibleCount} of ${state.totalCount} alerts shown",
+        title = stringResource(R.string.alerts_filters),
+        subtitle = stringResource(R.string.alerts_x_of_x_alerts_shown, state.visibleCount, state.totalCount),
         actions = {
             val previous = beforeReset
             when {
@@ -178,13 +180,13 @@ internal fun FiltersHeader(state: FiltersState) {
                     TextButton(onClick = {
                         state.onDefinitionChange(previous)
                         beforeReset = null
-                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text("Undo") }
+                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text(stringResource(R.string.mainscaffoldkt_undo)) }
                 // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
                 state.definition != FilterDefinition() ->
                     TextButton(onClick = {
                         beforeReset = state.definition
                         state.onDefinitionChange(FilterDefinition())
-                    }) { Text("Reset") }
+                    }) { Text(stringResource(R.string.alerts_reset)) }
             }
         }
     )
@@ -210,7 +212,7 @@ internal fun ActiveFiltersRow(state: FiltersState, modifier: Modifier = Modifier
                 trailingIcon = {
                     Icon(
                         Icons.Default.Close,
-                        contentDescription = "Remove ${chip.label}",
+                        contentDescription = stringResource(R.string.alerts_remove_x, chip.label),
                         modifier = Modifier.size(InputChipDefaults.IconSize)
                     )
                 },
@@ -238,20 +240,20 @@ internal fun StatsEditor(state: FiltersState) {
         modifier = Modifier.panelGutter().padding(top = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
     ) {
-        ValueLine("Minimum IV", if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_iv), if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minIvPercent = it))
         }
-        ValueLine("Minimum CP", if (stats.minCp > 0) "${stats.minCp}" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_cp), if (stats.minCp > 0) "${stats.minCp}" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minCp = it))
         }
-        ValueLine("Minimum level", if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
-        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else "Any" }) {
+        ValueLine(stringResource(R.string.alerts_minimum_level), if (stats.minLevel > 0) "${stats.minLevel}" else AppText.get(R.string.hunt_any))
+        PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else AppText.get(R.string.hunt_any) }) {
             update(stats.copy(minLevel = it))
         }
         Text(
-            "Sightings nobody has checked carry no IV and stay visible. Hundos and nundos ignore the IV limit.",
+            stringResource(R.string.alerts_sightings_nobody_has_checked_carry_no),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -281,7 +283,7 @@ internal fun DistanceEditor(state: FiltersState) {
     val definition = state.definition
     Column {
         Column(modifier = Modifier.panelGutter(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            ValueLine("Max distance", if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else "Any")
+            ValueLine(stringResource(R.string.alerts_max_distance), if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else stringResource(R.string.hunt_any))
             DistanceLimitPicker(
                 meters = definition.maxDistanceMeters,
                 onChange = { state.onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
@@ -291,7 +293,7 @@ internal fun DistanceEditor(state: FiltersState) {
             modifier = Modifier.panelGutter().padding(top = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs)
         ) {
-            ValueLine("Walking time", TravelTime.label(definition.maxWalkingMinutes))
+            ValueLine(stringResource(R.string.alerts_walking_time), TravelTime.label(definition.maxWalkingMinutes))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 TravelTime.PRESET_MINUTES.forEach { minutes ->
                     val selected = definition.maxWalkingMinutes == minutes
@@ -308,11 +310,11 @@ internal fun DistanceEditor(state: FiltersState) {
         }
         val count = definition.distanceOverrides.ruleCount
         PanelNavRow(
-            title = "Limits per type & species",
+            title = stringResource(R.string.alerts_limits_per_type_species),
             summary = when (count) {
-                0 -> "Same limit for everything"
-                1 -> "1 custom limit"
-                else -> "$count custom limits"
+                0 -> stringResource(R.string.alerts_same_limit_for_everything)
+                1 -> stringResource(R.string.alerts_1_custom_limit)
+                else -> stringResource(R.string.alerts_x_custom_limits, count)
             },
             active = count > 0,
             onClick = state.openDistanceOverrides,
@@ -339,7 +341,7 @@ internal fun AlertTypesEditor(state: FiltersState) {
     val definition = state.definition
     val allTokens = remember { FilterAlertType.entries.map { it.name } }
     Column(modifier = Modifier.testTag("map_filter_types_page")) {
-        EditorNote("The chips above the map change these too.")
+        EditorNote(stringResource(R.string.alerts_the_chips_above_the_map_change))
         FlowRow(
             modifier = Modifier.panelGutter().padding(bottom = Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),

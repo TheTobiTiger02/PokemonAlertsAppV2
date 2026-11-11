@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.data
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
@@ -72,20 +74,20 @@ enum class FilterSelectionMode { ALL, NONE, ONLY }
 @Serializable
 enum class FilterAlertType(val label: String) {
     /** Hundo, Nundo and PvP spawns: the ones that carry IV or ranking data. */
-    SPAWN("IV spawns"),
-    RAID("Raids"),
-    QUEST("Quests"),
-    ROCKET("Rocket"),
-    KECLEON("Kecleon"),
-    HUNDO("Hundos"),
-    NUNDO("Nundos"),
-    PVP("PvP"),
+    SPAWN(AppText.get(R.string.data_iv_spawns)),
+    RAID(AppText.get(R.string.data_raids)),
+    QUEST(AppText.get(R.string.data_quests)),
+    ROCKET(AppText.get(R.string.alerts_rocket)),
+    KECLEON(AppText.get(R.string.alerts_kecleon)),
+    HUNDO(AppText.get(R.string.data_hundos)),
+    NUNDO(AppText.get(R.string.data_nundos)),
+    PVP(AppText.get(R.string.alerts_pvp)),
     /** Every other wild spawn, including the backend's live sightings without IV. Off by default. */
-    COMMON("Common"),
+    COMMON(AppText.get(R.string.alerts_common)),
     /** Event Tappables: Pokémon they spawn and the loot they drop, filtered by species or item. */
-    TAPPABLE("Tappables"),
-    WEATHER("Weather"),
-    OTHER("Other")
+    TAPPABLE(AppText.get(R.string.data_tappables)),
+    WEATHER(AppText.get(R.string.alerts_weather)),
+    OTHER(AppText.get(R.string.data_other))
 }
 
 const val SPAWN_INTERACTION_RANGE_METERS = 40f
@@ -319,7 +321,7 @@ data class FilterStateDocument(
 
 @Serializable
 enum class FilterSurface(val label: String) {
-    FEED("Feed"), MAP("Map"), NOTIFICATIONS("Notifications")
+    FEED(AppText.get(R.string.data_feed)), MAP(AppText.get(R.string.alerts_map)), NOTIFICATIONS(AppText.get(R.string.onboarding_notifications))
 }
 
 /**
@@ -355,10 +357,10 @@ fun distanceStepIndex(meters: Int): Int {
 
 /** Human label for a meter limit: "Unlimited", "500 m", "3 km", or "1.5 km" for mixed values. */
 fun distanceLabel(meters: Int): String = when {
-    meters <= 0 -> "Unlimited"
+    meters <= 0 -> AppText.get(R.string.data_unlimited)
     meters < 1000 -> "$meters m"
     meters % 1000 == 0 -> "${meters / 1000} km"
-    else -> "${meters / 1000}.${(meters % 1000) / 100} km"
+    else -> AppText.get(R.string.data_x_x_km, meters / 1000, (meters % 1000) / 100)
 }
 
 object FilterStateCodec {

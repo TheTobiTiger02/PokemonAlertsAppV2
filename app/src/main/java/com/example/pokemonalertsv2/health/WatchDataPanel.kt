@@ -1,5 +1,8 @@
 package com.example.pokemonalertsv2.health
 
+import com.example.pokemonalertsv2.util.AppText
+import com.example.pokemonalertsv2.R
+import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.theme.HeartRed
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -86,7 +89,7 @@ fun WatchDataPanel(
         Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             WatchStatsSection(current, Modifier.testTag("watch_stats"))
             if (connected == true && System.currentTimeMillis() - endMillis < HEALTH_READ_MAX_AGE_MILLIS) {
-                TextButton(onClick = { attempt++ }, enabled = !reading) { Text(if (reading) "Checking…" else "Check watch data again") }
+                TextButton(onClick = { attempt++ }, enabled = !reading) { Text(if (reading) stringResource(R.string.health_checking) else stringResource(R.string.health_check_watch_data_again)) }
             }
         }
         return
@@ -97,34 +100,34 @@ fun WatchDataPanel(
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(Icons.Filled.Favorite, contentDescription = null, tint = HeartRed, modifier = Modifier.size(18.dp))
-                Text("Watch data", style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(R.string.health_watch_data), style = MaterialTheme.typography.titleSmall)
             }
             when {
                 availability == HealthDataReader.Availability.NEEDS_UPDATE -> {
-                    Text("Update Health Connect to see heart rate, steps and calories from your watch.",
+                    Text(AppText.get(R.string.health_update_health_connect_to_see_heart),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilledTonalButton(onClick = {
                         try { context.startActivity(reader.installIntent()) } catch (_: ActivityNotFoundException) {}
-                    }) { Text("Update Health Connect") }
+                    }) { Text(AppText.get(R.string.health_update_health_connect)) }
                 }
                 connected == false -> {
-                    Text("See heart rate, steps and calories from your Galaxy Watch (or any watch that syncs to Health Connect) for this walk.",
+                    Text(stringResource(R.string.health_see_heart_rate_steps_and_calories),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilledTonalButton(onClick = {
                         try { launcher.launch(HealthDataReader.PERMISSIONS) } catch (_: ActivityNotFoundException) {}
-                    }) { Text("Connect Health Connect") }
+                    }) { Text(stringResource(R.string.health_connect_health_connect)) }
                 }
                 reading || connected == null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("Reading your watch data…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.health_reading_your_watch_data), style = MaterialTheme.typography.bodySmall)
                 }
                 else -> {
                     Text(
-                        if (System.currentTimeMillis() - endMillis > HEALTH_READ_MAX_AGE_MILLIS) "Your watch recorded nothing for this walk."
-                        else "Nothing from your watch yet. It can take a few minutes to sync via Samsung Health; open the Samsung Health app to speed it up.",
+                        if (System.currentTimeMillis() - endMillis > HEALTH_READ_MAX_AGE_MILLIS) stringResource(R.string.health_your_watch_recorded_nothing_for_this)
+                        else stringResource(R.string.health_nothing_from_your_watch_yet_it),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    TextButton(onClick = { scope.launch { attempt++ } }) { Text("Check again") }
+                    TextButton(onClick = { scope.launch { attempt++ } }) { Text(stringResource(R.string.health_check_again)) }
                 }
             }
         }

@@ -1,5 +1,7 @@
 package com.example.pokemonalertsv2.raidwatch
 
+import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.HundoCP
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.RaidTier
@@ -57,7 +59,7 @@ internal fun createManualRaidAlert(
     nowMillis: Long = System.currentTimeMillis()
 ): PokemonAlert = PokemonAlert(
     name = "Manual raid · ${boss.catalogue.displayName}",
-    description = "Started manually for a ${boss.tierLabel} raid",
+    description = AppText.get(R.string.raidwatch_started_manually_for_a_x_raid, boss.tierLabel),
     imageUrl = boss.spriteUrls.firstOrNull(),
     thumbnailUrl = boss.spriteUrls.firstOrNull(),
     endTime = (nowMillis + MANUAL_RAID_DURATION_MILLIS).toString(),
