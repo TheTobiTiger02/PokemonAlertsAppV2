@@ -423,7 +423,8 @@ internal fun HistoryListControls(
     selectedDateLabel: String?,
     onOpenDateFilter: () -> Unit,
     onClearDateFilter: () -> Unit,
-    onOpenInsights: (() -> Unit)? = null
+    onOpenInsights: (() -> Unit)? = null,
+    onExport: (() -> Unit)? = null
 ) {
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -457,6 +458,11 @@ internal fun HistoryListControls(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (onExport != null) {
+                        IconButton(onClick = onExport, modifier = Modifier.testTag("export_history_csv")) {
+                            Icon(Icons.Filled.Share, contentDescription = "Export history as CSV")
+                        }
+                    }
                     if (onOpenInsights != null) {
                         IconButton(
                             onClick = onOpenInsights,

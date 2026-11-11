@@ -283,6 +283,39 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
         )
     }
 
+    /**
+     * Every history row matching the History tab's filters, paged 500 at a time, for export.
+     * Stops at [maxRows]; [ExportedHistory.hitCap] says whether there was more.
+     */
+    suspend fun fetchHistoryForExport(
+        date: String?,
+        type: String?,
+        q: String?,
+        area: String?,
+        maxRows: Int = EXPORT_MAX_ROWS
+    ): ExportedHistory {
+        val rows = mutableListOf<PokemonAlert>()
+        var offset = 0
+        var total = Int.MAX_VALUE
+        while (rows.size < maxRows && offset < total) {
+            val response = service.getHistoryPaged(
+                limit = minOf(INSIGHTS_PAGE_SIZE, maxRows - rows.size),
+                offset = offset,
+                type = type,
+                date = date,
+                q = normalizedHistoryQuery(q),
+                area = area
+            )
+            if (response.data.isEmpty()) break
+            rows += response.data
+            total = response.total ?: rows.size
+            offset = (response.offset ?: offset) + response.data.size
+        }
+        return ExportedHistory(rows, hitCap = rows.size >= maxRows && rows.size < total)
+    }
+
+    data class ExportedHistory(val alerts: List<PokemonAlert>, val hitCap: Boolean)
+
     private fun normalizedHistoryQuery(q: String?): String? = q?.trim()?.takeIf { it.isNotEmpty() }
 
     /** Wipes the local history cache (e.g. on logout / data-reset). */
@@ -404,6 +437,7 @@ class PokemonAlertsRepository @VisibleForTesting internal constructor(
          */
         const val INSIGHTS_MAX_ROWS = 3_000
         const val INSIGHTS_PAGE_SIZE = 500
+        const val EXPORT_MAX_ROWS = 5_000
         private const val ETAG_HEADER = "ETag"
         private const val SEEN_EXPIRY_MARGIN_MILLIS = 60 * 60 * 1000L
         private const val UNKNOWN_END_SEEN_MILLIS = 24 * 60 * 60 * 1000L

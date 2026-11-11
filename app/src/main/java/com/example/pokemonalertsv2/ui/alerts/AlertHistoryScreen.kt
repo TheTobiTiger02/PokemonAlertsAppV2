@@ -93,9 +93,18 @@ internal fun AlertHistoryPage(
     onSearchChanged: (String) -> Unit,
     onAreaChanged: (String?) -> Unit = {},
     onAlertClick: (PokemonAlert) -> Unit,
-    onOpenInsights: (() -> Unit)? = null
+    onOpenInsights: (() -> Unit)? = null,
+    /** Writes the filtered history to the picked file; reports a message when done. */
+    onExportCsv: ((android.net.Uri, (String) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        if (uri != null) onExportCsv?.invoke(uri) { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedTypeFilter by rememberSaveable { mutableStateOf(AlertFilter.ALL) }
     var selectedAreaFilter by rememberSaveable { mutableStateOf(HistoryAreaFilter.BOTH) }
@@ -446,7 +455,10 @@ internal fun AlertHistoryPage(
                     selectedDateMillis = null
                     onDateChanged(null)
                 },
-                onOpenInsights = onOpenInsights
+                onOpenInsights = onOpenInsights,
+                onExport = if (onExportCsv != null) {
+                    { exportLauncher.launch("alert-history-${java.time.LocalDate.now()}.csv") }
+                } else null
             )
             }
             Box(modifier = Modifier.weight(1f).nestedScroll(hideControls.connection)) {
