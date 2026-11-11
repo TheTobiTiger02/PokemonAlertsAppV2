@@ -160,17 +160,37 @@ internal fun MapFiltersSheet(
 /** Title, how many alerts the filters leave, and Reset when anything is set. */
 @Composable
 internal fun FiltersHeader(state: FiltersState) {
+    // What Reset replaced, offered back for a few seconds as Undo.
+    var beforeReset by remember { mutableStateOf<FilterDefinition?>(null) }
+    androidx.compose.runtime.LaunchedEffect(beforeReset) {
+        if (beforeReset != null) {
+            kotlinx.coroutines.delay(UNDO_WINDOW_MILLIS)
+            beforeReset = null
+        }
+    }
     PanelHeader(
         title = "Filters",
         subtitle = "${state.visibleCount} of ${state.totalCount} alerts shown",
         actions = {
-            // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
-            if (state.definition != FilterDefinition()) {
-                TextButton(onClick = { state.onDefinitionChange(FilterDefinition()) }) { Text("Reset") }
+            val previous = beforeReset
+            when {
+                previous != null && state.definition == FilterDefinition() ->
+                    TextButton(onClick = {
+                        state.onDefinitionChange(previous)
+                        beforeReset = null
+                    }, modifier = Modifier.testTag("map_filters_undo_reset")) { Text("Undo") }
+                // Nothing to reset when nothing is set, and an always-on Reset invites accidents.
+                state.definition != FilterDefinition() ->
+                    TextButton(onClick = {
+                        beforeReset = state.definition
+                        state.onDefinitionChange(FilterDefinition())
+                    }) { Text("Reset") }
             }
         }
     )
 }
+
+private const val UNDO_WINDOW_MILLIS = 8_000L
 
 /** One removable chip per rule in force; nothing at all when the filters are the defaults. */
 @Composable

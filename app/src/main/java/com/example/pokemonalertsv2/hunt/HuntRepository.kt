@@ -305,6 +305,25 @@ class HuntRepository private constructor(context: Context) {
         }
     }
 
+    /** Removes one finished hunt; [restoreHistoryEntry] puts it back for an Undo. */
+    suspend fun deleteHistoryEntry(startedAtMillis: Long) {
+        dataStore.edit { preferences ->
+            preferences[HUNT_HISTORY_KEY] = preferences[HUNT_HISTORY_KEY].decodeHistory()
+                .filterNot { it.startedAtMillis == startedAtMillis }
+                .encodeHistory()
+        }
+    }
+
+    suspend fun restoreHistoryEntry(summary: HuntSummary) {
+        dataStore.edit { preferences ->
+            preferences[HUNT_HISTORY_KEY] = (preferences[HUNT_HISTORY_KEY].decodeHistory()
+                .filterNot { it.startedAtMillis == summary.startedAtMillis } + summary)
+                .sortedByDescending { it.startedAtMillis }
+                .take(HUNT_HISTORY_CAP)
+                .encodeHistory()
+        }
+    }
+
     suspend fun clearHistory() {
         dataStore.edit { preferences -> preferences.remove(HUNT_HISTORY_KEY) }
     }
