@@ -31,11 +31,22 @@ object TimeUtils {
         // ISO_OFFSET_DATE_TIME (e.g., 2025-10-10T12:34:56+02:00)
         { s -> runCatching { OffsetDateTime.parse(s).toInstant().toEpochMilli() }.getOrNull() },
         // Common patterns without timezone - assume device default timezone
-        { s -> parseWithFormatter(s, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) },
-        { s -> parseWithFormatter(s, DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")) },
-        { s -> parseWithFormatter(s, DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) },
-        { s -> parseWithFormatter(s, DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")) }
+        { s -> parseWithFormatter(s, DASHED) },
+        { s -> parseWithFormatter(s, SLASHED) },
+        { s -> parseWithFormatter(s, DOTTED) },
+        { s -> parseWithFormatter(s, LOCAL_ISO) }
     )
+
+    // Built once: these run for every alert on every sync, and formatters are immutable.
+    private val DASHED = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+    private val SLASHED = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss")
+    private val DOTTED = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")
+    private val LOCAL_ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+    private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
+
+    /** "14:05" in the device's time zone; the app's one wall-clock format. */
+    fun formatClock(millis: Long): String =
+        java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).format(CLOCK)
 
     private fun parseWithFormatter(s: String, formatter: DateTimeFormatter): Long? {
         return try {

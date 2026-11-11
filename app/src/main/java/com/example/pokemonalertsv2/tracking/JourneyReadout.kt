@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.util.formatMeters
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -136,12 +137,7 @@ fun alertDetailLines(
 }
 
 /** Metres up close, kilometres once the number stops reading at a glance. */
-fun formatJourneyDistance(distanceMeters: Float): String =
-    if (distanceMeters < 1_000f) {
-        "${distanceMeters.roundToInt()} m"
-    } else {
-        String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
-    }
+fun formatJourneyDistance(distanceMeters: Float): String = formatMeters(distanceMeters.toDouble())
 
 /**
  * The line under the minimized map's bubble. Short enough for an 80dp window: a distance,
