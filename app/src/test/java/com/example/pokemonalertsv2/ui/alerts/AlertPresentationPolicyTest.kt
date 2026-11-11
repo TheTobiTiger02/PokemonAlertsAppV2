@@ -135,4 +135,14 @@ class AlertPresentationPolicyTest {
         assertTrue(expiresAtBoundary.isExpiredAt(boundary))
         assertFalse(withoutEndTime.isExpiredAt(boundary))
     }
+
+    @Test
+    fun favouritesAreOfferedOnlyWhereSupported() {
+        val withoutFavourites = alertActionPolicy(AlertCardContext.LIVE, isExpired = false, snoozeEnabled = false, hasGoingAction = false)
+        assertEquals(false, withoutFavourites.overflowActions.any { it == AlertSecondaryAction.FAVORITE || it == AlertSecondaryAction.UNFAVORITE })
+        val notYet = alertActionPolicy(AlertCardContext.LIVE, isExpired = false, snoozeEnabled = false, hasGoingAction = false, isFavorite = false)
+        assertEquals(true, AlertSecondaryAction.FAVORITE in notYet.overflowActions)
+        val already = alertActionPolicy(AlertCardContext.LIVE, isExpired = false, snoozeEnabled = false, hasGoingAction = false, isFavorite = true)
+        assertEquals(true, AlertSecondaryAction.UNFAVORITE in already.overflowActions)
+    }
 }

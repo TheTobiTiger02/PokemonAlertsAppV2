@@ -232,7 +232,10 @@ fun PokemonAlertsRoute(
                 
                 val savedPresets by viewModel.filterPresets.collectAsStateWithLifecycle()
                 val maxWalkingMinutes by viewModel.maxWalkingMinutes.collectAsStateWithLifecycle()
+                val favoriteIds by viewModel.favoriteAlertIds.collectAsStateWithLifecycle()
+                val favorites = remember(favoriteIds) { FavoriteAlerts(favoriteIds, viewModel::toggleFavorite) }
 
+                androidx.compose.runtime.CompositionLocalProvider(LocalFavoriteAlerts provides favorites) {
                 PokemonAlertsPage(
                     uiState = alertsUiState,
                     dismissedAlertIds = viewModel.dismissedAlertIds.collectAsStateWithLifecycle().value,
@@ -315,6 +318,7 @@ fun PokemonAlertsRoute(
                         }
                     }
                 )
+                }
         }
     }
 
@@ -780,6 +784,7 @@ internal fun AlertsList(
     unifiedDefinition: FilterDefinition? = null,
     onStartManualRaid: (() -> Unit)? = null
 ) {
+    val favorites = LocalFavoriteAlerts.current
     val arrivalTracking = rememberArrivalTrackingUiController()
     // A hunt walks you to one alert at a time; the feed marks which one so the row
     // and the map agree without having to compare coordinates.
@@ -1012,6 +1017,8 @@ internal fun AlertsList(
                                 AlertSecondaryAction.SHARE -> onShareClick(model.alert)
                                 AlertSecondaryAction.DISMISS -> onDismissClick(model.alert.uniqueId)
                                 AlertSecondaryAction.RESTORE -> onRestoreClick(model.alert.uniqueId)
+                                AlertSecondaryAction.FAVORITE,
+                                AlertSecondaryAction.UNFAVORITE -> favorites?.toggle?.invoke(model.alert.uniqueId)
                             }
                         },
                         isDismissed = isDismissed,

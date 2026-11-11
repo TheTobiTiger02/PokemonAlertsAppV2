@@ -3,6 +3,7 @@ package com.example.pokemonalertsv2.ui.alerts.mappanel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -239,6 +240,11 @@ internal fun MapLayersSheet(
                                     )
                                 }
                             }
+
+                            item("legend_label") {
+                                PanelSectionLabel(androidx.compose.ui.res.stringResource(R.string.map_legend_title))
+                            }
+                            item("legend") { MapLegend(Modifier.panelGutter()) }
                         }
                     }
                     LayersPage.GROUPING -> Column {
@@ -339,3 +345,53 @@ private fun MapStylePreview(style: MapStylePreference, modifier: Modifier) {
         drawLine(accentRoad, Offset(size.width * 0.32f, 0f), Offset(size.width * 0.44f, size.height), strokeWidth = stroke)
     }
 }
+
+private val LEGEND_ENTRIES = listOf(
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.HUNDO to "Hundo",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.NUNDO to "Nundo",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.PVP to "PvP",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.RAID to "Raid",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.QUEST to "Quest",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.SPAWN to "Spawn",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.COMMON to "Common",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.TAPPABLE to "Tappable",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.ROCKET to "Rocket",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.KECLEON to "Kecleon",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.WEATHER to "Weather",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.GENERIC to "Other",
+)
+
+/** What a marker's ring colour and the sync dot by the alert count mean. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun MapLegend(modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+        ) {
+            LEGEND_ENTRIES.forEach { (category, label) ->
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    androidx.compose.foundation.layout.Box(
+                        Modifier
+                            .size(12.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(androidx.compose.ui.graphics.Color(category.accentArgb))
+                    )
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = Spacing.xs)
+                    )
+                }
+            }
+        }
+        Text(
+            "The dot by the alert count: green is up to date, amber shows saved alerts while offline, " +
+                "red means the last refresh failed. Tap it to retry.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+

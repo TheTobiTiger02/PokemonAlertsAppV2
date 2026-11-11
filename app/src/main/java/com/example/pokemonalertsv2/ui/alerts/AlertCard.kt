@@ -293,6 +293,7 @@ internal fun AlertCard(
                             snoozeEnabled = snoozeEnabled,
                             hasGoingAction = onGoingClick != null,
                             isDismissed = isDismissed,
+                            isFavorite = LocalFavoriteAlerts.current?.ids?.contains(alert.uniqueId),
                             onAction = onSecondaryAction
                         )
                     }
@@ -460,6 +461,7 @@ internal fun AlertActionsOverflow(
     snoozeEnabled: Boolean,
     hasGoingAction: Boolean,
     isDismissed: Boolean = false,
+    isFavorite: Boolean? = null,
     onAction: (AlertSecondaryAction) -> Unit
 ) {
     val endMillis = remember(endTime) { TimeUtils.parseEndTimeToMillis(endTime) }
@@ -471,7 +473,8 @@ internal fun AlertActionsOverflow(
         isExpired = isExpired,
         snoozeEnabled = snoozeEnabled,
         hasGoingAction = hasGoingAction,
-        isDismissed = isDismissed
+        isDismissed = isDismissed,
+        isFavorite = isFavorite
     )
     AlertSecondaryActionsMenu(
         actions = policy.overflowActions,

@@ -634,7 +634,9 @@ internal fun AlertHistoryPage(
                                 }
                                 // History cards never offer dismiss/restore.
                                 AlertSecondaryAction.DISMISS,
-                                AlertSecondaryAction.RESTORE -> Unit
+                                AlertSecondaryAction.RESTORE,
+                                AlertSecondaryAction.FAVORITE,
+                                AlertSecondaryAction.UNFAVORITE -> Unit
                             }
                         }
                     )
