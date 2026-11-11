@@ -31,9 +31,7 @@ class HealthPermissionsRationaleActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }
-                .collectAsStateWithLifecycle(initialValue = 0)
-            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) {
+            PokemonAlertsV2Theme(darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()) {
                 Scaffold { padding ->
                     Column(
                         Modifier.fillMaxSize().padding(padding).padding(24.dp).verticalScroll(rememberScrollState()),

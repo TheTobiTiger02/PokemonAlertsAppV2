@@ -55,6 +55,8 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
 
     override fun onCreate() {
         super<Application>.onCreate()
+        // Read the theme once now, so no screen opens in the wrong theme.
+        com.example.pokemonalertsv2.ui.theme.AppThemeModeStore.start(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         try {
             AlertNotifier.ensureChannel(this)

@@ -105,11 +105,8 @@ class WidgetConfigActivity : ComponentActivity() {
         val existing = WidgetConfigurationStore.get(this, appWidgetId)
 
         setContent {
-            val themeMode by repository.observeThemeMode()
-                .collectAsStateWithLifecycle(initialValue = 0)
             val showExactAlarmPermission by showExactAlarmDialog.collectAsStateWithLifecycle()
-            val darkTheme = AppThemeMode.fromStored(themeMode)
-                .resolveDark(isSystemInDarkTheme())
+            val darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             // Live counts next to each category switch, mirroring the feed and map sheets.
             val categoryCounts by remember {
                 repository.alerts.map { alerts ->

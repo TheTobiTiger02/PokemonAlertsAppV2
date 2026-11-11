@@ -42,8 +42,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }.collectAsStateWithLifecycle(initialValue = 0)
-            PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) {
+            PokemonAlertsV2Theme(darkTheme = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()) {
                 val history by store.history.collectAsStateWithLifecycle(initialValue = emptyList())
                 var open by remember { mutableStateOf<CatchRouteSummary?>(null) }
                 var clearing by remember { mutableStateOf(false) }

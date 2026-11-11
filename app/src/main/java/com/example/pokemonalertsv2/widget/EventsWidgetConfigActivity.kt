@@ -65,8 +65,7 @@ class EventsWidgetConfigActivity : ComponentActivity() {
         val themeRepository = PokemonAlertsRepository.create(applicationContext)
 
         setContent {
-            val themeMode by themeRepository.observeThemeMode().collectAsStateWithLifecycle(initialValue = 0)
-            val dark = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())
+            val dark = com.example.pokemonalertsv2.ui.theme.rememberAppDarkTheme()
             PokemonAlertsV2Theme(darkTheme = dark) {
                 EventTypePicker(
                     loadTypes = { knownTypes() },
