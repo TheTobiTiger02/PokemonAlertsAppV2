@@ -528,6 +528,13 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
     
+    val favoriteAlertIds = repository.alertPreferences.favoriteAlertIds
+        .asPreferenceState(emptySet())
+
+    fun toggleFavorite(alertId: String) {
+        viewModelScope.launch { repository.toggleFavorite(alertId) }
+    }
+
     fun undoDismissAlert(alertId: String) {
         viewModelScope.launch {
             repository.alertPreferences.removeDismissedAlert(alertId)
