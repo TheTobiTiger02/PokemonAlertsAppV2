@@ -68,6 +68,13 @@ val osmTileUrl: String =
         ?: providers.environmentVariable("OSM_TILE_URL").orNull?.takeIf { it.isNotBlank() }
         ?: "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
+// Sent as X-App-Key when registering live sightings. Empty in local and PR builds, which is fine
+// until the server is told to require it (LIVE_PUSH_REQUIRE_KEY=1).
+val appApiKey: String =
+    localProperties.getProperty("APP_API_KEY")?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable("APP_API_KEY").orNull?.takeIf { it.isNotBlank() }
+        ?: ""
+
 val pokebattlerApiBaseUrl: String =
     localProperties.getProperty("POKEBATTLER_API_BASE_URL")?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable("POKEBATTLER_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
@@ -89,6 +96,7 @@ android {
         buildConfigField("String", "ALERTS_API_BASE_URL", "\"${alertsApiBaseUrl.trimEnd('/')}/\"")
         buildConfigField("String", "OSM_TILE_URL", "\"$osmTileUrl\"")
         buildConfigField("String", "POKEBATTLER_API_BASE_URL", "\"${pokebattlerApiBaseUrl.trimEnd('/')}/\"")
+        buildConfigField("String", "APP_API_KEY", "\"$appApiKey\"")
     }
 
     signingConfigs {
