@@ -24,6 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Surface
 import androidx.compose.material3.AlertDialog
@@ -162,7 +165,40 @@ internal fun SettingsOverview(
         else if (!backgroundLocationGranted) add("background location")
     }
 
+    var query by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    val results = androidx.compose.runtime.remember(query) { searchSettings(query) }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        androidx.compose.material3.OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search settings") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            trailingIcon = if (query.isNotEmpty()) {
+                { androidx.compose.material3.IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear search") } }
+            } else null,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().testTag("settings_search")
+        )
+        if (query.isNotBlank()) {
+            if (results.isEmpty()) {
+                Text("No setting matches \"${query.trim()}\".", style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                SettingsOverviewGroup("Results") {
+                    results.forEachIndexed { index, entry ->
+                        if (index > 0) OverviewDivider()
+                        SettingsOverviewRow(
+                            icon = rememberVectorPainter(Icons.Default.Search),
+                            title = entry.title,
+                            summary = entry.destination.title,
+                            onClick = { onDestinationSelected(entry.destination) }
+                        )
+                    }
+                }
+            }
+            return@Column
+        }
         // One place that says what is missing, instead of a dialog on every launch.
         if (missingPermissions.isNotEmpty()) {
             Surface(
