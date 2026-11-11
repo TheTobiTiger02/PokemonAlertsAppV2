@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -106,8 +107,10 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
         }
     }
 
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
     Scaffold(
         modifier = Modifier.testTag("hunt_history"),
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text("Hunt history") },
@@ -187,7 +190,14 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
                     )
                 }
                 items(hunts, key = { it.startedAtMillis }) { hunt ->
-                    HuntHistoryRow(hunt, onClick = { opened = hunt })
+                    HuntHistoryRow(hunt, onClick = { opened = hunt }, onDelete = {
+                        scope.launch {
+                            repository.deleteHistoryEntry(hunt.startedAtMillis)
+                            val result = snackbar.showSnackbar("Hunt deleted", actionLabel = "Undo",
+                                duration = androidx.compose.material3.SnackbarDuration.Short)
+                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) repository.restoreHistoryEntry(hunt)
+                        }
+                    })
                 }
             }
         }
@@ -218,7 +228,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit) {
+private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit, onDelete: () -> Unit) {
     val track = remember(hunt.track) { hunt.trackPoints }
     val catchPoints = remember(hunt.catches) { hunt.catches.mapNotNull { it.point } }
     Surface(
@@ -245,6 +255,9 @@ private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit) {
                 }
                 if (track.size >= 2 || catchPoints.size >= 2) {
                     HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.testTag("hunt_history_delete")) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${hunt.name}")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

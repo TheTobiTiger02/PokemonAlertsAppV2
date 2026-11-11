@@ -292,6 +292,16 @@ fun PokemonAlertsRoute(
                             }
                         }
                     },
+                    onFiltersCleared = { undo ->
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Filters cleared",
+                                actionLabel = "Undo",
+                                duration = SnackbarDuration.Short
+                            )
+                            if (result == SnackbarResult.ActionPerformed) undo()
+                        }
+                    },
                     onDismissClick = { alertId ->
                         viewModel.dismissAlert(alertId)
                         scope.launch {
@@ -415,6 +425,8 @@ fun PokemonAlertsPage(
     onLocationLookupPending: () -> Unit = {},
     presetControls: FilterPresetControls = FilterPresetControls(),
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
+    /** Called after "Clear all filters" with a way to put them back, for an Undo. */
+    onFiltersCleared: ((undo: () -> Unit) -> Unit)? = null,
     onMaxWalkingMinutesChange: (Int) -> Unit = {},
     onRefresh: () -> Unit,
     onAlertSelected: (PokemonAlert) -> Unit,
@@ -654,12 +666,26 @@ fun PokemonAlertsPage(
                 onClearAreaFilter = { onSelectedAreaChange("All") },
                 onClearDistanceFilter = { onMaxDistanceChange(0) },
                 onClearAllFilters = {
+                    val previousCategories = selectedCategories
+                    val previousShowDismissed = showDismissed
+                    val previousQuery = searchQuery
+                    val previousArea = selectedArea
+                    val previousDistance = maxDistance
+                    val previousWalking = maxWalkingMinutes
                     onSelectedCategoriesChange(emptySet())
                     showDismissed = false
                     searchQuery = ""
                     onSelectedAreaChange("All")
                     onMaxDistanceChange(0)
                     onMaxWalkingMinutesChange(TravelTime.NO_LIMIT)
+                    onFiltersCleared?.invoke {
+                        onSelectedCategoriesChange(previousCategories)
+                        showDismissed = previousShowDismissed
+                        searchQuery = previousQuery
+                        onSelectedAreaChange(previousArea)
+                        onMaxDistanceChange(previousDistance)
+                        onMaxWalkingMinutesChange(previousWalking)
+                    }
                 },
                 presetControls = presetControls,
                 maxWalkingMinutes = maxWalkingMinutes,
