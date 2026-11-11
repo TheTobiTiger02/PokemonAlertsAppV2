@@ -581,6 +581,15 @@ internal fun SettingsScreen(
                                 }
                             }
                         }
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        val crashReport = androidx.compose.runtime.remember { com.example.pokemonalertsv2.util.CrashLog.latest(context) }
+                        if (crashReport != null) {
+                            androidx.compose.material3.TextButton(onClick = {
+                                com.example.pokemonalertsv2.util.CrashLog.shareIntent(context)?.let(context::startActivity)
+                            }) {
+                                Text("Share last crash report")
+                            }
+                        }
                         Text(
                             text = "\u00A9 openrouteservice.org by HeiGIT | Map data \u00A9 OpenStreetMap contributors",
                             style = MaterialTheme.typography.bodySmall,
