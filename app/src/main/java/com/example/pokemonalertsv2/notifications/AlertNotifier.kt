@@ -52,6 +52,11 @@ object AlertNotifier {
     const val CHANNEL_RAIDS = "pokemon_alerts_raids"
     const val CHANNEL_SPAWNS = "pokemon_alerts_spawns"
     const val CHANNEL_QUESTS = "pokemon_alerts_quests"
+    // Own channels so each can get its own sound, vibration and importance in Android settings.
+    const val CHANNEL_HUNDOS = "pokemon_alerts_hundos"
+    const val CHANNEL_PVP = "pokemon_alerts_pvp"
+    const val CHANNEL_ROCKET = "pokemon_alerts_rocket"
+    const val CHANNEL_KECLEON = "pokemon_alerts_kecleon"
 
     /** Beyond this the inbox style truncates anyway; the rest becomes a "+N more". */
     private const val MAX_SUMMARY_LINES = 5
@@ -153,6 +158,20 @@ object AlertNotifier {
             enableVibration(true)
         }
         notificationManager.createNotificationChannel(questsChannel)
+
+        listOf(
+            Triple(CHANNEL_HUNDOS, R.string.notification_channel_hundos_name, R.string.notification_channel_hundos_description),
+            Triple(CHANNEL_PVP, R.string.notification_channel_pvp_name, R.string.notification_channel_pvp_description),
+            Triple(CHANNEL_ROCKET, R.string.notification_channel_rocket_name, R.string.notification_channel_rocket_description),
+            Triple(CHANNEL_KECLEON, R.string.notification_channel_kecleon_name, R.string.notification_channel_kecleon_description),
+        ).forEach { (id, nameRes, descriptionRes) ->
+            notificationManager.createNotificationChannel(
+                NotificationChannel(id, context.getString(nameRes), NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = context.getString(descriptionRes)
+                    enableVibration(true)
+                }
+            )
+        }
     }
 
     suspend fun notifyAlerts(context: Context, alerts: List<PokemonAlert>) {
@@ -372,10 +391,10 @@ object AlertNotifier {
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+                .also { builder -> applyExpiry(builder, alert) }
                 // Grouped by channel so a spawn wave collapses into one shade entry
                 // instead of burying everything else the user has.
                 .setGroup(channelId)
-                .setVibrate(if (settings.vibrateEnabled) longArrayOf(0, 250, 250, 250) else longArrayOf(0))
                 .addAction(
                     R.drawable.ic_map,
                     context.getString(R.string.notification_action_directions),
@@ -424,9 +443,45 @@ object AlertNotifier {
         }
     }
 
+    /**
+     * A notification for an alert that has ended is useless, so it removes itself then, and
+     * counts down to that moment in the shade instead of showing when it was posted.
+     */
+    internal fun applyExpiry(builder: NotificationCompat.Builder, alert: PokemonAlert, nowMillis: Long = System.currentTimeMillis()) {
+        val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: return
+        val left = end - nowMillis
+        if (left <= 0) return
+        builder.setTimeoutAfter(left)
+            .setWhen(end)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(true)
+    }
+
+    /**
+     * Children expire at their alert's end (see [applyExpiry]); the summary goes with the last of
+     * them. Children from earlier waves still in the shade count too: their `when` is their end.
+     */
+    private fun summaryTimeout(context: Context, channelId: String, posted: List<PokemonAlert>): Long? {
+        val now = System.currentTimeMillis()
+        val earlier = runCatching {
+            ContextCompat.getSystemService(context, NotificationManager::class.java)
+                ?.activeNotifications.orEmpty()
+                .filter { it.notification.group == channelId && it.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY == 0 }
+                .map { it.notification.`when` }
+        }.getOrDefault(emptyList())
+        val ends = posted.mapNotNull { TimeUtils.parseEndTimeToMillis(it.endTime) } + earlier
+        val latest = ends.maxOrNull() ?: return null
+        return (latest - now).takeIf { it > 0 }
+    }
+
     /** Channel grouping, shared by the posting loop and the burst-cap overflow tally. */
-    private fun notificationChannelFor(alert: PokemonAlert): String = when {
+    internal fun notificationChannelFor(alert: PokemonAlert): String = when {
         alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
+        alert.hasTypeContaining("hundo") || alert.hasTypeContaining("nundo") -> CHANNEL_HUNDOS
+        alert.hasTypeContaining("pvp") -> CHANNEL_PVP
+        alert.hasTypeContaining("rocket") -> CHANNEL_ROCKET
+        alert.hasTypeContaining("kecleon") -> CHANNEL_KECLEON
         alert.hasTypeContaining("common") || alert.hasTypeContaining("rare") || alert.hasTypeContaining("spawn") -> CHANNEL_SPAWNS
         alert.hasTypeContaining("quest") -> CHANNEL_QUESTS
         else -> CHANNEL_ID
@@ -493,6 +548,7 @@ object AlertNotifier {
             // Silent: the child notifications already alerted, and a second buzz for the
             // summary would double every delivery.
             .setSilent(true)
+            .also { builder -> summaryTimeout(context, channelId, posted)?.let(builder::setTimeoutAfter) }
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,
@@ -539,7 +595,6 @@ object AlertNotifier {
         val nundosEnabled: Boolean,
         val kecleonEnabled: Boolean,
         val rocketEnabled: Boolean,
-        val vibrateEnabled: Boolean,
         val silenceUntil: Long,
         val maxWalkingMinutes: Int,
         val quietHoursEnabled: Boolean,
@@ -672,7 +727,6 @@ object AlertNotifier {
                     nundosEnabled = preferences.nundosNotifications.first(),
                     kecleonEnabled = preferences.kecleonNotifications.first(),
                     rocketEnabled = preferences.rocketNotifications.first(),
-                    vibrateEnabled = preferences.notificationVibrate.first(),
                     silenceUntil = preferences.silenceUntil.first(),
                     maxWalkingMinutes = preferences.maxWalkingMinutes.first(),
                     quietHoursEnabled = preferences.quietHoursEnabled.first(),
