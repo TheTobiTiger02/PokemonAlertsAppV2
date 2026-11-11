@@ -1,11 +1,11 @@
 package com.example.pokemonalertsv2.widget
 
-import android.location.Location
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
+import com.example.pokemonalertsv2.util.haversineMeters
 
 internal object WidgetAlertSorter {
     fun sort(
@@ -77,16 +77,6 @@ internal object WidgetAlertSorter {
         if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return null
         if (latitude == 0.0 && longitude == 0.0) return null
 
-        val result = FloatArray(1)
-        return runCatching {
-            Location.distanceBetween(
-                origin.latitude,
-                origin.longitude,
-                latitude,
-                longitude,
-                result
-            )
-            result[0]
-        }.getOrNull()
+        return haversineMeters(origin.latitude, origin.longitude, latitude, longitude).toFloat()
     }
 }

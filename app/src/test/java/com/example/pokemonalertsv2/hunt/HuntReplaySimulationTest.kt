@@ -3,9 +3,9 @@ package com.example.pokemonalertsv2.hunt
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
-import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -250,7 +250,7 @@ private class Simulation(
         legStartMillis = now
         val coordinates = next?.mapCoordinatesOrNull() ?: return
         val toPin = costs.walkedMetersOrNull(null, next.uniqueId)
-            ?: (mapPipDistanceMeters(lat, lon, coordinates.latitude, coordinates.longitude) * WalkingRouteUtils.DETOUR_FACTOR)
+            ?: (haversineMeters(lat, lon, coordinates.latitude, coordinates.longitude) * WalkingRouteUtils.DETOUR_FACTOR)
         legMeters = (toPin - huntInteractionRadiusMeters(next)).coerceAtLeast(0.0)
         legSeconds = huntWalkSeconds(legMeters.toInt())
     }
@@ -279,7 +279,7 @@ private class Simulation(
         val wasOn = standingOn
         lat = legFromLat + (coordinates.latitude - legFromLat) * share
         lon = legFromLon + (coordinates.longitude - legFromLon) * share
-        if (wasOn != null && mapPipDistanceMeters(wasOn.latitudeE4 / 1e4, wasOn.longitudeE4 / 1e4, lat, lon) > HUNT_ORIGIN_DRIFT_METERS) {
+        if (wasOn != null && haversineMeters(wasOn.latitudeE4 / 1e4, wasOn.longitudeE4 / 1e4, lat, lon) > HUNT_ORIGIN_DRIFT_METERS) {
             standingOn = null
         }
     }
@@ -298,7 +298,7 @@ private class Simulation(
         for (alert in route) {
             val c = alert.mapCoordinatesOrNull() ?: continue
             val pin = costs.walkedMetersOrNull(fromId, alert.uniqueId)
-                ?: (mapPipDistanceMeters(fromLat, fromLon, c.latitude, c.longitude) * WalkingRouteUtils.DETOUR_FACTOR)
+                ?: (haversineMeters(fromLat, fromLon, c.latitude, c.longitude) * WalkingRouteUtils.DETOUR_FACTOR)
             clock += huntWalkSeconds((pin - huntInteractionRadiusMeters(alert)).coerceAtLeast(0.0).toInt())
             val end = TimeUtils.parseEndTimeToMillis(alert.endTime)
             numberedStops++
@@ -312,7 +312,7 @@ private class Simulation(
             val a = bearing(points[i - 1], points[i])
             val b = bearing(points[i], points[i + 1])
             val turn = abs(((b - a + 540) % 360) - 180)
-            val hop = mapPipDistanceMeters(points[i].first, points[i].second, points[i + 1].first, points[i + 1].second)
+            val hop = haversineMeters(points[i].first, points[i].second, points[i + 1].first, points[i + 1].second)
             if (turn > 135 && hop > 150) backtracks++
         }
     }

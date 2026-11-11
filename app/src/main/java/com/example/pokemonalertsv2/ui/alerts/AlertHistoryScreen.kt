@@ -3,6 +3,7 @@
 package com.example.pokemonalertsv2.ui.alerts
 
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
+import com.example.pokemonalertsv2.util.haversineMeters
 import com.example.pokemonalertsv2.util.rememberOffMain
 import android.Manifest
 import android.app.DatePickerDialog
@@ -207,15 +208,8 @@ internal fun AlertHistoryPage(
                 userLocation?.let { loc ->
                     filtered.sortedBy { alert ->
                         alert.mapCoordinatesOrNull()?.let { coordinates ->
-                            val results = FloatArray(1)
-                            Location.distanceBetween(
-                                loc.latitude,
-                                loc.longitude,
-                                coordinates.latitude,
-                                coordinates.longitude,
-                                results
-                            )
-                            results.getOrNull(0)?.takeUnless { it.isNaN() }
+                            haversineMeters(loc.latitude, loc.longitude, coordinates.latitude, coordinates.longitude)
+                                .toFloat().takeUnless { it.isNaN() }
                         } ?: Float.MAX_VALUE
                     }
                 } ?: filtered.sortedWith(compareByDescending<PokemonAlert> {

@@ -327,6 +327,7 @@ class WidgetAlertFilterTest {
     )
 
     private companion object {
-        val origin = WidgetAlertFilter.Origin(latitude = 49.74, longitude = 8.62)
+        // About 1.1 km south of the sample alerts, so none of them counts as directly in range.
+        val origin = WidgetAlertFilter.Origin(latitude = 49.73, longitude = 8.62)
     }
 }

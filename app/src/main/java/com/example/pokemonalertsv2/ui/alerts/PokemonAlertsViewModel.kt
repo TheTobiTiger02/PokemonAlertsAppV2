@@ -31,6 +31,7 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.notifications.AlertSnoozeScheduler
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -117,7 +118,7 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
 
     // ── Location and distance pipeline ────────────────────────────────────
     // These used to live in PokemonAlertsScreen as `remember` blocks, which meant every entry
-    // to the Alerts tab recomputed a Location.distanceBetween, a route lookup and an endTime
+    // to the Alerts tab recomputed a distance, a route lookup and an endTime
     // parse for every alert on the main thread, because AnimatedContent disposes the outgoing
     // screen. Holding them here computes once and survives navigation.
 
@@ -184,9 +185,8 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         alerts.map { alert ->
             val straightLine = location?.let { origin ->
                 alert.mapCoordinatesOrNull()?.let { coordinates ->
-                    val results = FloatArray(1)
-                    Location.distanceBetween(origin.latitude, origin.longitude, coordinates.latitude, coordinates.longitude, results)
-                    results.getOrNull(0)?.takeUnless(Float::isNaN)
+                    haversineMeters(origin.latitude, origin.longitude, coordinates.latitude, coordinates.longitude)
+                        .toFloat().takeUnless(Float::isNaN)
                 }
             }
             val display = WalkingRouteUtils.buildRouteDisplayInfo(straightLine, routes[alert.uniqueId])
