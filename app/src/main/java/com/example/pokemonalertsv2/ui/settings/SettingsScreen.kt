@@ -582,7 +582,7 @@ internal fun SettingsScreen(
                             }
                         }
                         Text(
-                            text = "\u00A9 openrouteservice.org by HeiGIT | Map data \u00A9 OpenStreetMap contributors",
+                            text = "Walking routes by Valhalla | Map data \u00A9 OpenStreetMap contributors",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

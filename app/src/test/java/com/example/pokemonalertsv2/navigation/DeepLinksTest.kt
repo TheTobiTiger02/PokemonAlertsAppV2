@@ -81,4 +81,12 @@ class DeepLinksTest {
         assertEquals(DeepLinkTarget.Event("a b/c"), parseDeepLink("pokemonalerts://event/a%20b%2Fc"))
         assertNull(parseDeepLink("pokemonalerts://event/"))
     }
+
+    @org.junit.Test
+    fun `short settings names reach their page`() {
+        assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.ABOUT_UPDATES), parseDeepLink("pokemonalerts://settings/about"))
+        assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.APPEARANCE_BEHAVIOR), parseDeepLink("pokemonalerts://settings/Appearance"))
+        assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.NOTIFICATIONS), parseDeepLink("pokemonalerts://settings/notifications"))
+        assertEquals(DeepLinkTarget.RootTab(4), parseDeepLink("pokemonalerts://settings/nonsense"))
+    }
 }

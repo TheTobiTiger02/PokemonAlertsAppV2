@@ -136,7 +136,15 @@ class CatchRoutesActivity : ComponentActivity() {
      * screen, which is what hides the promoted status-bar chip.
      */
     private fun floatingWindow() {
-        if (!Settings.canDrawOverlays(this)) startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        if (!Settings.canDrawOverlays(this)) {
+            // Without a word the jump to a system list of apps looks like a mistake.
+            android.widget.Toast.makeText(
+                this,
+                "Allow \"Display over other apps\" for Pokémon Alerts to use the floating route window",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
         else startService(Intent(this, CatchRouteService::class.java).setAction("map"))
     }
     private fun pickTime() {
