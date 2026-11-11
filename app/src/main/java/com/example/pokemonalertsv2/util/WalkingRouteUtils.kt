@@ -113,11 +113,7 @@ object WalkingRouteUtils {
     }
 
     fun formatDistanceMeters(meters: Float): String {
-        return if (meters >= 1000f) {
-            String.format(Locale.getDefault(), "%.1f km", meters / 1000f)
-        } else {
-            String.format(Locale.getDefault(), "%.0f m", meters)
-        }
+        return formatMeters(meters.toDouble())
     }
 
     fun formatWalkingDurationSeconds(seconds: Long): String {

@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.AppText
 import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.RouteGuidanceInfo
@@ -133,7 +134,7 @@ internal class PlannerActions(
 )
 
 internal fun catchClock(millis: Long): String =
-    Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+    TimeUtils.formatClock(millis)
 
 internal fun startSummary(model: CatchRoutesViewModel, s: CatchRouteSettings): String = when {
     s.fixed -> "${s.sourceRouteName ?: "GO route"}, as drawn"

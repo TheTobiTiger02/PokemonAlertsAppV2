@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.util.formatMeters
 import com.example.pokemonalertsv2.util.AppText
 import android.Manifest
 import android.app.Notification
@@ -659,12 +660,7 @@ internal object ArrivalTrackingNotifications {
             ?: alert.name.takeIf { it.isNotBlank() }
             ?: "alert"
 
-    private fun formatDistance(distanceMeters: Float): String =
-        if (distanceMeters < 1_000f) {
-            "${distanceMeters.roundToInt()} m"
-        } else {
-            String.format(Locale.getDefault(), "%.1f km", distanceMeters / 1_000f)
-        }
+    private fun formatDistance(distanceMeters: Float): String = formatMeters(distanceMeters.toDouble())
 
     private fun immutableFlag(): Int = PendingIntent.FLAG_IMMUTABLE
 }

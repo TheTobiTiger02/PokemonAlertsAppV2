@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.catchroutes
 
+import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.AppText
 import com.example.pokemonalertsv2.R
 import androidx.compose.ui.res.stringResource
@@ -332,6 +333,6 @@ class CatchRoutesActivity : ComponentActivity() {
     }
 
     private fun coordinate(p: CatchPoint) = String.format(Locale.US, "%.5f, %.5f", p.latitude, p.longitude)
-    private fun time(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+    private fun time(millis: Long) = TimeUtils.formatClock(millis)
 }
 

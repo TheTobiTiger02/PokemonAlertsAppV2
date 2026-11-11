@@ -174,7 +174,7 @@ internal fun hourBar(schedule: SpawnSchedule?, window: SpawnOpportunity?, zone: 
     return HourBar(segments, despawn / 3600f, schedule?.durationSeconds != null || window?.observed == true)
 }
 
-private fun clock(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
+private fun clock(millis: Long) = TimeUtils.formatClock(millis)
 
 private fun parseInstant(value: String?) = value?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
 
