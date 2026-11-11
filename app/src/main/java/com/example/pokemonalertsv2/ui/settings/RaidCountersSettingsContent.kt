@@ -157,7 +157,19 @@ fun RaidCountersSettingsContent(
                         context.startActivity(PokeGenieRosterActivity.createIntent(context))
                     }
                 ) { Text("View roster") }
-                OutlinedButton(onClick = onClearPokeGenie) { Text("Clear") }
+                var confirmClear by remember { androidx.compose.runtime.mutableStateOf(false) }
+                OutlinedButton(onClick = { confirmClear = true }) { Text("Clear") }
+                if (confirmClear) {
+                    AlertDialog(
+                        onDismissRequest = { confirmClear = false },
+                        title = { Text("Clear your Poké Genie roster?") },
+                        text = { Text("Counters go back to generic teams until you import a CSV again.") },
+                        confirmButton = {
+                            TextButton(onClick = { confirmClear = false; onClearPokeGenie() }) { Text("Clear") }
+                        },
+                        dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+                    )
+                }
             }
         }
 
@@ -272,13 +284,24 @@ fun RaidCountersSettingsContent(
                 ) { Text(provider.label) }
             }
         } else {
-            TextButton(
-                onClick = {
-                    auth.signOut()
-                    // Without this the WebView would silently sign straight back in.
-                    PokebattlerLoginActivity.clearWebSession()
-                }
-            ) { Text("Sign out") }
+            var confirmSignOut by remember { androidx.compose.runtime.mutableStateOf(false) }
+            TextButton(onClick = { confirmSignOut = true }) { Text("Sign out") }
+            if (confirmSignOut) {
+                AlertDialog(
+                    onDismissRequest = { confirmSignOut = false },
+                    title = { Text("Sign out of Pokebattler?") },
+                    text = { Text("Pokébox counters need you to sign in again.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            confirmSignOut = false
+                            auth.signOut()
+                            // Without this the WebView would silently sign straight back in.
+                            PokebattlerLoginActivity.clearWebSession()
+                        }) { Text("Sign out") }
+                    },
+                    dismissButton = { TextButton(onClick = { confirmSignOut = false }) { Text("Cancel") } }
+                )
+            }
         }
     }
 }

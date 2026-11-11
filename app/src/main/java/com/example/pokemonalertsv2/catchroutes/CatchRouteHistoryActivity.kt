@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -44,10 +45,13 @@ class CatchRouteHistoryActivity : ComponentActivity() {
         setContent {
             val themeMode by remember { AlertPreferences(alertPreferencesDataStore).themeMode }.collectAsStateWithLifecycle(initialValue = 0)
             PokemonAlertsV2Theme(darkTheme = AppThemeMode.fromStored(themeMode).resolveDark(isSystemInDarkTheme())) {
-                val history by store.history.collectAsStateWithLifecycle(initialValue = emptyList())
+                // Null until the first read, so "no routes yet" does not flash before the list arrives.
+                val loaded by store.history.collectAsStateWithLifecycle<List<CatchRouteSummary>?>(initialValue = null)
+                val history = loaded.orEmpty()
+                val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
                 var open by remember { mutableStateOf<CatchRouteSummary?>(null) }
                 var clearing by remember { mutableStateOf(false) }
-                Scaffold(topBar = {
+                Scaffold(snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) }, topBar = {
                     TopAppBar(title = { Text("Route history") }, navigationIcon = {
                         IconButton(onClick = ::finish) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                     }, actions = { if (history.isNotEmpty()) TextButton(onClick = { clearing = true }) { Text("Clear") } })
@@ -55,7 +59,8 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                     LazyVerticalGrid(columns = AdaptiveCardColumns, modifier = Modifier.fillMaxSize().padding(padding).testTag("catch_history"),
                         contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        if (history.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                        if (loaded == null) Unit
+                        else if (history.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
                             Text("Finished routes appear here, with what you caught and where you walked.",
                                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else item(span = { GridItemSpan(maxLineSpan) }) {
@@ -65,7 +70,16 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                                 StatTile(formatCatchKm(history.sumOf { it.walkedMeters }), "Walked", Modifier.weight(1f))
                             }
                         }
-                        items(history, key = { it.id }) { summary -> HistoryRow(summary) { open = summary } }
+                        items(history, key = { it.id }) { summary ->
+                            HistoryRow(summary, onDelete = {
+                                lifecycleScope.launch {
+                                    store.deleteHistory(summary.id)
+                                    val result = snackbar.showSnackbar("Route deleted", actionLabel = "Undo",
+                                        duration = androidx.compose.material3.SnackbarDuration.Short)
+                                    if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) store.addHistory(summary)
+                                }
+                            }) { open = summary }
+                        }
                     }
                 }
                 open?.let { summary ->
@@ -81,7 +95,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
         }
     }
 
-    @Composable private fun HistoryRow(summary: CatchRouteSummary, onClick: () -> Unit) {
+    @Composable private fun HistoryRow(summary: CatchRouteSummary, onDelete: () -> Unit, onClick: () -> Unit) {
         Surface(onClick = onClick, shape = MaterialTheme.shapes.medium, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
             Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -89,6 +103,9 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                     Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(summary.startedAtMillis)),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("${summary.headline()} · ${formatCatchSpeed(summary.averageKmh)}", style = MaterialTheme.typography.bodyMedium)
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.testTag("catch_history_delete_${summary.id}")) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${summary.name}")
                 }
             }
         }
