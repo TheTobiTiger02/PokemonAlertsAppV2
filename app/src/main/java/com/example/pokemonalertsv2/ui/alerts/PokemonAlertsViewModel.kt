@@ -223,7 +223,14 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         startRefresh(showLoading = true)
     }
 
-    fun refreshAlertsInBackground() {
+    /**
+     * The 30-second poll of whichever alert screens are composed. The feed and the map each run
+     * one and both stay composed after a visit, so without this gate the poll ran twice as often.
+     */
+    fun refreshAlertsInBackground(nowMillis: Long = System.currentTimeMillis()) {
+        val last = lastBackgroundRefreshMillis.get()
+        if (nowMillis - last < BACKGROUND_REFRESH_MIN_GAP_MILLIS) return
+        if (!lastBackgroundRefreshMillis.compareAndSet(last, nowMillis)) return
         startRefresh(showLoading = false)
     }
 
@@ -597,5 +604,10 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
             val scheduled = AlertSnoozeScheduler.schedule(getApplication(), alert, safeMinutes)
             onResult(scheduled)
         }
+    }
+
+    private companion object {
+        const val BACKGROUND_REFRESH_MIN_GAP_MILLIS = 25_000L
+        val lastBackgroundRefreshMillis = java.util.concurrent.atomic.AtomicLong(0L)
     }
 }

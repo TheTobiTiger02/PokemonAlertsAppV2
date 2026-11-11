@@ -45,6 +45,8 @@ private class AlertsFactory(
     private val appWidgetId: Int
 ) : RemoteViewsService.RemoteViewsFactory {
     private val items = mutableListOf<PokemonAlert>()
+    // Row images rendered in onDataSetChanged, so getViewAt is a lookup instead of a blocking render per row.
+    private var images: Map<String, android.graphics.Bitmap?> = emptyMap()
     private var currentLocation: Location? = null
     private var walkingRoutes: Map<String, WalkingRouteInfo> = emptyMap()
 
@@ -76,6 +78,9 @@ private class AlertsFactory(
             items.clear()
             items.addAll(sorted)
             walkingRoutes = renderSnapshot?.walkingRoutes.orEmpty()
+            images = sorted.associate { alert ->
+                alert.uniqueId to WidgetAlertImageRenderer.render(context, alert, sizeDp = 56, palette = palette)
+            }
         }
     }
 
@@ -85,6 +90,7 @@ private class AlertsFactory(
     override fun onDestroy() {
         items.clear()
         walkingRoutes = emptyMap()
+        images = emptyMap()
     }
 
     override fun getCount(): Int = items.size
@@ -188,7 +194,7 @@ private class AlertsFactory(
         // 5. Image loading is shared with the expanded single-alert layout.
         views.setImageViewBitmap(
             R.id.item_image,
-            runBlocking { WidgetAlertImageRenderer.render(context, alert, sizeDp = 56, palette = palette) }
+            images[alert.uniqueId]
         )
 
         // 6. Navigate button — show only if we have coordinates

@@ -57,7 +57,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
         val pending = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        widgetWork.launch {
             try {
                 updateAllSerialized(context, scheduleNext = true)
             } finally {
@@ -87,7 +87,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         // Rebuild views for this widget (may switch between compact/full)
         val pending = goAsync()
-        CoroutineScope(Dispatchers.IO).launch {
+        widgetWork.launch {
             try {
                 updateMutex.withLock {
                     val nowMillis = System.currentTimeMillis()
@@ -123,7 +123,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
                 }
                 if (intent.action == ACTION_REFRESH) showRefreshingFeedback(context)
                 val pending = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
+                widgetWork.launch {
                     try {
                         updateAllSerialized(context, scheduleNext = true)
                     } finally {
@@ -134,7 +134,7 @@ class AlertsWidgetProvider : AppWidgetProvider() {
             ACTION_DISMISS_WIDGET -> {
                 val alertId = intent.getStringExtra(EXTRA_DISMISS_ALERT_ID) ?: return
                 val pending = goAsync()
-                CoroutineScope(Dispatchers.IO).launch {
+                widgetWork.launch {
                     try {
                         val prefs = AlertPreferences(context.alertPreferencesDataStore)
                         prefs.addDismissedAlert(alertId)
