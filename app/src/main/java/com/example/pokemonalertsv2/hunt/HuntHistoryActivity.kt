@@ -89,7 +89,9 @@ class HuntHistoryActivity : ComponentActivity() {
 internal fun HuntHistoryScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val repository = remember(context) { HuntRepository.getInstance(context) }
-    val history by repository.history.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Null until the first read, so "No hunts yet" does not flash before the list arrives.
+    val loaded by repository.history.collectAsStateWithLifecycle<List<HuntSummary>?>(initialValue = null)
+    val history = loaded.orEmpty()
     val scope = rememberCoroutineScope()
     var opened by remember { mutableStateOf<HuntSummary?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -137,7 +139,9 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
             )
         }
     ) { padding ->
-        if (history.isEmpty()) {
+        if (loaded == null) {
+            Box(Modifier.fillMaxSize().padding(padding))
+        } else if (history.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
                 Text(
                     text = "No hunts yet. Finished hunts show up here with what you caught.",
