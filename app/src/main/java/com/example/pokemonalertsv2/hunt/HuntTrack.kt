@@ -1,6 +1,7 @@
 package com.example.pokemonalertsv2.hunt
 
 import com.example.pokemonalertsv2.catchroutes.CatchPoint
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlin.math.roundToLong
 
 /**
@@ -83,12 +84,5 @@ internal object HuntTrack {
     }
 }
 
-internal fun huntPathDistance(a: CatchPoint, b: CatchPoint): Double {
-    val earthRadius = 6_371_000.0
-    val dLat = Math.toRadians(b.latitude - a.latitude)
-    val dLon = Math.toRadians(b.longitude - a.longitude)
-    val h = kotlin.math.sin(dLat / 2).let { it * it } +
-        kotlin.math.cos(Math.toRadians(a.latitude)) * kotlin.math.cos(Math.toRadians(b.latitude)) *
-        kotlin.math.sin(dLon / 2).let { it * it }
-    return earthRadius * 2 * kotlin.math.atan2(kotlin.math.sqrt(h), kotlin.math.sqrt(1 - h))
-}
+internal fun huntPathDistance(a: CatchPoint, b: CatchPoint): Double =
+    haversineMeters(a.latitude, a.longitude, b.latitude, b.longitude)

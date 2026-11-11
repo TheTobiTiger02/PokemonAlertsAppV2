@@ -3,8 +3,8 @@ package com.example.pokemonalertsv2.hunt
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.tracking.usesPoiArrivalRadius
-import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlin.math.ceil
 
 /**
@@ -157,7 +157,7 @@ internal class ResolvedHuntLegCosts(
      * trainer happens to be standing, so those stay usable for the whole TTL.
      */
     private val originDrifted: Boolean by lazy {
-        mapPipDistanceMeters(originLatitude, originLongitude, readLatitude, readLongitude) >
+        haversineMeters(originLatitude, originLongitude, readLatitude, readLongitude) >
             HUNT_ORIGIN_DRIFT_METERS
     }
 

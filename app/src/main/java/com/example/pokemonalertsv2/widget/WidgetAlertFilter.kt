@@ -9,6 +9,7 @@ import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.alertCategories
 import com.example.pokemonalertsv2.util.TimeUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 
 internal object WidgetAlertFilter {
     data class Origin(
@@ -143,10 +144,6 @@ internal object WidgetAlertFilter {
     fun directDistanceMeters(origin: Origin, alert: PokemonAlert): Float? {
         val latitude = alert.latitude ?: return null
         val longitude = alert.longitude ?: return null
-        val results = FloatArray(1)
-        runCatching {
-            Location.distanceBetween(origin.latitude, origin.longitude, latitude, longitude, results)
-        }.getOrNull() ?: return null
-        return results.getOrNull(0)?.takeUnless { it.isNaN() }
+        return haversineMeters(origin.latitude, origin.longitude, latitude, longitude).toFloat().takeUnless { it.isNaN() }
     }
 }

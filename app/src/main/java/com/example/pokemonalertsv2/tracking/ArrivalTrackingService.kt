@@ -59,12 +59,12 @@ import com.example.pokemonalertsv2.ui.alerts.MapTrackingInteractionState
 import com.example.pokemonalertsv2.ui.alerts.MapPoseCadence
 import com.example.pokemonalertsv2.ui.alerts.MapPoseTracker
 import com.example.pokemonalertsv2.ui.alerts.MAP_PIP_REFIT_METERS
-import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.ui.alerts.stepMapPipSelection
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteRepository
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1850,7 +1850,7 @@ class ArrivalTrackingService : Service() {
             val previousLat = lastFocusLatitude
             val previousLon = lastFocusLongitude
             if (!refocus && previousLat != null && previousLon != null) {
-                val moved = mapPipDistanceMeters(
+                val moved = haversineMeters(
                     previousLat,
                     previousLon,
                     origin.latitude,
@@ -2241,15 +2241,7 @@ class ArrivalTrackingService : Service() {
         location: Location,
         destination: TrackedDestination
     ): Float {
-        val results = FloatArray(1)
-        Location.distanceBetween(
-            location.latitude,
-            location.longitude,
-            destination.latitude,
-            destination.longitude,
-            results
-        )
-        return results[0]
+        return haversineMeters(location.latitude, location.longitude, destination.latitude, destination.longitude).toFloat()
     }
 
     private fun isFreshValidLocation(location: Location): Boolean {

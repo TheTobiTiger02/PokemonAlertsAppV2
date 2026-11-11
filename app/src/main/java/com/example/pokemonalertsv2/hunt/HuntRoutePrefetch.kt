@@ -5,7 +5,7 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
-import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
+import com.example.pokemonalertsv2.util.haversineMeters
 
 /**
  * The targets worth routing, chosen without ever consulting a routed cost.
@@ -57,4 +57,4 @@ internal fun huntOriginMoved(
     toLongitude: Double,
     thresholdMeters: Double = HUNT_ORIGIN_DRIFT_METERS
 ): Boolean =
-    mapPipDistanceMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) > thresholdMeters
+    haversineMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) > thresholdMeters

@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.catchroutes.SpawnpointSelection
 import com.example.pokemonalertsv2.catchroutes.SpawnpointDetailSheet
 import com.example.pokemonalertsv2.catchroutes.SpawnAvailabilityRepository
 import com.example.pokemonalertsv2.data.PokemonAlertsApi
+import com.example.pokemonalertsv2.util.haversineMeters
 import com.example.pokemonalertsv2.util.rememberOffMain
 import com.example.pokemonalertsv2.util.PerfTrace
 import android.os.Build
@@ -1547,7 +1548,7 @@ internal fun AlertsMapScreenContent(
     ) {
         val destination = arrivalTracking.activeDestination ?: return@remember null
         val location = userLocation ?: return@remember null
-        mapPipDistanceMeters(
+        haversineMeters(
             location.latitude,
             location.longitude,
             destination.latitude,
@@ -1764,7 +1765,7 @@ internal fun AlertsMapScreenContent(
             val previousLatitude = lastFitLatitude
             val previousLongitude = lastFitLongitude
             val moved = previousLatitude == null || previousLongitude == null ||
-                mapPipDistanceMeters(
+                haversineMeters(
                     previousLatitude,
                     previousLongitude,
                     location.latitude,
@@ -2779,15 +2780,8 @@ internal fun visibleMapAlerts(
         if (filterDefinition == null) return@filter true
 
         val distance = if (userLatitude != null && userLongitude != null) {
-            val result = FloatArray(1)
-            Location.distanceBetween(
-                userLatitude,
-                userLongitude,
-                coordinates.latitude,
-                coordinates.longitude,
-                result
-            )
-            result.firstOrNull()?.takeUnless(Float::isNaN)
+            haversineMeters(userLatitude, userLongitude, coordinates.latitude, coordinates.longitude)
+                .toFloat().takeUnless(Float::isNaN)
         } else null
         val route = walkingRoutes[alert.uniqueId]
         AlertFilterMatcher.matches(

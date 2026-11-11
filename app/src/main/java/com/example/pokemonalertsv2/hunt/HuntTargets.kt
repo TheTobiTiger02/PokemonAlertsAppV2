@@ -8,9 +8,9 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
 import com.example.pokemonalertsv2.ui.alerts.mapCoordinatesOrNull
-import com.example.pokemonalertsv2.ui.alerts.mapPipDistanceMeters
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
+import com.example.pokemonalertsv2.util.haversineMeters
 
 /**
  * What a hunt suggests right now.
@@ -437,7 +437,7 @@ private fun huntApproachMeters(
     toLongitude: Double,
     alert: PokemonAlert
 ): Double =
-    (mapPipDistanceMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) -
+    (haversineMeters(fromLatitude, fromLongitude, toLatitude, toLongitude) -
         huntInteractionRadiusMeters(alert)).coerceAtLeast(0.0)
 
 /**
@@ -456,7 +456,7 @@ private fun legMeters(
 ): Double {
     val coordinates = to.mapCoordinatesOrNull() ?: return 0.0
     val toPin = costs.walkedMetersOrNull(fromId, to.uniqueId)
-        ?: (mapPipDistanceMeters(
+        ?: (haversineMeters(
             fromLatitude,
             fromLongitude,
             coordinates.latitude,
@@ -569,6 +569,6 @@ internal fun huntMatchesOutsideArea(
     }
     if (originLatitude == null || originLongitude == null) return outside.take(limit)
     return outside.sortedBy { alert ->
-        mapPipDistanceMeters(originLatitude, originLongitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0)
+        haversineMeters(originLatitude, originLongitude, alert.latitude ?: 0.0, alert.longitude ?: 0.0)
     }.take(limit)
 }

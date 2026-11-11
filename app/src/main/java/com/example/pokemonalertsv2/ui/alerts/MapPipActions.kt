@@ -13,6 +13,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.tracking.isEligibleArrivalDestination
+import com.example.pokemonalertsv2.util.haversineMeters
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.max
@@ -233,7 +234,7 @@ internal fun mapPipBrowseOrder(
     .sortedWith(
         compareBy(
             { (_, coordinates) ->
-                mapPipDistanceMeters(
+                haversineMeters(
                     originLatitude,
                     originLongitude,
                     coordinates.latitude,
@@ -262,21 +263,6 @@ internal fun stepMapPipSelection(
     return orderedIds[nextIndex]
 }
 
-internal fun mapPipDistanceMeters(
-    latitude: Double,
-    longitude: Double,
-    otherLatitude: Double,
-    otherLongitude: Double
-): Double {
-    val deltaLat = Math.toRadians(otherLatitude - latitude)
-    val deltaLon = Math.toRadians(otherLongitude - longitude)
-    val a = sin(deltaLat / 2).pow(2) +
-        cos(Math.toRadians(latitude)) * cos(Math.toRadians(otherLatitude)) *
-        sin(deltaLon / 2).pow(2)
-    return 2 * MAP_PIP_EARTH_RADIUS_METERS * asin(min(1.0, sqrt(a)))
-}
-
-private const val MAP_PIP_EARTH_RADIUS_METERS = 6_371_000.0
 
 /** How the window should frame the user and the alert they are browsing. */
 internal sealed interface MapPipFocus {
@@ -309,7 +295,7 @@ internal fun resolveMapPipFocus(
     alertLatitude: Double,
     alertLongitude: Double
 ): MapPipFocus {
-    val separation = mapPipDistanceMeters(
+    val separation = haversineMeters(
         userLatitude,
         userLongitude,
         alertLatitude,
