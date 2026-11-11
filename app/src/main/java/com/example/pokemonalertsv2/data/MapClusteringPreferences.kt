@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.data
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit

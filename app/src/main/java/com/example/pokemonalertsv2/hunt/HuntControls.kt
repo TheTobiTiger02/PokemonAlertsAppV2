@@ -144,7 +144,7 @@ fun HuntControls(
 
         BatterySaverSwitch(
             description = stringResource(R.string.hunt_hunt_battery_saver),
-            explanation = "Face down during a hunt blacks out the screen. Long press it to turn off."
+            explanation = stringResource(R.string.hunt_face_down_during_a_hunt_blacks)
         )
 
         SpacialRendSwitch()

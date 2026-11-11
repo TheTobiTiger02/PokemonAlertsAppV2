@@ -84,9 +84,9 @@ private fun ProfileRows(state: StudioBodyState) {
 @Composable
 internal fun StudioTabsBody(state: StudioBodyState) {
     val filters = state.filters(nearbyExtras = {
-        PanelSectionLabel("Areas")
+        PanelSectionLabel(stringResource(R.string.settings_areas))
         AreaChipsEditor(state.draft, state.areas, state.onDraftChange, Modifier.panelGutter())
-        PanelSectionLabel("Profile")
+        PanelSectionLabel(stringResource(R.string.settings_profile))
         ProfileRows(state)
     })
     Box(Modifier.fillMaxSize().padding(top = Spacing.sm).testTag("studio_tabs")) {

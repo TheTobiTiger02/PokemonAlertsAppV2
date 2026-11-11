@@ -571,7 +571,7 @@ internal fun MainScaffold(
             is UpdateState.UpdateAvailable -> {
                 AlertDialog(
                     onDismissRequest = { InAppUpdateManager.resetState() },
-                    title = { Text(stringResource(R.string.mainscaffoldkt_update_available)) },
+                    title = { Text("Update Available") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(stringResource(R.string.mainscaffoldkt_a_new_version_of_pokemonalerts_x, state.release.tagName))
@@ -596,7 +596,7 @@ internal fun MainScaffold(
                                 }
                             }
                         ) {
-                            Text(stringResource(R.string.mainscaffoldkt_update))
+                            Text("Update")
                         }
                     },
                     dismissButton = {

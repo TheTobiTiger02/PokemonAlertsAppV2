@@ -873,7 +873,7 @@ internal fun CustomDatePickerDialog(
             FilledTonalButton(
                 onClick = { onDateSelected(selectedYear, selectedMonth, selectedDay) }
             ) {
-                Text(stringResource(R.string.settings_select))
+                Text("Select")
             }
         },
         dismissButton = {

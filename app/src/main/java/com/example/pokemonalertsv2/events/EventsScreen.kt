@@ -245,7 +245,7 @@ fun EventsContent(
                 )
             }
             if (nowEvents.isNotEmpty()) {
-                item(span = StaggeredGridItemSpan.FullLine) { SectionTitle("Happening now") }
+                item(span = StaggeredGridItemSpan.FullLine) { SectionTitle(stringResource(R.string.events_happening_now)) }
                 items(nowEvents, key = { "now-${it.id}" }) { event ->
                     EventCard(event, state, onClick = { selected = event }, onToggleStar = onToggleStar)
                 }

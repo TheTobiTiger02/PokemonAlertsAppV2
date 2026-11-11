@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.widget
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas

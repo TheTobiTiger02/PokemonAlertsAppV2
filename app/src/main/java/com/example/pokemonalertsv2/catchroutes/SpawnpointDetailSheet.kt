@@ -239,23 +239,23 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
             }
         }
 
-        SectionLabel("Every hour")
+        SectionLabel(stringResource(R.string.catchroutes_every_hour))
         HourBarView(hourBar(schedule, primary), now)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Fact("Despawns", schedule?.despawnSecondOfHour?.let(::secondOfHourLabel) ?: primary?.let { clock(it.despawnAt) } ?: "Unknown", Modifier.weight(1f))
-            Fact("Lasts", durationLabel(schedule), Modifier.weight(1f))
-            Fact("Agreeing cycles", schedule?.supportCycles?.let { s -> schedule.totalCycles?.let { "$s of $it" } ?: "$s" } ?: "—", Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_despawns), schedule?.despawnSecondOfHour?.let(::secondOfHourLabel) ?: primary?.let { clock(it.despawnAt) } ?: "Unknown", Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_lasts), durationLabel(schedule), Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_agreeing_cycles), schedule?.supportCycles?.let { s -> schedule.totalCycles?.let { "$s of $it" } ?: "$s" } ?: "—", Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // "Never" only once the backend has answered; before that, or without it, it is unknown.
             val unknown = if (detail == null) "—" else stringResource(R.string.catchroutes_never)
-            Fact("Last verified", parseInstant(schedule?.lastVerifiedAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_last_verified), parseInstant(schedule?.lastVerifiedAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
             Fact("Seen live", parseInstant(detail?.liveLastSeenAt ?: primary?.liveLastSeenAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
-            Fact("Last active", parseInstant(detail?.lastActiveAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
+            Fact(stringResource(R.string.catchroutes_last_active), parseInstant(detail?.lastActiveAt)?.let { TimeUtils.formatTimeAgo(it) } ?: unknown, Modifier.weight(1f))
         }
 
         if (selection.encounters.isNotEmpty()) {
-            SectionLabel("On this route")
+            SectionLabel(stringResource(R.string.catchroutes_on_this_route))
             selection.encounters.forEach { e ->
                 val wait = itinerary?.waits?.firstOrNull { kotlin.math.abs(it.meters - e.meters) <= (itinerary.settings.radius * 2) }
                 Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -265,14 +265,14 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
                             Text(stringResource(R.string.catchroutes_x_m_along_the_route_x, e.meters.toInt(), TimeUtils.formatDurationShort(e.opportunity.despawnAt - e.arrivalMillis)),
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (wait != null) Pill("Wait ${TimeUtils.formatDurationShort(wait.millis)}", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                        if (wait != null) Pill(stringResource(R.string.catchroutes_wait_x, TimeUtils.formatDurationShort(wait.millis)), MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
                     }
                 }
             }
         }
 
         if (windows.isNotEmpty()) {
-            SectionLabel("Windows")
+            SectionLabel(stringResource(R.string.catchroutes_windows))
             windows.filter { it.despawnAt > now }.take(4).ifEmpty { windows.takeLast(1) }.forEach { w ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("${clock(w.availableFrom)}–${clock(w.despawnAt)}", style = MaterialTheme.typography.bodyMedium,
@@ -286,7 +286,7 @@ private fun SpawnpointSection(selection: SpawnpointSelection, itinerary: CatchIt
 
         val sightings = detail?.sightings.orEmpty().filter { it.pokemonId != null }
         if (sightings.isNotEmpty()) {
-            SectionLabel("Recent spawns")
+            SectionLabel(stringResource(R.string.catchroutes_recent_spawns))
             RecentSpawns(sightings)
         }
 

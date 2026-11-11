@@ -96,7 +96,7 @@ internal fun TeamSection(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            SectionLabel("Suggested team")
+            SectionLabel(stringResource(R.string.counters_suggested_team))
             Spacer(modifier = Modifier.weight(1f))
             CopyTeamButton(enabled = team.isNotEmpty(), onCopy = onCopyTeam)
         }

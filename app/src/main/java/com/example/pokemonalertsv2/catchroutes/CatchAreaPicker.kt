@@ -68,7 +68,7 @@ internal fun CatchAreaPicker(
                             saved.forEach { area ->
                                 DropdownMenuItem(text = { Text(area.name) }, onClick = {
                                     savedOpen = false; drawing = false; change(area.corners); view?.fitArea(area.corners)
-                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text(stringResource(R.string.catchroutes_delete)) } })
+                                }, trailingIcon = { TextButton(onClick = { savedOpen = false; deleting = area }) { Text("Delete") } })
                             }
                         }
                     }
@@ -112,8 +112,8 @@ internal fun CatchAreaPicker(
             dismissButton = { TextButton(onClick = { naming = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
     deleting?.let { area ->
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, area.name)) },
-            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text(stringResource(R.string.catchroutes_delete)) } },
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${area.name}?") },
+            confirmButton = { TextButton(onClick = { scope.launch { store.deleteArea(area.id) }; deleting = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } })
     }
 }

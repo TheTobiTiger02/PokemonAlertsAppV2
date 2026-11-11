@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.tracking
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.ui.alerts.mapchrome.guidanceRest
 import com.example.pokemonalertsv2.hunt.huntTargetDetail
 import android.Manifest

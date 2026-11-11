@@ -170,7 +170,7 @@ internal fun NotificationsPageDesign(
                     deliveryRows()
                     AnimatedVisibility(visible = enabled) {
                         Column {
-                            PanelSectionLabel("Quiet time")
+                            PanelSectionLabel(stringResource(R.string.settings_quiet_time))
                             PanelNavRow(
                                 title = stringResource(R.string.settings_quiet_hours),
                                 summary = if (quietEnabled) stringResource(R.string.settings_every_day_x, quietSummary) else stringResource(R.string.settings_off),
@@ -188,7 +188,7 @@ internal fun NotificationsPageDesign(
                             )
                         }
                     }
-                    PanelSectionLabel("Alerts")
+                    PanelSectionLabel(stringResource(R.string.history_alerts))
                     PanelNavRow(
                         title = stringResource(R.string.settings_what_notifies),
                         summary = definition.notifiedTypeSummary(),
@@ -198,12 +198,12 @@ internal fun NotificationsPageDesign(
                 }
 
                 NotificationsPage.QUIET_HOURS -> {
-                    PanelHeader("Quiet hours", onBack = back)
+                    PanelHeader(stringResource(R.string.settings_quiet_hours), onBack = back)
                     quietHoursRows()
                 }
 
                 NotificationsPage.SILENCE -> {
-                    PanelHeader("Silence now", subtitle = stringResource(R.string.settings_every_alert_waits_until_it_ends), onBack = back)
+                    PanelHeader(stringResource(R.string.settings_silence_now), subtitle = stringResource(R.string.settings_every_alert_waits_until_it_ends), onBack = back)
                     silenceRows(back)
                 }
             }
@@ -219,7 +219,7 @@ private fun PermissionRows(
     onManageNotifications: () -> Unit,
     onManageLocation: () -> Unit
 ) {
-    PanelSectionLabel("Permissions")
+    PanelSectionLabel(stringResource(R.string.settings_permissions))
     PermissionRow(
         title = stringResource(R.string.onboarding_notifications),
         granted = grants.notifications,
@@ -289,7 +289,7 @@ private fun DeliveryRows(
     onEnabledChange: (Boolean) -> Unit,
     onOverlayChange: (Boolean) -> Unit
 ) {
-    PanelSectionLabel("Delivery")
+    PanelSectionLabel(stringResource(R.string.settings_delivery))
     PanelSwitchRow(
         title = stringResource(R.string.onboarding_notifications),
         subtitle = stringResource(R.string.settings_alerts_for_new_pok_mon_nearby),
@@ -606,9 +606,9 @@ internal fun GoDexPageContent(
 
                     else -> {
                         GoDexStatusHeader(config.collectionTitle, needed, total, syncLine)
-                        PanelSectionLabel("Checklist")
+                        PanelSectionLabel(stringResource(R.string.settings_checklist))
                         checklistRows()
-                        PanelSectionLabel("Account")
+                        PanelSectionLabel(stringResource(R.string.settings_account))
                         PanelNavRow(
                             title = stringResource(R.string.settings_account),
                             summary = account.first,
@@ -620,12 +620,12 @@ internal fun GoDexPageContent(
                 }
 
                 GoDexPage.CHECKLIST -> {
-                    PanelHeader("Checklist", subtitle = config.collectionTitle.ifBlank { null }, onBack = back)
+                    PanelHeader(stringResource(R.string.settings_checklist), subtitle = config.collectionTitle.ifBlank { null }, onBack = back)
                     checklistRows()
                 }
 
                 GoDexPage.ACCOUNT -> {
-                    PanelHeader("Account", onBack = back)
+                    PanelHeader(stringResource(R.string.settings_account), onBack = back)
                     GoDexAccountRows(
                         config = config,
                         sync = sync,
@@ -637,7 +637,7 @@ internal fun GoDexPageContent(
                 }
 
                 GoDexPage.PUBLIC_LINK -> {
-                    PanelHeader("Public link", subtitle = stringResource(R.string.settings_read_only_catches_stay_in_godex), onBack = back)
+                    PanelHeader(stringResource(R.string.settings_public_link), subtitle = stringResource(R.string.settings_read_only_catches_stay_in_godex), onBack = back)
                     Column(
                         modifier = Modifier.panelGutter().padding(top = Spacing.md),
                         verticalArrangement = Arrangement.spacedBy(Spacing.md)

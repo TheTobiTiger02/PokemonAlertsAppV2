@@ -214,11 +214,11 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val summary = remember(activity.days) { summarizeSpawnActivity(activity.days) }
     val days = activity.days.summary
-    Section("Active spawnpoints per day") {
+    Section(stringResource(R.string.history_active_spawnpoints_per_day)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Headline("Today so far", summary.today?.let(numbers::format) ?: "—", Modifier.weight(1f))
-            Headline("Usual day", summary.usual?.let(numbers::format) ?: "—", Modifier.weight(1f))
-            Headline("Busiest", summary.busiest?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_today_so_far), summary.today?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_usual_day), summary.usual?.let(numbers::format) ?: "—", Modifier.weight(1f))
+            Headline(stringResource(R.string.history_busiest), summary.busiest?.let(numbers::format) ?: "—", Modifier.weight(1f))
         }
         if (days.isNotEmpty()) {
             StackedColumns(
@@ -228,7 +228,7 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
                 selected = days.indexOfFirst { it.day == detailDay }.takeIf { it >= 0 },
                 flagged = summary.flagged,
                 reference = summary.usual,
-                referenceLabel = "Usual",
+                referenceLabel = stringResource(R.string.history_usual),
                 // A label every few days on long ranges; the opened day always has its own.
                 labelEvery = if (days.size > 10) (days.size + 6) / 7 else 1,
                 onSelect = { onOpenDay(days[it].day) }
@@ -261,10 +261,10 @@ private fun SpawnpointsSection(activity: SpawnActivity, showNotes: Boolean, deta
 private fun WildSpawnsSection(activity: SpawnActivity, search: SpawnActivityUiState, onDayChange: (String?) -> Unit, dayChips: Boolean) {
     val numbers = remember { NumberFormat.getIntegerInstance() }
     val species = activity.species
-    Section("Wild spawns") {
+    Section(stringResource(R.string.history_wild_spawns)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Headline("Sightings", numbers.format(species.totals.sightings), Modifier.weight(1f))
-            Headline("Species", numbers.format(species.totals.species), Modifier.weight(1f))
+            Headline(stringResource(R.string.history_sightings), numbers.format(species.totals.sightings), Modifier.weight(1f))
+            Headline(stringResource(R.string.history_species), numbers.format(species.totals.species), Modifier.weight(1f))
         }
         if (species.perDay.size > 1) {
             val picked = species.perDay.indexOfFirst { it.day == search.day }
@@ -345,7 +345,7 @@ private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState
             modifier = Modifier.fillMaxWidth().height(80.dp),
             contentAlignment = Alignment.Center
         ) { CircularProgressIndicator() }
-        search.search.isBlank() && result != null -> Section("Most seen species$on") {
+        search.search.isBlank() && result != null -> Section(stringResource(R.string.history_most_seen_species_x, on)) {
             Text(
                 stringResource(R.string.history_x_sightings_of_x_species_x, numbers.format(result.totals.sightings), numbers.format(result.totals.species), on),
                 style = MaterialTheme.typography.bodySmall,
@@ -375,12 +375,12 @@ private fun SpeciesResults(activity: SpawnActivity, search: SpawnActivityUiState
                         )
                     }
                 }
-                Section("Matching species$on") {
+                Section(stringResource(R.string.history_matching_species_x, on)) {
                     SpeciesRows(result.species, total, numbers)
                 }
             }
         }
-        species.species.isNotEmpty() -> Section("Most seen species") {
+        species.species.isNotEmpty() -> Section(stringResource(R.string.history_most_seen_species)) {
             SpeciesRows(species.species.take(30), total, numbers)
         }
     }
@@ -556,10 +556,10 @@ private fun InsightsBody(insights: SpawnInsights) {
     }
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Headline("Sightings", insights.totalSightings.toString(), Modifier.weight(1f))
-        Headline("Per day", String.format("%.1f", insights.perDayAverage), Modifier.weight(1f))
+        Headline(stringResource(R.string.history_sightings), insights.totalSightings.toString(), Modifier.weight(1f))
+        Headline(stringResource(R.string.history_per_day), String.format("%.1f", insights.perDayAverage), Modifier.weight(1f))
         Headline(
-            "Busiest",
+            stringResource(R.string.history_busiest),
             insights.busiestHour?.let { formatHour(it) } ?: "—",
             Modifier.weight(1f)
         )
@@ -572,18 +572,18 @@ private fun InsightsBody(insights: SpawnInsights) {
         )
     }
 
-    Section("By hour of day") {
+    Section(stringResource(R.string.history_by_hour_of_day)) {
         // One label per six hours: a label under every bar has a 24th of the
         // width to live in, which is not enough for "12h" and silently clips it.
         BarRow(values = insights.byHour, labels = (0..18 step 6).map(::formatHour))
     }
 
-    Section("By day of week") {
+    Section(stringResource(R.string.history_by_day_of_week)) {
         BarRow(values = insights.byWeekday, labels = WEEKDAYS)
     }
 
     if (insights.byArea.isNotEmpty()) {
-        Section("By area") {
+        Section(stringResource(R.string.history_by_area)) {
             val max = insights.byArea.first().count.coerceAtLeast(1)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 insights.byArea.take(8).forEach { entry ->

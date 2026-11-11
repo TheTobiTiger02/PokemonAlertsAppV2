@@ -684,24 +684,24 @@ internal fun AffectedAlertDetailCard(alert: AffectedAlert) {
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            alert.id?.let { DetailValueRow("Alert ID", "#$it") }
+            alert.id?.let { DetailValueRow(stringResource(R.string.alerts_alert_id), "#$it") }
             alert.pokemon?.takeIf { it.isNotBlank() }?.let {
-                DetailValueRow("Pokémon", it)
+                DetailValueRow(stringResource(R.string.alerts_pok_mon), it)
             }
             alert.pokemonForm?.takeIf { it.isNotBlank() }?.let {
-                DetailValueRow("Form", it)
+                DetailValueRow(stringResource(R.string.alerts_form), it)
             }
-            alert.cp?.let { DetailValueRow("CP", it.toString()) }
+            alert.cp?.let { DetailValueRow(stringResource(R.string.alerts_cp), it.toString()) }
             alert.type
                 .orEmpty()
                 .mapNotNull { it.takeIf(String::isNotBlank) }
                 .takeIf { it.isNotEmpty() }
-                ?.let { DetailValueRow("Types", it.joinToString(", ")) }
+                ?.let { DetailValueRow(stringResource(R.string.alerts_types), it.joinToString(", ")) }
             alert.area?.takeIf { it.isNotBlank() }?.let {
-                DetailValueRow("Area", it)
+                DetailValueRow(stringResource(R.string.hunt_area), it)
             }
             alert.endTime?.takeIf { it.isNotBlank() }?.let { raw ->
-                DetailValueRow("Original end time", TimeUtils.formatTimestamp(raw) ?: raw)
+                DetailValueRow(stringResource(R.string.alerts_original_end_time), TimeUtils.formatTimestamp(raw) ?: raw)
             }
         }
     }

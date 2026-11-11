@@ -1,6 +1,5 @@
 package com.example.pokemonalertsv2.ui.alerts
 
-import androidx.compose.ui.res.stringResource
 import android.app.Activity
 import android.content.Context
 import android.content.Intent

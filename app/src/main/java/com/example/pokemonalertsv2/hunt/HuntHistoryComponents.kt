@@ -220,12 +220,12 @@ private fun HeartRateChart(perMinute: List<Int>, modifier: Modifier = Modifier) 
 @Composable
 internal fun CatchBadges(catch: HuntCatch) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (catch.shiny) StatPill("Shiny", icon = Icons.Filled.Star, tint = Color.Black, container = ShinyGold)
+        if (catch.shiny) StatPill(stringResource(R.string.alerts_shiny_2), icon = Icons.Filled.Star, tint = Color.Black, container = ShinyGold)
         catch.iv?.let { iv ->
             if (iv == 100) StatPill("100%", tint = Color.White, container = HundoPink)
-            else StatPill("IV $iv", container = MaterialTheme.colorScheme.surfaceContainerHighest, tint = MaterialTheme.colorScheme.onSurface)
+            else StatPill(stringResource(R.string.alerts_iv_x, iv), container = MaterialTheme.colorScheme.surfaceContainerHighest, tint = MaterialTheme.colorScheme.onSurface)
         }
-        catch.cp?.let { StatPill("CP $it", container = MaterialTheme.colorScheme.surfaceContainerHighest, tint = MaterialTheme.colorScheme.onSurface) }
+        catch.cp?.let { StatPill(stringResource(R.string.alerts_cp_x, it), container = MaterialTheme.colorScheme.surfaceContainerHighest, tint = MaterialTheme.colorScheme.onSurface) }
     }
 }
 

@@ -100,7 +100,7 @@ internal fun SpawnDayDetailSection(state: SpawnActivityUiState, onOpenHour: (Lon
                     InlineStat(detail.alerts?.let { numbers.format(it.total) } ?: "—", "Alerts", Modifier.weight(1f))
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Active spawnpoints by hour")
+                    CardLabel(stringResource(R.string.history_active_spawnpoints_by_hour))
                     StackedColumns(
                         columns = spawns.hours.map { ColumnValue(it.live, it.catalogueOnly) },
                         labels = labels,
@@ -125,7 +125,7 @@ internal fun SpawnDayDetailSection(state: SpawnActivityUiState, onOpenHour: (Lon
         detail?.alerts?.let { alerts ->
             DetailCard {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Alerts by hour", trailing = "${numbers.format(alerts.total)} alerts")
+                    CardLabel(stringResource(R.string.history_alerts_by_hour), trailing = "${numbers.format(alerts.total)} alerts")
                     val alertLabels = hourLabels(alerts.hours.map { it.hour })
                     StackedColumns(
                         columns = alerts.hours.map { ColumnValue(it.count) },
@@ -190,7 +190,7 @@ private fun HourCard(
             hourDetail == null && state.hourError != null -> Failed(state.hourError) { onOpenHour(start) }
             hourDetail != null -> {
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Pokémon first seen")
+                    CardLabel(stringResource(R.string.history_pok_mon_first_seen))
                     if (hourDetail.species.isEmpty()) {
                         Text(stringResource(R.string.history_no_wild_pok_mon_were_first), style = MaterialTheme.typography.bodySmall)
                     } else {
@@ -198,7 +198,7 @@ private fun HourCard(
                     }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                    CardLabel("Where they spawned")
+                    CardLabel(stringResource(R.string.history_where_they_spawned))
                     HourMap(hourDetail.points)
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         KeyItem(Color(android.graphics.Color.parseColor(SpawnHourMapView.LIVE_COLOR)), "Seen by our scanner", CircleShape)

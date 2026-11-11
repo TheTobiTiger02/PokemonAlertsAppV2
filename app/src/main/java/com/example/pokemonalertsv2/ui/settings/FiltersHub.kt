@@ -70,7 +70,7 @@ internal fun FiltersHubContent(
             val profileName = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == assignment.profileId }?.name
             SurfaceSummaryCard(surface, assignment, assignment.resolve(document), counts[surface] ?: 0, profileName) { editing = surface.name }
         }
-        SummaryCard("Widgets", "Independent rules per widget • sorting stays with each widget", Icons.Default.Settings, null) { showWidgets = !showWidgets }
+        SummaryCard(stringResource(R.string.settings_widgets), "Independent rules per widget • sorting stays with each widget", Icons.Default.Settings, null) { showWidgets = !showWidgets }
         AnimatedVisibility(showWidgets) { WidgetFiltersSection() }
         TextButton(onClick = onOpenFullNotificationSettings) {
             Icon(Icons.Default.Notifications, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_notification_delivery_quiet_hours_and_vibration))
@@ -206,10 +206,10 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
         onDismiss = { showDistanceOverrides = false }
     ) { draft = draft.copy(distanceOverrides = it); showDistanceOverrides = false }
     if (showProfiles) ProfilePickerDialog(document, { showProfiles = false }, onChoose = { profile, linked -> draft = profile.definition; linkedProfileId = profile.id.takeIf { linked }; showProfiles = false }, onDelete = viewModel::deleteFilterProfile, onSave = viewModel::saveFilterProfile, widgetConsumers = viewModel::linkedWidgetConsumers)
-    if (showSave) NameDialog("Save profile", { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
+    if (showSave) NameDialog(stringResource(R.string.settings_save_profile), { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
-        title = { Text(stringResource(R.string.settings_update_linked_profile)) },
+        title = { Text("Update linked profile?") },
         text = { Text(stringResource(R.string.settings_editing_x_also_changes_x_these, linkedProfile.name, (document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString())) },
         confirmButton = { Button(onClick = {
             if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
@@ -560,7 +560,7 @@ internal fun ProfilePickerDialog(
                         }
                         if (!builtIn) Row {
                             TextButton(onClick = { renaming = profile }) { Text(stringResource(R.string.hunt_rename)) }
-                            TextButton(onClick = { deleting = profile }) { Text(stringResource(R.string.catchroutes_delete)) }
+                            TextButton(onClick = { deleting = profile }) { Text("Delete") }
                         }
                         HorizontalDivider()
                     }
@@ -569,10 +569,10 @@ internal fun ProfilePickerDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_close)) } }
     )
-    renaming?.let { profile -> NameDialog("Rename profile", { renaming = null }, initialValue = profile.name) { name -> onSave(name, profile.definition, profile.id); renaming = null } }
+    renaming?.let { profile -> NameDialog(stringResource(R.string.settings_rename_profile), { renaming = null }, initialValue = profile.name) { name -> onSave(name, profile.definition, profile.id); renaming = null } }
     deleting?.let { profile ->
         val consumers = document.consumersOf(profile.id).map { it.label } + widgetConsumers(profile.id)
-        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, profile.name)) }, text = { Text(if (consumers.isEmpty()) stringResource(R.string.settings_this_profile_is_not_linked_to) else stringResource(R.string.settings_x_will_keep_independent_copies_of, consumers.joinToString())) }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text(stringResource(R.string.settings_delete_profile)) } })
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete ${profile.name}?") }, text = { Text(if (consumers.isEmpty()) stringResource(R.string.settings_this_profile_is_not_linked_to) else stringResource(R.string.settings_x_will_keep_independent_copies_of, consumers.joinToString())) }, dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onDelete(profile.id); deleting = null }) { Text("Delete profile") } })
     }
 }
 
@@ -592,7 +592,7 @@ private fun WidgetFiltersSection() {
             }
         }
     }
-    SettingsSection("Widget instances") {
+    SettingsSection(stringResource(R.string.settings_widget_instances)) {
         if (placed.isEmpty()) Text(stringResource(R.string.settings_no_widgets_placed_add_one_from), color = MaterialTheme.colorScheme.onSurfaceVariant)
         placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) stringResource(R.string.settings_legacy_rules_migrates_when_edited) else stringResource(R.string.settings_unified_filter_instance_x, id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text(stringResource(R.string.settings_customize)) } } } }
     }

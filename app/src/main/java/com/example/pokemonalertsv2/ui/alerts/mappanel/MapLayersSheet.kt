@@ -116,7 +116,7 @@ internal fun MapLayersSheet(
                             modifier = Modifier.fillMaxWidth().testTag("map_panel_list"),
                             contentPadding = PaddingValues(bottom = Spacing.md)
                         ) {
-                            item("style_label") { PanelSectionLabel("Map style") }
+                            item("style_label") { PanelSectionLabel(stringResource(R.string.alerts_map_style)) }
                             item("style") {
                                 Row(
                                     modifier = Modifier.panelGutter(),
@@ -141,7 +141,7 @@ internal fun MapLayersSheet(
                                 }
                             }
 
-                            item("show_label") { PanelSectionLabel("Show on map") }
+                            item("show_label") { PanelSectionLabel(stringResource(R.string.alerts_show_on_map)) }
                             item("countdowns") {
                                 PanelSwitchRow(
                                     title = stringResource(R.string.alerts_countdown_labels),
@@ -216,7 +216,7 @@ internal fun MapLayersSheet(
                                 )
                             }
 
-                            item("markers_label") { PanelSectionLabel("Markers") }
+                            item("markers_label") { PanelSectionLabel(stringResource(R.string.alerts_markers)) }
                             item("grouping") {
                                 val clustering = rememberMapClusteringSettings()
                                 PanelNavRow(
@@ -229,7 +229,7 @@ internal fun MapLayersSheet(
                             }
 
                             if (onToggleAutoEnterPictureInPicture != null) {
-                                item("leave_label") { PanelSectionLabel("When you leave the app") }
+                                item("leave_label") { PanelSectionLabel(stringResource(R.string.alerts_when_you_leave_the_app)) }
                                 item("auto_pip") {
                                     PanelSwitchRow(
                                         title = stringResource(R.string.alerts_floating_map_automatically),

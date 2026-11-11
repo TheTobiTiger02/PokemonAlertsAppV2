@@ -1,6 +1,4 @@
 package com.example.pokemonalertsv2.ui.alerts
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 
 
 sealed interface SyncStatus {

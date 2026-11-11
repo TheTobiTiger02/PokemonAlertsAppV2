@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.data.counters
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 

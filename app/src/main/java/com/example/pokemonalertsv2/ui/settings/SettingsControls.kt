@@ -185,7 +185,7 @@ internal fun SettingsOverview(
                 Text(stringResource(R.string.settings_no_setting_matches_x, query.trim()), style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                SettingsOverviewGroup("Results") {
+                SettingsOverviewGroup(stringResource(R.string.settings_results)) {
                     results.forEachIndexed { index, entry ->
                         if (index > 0) OverviewDivider()
                         SettingsOverviewRow(
@@ -226,7 +226,7 @@ internal fun SettingsOverview(
             }
         }
 
-        val alertsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Alerts") {
+        val alertsGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.history_alerts)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Notifications),
                 title = stringResource(R.string.settings_notifications_permissions),
@@ -241,7 +241,7 @@ internal fun SettingsOverview(
                 onClick = { onDestinationSelected(SettingsDestination.ALERT_FILTERS) }
             )
         } }
-        val displayGroup: @Composable () -> Unit = { SettingsOverviewGroup("Display") {
+        val displayGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_display)) {
             SettingsOverviewRow(
                 icon = painterResource(R.drawable.ic_theme),
                 title = stringResource(R.string.settings_appearance),
@@ -256,7 +256,7 @@ internal fun SettingsOverview(
                 onClick = { onDestinationSelected(SettingsDestination.MAP_TRACKING) }
             )
         } }
-        val accountsGroup: @Composable () -> Unit = { SettingsOverviewGroup("Accounts") {
+        val accountsGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_accounts)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.AccountCircle),
                 title = stringResource(R.string.settings_godex_checklist),
@@ -272,7 +272,7 @@ internal fun SettingsOverview(
                 onClick = { onDestinationSelected(SettingsDestination.RAID_COUNTERS) }
             )
         } }
-        val appGroup: @Composable () -> Unit = { SettingsOverviewGroup("App") {
+        val appGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_app)) {
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Info),
                 title = stringResource(R.string.settings_backup_about),

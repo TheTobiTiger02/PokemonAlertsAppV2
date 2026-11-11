@@ -134,11 +134,11 @@ fun EventDetailScreen(
 @Composable
 private fun FeedDetails(event: GameEvent) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (event.featured.isNotEmpty()) { SectionTitle("Featured Pokémon"); PokemonRow(event.featured) }
-        if (event.raidBosses.isNotEmpty()) { SectionTitle("Raid bosses"); PokemonRow(event.raidBosses) }
-        if (event.shinies.isNotEmpty()) { SectionTitle("Shinies"); PokemonRow(event.shinies) }
+        if (event.featured.isNotEmpty()) { SectionTitle(stringResource(R.string.events_featured_pok_mon)); PokemonRow(event.featured) }
+        if (event.raidBosses.isNotEmpty()) { SectionTitle(stringResource(R.string.events_raid_bosses)); PokemonRow(event.raidBosses) }
+        if (event.shinies.isNotEmpty()) { SectionTitle(stringResource(R.string.events_shinies)); PokemonRow(event.shinies) }
         if (event.bonuses.isNotEmpty()) {
-            SectionTitle("Bonuses")
+            SectionTitle(stringResource(R.string.events_bonuses))
             BonusRows(event.bonuses)
             event.bonusDisclaimers.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

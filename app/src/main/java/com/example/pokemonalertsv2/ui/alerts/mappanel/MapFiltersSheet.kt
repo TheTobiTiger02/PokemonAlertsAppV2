@@ -239,15 +239,15 @@ internal fun StatsEditor(state: FiltersState) {
         modifier = Modifier.panelGutter().padding(top = Spacing.md),
         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
     ) {
-        ValueLine("Minimum IV", if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
+        ValueLine(stringResource(R.string.alerts_minimum_iv), if (stats.minIvPercent > 0) "${stats.minIvPercent}%" else "Any")
         PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.IV_PRESETS, stats.minIvPercent, { if (it > 0) "$it%" else "Any" }) {
             update(stats.copy(minIvPercent = it))
         }
-        ValueLine("Minimum CP", if (stats.minCp > 0) "${stats.minCp}" else "Any")
+        ValueLine(stringResource(R.string.alerts_minimum_cp), if (stats.minCp > 0) "${stats.minCp}" else "Any")
         PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.CP_PRESETS, stats.minCp, { if (it > 0) "$it" else "Any" }) {
             update(stats.copy(minCp = it))
         }
-        ValueLine("Minimum level", if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
+        ValueLine(stringResource(R.string.alerts_minimum_level), if (stats.minLevel > 0) "${stats.minLevel}" else "Any")
         PresetChips(com.example.pokemonalertsv2.data.StatFilterRules.LEVEL_PRESETS, stats.minLevel, { if (it > 0) "$it" else "Any" }) {
             update(stats.copy(minLevel = it))
         }
@@ -282,7 +282,7 @@ internal fun DistanceEditor(state: FiltersState) {
     val definition = state.definition
     Column {
         Column(modifier = Modifier.panelGutter(), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-            ValueLine("Max distance", if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else stringResource(R.string.hunt_any))
+            ValueLine(stringResource(R.string.alerts_max_distance), if (definition.maxDistanceMeters > 0) distanceLabel(definition.maxDistanceMeters) else stringResource(R.string.hunt_any))
             DistanceLimitPicker(
                 meters = definition.maxDistanceMeters,
                 onChange = { state.onDefinitionChange(definition.copy(maxDistanceMeters = it)) }
@@ -292,7 +292,7 @@ internal fun DistanceEditor(state: FiltersState) {
             modifier = Modifier.panelGutter().padding(top = Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs)
         ) {
-            ValueLine("Walking time", TravelTime.label(definition.maxWalkingMinutes))
+            ValueLine(stringResource(R.string.alerts_walking_time), TravelTime.label(definition.maxWalkingMinutes))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 TravelTime.PRESET_MINUTES.forEach { minutes ->
                     val selected = definition.maxWalkingMinutes == minutes
@@ -340,7 +340,7 @@ internal fun AlertTypesEditor(state: FiltersState) {
     val definition = state.definition
     val allTokens = remember { FilterAlertType.entries.map { it.name } }
     Column(modifier = Modifier.testTag("map_filter_types_page")) {
-        EditorNote("The chips above the map change these too.")
+        EditorNote(stringResource(R.string.alerts_the_chips_above_the_map_change))
         FlowRow(
             modifier = Modifier.panelGutter().padding(bottom = Spacing.lg),
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),

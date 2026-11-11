@@ -1,6 +1,5 @@
 package com.example.pokemonalertsv2.raidwatch
 
-import androidx.compose.ui.res.stringResource
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager

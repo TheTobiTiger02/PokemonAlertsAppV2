@@ -281,7 +281,7 @@ private fun QuestTile(
                 .combinedClickable(
                     role = Role.Button,
                     onClickLabel = if (all) stringResource(R.string.alerts_hide_this_x, view.unit) else stringResource(R.string.alerts_show_this_x, view.unit),
-                    onLongClickLabel = "Pick ${view.other}s",
+                    onLongClickLabel = stringResource(R.string.alerts_pick_x_s, view.other),
                     onLongClick = onOpenPairs,
                     onClick = onClick
                 )

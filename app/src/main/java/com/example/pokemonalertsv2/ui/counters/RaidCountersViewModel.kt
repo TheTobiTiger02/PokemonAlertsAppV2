@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.ui.counters
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.ensureActive
 
 import android.app.Application

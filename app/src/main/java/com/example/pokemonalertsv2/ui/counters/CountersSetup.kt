@@ -95,19 +95,19 @@ internal fun BattleSetupSheet(
         )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        SheetSwitchRow("Party Power", options.partyPower) {
+        SheetSwitchRow(stringResource(R.string.counters_party_power), options.partyPower) {
             actions.onOptionsChanged(options.copy(partyPower = it))
         }
-        SheetSwitchRow("Include megas", options.includeMegas) {
+        SheetSwitchRow(stringResource(R.string.counters_include_megas), options.includeMegas) {
             actions.onOptionsChanged(options.copy(includeMegas = it))
         }
-        SheetSwitchRow("Include shadows", options.includeShadow) {
+        SheetSwitchRow(stringResource(R.string.counters_include_shadows), options.includeShadow) {
             actions.onOptionsChanged(options.copy(includeShadow = it))
         }
-        SheetSwitchRow("Include legendaries", options.includeLegendary) {
+        SheetSwitchRow(stringResource(R.string.counters_include_legendaries), options.includeLegendary) {
             actions.onOptionsChanged(options.copy(includeLegendary = it))
         }
-        SheetSwitchRow("Owned only", state.ownedOnly, actions.onOwnedOnlyChanged)
+        SheetSwitchRow(stringResource(R.string.counters_owned_only), state.ownedOnly, actions.onOwnedOnlyChanged)
 
         if (state.showingPersonal) {
             Text(stringResource(R.string.counters_my_pok_mon_moves), style = MaterialTheme.typography.labelLarge)

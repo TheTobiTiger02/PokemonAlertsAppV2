@@ -598,7 +598,7 @@ internal fun MovesetComparison(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        SectionLabel("Other movesets")
+        SectionLabel(stringResource(R.string.counters_other_movesets))
         alternatives.forEach { option ->
             Row(
                 modifier = Modifier.fillMaxWidth(),

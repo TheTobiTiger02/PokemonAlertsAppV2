@@ -173,22 +173,22 @@ private fun predictionLabel(p: CatchPrediction) = when (p) {
 /** The settings as rows, each saying what is set and opening its page. */
 @Composable
 internal fun PlanRows(model: CatchRoutesViewModel, s: CatchRouteSettings, savedCount: Int, onOpen: (PlanPage) -> Unit) {
-    PanelSectionLabel("Where")
-    PanelNavRow("Start", startSummary(model, s), { onOpen(PlanPage.START) }, Modifier.testTag("plan_row_start"),
+    PanelSectionLabel(stringResource(R.string.catchroutes_where))
+    PanelNavRow(stringResource(R.string.catchroutes_start), startSummary(model, s), { onOpen(PlanPage.START) }, Modifier.testTag("plan_row_start"),
         active = s.sourceRouteId != null) { PanelIcon(R.drawable.ic_my_location) }
     if (!s.fixed) {
-        PanelNavRow("Finish", finishSummary(s), { onOpen(PlanPage.FINISH) }, Modifier.testTag("plan_row_finish")) { PanelIcon(R.drawable.ic_navigate) }
-        PanelNavRow("Area", areaSummary(s), { onOpen(PlanPage.AREA) }, Modifier.testTag("plan_row_area"),
+        PanelNavRow(stringResource(R.string.onboarding_finish), finishSummary(s), { onOpen(PlanPage.FINISH) }, Modifier.testTag("plan_row_finish")) { PanelIcon(R.drawable.ic_navigate) }
+        PanelNavRow(stringResource(R.string.hunt_area), areaSummary(s), { onOpen(PlanPage.AREA) }, Modifier.testTag("plan_row_area"),
             active = s.area.isArea()) { PanelIcon(R.drawable.ic_map) }
     }
-    PanelSectionLabel("When")
-    PanelNavRow("When", whenSummary(model, s), { onOpen(PlanPage.WHEN) }, Modifier.testTag("plan_row_when")) { PanelIcon(R.drawable.ic_timer) }
+    PanelSectionLabel(stringResource(R.string.catchroutes_when))
+    PanelNavRow(stringResource(R.string.catchroutes_when), whenSummary(model, s), { onOpen(PlanPage.WHEN) }, Modifier.testTag("plan_row_when")) { PanelIcon(R.drawable.ic_timer) }
     PanelNavRow(PlanPage.SUGGEST.title, if (s.fixed) stringResource(R.string.catchroutes_best_start_time) else stringResource(R.string.catchroutes_best_start_spot_or_time), { onOpen(PlanPage.SUGGEST) },
         Modifier.testTag("plan_row_suggest")) { PanelIcon(R.drawable.ic_insights) }
-    PanelSectionLabel("What")
-    PanelNavRow("Includes", includesSummary(s), { onOpen(PlanPage.INCLUDES) }, Modifier.testTag("plan_row_includes"),
+    PanelSectionLabel(stringResource(R.string.catchroutes_what))
+    PanelNavRow(stringResource(R.string.catchroutes_includes), includesSummary(s), { onOpen(PlanPage.INCLUDES) }, Modifier.testTag("plan_row_includes"),
         active = s.includeEventSpawns || s.spacialRend) { PanelIcon(R.drawable.ic_category) }
-    PanelNavRow("Advanced", advancedSummary(s), { onOpen(PlanPage.ADVANCED) }, Modifier.testTag("plan_row_advanced")) { PanelIcon(R.drawable.ic_tune) }
+    PanelNavRow(stringResource(R.string.catchroutes_advanced), advancedSummary(s), { onOpen(PlanPage.ADVANCED) }, Modifier.testTag("plan_row_advanced")) { PanelIcon(R.drawable.ic_tune) }
     PanelNavRow(PlanPage.SAVED.title, if (savedCount == 0) stringResource(R.string.catchroutes_save_this_setup_to_reuse_it) else "$savedCount saved", { onOpen(PlanPage.SAVED) },
         Modifier.testTag("plan_row_saved")) { PanelIcon(R.drawable.ic_star_border) }
 }
@@ -258,16 +258,16 @@ private fun PageNote(text: String) {
 @Composable
 internal fun StartEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, actions: PlannerActions) {
     if (!s.fixed) {
-        PanelSectionLabel("Start from")
-        ChoiceRow("Your location", model.hasStart && model.startLabel == "Your location", actions.useLocation, "start_location")
-        ChoiceRow("Pick on the map", model.hasStart && model.startLabel == "Pinned on the map", { actions.pickOnMap(false) }, "start_pin",
+        PanelSectionLabel(stringResource(R.string.catchroutes_start_from))
+        ChoiceRow(stringResource(R.string.catchroutes_your_location), model.hasStart && model.startLabel == "Your location", actions.useLocation, "start_location")
+        ChoiceRow(stringResource(R.string.catchroutes_pick_on_the_map), model.hasStart && model.startLabel == "Pinned on the map", { actions.pickOnMap(false) }, "start_pin",
             subtitle = stringResource(R.string.catchroutes_tap_the_map_to_place_it))
         // A start from a suggestion, a saved setup or the history shows as what it is.
         if (model.hasStart && model.startLabel != "Your location" && model.startLabel != "Pinned on the map")
             ChoiceRow(model.startLabel, true, {}, "start_other")
     }
-    PanelSectionLabel("Pokémon GO route")
-    PanelNavRow("GO route", when {
+    PanelSectionLabel(stringResource(R.string.catchroutes_pok_mon_go_route))
+    PanelNavRow(stringResource(R.string.catchroutes_go_route), when {
         s.fixed -> "Walking ${s.sourceRouteName ?: "an imported route"} as drawn"
         s.sourceRouteId != null -> "Planning near ${s.sourceRouteName ?: "an imported route"}"
         else -> stringResource(R.string.catchroutes_walk_one_as_drawn_or_plan)
@@ -279,7 +279,7 @@ internal fun StartEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, act
 
 @Composable
 internal fun FinishEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, actions: PlannerActions) {
-    if (s.fixed) { PageNote("A GO route walked as drawn ends where it ends."); return }
+    if (s.fixed) { PageNote(stringResource(R.string.catchroutes_a_go_route_walked_as_drawn)); return }
     CatchFinish.entries.forEach { finish ->
         ChoiceRow(
             title = when (finish) { CatchFinish.ROUND_TRIP -> "Back to start"; CatchFinish.ANYWHERE -> "End anywhere"; CatchFinish.PIN -> stringResource(R.string.catchroutes_end_at_a_pin) },
@@ -293,8 +293,8 @@ internal fun FinishEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, ac
 
 @Composable
 internal fun AreaEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, actions: PlannerActions) {
-    if (s.fixed) { PageNote("A GO route walked as drawn has no area."); return }
-    ChoiceRow("No limit", !s.area.isArea(), { model.edit(s.copy(area = emptyList())) }, "area_none")
+    if (s.fixed) { PageNote(stringResource(R.string.catchroutes_a_go_route_walked_as_drawn_2)); return }
+    ChoiceRow(stringResource(R.string.catchroutes_no_limit), !s.area.isArea(), { model.edit(s.copy(area = emptyList())) }, "area_none")
     PanelNavRow(if (s.area.isArea()) stringResource(R.string.catchroutes_edit_area) else stringResource(R.string.catchroutes_draw_an_area),
         if (s.area.isArea()) stringResource(R.string.catchroutes_inside_x_corners, s.area.size) else stringResource(R.string.catchroutes_keep_the_route_inside_a_shape),
         actions.openArea, Modifier.testTag("area_draw"), active = s.area.isArea()) { PanelIcon(R.drawable.ic_map) }
@@ -304,11 +304,11 @@ internal fun AreaEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, acti
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun WhenEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, actions: PlannerActions) {
-    PanelSectionLabel("Leave")
-    ChoiceRow("Now", model.useNow, { model.schedule(null) }, "when_now")
-    ChoiceRow("Later", !model.useNow, actions.pickTime, "when_later",
+    PanelSectionLabel(stringResource(R.string.catchroutes_leave))
+    ChoiceRow(stringResource(R.string.catchroutes_now), model.useNow, { model.schedule(null) }, "when_now")
+    ChoiceRow(stringResource(R.string.catchroutes_later), !model.useNow, actions.pickTime, "when_later",
         subtitle = if (model.useNow) stringResource(R.string.catchroutes_pick_a_day_and_time) else stringResource(R.string.catchroutes_at_x_tap_to_change, catchClock(s.startAtMillis)))
-    PanelSectionLabel("Walk for")
+    PanelSectionLabel(stringResource(R.string.catchroutes_walk_for))
     FlowRow(Modifier.panelGutter(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs), verticalArrangement = Arrangement.Center) {
         listOf(30, 60, 90, 120).forEach { minutes ->
             FilterChip(selected = s.durationMinutes == minutes, onClick = { model.edit(s.copy(durationMinutes = minutes)) },
@@ -322,21 +322,21 @@ internal fun WhenEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, acti
 
 @Composable
 internal fun SuggestEditor(model: CatchRoutesViewModel, s: CatchRouteSettings, onDone: () -> Unit) {
-    PageNote("Compares nearby options with your other settings and plans the best one.")
-    if (!s.fixed) ActionRow("Best start spot", "Most expected catches for this departure", R.drawable.ic_my_location,
+    PageNote(stringResource(R.string.catchroutes_compares_nearby_options_with_your_other))
+    if (!s.fixed) ActionRow(stringResource(R.string.catchroutes_best_start_spot), "Most expected catches for this departure", R.drawable.ic_my_location,
         { model.recommendStart(); onDone() }, "recommend_start", enabled = !model.busy)
-    ActionRow("Best start time", if (model.hasStart) stringResource(R.string.catchroutes_best_departure_in_the_next_six) else stringResource(R.string.catchroutes_set_a_start_first),
+    ActionRow(stringResource(R.string.catchroutes_best_start_time), if (model.hasStart) stringResource(R.string.catchroutes_best_departure_in_the_next_six) else stringResource(R.string.catchroutes_set_a_start_first),
         R.drawable.ic_timer, { model.recommendTime(); onDone() }, "recommend_time", enabled = !model.busy && model.hasStart)
 }
 
 @Composable
 internal fun IncludesEditor(model: CatchRoutesViewModel, s: CatchRouteSettings) {
-    PanelSwitchRow("Event spawns", s.includeEventSpawns, { model.edit(s.copy(includeEventSpawns = it)) },
+    PanelSwitchRow(stringResource(R.string.catchroutes_event_spawns), s.includeEventSpawns, { model.edit(s.copy(includeEventSpawns = it)) },
         Modifier.testTag("include_events"), subtitle = stringResource(R.string.catchroutes_spawnpoints_that_only_spawn_during_spotlight)) {
         PanelIcon(R.drawable.ic_category)
     }
     if (s.includeEventSpawns) {
-        PanelSectionLabel("Which events")
+        PanelSectionLabel(stringResource(R.string.catchroutes_which_events))
         EVENT_SPAWN_TYPES.chunked(2).forEach { pair ->
             Row(Modifier.panelGutter().padding(vertical = Spacing.xxs), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 pair.forEach { type ->
@@ -350,9 +350,9 @@ internal fun IncludesEditor(model: CatchRoutesViewModel, s: CatchRouteSettings) 
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-        PageNote("Planned like any other spawnpoint, even when no event is running.")
+        PageNote(stringResource(R.string.catchroutes_planned_like_any_other_spawnpoint_even))
     }
-    PanelSwitchRow("Spacial Rend", s.spacialRend, { model.edit(s.copy(spacialRend = it)) }, Modifier.testTag("include_spacial_rend"),
+    PanelSwitchRow(stringResource(R.string.hunt_spacial_rend), s.spacialRend, { model.edit(s.copy(spacialRend = it)) }, Modifier.testTag("include_spacial_rend"),
         subtitle = stringResource(R.string.catchroutes_catch_range_x_m, s.radius.toInt())) { PanelIcon(R.drawable.ic_radius) }
 }
 
@@ -377,34 +377,34 @@ internal fun AdvancedEditor(model: CatchRoutesViewModel, s: CatchRouteSettings) 
     PanelSectionLabel("Walking pace · ${String.format(Locale.getDefault(), "%.1f", s.speedMps * 3.6)} km/h")
     Slider(value = s.speedMps.toFloat(), onValueChange = { model.edit(s.copy(speedMps = it.toDouble())) }, valueRange = 0.5f..2.5f,
         modifier = Modifier.panelGutter().testTag("advanced_pace"))
-    PanelSectionLabel("Spawn timing")
+    PanelSectionLabel(stringResource(R.string.catchroutes_spawn_timing))
     CatchPrediction.entries.forEach { prediction ->
         ChoiceRow(predictionLabel(prediction), s.prediction == prediction, { model.edit(s.copy(prediction = prediction)) }, "prediction_${prediction.name}")
     }
-    PanelSectionLabel("Wait at a spawnpoint for it to appear")
+    PanelSectionLabel(stringResource(R.string.catchroutes_wait_at_a_spawnpoint_for_it))
     FlowRow(Modifier.panelGutter(), horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         listOf(0, 2, 5, 10).forEach { minutes ->
             FilterChip(selected = s.maxWaitMinutes == minutes, onClick = { model.edit(s.copy(maxWaitMinutes = minutes)) },
                 label = { Text(if (minutes == 0) stringResource(R.string.catchroutes_never) else stringResource(R.string.catchroutes_up_to_x_min, minutes)) }, modifier = Modifier.testTag("wait_$minutes"))
         }
     }
-    PanelSectionLabel("Name")
+    PanelSectionLabel(stringResource(R.string.catchroutes_name))
     OutlinedTextField(value = s.name, onValueChange = { model.edit(s.copy(name = it.take(80))) }, label = { Text(stringResource(R.string.catchroutes_route_name)) }, singleLine = true,
         modifier = Modifier.fillMaxWidth().panelGutter().testTag("route_name"))
 }
 
 @Composable
 internal fun SavedEditor(model: CatchRoutesViewModel, saved: List<CatchSetupEntity>, actions: PlannerActions, onDone: () -> Unit) {
-    ActionRow("Save this setup", if (model.hasStart) stringResource(R.string.catchroutes_overwrites_the_setup_you_loaded_if) else stringResource(R.string.catchroutes_set_a_start_first),
+    ActionRow(stringResource(R.string.catchroutes_save_this_setup), if (model.hasStart) stringResource(R.string.catchroutes_overwrites_the_setup_you_loaded_if) else stringResource(R.string.catchroutes_set_a_start_first),
         R.drawable.ic_star_border, { model.save() }, "save_setup", enabled = model.hasStart)
-    ActionRow("Save as a copy", "Keeps the loaded setup as it was", R.drawable.ic_content_copy, { model.save(true) }, "save_setup_copy",
+    ActionRow(stringResource(R.string.catchroutes_save_as_a_copy), "Keeps the loaded setup as it was", R.drawable.ic_content_copy, { model.save(true) }, "save_setup_copy",
         enabled = model.hasStart)
     PanelSectionLabel(if (saved.isEmpty()) stringResource(R.string.catchroutes_no_saved_setups_yet) else stringResource(R.string.catchroutes_saved_setups))
     saved.forEach { setup ->
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { model.load(setup); onDone() }.padding(start = PanelGutter, end = Spacing.sm),
             verticalAlignment = Alignment.CenterVertically) {
             Text(setup.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            IconButton(onClick = { actions.deleteSetup(setup) }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.catchroutes_delete_x_2, setup.name)) }
+            IconButton(onClick = { actions.deleteSetup(setup) }) { Icon(Icons.Filled.Close, contentDescription = "Delete ${setup.name}") }
         }
     }
 }
@@ -487,14 +487,14 @@ internal fun ResultPanel(
     PanelPages(page = page, root = ResultPage.ROOT, onBack = { onPage(ResultPage.ROOT) }) { shown ->
         if (shown == ResultPage.OPTIONS && session != null) {
             Column(modifier.fillMaxWidth()) {
-                PanelHeader("Route options", onBack = { onPage(ResultPage.ROOT) })
+                PanelHeader(stringResource(R.string.catchroutes_route_options), onBack = { onPage(ResultPage.ROOT) })
                 Column(listModifier.verticalScroll(rememberScrollState())) {
-                    PanelSwitchRow("Spacial Rend", state.settings.spacialRend, { model.controller.setRadius(it) },
+                    PanelSwitchRow(stringResource(R.string.hunt_spacial_rend), state.settings.spacialRend, { model.controller.setRadius(it) },
                         Modifier.testTag("route_option_spacial_rend"), subtitle = stringResource(R.string.catchroutes_catch_range_x_m, state.settings.radius.toInt())) {
                         PanelIcon(R.drawable.ic_radius)
                     }
                     BatterySaverSwitch(description = stringResource(R.string.catchroutes_route_battery_saver),
-                        explanation = "Face down during a route blacks out the screen. Long press it to turn off. Shared with hunts.",
+                        explanation = stringResource(R.string.catchroutes_face_down_during_a_route_blacks),
                         modifier = Modifier.panelGutter().padding(vertical = Spacing.md))
                 }
             }
@@ -512,7 +512,7 @@ internal fun ResultPanel(
                     }
                 }
                 if (session != null) item { WalkingDetails(session, state, Modifier.panelGutter()) }
-                item { PanelSectionLabel("Stops") }
+                item { PanelSectionLabel(stringResource(R.string.catchroutes_stops)) }
                 val nextIndex = session?.let { catchNextStopIndex(it, state.now) }
                 itemsIndexed(state.stops) { index, group ->
                     val visited = session != null && group.all { e -> session.wasVisited(e.opportunity) }

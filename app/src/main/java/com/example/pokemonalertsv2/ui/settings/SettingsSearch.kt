@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.ui.settings
 
+
 /** One thing a person might look for in Settings, and the page it lives on. */
 internal data class SettingsSearchEntry(
     val title: String,

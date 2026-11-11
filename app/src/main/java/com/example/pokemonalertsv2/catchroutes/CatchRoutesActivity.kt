@@ -299,7 +299,7 @@ class CatchRoutesActivity : ComponentActivity() {
         summary?.let { finished ->
             CatchRouteSummarySheet(finished, onDismiss = { summary = null }, onWalkAgain = { summary = null; walkAgain(finished) })
         }
-        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text(stringResource(R.string.catchroutes_delete_x, setup.name)) }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text(stringResource(R.string.catchroutes_delete)) } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }) }
+        deleteSetup?.let { setup -> AlertDialog(onDismissRequest = { deleteSetup = null }, title = { Text("Delete ${setup.name}?") }, confirmButton = { TextButton(onClick = { model.delete(setup); deleteSetup = null }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteSetup = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }) }
     }
 
     /** The map's top bar: the route's name and where the walk stands, or the planner's title. */

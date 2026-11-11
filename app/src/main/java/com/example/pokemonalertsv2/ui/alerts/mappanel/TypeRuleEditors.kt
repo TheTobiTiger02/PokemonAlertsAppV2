@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.ui.alerts.mappanel
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding

@@ -189,7 +189,7 @@ internal fun SettingsScreen(
         else -> pendingPokeGenieImport
     }
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle(initialValue = true)
-    val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = "All")
+    val selectedArea by viewModel.selectedArea.collectAsStateWithLifecycle(initialValue = stringResource(R.string.alerts_all))
     val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle(initialValue = 0)
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle(initialValue = 0)
     val savedSortPreference by viewModel.sortPreference.collectAsStateWithLifecycle(

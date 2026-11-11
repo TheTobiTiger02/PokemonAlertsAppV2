@@ -1,6 +1,5 @@
 package com.example.pokemonalertsv2.tracking
 
-import androidx.compose.ui.res.stringResource
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel

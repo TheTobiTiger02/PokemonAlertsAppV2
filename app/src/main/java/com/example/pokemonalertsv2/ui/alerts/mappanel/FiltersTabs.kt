@@ -98,7 +98,7 @@ internal fun FiltersTabs(
                     StatsEditor(state)
                     state.nearbyExtras?.invoke()
                     state.openFilterStudio?.let { open ->
-                        PanelSectionLabel("More")
+                        PanelSectionLabel(stringResource(R.string.hunt_more))
                         PanelNavRow(
                             title = stringResource(R.string.alerts_advanced_rules),
                             summary = stringResource(R.string.alerts_areas_presets_and_more_in_filter),
@@ -244,7 +244,7 @@ private fun TokenGridOrNote(
     look: (String) -> TokenLook
 ) {
     if (tokens.isEmpty()) {
-        EditorNote("These load with the next refresh.")
+        EditorNote(stringResource(R.string.alerts_these_load_with_the_next_refresh))
     } else {
         TokenTileGrid(
             tokens = tokens,

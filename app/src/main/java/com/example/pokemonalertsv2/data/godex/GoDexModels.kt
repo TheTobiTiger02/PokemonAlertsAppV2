@@ -1,6 +1,4 @@
 package com.example.pokemonalertsv2.data.godex
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 
 
 data class GoDexConfig(

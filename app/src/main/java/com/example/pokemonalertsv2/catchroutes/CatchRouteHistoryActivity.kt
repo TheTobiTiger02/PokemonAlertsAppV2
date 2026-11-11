@@ -106,7 +106,7 @@ class CatchRouteHistoryActivity : ComponentActivity() {
                     Text("${summary.headline()} · ${formatCatchSpeed(summary.averageKmh)}", style = MaterialTheme.typography.bodyMedium)
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("catch_history_delete_${summary.id}")) {
-                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.catchroutes_delete_x_2, summary.name))
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${summary.name}")
                 }
             }
         }

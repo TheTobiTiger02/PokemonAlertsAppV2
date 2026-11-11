@@ -213,7 +213,7 @@ internal fun HuntHistoryScreen(onBack: () -> Unit) {
     opened?.let { summary ->
         HuntSummarySheet(
             summary,
-            doneLabel = "Close",
+            doneLabel = stringResource(R.string.catchroutes_close),
             title = DateFormat.getDateInstance(DateFormat.FULL).format(Date(summary.startedAtMillis))
         ) { opened = null }
     }
@@ -264,7 +264,7 @@ private fun HuntHistoryRow(hunt: HuntSummary, onClick: () -> Unit, onDelete: () 
                     HuntPathThumbnail(track, catchPoints, Modifier.size(width = 72.dp, height = 56.dp))
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("hunt_history_delete")) {
-                    Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.catchroutes_delete_x_2, hunt.name))
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete ${hunt.name}")
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

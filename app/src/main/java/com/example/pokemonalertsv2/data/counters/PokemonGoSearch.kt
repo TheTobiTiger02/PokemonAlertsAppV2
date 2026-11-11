@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.data.counters
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import java.util.Locale
 
 /**

@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.util
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import java.util.concurrent.TimeUnit
 
 /**

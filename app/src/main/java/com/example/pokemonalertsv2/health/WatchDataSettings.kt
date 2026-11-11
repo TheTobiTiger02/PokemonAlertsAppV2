@@ -78,7 +78,7 @@ fun WatchDataSettings() {
                         }) { Text(stringResource(R.string.health_connect)) }
                     }
                 HealthDataReader.Availability.NEEDS_UPDATE ->
-                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(stringResource(R.string.health_update_health_connect)) }
+                    FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text("Update Health Connect") }
                 HealthDataReader.Availability.UNAVAILABLE ->
                     FilledTonalButton(onClick = { start(reader.installIntent()) }) { Text(stringResource(R.string.health_get_health_connect)) }
             }

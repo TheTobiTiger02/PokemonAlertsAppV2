@@ -103,11 +103,11 @@ fun WatchDataPanel(
             }
             when {
                 availability == HealthDataReader.Availability.NEEDS_UPDATE -> {
-                    Text(stringResource(R.string.health_update_health_connect_to_see_heart),
+                    Text("Update Health Connect to see heart rate, steps and calories from your watch.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     FilledTonalButton(onClick = {
                         try { context.startActivity(reader.installIntent()) } catch (_: ActivityNotFoundException) {}
-                    }) { Text(stringResource(R.string.health_update_health_connect)) }
+                    }) { Text("Update Health Connect") }
                 }
                 connected == false -> {
                     Text(stringResource(R.string.health_see_heart_rate_steps_and_calories),

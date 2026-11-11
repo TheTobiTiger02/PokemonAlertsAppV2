@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.tracking
 
+import com.example.pokemonalertsv2.R
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList

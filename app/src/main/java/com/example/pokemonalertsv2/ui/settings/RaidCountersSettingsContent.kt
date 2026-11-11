@@ -246,7 +246,7 @@ fun RaidCountersSettingsContent(
             },
             confirmButton = {
                 Button(onClick = onConfirmImport) {
-                    Text(if (settings.pokeGenieCount > 0) stringResource(R.string.settings_replace_roster) else stringResource(R.string.settings_import))
+                    Text(if (settings.pokeGenieCount > 0) "Replace roster" else stringResource(R.string.settings_import))
                 }
             },
             dismissButton = {

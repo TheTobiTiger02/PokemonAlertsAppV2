@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data
 
+
 data class NotificationCategoryState(
     val raids: Boolean,
     val spawns: Boolean,

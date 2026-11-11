@@ -1,7 +1,7 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.example.pokemonalertsv2.ui.alerts
-
+
 import com.example.pokemonalertsv2.ui.components.AdaptiveCardColumns
 import com.example.pokemonalertsv2.util.rememberOffMain
 import com.example.pokemonalertsv2.util.PerfTrace
@@ -603,7 +603,7 @@ fun PokemonAlertsPage(
             FeedContentState.EMPTY -> AnimatedEmptyState(
                     title = stringResource(R.string.alerts_all_caught_up),
                     message = stringResource(R.string.alerts_no_active_alerts_right_now_tap),
-                    ctaText = "Refresh feed",
+                    ctaText = stringResource(R.string.alerts_refresh_feed),
                     onAction = onRefresh
                 )
             FeedContentState.CONTENT -> AlertsList(

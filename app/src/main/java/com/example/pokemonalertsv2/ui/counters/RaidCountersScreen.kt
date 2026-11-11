@@ -86,7 +86,7 @@ internal fun LazyListScope.countersBody(
     val metric = state.options.sort.toCounterMetric()
     when (state.phase) {
         CountersPhase.UNRESOLVED -> item(key = "unresolved") { UnresolvedState(state, actions) }
-        CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList("Loading counters…") }
+        CountersPhase.LOADING -> item(key = "loading") { CounterSkeletonList(stringResource(R.string.counters_loading_counters)) }
         CountersPhase.ERROR -> item(key = "error") { ErrorState(state, actions) }
         CountersPhase.EMPTY -> item(key = "empty") { EmptyState(state) }
         CountersPhase.PERSONAL -> personalItems(state, actions, metric, copyTeam)
@@ -295,7 +295,7 @@ internal fun LazyListScope.personalItems(
             onCopyTeam = onCopyTeam
         )
     }
-    item(key = "personal_label") { SectionLabel("Your best counters") }
+    item(key = "personal_label") { SectionLabel(stringResource(R.string.counters_your_best_counters)) }
 
     val best = metric.bestOf(personal.ranked.map { it.metrics.valueFor(metric) })
     itemsIndexed(

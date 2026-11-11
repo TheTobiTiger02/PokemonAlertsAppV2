@@ -136,7 +136,7 @@ internal fun CompactAlertCard(
                     .combinedClickable(
                         onClick = onShowDetails,
                         onLongClick = { menuOpen = true },
-                        onLongClickLabel = "More actions"
+                        onLongClickLabel = stringResource(R.string.alerts_more_actions)
                     )
                     .padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,

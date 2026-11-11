@@ -168,7 +168,7 @@ internal fun HuntTargetSheet(
                 onDeleteSaved = { saved -> deleting = saved },
                 startLabel = when {
                     !ready -> stringResource(R.string.hunt_pick_something_to_hunt)
-                    editing != null -> stringResource(R.string.hunt_update_hunt)
+                    editing != null -> "Update hunt"
                     else -> stringResource(R.string.hunt_hunt_x, huntName(hunt, catalog))
                 },
                 ready = ready,
@@ -180,14 +180,14 @@ internal fun HuntTargetSheet(
     deleting?.let { target ->
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { deleting = null },
-            title = { Text(stringResource(R.string.hunt_delete_x, target.name)) },
+            title = { Text("Delete \"${target.name}\"?") },
             text = { Text(stringResource(R.string.hunt_the_saved_hunt_and_its_targets)) },
             confirmButton = {
                 androidx.compose.material3.TextButton(onClick = {
                     scope.launch { huntRepository.deleteSavedHunt(target.id) }
                     if (editingId == target.id) editingId = null
                     deleting = null
-                }) { Text(stringResource(R.string.catchroutes_delete)) }
+                }) { Text("Delete") }
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
         )
@@ -286,7 +286,7 @@ private fun HuntPages(
                             )
                         }
                         if (savedHunts.isNotEmpty()) {
-                            item { PanelSectionLabel("Hunted before") }
+                            item { PanelSectionLabel(stringResource(R.string.hunt_hunted_before)) }
                             items(savedHunts, key = { it.id }) { saved ->
                                 Box(Modifier.padding(horizontal = PanelGutter)) {
                                     SavedHuntRow(
@@ -299,14 +299,14 @@ private fun HuntPages(
                                 }
                             }
                         }
-                        item { PanelSectionLabel("What") }
+                        item { PanelSectionLabel(stringResource(R.string.catchroutes_what)) }
                         item {
                             Box(Modifier.padding(horizontal = PanelGutter)) {
                                 AlertTypesSection(
                                     definition = filters.definition,
                                     categoryCounts = filters.categoryCounts,
                                     onDefinitionChange = filters.onDefinitionChange,
-                                    setAllLabel = "Pick one or more"
+                                    setAllLabel = stringResource(R.string.hunt_pick_one_or_more)
                                 )
                             }
                         }
@@ -314,7 +314,7 @@ private fun HuntPages(
                         // no business asking about raid tiers.
                         val editable = chosenTypes.mapNotNull { type -> type.editor()?.let { type to it } }
                         if (editable.isNotEmpty()) {
-                            item { PanelSectionLabel("Narrow it down") }
+                            item { PanelSectionLabel(stringResource(R.string.hunt_narrow_it_down)) }
                             items(editable, key = { it.first.name }) { (type, editor) ->
                                 PanelNavRow(
                                     title = type.label,
@@ -326,7 +326,7 @@ private fun HuntPages(
                                 )
                             }
                         }
-                        item { PanelSectionLabel("Where") }
+                        item { PanelSectionLabel(stringResource(R.string.catchroutes_where)) }
                         item {
                             PanelNavRow(
                                 title = stringResource(R.string.hunt_area),
@@ -432,7 +432,7 @@ private fun SavedHuntRow(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.catchroutes_delete)) },
+                    text = { Text("Delete") },
                     onClick = {
                         menuOpen = false
                         onDelete()

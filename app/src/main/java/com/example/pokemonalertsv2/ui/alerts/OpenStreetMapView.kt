@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.ui.alerts
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor

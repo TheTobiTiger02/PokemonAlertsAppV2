@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.tracking
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.hunt.huntInRangeChipText
 import com.example.pokemonalertsv2.util.TimeUtils

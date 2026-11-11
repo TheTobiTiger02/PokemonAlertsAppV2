@@ -81,7 +81,7 @@ internal fun TappablesTab(state: FiltersState) {
             TextButton(onClick = { update(FilterSelection.None) }) { Text(stringResource(R.string.alerts_none)) }
         }
         if (sections.all.isEmpty()) {
-            EditorNote("These load with the next refresh.")
+            EditorNote(stringResource(R.string.alerts_these_load_with_the_next_refresh))
             return@Column
         }
         listOf("Loot" to sections.loot, "Pokémon" to sections.pokemon).forEach { (title, tokens) ->

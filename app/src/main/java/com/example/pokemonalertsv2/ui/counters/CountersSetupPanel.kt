@@ -118,7 +118,7 @@ internal fun CounterSetupPanel(
                 SetupPage.LEVEL -> Column(pageModifier) {
                     PanelHeader(title = stringResource(R.string.counters_attacker_level), onBack = back)
                     if (live?.state?.showingPersonal == true) {
-                        PageNote("My Pokémon ranks each of yours at its own level; this level is for the Pokébattler list.")
+                        PageNote(stringResource(R.string.counters_my_pok_mon_ranks_each_of))
                     }
                     LevelTiles(
                         selected = options.attackerLevel,
@@ -203,7 +203,7 @@ private fun SetupList(
     val actions = live?.actions
 
     if (SetupItem.WEATHER !in excluded) {
-        PanelSectionLabel("Weather")
+        PanelSectionLabel(stringResource(R.string.alerts_weather))
         WeatherTiles(
             selected = options.weather,
             onSelect = { onOptionsChanged(options.copy(weather = it)) },
@@ -212,7 +212,7 @@ private fun SetupList(
         state?.let { weatherSourceNote(it) }?.let { PageNote(it) }
     }
 
-    PanelSectionLabel("Battle")
+    PanelSectionLabel(stringResource(R.string.counters_battle))
     if (state != null) {
         PanelNavRow(
             title = stringResource(R.string.counters_boss_moveset),
@@ -265,7 +265,7 @@ private fun SetupList(
         icon = { PanelIcon(R.drawable.ic_timer) }
     )
 
-    PanelSectionLabel("Include")
+    PanelSectionLabel(stringResource(R.string.counters_include))
     PanelSwitchRow(
         title = stringResource(R.string.counters_megas),
         checked = options.includeMegas,
@@ -288,7 +288,7 @@ private fun SetupList(
     if (state == null || actions == null) return
     val showOwned = SetupItem.OWNED !in excluded && state.pokeGenieCount > 0
     if (!showOwned && !state.hasPersonalSource) return
-    PanelSectionLabel("My Pokémon")
+    PanelSectionLabel(stringResource(R.string.counters_my_pok_mon))
     if (showOwned) {
         PanelSwitchRow(
             title = stringResource(R.string.counters_owned_only),

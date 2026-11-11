@@ -128,17 +128,17 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
                     }
                 }
                 if (config.grouping != MapGrouping.COINCIDENT) {
-                    ClusterSlider("Grouping distance", config.distanceDp, 8..80, "dp") {
+                    ClusterSlider(stringResource(R.string.alerts_grouping_distance), config.distanceDp, 8..80, "dp") {
                         change(config.copy(distanceDp = it))
                     }
-                    ClusterSlider("Separate pins at zoom", config.zoomCutoff, 8..18, "") {
+                    ClusterSlider(stringResource(R.string.alerts_separate_pins_at_zoom), config.zoomCutoff, 8..18, "") {
                         change(config.copy(zoomCutoff = it))
                     }
                 }
-                ClusterSlider("Overview marker limit", config.overviewLimit, 25..600, "", 25) {
+                ClusterSlider(stringResource(R.string.alerts_overview_marker_limit), config.overviewLimit, 25..600, "", 25) {
                     change(config.copy(overviewLimit = it))
                 }
-                ClusterSlider("Close zoom marker limit", config.closeLimit, 50..1200, "", 50) {
+                ClusterSlider(stringResource(R.string.alerts_close_zoom_marker_limit), config.closeLimit, 50..1200, "", 50) {
                     change(config.copy(closeLimit = it))
                 }
                 Text(

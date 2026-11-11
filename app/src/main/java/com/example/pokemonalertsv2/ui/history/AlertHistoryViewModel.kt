@@ -1,7 +1,5 @@
 package com.example.pokemonalertsv2.ui.history
 
-import com.example.pokemonalertsv2.R
-import androidx.compose.ui.res.stringResource
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
