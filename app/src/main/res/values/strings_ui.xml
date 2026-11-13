@@ -1116,10 +1116,6 @@
     <string name="tracking_waiting_for_precise_gps">Waiting for precise GPS</string>
     <string name="tracking_x_next_x">%1$s · next: %2$s</string>
     <string name="tracking_x_raid_ended">%1$s raid ended</string>
-    <string name="tracking_you_re_at_x">You’re at %1$s.</string>
-    <string name="tracking_you_re_in_range_of_the">You’re in range of the raid.</string>
-    <string name="tracking_you_re_in_range_of_the_2">You’re in range of the PokéStop.</string>
-    <string name="tracking_you_re_within_x_m_of">You’re within %1$s m of the alert.</string>
     <string name="ui_got_it">Got it</string>
     <string name="ui_what_s_new_in_x">What’s new in %1$s</string>
     <string name="util_1_day_ago">1 day ago</string>

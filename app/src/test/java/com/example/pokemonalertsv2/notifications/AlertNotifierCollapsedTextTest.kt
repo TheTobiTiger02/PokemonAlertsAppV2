@@ -20,11 +20,11 @@ class AlertNotifierCollapsedTextTest {
     }
 
     @Test
-    fun inRangePrecedesTheDistance() {
+    fun inRangeReplacesTheDistance() {
         val alert = PokemonAlert(name = "Rayquaza", type = listOf("Raid"), endTime = endsIn(5))
 
         assertEquals(
-            "In range \u2022 40 m \u2022 5 min left",
+            "In range \u2022 5 min left",
             AlertNotifier.buildCollapsedNotificationText(alert, "40 m", null, isInRange = true, nowMillis = now)
         )
     }

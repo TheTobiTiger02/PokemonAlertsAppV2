@@ -20,18 +20,17 @@ import androidx.core.content.ContextCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.CaughtAlert
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.NotificationContentPreferences
+import com.example.pokemonalertsv2.notifications.NotificationContent
+import com.example.pokemonalertsv2.notifications.NotificationContentInput
+import com.example.pokemonalertsv2.notifications.notificationIdentity
+import com.example.pokemonalertsv2.notifications.renderNotificationContent
 import com.example.pokemonalertsv2.hunt.headline
-import com.example.pokemonalertsv2.hunt.huntInRangeChipText
-import com.example.pokemonalertsv2.hunt.huntInRangeLines
-import com.example.pokemonalertsv2.hunt.huntInRangeTitle
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
-import com.example.pokemonalertsv2.ui.alerts.displayCp
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.util.WalkingRouteInfo
 import com.example.pokemonalertsv2.util.WalkingRouteUtils
-import java.util.Locale
-import kotlin.math.roundToInt
 
 internal object ArrivalTrackingNotifications {
     const val ONGOING_NOTIFICATION_ID = 40_040
@@ -48,9 +47,6 @@ internal object ArrivalTrackingNotifications {
     private const val REQUEST_SUMMARY = 40_047
     private const val REQUEST_TOGGLE_GOING_MAP = 40_049
     const val HUNT_SUMMARY_NOTIFICATION_ID = 40_048
-
-    /** Assumed max journey distance for the progress bar, in meters. */
-    private const val PROGRESS_MAX_METERS = 10_000f
 
     fun ensureChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
@@ -174,43 +170,19 @@ internal object ArrivalTrackingNotifications {
         /** "Mewtwo raid ended · next: Eevee": leads the card for a minute after a switch. */
         endedNote: String? = null,
         /** A one-off journey's map switch, shown as Show map / Hide map; null on a hunt. */
-        goingMapShown: Boolean? = null
+        goingMapShown: Boolean? = null,
+        contentPreferences: NotificationContentPreferences = NotificationContentPreferences(),
+        goDexText: String? = null
     ): Notification {
         val alert = destination.alert
-        val walkingContent = endedNote ?: ongoingContent(
-            destination = destination,
-            distanceMeters = distanceMeters,
-            walkingRoute = walkingRoute,
-            inRange = inRange,
-            waitingForPreciseLocation = waitingForPreciseLocation
+        val rendered = journeyContent(
+            destination, distanceMeters, walkingRoute, inRange,
+            waitingForPreciseLocation, contentPreferences, endedNote, goDexText
         )
-        val remaining = TimeUtils.parseEndTimeToMillis(alert.endTime)
-            ?.minus(System.currentTimeMillis())
-            ?.takeIf { it > 0L }
-            ?.let { " \u2022 ${TimeUtils.formatDurationShort(it)} left" }
-            .orEmpty()
-        // In range, on a hunt or an "I'm going": the distance and the progress bar have
-        // both been spent, so the card becomes the reason you walked here -- the task,
-        // the reward, which grunt. Empty for a raid and for anything with nothing to
-        // add, which is what keeps the walking readout as the default.
-        val arrivedLines = if (inRange) huntInRangeLines(alert) else emptyList()
-        val content = arrivedLines.firstOrNull() ?: walkingContent
-        val title = (if (arrivedLines.isEmpty()) null else huntInRangeTitle(alert))
-            ?: ongoingTitle(alert)
-        val expandedBody = if (arrivedLines.isEmpty()) {
-            buildExpandedBody(alert, content, remaining)
-        } else {
-            arrivedLines.joinToString("\n")
-        }
-        val chip = when {
-            // Close enough to see it: the distance has stopped being the useful
-            // number, so a hunt swaps in whatever decides the next tap instead.
-            inRange -> huntInRangeChipText(alert) ?: AppText.get(R.string.alerts_in_range)
-            waitingForPreciseLocation -> null
-            walkingRoute != null -> formatDistance(walkingRoute.distanceMeters.toFloat())
-            distanceMeters != null -> formatDistance(distanceMeters)
-            else -> null
-        } ?: remaining.trim().takeIf { it.isNotBlank() }
+        val content = rendered.collapsed
+        val title = if (inRange) rendered.title else ongoingTitle(alert)
+        val expandedBody = rendered.expanded
+        val chip = rendered.chip
 
         if (Build.VERSION.SDK_INT >= LIVE_NOTIFICATION_MIN_SDK) {
             return liveBuilder(context, alert)
@@ -261,30 +233,15 @@ internal object ArrivalTrackingNotifications {
                         )
                     }
                 }
-                .setStyle(
-                    // A progress bar reading "you are here" is worth less than the
-                    // task and the reward. BigTextStyle is promotion-eligible -- see
-                    // [restoring] -- so the status bar chip survives the swap.
-                    if (expandedBody.isNotBlank() && arrivedLines.isNotEmpty()) {
-                        Notification.BigTextStyle().bigText(expandedBody)
-                    } else {
-                        buildProgressStyle(
-                            context = context,
-                            alert = alert,
-                            distanceMeters = distanceMeters,
-                            waitingForPreciseLocation = waitingForPreciseLocation
-                        )
-                    }
-                )
+                .setStyle(Notification.BigTextStyle().bigText(expandedBody))
                 .apply {
-                    chip?.let { setShortCriticalText(it) }
+                    setShortCriticalText(chip)
                 }
                 .build()
         }
         return ongoingBuilder(context, alert)
             .setContentTitle(title)
             .setContentText(content)
-            .setSubText(content)
             .setContentIntent(openAlertPendingIntent(context, alert))
             .apply {
                 if (huntActive || inRange) {
@@ -321,7 +278,7 @@ internal object ArrivalTrackingNotifications {
             // Carried on every version: below 36 NotificationCompat stores it as an
             // extra, at 36 it becomes the status bar chip's text. It was being computed
             // and thrown away on this path.
-            .apply { chip?.let { setShortCriticalText(it) } }
+            .setShortCriticalText(chip)
             // BigTextStyle, not ProgressStyle: NotificationCompat.ProgressStyle degrades
             // to the *default* style below API 36, which would drop the expanded body --
             // the one place a pre-36 device renders the detail behind a tap.
@@ -336,69 +293,48 @@ internal object ArrivalTrackingNotifications {
         inRange: Boolean,
         waitingForPreciseLocation: Boolean
     ): String {
+        return journeyContent(
+            destination, distanceMeters, walkingRoute, inRange, waitingForPreciseLocation,
+            NotificationContentPreferences()
+        ).collapsed
+    }
+
+    private fun journeyContent(
+        destination: TrackedDestination,
+        distanceMeters: Float?,
+        walkingRoute: WalkingRouteInfo?,
+        inRange: Boolean,
+        waitingForPreciseLocation: Boolean,
+        preferences: NotificationContentPreferences,
+        endedNote: String? = null,
+        goDexText: String? = null
+    ): NotificationContent {
         val routeDisplay = WalkingRouteUtils.buildRouteDisplayInfo(
             straightLineDistanceMeters = distanceMeters,
             routeInfo = walkingRoute,
             fallbackToEstimate = false
         )
-        val movement = if (walkingRoute != null && routeDisplay.distanceText != null) {
-            listOfNotNull(
-                "${routeDisplay.distanceText} walk",
-                routeDisplay.walkingText
-            ).joinToString(" \u2022 ")
-        } else {
-            routeDisplay.distanceText
+        val distance = routeDisplay.distanceText?.let {
+            if (walkingRoute != null) "$it walk" else "$it direct"
         }
-        val status = when {
-            inRange -> AppText.get(R.string.alerts_in_range)
+        val status = endedNote ?: when {
+            inRange -> null
             waitingForPreciseLocation -> AppText.get(R.string.tracking_waiting_for_precise_gps)
             distanceMeters == null -> AppText.get(R.string.tracking_finding_your_precise_location)
-            else -> AppText.get(R.string.tracking_range_at_x_m_direct, destination.radiusMeters)
+            else -> null
         }
-        return listOfNotNull(status, movement).joinToString(" \u2022 ")
+        return renderNotificationContent(
+            NotificationContentInput(
+                destination.alert, distance, routeDisplay.walkingText,
+                inRange = inRange, status = status, goDexText = goDexText,
+                rangeHint = AppText.get(R.string.tracking_range_at_x_m_direct, destination.radiusMeters)
+                    .takeIf { distanceMeters != null && !waitingForPreciseLocation }
+            ), preferences
+        )
     }
 
     internal fun ongoingTitle(alert: PokemonAlert): String {
-        val name = displayName(alert)
-        val cp = alert.displayCp?.let { " \u2022 CP $it" }.orEmpty()
-        return "Going to $name$cp"
-    }
-
-    internal fun buildExpandedBody(alert: PokemonAlert, content: String, remaining: String): String {
-        val detail = buildList {
-            remaining.trim().takeIf { it.isNotBlank() }?.let { add(it) }
-            alert.displayCp?.let { add("CP $it") }
-        }
-        return if (detail.isEmpty()) content else "$content\n${detail.joinToString(" \u2022 ")}"
-    }
-
-    @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
-    private fun buildProgressStyle(
-        context: Context,
-        alert: PokemonAlert,
-        distanceMeters: Float?,
-        waitingForPreciseLocation: Boolean
-    ): Notification.ProgressStyle {
-        val accent = resolveAlertVisualStyle(alert).category.accentArgb.toInt()
-        val style = Notification.ProgressStyle()
-            .setStyledByProgress(true)
-            .setProgressStartIcon(Icon.createWithResource(context, R.drawable.ic_my_location))
-            .setProgressEndIcon(Icon.createWithResource(context, R.drawable.ic_poke_notification))
-            .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_navigate))
-            .addProgressPoint(
-                Notification.ProgressStyle.Point(PROGRESS_MAX_METERS.roundToInt()).setColor(accent)
-            )
-        if (waitingForPreciseLocation || distanceMeters == null) {
-            return style.setProgressIndeterminate(true)
-        }
-        val remaining = distanceMeters.coerceAtLeast(0f)
-        val travelled = (PROGRESS_MAX_METERS - remaining).coerceAtLeast(0f)
-        return style
-            .addProgressSegment(
-                Notification.ProgressStyle.Segment(PROGRESS_MAX_METERS.roundToInt())
-                    .setColor(accent)
-            )
-            .setProgress(travelled.roundToInt())
+        return "Going to ${notificationIdentity(alert)}"
     }
 
     @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
@@ -489,7 +425,12 @@ internal object ArrivalTrackingNotifications {
         NotificationManagerCompat.from(context).cancel(HUNT_SUMMARY_NOTIFICATION_ID)
     }
 
-    fun postArrival(context: Context, destination: TrackedDestination) {
+    fun postArrival(
+        context: Context,
+        destination: TrackedDestination,
+        contentPreferences: NotificationContentPreferences = NotificationContentPreferences(),
+        goDexText: String? = null
+    ) {
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
@@ -498,12 +439,13 @@ internal object ArrivalTrackingNotifications {
             return
         }
         val alert = destination.alert
-        val title = "You\u2019re in range of ${displayName(alert)}"
-        val body = buildArrivalBody(alert, destination.radiusMeters)
+        val rendered = arrivalContent(alert, contentPreferences, goDexText = goDexText)
+        val title = "You\u2019re in range of ${rendered.title}"
+        val body = rendered.expanded
         val builder = NotificationCompat.Builder(context, CHANNEL_ARRIVAL)
             .setSmallIcon(R.drawable.ic_poke_notification)
             .setContentTitle(title)
-            .setContentText(body)
+            .setContentText(rendered.collapsed)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -518,32 +460,14 @@ internal object ArrivalTrackingNotifications {
             .notify(alert.uniqueId.hashCode() xor 0x415252, builder.build())
     }
 
-    internal fun buildArrivalBody(
+    internal fun arrivalContent(
         alert: PokemonAlert,
-        radiusMeters: Int,
-        nowMillis: Long = System.currentTimeMillis()
-    ): String {
-        val lead = when {
-            alert.hasTypeContaining("raid") -> {
-                val gym = alert.gym?.takeIf { it.isNotBlank() }
-                if (gym != null) AppText.get(R.string.tracking_you_re_at_x, gym) else AppText.get(R.string.tracking_you_re_in_range_of_the)
-            }
-            alert.hasTypeContaining("quest") -> {
-                val stop = alert.pokestop?.takeIf { it.isNotBlank() }
-                if (stop != null) AppText.get(R.string.tracking_you_re_at_x, stop) else AppText.get(R.string.tracking_you_re_in_range_of_the_2)
-            }
-            alert.pokemon != null ||
-                alert.hasTypeContaining("hundo") ||
-                alert.hasTypeContaining("spawn") ||
-                alert.hasTypeContaining("pvp") -> {
-                "It should now be visible in Pok\u00e9mon GO."
-            }
-            else -> AppText.get(R.string.tracking_you_re_within_x_m_of, radiusMeters)
-        }
-
-        val metadata = alertDetailLines(alert, nowMillis)
-        return if (metadata.isEmpty()) lead else "$lead ${metadata.joinToString(" \u2022 ")}"
-    }
+        preferences: NotificationContentPreferences = NotificationContentPreferences(),
+        nowMillis: Long = System.currentTimeMillis(),
+        goDexText: String? = null
+    ): NotificationContent = renderNotificationContent(
+        NotificationContentInput(alert, inRange = true, nowMillis = nowMillis, goDexText = goDexText), preferences
+    )
 
     private fun ongoingBuilder(
         context: Context,

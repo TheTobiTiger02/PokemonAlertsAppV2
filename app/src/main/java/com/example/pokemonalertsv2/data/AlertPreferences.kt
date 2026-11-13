@@ -24,6 +24,7 @@ private const val DATA_STORE_NAME = "pokemon_alerts_preferences"
 private val filterMigrationsDone: MutableSet<DataStore<Preferences>> =
     java.util.Collections.synchronizedSet(java.util.Collections.newSetFromMap(java.util.IdentityHashMap()))
 internal val SEEN_ALERTS_KEY = stringSetPreferencesKey("seen_alert_ids")
+internal val NOTIFICATION_CONTENT_KEY = androidx.datastore.preferences.core.stringPreferencesKey("notification_content_v1")
 private val FAVORITE_ALERTS_KEY = stringSetPreferencesKey("favorite_alert_ids")
 private val THEME_MODE_KEY = androidx.datastore.preferences.core.intPreferencesKey("theme_mode")
 private val LAST_CAUGHT_ID_KEY = androidx.datastore.preferences.core.stringPreferencesKey("last_caught_alert_id")
@@ -172,6 +173,11 @@ data class AlertSyncCursor(
 )
 
 interface AlertPreferencesStore {
+    val notificationContent: Flow<NotificationContentPreferences>
+        get() = flowOf(NotificationContentPreferences())
+
+    suspend fun updateNotificationContent(transform: (NotificationContentPreferences) -> NotificationContentPreferences) = Unit
+
     /** Unified, versioned eligibility rules. Default bodies keep lightweight test stores source-compatible. */
     val filterStateDocument: Flow<FilterStateDocument>
         get() = flowOf(FilterStateDocument())
@@ -425,6 +431,20 @@ interface AlertPreferencesStore {
 }
 
 class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPreferencesStore {
+
+    override val notificationContent: Flow<NotificationContentPreferences> = dataStore.data
+        .distinctUntilChangedBy { it[NOTIFICATION_CONTENT_KEY] }
+        .map { NotificationContentCodec.decode(it[NOTIFICATION_CONTENT_KEY]) }
+
+    override suspend fun updateNotificationContent(
+        transform: (NotificationContentPreferences) -> NotificationContentPreferences
+    ) {
+        dataStore.edit { prefs ->
+            prefs[NOTIFICATION_CONTENT_KEY] = NotificationContentCodec.encode(
+                transform(NotificationContentCodec.decode(prefs[NOTIFICATION_CONTENT_KEY]))
+            )
+        }
+    }
 
     // Every write to this DataStore (seen alerts, settings, ...) re-emits it. Decoding the filter
     // JSON is only needed when that JSON changed, and the legacy migration only once per process.

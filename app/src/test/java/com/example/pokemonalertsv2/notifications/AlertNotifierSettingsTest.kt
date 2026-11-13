@@ -14,11 +14,11 @@ import com.example.pokemonalertsv2.data.DEFAULT_QUIET_HOURS_END
 class AlertNotifierSettingsTest {
 
     @Test
-    fun notificationContent_placesExactWildCpFirst() {
+    fun notificationContentIncludesSelectedTravelAndExactCp() {
         val alert = PokemonAlert(name = "Trubbish", cp = 457, type = listOf("Hundo"))
 
         assertEquals(
-            "CP 457 • 15.5 km • 192 min walk • Hundo",
+            "15.5 km • 192 min walk • CP 457",
             AlertNotifier.buildNotificationContentText(
                 alert = alert,
                 distanceText = "15.5 km",

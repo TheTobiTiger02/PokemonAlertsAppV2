@@ -121,7 +121,43 @@ class ArrivalTrackingServiceInstrumentedTest {
     }
 
     @Test
-    fun ongoingNotificationUsesAndroid16LiveProgressContract() {
+    fun contentChangesRefreshTheActiveJourneyWithoutReplacingItsDestination() = runBlocking {
+        val previous = alertPreferences.notificationContent.first()
+        try {
+            alertPreferences.updateNotificationContent { com.example.pokemonalertsv2.data.NotificationContentPreferences() }
+            repository.startTracking(
+                PokemonAlert(
+                    name = "Hundo Pikachu", pokemon = "Pikachu", type = listOf("Hundo"), cp = 938,
+                    latitude = 49.86, longitude = 8.65,
+                    endTime = (System.currentTimeMillis() + 600_000L).toString()
+                )
+            )
+            val destination = repository.currentDestination()
+            ArrivalTrackingService.start(context)
+            assertTrue(fakeLocationSource.started.await(5, TimeUnit.SECONDS))
+            fun hasCp() = activeOngoingNotification()?.extras
+                ?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.contains("CP 938") == true
+            var deadline = SystemClock.elapsedRealtime() + 5_000
+            while (!hasCp() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50)
+            assertTrue(hasCp())
+            alertPreferences.updateNotificationContent {
+                it.withField(com.example.pokemonalertsv2.data.FilterAlertType.HUNDO, false, com.example.pokemonalertsv2.data.NotificationField.CP, false)
+                    .withField(com.example.pokemonalertsv2.data.FilterAlertType.HUNDO, true, com.example.pokemonalertsv2.data.NotificationField.CP, false)
+            }
+            deadline = SystemClock.elapsedRealtime() + 5_000
+            while (hasCp() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50)
+            assertTrue(!hasCp())
+            val notification = activeOngoingNotification()
+            assertNotNull(notification)
+            assertTrue(notification!!.actions.any { it.title == "Stop" })
+            assertEquals(destination, repository.currentDestination())
+        } finally {
+            alertPreferences.updateNotificationContent { previous }
+        }
+    }
+
+    @Test
+    fun ongoingNotificationUsesAndroid16LiveTextContract() {
         assumeTrue(Build.VERSION.SDK_INT >= 36)
         assertEquals(
             android.content.pm.PackageManager.PERMISSION_GRANTED,
@@ -160,11 +196,11 @@ class ArrivalTrackingServiceInstrumentedTest {
         assertTrue(
             notification.extras
                 .getString(Notification.EXTRA_TEMPLATE)
-                ?.contains("ProgressStyle") == true
+                ?.contains("BigTextStyle") == true
         )
         assertTrue(
             notification.extras
-                .getCharSequence(Notification.EXTRA_TITLE)
+                .getCharSequence(Notification.EXTRA_BIG_TEXT)
                 ?.contains("CP 938") == true
         )
     }

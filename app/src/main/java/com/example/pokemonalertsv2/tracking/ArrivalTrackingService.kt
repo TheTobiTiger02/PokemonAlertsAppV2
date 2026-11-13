@@ -208,6 +208,9 @@ class ArrivalTrackingService : Service() {
     /** The stored theme mode, kept so a system night-mode change can be applied on its own. */
     private var storedThemeMode = 0
     private var themeJob: Job? = null
+    private var notificationContentJob: Job? = null
+    private var notificationGoDexJob: Job? = null
+    private var notificationContent = com.example.pokemonalertsv2.data.NotificationContentPreferences()
     private var routeLineJob: Job? = null
     private var spacialRendJob: Job? = null
     private var outsideAreaJob: Job? = null
@@ -445,6 +448,22 @@ class ArrivalTrackingService : Service() {
                 }
             }
         }
+        if (notificationContentJob == null) {
+            notificationContentJob = serviceScope.launch {
+                AlertPreferences(applicationContext.alertPreferencesDataStore).notificationContent.collect { content ->
+                    notificationContent = content
+                    refreshCurrentNotification()
+                }
+            }
+        }
+        if (notificationGoDexJob == null) {
+            notificationGoDexJob = serviceScope.launch {
+                val goDex = com.example.pokemonalertsv2.data.godex.GoDexRepository.getInstance(applicationContext)
+                combine(goDex.config, goDex.entries) { _, _ -> Unit }.collect {
+                    refreshCurrentNotification()
+                }
+            }
+        }
         if (routeLineJob == null) {
             routeLineJob = serviceScope.launch {
                 // Collected rather than read on each path refresh, so the switch in the window
@@ -602,6 +621,8 @@ class ArrivalTrackingService : Service() {
         undoOfferJob?.cancel()
         appMapVisibilityJob?.cancel()
         themeJob?.cancel()
+        notificationContentJob?.cancel()
+        notificationGoDexJob?.cancel()
         routeLineJob?.cancel()
         spacialRendJob?.cancel()
         outsideAreaJob?.cancel()
@@ -1009,7 +1030,9 @@ class ArrivalTrackingService : Service() {
             if (!raidLiveUpdateStarted) {
                 lastInRange = true
                 if (hasNotificationPermission()) {
-                    ArrivalTrackingNotifications.postArrival(this@ArrivalTrackingService, destination)
+                    ArrivalTrackingNotifications.postArrival(
+                        this@ArrivalTrackingService, destination, notificationContent, journeyGoDexText(destination.alert)
+                    )
                 }
                 updateOngoing(
                     destination = destination,
@@ -1024,7 +1047,9 @@ class ArrivalTrackingService : Service() {
             if (!raidLiveUpdateStarted && hasNotificationPermission()) {
                 ArrivalTrackingNotifications.postArrival(
                     this@ArrivalTrackingService,
-                    destination
+                    destination,
+                    notificationContent,
+                    journeyGoDexText(destination.alert)
                 )
             }
             // The destination collector owns standby/shutdown. A newer journey may
@@ -1053,6 +1078,13 @@ class ArrivalTrackingService : Service() {
         repository.stopTracking()
     }
 
+    private fun journeyGoDexText(alert: PokemonAlert): String? {
+        val goDex = com.example.pokemonalertsv2.data.godex.GoDexRepository.getInstance(applicationContext)
+        return com.example.pokemonalertsv2.notifications.goDexNotificationText(
+            alert, goDex.match(alert, goDex.entries.value, goDex.config.value.isConnected)
+        )
+    }
+
     @SuppressLint("MissingPermission")
     private fun updateOngoing(
         destination: TrackedDestination,
@@ -1072,7 +1104,9 @@ class ArrivalTrackingService : Service() {
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
             undoOffer = undoOffer,
             endedNote = endedNote(),
-            goingMapShown = if (huntActive) null else goingMapEnabled
+            goingMapShown = if (huntActive) null else goingMapEnabled,
+            contentPreferences = notificationContent,
+            goDexText = journeyGoDexText(destination.alert)
         )
         runCatching {
             NotificationManagerCompat.from(this)
@@ -1945,7 +1979,9 @@ class ArrivalTrackingService : Service() {
             offerOverlay = readoutSurface() == JourneyReadoutSurface.MAP_LABEL,
             undoOffer = undoOffer,
             endedNote = endedNote(),
-            goingMapShown = if (huntActive) null else goingMapEnabled
+            goingMapShown = if (huntActive) null else goingMapEnabled,
+            contentPreferences = notificationContent,
+            goDexText = journeyGoDexText(destination.alert)
         )
     }
 

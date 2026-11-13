@@ -1,15 +1,22 @@
 package com.example.pokemonalertsv2.ui.settings
 
 import android.app.Application
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.core.app.ApplicationProvider
 import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.FilterAlertType
+import com.example.pokemonalertsv2.data.NotificationContentPreferences
+import com.example.pokemonalertsv2.data.NotificationField
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import kotlinx.coroutines.flow.first
@@ -30,12 +37,15 @@ class SettingsPageDesignsComposeTest {
     private var savedEnabled = true
     private var savedVibrate = true
     private var savedSilence = 0L
+    private var savedContent = NotificationContentPreferences()
 
     @Before
     fun setUp() = runBlocking {
         savedEnabled = preferences.notificationsEnabled.first()
         savedVibrate = preferences.notificationVibrate.first()
         savedSilence = preferences.silenceUntil.first()
+        savedContent = preferences.notificationContent.first()
+        preferences.updateNotificationContent { NotificationContentPreferences() }
         preferences.updateNotificationsEnabled(true)
         preferences.updateNotificationVibrate(true)
         preferences.updateSilenceUntil(0L)
@@ -46,6 +56,27 @@ class SettingsPageDesignsComposeTest {
         preferences.updateNotificationsEnabled(savedEnabled)
         preferences.updateNotificationVibrate(savedVibrate)
         preferences.updateSilenceUntil(savedSilence)
+        preferences.updateNotificationContent { savedContent }
+    }
+
+    @Test
+    fun notificationContentPersistsSeparateViewsAndResetsOneCategory() {
+        show()
+        composeRule.onNodeWithTag("settings_notification_content").performScrollTo().performClick()
+        composeRule.onNodeWithTag("notification_category_RAID").performScrollTo().performClick()
+        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsOn().performClick()
+        composeRule.waitUntil(5_000) {
+            runBlocking { NotificationField.WEATHER !in preferences.notificationContent.first().fields(FilterAlertType.RAID, false) }
+        }
+        composeRule.onNodeWithTag("notification_view_expanded").performScrollTo().performClick()
+        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsOn()
+        composeRule.onNodeWithTag("notification_preview_body").performScrollTo().assertTextContains("Windy", substring = true)
+        composeRule.onNodeWithTag("notification_content_reset").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) {
+            runBlocking { preferences.notificationContent.first() == NotificationContentPreferences() }
+        }
+        composeRule.onNodeWithText("Raids").performScrollTo()
+        com.example.pokemonalertsv2.notifications.captureNotificationProof(app, "content-settings")
     }
 
     @Test
@@ -77,7 +108,8 @@ class SettingsPageDesignsComposeTest {
                     grants = PermissionGrants(notifications = true, foregroundLocation = true, backgroundLocation = true),
                     onManageNotifications = {},
                     onManageLocation = {},
-                    onOpenFilterStudio = {}
+                    onOpenFilterStudio = {},
+                    modifier = Modifier.statusBarsPadding()
                 )
             }
         }

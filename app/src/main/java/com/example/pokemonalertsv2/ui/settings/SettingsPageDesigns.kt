@@ -102,7 +102,7 @@ internal data class PermissionGrants(
         get() = listOf(notifications, foregroundLocation, backgroundLocation).count { !it }
 }
 
-private enum class NotificationsPage { ROOT, QUIET_HOURS, SILENCE }
+private enum class NotificationsPage { ROOT, QUIET_HOURS, SILENCE, CONTENT }
 
 @Composable
 internal fun NotificationsPageDesign(
@@ -121,6 +121,7 @@ internal fun NotificationsPageDesign(
     val quietStart by viewModel.quietHoursStartMinute.collectAsStateWithLifecycle()
     val quietEnd by viewModel.quietHoursEndMinute.collectAsStateWithLifecycle()
     val definition by viewModel.notificationFilterDefinition.collectAsStateWithLifecycle()
+    val content by viewModel.notificationContent.collectAsStateWithLifecycle()
     val now = rememberMinuteClock()
 
     var pageName by rememberSaveable { mutableStateOf(NotificationsPage.ROOT.name) }
@@ -196,7 +197,21 @@ internal fun NotificationsPageDesign(
                         onClick = onOpenFilterStudio,
                         icon = { Icon(Icons.Filled.CheckCircle, null, Modifier.size(20.dp)) }
                     )
+                    PanelNavRow(
+                        title = stringResource(R.string.notification_content_title),
+                        summary = stringResource(R.string.notification_content_summary),
+                        onClick = { open(NotificationsPage.CONTENT) },
+                        modifier = Modifier.testTag("settings_notification_content"),
+                        icon = { Icon(Icons.Filled.Notifications, null, Modifier.size(20.dp)) }
+                    )
                 }
+
+                NotificationsPage.CONTENT -> NotificationContentSettings(
+                    preferences = content,
+                    onFieldChange = viewModel::updateNotificationField,
+                    onReset = viewModel::resetNotificationContent,
+                    onBack = back
+                )
 
                 NotificationsPage.QUIET_HOURS -> {
                     PanelHeader(stringResource(R.string.settings_quiet_hours), onBack = back)

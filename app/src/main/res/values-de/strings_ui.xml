@@ -1115,10 +1115,6 @@
     <string name="tracking_waiting_for_precise_gps">Warte auf genaues GPS</string>
     <string name="tracking_x_next_x">%1$s · als Nächstes: %2$s</string>
     <string name="tracking_x_raid_ended">%1$s-Raid beendet</string>
-    <string name="tracking_you_re_at_x">Du bist bei %1$s.</string>
-    <string name="tracking_you_re_in_range_of_the">Du bist in Reichweite des Raids.</string>
-    <string name="tracking_you_re_in_range_of_the_2">Du bist in Reichweite des PokéStops.</string>
-    <string name="tracking_you_re_within_x_m_of">Du bist weniger als %1$s m vom Alarm entfernt.</string>
     <string name="ui_got_it">Verstanden</string>
     <string name="ui_what_s_new_in_x">Neu in %1$s</string>
     <string name="util_1_day_ago">vor 1 Tag</string>
