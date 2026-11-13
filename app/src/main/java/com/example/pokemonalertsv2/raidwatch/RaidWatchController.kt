@@ -108,7 +108,10 @@ object RaidWatchController {
         val store = RaidWatchStore(appContext)
         val watch = store.current() ?: return
 
-        val largeIcon = loadBossImage(appContext, watch.alert)
+        val imageStyle = AlertPreferences(appContext.alertPreferencesDataStore).notificationContent.first()
+            .imageStyle(com.example.pokemonalertsv2.data.FilterAlertType.RAID)
+        val largeIcon = if (imageStyle == com.example.pokemonalertsv2.data.NotificationImageStyle.NONE) null
+        else loadBossImage(appContext, watch.alert)
         // Only the team computed for this raid; a leftover from the previous one would put six
         // wrong Pokemon in front of someone about to start a lobby.
         watchMutex.withLock {

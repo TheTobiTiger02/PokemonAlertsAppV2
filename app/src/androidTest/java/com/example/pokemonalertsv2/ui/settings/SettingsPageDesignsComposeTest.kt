@@ -7,6 +7,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -64,18 +67,29 @@ class SettingsPageDesignsComposeTest {
         show()
         composeRule.onNodeWithTag("settings_notification_content").performScrollTo().performClick()
         composeRule.onNodeWithTag("notification_category_RAID").performScrollTo().performClick()
-        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsOn().performClick()
+        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsSelected().performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { NotificationField.WEATHER !in preferences.notificationContent.first().fields(FilterAlertType.RAID, false) }
         }
         composeRule.onNodeWithTag("notification_view_expanded").performScrollTo().performClick()
-        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsOn()
-        composeRule.onNodeWithTag("notification_preview_body").performScrollTo().assertTextContains("Windy", substring = true)
+        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsSelected()
+        composeRule.onNodeWithTag("notification_preview_body", useUnmergedTree = true).assertTextContains("320 m", substring = true)
+        composeRule.onNodeWithTag("notification_image_NONE").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) {
+            runBlocking { preferences.notificationContent.first().imageStyle(FilterAlertType.RAID) == com.example.pokemonalertsv2.data.NotificationImageStyle.NONE }
+        }
+        composeRule.onNodeWithTag("notification_title_VENUE").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) {
+            runBlocking { com.example.pokemonalertsv2.data.NotificationTitlePart.VENUE in preferences.notificationContent.first().titleParts(FilterAlertType.RAID) }
+        }
+        composeRule.onAllNodesWithTag("notification_preview_in_range").assertCountEquals(0)
         composeRule.onNodeWithTag("notification_content_reset").performScrollTo().performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { preferences.notificationContent.first() == NotificationContentPreferences() }
         }
-        composeRule.onNodeWithText("Raids").performScrollTo()
+        // The preview and the test button are pinned above the scrolling choices.
+        composeRule.onNodeWithTag("notification_preview_state_in_range").assertIsDisplayed()
+        composeRule.onNodeWithTag("notification_test_send").assertIsDisplayed()
         com.example.pokemonalertsv2.notifications.captureNotificationProof(app, "content-settings")
     }
 

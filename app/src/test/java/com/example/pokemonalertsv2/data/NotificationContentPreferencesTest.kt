@@ -17,6 +17,52 @@ import org.junit.Test
 
 class NotificationContentPreferencesTest {
     @Test
+    fun pictureAndTitleDefaultPerCategoryAndRoundTrip() {
+        val defaults = NotificationContentPreferences()
+        assertEquals(NotificationImageStyle.LARGE, defaults.imageStyle(FilterAlertType.RAID))
+        assertEquals(
+            setOf(NotificationTitlePart.GODEX_MARKER, NotificationTitlePart.CATEGORY, NotificationTitlePart.SUBJECT, NotificationTitlePart.CP),
+            defaults.titleParts(FilterAlertType.HUNDO)
+        )
+        assertEquals(setOf(NotificationTitlePart.CATEGORY, NotificationTitlePart.SUBJECT), defaults.titleParts(FilterAlertType.QUEST))
+        assertFalse(defaults.isCustomized(FilterAlertType.RAID))
+
+        val changed = defaults
+            .withImageStyle(FilterAlertType.RAID, NotificationImageStyle.NONE)
+            .withTitlePart(FilterAlertType.RAID, NotificationTitlePart.VENUE, true)
+            .withTitlePart(FilterAlertType.QUEST, NotificationTitlePart.IV, true)
+        assertEquals(NotificationImageStyle.NONE, changed.imageStyle(FilterAlertType.RAID))
+        assertTrue(NotificationTitlePart.VENUE in changed.titleParts(FilterAlertType.RAID))
+        assertFalse(NotificationTitlePart.IV in changed.titleParts(FilterAlertType.QUEST))
+        assertTrue(changed.isCustomized(FilterAlertType.RAID))
+        assertEquals(changed, NotificationContentCodec.decode(NotificationContentCodec.encode(changed)))
+        assertEquals(defaults, changed.reset(FilterAlertType.RAID).reset(FilterAlertType.QUEST))
+    }
+
+    @Test
+    fun defaultsKeepCollapsedShortAndTheExpandedSummaryFocused() {
+        val defaults = NotificationContentPreferences()
+        val hundo = defaults.fields(FilterAlertType.HUNDO, false)
+        assertTrue(NotificationField.IV in hundo)
+        assertFalse(NotificationField.WALKING_TIME in hundo)
+        assertTrue(NotificationField.VENUE in defaults.fields(FilterAlertType.RAID, false))
+        assertTrue(NotificationField.VENUE in defaults.fields(FilterAlertType.QUEST, false))
+        assertTrue(NotificationField.WEATHER in defaults.fields(FilterAlertType.RAID, true))
+        assertFalse(NotificationField.WEATHER in defaults.fields(FilterAlertType.HUNDO, true))
+        assertFalse(NotificationField.AREA in defaults.fields(FilterAlertType.RAID, true))
+        assertTrue(NotificationField.WALKING_TIME in defaults.fields(FilterAlertType.HUNDO, true))
+    }
+
+    @Test
+    fun storedChoicesFromBeforePicturesAndTitlesKeepWorking() {
+        val decoded = NotificationContentCodec.decode("""{"version":1,"categories":{"RAID":{"collapsed":["WEATHER"]}}}""")
+        assertEquals(NotificationImageStyle.LARGE, decoded.imageStyle(FilterAlertType.RAID))
+        assertEquals(setOf(NotificationTitlePart.CATEGORY, NotificationTitlePart.SUBJECT), decoded.titleParts(FilterAlertType.RAID))
+        val unknown = NotificationContentCodec.decode("""{"categories":{"RAID":{"image":"HOLOGRAM"}}}""")
+        assertEquals(NotificationImageStyle.LARGE, unknown.imageStyle(FilterAlertType.RAID))
+    }
+
+    @Test
     fun categoryAndDetailLevelAreIndependentAndResetRestoresDefaults() {
         val defaults = NotificationContentPreferences()
         val changed = defaults.withField(FilterAlertType.RAID, false, NotificationField.WEATHER, false)

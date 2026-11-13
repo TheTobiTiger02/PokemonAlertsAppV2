@@ -165,7 +165,16 @@ internal fun NotificationsPageDesign(
     }
 
     PanelPages(page = page, root = NotificationsPage.ROOT, onBack = back) { shown ->
-        PageColumn(modifier) {
+        if (shown == NotificationsPage.CONTENT) NotificationContentSettings(
+            preferences = content,
+            onFieldChange = viewModel::updateNotificationField,
+            onImageStyleChange = viewModel::updateNotificationImageStyle,
+            onTitlePartChange = viewModel::updateNotificationTitlePart,
+            onSendTest = viewModel::sendTestNotification,
+            onReset = viewModel::resetNotificationContent,
+            onBack = back,
+            modifier = modifier
+        ) else PageColumn(modifier) {
             when (shown) {
                 NotificationsPage.ROOT -> {
                     permissionRows()
@@ -206,12 +215,8 @@ internal fun NotificationsPageDesign(
                     )
                 }
 
-                NotificationsPage.CONTENT -> NotificationContentSettings(
-                    preferences = content,
-                    onFieldChange = viewModel::updateNotificationField,
-                    onReset = viewModel::resetNotificationContent,
-                    onBack = back
-                )
+                // Laid out below without the page scroll, so its preview can stay pinned.
+                NotificationsPage.CONTENT -> Unit
 
                 NotificationsPage.QUIET_HOURS -> {
                     PanelHeader(stringResource(R.string.settings_quiet_hours), onBack = back)
