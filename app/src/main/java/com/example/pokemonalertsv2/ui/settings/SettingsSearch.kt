@@ -13,6 +13,7 @@ internal data class SettingsSearchEntry(
 
 /** Settings worth finding by name. Titles are what each page shows, keywords what people type. */
 internal val SETTINGS_SEARCH_INDEX = listOf(
+    SettingsSearchEntry(AppText.get(R.string.notification_content_title), SettingsDestination.NOTIFICATIONS, listOf("collapsed", "expanded", "weather", "notification details", "customize")),
     SettingsSearchEntry(AppText.get(R.string.settings_notifications_on_or_off), SettingsDestination.NOTIFICATIONS, listOf("alerts", "push")),
     SettingsSearchEntry(AppText.get(R.string.settings_quiet_hours), SettingsDestination.NOTIFICATIONS, listOf("night", "sleep", "do not disturb")),
     SettingsSearchEntry(AppText.get(R.string.settings_silence_notifications), SettingsDestination.NOTIFICATIONS, listOf("mute", "pause", "snooze")),

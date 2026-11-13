@@ -32,13 +32,13 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.25"
+internal const val WHATS_NEW_RELEASE = "1.29.6"
 
 private val WHATS_NEW_POINTS = listOf(
-    "Hunt: a hunt limited to an area can still show the matches outside it, dimmed. Tap one to walk there; the hunt never suggests them.",
-    "Spacial Rend can be switched on and off from the floating map's ⋯ menu and from Map tools, for an 80 m in-range circle.",
-    "The floating map keeps pins and your position clear of its buttons, counts seconds in a target's last minute, and keeps its route line while a new one loads.",
-    "Drag the floating map by its top row or sides, not only the card at the bottom. The undo strip after a catch now leaves after 8 seconds."
+    R.string.whats_new_notification_range,
+    R.string.whats_new_notification_weather,
+    R.string.whats_new_notification_content,
+    R.string.whats_new_notification_live_cards
 )
 
 /**
@@ -76,7 +76,7 @@ internal fun WhatsNewSheetHost() {
             WHATS_NEW_POINTS.forEach { point ->
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("•", color = MaterialTheme.colorScheme.primary)
-                    Text(point, style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(point), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Button(onClick = dismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.ui_got_it)) }

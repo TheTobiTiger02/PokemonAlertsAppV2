@@ -29,6 +29,9 @@ import com.example.pokemonalertsv2.data.FilterSurface
 import com.example.pokemonalertsv2.data.MAX_FILTER_PROFILE_NAME
 import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
+import com.example.pokemonalertsv2.data.NotificationContentPreferences
+import com.example.pokemonalertsv2.data.NotificationField
+import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
 import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
@@ -330,6 +333,23 @@ class SettingsViewModel(
     
     val notificationsEnabled: StateFlow<Boolean> = preferences.notificationsEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val notificationContent: StateFlow<NotificationContentPreferences> = preferences.notificationContent
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NotificationContentPreferences())
+
+    fun updateNotificationField(category: FilterAlertType, expanded: Boolean, field: NotificationField, enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateNotificationContent { it.withField(category, expanded, field, enabled) }
+            RaidWatchController.refresh(getApplication())
+        }
+    }
+
+    fun resetNotificationContent(category: FilterAlertType) {
+        viewModelScope.launch {
+            preferences.updateNotificationContent { it.reset(category) }
+            RaidWatchController.refresh(getApplication())
+        }
+    }
     
     val raidsNotifications: StateFlow<Boolean> = preferences.raidsNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)

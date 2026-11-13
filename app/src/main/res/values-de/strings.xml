@@ -25,7 +25,6 @@
     <string name="notification_channel_spawns_description">Benachrichtigungen zu wilden Pokémon</string>
     <string name="notification_channel_quests_name">Feldforschung</string>
     <string name="notification_channel_quests_description">Benachrichtigungen zu Feldforschungen</string>
-    <string name="notification_default_body">Neuer Pok&#x00E9;mon-Alarm</string>
     <string name="notification_permission_rationale">Erlaube Benachrichtigungen, um neue Pokémon-Alarme sofort zu erhalten.</string>
     <string name="background_location_title">Standortzugriff im Hintergrund</string>
     <string name="background_location_message">Damit Entfernungen und standortbasierte Funktionen auch im Hintergrund stimmen, öffne die App-Einstellungen, wähle Berechtigungen, dann Standort, und wähle „Immer zulassen“.</string>

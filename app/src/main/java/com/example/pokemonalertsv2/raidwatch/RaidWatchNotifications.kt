@@ -15,24 +15,18 @@ import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.NotificationContentPreferences
+import com.example.pokemonalertsv2.notifications.NotificationContentInput
+import com.example.pokemonalertsv2.notifications.renderNotificationContent
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
-import com.example.pokemonalertsv2.util.TimeUtils
 
 /**
  * The raid Live Update shown after an "I'm going" journey reaches the gym.
  *
- * The status bar chip is reserved for both hundo catch CPs. Expanding that chip is the whole
- * point of this notification: it happens without leaving the foreground app, so the expanded
- * body carries what a trainer standing at the gym actually needs -- the boss moveset and the
- * six counters to bring -- rather than the gym name they are looking at or the hundo CPs the
- * chip already shows.
- *
- * That body is why the style is [Notification.BigTextStyle] rather than the ProgressStyle this
- * started as. A promoted ongoing notification may not carry custom RemoteViews, so text is the
- * only way to list a team, and BigTextStyle is the one promotion-eligible style that renders
- * more than a single line. The raid-window progress bar was the cost of that, and remaining
- * time moved into the first body line instead.
+ * The shared content renderer applies the raid's collapsed and expanded field selections.
+ * The chip defaults to the hundo catch CPs, and selected team rows lead the expanded body.
+ * Native BigTextStyle supports the live status chip as well as the multi-line team.
  *
  * Built on the same Android 16 surfaces as
  * [com.example.pokemonalertsv2.tracking.ArrivalTrackingNotifications] --
@@ -74,12 +68,23 @@ internal object RaidWatchNotifications {
         watch: WatchedRaid,
         team: RaidTeamSnapshot? = null,
         nowMillis: Long = System.currentTimeMillis(),
-        largeIcon: Bitmap? = null
+        largeIcon: Bitmap? = null,
+        contentPreferences: NotificationContentPreferences = NotificationContentPreferences()
     ): Notification {
         val alert = watch.alert
         val title = bossTitle(alert)
-        val body = buildTeamBody(alert, team, watch.endMillis, nowMillis)
-        val summary = headlineLine(alert, watch.endMillis, nowMillis)
+        val rendered = renderNotificationContent(
+            NotificationContentInput(
+                alert = alert,
+                // Raid Watch outlives location tracking, so it cannot assert current range.
+                nowMillis = nowMillis,
+                endMillis = watch.endMillis,
+                raidWatch = true,
+                teamText = buildTeamBody(team)
+            ), contentPreferences
+        )
+        val body = rendered.expanded
+        val summary = rendered.collapsed
         // A snapshot that came back with no team is the one case where there is genuinely
         // nothing to put on the clipboard. A missing snapshot only means "not yet", and the
         // action computes it on demand.
@@ -89,9 +94,8 @@ internal object RaidWatchNotifications {
             return liveBuilder(context, alert)
                 .setContentTitle(title)
                 .setContentText(summary)
-                .setSubText(summary)
                 .setContentIntent(openCountersPendingIntent(context, alert))
-                .setShortCriticalText(compactHundoText(alert))
+                .setShortCriticalText(rendered.chip)
                 .setStyle(Notification.BigTextStyle().bigText(body))
                 .apply {
                     if (showCopy) {
@@ -125,7 +129,6 @@ internal object RaidWatchNotifications {
             .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
             .setContentTitle(title)
             .setContentText(summary)
-            .setSubText(summary)
             .setContentIntent(openCountersPendingIntent(context, alert))
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .apply {
@@ -143,26 +146,7 @@ internal object RaidWatchNotifications {
     }
 
     /**
-     * The collapsed line: the boss's moveset and how long is left to use it.
-     *
-     * Remaining time lives here because the ProgressStyle bar that used to carry it is not
-     * available alongside a multi-line body. It stays current because [RaidWatchTiming] already
-     * re-posts the notification on a countdown-shaped cadence.
-     */
-    internal fun headlineLine(alert: PokemonAlert, endMillis: Long, nowMillis: Long): String {
-        val remaining = RaidWatchTiming.remainingMillis(nowMillis, endMillis)
-        val time = if (remaining > 0L) TimeUtils.formatDurationShort(remaining) else AppText.get(R.string.raidwatch_raid_ended)
-        return listOfNotNull(alert.moves?.formatted(), time).joinToString(" · ")
-    }
-
-    /**
-     * The expanded body: the suggested counter groups, with moveset and remaining time in
-     * the notification subtext above it.
-     *
-     * Deliberately carries neither the gym nor the hundo CPs. The trainer is standing at the
-     * gym, and the status bar chip already shows the catch values -- spending lines on either
-     * would push the team out of view, which is the one thing only this surface can show while
-     * Pokémon GO is in the foreground.
+     * Suggested counter rows, passed as one selectable field to the content renderer.
      *
      * Every line here is fighting for room. A promoted ongoing notification is rendered at a
      * capped height in both the shade and the chip's popup, and the system truncates the body
@@ -170,12 +154,7 @@ internal object RaidWatchNotifications {
      * So there is no blank separator, and a Pokemon and its moveset share one line: the team is
      * only useful if all of it survives the cut.
      */
-    internal fun buildTeamBody(
-        alert: PokemonAlert,
-        team: RaidTeamSnapshot?,
-        endMillis: Long,
-        nowMillis: Long
-    ): String {
+    internal fun buildTeamBody(team: RaidTeamSnapshot?): String {
         return when {
             team == null -> AppText.get(R.string.raidwatch_building_your_team)
             !team.hasTeam -> team.note ?: "No team to suggest for this boss."
@@ -191,18 +170,6 @@ internal object RaidWatchNotifications {
         alert.pokemon?.takeIf { it.isNotBlank() }
             ?: alert.name.takeIf { it.isNotBlank() }
             ?: "Raid"
-
-    /** Compact, label-free form because Android gives this surface very little width. */
-    internal fun compactHundoText(alert: PokemonAlert): String {
-        val level20 = alert.hundoCP?.level20?.takeIf { it > 0 }
-        val level25 = alert.hundoCP?.level25?.takeIf { it > 0 }
-        return when {
-            level20 != null && level25 != null -> "$level20/$level25"
-            level20 != null -> level20.toString()
-            level25 != null -> level25.toString()
-            else -> "—"
-        }
-    }
 
     @RequiresApi(LIVE_NOTIFICATION_MIN_SDK)
     private fun liveBuilder(context: Context, alert: PokemonAlert): Notification.Builder =

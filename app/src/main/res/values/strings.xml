@@ -25,7 +25,6 @@
     <string name="notification_channel_spawns_description">Notifications for Wild Spawns</string>
     <string name="notification_channel_quests_name">Field Research</string>
     <string name="notification_channel_quests_description">Notifications for Field Research</string>
-    <string name="notification_default_body">New Pok&#x00E9;mon alert available</string>
     <string name="notification_permission_rationale">Enable notifications to get new Pokemon alerts instantly.</string>
     <string name="background_location_title">Background location access</string>
     <string name="background_location_message">To keep distances and location-based features accurate in the background, open app settings, choose Permissions, then Location, and select Allow all the time.</string>

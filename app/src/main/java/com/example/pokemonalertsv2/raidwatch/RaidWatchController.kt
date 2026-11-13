@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.AlarmManagerCompat
 import androidx.core.app.NotificationManagerCompat
@@ -17,10 +18,15 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.AlertPreferences
+import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.util.TimeUtils
 import com.example.pokemonalertsv2.work.RaidTeamPrefetchWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Starts, refreshes and tears down the single raid Live Update.
@@ -34,6 +40,7 @@ object RaidWatchController {
 
     private const val TAG = "RaidWatchController"
     private const val REQUEST_TICK = 40_064
+    private val watchMutex = Mutex()
 
     /**
      * Begins watching [alert]. Returns false when the raid has no parseable end time or has
@@ -48,7 +55,7 @@ object RaidWatchController {
         if (RaidWatchTiming.hasEnded(nowMillis, endMillis)) return false
 
         val appContext = context.applicationContext
-        RaidWatchStore(appContext).save(alert, nowMillis, endMillis)
+        watchMutex.withLock { RaidWatchStore(appContext).save(alert, nowMillis, endMillis) }
         refresh(appContext, nowMillis)
         // Ranking the roster takes a Pokebattler round trip, so it cannot happen inline: the
         // arrival service stops itself the moment this returns. The worker re-posts the
@@ -59,6 +66,10 @@ object RaidWatchController {
 
     /** Stops the watch: cancels the alarm, drops the notification, clears the stored raid. */
     suspend fun stop(context: Context) {
+        watchMutex.withLock { stopLocked(context.applicationContext) }
+    }
+
+    private suspend fun stopLocked(context: Context) {
         val appContext = context.applicationContext
         cancelTick(appContext)
         RaidTeamPrefetchWorker.cancel(appContext)
@@ -76,10 +87,12 @@ object RaidWatchController {
      */
     suspend fun stopIfWatching(context: Context, alertUniqueId: String): Boolean {
         val appContext = context.applicationContext
-        val watched = RaidWatchStore(appContext).current() ?: return false
-        if (!isWatching(watched, alertUniqueId)) return false
-        stop(appContext)
-        return true
+        return watchMutex.withLock {
+            val watched = RaidWatchStore(appContext).current()
+            if (!isWatching(watched, alertUniqueId)) return@withLock false
+            stopLocked(appContext)
+            true
+        }
     }
 
     internal fun isWatching(watched: WatchedRaid?, alertUniqueId: String): Boolean =
@@ -90,33 +103,38 @@ object RaidWatchController {
      * or tears the watch down if the raid has ended. Safe to call with no watch active.
      */
     suspend fun refresh(context: Context, nowMillis: Long = System.currentTimeMillis()) {
+        val refreshStartedAt = SystemClock.elapsedRealtime()
         val appContext = context.applicationContext
         val store = RaidWatchStore(appContext)
         val watch = store.current() ?: return
 
-        val delay = RaidWatchTiming.nextTickDelayMillis(nowMillis, watch.endMillis)
-        if (delay == null) {
-            stop(appContext)
-            return
-        }
-
-        RaidWatchNotifications.ensureChannel(appContext)
         val largeIcon = loadBossImage(appContext, watch.alert)
         // Only the team computed for this raid; a leftover from the previous one would put six
         // wrong Pokemon in front of someone about to start a lobby.
-        val team = store.currentTeam()?.takeIf { it.alertUniqueId == watch.alert.uniqueId }
-        val notification = RaidWatchNotifications.build(
-            context = appContext,
-            watch = watch,
-            team = team,
-            nowMillis = nowMillis,
-            largeIcon = largeIcon
-        )
-        if (hasNotificationPermission(appContext)) {
-            postNotification(appContext, notification)
+        watchMutex.withLock {
+            // Image loading yields. Dismissal or replacement during it must win over this refresh.
+            val current = store.current()
+            if (current?.alert?.uniqueId != watch.alert.uniqueId || current.endMillis != watch.endMillis) return@withLock
+            val refreshedAt = nowMillis + SystemClock.elapsedRealtime() - refreshStartedAt
+            val delay = RaidWatchTiming.nextTickDelayMillis(refreshedAt, watch.endMillis)
+            if (delay == null) {
+                stopLocked(appContext)
+                return@withLock
+            }
+            val team = store.currentTeam()?.takeIf { it.alertUniqueId == watch.alert.uniqueId }
+            val content = AlertPreferences(appContext.alertPreferencesDataStore).notificationContent.first()
+            RaidWatchNotifications.ensureChannel(appContext)
+            val notification = RaidWatchNotifications.build(
+                context = appContext,
+                watch = current,
+                team = team,
+                nowMillis = refreshedAt,
+                largeIcon = largeIcon,
+                contentPreferences = content
+            )
+            if (hasNotificationPermission(appContext)) postNotification(appContext, notification)
+            scheduleTick(appContext, refreshedAt + delay)
         }
-
-        scheduleTick(appContext, nowMillis + delay)
     }
 
     private suspend fun loadBossImage(context: Context, alert: PokemonAlert) =

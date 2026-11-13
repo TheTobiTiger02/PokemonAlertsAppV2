@@ -32,9 +32,6 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterMatchContext
 import com.example.pokemonalertsv2.data.isDirectlyInRange
 import com.example.pokemonalertsv2.ui.alerts.AlertDetailActivity
-import com.example.pokemonalertsv2.ui.alerts.buildAlertGlanceMetadata
-import com.example.pokemonalertsv2.ui.alerts.displayCp
-import com.example.pokemonalertsv2.ui.alerts.formatAlertTitle
 import com.example.pokemonalertsv2.ui.alerts.resolveAlertVisualStyle
 import com.example.pokemonalertsv2.util.CachedLocationProvider
 import com.example.pokemonalertsv2.util.MapFallbackImageGenerator
@@ -74,12 +71,9 @@ object AlertNotifier {
         distanceText: String? = null,
         walkingText: String? = null,
         isInRange: Boolean = false
-    ): String = buildAlertGlanceMetadata(
-        alert = alert,
-        distanceText = distanceText,
-        walkingText = walkingText,
-        isInRange = isInRange
-    )
+    ): String = renderNotificationContent(
+        NotificationContentInput(alert, distanceText, walkingText, inRange = isInRange)
+    ).expanded.replace("\n", " • ")
 
     /**
      * The one line a collapsed notification shows. Distance leads, so it is never the part the
@@ -92,19 +86,9 @@ object AlertNotifier {
         walkingText: String?,
         isInRange: Boolean,
         nowMillis: Long = System.currentTimeMillis()
-    ): String {
-        val minutesLeft = TimeUtils.parseEndTimeToMillis(alert.endTime)
-            ?.minus(nowMillis)
-            ?.takeIf { it > 0 }
-            ?.let { (it + 59_999L) / 60_000L }
-        return listOfNotNull(
-            if (isInRange) AppText.get(R.string.alerts_in_range) else null,
-            distanceText?.takeIf { it.isNotBlank() },
-            walkingText?.takeIf { it.isNotBlank() },
-            minutesLeft?.let { "$it min left" },
-            alert.displayCp?.let { "CP $it" }
-        ).joinToString(" \u2022 ").ifBlank { resolveAlertVisualStyle(alert).label }
-    }
+    ): String = renderNotificationContent(
+        NotificationContentInput(alert, distanceText, walkingText, inRange = isInRange, nowMillis = nowMillis)
+    ).collapsed
 
     fun ensureChannel(context: Context) {
         val notificationManager = ContextCompat.getSystemService(context, NotificationManager::class.java) ?: return
@@ -180,6 +164,8 @@ object AlertNotifier {
         ensureChannel(context)
         
         val repository = PokemonAlertsRepository.create(context)
+        val contentPreferences = repository.alertPreferences.notificationContent.first()
+        val summaryLines = mutableMapOf<String, String>()
         val goDexRepository = GoDexRepository.getInstance(context)
         val (goDexConfig, goDexEntries) = goDexRepository.notificationSnapshot()
         val settings = NotificationSettings.load(repository.alertPreferences).copy(
@@ -339,28 +325,18 @@ object AlertNotifier {
             val distanceText = candidate.routeDisplayInfo.distanceText
             val walkingText = candidate.routeDisplayInfo.walkingText
 
-            val baseText = alert.type?.joinToString(", ")
-                ?: context.getString(R.string.notification_default_body)
             val isInRange = alert.isDirectlyInRange(candidate.routeDisplayInfo.straightLineDistanceMeters)
-            val contentText = buildNotificationContentText(
-                alert = alert,
-                distanceText = distanceText,
-                walkingText = walkingText,
-                isInRange = isInRange
-            ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
-            val collapsedText = buildCollapsedNotificationText(
-                alert = alert,
-                distanceText = distanceText,
-                walkingText = walkingText,
-                isInRange = isInRange
-            ) + goDexNotificationSuffix(alert, candidate.goDexStatus)
-            val expandedText = buildString {
-                append(contentText)
-                if (alert.description.isNotBlank() && alert.description != baseText) {
-                    appendLine()
-                    append(alert.description)
-                }
-            }
+            val content = renderNotificationContent(
+                NotificationContentInput(
+                    alert = alert,
+                    distanceText = distanceText,
+                    walkingText = walkingText,
+                    inRange = isInRange,
+                    goDexText = goDexNotificationText(alert, candidate.goDexStatus)
+                ),
+                contentPreferences
+            )
+            summaryLines[alert.uniqueId] = "${content.title} • ${content.collapsed}"
 
             // Fully prepare the image before posting so the first notification already
             // contains its map fallback. A bounded wait keeps delivery reliable offline.
@@ -383,16 +359,16 @@ object AlertNotifier {
 
             val notificationBuilder = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_poke_notification)
-                .setContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
-                .setContentText(collapsedText)
+                .setContentTitle(content.title)
+                .setContentText(content.collapsed)
                 .setStyle(
-                    NotificationCompat.BigTextStyle().bigText(expandedText)
+                    NotificationCompat.BigTextStyle().bigText(content.expanded)
                 )
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
-                .also { builder -> applyExpiry(builder, alert) }
+                .also { builder -> applyExpiry(builder, alert, showCountdown = content.showCountdown) }
                 // Grouped by channel so a spawn wave collapses into one shade entry
                 // instead of burying everything else the user has.
                 .setGroup(channelId)
@@ -414,18 +390,7 @@ object AlertNotifier {
                     createPipPendingIntent(context, alert)
                 )
 
-            // Add the image as large icon and big picture if available
-            bitmap?.let {
-                notificationBuilder.setLargeIcon(it)
-                // Use BigPictureStyle if we have an image
-                notificationBuilder.setStyle(
-                    NotificationCompat.BigPictureStyle()
-                        .bigPicture(it)
-                        .bigLargeIcon(null as Bitmap?) // Hide large icon when expanded
-                        .setBigContentTitle(formatAlertTitle(alert, candidate.goDexStatus.status))
-                        .setSummaryText(contentText)
-                )
-            }
+            bitmap?.let(notificationBuilder::setLargeIcon)
 
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 notificationManager.notify(AlertNotificationIds.forAlert(alert.uniqueId), notificationBuilder.build())
@@ -439,7 +404,8 @@ object AlertNotifier {
                 notificationManager = notificationManager,
                 channelId = channelId,
                 posted = posted,
-                overflowCount = overflowByChannel[channelId] ?: 0
+                overflowCount = overflowByChannel[channelId] ?: 0,
+                summaryLines = summaryLines
             )
         }
     }
@@ -448,14 +414,19 @@ object AlertNotifier {
      * A notification for an alert that has ended is useless, so it removes itself then, and
      * counts down to that moment in the shade instead of showing when it was posted.
      */
-    internal fun applyExpiry(builder: NotificationCompat.Builder, alert: PokemonAlert, nowMillis: Long = System.currentTimeMillis()) {
+    internal fun applyExpiry(
+        builder: NotificationCompat.Builder,
+        alert: PokemonAlert,
+        nowMillis: Long = System.currentTimeMillis(),
+        showCountdown: Boolean = true
+    ) {
         val end = TimeUtils.parseEndTimeToMillis(alert.endTime) ?: return
         val left = end - nowMillis
         if (left <= 0) return
         builder.setTimeoutAfter(left)
             .setWhen(end)
-            .setShowWhen(true)
-            .setUsesChronometer(true)
+            .setShowWhen(showCountdown)
+            .setUsesChronometer(showCountdown)
             .setChronometerCountDown(true)
     }
 
@@ -503,7 +474,8 @@ object AlertNotifier {
         notificationManager: NotificationManagerCompat,
         channelId: String,
         posted: List<PokemonAlert>,
-        overflowCount: Int = 0
+        overflowCount: Int = 0,
+        summaryLines: Map<String, String> = emptyMap()
     ) {
         if (posted.isEmpty() && overflowCount <= 0) return
         if (ContextCompat.checkSelfPermission(
@@ -518,7 +490,7 @@ object AlertNotifier {
         val label = groupLabel(channelId, posted.size + overflowCount)
         val inbox = NotificationCompat.InboxStyle().setBigContentTitle(label)
         posted.take(MAX_SUMMARY_LINES).forEach { alert ->
-            inbox.addLine(summaryLine(alert))
+            inbox.addLine(summaryLines[alert.uniqueId] ?: notificationIdentity(alert))
         }
         val unlisted = (posted.size - MAX_SUMMARY_LINES).coerceAtLeast(0) + overflowCount
         if (unlisted > 0) {
@@ -576,14 +548,6 @@ object AlertNotifier {
             else -> if (count == 1) "alert" else "alerts"
         }
         return "$count $noun"
-    }
-
-    private fun summaryLine(alert: PokemonAlert): String {
-        val name = alert.pokemon?.takeIf { it.isNotBlank() } ?: alert.name
-        val where = alert.gym?.takeIf { it.isNotBlank() }
-            ?: alert.pokestop?.takeIf { it.isNotBlank() }
-            ?: alert.area?.takeIf { it.isNotBlank() }
-        return if (where == null) name else "$name • $where"
     }
 
     internal data class NotificationSettings(
@@ -753,23 +717,6 @@ object AlertNotifier {
 
     private fun Set<String>.lowercaseSet(): Set<String> {
         return mapTo(LinkedHashSet(size)) { it.lowercase(Locale.ROOT) }
-    }
-
-    private fun goDexNotificationSuffix(alert: PokemonAlert, result: GoDexMatchResult): String {
-        if (!alert.hasType("hundo")) return ""
-        return when (result.status) {
-            GoDexMatchStatus.NEEDED -> AppText.get(R.string.notifications_needed_in_godex)
-            GoDexMatchStatus.EVOLUTION_NEEDED ->
-                " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}"
-            GoDexMatchStatus.FORM_CHANGE_NEEDED ->
-                " \u2022 Collected \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
-            GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED ->
-                " \u2022 Collected \u2022 Evolution needed: ${result.compactEvolutionLabel ?: "evolution"}" +
-                    " \u2022 Form change needed: ${result.compactFormChangeLabel ?: "form"}"
-            GoDexMatchStatus.COLLECTED -> AppText.get(R.string.notifications_already_collected_in_godex)
-            GoDexMatchStatus.UNKNOWN -> AppText.get(R.string.notifications_godex_form_unknown)
-            GoDexMatchStatus.NOT_CONFIGURED -> ""
-        }
     }
 
     private fun immutableFlag(): Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_IMMUTABLE else 0

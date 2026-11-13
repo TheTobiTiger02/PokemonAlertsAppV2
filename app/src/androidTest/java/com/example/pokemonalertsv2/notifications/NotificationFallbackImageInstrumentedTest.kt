@@ -57,7 +57,7 @@ class NotificationFallbackImageInstrumentedTest {
             assertNotNull("Expected the alert notification to be posted", posted)
             assertTrue(
                 "Expected the first posted notification to contain its generated map",
-                posted!!.notification.extras.containsKey(Notification.EXTRA_PICTURE)
+                posted!!.notification.getLargeIcon() != null
             )
         } finally {
             notificationManager.cancel(notificationId)
