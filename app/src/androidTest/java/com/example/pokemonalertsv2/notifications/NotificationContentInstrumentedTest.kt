@@ -48,6 +48,26 @@ class NotificationContentInstrumentedTest {
     }
 
     @Test
+    fun largePictureExpandsToTheMapAndNoneLeavesThePictureOut() {
+        val alert = raid().copy(id = 9_910_009)
+        val content = renderNotificationContent(NotificationContentInput(alert, "320 m", "4 min walk"))
+        val picture = android.graphics.Bitmap.createBitmap(64, 32, android.graphics.Bitmap.Config.ARGB_8888)
+        val large = AlertNotifier.buildAlertNotification(
+            context, alert, content, picture,
+            com.example.pokemonalertsv2.data.NotificationImageStyle.LARGE, AlertNotifier.CHANNEL_RAIDS
+        ).build()
+        assertTrue(large.extras.getString(Notification.EXTRA_TEMPLATE).orEmpty().contains("BigPictureStyle"))
+        assertTrue(large.extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT).toString().contains("Central Gym"))
+        assertEquals("Raid · Mewtwo", large.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+        val none = AlertNotifier.buildAlertNotification(
+            context, alert, content, picture,
+            com.example.pokemonalertsv2.data.NotificationImageStyle.NONE, AlertNotifier.CHANNEL_RAIDS
+        ).build()
+        assertTrue(none.extras.getString(Notification.EXTRA_TEMPLATE).orEmpty().contains("BigTextStyle"))
+        assertNull(none.getLargeIcon())
+    }
+
+    @Test
     fun incomingAlertUsesSelectedTextWithExpiryAndSummary() = runBlocking {
         val previousContent = preferences.notificationContent.first()
         val previousFilter = preferences.filterStateDocument.first()
@@ -66,6 +86,7 @@ class NotificationContentInstrumentedTest {
             }
             preferences.updateNotificationContent {
                 NotificationContentPreferences().withField(FilterAlertType.RAID, true, NotificationField.TIME_LEFT, false)
+                    .withImageStyle(FilterAlertType.RAID, com.example.pokemonalertsv2.data.NotificationImageStyle.THUMBNAIL)
             }
             AlertNotifier.notifyAlerts(context, listOf(alert))
             val posted = waitForNotification(id)

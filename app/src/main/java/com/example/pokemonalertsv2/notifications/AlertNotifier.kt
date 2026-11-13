@@ -21,6 +21,8 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.PokemonAlertsApplication
 import com.example.pokemonalertsv2.data.AlertPreferencesStore
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.NotificationImageStyle
+import com.example.pokemonalertsv2.data.notificationContentCategory
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
@@ -301,27 +303,6 @@ object AlertNotifier {
 
         selected.forEach { candidate ->
             val alert = candidate.alert
-            val notificationIntent = AlertDetailActivity.createIntent(
-                context = context,
-                alert = alert,
-                returnToAlerts = true
-            )
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                AlertNotificationIds.forAlert(alert.uniqueId),
-                notificationIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
-            )
-
-            // Create PendingIntent for opening Google Maps
-            val mapsIntent = Intent(Intent.ACTION_VIEW, alert.googleMapsUri)
-            val mapsPendingIntent = PendingIntent.getActivity(
-                context,
-                AlertNotificationIds.forAlertAction("directions", alert.uniqueId),
-                mapsIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
-            )
-
             val distanceText = candidate.routeDisplayInfo.distanceText
             val walkingText = candidate.routeDisplayInfo.walkingText
 
@@ -332,65 +313,23 @@ object AlertNotifier {
                     distanceText = distanceText,
                     walkingText = walkingText,
                     inRange = isInRange,
-                    goDexText = goDexNotificationText(alert, candidate.goDexStatus)
+                    goDexText = goDexNotificationText(alert, candidate.goDexStatus),
+                    goDexStatus = candidate.goDexStatus.status
                 ),
                 contentPreferences
             )
             summaryLines[alert.uniqueId] = "${content.title} • ${content.collapsed}"
 
+            val imageStyle = contentPreferences.imageStyle(notificationContentCategory(alert))
             // Fully prepare the image before posting so the first notification already
             // contains its map fallback. A bounded wait keeps delivery reliable offline.
-            val bitmap = resolveAlertNotificationImage(
-                alert = alert,
-                loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
-                generateMapFallback = { coordinates, thumbnailUrl ->
-                    MapFallbackImageGenerator.generate(
-                        context = context,
-                        latitude = coordinates.latitude,
-                        longitude = coordinates.longitude,
-                        thumbnailUrl = thumbnailUrl,
-                        outputWidth = 512,
-                        outputHeight = 256
-                    )
-                }
-            )
+            val bitmap = prepareAlertImage(context, imageLoader, alert, imageStyle)
 
             val channelId = notificationChannelFor(alert)
-
-            val notificationBuilder = NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(R.drawable.ic_poke_notification)
-                .setContentTitle(content.title)
-                .setContentText(content.collapsed)
-                .setStyle(
-                    NotificationCompat.BigTextStyle().bigText(content.expanded)
-                )
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setContentIntent(pendingIntent)
-                .setAutoCancel(true)
-                .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
-                .also { builder -> applyExpiry(builder, alert, showCountdown = content.showCountdown) }
+            val notificationBuilder = buildAlertNotification(context, alert, content, bitmap, imageStyle, channelId)
                 // Grouped by channel so a spawn wave collapses into one shade entry
                 // instead of burying everything else the user has.
                 .setGroup(channelId)
-                .addAction(
-                    R.drawable.ic_map,
-                    context.getString(R.string.notification_action_directions),
-                    mapsPendingIntent
-                )
-                // Quick Action: Dismiss
-                .addAction(
-                    R.drawable.ic_poke_notification,
-                    context.getString(R.string.notification_action_dismiss),
-                    createDismissPendingIntent(context, alert)
-                )
-                // Quick Action: Open in PiP
-                .addAction(
-                    R.drawable.ic_pip,
-                    context.getString(R.string.enter_pip_short),
-                    createPipPendingIntent(context, alert)
-                )
-
-            bitmap?.let(notificationBuilder::setLargeIcon)
 
             if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
                 notificationManager.notify(AlertNotificationIds.forAlert(alert.uniqueId), notificationBuilder.build())
@@ -408,6 +347,87 @@ object AlertNotifier {
                 summaryLines = summaryLines
             )
         }
+    }
+
+    /** Resolves the picture for [style]; [NotificationImageStyle.NONE] skips the network entirely. */
+    internal suspend fun prepareAlertImage(
+        context: Context,
+        imageLoader: ImageLoader,
+        alert: PokemonAlert,
+        style: NotificationImageStyle
+    ): Bitmap? {
+        if (style == NotificationImageStyle.NONE) return null
+        val large = style == NotificationImageStyle.LARGE
+        return resolveAlertNotificationImage(
+            alert = alert,
+            loadRemoteImage = { url -> loadImageBitmap(context, imageLoader, url) },
+            generateMapFallback = { coordinates, thumbnailUrl ->
+                MapFallbackImageGenerator.generate(
+                    context = context,
+                    latitude = coordinates.latitude,
+                    longitude = coordinates.longitude,
+                    thumbnailUrl = thumbnailUrl,
+                    // 2:1 matches the expanded big-picture crop; the larger size stays sharp full width.
+                    outputWidth = if (large) 1024 else 512,
+                    outputHeight = if (large) 512 else 256
+                )
+            }
+        )
+    }
+
+    /**
+     * One builder for real alerts and the Settings test notification, so the test looks
+     * exactly like the real thing. LARGE expands to the full-width picture, with the
+     * expanded details as its summary; THUMBNAIL keeps the picture as the small icon.
+     */
+    internal fun buildAlertNotification(
+        context: Context,
+        alert: PokemonAlert,
+        content: NotificationContent,
+        bitmap: Bitmap?,
+        imageStyle: NotificationImageStyle,
+        channelId: String
+    ): NotificationCompat.Builder {
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            AlertNotificationIds.forAlert(alert.uniqueId),
+            AlertDetailActivity.createIntent(context = context, alert = alert, returnToAlerts = true),
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+        val mapsPendingIntent = PendingIntent.getActivity(
+            context,
+            AlertNotificationIds.forAlertAction("directions", alert.uniqueId),
+            Intent(Intent.ACTION_VIEW, alert.googleMapsUri),
+            PendingIntent.FLAG_UPDATE_CURRENT or immutableFlag()
+        )
+        val picture = bitmap.takeIf { imageStyle != NotificationImageStyle.NONE }
+        val style = if (imageStyle == NotificationImageStyle.LARGE && picture != null) {
+            NotificationCompat.BigPictureStyle()
+                .bigPicture(picture)
+                // The picture itself takes over when expanded; a second copy as icon is noise.
+                .bigLargeIcon(null as Bitmap?)
+                .setSummaryText(content.expanded.lines().joinToString(" • "))
+        } else {
+            NotificationCompat.BigTextStyle().bigText(content.expanded)
+        }
+        return NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_poke_notification)
+            .setContentTitle(content.title)
+            .setContentText(content.collapsed)
+            .setStyle(style)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setColor(resolveAlertVisualStyle(alert).category.accentArgb.toInt())
+            .also { builder -> applyExpiry(builder, alert, showCountdown = content.showCountdown) }
+            .addAction(R.drawable.ic_map, context.getString(R.string.notification_action_directions), mapsPendingIntent)
+            .addAction(
+                R.drawable.ic_poke_notification,
+                context.getString(R.string.notification_action_dismiss),
+                createDismissPendingIntent(context, alert)
+            )
+            .addAction(R.drawable.ic_pip, context.getString(R.string.enter_pip_short), createPipPendingIntent(context, alert))
+            .apply { picture?.let(::setLargeIcon) }
     }
 
     /**

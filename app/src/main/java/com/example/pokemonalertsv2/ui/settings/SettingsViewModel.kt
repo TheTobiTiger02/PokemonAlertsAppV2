@@ -31,6 +31,9 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.NotificationContentPreferences
 import com.example.pokemonalertsv2.data.NotificationField
+import com.example.pokemonalertsv2.data.NotificationImageStyle
+import com.example.pokemonalertsv2.data.NotificationTitlePart
+import com.example.pokemonalertsv2.notifications.TestNotification
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.counters.RaidCounterOptions
@@ -341,6 +344,27 @@ class SettingsViewModel(
         viewModelScope.launch {
             preferences.updateNotificationContent { it.withField(category, expanded, field, enabled) }
             RaidWatchController.refresh(getApplication())
+        }
+    }
+
+    fun updateNotificationImageStyle(category: FilterAlertType, style: NotificationImageStyle) {
+        viewModelScope.launch {
+            preferences.updateNotificationContent { it.withImageStyle(category, style) }
+            RaidWatchController.refresh(getApplication())
+        }
+    }
+
+    fun updateNotificationTitlePart(category: FilterAlertType, part: NotificationTitlePart, enabled: Boolean) {
+        viewModelScope.launch {
+            preferences.updateNotificationContent { it.withTitlePart(category, part, enabled) }
+            RaidWatchController.refresh(getApplication())
+        }
+    }
+
+    /** Posts a sample alert through the real notification builder; [onResult] is false without permission. */
+    fun sendTestNotification(category: FilterAlertType, inRange: Boolean, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            onResult(TestNotification.post(getApplication(), category, inRange, notificationContent.value))
         }
     }
 

@@ -28,10 +28,29 @@ enum class NotificationField(val labelRes: Int) {
     DESCRIPTION(R.string.notification_field_description)
 }
 
+/** How the alert picture is shown: full width when expanded, as a small icon, or not at all. */
+enum class NotificationImageStyle(val labelRes: Int) {
+    LARGE(R.string.notification_image_large),
+    THUMBNAIL(R.string.notification_image_thumbnail),
+    NONE(R.string.notification_image_none)
+}
+
+/** Building blocks of a notification title, rendered in declaration order. */
+enum class NotificationTitlePart(val labelRes: Int) {
+    GODEX_MARKER(R.string.notification_title_godex),
+    CATEGORY(R.string.notification_title_category),
+    SUBJECT(R.string.notification_title_subject),
+    IV(R.string.notification_field_iv),
+    CP(R.string.notification_field_cp),
+    VENUE(R.string.notification_field_venue)
+}
+
 @Serializable
 data class NotificationCategoryContent(
     val collapsed: Set<String>? = null,
-    val expanded: Set<String>? = null
+    val expanded: Set<String>? = null,
+    val image: String? = null,
+    val title: Set<String>? = null
 )
 
 @Serializable
@@ -62,9 +81,65 @@ data class NotificationContentPreferences(
         return copy(categories = categories + (category.name to selection))
     }
 
+    fun imageStyle(category: FilterAlertType): NotificationImageStyle =
+        NotificationImageStyle.entries.firstOrNull { it.name == categories[category.name]?.image }
+            ?: NotificationImageStyle.LARGE
+
+    fun withImageStyle(category: FilterAlertType, style: NotificationImageStyle): NotificationContentPreferences {
+        val current = categories[category.name] ?: NotificationCategoryContent()
+        return copy(categories = categories + (category.name to current.copy(image = style.name)))
+    }
+
+    fun titleParts(category: FilterAlertType): Set<NotificationTitlePart> {
+        val available = notificationTitleParts(category)
+        return categories[category.name]?.title
+            ?.let { names -> available.filterTo(linkedSetOf()) { it.name in names } }
+            ?: defaultTitleParts(category)
+    }
+
+    fun withTitlePart(
+        category: FilterAlertType,
+        part: NotificationTitlePart,
+        enabled: Boolean
+    ): NotificationContentPreferences {
+        if (part !in notificationTitleParts(category)) return this
+        val current = categories[category.name] ?: NotificationCategoryContent()
+        val stored = titleParts(category).mapTo(linkedSetOf()) { it.name }
+        val changed = if (enabled) stored + part.name else stored - part.name
+        return copy(categories = categories + (category.name to current.copy(title = changed)))
+    }
+
+    /** True once the user changed anything for [category], so Settings can mark it. */
+    fun isCustomized(category: FilterAlertType): Boolean = categories[category.name]
+        ?.let { it.collapsed != null || it.expanded != null || it.image != null || it.title != null } == true
+
     fun reset(category: FilterAlertType): NotificationContentPreferences =
         copy(categories = categories - category.name)
 }
+
+fun notificationTitleParts(category: FilterAlertType): Set<NotificationTitlePart> {
+    val fields = notificationFields(category, expanded = false)
+    return NotificationTitlePart.entries.filterTo(linkedSetOf()) { part ->
+        when (part) {
+            NotificationTitlePart.GODEX_MARKER -> category == FilterAlertType.HUNDO
+            NotificationTitlePart.IV -> NotificationField.IV in fields
+            NotificationTitlePart.CP -> NotificationField.CP in fields
+            else -> true
+        }
+    }
+}
+
+/** Encounter alerts, where IV and CP are the point of the notification. */
+private val IV_CATEGORIES = setOf(
+    FilterAlertType.SPAWN, FilterAlertType.HUNDO, FilterAlertType.NUNDO, FilterAlertType.PVP
+)
+private val ENCOUNTER_CATEGORIES = IV_CATEGORIES + FilterAlertType.COMMON
+
+private fun defaultTitleParts(category: FilterAlertType): Set<NotificationTitlePart> =
+    notificationTitleParts(category).intersect(
+        setOf(NotificationTitlePart.GODEX_MARKER, NotificationTitlePart.CATEGORY, NotificationTitlePart.SUBJECT) +
+            if (category in ENCOUNTER_CATEGORIES) setOf(NotificationTitlePart.CP) else emptySet()
+    )
 
 fun notificationFields(category: FilterAlertType, expanded: Boolean): Set<NotificationField> {
     val common = setOf(
@@ -91,15 +166,24 @@ fun notificationFields(category: FilterAlertType, expanded: Boolean): Set<Notifi
 private fun defaultNotificationFields(category: FilterAlertType, expanded: Boolean): Set<NotificationField> {
     val available = notificationFields(category, expanded)
     if (expanded) {
-        return if (category == FilterAlertType.OTHER || category == FilterAlertType.TAPPABLE) available
-        else available - NotificationField.DESCRIPTION
+        // Weather and area make the line under the big picture long; raids keep weather
+        // because it decides the boost.
+        val hidden = buildSet {
+            add(NotificationField.AREA)
+            if (category != FilterAlertType.RAID) add(NotificationField.WEATHER)
+            if (category != FilterAlertType.OTHER && category != FilterAlertType.TAPPABLE) add(NotificationField.DESCRIPTION)
+        }
+        return available - hidden
     }
-    val defaults = setOf(
-        NotificationField.DISTANCE, NotificationField.WALKING_TIME,
-        NotificationField.TIME_LEFT, NotificationField.CP
-    ) + if (category == FilterAlertType.RAID) {
-        setOf(NotificationField.WEATHER, NotificationField.CATCH_CP)
-    } else emptySet()
+    val defaults = buildSet {
+        addAll(listOf(NotificationField.DISTANCE, NotificationField.TIME_LEFT, NotificationField.CP))
+        when (category) {
+            FilterAlertType.RAID -> addAll(listOf(NotificationField.WEATHER, NotificationField.CATCH_CP, NotificationField.VENUE))
+            FilterAlertType.QUEST, FilterAlertType.ROCKET -> add(NotificationField.VENUE)
+            in IV_CATEGORIES -> add(NotificationField.IV)
+            else -> Unit
+        }
+    }
     return available.intersect(defaults)
 }
 

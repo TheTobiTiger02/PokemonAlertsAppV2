@@ -10,7 +10,7 @@ class ArrivalTrackingNotificationsTest {
     @Test
     fun `encounter arrival includes selected cp iv form and remaining time`() {
         val now = 1_000_000_000_000L
-        val body = ArrivalTrackingNotifications.arrivalContent(
+        val content = ArrivalTrackingNotifications.arrivalContent(
             alert = PokemonAlert(
                 name = "Hundo Pikachu",
                 pokemon = "Pikachu",
@@ -23,10 +23,11 @@ class ArrivalTrackingNotificationsTest {
                 endTime = (now + 60_000L).toString() // 1m 00s out
             ),
             nowMillis = now
-        ).expanded
+        )
+        val body = content.expanded
 
         assertTrue(body.contains("In range"))
-        assertTrue(body.contains("CP 938"))
+        assertTrue(content.title.contains("CP 938"))
         assertTrue(body.contains("IV 15/15/15"))
         assertTrue(body.contains("Normal"))
         assertTrue(body.contains("1 min left"))

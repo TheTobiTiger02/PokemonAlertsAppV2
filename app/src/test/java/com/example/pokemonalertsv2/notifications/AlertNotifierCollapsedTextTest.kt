@@ -14,7 +14,7 @@ class AlertNotifierCollapsedTextTest {
         val alert = PokemonAlert(name = "Hundo Rookidee", cp = 419, type = listOf("Hundo"), endTime = endsIn(20))
 
         assertEquals(
-            "76 m \u2022 1 min walk \u2022 20 min left \u2022 CP 419",
+            "76 m \u2022 20 min left",
             AlertNotifier.buildCollapsedNotificationText(alert, "76 m", "1 min walk", isInRange = false, nowMillis = now)
         )
     }

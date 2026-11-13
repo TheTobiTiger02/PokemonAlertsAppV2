@@ -74,9 +74,10 @@ class NotificationContentTest {
             }
         }
         val content = render(raid, preferences, inRange = true)
-        assertEquals("Mewtwo Raid", content.title)
-        assertEquals("In range", content.collapsed)
-        assertEquals("In range", content.expanded)
+        assertEquals("Raid · Mewtwo", content.title)
+        // "In range" follows the travel fields, so with them off only the category remains.
+        assertEquals("Raids", content.collapsed)
+        assertEquals("Raids", content.expanded)
         assertEquals("In range", content.chip)
     }
 
@@ -84,8 +85,10 @@ class NotificationContentTest {
     fun encounterOptionalFactsStayOutOfIdentityTitles() {
         val alert = PokemonAlert(name = "Hundo Pikachu", pokemon = "Pikachu", type = listOf("Hundo"), cp = 938, iv = "15/15/15")
         val content = render(alert)
-        assertEquals("Pikachu", content.title)
-        assertTrue(content.collapsed.contains("CP 938"))
+        // CP leads the title of encounter alerts and is then left out of the text.
+        assertEquals("Hundo · Pikachu · CP 938", content.title)
+        assertFalse(content.collapsed.contains("CP 938"))
+        assertTrue(content.collapsed.contains("IV 15/15/15"))
         assertTrue(content.expanded.contains("IV 15/15/15"))
     }
 
@@ -102,7 +105,7 @@ class NotificationContentTest {
     @Test
     fun blankLegacyIdentityAndMultilineDescriptionStillProduceUsableText() {
         val content = render(PokemonAlert(name = "", description = "First line\nSecond line"))
-        assertEquals("Other", content.title)
+        assertEquals("Alert", content.title)
         val selected = NotificationContentPreferences().withField(FilterAlertType.OTHER, false, NotificationField.DESCRIPTION, true)
         assertFalse(render(PokemonAlert(name = "", description = "First\nSecond"), selected).collapsed.contains("\n"))
     }
@@ -127,6 +130,43 @@ class NotificationContentTest {
         assertFalse(content.expanded.contains("CP 938"))
         assertTrue(content.expanded.contains("IV 10/12/14"))
         assertFalse(content.title.contains("Clear"))
+    }
+
+    @Test
+    fun inRangeAppearsOnlyWhenATravelDetailIsSelected() {
+        val walkingOnly = NotificationContentPreferences()
+            .withField(FilterAlertType.RAID, false, NotificationField.DISTANCE, false)
+            .withField(FilterAlertType.RAID, false, NotificationField.WALKING_TIME, true)
+        assertTrue(render(raid, walkingOnly, inRange = true).collapsed.startsWith("In range"))
+        val noTravel = walkingOnly.withField(FilterAlertType.RAID, false, NotificationField.WALKING_TIME, false)
+        val content = render(raid, noTravel, inRange = true)
+        assertFalse(content.collapsed.contains("In range"))
+        assertTrue(content.expanded.startsWith("In range"))
+    }
+
+    @Test
+    fun titleNamesTheAlertTypeTierAndGoDexNeed() {
+        val tiered = render(raid.copy(type = listOf("Raid", "5")))
+        assertEquals("5★ Raid · Mewtwo", tiered.title)
+        val hundo = PokemonAlert(name = "Hundo Pikachu", pokemon = "Pikachu", type = listOf("Hundo"), cp = 938, iv = "15/15/15")
+        val needed = renderNotificationContent(
+            NotificationContentInput(hundo, goDexStatus = com.example.pokemonalertsv2.data.godex.GoDexMatchStatus.NEEDED, nowMillis = now)
+        )
+        assertEquals("🎯 Hundo · Pikachu · CP 938", needed.title)
+        val quest = PokemonAlert(name = "Quest", type = listOf("Quest"), questReward = "Rare Candy ×3")
+        assertEquals("Quest · Rare Candy ×3", render(quest).title)
+    }
+
+    @Test
+    fun aFactMovedIntoTheTitleIsNotRepeatedInTheBody() {
+        val hundo = PokemonAlert(name = "Hundo Pikachu", pokemon = "Pikachu", type = listOf("Hundo"), cp = 938, iv = "15/15/15")
+        val preferences = NotificationContentPreferences()
+            .withTitlePart(FilterAlertType.HUNDO, NotificationTitlePart.CP, true)
+            .withTitlePart(FilterAlertType.HUNDO, NotificationTitlePart.CATEGORY, false)
+        val content = render(hundo, preferences)
+        assertEquals("Pikachu · CP 938", content.title)
+        assertFalse(content.collapsed.contains("CP 938"))
+        assertFalse(content.expanded.contains("CP 938"))
     }
 
     private fun render(

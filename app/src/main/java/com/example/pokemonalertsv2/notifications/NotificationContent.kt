@@ -4,6 +4,8 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.NotificationContentPreferences
 import com.example.pokemonalertsv2.data.NotificationField
+import com.example.pokemonalertsv2.data.NotificationTitlePart
+import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.notificationContentCategory
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
@@ -27,7 +29,8 @@ internal data class NotificationContentInput(
     val goDexText: String? = null,
     val raidWatch: Boolean = false,
     val teamText: String? = null,
-    val rangeHint: String? = null
+    val rangeHint: String? = null,
+    val goDexStatus: GoDexMatchStatus? = null
 )
 
 internal data class NotificationContent(
@@ -45,19 +48,24 @@ internal fun renderNotificationContent(
 ): NotificationContent {
     val alert = input.alert
     val category = notificationContentCategory(alert)
+    val titleParts = preferences.titleParts(category)
+    // A fact already in the title is not repeated underneath it.
+    val inTitle = TITLE_FIELDS.filterKeys { it in titleParts }.values.toSet()
     val collapsedFields = preferences.fields(category, expanded = false)
     val expandedFields = preferences.fields(category, expanded = true)
     val remaining = input.endMillis?.minus(input.nowMillis)
-    val status = buildList {
-        input.status.clean()?.let(::add)
-        if (input.inRange) add(AppText.get(R.string.alerts_in_range))
-        if (remaining != null && remaining <= 0) {
-            add(AppText.get(if (category == FilterAlertType.RAID) R.string.raidwatch_raid_ended else R.string.notification_content_ended))
-        }
-    }.distinct()
     val values = notificationFieldValues(input, remaining)
 
-    fun lines(fields: Set<NotificationField>, expanded: Boolean): List<String> {
+    fun lines(selected: Set<NotificationField>, expanded: Boolean): List<String> {
+        val fields = selected - inTitle
+        // "In range" stands in for the travel details, so it follows their selection.
+        val status = buildList {
+            input.status.clean()?.let(::add)
+            if (input.inRange && fields.any { it in TRAVEL_FIELDS }) add(AppText.get(R.string.alerts_in_range))
+            if (remaining != null && remaining <= 0) {
+                add(AppText.get(if (category == FilterAlertType.RAID) R.string.raidwatch_raid_ended else R.string.notification_content_ended))
+            }
+        }.distinct()
         val order = if (input.raidWatch && expanded) {
             listOf(NotificationField.TEAM) + NotificationField.entries.filterNot { it == NotificationField.TEAM }
         } else NotificationField.entries
@@ -72,7 +80,7 @@ internal fun renderNotificationContent(
     }
 
     return NotificationContent(
-        title = notificationIdentity(alert),
+        title = notificationTitle(alert, titleParts, input.goDexStatus),
         collapsed = lines(collapsedFields, expanded = false).joinToString(" • ") { it.replace(WHITESPACE, " ") },
         expanded = lines(expandedFields, expanded = true).joinToString("\n"),
         chip = notificationChip(input, collapsedFields, remaining),
@@ -94,6 +102,79 @@ internal fun notificationIdentity(alert: PokemonAlert): String {
     }
 }
 
+/** Builds the title from the selected parts, e.g. "🎯 Hundo · Pikachu" or "5★ Raid · Mewtwo". */
+internal fun notificationTitle(
+    alert: PokemonAlert,
+    parts: Set<NotificationTitlePart>,
+    goDexStatus: GoDexMatchStatus? = null
+): String {
+    val category = notificationContentCategory(alert)
+    val subject = notificationSubject(alert, category)
+    val marker = when (goDexStatus) {
+        GoDexMatchStatus.NEEDED -> "🎯"
+        GoDexMatchStatus.EVOLUTION_NEEDED,
+        GoDexMatchStatus.FORM_CHANGE_NEEDED,
+        GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> "🧬"
+        else -> null
+    }?.takeIf { NotificationTitlePart.GODEX_MARKER in parts }
+    val segments = NotificationTitlePart.entries.filter { it in parts }.mapNotNull { part ->
+        when (part) {
+            NotificationTitlePart.GODEX_MARKER -> null
+            NotificationTitlePart.CATEGORY -> notificationCategoryTag(alert, category)
+            NotificationTitlePart.SUBJECT -> subject
+            NotificationTitlePart.IV -> (if (alert.isWeatherChange) alert.newIv else alert.formattedIv).clean()
+                ?.let { AppText.get(R.string.notification_content_iv, it) }
+            NotificationTitlePart.CP -> alert.displayCp?.let { AppText.get(R.string.notification_content_cp, it) }
+            NotificationTitlePart.VENUE -> alert.gym.clean() ?: alert.pokestop.clean()
+        }.clean()
+    }.distinctBy { it.lowercase() }.ifEmpty { listOf(subject ?: category.label) }
+    return listOfNotNull(marker, segments.joinToString(" · ")).joinToString(" ")
+}
+
+/** The short singular tag that says what kind of alert this is. */
+internal fun notificationCategoryTag(alert: PokemonAlert, category: FilterAlertType = notificationContentCategory(alert)): String =
+    when (category) {
+        FilterAlertType.SPAWN -> AppText.get(R.string.notification_tag_spawn)
+        FilterAlertType.RAID -> RaidTierParser.parse(alert)?.displayLabel
+            ?.let { tier -> AppText.get(R.string.notification_tag_raid_tier, if (tier.all(Char::isDigit)) "$tier★" else tier) }
+            ?: AppText.get(R.string.notification_tag_raid)
+        FilterAlertType.QUEST -> AppText.get(R.string.notification_tag_quest)
+        FilterAlertType.ROCKET -> AppText.get(R.string.notification_tag_rocket)
+        FilterAlertType.KECLEON -> "Kecleon"
+        FilterAlertType.HUNDO -> AppText.get(R.string.notification_tag_hundo)
+        FilterAlertType.NUNDO -> AppText.get(R.string.notification_tag_nundo)
+        FilterAlertType.PVP -> AppText.get(R.string.notification_tag_pvp)
+        FilterAlertType.COMMON -> AppText.get(R.string.notification_tag_common)
+        FilterAlertType.TAPPABLE -> AppText.get(R.string.notification_tag_tappable)
+        FilterAlertType.WEATHER -> AppText.get(R.string.notification_tag_weather)
+        FilterAlertType.OTHER -> AppText.get(R.string.notification_tag_other)
+    }
+
+/** What the alert is about: the Pokémon, the quest reward or the grunt type. */
+private fun notificationSubject(alert: PokemonAlert, category: FilterAlertType): String? {
+    val name = alert.pokemon.clean() ?: alert.cleanPokemonName.clean()
+    if (alert.isSpeciesReplacement) {
+        val old = alert.oldSpecies.clean()
+        val new = alert.newSpecies.clean()
+        if (old != null && new != null) return "$old → $new"
+    }
+    return when (category) {
+        FilterAlertType.QUEST -> questAlertPresentation(alert)?.reward.clean() ?: alert.questReward.clean()
+            ?: AppText.get(R.string.notification_content_research)
+        FilterAlertType.ROCKET -> alert.gruntType.clean()?.replaceFirstChar { it.uppercaseChar() }
+            ?.let { AppText.get(R.string.notification_content_grunt, it) }
+            ?: AppText.get(R.string.alerts_team_go_rocket)
+        FilterAlertType.KECLEON -> "Kecleon"
+        FilterAlertType.TAPPABLE -> name ?: alert.questReward.clean()
+        else -> name
+    }
+}
+
+private val TITLE_FIELDS = mapOf(
+    NotificationTitlePart.IV to NotificationField.IV,
+    NotificationTitlePart.CP to NotificationField.CP,
+    NotificationTitlePart.VENUE to NotificationField.VENUE
+)
 private val TRAVEL_FIELDS = setOf(NotificationField.DISTANCE, NotificationField.WALKING_TIME)
 private val WHITESPACE = Regex("\\s+")
 

@@ -18,7 +18,7 @@ class AlertNotifierSettingsTest {
         val alert = PokemonAlert(name = "Trubbish", cp = 457, type = listOf("Hundo"))
 
         assertEquals(
-            "15.5 km • 192 min walk • CP 457",
+            "15.5 km • 192 min walk",
             AlertNotifier.buildNotificationContentText(
                 alert = alert,
                 distanceText = "15.5 km",
