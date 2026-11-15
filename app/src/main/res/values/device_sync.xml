@@ -3,7 +3,6 @@
 <resources>
     <string name="settings_device_sync">Device sync</string>
     <string name="device_sync_overview_off">Off · keep settings the same on all your devices</string>
-    <string name="device_sync_overview_on">On · %1$d devices</string>
     <string name="device_sync_intro">Keeps settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. Everything is encrypted on this device before it leaves, so the server cannot read it.</string>
     <string name="device_sync_local_note">Window positions, the running hunt or route and the alert history stay on each device.</string>
     <string name="device_sync_set_up">Set up sync</string>
@@ -25,7 +24,6 @@
     <string name="device_sync_add_device">Add a device</string>
     <string name="device_sync_add_device_warning">This code gives full access to your synced data, including your GoDex and Pokebattler sign-ins. Only use it on your own devices.</string>
     <string name="device_sync_add_device_steps">On the other device open Settings › Device sync › Join with code, then scan this QR code or paste the code.</string>
-    <string name="device_sync_show_code">Show code</string>
     <string name="device_sync_copy_code">Copy code</string>
     <string name="device_sync_code_copied">Code copied</string>
     <string name="device_sync_qr_description">QR code for joining device sync</string>
@@ -39,6 +37,7 @@
     <string name="device_sync_collection_pokegenie">Poké Genie roster</string>
     <string name="device_sync_collection_signins">Sign-ins</string>
     <string name="device_sync_collection_devices">Device list</string>
+    <string name="device_sync_just_now">just now</string>
     <string name="device_sync_never">Not synced yet</string>
     <string name="device_sync_synced_at">Synced %1$s</string>
     <string name="device_sync_update_app">Update the app on this device</string>
@@ -50,4 +49,8 @@
     <string name="device_sync_delete_confirm">Delete</string>
     <string name="device_sync_deleted_elsewhere">Sync was deleted on another device. This device kept its data.</string>
     <string name="whats_new_device_sync">Device sync: keep settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. Settings › Device sync.</string>
+    <plurals name="device_sync_overview_on">
+        <item quantity="one">On · %1$d device</item>
+        <item quantity="other">On · %1$d devices</item>
+    </plurals>
 </resources>

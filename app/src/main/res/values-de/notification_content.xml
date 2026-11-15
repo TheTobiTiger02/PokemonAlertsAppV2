@@ -1,7 +1,4 @@
 <resources>
-    <string name="whats_new_notification_range">„In Reichweite“ ersetzt Entfernung und Gehzeit und erscheint nur, wenn eins davon ausgewählt ist.</string>
-    <string name="whats_new_notification_content">Unter „Benachrichtigungsinhalt“ in den Benachrichtigungseinstellungen kannst du Details je Kategorie für eingeklappte und ausgeklappte Benachrichtigungen auswählen, eine Vorschau ansehen und eine Kategorie zurücksetzen.</string>
-    <string name="whats_new_notification_live_cards">Deine Auswahl gilt auch für „Ich gehe hin“, Hunt und Raid Watch. Live-Benachrichtigungen zeigen anpassbare Textdetails, Aktionen und auf unterstützten Geräten den Status-Chip.</string>
     <string name="notification_content_title">Benachrichtigungsinhalt</string>
     <string name="notification_content_summary">Details für jede Alarmkategorie auswählen</string>
     <string name="notification_content_collapsed">Eingeklappt</string>
@@ -65,7 +62,6 @@
     <string name="notification_test_send">Test senden</string>
     <string name="notification_test_sent">Testbenachrichtigung gesendet</string>
     <string name="notification_test_no_permission">Benachrichtigungen sind für diese App nicht erlaubt</string>
-    <string name="whats_new_notification_design">Benachrichtigungen zeigen den Alarmtyp im Titel, und das Kartenbild füllt die ausgeklappte Benachrichtigung. Wähle Titel, Bild und Details je Kategorie und sende unter „Benachrichtigungsinhalt“ eine Testbenachrichtigung.</string>
     <string name="notification_short_weather">Wetter</string>
     <string name="notification_short_distance">Entfernung</string>
     <string name="notification_short_walking_time">Fußweg</string>

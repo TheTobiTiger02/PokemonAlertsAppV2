@@ -194,8 +194,6 @@ internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
 
 @Composable
 private fun NotConnected(state: SyncStateSnapshot, busy: Boolean, onSetUp: () -> Unit, onJoin: () -> Unit) {
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     SettingsSection(title = stringResource(R.string.settings_device_sync)) {
         if (state.notice == DeviceSync.NOTICE_DELETED_ELSEWHERE) {
             Text(
@@ -203,7 +201,6 @@ private fun NotConnected(state: SyncStateSnapshot, busy: Boolean, onSetUp: () ->
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error
             )
-            LaunchedEffect(Unit) { scope.launch { DeviceSync.state(context).clearNotice() } }
         }
         Text(stringResource(R.string.device_sync_intro), style = MaterialTheme.typography.bodyMedium)
         Text(
@@ -322,9 +319,14 @@ private fun syncedLabel(millis: Long): String =
     if (millis <= 0) stringResource(R.string.device_sync_never)
     else stringResource(R.string.device_sync_synced_at, relative(millis))
 
-private fun relative(millis: Long): String =
-    if (millis <= 0) "–"
-    else DateUtils.getRelativeTimeSpanString(millis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+/** "just now", "5 minutes ago", "yesterday"; lowercased in German, where it sits mid-sentence. */
+private fun relative(millis: Long): String {
+    if (millis <= 0) return "–"
+    val now = System.currentTimeMillis()
+    if (now - millis < DateUtils.MINUTE_IN_MILLIS) return AppText.get(R.string.device_sync_just_now)
+    val text = DateUtils.getRelativeTimeSpanString(millis, now, DateUtils.MINUTE_IN_MILLIS).toString()
+    return if (java.util.Locale.getDefault().language == "de" && text.startsWith("Vor ")) text.replaceFirstChar { it.lowercase() } else text
+}
 
 @Composable
 private fun JoinDialog(
@@ -455,7 +457,7 @@ internal fun deviceSyncSummary(context: Context): String {
     val snapshot by remember(context) { DeviceSync.state(context).snapshots }.collectAsStateWithLifecycle(initialValue = null)
     val state = snapshot
     return if (state?.connected == true) {
-        stringResource(R.string.device_sync_overview_on, state.devices.size + 1)
+        (state.devices.size + 1).let { androidx.compose.ui.res.pluralStringResource(R.plurals.device_sync_overview_on, it, it) }
     } else {
         stringResource(R.string.device_sync_overview_off)
     }

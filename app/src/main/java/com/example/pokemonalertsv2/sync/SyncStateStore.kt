@@ -103,16 +103,12 @@ class SyncStateStore(
         }
     }
 
-    /** Forgets the group. Local data stays; [notice] is shown once on the sync page. */
+    /** Forgets the group. Local data stays; [notice] stays on the sync page until the next set-up or join. */
     suspend fun disconnect(notice: String? = null) {
         dataStore.edit { preferences ->
             clearGroupState(preferences)
             if (notice != null) preferences[NOTICE_KEY] = notice
         }
-    }
-
-    suspend fun clearNotice() {
-        dataStore.edit { it.remove(NOTICE_KEY) }
     }
 
     private fun clearGroupState(preferences: MutablePreferences) {
