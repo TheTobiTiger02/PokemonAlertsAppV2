@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
@@ -273,6 +274,13 @@ internal fun SettingsOverview(
             )
         } }
         val appGroup: @Composable () -> Unit = { SettingsOverviewGroup(stringResource(R.string.settings_app)) {
+            SettingsOverviewRow(
+                icon = rememberVectorPainter(Icons.Filled.Refresh),
+                title = stringResource(R.string.settings_device_sync),
+                summary = deviceSyncSummary(androidx.compose.ui.platform.LocalContext.current),
+                onClick = { onDestinationSelected(SettingsDestination.DEVICE_SYNC) }
+            )
+            OverviewDivider()
             SettingsOverviewRow(
                 icon = rememberVectorPainter(Icons.Default.Info),
                 title = stringResource(R.string.settings_backup_about),

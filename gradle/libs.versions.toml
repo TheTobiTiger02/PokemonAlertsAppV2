@@ -31,6 +31,8 @@ benchmark = "1.4.1"
 uiautomator = "2.3.0"
 profileinstaller = "1.4.1"
 healthConnect = "1.1.0"
+zxing = "3.5.3"
+codeScanner = "16.1.0"
 
 [libraries]
 androidx-health-connect-client = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
@@ -73,6 +75,8 @@ google-play-services-maps = { group = "com.google.android.gms", name = "play-ser
 google-maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "mapLibre" }
 google-play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+google-play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "codeScanner" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 androidx-benchmark-macro = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }

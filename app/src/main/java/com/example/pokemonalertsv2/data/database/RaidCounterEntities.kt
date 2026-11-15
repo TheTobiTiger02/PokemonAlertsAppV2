@@ -52,6 +52,8 @@ data class RaidCounterCacheEntity(
  * newline separated. Both are computed at import time so decorating a counter list is a
  * hash lookup rather than a re-normalization of the whole box.
  */
+// Serializable for device sync, which carries the whole roster as one item.
+@kotlinx.serialization.Serializable
 @Entity(
     tableName = "poke_genie_mons",
     indices = [Index("matchKey")]

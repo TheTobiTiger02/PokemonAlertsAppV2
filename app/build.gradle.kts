@@ -88,8 +88,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 123
-        versionName = "1.30.0"
+        versionCode = 124
+        versionName = "1.31.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -239,6 +239,10 @@ dependencies {
     implementation(libs.google.maps.compose)
     implementation(libs.maplibre.android)
     implementation(libs.google.play.services.location)
+    // Device sync pairing: QR code shown on one device (zxing, pure Java) and scanned on the
+    // other with the Play services scanner, which needs no camera permission.
+    implementation(libs.zxing.core)
+    implementation(libs.google.play.services.code.scanner)
     // Heart rate, steps and calories a watch synced to Health Connect (e.g. Galaxy Watch via Samsung Health).
     implementation(libs.androidx.health.connect.client)
     implementation(platform(libs.firebase.bom))

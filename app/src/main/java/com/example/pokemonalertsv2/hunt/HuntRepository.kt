@@ -96,7 +96,7 @@ class HuntRepository private constructor(context: Context) {
         encodeDefaults = true
     }
 
-    private val batterySaverKey = androidx.datastore.preferences.core.booleanPreferencesKey("battery_saver")
+    private val batterySaverKey = BATTERY_SAVER_KEY
     val batterySaverEnabled: Flow<Boolean> = dataStore.data.map { it[batterySaverKey] ?: false }.distinctUntilChanged()
     suspend fun setBatterySaverEnabled(enabled: Boolean) {
         dataStore.edit { it[batterySaverKey] = enabled }
@@ -106,11 +106,23 @@ class HuntRepository private constructor(context: Context) {
      * Whether a hunt limited to an area still draws the matches outside it. They are never suggested or
      * planned, only shown dimmed, so one can still be tapped and walked to. Applies to every hunt.
      */
-    private val showOutsideAreaKey = androidx.datastore.preferences.core.booleanPreferencesKey("show_outside_area")
+    private val showOutsideAreaKey = SHOW_OUTSIDE_AREA_KEY
     val showOutsideArea: Flow<Boolean> = dataStore.data.map { it[showOutsideAreaKey] ?: false }.distinctUntilChanged()
     suspend fun setShowOutsideArea(enabled: Boolean) {
         dataStore.edit { it[showOutsideAreaKey] = enabled }
     }
+
+    /**
+     * Device sync (sync/SyncAdapter.kt): saved hunts, finished hunts and the two hunt toggles.
+     * The running hunt, its stats and the unseen summary belong to this device and never travel.
+     */
+    suspend fun syncSnapshot(): Map<String, String> = huntSyncSnapshot(dataStore.data.first())
+
+    suspend fun applySync(upserts: Map<String, String>, deletes: Set<String>) {
+        dataStore.edit { applyHuntSync(it, upserts, deletes) }
+    }
+
+    val syncChanges: Flow<Map<String, String>> = dataStore.data.map { huntSyncSnapshot(it) }.distinctUntilChanged()
 
     val sessionFlow: Flow<HuntSession?> = dataStore.data
         .map { preferences -> preferences[ACTIVE_HUNT_KEY]?.decodeSession() }
@@ -442,6 +454,70 @@ class HuntRepository private constructor(context: Context) {
         private val HUNT_STATS_KEY = stringPreferencesKey("active_hunt_stats")
         private val LAST_SUMMARY_KEY = stringPreferencesKey("last_hunt_summary")
         private val HUNT_HISTORY_KEY = stringPreferencesKey("hunt_history")
+        private val BATTERY_SAVER_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("battery_saver")
+        private val SHOW_OUTSIDE_AREA_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("show_outside_area")
+
+        private const val SAVED_PREFIX = "saved/"
+        private const val HISTORY_PREFIX = "history/"
+        private const val BATTERY_SAVER_ITEM = "pref/battery_saver"
+        private const val SHOW_OUTSIDE_AREA_ITEM = "pref/show_outside_area"
+        private val syncJson = Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
+
+        /** One item per saved hunt and per finished hunt, plus the two toggles; values are their JSON. */
+        internal fun huntSyncSnapshot(preferences: Preferences): Map<String, String> {
+            val items = LinkedHashMap<String, String>()
+            preferences[SAVED_HUNTS_KEY]
+                ?.let { raw -> runCatching { syncJson.decodeFromString(ListSerializer(SavedHunt.serializer()), raw) }.getOrNull() }
+                ?.forEach { items[SAVED_PREFIX + it.id] = syncJson.encodeToString(SavedHunt.serializer(), it) }
+            preferences[HUNT_HISTORY_KEY]
+                ?.let { raw -> runCatching { syncJson.decodeFromString(ListSerializer(HuntSummary.serializer()), raw) }.getOrNull() }
+                ?.forEach { items[HISTORY_PREFIX + it.startedAtMillis] = syncJson.encodeToString(HuntSummary.serializer(), it) }
+            preferences[BATTERY_SAVER_KEY]?.let { items[BATTERY_SAVER_ITEM] = it.toString() }
+            preferences[SHOW_OUTSIDE_AREA_KEY]?.let { items[SHOW_OUTSIDE_AREA_ITEM] = it.toString() }
+            return items
+        }
+
+        /** Writes synced items back in the stored layout; items that do not decode are skipped. */
+        internal fun applyHuntSync(
+            preferences: androidx.datastore.preferences.core.MutablePreferences,
+            upserts: Map<String, String>,
+            deletes: Set<String>
+        ) {
+            val touched = upserts.keys + deletes
+            if (touched.any { it.startsWith(SAVED_PREFIX) }) {
+                val saved = preferences[SAVED_HUNTS_KEY]
+                    ?.let { raw -> runCatching { syncJson.decodeFromString(ListSerializer(SavedHunt.serializer()), raw) }.getOrNull() }
+                    .orEmpty().associateBy { SAVED_PREFIX + it.id }.toMutableMap()
+                deletes.forEach { saved.remove(it) }
+                upserts.filterKeys { it.startsWith(SAVED_PREFIX) }.forEach { (key, value) ->
+                    runCatching { syncJson.decodeFromString(SavedHunt.serializer(), value) }.getOrNull()?.let { saved[key] = it }
+                }
+                preferences[SAVED_HUNTS_KEY] = syncJson.encodeToString(
+                    ListSerializer(SavedHunt.serializer()),
+                    savedHuntOrder(saved.values.toList())
+                )
+            }
+            if (touched.any { it.startsWith(HISTORY_PREFIX) }) {
+                val history = preferences[HUNT_HISTORY_KEY]
+                    ?.let { raw -> runCatching { syncJson.decodeFromString(ListSerializer(HuntSummary.serializer()), raw) }.getOrNull() }
+                    .orEmpty().associateBy { HISTORY_PREFIX + it.startedAtMillis }.toMutableMap()
+                deletes.forEach { history.remove(it) }
+                upserts.filterKeys { it.startsWith(HISTORY_PREFIX) }.forEach { (key, value) ->
+                    runCatching { syncJson.decodeFromString(HuntSummary.serializer(), value) }.getOrNull()?.let { history[key] = it }
+                }
+                preferences[HUNT_HISTORY_KEY] = syncJson.encodeToString(
+                    ListSerializer(HuntSummary.serializer()),
+                    history.values.sortedByDescending { it.startedAtMillis }.take(HUNT_HISTORY_CAP)
+                )
+            }
+            listOf(BATTERY_SAVER_ITEM to BATTERY_SAVER_KEY, SHOW_OUTSIDE_AREA_ITEM to SHOW_OUTSIDE_AREA_KEY).forEach { (item, key) ->
+                if (item in deletes) preferences.remove(key)
+                upserts[item]?.toBooleanStrictOrNull()?.let { preferences[key] = it }
+            }
+        }
 
         @Volatile
         private var instance: HuntRepository? = null
