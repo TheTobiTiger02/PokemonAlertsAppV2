@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -120,8 +121,14 @@ class WidgetConfigActivity : ComponentActivity() {
             }.collectAsStateWithLifecycle(initialValue = emptyMap())
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
                 var showFilterEditor by remember { mutableStateOf(false) }
+                var followSet by remember { mutableStateOf(existing.followSet) }
                 WidgetStudioConfiguration(
                     initialConfiguration = existing,
+                    followSet = followSet,
+                    onFollowChange = { follow ->
+                        followSet = follow
+                        filterViewModel.setWidgetFollowsSet(appWidgetId, follow)
+                    },
                     onOpenEditor = { showFilterEditor = true },
                     onConfirm = { configuration ->
                         val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
@@ -134,10 +141,12 @@ class WidgetConfigActivity : ComponentActivity() {
                     }
                 )
 
+                // A widget that follows the set edits the set's widget filter; one with its
+                // own filter edits that.
                 if (showFilterEditor) com.example.pokemonalertsv2.ui.settings.FilterStudioDialog(
-                    surface = com.example.pokemonalertsv2.data.FilterSurface.FEED,
+                    surface = if (followSet) com.example.pokemonalertsv2.data.FilterSurface.WIDGETS else com.example.pokemonalertsv2.data.FilterSurface.FEED,
                     viewModel = filterViewModel,
-                    widgetId = appWidgetId,
+                    widgetId = appWidgetId.takeUnless { followSet },
                     onDismiss = { showFilterEditor = false }
                 )
 
@@ -213,6 +222,8 @@ private val WIDGET_AREA_OPTIONS = listOf("All", "Alsbach", "Darmstadt")
 @Composable
 private fun WidgetStudioConfiguration(
     initialConfiguration: WidgetConfiguration,
+    followSet: Boolean,
+    onFollowChange: (Boolean) -> Unit,
     onOpenEditor: () -> Unit,
     onConfirm: (WidgetConfiguration) -> Unit
 ) {
@@ -225,8 +236,20 @@ private fun WidgetStudioConfiguration(
     ) { padding ->
         Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(20.dp).readableWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(stringResource(R.string.widget_a_view_of_your_own), style = MaterialTheme.typography.headlineSmall)
-            Text(stringResource(R.string.widget_this_widget_has_independent_alert_rules), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) { Text(stringResource(R.string.widget_open_filter_studio)) }
+            Row(
+                Modifier.fillMaxWidth().toggleable(value = followSet, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onFollowChange).testTag("widget_follow_set"),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.filter_widgets_follow_switch), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.filter_widgets_follow_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(checked = followSet, onCheckedChange = null)
+            }
+            Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+                Text(stringResource(if (followSet) R.string.filter_widgets_edit_set else R.string.filter_widgets_edit_own))
+            }
             Text(stringResource(R.string.widget_display_priority), style = MaterialTheme.typography.titleMedium)
             Text(stringResource(R.string.widget_sorting_only_changes_the_order_never), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

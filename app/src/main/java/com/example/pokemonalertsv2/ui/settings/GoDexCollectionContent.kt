@@ -84,10 +84,13 @@ import com.example.pokemonalertsv2.ui.motion.appFadeThrough
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-internal enum class GoDexCollectionFilter(val label: String) {
-    NEEDED(AppText.get(R.string.settings_still_needed_2)),
-    CAUGHT(AppText.get(R.string.hunt_caught)),
-    ALL(AppText.get(R.string.alerts_all))
+internal enum class GoDexCollectionFilter(private val labelRes: Int) {
+    NEEDED(R.string.settings_still_needed_2),
+    CAUGHT(R.string.hunt_caught),
+    ALL(R.string.alerts_all);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 internal data class GoDexCollectionSelection(

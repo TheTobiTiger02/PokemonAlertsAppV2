@@ -85,14 +85,12 @@ internal object WidgetAlertLoader {
         val sortPreference = runCatching { repo.alertPreferences.sortPreference.first() }
             .getOrElse { com.example.pokemonalertsv2.data.SortPreference.POSTED_TIME }
         val storedConfiguration = WidgetConfigurationStore.get(context, appWidgetId)
-        val configuration = if (storedConfiguration.filterAssignment == null) {
+        val configuration = if (storedConfiguration.filterAssignment == null && !storedConfiguration.followSet) {
             storedConfiguration.copy(filterAssignment = com.example.pokemonalertsv2.data.FilterAssignment.local(storedConfiguration.legacyFilterDefinition(selectedArea, maxDistance)))
                 .also { WidgetConfigurationStore.save(context, appWidgetId, it) }
         } else storedConfiguration
         val filterDocument = runCatching { repo.alertPreferences.filterStateDocument.first() }.getOrNull()
-        val unifiedDefinition = configuration.filterAssignment?.let { assignment ->
-            filterDocument?.let(assignment::resolve) ?: assignment.definition
-        }
+        val unifiedDefinition = configuration.effectiveDefinition(filterDocument, selectedArea, maxDistance)
         val filterTypes = configuration.selectedAlertTypes
         // A widget pinned to one area keeps its own view; otherwise it follows the app.
         val effectiveArea = when (val areaMode = configuration.area) {

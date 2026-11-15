@@ -52,9 +52,13 @@ fun unionOf(definitions: List<FilterDefinition>): FilterDefinition {
     }
 }
 
-/** The Feed, Map and Notifications definitions this document currently resolves to. */
+/**
+ * The Feed, Map and Notifications definitions this document currently resolves to. The
+ * set's widget filter is not one of them: only widgets that follow it count, and the
+ * caller adds those with the rest of the placed widgets.
+ */
 fun FilterStateDocument.surfaceDefinitions(): List<FilterDefinition> =
-    FilterSurface.entries.map { surface -> assignment(surface).resolve(this) }
+    FilterSurface.entries.filterNot { it == FilterSurface.WIDGETS }.map { surface -> assignment(surface).resolve(this) }
 
 /**
  * The surfaces that need alerts delivered while the app is in the background.

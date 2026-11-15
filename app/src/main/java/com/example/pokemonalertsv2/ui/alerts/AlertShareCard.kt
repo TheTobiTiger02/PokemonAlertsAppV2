@@ -375,13 +375,13 @@ object AlertShareCard {
         var y = startY + 64f
         val labelPaint = textPaint(28f, palette.secondaryText, Typeface.BOLD)
         val valuePaint = textPaint(40f, palette.primaryText, Typeface.BOLD)
-        canvas.drawText("STATUS", PADDING + 34f, y, labelPaint)
+        canvas.drawText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_share_status), PADDING + 34f, y, labelPaint)
         y += 58f
         canvas.drawText(content.endLabel, PADDING + 34f, y, valuePaint)
         y += 62f
 
         content.locationLabel?.let {
-            canvas.drawText("LOCATION", PADDING + 34f, y, labelPaint)
+            canvas.drawText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_share_location), PADDING + 34f, y, labelPaint)
             y += 48f
             y = drawWrappedText(canvas, it, PADDING + 34f, y, CARD_WIDTH - PADDING * 2 - 68f, textPaint(34f, palette.primaryText), 2, 42f)
         }
@@ -397,7 +397,7 @@ object AlertShareCard {
         val footerPaint = textPaint(28f, palette.secondaryText)
         val titlePaint = textPaint(32f, palette.primaryText, Typeface.BOLD)
         val y = (startY + 90f).coerceAtMost(CARD_HEIGHT - 110f)
-        canvas.drawText("Shared from Pokemon Alerts", PADDING, y, titlePaint)
+        canvas.drawText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_share_footer), PADDING, y, titlePaint)
         content.mapsUrl?.let {
             drawWrappedText(canvas, it, PADDING, y + 46f, CARD_WIDTH - PADDING * 2, footerPaint, 2, 36f)
         }

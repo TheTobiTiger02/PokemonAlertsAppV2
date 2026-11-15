@@ -20,7 +20,7 @@ import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
 import com.example.pokemonalertsv2.widget.AlertsWidgetProvider
 import com.example.pokemonalertsv2.widget.NearbyRadarWidgetProvider
 import com.example.pokemonalertsv2.widget.WidgetConfigurationStore
-import com.example.pokemonalertsv2.widget.legacyFilterDefinition
+import com.example.pokemonalertsv2.widget.effectiveDefinition
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.android.gms.tasks.Task
@@ -114,9 +114,8 @@ object FcmTopicSubscriptionManager {
         val ids = manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java)) +
             manager.getAppWidgetIds(ComponentName(context, NearbyRadarWidgetProvider::class.java))
         ids.map { id ->
-            val configuration = WidgetConfigurationStore.get(context, id)
-            configuration.filterAssignment?.resolve(document)
-                ?: configuration.legacyFilterDefinition(appArea = AppText.get(R.string.alerts_all), appDistanceMeters = 0)
+            WidgetConfigurationStore.get(context, id)
+                .effectiveDefinition(document, appArea = AppText.get(R.string.alerts_all), appDistanceMeters = 0)
         }
     }.getOrDefault(emptyList())
 

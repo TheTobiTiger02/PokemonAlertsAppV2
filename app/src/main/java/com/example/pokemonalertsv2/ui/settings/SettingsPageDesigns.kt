@@ -167,11 +167,8 @@ internal fun NotificationsPageDesign(
     PanelPages(page = page, root = NotificationsPage.ROOT, onBack = back) { shown ->
         if (shown == NotificationsPage.CONTENT) NotificationContentSettings(
             preferences = content,
-            onFieldChange = viewModel::updateNotificationField,
-            onImageStyleChange = viewModel::updateNotificationImageStyle,
-            onTitlePartChange = viewModel::updateNotificationTitlePart,
+            onEdit = viewModel::editNotificationContent,
             onSendTest = viewModel::sendTestNotification,
-            onReset = viewModel::resetNotificationContent,
             onBack = back,
             modifier = modifier
         ) else PageColumn(modifier) {

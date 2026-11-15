@@ -102,7 +102,9 @@ data class AlertEntity(
     // Live sightings
     val expiryVerified: Boolean? = null,
     val replacesAlertId: Int? = null,
-    val live: Boolean? = null
+    val live: Boolean? = null,
+    /** [com.example.pokemonalertsv2.data.AlertGameIds] as JSON: ids and translations for display. */
+    val gameIdsJson: String? = null
 )
 
 fun AlertEntity.toDomain(): PokemonAlert {
@@ -186,7 +188,11 @@ fun AlertEntity.toDomain(): PokemonAlert {
         expiryVerified = expiryVerified,
         replacesAlertId = replacesAlertId,
         live = live
-    )
+    ).let { alert ->
+        val ids = gameIdsJson?.let { raw -> runCatching { Json.decodeFromString<com.example.pokemonalertsv2.data.AlertGameIds>(raw) }.getOrNull() }
+            ?: return@let alert
+        alert.copy(formId = ids.formId, raidLevel = ids.raidLevel, moveIds = ids.moveIds, gruntTypeId = ids.gruntTypeId, i18n = ids.i18n)
+    }
 }
 
 fun PokemonAlert.toEntity(): AlertEntity {
@@ -252,6 +258,8 @@ fun PokemonAlert.toEntity(): AlertEntity {
         invalidatedByAlertId = invalidatedByAlertId,
         expiryVerified = expiryVerified,
         replacesAlertId = replacesAlertId,
-        live = live
+        live = live,
+        gameIdsJson = com.example.pokemonalertsv2.data.AlertGameIds(formId, raidLevel, moveIds, gruntTypeId, i18n)
+            .takeUnless { it.isEmpty }?.let { Json.encodeToString(it) }
     )
 }

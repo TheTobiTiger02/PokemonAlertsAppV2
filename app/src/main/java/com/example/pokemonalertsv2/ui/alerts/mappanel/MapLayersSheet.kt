@@ -61,9 +61,12 @@ import com.example.pokemonalertsv2.ui.components.panelGutter
 import androidx.compose.ui.text.style.TextOverflow
 
 /** The Layers sheet's pages: the list, and the marker grouping editor. */
-internal enum class LayersPage(val title: String) {
-    ROOT(AppText.get(R.string.alerts_map_layers)),
-    GROUPING(AppText.get(R.string.alerts_marker_grouping))
+internal enum class LayersPage(private val titleRes: Int) {
+    ROOT(R.string.alerts_map_layers),
+    GROUPING(R.string.alerts_marker_grouping);
+
+    /** Read on every access, so a language switch shows at once. */
+    val title: String get() = AppText.get(titleRes)
 }
 
 /**

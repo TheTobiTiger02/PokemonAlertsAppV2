@@ -367,4 +367,5 @@ object PokemonAlertsApi {
     val eventsService: com.example.pokemonalertsv2.events.EventsService by lazy { retrofit.create() }
     val liveSpeciesService: com.example.pokemonalertsv2.megaboost.LiveSpeciesService by lazy { retrofit.create() }
     val goRoutesService: com.example.pokemonalertsv2.catchroutes.GoRoutesService by lazy { retrofit.create() }
+    val gameTextService: com.example.pokemonalertsv2.data.gametext.GameTextService by lazy { retrofit.create() }
 }

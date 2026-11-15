@@ -37,12 +37,15 @@ data class MapClusteringConfig(
 }
 
 /** Stored by [name]; [label] and [description] are free to change. */
-enum class MapClusteringPreset(val label: String, val description: String, val config: MapClusteringConfig) {
-    LESS(AppText.get(R.string.data_less_clustering), "Pins separate early; groups only where crowded.", MapClusteringConfig()),
-    CURRENT(AppText.get(R.string.data_classic_grouping), "Groups nearby pins until you zoom in close.", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
-    OVERLAP(AppText.get(R.string.data_overlap_only), "Groups only pins that would overlap.", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
-    STACKS(AppText.get(R.string.data_same_location_stacks), "Stacks only alerts at the exact same spot.", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
-    PERFORMANCE(AppText.get(R.string.data_performance), "Fewest markers; smoothest on busy maps.", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150))
+enum class MapClusteringPreset(private val labelRes: Int, val description: String, val config: MapClusteringConfig) {
+    LESS(R.string.data_less_clustering, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_clustering_less), MapClusteringConfig()),
+    CURRENT(R.string.data_classic_grouping, "Groups nearby pins until you zoom in close.", MapClusteringConfig(MapGrouping.CURRENT, 40, 12, 80, 250)),
+    OVERLAP(R.string.data_overlap_only, "Groups only pins that would overlap.", MapClusteringConfig(MapGrouping.DISTANCE, 12, 14)),
+    STACKS(R.string.data_same_location_stacks, "Stacks only alerts at the exact same spot.", MapClusteringConfig(grouping = MapGrouping.COINCIDENT)),
+    PERFORMANCE(R.string.data_performance, "Fewest markers; smoothest on busy maps.", MapClusteringConfig(MapGrouping.GRID, 48, 14, 60, 150));
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 @Serializable

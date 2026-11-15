@@ -11,9 +11,11 @@ internal data class QuestAlertPresentation(
 /** Shared, whitespace-safe quest copy for cards, map details, and widgets. */
 internal fun questAlertPresentation(alert: PokemonAlert): QuestAlertPresentation? {
     if (!alert.hasTypeContaining("quest")) return null
+    // The backend renders quests in other languages too; English is the fallback.
+    val translated = alert.i18n?.get(com.example.pokemonalertsv2.util.AppLanguage.displayLanguage())
     return QuestAlertPresentation(
-        task = alert.questTask?.trim()?.takeIf(String::isNotEmpty),
-        reward = alert.questReward?.trim()?.takeIf(String::isNotEmpty),
+        task = (translated?.questTask ?: alert.questTask)?.trim()?.takeIf(String::isNotEmpty),
+        reward = (translated?.questReward ?: com.example.pokemonalertsv2.data.gametext.GameNames.reward(alert.questReward))?.trim()?.takeIf(String::isNotEmpty),
         requiresAr = alert.requiresAR == true
     )
 }

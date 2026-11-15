@@ -58,7 +58,7 @@ internal fun notificationPreviewInput(
         weatherTo = if (category == FilterAlertType.WEATHER) "Windy" else null,
         newCp = if (category == FilterAlertType.WEATHER) 593 else null,
         newIv = if (category == FilterAlertType.WEATHER) "10/12/14" else null,
-        description = "Additional alert details",
+        description = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_preview_additional_details),
         latitude = latitude,
         longitude = longitude,
         endTime = (now + 20 * 60_000L).toString()

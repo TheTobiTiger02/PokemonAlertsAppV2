@@ -78,7 +78,7 @@ fun ShimmerAlertCard() {
         modifier = Modifier
             .fillMaxWidth()
             .semantics(mergeDescendants = true) {
-                contentDescription = "Loading alert"
+                contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_loading_alert)
                 liveRegion = LiveRegionMode.Polite
             },
         colors = CardDefaults.cardColors(

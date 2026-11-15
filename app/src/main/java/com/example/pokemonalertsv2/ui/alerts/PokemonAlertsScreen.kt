@@ -230,8 +230,7 @@ fun PokemonAlertsRoute(
                 val maxDistance by viewModel.maxDistance.collectAsStateWithLifecycle()
                 val defaultSnoozeMinutes by viewModel.snoozeDuration.collectAsStateWithLifecycle()
                 val savedSortPreference by viewModel.sortPreference.collectAsStateWithLifecycle()
-                
-                val savedPresets by viewModel.filterPresets.collectAsStateWithLifecycle()
+
                 val maxWalkingMinutes by viewModel.maxWalkingMinutes.collectAsStateWithLifecycle()
                 val favoriteIds by viewModel.favoriteAlertIds.collectAsStateWithLifecycle()
                 val favorites = remember(favoriteIds) { FavoriteAlerts(favoriteIds, viewModel::toggleFavorite) }
@@ -245,20 +244,6 @@ fun PokemonAlertsRoute(
                     locationLookupComplete = viewModel.locationLookupComplete.collectAsStateWithLifecycle().value,
                     onRefreshLocation = viewModel::refreshUserLocation,
                     onLocationLookupPending = viewModel::markLocationLookupPending,
-                    presetControls = FilterPresetControls(
-                        presets = savedPresets,
-                        onApply = viewModel::applyFilterPreset,
-                        onSaveCurrent = { name ->
-                            viewModel.saveFilterPreset(
-                                name = name,
-                                categories = selectedFeedCategories,
-                                sort = savedSortPreference,
-                                area = selectedArea,
-                                maxDistanceMeters = maxDistance
-                            )
-                        },
-                        onDelete = viewModel::deleteFilterPreset
-                    ),
                     maxWalkingMinutes = maxWalkingMinutes,
                     onMaxWalkingMinutesChange = viewModel::updateMaxWalkingMinutes,
                     selectedArea = selectedArea,
@@ -397,28 +382,19 @@ internal fun hasForegroundLocationPermission(context: Context): Boolean =
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-internal enum class HistoryAreaFilter(val label: String, val area: String?) {
-    BOTH(AppText.get(R.string.alerts_both), null),
-    ALSBACH(AppText.get(R.string.alerts_alsbach), "Alsbach"),
-    DARMSTADT(AppText.get(R.string.alerts_darmstadt), "Darmstadt");
+internal enum class HistoryAreaFilter(private val labelRes: Int, val area: String?) {
+    BOTH(R.string.alerts_both, null),
+    ALSBACH(R.string.alerts_alsbach, "Alsbach"),
+    DARMSTADT(R.string.alerts_darmstadt, "Darmstadt");
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 
     fun includes(alert: PokemonAlert): Boolean =
         area == null || AlertFilterMatcher.matchesArea(FilterSelection.only(listOf(area)), alert.area)
 }
 
 internal enum class FeedContentState { LOADING, EMPTY, CONTENT }
-
-/**
- * The saved-preset controls, bundled so the feed parameter list does not grow by four more
- * loose lambdas on a composable that already takes thirty.
- */
-@Immutable
-data class FilterPresetControls(
-    val presets: List<FilterPreset> = emptyList(),
-    val onApply: (FilterPreset) -> Unit = {},
-    val onSaveCurrent: (String) -> Unit = {},
-    val onDelete: (String) -> Unit = {}
-)
 
 @Composable
 fun PokemonAlertsPage(
@@ -430,7 +406,6 @@ fun PokemonAlertsPage(
     locationLookupComplete: Boolean = false,
     onRefreshLocation: (Boolean) -> Unit = {},
     onLocationLookupPending: () -> Unit = {},
-    presetControls: FilterPresetControls = FilterPresetControls(),
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
     /** Called after "Clear all filters" with a way to put them back, for an Undo. */
     onFiltersCleared: ((undo: () -> Unit) -> Unit)? = null,
@@ -694,7 +669,6 @@ fun PokemonAlertsPage(
                         onMaxWalkingMinutesChange(previousWalking)
                     }
                 },
-                presetControls = presetControls,
                 maxWalkingMinutes = maxWalkingMinutes,
                 onMaxWalkingMinutesChange = onMaxWalkingMinutesChange,
                 onOpenFilterStudio = if (onFilterDefinitionChange != null) ({ quickFiltersOpen = true }) else onOpenFilterStudio,
@@ -806,7 +780,6 @@ internal fun AlertsList(
     onClearAreaFilter: () -> Unit = {},
     onClearDistanceFilter: () -> Unit = {},
     onClearAllFilters: () -> Unit = {},
-    presetControls: FilterPresetControls = FilterPresetControls(),
     maxWalkingMinutes: Int = TravelTime.NO_LIMIT,
     onMaxWalkingMinutesChange: (Int) -> Unit = {},
     onOpenFilterStudio: () -> Unit = {},

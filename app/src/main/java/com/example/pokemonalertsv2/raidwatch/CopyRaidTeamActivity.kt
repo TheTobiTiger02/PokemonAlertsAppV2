@@ -61,7 +61,7 @@ class CopyRaidTeamActivity : ComponentActivity() {
     private fun copy(snapshot: RaidTeamSnapshot) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
         clipboard.setPrimaryClip(
-            ClipData.newPlainText("Pokémon GO team search", snapshot.clipboardQuery)
+            ClipData.newPlainText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_raid_team_search), snapshot.clipboardQuery)
         )
         when {
             // Never silent about the downgrade: the trainer asked for their exact six and is

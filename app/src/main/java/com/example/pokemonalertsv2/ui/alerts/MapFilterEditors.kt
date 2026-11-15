@@ -40,16 +40,19 @@ import com.example.pokemonalertsv2.data.*
 import com.example.pokemonalertsv2.ui.settings.SpeciesSortOrder
 import com.example.pokemonalertsv2.ui.theme.Spacing
 
-internal enum class MapSelectorTarget(val title: String, val shortLabel: String) {
-    SPAWN(AppText.get(R.string.alerts_iv_spawn_species), "IV spawns"),
-    HUNDO(AppText.get(R.string.alerts_hundo_species), "100%"),
-    PVP(AppText.get(R.string.alerts_pvp_species), "PvP"),
-    COMMON(AppText.get(R.string.alerts_common_species), "Common"),
-    NUNDO(AppText.get(R.string.alerts_nundo_species), "0%"),
-    RAID_SPECIES(AppText.get(R.string.alerts_raid_species), "Raid Bosses"),
-    RAID_TIERS(AppText.get(R.string.alerts_raid_tiers), "Tiers"),
-    ROCKET(AppText.get(R.string.alerts_rocket_types), "Rockets"),
-    TAPPABLE(AppText.get(R.string.alerts_tappable_species_and_loot), "Tappables")
+internal enum class MapSelectorTarget(private val titleRes: Int, val shortLabel: String) {
+    SPAWN(R.string.alerts_iv_spawn_species, "IV spawns"),
+    HUNDO(R.string.alerts_hundo_species, "100%"),
+    PVP(R.string.alerts_pvp_species, "PvP"),
+    COMMON(R.string.alerts_common_species, "Common"),
+    NUNDO(R.string.alerts_nundo_species, "0%"),
+    RAID_SPECIES(R.string.alerts_raid_species, "Raid Bosses"),
+    RAID_TIERS(R.string.alerts_raid_tiers, "Tiers"),
+    ROCKET(R.string.alerts_rocket_types, "Rockets"),
+    TAPPABLE(R.string.alerts_tappable_species_and_loot, "Tappables");
+
+    /** Read on every access, so a language switch shows at once. */
+    val title: String get() = AppText.get(titleRes)
 }
 
 internal val SPECIES_TARGETS = listOf(
@@ -236,7 +239,12 @@ internal fun SpeciesPickerContent(
     val queryKey = remember(searchQuery) { normalizeFilterToken(searchQuery) }
     val displayList = remember(normalizedCandidates, currentSelection.normalizedValues, queryKey, sortOrder, arts) {
         normalizedCandidates
-            .filter { (key, _) -> key.contains(queryKey) || dexOf(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) } }
+            // Searches the shown name too, so "Glurak" finds Charizard; the stored value stays English.
+            .filter { (key, value) ->
+                key.contains(queryKey) ||
+                    normalizeFilterToken(com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(value) ?: value).contains(queryKey) ||
+                    dexOf(key).let { it != Int.MAX_VALUE && it.toString().contains(queryKey) }
+            }
             .sortedWith(
                 compareByDescending<Pair<String, String>> { (key, _) -> key in currentSelection.normalizedValues }
                     .thenComparing { (key, _) ->
@@ -457,7 +465,7 @@ private fun SpeciesTile(
                 )
             }
             Text(
-                text = name,
+                text = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(name) ?: name,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

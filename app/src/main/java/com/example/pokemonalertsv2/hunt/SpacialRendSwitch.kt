@@ -39,7 +39,7 @@ internal fun SpacialRendSwitch(modifier: Modifier = Modifier) {
             Switch(
                 checked = enabled,
                 onCheckedChange = { on -> scope.launch { preferences.updateSpacialRendEnabled(on) } },
-                modifier = Modifier.semantics { contentDescription = "Spacial Rend active" }
+                modifier = Modifier.semantics { contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_spacial_rend_active) }
             )
         }
         Text(

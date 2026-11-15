@@ -535,14 +535,12 @@ internal fun SettingsBackupCard(snackbarHostState: SnackbarHostState) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
-            text = "Save your filters, species lists, exclusions, quiet hours and counter " +
-                "setup to a file, and restore them after a reinstall.",
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_backup_intro),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            text = "Sign-ins are not included — you will need to sign in to GoDex and " +
-                "Pokébattler again.",
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_backup_signins),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

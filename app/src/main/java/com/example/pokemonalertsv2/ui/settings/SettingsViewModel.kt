@@ -31,8 +31,6 @@ import com.example.pokemonalertsv2.data.SortPreference
 import com.example.pokemonalertsv2.data.NotificationPreset
 import com.example.pokemonalertsv2.data.NotificationContentPreferences
 import com.example.pokemonalertsv2.data.NotificationField
-import com.example.pokemonalertsv2.data.NotificationImageStyle
-import com.example.pokemonalertsv2.data.NotificationTitlePart
 import com.example.pokemonalertsv2.notifications.TestNotification
 import com.example.pokemonalertsv2.raidwatch.RaidWatchController
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
@@ -340,41 +338,29 @@ class SettingsViewModel(
     val notificationContent: StateFlow<NotificationContentPreferences> = preferences.notificationContent
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NotificationContentPreferences())
 
-    fun updateNotificationField(category: FilterAlertType, expanded: Boolean, field: NotificationField, enabled: Boolean) {
+    /** Applies one edit to the notification layouts; Raid Watch redraws with it straight away. */
+    fun editNotificationContent(change: (NotificationContentPreferences) -> NotificationContentPreferences) {
         viewModelScope.launch {
-            preferences.updateNotificationContent { it.withField(category, expanded, field, enabled) }
+            preferences.updateNotificationContent(change)
             RaidWatchController.refresh(getApplication())
         }
     }
 
-    fun updateNotificationImageStyle(category: FilterAlertType, style: NotificationImageStyle) {
+    fun updateNotificationField(category: FilterAlertType, expanded: Boolean, field: NotificationField, enabled: Boolean) =
+        editNotificationContent { it.withField(category, expanded, field, enabled) }
+
+    /**
+     * Posts a sample alert through the real notification builder; [onResult] is false without
+     * permission. A null [category] tests the shared default layout on a type that follows it.
+     */
+    fun sendTestNotification(category: FilterAlertType?, inRange: Boolean, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            preferences.updateNotificationContent { it.withImageStyle(category, style) }
-            RaidWatchController.refresh(getApplication())
+            val type = category ?: FilterAlertType.SPAWN
+            val content = if (category == null) notificationContent.value.reset(type) else notificationContent.value
+            onResult(TestNotification.post(getApplication(), type, inRange, content))
         }
     }
 
-    fun updateNotificationTitlePart(category: FilterAlertType, part: NotificationTitlePart, enabled: Boolean) {
-        viewModelScope.launch {
-            preferences.updateNotificationContent { it.withTitlePart(category, part, enabled) }
-            RaidWatchController.refresh(getApplication())
-        }
-    }
-
-    /** Posts a sample alert through the real notification builder; [onResult] is false without permission. */
-    fun sendTestNotification(category: FilterAlertType, inRange: Boolean, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            onResult(TestNotification.post(getApplication(), category, inRange, notificationContent.value))
-        }
-    }
-
-    fun resetNotificationContent(category: FilterAlertType) {
-        viewModelScope.launch {
-            preferences.updateNotificationContent { it.reset(category) }
-            RaidWatchController.refresh(getApplication())
-        }
-    }
-    
     val raidsNotifications: StateFlow<Boolean> = preferences.raidsNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     
@@ -631,6 +617,58 @@ class SettingsViewModel(
     }
 
     //region Filters hub — per-surface category selections with a shared live tally.
+
+    /** Makes another filter set active: feed, map, notifications and following widgets switch together. */
+    fun activateFilterSet(id: String) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { it.activateSet(id) }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    /** Adds a set copied from the active one, or one that shows everything, and switches to it. */
+    fun createFilterSet(name: String, copyActive: Boolean) {
+        val id = "set-" + java.util.UUID.randomUUID().toString()
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document ->
+                val created = document.createSet(name, id, from = if (copyActive) document.activeSet else null)
+                created.activateSet(id)
+            }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    fun renameFilterSet(id: String, name: String) {
+        viewModelScope.launch { preferences.updateFilterStateDocument { it.renameSet(id, name) } }
+    }
+
+    fun deleteFilterSet(id: String) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { it.deleteSet(id) }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    /** Copies another surface's filter of the active set onto [surface]. */
+    fun copySurfaceFilter(from: FilterSurface, to: FilterSurface) {
+        viewModelScope.launch {
+            preferences.updateFilterStateDocument { document -> document.withAssignment(to, document.assignment(from)) }
+            AlertsWidgetProvider.requestUpdate(getApplication())
+        }
+    }
+
+    /** A widget either follows the active set's widget filter or keeps a filter of its own. */
+    fun setWidgetFollowsSet(widgetId: Int, follow: Boolean) {
+        val context = getApplication<Application>()
+        viewModelScope.launch {
+            val store = com.example.pokemonalertsv2.widget.WidgetConfigurationStore
+            val configuration = store.get(context, widgetId)
+            // Leaving the set starts from what the widget showed, so nothing jumps.
+            val own = configuration.filterAssignment ?: FilterAssignment.local(filterStateDocument.value.widgets.resolve(filterStateDocument.value))
+            store.save(context, widgetId, configuration.copy(followSet = follow, filterAssignment = own))
+            AlertsWidgetProvider.requestUpdate(context)
+        }
+    }
 
     fun applySurfaceFilter(surface: FilterSurface, definition: FilterDefinition) {
         viewModelScope.launch {

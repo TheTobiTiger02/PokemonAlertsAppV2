@@ -90,16 +90,19 @@ import androidx.compose.runtime.setValue
 // the summary rows that open them, the Generate bar, and the slimmer route and walking cards.
 
 /** The planner's editor pages. Rows and Map + sheet reach them from rows; Steps from its steps. */
-internal enum class PlanPage(val title: String) {
-    ROOT(AppText.get(R.string.catchroutes_plan_a_route)),
-    START(AppText.get(R.string.catchroutes_start)),
-    FINISH(AppText.get(R.string.onboarding_finish)),
-    AREA(AppText.get(R.string.hunt_area)),
-    WHEN(AppText.get(R.string.catchroutes_when)),
-    SUGGEST(AppText.get(R.string.catchroutes_let_the_app_choose)),
-    INCLUDES(AppText.get(R.string.catchroutes_includes)),
-    ADVANCED(AppText.get(R.string.catchroutes_advanced)),
-    SAVED(AppText.get(R.string.catchroutes_saved_routes))
+internal enum class PlanPage(private val titleRes: Int) {
+    ROOT(R.string.catchroutes_plan_a_route),
+    START(R.string.catchroutes_start),
+    FINISH(R.string.onboarding_finish),
+    AREA(R.string.hunt_area),
+    WHEN(R.string.catchroutes_when),
+    SUGGEST(R.string.catchroutes_let_the_app_choose),
+    INCLUDES(R.string.catchroutes_includes),
+    ADVANCED(R.string.catchroutes_advanced),
+    SAVED(R.string.catchroutes_saved_routes);
+
+    /** Read on every access, so a language switch shows at once. */
+    val title: String get() = AppText.get(titleRes)
 }
 
 /** What the planner shows: the route being planned or walked, and the clock that ages it. */

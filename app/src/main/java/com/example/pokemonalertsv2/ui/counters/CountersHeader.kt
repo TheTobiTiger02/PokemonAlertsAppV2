@@ -147,8 +147,7 @@ internal fun SourceSelector(
     if (!hasPersonalSource && showHint) {
         // The disabled segment looked like any unselected tab and gave no reason.
         Text(
-            text = "To rank your own Pokémon, import a Poké Genie CSV or sign in to Pokébattler " +
-                "in Settings › Raid counters.",
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_counters_personal_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp)

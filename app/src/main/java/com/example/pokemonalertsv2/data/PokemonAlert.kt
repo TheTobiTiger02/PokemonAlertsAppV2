@@ -21,6 +21,26 @@ data class PvpRanking(
     val percentage: Double? = null
 )
 
+/** Game ids of a raid boss's moves, next to their English names in [PokemonMoves]. */
+@Serializable
+data class MoveIds(val fast: Int? = null, val charged: Int? = null)
+
+/** Sentences that cannot be looked up by name, rendered by the backend per language. */
+@Serializable
+data class AlertTranslation(val questTask: String? = null, val questReward: String? = null)
+
+/** The game ids and translations of one alert, stored as one JSON column. */
+@Serializable
+data class AlertGameIds(
+    val formId: Int? = null,
+    val raidLevel: Int? = null,
+    val moveIds: MoveIds? = null,
+    val gruntTypeId: Int? = null,
+    val i18n: Map<String, AlertTranslation>? = null
+) {
+    val isEmpty: Boolean get() = formId == null && raidLevel == null && moveIds == null && gruntTypeId == null && i18n.isNullOrEmpty()
+}
+
 /**
  * Represents Pokemon moves (fast and charged attacks).
  */
@@ -205,7 +225,15 @@ data class PokemonAlert(
     /** The server id of the live sighting this full alert replaced. */
     val replacesAlertId: Int? = null,
     /** True for a species-only sighting from the backend's map collector (typed Common, no IV). */
-    val live: Boolean? = null
+    val live: Boolean? = null,
+
+    // Game ids next to the English names, so the app can show them in another language.
+    val formId: Int? = null,
+    val raidLevel: Int? = null,
+    val moveIds: MoveIds? = null,
+    val gruntTypeId: Int? = null,
+    /** Text the backend rendered in other languages, keyed by language ("de"). */
+    val i18n: Map<String, AlertTranslation>? = null
 ) {
     /**
      * Stable local identity used as the Room primary key. Prefers the server id

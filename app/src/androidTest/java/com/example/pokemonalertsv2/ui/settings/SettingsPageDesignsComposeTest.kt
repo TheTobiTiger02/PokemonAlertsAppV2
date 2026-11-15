@@ -67,27 +67,36 @@ class SettingsPageDesignsComposeTest {
         show()
         composeRule.onNodeWithTag("settings_notification_content").performScrollTo().performClick()
         composeRule.onNodeWithTag("notification_category_RAID").performScrollTo().performClick()
-        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsSelected().performClick()
+        composeRule.onNodeWithTag("notification_tab_COLLAPSED").performClick()
+        composeRule.onNodeWithTag("notification_remove_WEATHER").performScrollTo().performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { NotificationField.WEATHER !in preferences.notificationContent.first().fields(FilterAlertType.RAID, false) }
         }
-        composeRule.onNodeWithTag("notification_view_expanded").performScrollTo().performClick()
-        composeRule.onNodeWithTag("notification_field_WEATHER").performScrollTo().assertIsSelected()
+        // Collapsed and expanded are separate lists.
+        composeRule.onNodeWithTag("notification_tab_EXPANDED").performClick()
+        composeRule.onNodeWithTag("notification_shown_WEATHER").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithTag("notification_preview_body", useUnmergedTree = true).assertTextContains("320 m", substring = true)
+        // Linking a row puts it on the line above.
+        composeRule.onNodeWithTag("notification_join_TIME_LEFT").performScrollTo().performClick()
+        composeRule.waitUntil(5_000) {
+            runBlocking { preferences.notificationContent.first().expandedLines(FilterAlertType.RAID).any { NotificationField.TIME_LEFT in it && it.size > 1 } }
+        }
+        composeRule.onNodeWithTag("notification_tab_PICTURE").performClick()
         composeRule.onNodeWithTag("notification_image_NONE").performScrollTo().performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { preferences.notificationContent.first().imageStyle(FilterAlertType.RAID) == com.example.pokemonalertsv2.data.NotificationImageStyle.NONE }
         }
-        composeRule.onNodeWithTag("notification_title_VENUE").performScrollTo().performClick()
+        composeRule.onNodeWithTag("notification_tab_TITLE").performClick()
+        composeRule.onNodeWithTag("notification_add_VENUE").performScrollTo().performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { com.example.pokemonalertsv2.data.NotificationTitlePart.VENUE in preferences.notificationContent.first().titleParts(FilterAlertType.RAID) }
         }
-        composeRule.onAllNodesWithTag("notification_preview_in_range").assertCountEquals(0)
-        composeRule.onNodeWithTag("notification_content_reset").performScrollTo().performClick()
+        composeRule.onNodeWithTag("notification_layout_menu").performClick()
+        composeRule.onNodeWithTag("notification_content_reset").performClick()
         composeRule.waitUntil(5_000) {
             runBlocking { preferences.notificationContent.first() == NotificationContentPreferences() }
         }
-        // The preview and the test button are pinned above the scrolling choices.
+        // The preview and the test button are pinned above the scrolling lists.
         composeRule.onNodeWithTag("notification_preview_state_in_range").assertIsDisplayed()
         composeRule.onNodeWithTag("notification_test_send").assertIsDisplayed()
         com.example.pokemonalertsv2.notifications.captureNotificationProof(app, "content-settings")

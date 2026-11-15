@@ -15,11 +15,14 @@ data class NotificationCategoryState(
     val rocket: Boolean
 )
 
-enum class NotificationPreset(val label: String) {
-    EVERYTHING(AppText.get(R.string.data_everything)),
-    HIGH_VALUE(AppText.get(R.string.data_high_value_catches)),
-    QUIET_ESSENTIALS(AppText.get(R.string.data_quiet_essentials)),
-    CUSTOM(AppText.get(R.string.alerts_custom));
+enum class NotificationPreset(private val labelRes: Int) {
+    EVERYTHING(R.string.data_everything),
+    HIGH_VALUE(R.string.data_high_value_catches),
+    QUIET_ESSENTIALS(R.string.data_quiet_essentials),
+    CUSTOM(R.string.alerts_custom);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 
     fun categories(): NotificationCategoryState? = when (this) {
         EVERYTHING -> NotificationCategoryState(true, true, true, true, true, true, true, true)

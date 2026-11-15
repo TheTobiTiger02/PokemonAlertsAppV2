@@ -363,7 +363,7 @@ internal fun MovesCard(moves: PokemonMoves) {
                         )
                     }
                     Text(
-                        text = fast,
+                        text = com.example.pokemonalertsv2.data.gametext.GameNames.move(fast) ?: fast,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -390,7 +390,7 @@ internal fun MovesCard(moves: PokemonMoves) {
                         )
                     }
                     Text(
-                        text = charged,
+                        text = com.example.pokemonalertsv2.data.gametext.GameNames.move(charged) ?: charged,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -472,7 +472,7 @@ internal fun LocationCard(alert: PokemonAlert) {
                                 String.format(java.util.Locale.ROOT, "%.6f, %.6f", alert.latitude, alert.longitude)
                             )
                         )
-                        android.widget.Toast.makeText(context, "Coordinates copied", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(context, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_coordinates_copied), android.widget.Toast.LENGTH_SHORT).show()
                     },
                     contentPadding = PaddingValues(horizontal = 0.dp)
                 ) {
@@ -577,7 +577,7 @@ internal fun RocketCard(
                     )
                     if (gruntType?.isNotBlank() == true) {
                         Text(
-                            text = gruntType,
+                            text = com.example.pokemonalertsv2.data.gametext.GameNames.grunt(gruntType) ?: gruntType,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium

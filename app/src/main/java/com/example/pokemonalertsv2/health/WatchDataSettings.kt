@@ -48,7 +48,7 @@ fun WatchDataSettings() {
         connected = availability == HealthDataReader.Availability.AVAILABLE && reader.isConnected()
     }
     val unavailable = {
-        android.widget.Toast.makeText(context, "Health Connect could not be opened on this phone", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(context, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_health_connect_unavailable), android.widget.Toast.LENGTH_LONG).show()
     }
     fun start(intent: android.content.Intent) = try { context.startActivity(intent) } catch (_: ActivityNotFoundException) { unavailable() }
 

@@ -4,6 +4,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.FilterAlertType
 import com.example.pokemonalertsv2.data.NotificationContentPreferences
 import com.example.pokemonalertsv2.data.NotificationField
+import com.example.pokemonalertsv2.data.NotificationFieldStyle
 import com.example.pokemonalertsv2.data.NotificationTitlePart
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.PokemonAlert
@@ -41,48 +42,55 @@ internal data class NotificationContent(
     val showCountdown: Boolean
 )
 
-/** The same field selection is used by native notifications and the Settings previews. */
+/** The same layout is used by native notifications and the Settings previews. */
 internal fun renderNotificationContent(
     input: NotificationContentInput,
     preferences: NotificationContentPreferences = NotificationContentPreferences()
 ): NotificationContent {
     val alert = input.alert
     val category = notificationContentCategory(alert)
-    val titleParts = preferences.titleParts(category)
+    val titleOrder = preferences.titleOrder(category)
     // A fact already in the title is not repeated underneath it.
-    val inTitle = TITLE_FIELDS.filterKeys { it in titleParts }.values.toSet()
-    val collapsedFields = preferences.fields(category, expanded = false)
-    val expandedFields = preferences.fields(category, expanded = true)
+    val inTitle = TITLE_FIELDS.filterKeys { it in titleOrder }.values.toSet()
+    val collapsedOrder = preferences.collapsedOrder(category)
+    val expandedLines = preferences.expandedLines(category)
+    val collapsedFields = collapsedOrder.toSet()
+    val expandedFields = expandedLines.flatten().toSet()
     val remaining = input.endMillis?.minus(input.nowMillis)
     val values = notificationFieldValues(input, remaining)
 
-    fun lines(selected: Set<NotificationField>, expanded: Boolean): List<String> {
-        val fields = selected - inTitle
-        // "In range" stands in for the travel details, so it follows their selection.
-        val status = buildList {
-            input.status.clean()?.let(::add)
-            if (input.inRange && fields.any { it in TRAVEL_FIELDS }) add(AppText.get(R.string.alerts_in_range))
-            if (remaining != null && remaining <= 0) {
-                add(AppText.get(if (category == FilterAlertType.RAID) R.string.raidwatch_raid_ended else R.string.notification_content_ended))
-            }
-        }.distinct()
-        val order = if (input.raidWatch && expanded) {
-            listOf(NotificationField.TEAM) + NotificationField.entries.filterNot { it == NotificationField.TEAM }
-        } else NotificationField.entries
-        val detail = order.filter { it in fields }.mapNotNull { field ->
-            if (input.inRange && field in TRAVEL_FIELDS) null else values[field].clean()
-        }
-        val team = values[NotificationField.TEAM].clean()
-        val ordered = if (input.raidWatch && expanded && NotificationField.TEAM in fields && team != null) {
-            listOf(team) + status + detail.filterNot { it == team }
-        } else status + detail
-        return ordered.distinct().ifEmpty { listOf(category.label) }
+    fun text(field: NotificationField): String? {
+        if (input.inRange && field in TRAVEL_FIELDS) return null
+        val value = values[field] ?: return null
+        return value.styled(field, preferences.style(category, field))
     }
 
+    // "In range" stands in for the travel details, so it follows their selection.
+    fun status(fields: Set<NotificationField>): List<String> = buildList {
+        input.status.clean()?.let(::add)
+        if (input.inRange && fields.any { it in TRAVEL_FIELDS }) add(AppText.get(R.string.alerts_in_range))
+        if (remaining != null && remaining <= 0) {
+            add(AppText.get(if (category == FilterAlertType.RAID) R.string.raidwatch_raid_ended else R.string.notification_content_ended))
+        }
+    }.distinct()
+
+    val collapsed = (status(collapsedFields - inTitle) + collapsedOrder.filterNot { it in inTitle }.mapNotNull(::text))
+        .distinct().ifEmpty { listOf(category.label) }
+
+    val lines = expandedLines.mapNotNull { line ->
+        line.filterNot { it in inTitle }.mapNotNull(::text).distinct().joinToString(" • ").clean()
+    }
+    // Raid Watch leads with the suggested team, unless the user ordered the lines themselves.
+    val team = if (NotificationField.TEAM in expandedFields - inTitle) text(NotificationField.TEAM) else null
+    val leadWithTeam = input.raidWatch && team != null && !preferences.hasCustomExpandedOrder(category)
+    val expandedStatus = status(expandedFields - inTitle)
+    val expanded = (if (leadWithTeam) listOf(team!!) + expandedStatus + lines.filterNot { it == team }
+        else expandedStatus + lines).distinct().ifEmpty { listOf(category.label) }
+
     return NotificationContent(
-        title = notificationTitle(alert, titleParts, input.goDexStatus),
-        collapsed = lines(collapsedFields, expanded = false).joinToString(" • ") { it.replace(WHITESPACE, " ") },
-        expanded = lines(expandedFields, expanded = true).joinToString("\n"),
+        title = notificationTitle(alert, titleOrder, input.goDexStatus),
+        collapsed = collapsed.joinToString(" • ") { it.replace(WHITESPACE, " ") },
+        expanded = expanded.joinToString("\n"),
         chip = notificationChip(input, collapsedFields, remaining),
         showCountdown = NotificationField.TIME_LEFT in collapsedFields && NotificationField.TIME_LEFT in expandedFields
     )
@@ -91,7 +99,7 @@ internal fun renderNotificationContent(
 /** Optional facts live in the selected details, so a title cannot leak a hidden field. */
 internal fun notificationIdentity(alert: PokemonAlert): String {
     val category = notificationContentCategory(alert)
-    val name = alert.pokemon.clean() ?: alert.cleanPokemonName.clean() ?: category.label
+    val name = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.pokemon.clean() ?: alert.cleanPokemonName.clean(), alert.pokedexId).clean() ?: category.label
     return when (category) {
         FilterAlertType.RAID -> AppText.get(R.string.notification_content_raid_title, name)
         FilterAlertType.QUEST -> AppText.get(R.string.notification_content_research)
@@ -105,7 +113,7 @@ internal fun notificationIdentity(alert: PokemonAlert): String {
 /** Builds the title from the selected parts, e.g. "🎯 Hundo · Pikachu" or "5★ Raid · Mewtwo". */
 internal fun notificationTitle(
     alert: PokemonAlert,
-    parts: Set<NotificationTitlePart>,
+    parts: Collection<NotificationTitlePart>,
     goDexStatus: GoDexMatchStatus? = null
 ): String {
     val category = notificationContentCategory(alert)
@@ -117,7 +125,8 @@ internal fun notificationTitle(
         GoDexMatchStatus.EVOLUTION_AND_FORM_CHANGE_NEEDED -> "🧬"
         else -> null
     }?.takeIf { NotificationTitlePart.GODEX_MARKER in parts }
-    val segments = NotificationTitlePart.entries.filter { it in parts }.mapNotNull { part ->
+    // The GoDex marker always leads; every other part follows the user's order.
+    val segments = parts.distinct().mapNotNull { part ->
         when (part) {
             NotificationTitlePart.GODEX_MARKER -> null
             NotificationTitlePart.CATEGORY -> notificationCategoryTag(alert, category)
@@ -152,16 +161,16 @@ internal fun notificationCategoryTag(alert: PokemonAlert, category: FilterAlertT
 
 /** What the alert is about: the Pokémon, the quest reward or the grunt type. */
 private fun notificationSubject(alert: PokemonAlert, category: FilterAlertType): String? {
-    val name = alert.pokemon.clean() ?: alert.cleanPokemonName.clean()
+    val name = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.pokemon.clean() ?: alert.cleanPokemonName.clean(), alert.pokedexId).clean()
     if (alert.isSpeciesReplacement) {
-        val old = alert.oldSpecies.clean()
-        val new = alert.newSpecies.clean()
+        val old = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.oldSpecies.clean()).clean()
+        val new = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.newSpecies.clean()).clean()
         if (old != null && new != null) return "$old → $new"
     }
     return when (category) {
         FilterAlertType.QUEST -> questAlertPresentation(alert)?.reward.clean() ?: alert.questReward.clean()
             ?: AppText.get(R.string.notification_content_research)
-        FilterAlertType.ROCKET -> alert.gruntType.clean()?.replaceFirstChar { it.uppercaseChar() }
+        FilterAlertType.ROCKET -> com.example.pokemonalertsv2.data.gametext.GameNames.grunt(alert.gruntType.clean(), alert.gruntTypeId).clean()?.replaceFirstChar { it.uppercaseChar() }
             ?.let { AppText.get(R.string.notification_content_grunt, it) }
             ?: AppText.get(R.string.alerts_team_go_rocket)
         FilterAlertType.KECLEON -> "Kecleon"
@@ -178,7 +187,26 @@ private val TITLE_FIELDS = mapOf(
 private val TRAVEL_FIELDS = setOf(NotificationField.DISTANCE, NotificationField.WALKING_TIME)
 private val WHITESPACE = Regex("\\s+")
 
-private fun notificationFieldValues(input: NotificationContentInput, remaining: Long?): Map<NotificationField, String?> {
+/**
+ * One detail, written two ways: [standard] is the wording the app has always
+ * used ("CP 2500"), [value] is the bare fact ("2500") that the Value, Label
+ * and Icon styles build on.
+ */
+private data class FieldText(val standard: String, val value: String)
+
+private fun FieldText.styled(field: NotificationField, style: NotificationFieldStyle): String = when (style) {
+    NotificationFieldStyle.STANDARD -> standard
+    NotificationFieldStyle.VALUE -> value
+    NotificationFieldStyle.LABEL -> AppText.get(R.string.notification_style_label_format, AppText.get(field.shortLabelRes), value)
+    NotificationFieldStyle.ICON -> "${field.icon} $value"
+}
+
+private fun fieldText(standard: String?, value: String? = standard): FieldText? {
+    val shown = standard.clean() ?: return null
+    return FieldText(shown, value.clean() ?: shown)
+}
+
+private fun notificationFieldValues(input: NotificationContentInput, remaining: Long?): Map<NotificationField, FieldText?> {
     val alert = input.alert
     val quest = questAlertPresentation(alert)
     val weather = if (alert.isWeatherChange) weatherTransitionLabel(alert) else {
@@ -190,32 +218,46 @@ private fun notificationFieldValues(input: NotificationContentInput, remaining: 
     val bestRanking = alert.pvpRankings.orEmpty().filter { (it.rank ?: 0) > 0 }.minByOrNull { it.rank!! }
     val reward = quest?.reward ?: alert.questReward.clean() ?: alert.pokemonRewards.orEmpty()
         .mapNotNull { it.pokemon.clean() }.joinToString(", ").clean()
+    val iv = (if (alert.isWeatherChange) alert.newIv else alert.formattedIv).clean()
+    val grunt = com.example.pokemonalertsv2.data.gametext.GameNames.grunt(alert.gruntType.clean(), alert.gruntTypeId).clean()
+    val live = remaining?.takeIf { it > 0 }
+    val arRequired = alert.requiresAR == true
     return mapOf(
-        NotificationField.WEATHER to weather,
-        NotificationField.DISTANCE to listOfNotNull(input.rangeHint.clean(), input.distanceText.clean())
-            .joinToString(" • ").clean(),
-        NotificationField.WALKING_TIME to input.walkingText,
-        NotificationField.TIME_LEFT to remaining?.takeIf { it > 0 }?.let {
-            if (it < 60_000L) AppText.get(R.string.countdown_short_prefix, TimeUtils.formatDurationShort(it))
-            else AppText.get(R.string.notification_content_minutes_left, (it + 59_999L) / 60_000L)
+        NotificationField.WEATHER to fieldText(weather),
+        NotificationField.DISTANCE to fieldText(
+            listOfNotNull(input.rangeHint.clean(), input.distanceText.clean()).joinToString(" • ").clean(),
+            input.distanceText
+        ),
+        NotificationField.WALKING_TIME to fieldText(input.walkingText),
+        NotificationField.TIME_LEFT to live?.let {
+            fieldText(
+                if (it < 60_000L) AppText.get(R.string.countdown_short_prefix, TimeUtils.formatDurationShort(it))
+                else AppText.get(R.string.notification_content_minutes_left, (it + 59_999L) / 60_000L),
+                if (it < 60_000L) TimeUtils.formatDurationShort(it)
+                else AppText.get(R.string.notification_content_minutes, (it + 59_999L) / 60_000L)
+            )
         },
-        NotificationField.CP to alert.displayCp?.let { AppText.get(R.string.notification_content_cp, it) },
-        NotificationField.CATCH_CP to buildPipCpText(alert),
-        NotificationField.IV to (if (alert.isWeatherChange) alert.newIv else alert.formattedIv).clean()
-            ?.let { AppText.get(R.string.notification_content_iv, it) },
-        NotificationField.FORM to alert.pokemonForm,
-        NotificationField.PVP_RANK to bestRanking?.let { "${it.league.orEmpty()} #${it.rank}".trim() },
-        NotificationField.VENUE to (alert.gym.clean() ?: alert.pokestop.clean() ?: alert.pokemonLocation.clean()),
-        NotificationField.AREA to alert.area,
-        NotificationField.TASK to (quest?.task ?: alert.questTask),
-        NotificationField.REWARD to reward?.let { AppText.get(R.string.notification_content_reward, it) },
-        NotificationField.AR to AppText.get(R.string.notification_content_ar_required).takeIf { alert.requiresAR == true },
-        NotificationField.GRUNT to alert.gruntType.clean()?.let { AppText.get(R.string.notification_content_grunt, it) },
-        NotificationField.MOVES to alert.moves?.formatted(),
-        NotificationField.GODEX to input.goDexText,
-        NotificationField.TEAM to input.teamText.takeIf { input.raidWatch },
-        NotificationField.DESCRIPTION to alert.description.clean()
-            ?.takeUnless { it == alert.type?.joinToString(", ") }
+        NotificationField.CP to alert.displayCp?.let { fieldText(AppText.get(R.string.notification_content_cp, it), it.toString()) },
+        NotificationField.CATCH_CP to fieldText(buildPipCpText(alert), compactCatchCpText(alert)),
+        NotificationField.IV to iv?.let { fieldText(AppText.get(R.string.notification_content_iv, it), it) },
+        NotificationField.FORM to fieldText(com.example.pokemonalertsv2.data.gametext.GameNames.form(alert.pokemonForm, alert.formId)),
+        NotificationField.PVP_RANK to fieldText(bestRanking?.let { "${it.league.orEmpty()} #${it.rank}".trim() }),
+        NotificationField.VENUE to fieldText(alert.gym.clean() ?: alert.pokestop.clean() ?: alert.pokemonLocation.clean()),
+        NotificationField.AREA to fieldText(alert.area),
+        NotificationField.TASK to fieldText(quest?.task ?: alert.questTask),
+        NotificationField.REWARD to reward?.let { fieldText(AppText.get(R.string.notification_content_reward, it), it) },
+        NotificationField.AR to fieldText(
+            AppText.get(R.string.notification_content_ar_required).takeIf { arRequired },
+            AppText.get(R.string.notification_content_ar_value).takeIf { arRequired }
+        ),
+        NotificationField.GRUNT to grunt?.let { fieldText(AppText.get(R.string.notification_content_grunt, it), it) },
+        NotificationField.MOVES to fieldText(with(com.example.pokemonalertsv2.data.gametext.GameNames) { moves(alert.moves?.fast, alert.moves?.charged, alert.moveIds?.fast, alert.moveIds?.charged) }
+            .let { (fast, charged) -> listOfNotNull(fast, charged).takeIf { it.isNotEmpty() }?.joinToString(" / ") }),
+        NotificationField.GODEX to fieldText(input.goDexText),
+        NotificationField.TEAM to fieldText(input.teamText.takeIf { input.raidWatch }),
+        NotificationField.DESCRIPTION to fieldText(
+            alert.description.clean()?.takeUnless { it == alert.type?.joinToString(", ") }
+        )
     )
 }
 

@@ -37,10 +37,13 @@ import androidx.compose.animation.core.tween
  * The views that share the Alerts tab. [INSIGHTS] is not a segment of the switch: it opens from
  * a button on the history screen and has its own back arrow.
  */
-enum class AlertsSection(val label: String) {
-    LIVE(AppText.get(R.string.alerts_live)),
-    HISTORY(AppText.get(R.string.alerts_history)),
-    INSIGHTS(AppText.get(R.string.alerts_insights))
+enum class AlertsSection(private val labelRes: Int) {
+    LIVE(R.string.alerts_live),
+    HISTORY(R.string.alerts_history),
+    INSIGHTS(R.string.alerts_insights);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 /** The two sections the Live | History switch offers, in display order. */

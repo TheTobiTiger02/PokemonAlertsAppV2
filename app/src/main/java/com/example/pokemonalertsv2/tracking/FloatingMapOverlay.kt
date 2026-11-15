@@ -143,9 +143,9 @@ internal class FloatingMapOverlay(context: Context) {
     /** Repaints the Follow button when following starts or stops. */
     private var followView: ((Boolean) -> Unit)? = null
     private var guidanceViews: OverlayChrome.GuidanceViews? = null
-    private var guidanceTitle = "Hunting"
+    private var guidanceTitle = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_hunting)
     private var guidanceDetail = ""
-    private var readout = "Hunting"
+    private var readout = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_hunting)
 
     /** The bubble's ring colour (the target's category) and whether it shows artwork. */
     private var bubbleAccent: Int? = null
@@ -696,7 +696,7 @@ internal class FloatingMapOverlay(context: Context) {
             icon.setPadding(inset, inset, inset, inset)
         }
         paintBubbleIcon()
-        icon.contentDescription = alert?.let { "Hunting ${it.pokemon ?: it.name}" } ?: "Hunt map"
+        icon.contentDescription = alert?.let { "Hunting ${it.pokemon ?: it.name}" } ?: com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_hunt_map)
     }
 
     /** The short line under the bubble: a distance, "In range", or what the hunt is doing. */
@@ -861,14 +861,14 @@ internal class FloatingMapOverlay(context: Context) {
             noticeText = this
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         addView(TextView(themedContext).apply {
-            text = "UNDO"
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_undo)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setTypeface(typeface, Typeface.BOLD)
             paint { setTextColor(it.primary) }
             setPadding(dp(10), dp(4), dp(10), dp(4))
             background = selectableBackground()
             isClickable = true
-            contentDescription = "Undo catch"
+            contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_undo_catch)
             setOnClickListener { onUndo() }
             undoAction = this
         })
@@ -895,7 +895,7 @@ internal class FloatingMapOverlay(context: Context) {
                     progressTintList = ColorStateList.valueOf(it.primary)
                     thumbTintList = ColorStateList.valueOf(it.primary)
                 }
-                contentDescription = "Map opacity"
+                contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_map_opacity)
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
                         if (!fromUser) return
@@ -1033,7 +1033,7 @@ internal class FloatingMapOverlay(context: Context) {
             setImageResource(R.drawable.ic_map)
             val inset = dp(14)
             setPadding(inset, inset, inset, inset)
-            contentDescription = "Hunt map"
+            contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_hunt_map)
             bubbleIcon = this
         }, FrameLayout.LayoutParams(circle, circle).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -1054,7 +1054,7 @@ internal class FloatingMapOverlay(context: Context) {
                 (background as? GradientDrawable)?.setColor(colors.label)
             }
             elevation = dp(5).toFloat()
-            text = "Hunting"
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_hunting)
             bubbleLabel = this
         }, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
