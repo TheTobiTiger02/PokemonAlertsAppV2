@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -49,68 +50,332 @@ import com.example.pokemonalertsv2.data.*
 import com.example.pokemonalertsv2.ui.alerts.AREA_FILTER_OPTIONS
 import com.example.pokemonalertsv2.widget.*
 
+/**
+ * The Filter Studio hub: the active filter set on top, then one card per place
+ * that filters (Feed, Map, Notifications, Widgets) in the same layout, then the
+ * reusable profiles. Each card says in plain words where its rules come from.
+ */
 @Composable
 internal fun FiltersHubContent(
     viewModel: SettingsViewModel,
     onOpenFullNotificationSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val document by viewModel.filterStateDocument.collectAsStateWithLifecycle()
     val counts by viewModel.filterPreviewCounts.collectAsStateWithLifecycle()
     val requestedEditor by viewModel.requestedFilterEditor.collectAsStateWithLifecycle()
     var editing by rememberSaveable { mutableStateOf<String?>(null) }
-    var showWidgets by rememberSaveable { mutableStateOf(false) }
+    var choosingSet by rememberSaveable { mutableStateOf(false) }
+    var managingSets by rememberSaveable { mutableStateOf(false) }
+    var profileTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var savingFrom by rememberSaveable { mutableStateOf<String?>(null) }
+    var showProfiles by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(requestedEditor) {
         requestedEditor?.let { editing = it.name; viewModel.consumeRequestedFilterEditor() }
     }
+    val profiles = BuiltInFilterProfiles.all + document.profiles
+    val activeSet = document.activeSet
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.settings_filter_studio), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(stringResource(R.string.settings_each_surface_has_its_own_rules), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.filter_hub_intro), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ActiveSetCard(
+            name = activeSet.name,
+            setCount = document.allSets().size,
+            onSwitch = { choosingSet = true },
+            onManage = { managingSets = true }
+        )
         FilterSurface.entries.forEach { surface ->
             val assignment = document.assignment(surface)
-            val profileName = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == assignment.profileId }?.name
-            SurfaceSummaryCard(surface, assignment, assignment.resolve(document), counts[surface] ?: 0, profileName) { editing = surface.name }
+            SurfaceCard(
+                surface = surface,
+                definition = assignment.resolve(document),
+                profileName = profiles.firstOrNull { it.id == assignment.profileId }?.name?.takeIf { assignment.mode == FilterAssignmentMode.LINKED },
+                matchCount = counts[surface] ?: 0,
+                onEdit = { editing = surface.name },
+                onCopyFrom = { from -> viewModel.copySurfaceFilter(from, surface) },
+                onUseProfile = { profileTarget = surface.name },
+                onSaveProfile = { savingFrom = surface.name }
+            ) {
+                if (surface == FilterSurface.WIDGETS) PlacedWidgets(viewModel)
+            }
         }
-        SummaryCard(stringResource(R.string.settings_widgets), "Independent rules per widget • sorting stays with each widget", Icons.Default.Settings, null) { showWidgets = !showWidgets }
-        AnimatedVisibility(showWidgets) { WidgetFiltersSection() }
+        ProfilesCard(
+            profiles = document.profiles,
+            usage = { document.consumerCount(it) },
+            onOpen = { showProfiles = true }
+        )
         TextButton(onClick = onOpenFullNotificationSettings) {
             Icon(Icons.Default.Notifications, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.settings_notification_delivery_quiet_hours_and_vibration))
         }
     }
     editing?.let { name -> FilterSurface.entries.firstOrNull { it.name == name }?.let { FilterStudioDialog(it, viewModel) { editing = null } } }
+    if (choosingSet) SetPickerDialog(
+        sets = document.allSets(),
+        activeId = activeSet.id,
+        onDismiss = { choosingSet = false },
+        onChoose = { set ->
+            choosingSet = false
+            viewModel.activateFilterSet(set.id)
+            android.widget.Toast.makeText(context, AppText.get(R.string.filter_sets_switched, set.name), android.widget.Toast.LENGTH_SHORT).show()
+        }
+    )
+    if (managingSets) ManageSetsDialog(
+        sets = document.allSets(),
+        activeId = activeSet.id,
+        onDismiss = { managingSets = false },
+        onCreate = viewModel::createFilterSet,
+        onRename = viewModel::renameFilterSet,
+        onDelete = viewModel::deleteFilterSet
+    )
+    profileTarget?.let { name ->
+        val surface = FilterSurface.valueOf(name)
+        ProfilePickerDialog(
+            document, { profileTarget = null },
+            onChoose = { profile, linked -> viewModel.applyProfile(surface, profile, linked); profileTarget = null },
+            onDelete = viewModel::deleteFilterProfile, onSave = viewModel::saveFilterProfile, widgetConsumers = viewModel::linkedWidgetConsumers
+        )
+    }
+    if (showProfiles) ProfilePickerDialog(
+        document, { showProfiles = false }, onChoose = null,
+        onDelete = viewModel::deleteFilterProfile, onSave = viewModel::saveFilterProfile, widgetConsumers = viewModel::linkedWidgetConsumers
+    )
+    savingFrom?.let { name ->
+        val surface = FilterSurface.valueOf(name)
+        NameDialog(stringResource(R.string.settings_save_profile), { savingFrom = null }) {
+            viewModel.saveFilterProfile(it, document.assignment(surface).resolve(document)); savingFrom = null
+        }
+    }
 }
 
 @Composable
-private fun SurfaceSummaryCard(surface: FilterSurface, assignment: FilterAssignment, definition: FilterDefinition, matchCount: Int, profileName: String?, onClick: () -> Unit) {
-    val typeSummary = when (definition.alertTypes.mode) {
-        FilterSelectionMode.ALL -> "All alert types"; FilterSelectionMode.NONE -> "No alert types"; FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_alert_type) else stringResource(R.string.hunt_x_alert_types, it) }
+private fun ActiveSetCard(name: String, setCount: Int, onSwitch: () -> Unit, onManage: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary) {
+                    Icon(Icons.Default.Star, null, Modifier.padding(12.dp).size(24.dp), tint = MaterialTheme.colorScheme.onPrimary)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.filter_sets_title), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("filter_set_active_name"))
+                    Text(stringResource(R.string.filter_sets_summary), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = onSwitch, enabled = setCount > 1, modifier = Modifier.testTag("filter_set_switch")) { Text(stringResource(R.string.filter_sets_switch)) }
+                OutlinedButton(onClick = onManage, modifier = Modifier.testTag("filter_set_manage")) { Text(stringResource(R.string.filter_sets_manage)) }
+            }
+        }
     }
-    val location = buildList {
-        if (definition.areas.mode == FilterSelectionMode.NONE) add(AppText.get(R.string.settings_no_areas))
-        if (definition.areas.mode == FilterSelectionMode.ONLY) add(definition.areas.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_area) else "$it areas" })
+}
+
+/** What a definition does, as a few short chips: types, place and extra rules. */
+@Composable
+private fun definitionChips(definition: FilterDefinition): List<String> {
+    val types = when (definition.alertTypes.mode) {
+        FilterSelectionMode.ALL -> stringResource(R.string.alerts_all)
+        FilterSelectionMode.NONE -> stringResource(R.string.alerts_none)
+        FilterSelectionMode.ONLY -> definition.alertTypes.selectedCount.let { if (it == 1) stringResource(R.string.settings_1_alert_type) else stringResource(R.string.hunt_x_alert_types, it) }
+    }
+    return buildList {
+        add(types)
+        add(definition.areaSummary())
         if (definition.maxDistanceMeters > 0) add(distanceLabel(definition.maxDistanceMeters))
-        definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) stringResource(R.string.settings_1_distance_override) else stringResource(R.string.settings_x_distance_overrides, it)) }
         if (definition.maxWalkingMinutes > 0) add(AppText.get(R.string.walk_minutes, definition.maxWalkingMinutes))
-    }.ifEmpty { listOf("Anywhere") }.joinToString(" • ")
-    SummaryCard(
-        surface.label, "$typeSummary • $location",
-        when (surface) { FilterSurface.FEED -> Icons.Default.List; FilterSurface.MAP -> Icons.Default.LocationOn; FilterSurface.NOTIFICATIONS -> Icons.Default.Notifications },
-        "$matchCount live" + (if (definition.advancedRuleCount > 0) stringResource(R.string.settings_x_advanced, definition.advancedRuleCount) else "") + (if (assignment.mode == FilterAssignmentMode.LINKED) " • Linked: ${profileName ?: "profile"}" else stringResource(R.string.settings_custom_rules)), onClick
+        definition.distanceOverrides.ruleCount.takeIf { it > 0 }?.let { add(if (it == 1) stringResource(R.string.settings_1_distance_override) else stringResource(R.string.settings_x_distance_overrides, it)) }
+        if (definition.advancedRuleCount > 0) add(stringResource(R.string.settings_x_advanced, definition.advancedRuleCount).removePrefix(" • ").trim())
+    }
+}
+
+@Composable
+private fun SurfaceCard(
+    surface: FilterSurface,
+    definition: FilterDefinition,
+    profileName: String?,
+    matchCount: Int,
+    onEdit: () -> Unit,
+    onCopyFrom: (FilterSurface) -> Unit,
+    onUseProfile: () -> Unit,
+    onSaveProfile: () -> Unit,
+    extra: @Composable ColumnScope.() -> Unit = {}
+) {
+    var menu by remember { mutableStateOf(false) }
+    OutlinedCard(Modifier.fillMaxWidth().testTag("filter_surface_${surface.name}")) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+                    Icon(surface.icon(), null, Modifier.padding(10.dp).size(22.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(surface.label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        profileName?.let { stringResource(R.string.filter_surface_uses_profile, it) } ?: stringResource(R.string.filter_surface_own),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (profileName != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box {
+                    IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, stringResource(R.string.filter_surface_more, surface.label)) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        FilterSurface.entries.filter { it != surface }.forEach { other ->
+                            DropdownMenuItem(text = { Text(stringResource(R.string.filter_surface_copy_from, other.label)) }, onClick = { menu = false; onCopyFrom(other) })
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(text = { Text(stringResource(R.string.filter_surface_use_profile)) }, onClick = { menu = false; onUseProfile() })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.filter_surface_save_profile)) }, onClick = { menu = false; onSaveProfile() })
+                    }
+                }
+            }
+            if (surface == FilterSurface.WIDGETS) {
+                Text(stringResource(R.string.filter_surface_widgets_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                definitionChips(definition).forEach { chip ->
+                    Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Text(chip, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp))
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.filter_surface_live, matchCount), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                FilledTonalButton(onClick = onEdit, modifier = Modifier.testTag("filter_surface_edit_${surface.name}")) {
+                    Icon(Icons.Default.Edit, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.filter_surface_edit))
+                }
+            }
+            extra()
+        }
+    }
+}
+
+private fun FilterSurface.icon(): androidx.compose.ui.graphics.vector.ImageVector = when (this) {
+    FilterSurface.FEED -> Icons.Default.List
+    FilterSurface.MAP -> Icons.Default.LocationOn
+    FilterSurface.NOTIFICATIONS -> Icons.Default.Notifications
+    FilterSurface.WIDGETS -> Icons.Default.Home
+}
+
+@Composable
+private fun ProfilesCard(profiles: List<FilterProfile>, usage: (String) -> Int, onOpen: () -> Unit) {
+    OutlinedCard(onClick = onOpen, modifier = Modifier.fillMaxWidth().testTag("filter_profiles")) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("${stringResource(R.string.settings_profiles)} · ${profiles.size + BuiltInFilterProfiles.all.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.filter_profiles_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                profiles.take(3).forEach { profile ->
+                    val used = usage(profile.id)
+                    Text(
+                        "${profile.name} · ${if (used > 0) stringResource(R.string.filter_profile_used_by, used) else stringResource(R.string.filter_profile_unused)}",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            Icon(Icons.Default.ArrowForward, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SetPickerDialog(sets: List<FilterSet>, activeId: String, onDismiss: () -> Unit, onChoose: (FilterSet) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.filter_sets_choose)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                sets.forEach { set ->
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable { onChoose(set) }.testTag("filter_set_option_${set.name}"),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = set.id == activeId, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Text(set.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_close)) } }
     )
 }
 
 @Composable
-private fun SummaryCard(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, badge: String?, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) { Icon(icon, null, Modifier.padding(12.dp).size(24.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer) }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)); Icon(Icons.Default.ArrowForward, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                badge?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+private fun ManageSetsDialog(
+    sets: List<FilterSet>,
+    activeId: String,
+    onDismiss: () -> Unit,
+    onCreate: (String, Boolean) -> Unit,
+    onRename: (String, String) -> Unit,
+    onDelete: (String) -> Unit
+) {
+    var creating by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf<FilterSet?>(null) }
+    var deleting by remember { mutableStateOf<FilterSet?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.filter_sets_manage_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                sets.forEach { set ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(set.name, style = MaterialTheme.typography.bodyLarge)
+                            if (set.id == activeId) Text(stringResource(R.string.filter_sets_active), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        IconButton(onClick = { renaming = set }) { Icon(Icons.Default.Edit, stringResource(R.string.filter_sets_rename)) }
+                        IconButton(onClick = { deleting = set }, enabled = sets.size > 1) { Icon(Icons.Default.Delete, stringResource(R.string.filter_sets_delete)) }
+                    }
+                }
+                Text(stringResource(R.string.filter_sets_limit, MAX_FILTER_SETS), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.catchroutes_close)) } },
+        confirmButton = {
+            Button(onClick = { creating = true }, enabled = sets.size < MAX_FILTER_SETS, modifier = Modifier.testTag("filter_set_new")) {
+                Icon(Icons.Default.Add, null); Spacer(Modifier.width(6.dp)); Text(stringResource(R.string.filter_sets_new))
             }
         }
+    )
+    if (creating) NewSetDialog(onDismiss = { creating = false }) { name, copy -> onCreate(name, copy); creating = false; onDismiss() }
+    renaming?.let { set -> NameDialog(stringResource(R.string.filter_sets_rename), { renaming = null }, initialValue = set.name, maxLength = MAX_FILTER_SET_NAME) { onRename(set.id, it); renaming = null } }
+    deleting?.let { set ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text(stringResource(R.string.filter_sets_delete)) },
+            text = { Text(stringResource(R.string.filter_sets_delete_body, set.name)) },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } },
+            confirmButton = { Button(onClick = { onDelete(set.id); deleting = null }) { Text(stringResource(R.string.filter_sets_delete)) } }
+        )
     }
+}
+
+@Composable
+private fun NewSetDialog(onDismiss: () -> Unit, onCreate: (String, Boolean) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    var copyActive by rememberSaveable { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.filter_sets_new)) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    name, { name = it.take(MAX_FILTER_SET_NAME) },
+                    label = { Text(stringResource(R.string.filter_sets_name)) },
+                    supportingText = { Text("${name.length}/$MAX_FILTER_SET_NAME") },
+                    singleLine = true,
+                    modifier = Modifier.testTag("filter_set_name_field")
+                )
+                listOf(true to R.string.filter_sets_new_copy, false to R.string.filter_sets_new_empty).forEach { (value, label) ->
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { copyActive = value }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = copyActive == value, onClick = null)
+                        Spacer(Modifier.width(12.dp))
+                        Text(stringResource(label))
+                    }
+                }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } },
+        confirmButton = { Button(onClick = { onCreate(name.trim(), copyActive) }, enabled = name.isNotBlank(), modifier = Modifier.testTag("filter_set_create")) { Text(stringResource(R.string.catchroutes_save)) } }
+    )
 }
 
 @Composable
@@ -127,9 +392,13 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val legacyDistance by viewModel.maxDistance.collectAsStateWithLifecycle()
     val widgetConfiguration = remember(widgetId) { widgetId?.let { WidgetConfigurationStore.get(context, it) } }
     val assignment = widgetConfiguration?.let {
-        it.filterAssignment ?: FilterAssignment.local(it.legacyFilterDefinition(legacyArea, legacyDistance))
+        when {
+            it.followSet -> document.widgets
+            else -> it.filterAssignment ?: FilterAssignment.local(it.legacyFilterDefinition(legacyArea, legacyDistance))
+        }
     } ?: document.assignment(surface)
-    val editorTitle = widgetId?.let { "Widget #$it" } ?: surface.label
+    val editorTitle = widgetId?.let { "Widget #$it" }
+        ?: stringResource(R.string.filter_studio_title, surface.label, stringResource(R.string.filter_sets_chip, document.activeSet.name))
     var draft by remember(surface, assignment) { mutableStateOf(assignment.resolve(document)) }
     var linkedProfileId by remember(surface, assignment) { mutableStateOf(assignment.profileId.takeIf { assignment.mode == FilterAssignmentMode.LINKED }) }
     var showLinkedWarning by remember { mutableStateOf(false) }
@@ -141,14 +410,14 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     val linkedProfile = (BuiltInFilterProfiles.all + document.profiles).firstOrNull { it.id == linkedProfileId }
     val applyLocal: () -> Unit = {
         if (widgetId != null && widgetConfiguration != null) {
-            WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.local(draft)))
+            WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.local(draft), followSet = false))
             AlertsWidgetProvider.requestUpdate(context)
         } else viewModel.applySurfaceFilter(surface, draft)
         onDismiss()
     }
     val applyLink: (FilterProfile) -> Unit = { profile ->
         if (widgetId != null && widgetConfiguration != null) {
-            WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.linked(profile)))
+            WidgetConfigurationStore.save(context, widgetId, widgetConfiguration.copy(filterAssignment = FilterAssignment.linked(profile), followSet = false))
             AlertsWidgetProvider.requestUpdate(context)
         } else viewModel.applyProfile(surface, profile, true)
         onDismiss()
@@ -189,7 +458,8 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
                     matchCount = matchCount,
                     totalCount = alerts.size,
                     areas = catalog.areas.ifEmpty { AREA_FILTER_OPTIONS.filterNot { it == "All" } },
-                    profileSummary = linkedProfile?.let { "Linked: ${it.name}" } ?: "Custom rules",
+                    profileSummary = linkedProfile?.let { stringResource(R.string.filter_studio_profile_banner, it.name, document.consumerCount(it.id).coerceAtLeast(1)) }
+                        ?: stringResource(R.string.filter_surface_own),
                     openProfiles = { showProfiles = true },
                     saveProfile = { showSave = true },
                     openQuestRules = { showQuests = true },
@@ -210,13 +480,13 @@ internal fun FilterStudioDialog(surface: FilterSurface, viewModel: SettingsViewM
     if (showSave) NameDialog(stringResource(R.string.settings_save_profile), { showSave = false }) { viewModel.saveFilterProfile(it, draft); showSave = false }
     if (showLinkedWarning && linkedProfile != null) AlertDialog(
         onDismissRequest = { showLinkedWarning = false },
-        title = { Text(AppText.get(R.string.settings_update_linked_profile)) },
+        title = { Text(stringResource(R.string.filter_update_profile_title)) },
         text = { Text(stringResource(R.string.settings_editing_x_also_changes_x_these, linkedProfile.name, (document.consumersOf(linkedProfile.id).map { it.label } + viewModel.linkedWidgetConsumers(linkedProfile.id) + editorTitle).distinct().joinToString())) },
         confirmButton = { Button(onClick = {
             if (widgetId != null) { viewModel.saveFilterProfile(linkedProfile.name, draft, linkedProfile.id); applyLink(linkedProfile.copy(definition = draft)) }
             else { viewModel.applyLinkedFilter(surface, linkedProfile, draft); onDismiss() }
-        }) { Text(stringResource(R.string.settings_apply_to_all)) } },
-        dismissButton = { TextButton(onClick = applyLocal) { Text(stringResource(R.string.settings_only_this_surface)) } }
+        }) { Text(stringResource(R.string.filter_update_profile_all)) } },
+        dismissButton = { TextButton(onClick = applyLocal) { Text(stringResource(R.string.filter_update_profile_only)) } }
     )
 }
 
@@ -370,14 +640,14 @@ internal fun QuestRulesDialog(current: QuestFilterRules, catalog: List<FilterCat
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.widthIn(max = Dimens.ReadableContentWidth).fillMaxWidth().fillMaxHeight(.92f).padding(10.dp), shape = MaterialTheme.shapes.extraLarge) { Column(Modifier.padding(16.dp)) {
             Text(stringResource(R.string.settings_quest_rules), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            PrimaryTabRow(tab) { listOf("Exact quests", "Tasks", "Rewards").forEachIndexed { index, label -> Tab(tab == index, { tab = index }, text = { Text(label) }) } }
+            PrimaryTabRow(tab) { listOf(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_quest_tab_exact), com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_quest_tab_tasks), com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_quest_tab_rewards)).forEachIndexed { index, label -> Tab(tab == index, { tab = index }, text = { Text(label) }) } }
             if (tab == 0) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterSelectionMode.entries.forEach { mode ->
                     FilterChip(exactMode == mode, { exactMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All quests"; FilterSelectionMode.NONE -> "No exact pairs"; FilterSelectionMode.ONLY -> stringResource(R.string.settings_selected_x, exact.size) }) })
                 }
             }
             if (tab != 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.settings_use_task_reward_rule), Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = "Use task and reward facets" }) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Text(stringResource(R.string.settings_use_task_reward_rule), Modifier.weight(1f)); Switch(facetEnabled, { facetEnabled = it; if (it && exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE }, modifier = Modifier.semantics { contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_quest_use_facets) }) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterSelectionMode.entries.forEach { mode ->
                         FilterChip(selected = (if (tab == 1) taskMode else rewardMode) == mode, onClick = { facetEnabled = true; if (exactMode == FilterSelectionMode.ALL) exactMode = FilterSelectionMode.NONE; if (tab == 1) taskMode = mode else rewardMode = mode }, label = { Text(when (mode) { FilterSelectionMode.ALL -> "All"; FilterSelectionMode.NONE -> "None"; FilterSelectionMode.ONLY -> stringResource(R.string.alerts_selected) }) })
@@ -536,7 +806,7 @@ private fun questRewardIconRes(reward: String?, knownSpecies: Set<String>): Int 
 internal fun ProfilePickerDialog(
     document: FilterStateDocument,
     onDismiss: () -> Unit,
-    onChoose: (FilterProfile, Boolean) -> Unit,
+    onChoose: ((FilterProfile, Boolean) -> Unit)?,
     onDelete: (String) -> Unit,
     onSave: (String, FilterDefinition, String?) -> Unit,
     widgetConsumers: (String) -> List<String>
@@ -555,8 +825,10 @@ internal fun ProfilePickerDialog(
                         Text(profile.name, fontWeight = FontWeight.SemiBold)
                         Text(if (builtIn) stringResource(R.string.settings_read_only_starter_duplicate_to_edit) else stringResource(R.string.settings_x_advanced_rules, profile.definition.advancedRuleCount), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Row {
-                            TextButton(onClick = { onChoose(profile, true) }) { Text(stringResource(R.string.settings_link)) }
-                            TextButton(onClick = { onChoose(profile, false) }) { Text(stringResource(R.string.settings_copy)) }
+                            if (onChoose != null) {
+                                TextButton(onClick = { onChoose(profile, true) }) { Text(stringResource(R.string.filter_profile_use)) }
+                                TextButton(onClick = { onChoose(profile, false) }) { Text(stringResource(R.string.filter_profile_copy_rules)) }
+                            }
                             TextButton(onClick = { onSave("${profile.name} copy", profile.definition, null) }) { Text(stringResource(R.string.settings_duplicate)) }
                         }
                         if (!builtIn) Row {
@@ -577,10 +849,11 @@ internal fun ProfilePickerDialog(
     }
 }
 
-@Composable private fun NameDialog(title: String, onDismiss: () -> Unit, initialValue: String = "", onSave: (String) -> Unit) { var value by rememberSaveable { mutableStateOf(initialValue) }; AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it.take(MAX_FILTER_PROFILE_NAME) }, label = { Text(stringResource(R.string.settings_unique_name)) }, supportingText = { Text("${value.length}/$MAX_FILTER_PROFILE_NAME") }, singleLine = true) }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onSave(value) }, enabled = value.isNotBlank()) { Text(stringResource(R.string.catchroutes_save)) } }) }
+@Composable private fun NameDialog(title: String, onDismiss: () -> Unit, initialValue: String = "", maxLength: Int = MAX_FILTER_PROFILE_NAME, onSave: (String) -> Unit) { var value by rememberSaveable { mutableStateOf(initialValue) }; AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { OutlinedTextField(value, { value = it.take(maxLength) }, label = { Text(stringResource(R.string.settings_unique_name)) }, supportingText = { Text("${value.length}/$maxLength") }, singleLine = true) }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }, confirmButton = { Button(onClick = { onSave(value) }, enabled = value.isNotBlank()) { Text(stringResource(R.string.catchroutes_save)) } }) }
 
+/** Every placed widget, with whether it follows the active set or keeps its own filter. */
 @Composable
-private fun WidgetFiltersSection() {
+private fun PlacedWidgets(viewModel: SettingsViewModel) {
     val context = LocalContext.current
     // getAppWidgetIds and the configuration store are binder/disk calls; keep them off the
     // composition thread so opening the hub never waits on them.
@@ -588,13 +861,32 @@ private fun WidgetFiltersSection() {
         value = withContext(Dispatchers.IO) {
             val manager = AppWidgetManager.getInstance(context)
             buildList {
-                manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java)).forEach { add(Triple(it, "Alerts widget", WidgetConfigurationStore.get(context, it))) }
-                manager.getAppWidgetIds(ComponentName(context, NearbyRadarWidgetProvider::class.java)).forEach { add(Triple(it, "Nearby radar", WidgetConfigurationStore.get(context, it))) }
+                manager.getAppWidgetIds(ComponentName(context, AlertsWidgetProvider::class.java)).forEach { add(Triple(it, AppText.get(R.string.filter_widgets_alerts), WidgetConfigurationStore.get(context, it))) }
+                manager.getAppWidgetIds(ComponentName(context, NearbyRadarWidgetProvider::class.java)).forEach { add(Triple(it, AppText.get(R.string.filter_widgets_radar), WidgetConfigurationStore.get(context, it))) }
             }
         }
     }
-    SettingsSection(stringResource(R.string.settings_widget_instances)) {
-        if (placed.isEmpty()) Text(stringResource(R.string.settings_no_widgets_placed_add_one_from), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        placed.forEach { (id, label, configuration) -> OutlinedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) { Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(label, fontWeight = FontWeight.SemiBold); Text(if (configuration.filterAssignment == null) stringResource(R.string.settings_legacy_rules_migrates_when_edited) else stringResource(R.string.settings_unified_filter_instance_x, id), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }; TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text(stringResource(R.string.settings_customize)) } } } }
+    // The switch answers at once; the store write lands a moment later.
+    var follows by remember { mutableStateOf(mapOf<Int, Boolean>()) }
+    HorizontalDivider()
+    Text(stringResource(R.string.filter_widgets_placed), style = MaterialTheme.typography.labelLarge)
+    if (placed.isEmpty()) Text(stringResource(R.string.filter_widgets_none), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    placed.forEach { (id, label, configuration) ->
+        val follow = follows[id] ?: configuration.followSet
+        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("$label #$id", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(if (follow) R.string.filter_widgets_follows else R.string.filter_surface_own),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { context.startActivity(Intent(context, WidgetConfigActivity::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text(stringResource(R.string.settings_customize)) }
+            Switch(
+                checked = follow,
+                onCheckedChange = { follows = follows + (id to it); viewModel.setWidgetFollowsSet(id, it) },
+                modifier = Modifier.testTag("filter_widget_follow_$id").semantics { contentDescription = AppText.get(R.string.filter_widgets_follow_switch) }
+            )
+        }
     }
 }

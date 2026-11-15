@@ -206,9 +206,7 @@ internal fun ScreenNotices(
         // changing the numbers under the user.
         if (state.degradedOptions.isNotEmpty()) {
             Text(
-                text = "Pokébattler has no ranking for this boss at " +
-                    state.degradedOptions.joinToString(" · ") +
-                    ". Showing its level 40, no-friendship results.",
+                text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_counters_degraded, state.degradedOptions.joinToString(" · ")),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

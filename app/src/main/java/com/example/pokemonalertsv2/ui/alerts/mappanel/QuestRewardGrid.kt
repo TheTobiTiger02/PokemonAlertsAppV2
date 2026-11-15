@@ -75,9 +75,12 @@ import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
  * Which side of a quest the tab is organised by. Each side's detail sheet lists the other one:
  * a reward's tasks, or a task's rewards.
  */
-private enum class QuestView(val label: String, val unit: String, val other: String) {
-    REWARDS(AppText.get(R.string.alerts_rewards), "reward", "task"),
-    TASKS(AppText.get(R.string.alerts_tasks), "task", "reward")
+private enum class QuestView(private val labelRes: Int, val unit: String, val other: String) {
+    REWARDS(R.string.alerts_rewards, "reward", "task"),
+    TASKS(R.string.alerts_tasks, "task", "reward");
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 /** One reward or one task, with every quest pairing it with the other side, index for index. */

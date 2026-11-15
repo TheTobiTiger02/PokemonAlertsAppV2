@@ -55,7 +55,7 @@ internal object RaidWatchNotifications {
                 "Raid arrival",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Hundo CP Live Update shown after arriving at a raid"
+                description = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_raidwatch_channel_description)
                 setSound(null, null)
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC

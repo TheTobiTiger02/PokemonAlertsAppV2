@@ -72,7 +72,10 @@ internal fun LiveQuickFiltersSheet(
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(stringResource(R.string.alerts_filter_alerts), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.alerts_filter_alerts), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                com.example.pokemonalertsv2.ui.components.FilterSetSwitcher()
+            }
 
             Text(stringResource(R.string.alerts_alert_type), style = MaterialTheme.typography.titleSmall)
             val allTypes = remember(Unit) { FilterAlertType.entries.map { it.name } }

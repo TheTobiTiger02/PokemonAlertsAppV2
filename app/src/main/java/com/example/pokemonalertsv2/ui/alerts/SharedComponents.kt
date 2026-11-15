@@ -413,7 +413,9 @@ fun formatAlertTitle(alert: PokemonAlert, goDexStatus: GoDexMatchStatus = GoDexM
 }
 
 internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
-    val baseName = alert.pokemon ?: alert.cleanPokemonName
+    // Display only: the shown language's species name; the alert itself stays English.
+    val baseName = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.pokemon ?: alert.cleanPokemonName, alert.pokedexId)
+        ?: alert.cleanPokemonName
     
     // Handle raids - just show "Pokemon Raid"
     if (alert.hasTypeContaining("raid")) {
@@ -422,7 +424,7 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     
     // Handle species replacement — show "OldSpecies → NewSpecies"
     if (alert.isSpeciesReplacement) {
-        return "🔄 ${alert.oldSpecies} → ${alert.newSpecies}"
+        return "🔄 ${com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.oldSpecies)} → ${com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.newSpecies)}"
     }
     
     // Handle weather change - show "Pokemon Weather Change"
@@ -433,7 +435,7 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     
     // Handle Team Rocket - show grunt type
     if (alert.hasTypeContaining("rocket") || alert.gruntType != null) {
-        val gruntLabel = alert.gruntType
+        val gruntLabel = com.example.pokemonalertsv2.data.gametext.GameNames.grunt(alert.gruntType, alert.gruntTypeId)
             ?.trim()
             ?.takeIf { it.isNotBlank() }
             ?.replaceFirstChar { it.uppercaseChar() }
@@ -452,7 +454,7 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     // Quests lead with what you get; the category badge and the stop name carry the rest.
     // The server name reads "Razz Berry ×6 at Vogel Graffiti", so fall back to its first half.
     if (alert.hasTypeContaining("quest")) {
-        return alert.questReward?.trim()?.takeIf { it.isNotEmpty() }
+        return questAlertPresentation(alert)?.reward
             ?: baseName.substringBefore(" at ").trim().ifEmpty { baseName }
     }
     

@@ -67,8 +67,24 @@ internal data class WidgetConfiguration(
     val priority: WidgetPriority = WidgetPriority.APP_DEFAULT,
     val distance: WidgetDistanceMode = WidgetDistanceMode.InheritApp,
     val area: WidgetAreaMode = WidgetAreaMode.InheritApp,
-    val filterAssignment: FilterAssignment? = null
+    val filterAssignment: FilterAssignment? = null,
+    /** Shows the active filter set's widget filter instead of [filterAssignment]. */
+    val followSet: Boolean = false
 )
+
+/**
+ * What this widget filters with: the active set's widget filter when it follows the set,
+ * otherwise its own assignment, otherwise the rules an older build stored.
+ */
+internal fun WidgetConfiguration.effectiveDefinition(
+    document: com.example.pokemonalertsv2.data.FilterStateDocument?,
+    appArea: String,
+    appDistanceMeters: Int
+): FilterDefinition = when {
+    followSet && document != null -> document.widgets.resolve(document)
+    filterAssignment != null -> document?.let(filterAssignment::resolve) ?: filterAssignment.definition
+    else -> legacyFilterDefinition(appArea, appDistanceMeters)
+}
 
 internal fun WidgetConfiguration.legacyFilterDefinition(appArea: String, appDistanceMeters: Int): FilterDefinition {
     val effectiveArea = when (val mode = area) { WidgetAreaMode.InheritApp -> appArea; is WidgetAreaMode.Fixed -> mode.area }
@@ -89,6 +105,7 @@ internal object WidgetConfigurationStore {
     private const val DISTANCE_PREFIX = "widget_distance_"
     private const val AREA_PREFIX = "widget_area_"
     private const val ASSIGNMENT_PREFIX = "widget_filter_assignment_"
+    private const val FOLLOW_SET_PREFIX = "widget_filter_follow_set_"
 
     fun get(context: Context, appWidgetId: Int): WidgetConfiguration {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -108,7 +125,13 @@ internal object WidgetConfigurationStore {
         val assignment = FilterStateCodec.decodeAssignment(
             prefs.getString("$ASSIGNMENT_PREFIX$appWidgetId", null)
         )
-        return WidgetConfiguration(filters, priority, distance, area, assignment)
+        // A widget placed before filter sets existed has stored rules of its own and keeps
+        // them; a widget with nothing stored is new and follows the active set.
+        val followSet = prefs.getBoolean(
+            "$FOLLOW_SET_PREFIX$appWidgetId",
+            !prefs.contains("$ASSIGNMENT_PREFIX$appWidgetId") && !prefs.contains("$FILTER_PREFIX$appWidgetId")
+        )
+        return WidgetConfiguration(filters, priority, distance, area, assignment, followSet)
     }
 
     /**
@@ -150,6 +173,7 @@ internal object WidgetConfigurationStore {
             .putString("$PRIORITY_PREFIX$appWidgetId", configuration.priority.name)
             .putString("$DISTANCE_PREFIX$appWidgetId", distance)
             .putString("$AREA_PREFIX$appWidgetId", area)
+            .putBoolean("$FOLLOW_SET_PREFIX$appWidgetId", configuration.followSet)
         configuration.filterAssignment?.let { assignment ->
             editor.putString(
                 "$ASSIGNMENT_PREFIX$appWidgetId",
@@ -169,6 +193,7 @@ internal object WidgetConfigurationStore {
             .remove("$DISTANCE_PREFIX$appWidgetId")
             .remove("$AREA_PREFIX$appWidgetId")
             .remove("$ASSIGNMENT_PREFIX$appWidgetId")
+            .remove("$FOLLOW_SET_PREFIX$appWidgetId")
             .apply()
         PushTopicSyncWorker.triggerSync(context)
     }

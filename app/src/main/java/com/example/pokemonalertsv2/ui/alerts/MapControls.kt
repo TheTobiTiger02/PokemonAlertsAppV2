@@ -71,12 +71,11 @@ internal fun OfflineTilesSection(centre: MapCameraSnapshot, modifier: Modifier =
     ) {
         Column(modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
             Text(
-                text = "Offline map · " + (status ?: cacheBytes?.let { formatCacheSize(it) + " saved" } ?: "…"),
+                text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_offline_map, status ?: cacheBytes?.let { com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_offline_saved, formatCacheSize(it)) } ?: "…"),
                 style = MaterialTheme.typography.titleSmall
             )
             Text(
-                text = "Areas you have viewed work without a connection. Saving an area also " +
-                    "fetches closer zoom levels.",
+                text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_offline_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(end = 8.dp)

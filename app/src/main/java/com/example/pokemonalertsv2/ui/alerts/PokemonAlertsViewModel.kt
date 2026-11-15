@@ -298,49 +298,6 @@ class PokemonAlertsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    val filterPresets = repository.alertPreferences.filterPresets
-        .asPreferenceState(emptyList())
-
-    /** Captures whatever the feed controls currently say, under [name]. */
-    fun saveFilterPreset(
-        name: String,
-        categories: Set<AlertCategory>,
-        sort: SortPreference,
-        area: String,
-        maxDistanceMeters: Int
-    ) {
-        viewModelScope.launch {
-            repository.alertPreferences.saveFilterPreset(
-                FilterPreset(
-                    name = name,
-                    sort = sort.name,
-                    area = area,
-                    maxDistanceMeters = maxDistanceMeters,
-                    categories = categories.toStoredNames()
-                )
-            )
-        }
-    }
-
-    fun deleteFilterPreset(name: String) {
-        viewModelScope.launch { repository.alertPreferences.deleteFilterPreset(name) }
-    }
-
-    /**
-     * Puts every control back at once.
-     *
-     * Unknown enum names fall back to the defaults rather than throwing: a preset saved by
-     * an older build must not be able to crash the feed.
-     */
-    fun applyFilterPreset(preset: FilterPreset) {
-        val sort = SortPreference.entries.firstOrNull { it.name == preset.sort }
-            ?: SortPreference.POSTED_TIME
-        updateSelectedFeedCategories(preset.categories.toCategorySelection())
-        updateSortPreference(sort)
-        updateSelectedArea(preset.area)
-        updateMaxDistance(preset.maxDistanceMeters)
-    }
-
     // Per-surface category selections. Each surface stores its own set so the map keeps
     // showing raids while the feed is narrowed to quests, and neither disturbs the other.
     val selectedFeedCategories = repository.alertPreferences.feedCategories

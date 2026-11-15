@@ -72,22 +72,25 @@ data class FilterSelection(
 enum class FilterSelectionMode { ALL, NONE, ONLY }
 
 @Serializable
-enum class FilterAlertType(val label: String) {
+enum class FilterAlertType(private val labelRes: Int) {
     /** Hundo, Nundo and PvP spawns: the ones that carry IV or ranking data. */
-    SPAWN(AppText.get(R.string.data_iv_spawns)),
-    RAID(AppText.get(R.string.data_raids)),
-    QUEST(AppText.get(R.string.data_quests)),
-    ROCKET(AppText.get(R.string.alerts_rocket)),
-    KECLEON(AppText.get(R.string.alerts_kecleon)),
-    HUNDO(AppText.get(R.string.data_hundos)),
-    NUNDO(AppText.get(R.string.data_nundos)),
-    PVP(AppText.get(R.string.alerts_pvp)),
+    SPAWN(R.string.data_iv_spawns),
+    RAID(R.string.data_raids),
+    QUEST(R.string.data_quests),
+    ROCKET(R.string.alerts_rocket),
+    KECLEON(R.string.alerts_kecleon),
+    HUNDO(R.string.data_hundos),
+    NUNDO(R.string.data_nundos),
+    PVP(R.string.alerts_pvp),
     /** Every other wild spawn, including the backend's live sightings without IV. Off by default. */
-    COMMON(AppText.get(R.string.alerts_common)),
+    COMMON(R.string.alerts_common),
     /** Event Tappables: Pokémon they spawn and the loot they drop, filtered by species or item. */
-    TAPPABLE(AppText.get(R.string.data_tappables)),
-    WEATHER(AppText.get(R.string.alerts_weather)),
-    OTHER(AppText.get(R.string.data_other))
+    TAPPABLE(R.string.data_tappables),
+    WEATHER(R.string.alerts_weather),
+    OTHER(R.string.data_other);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 const val SPAWN_INTERACTION_RANGE_METERS = 40f
@@ -285,44 +288,180 @@ data class FilterAssignment(
     }
 }
 
+/**
+ * A named bundle of filters, one per surface, that can be switched as a whole:
+ * "Weekend" can notify about everything while "Work" only notifies about hundos.
+ * Each surface is still a [FilterAssignment], so a set can use a profile.
+ */
+@Serializable
+data class FilterSet(
+    val id: String,
+    val name: String,
+    val feed: FilterAssignment = FilterAssignment.local(),
+    val map: FilterAssignment = FilterAssignment.local(),
+    val notifications: FilterAssignment = FilterAssignment.local(),
+    val widgets: FilterAssignment = FilterAssignment.local(),
+    val updatedAtMillis: Long = 0L
+) {
+    fun assignment(surface: FilterSurface): FilterAssignment = when (surface) {
+        FilterSurface.FEED -> feed
+        FilterSurface.MAP -> map
+        FilterSurface.NOTIFICATIONS -> notifications
+        FilterSurface.WIDGETS -> widgets
+    }
+
+    fun withAssignment(surface: FilterSurface, assignment: FilterAssignment): FilterSet = when (surface) {
+        FilterSurface.FEED -> copy(feed = assignment)
+        FilterSurface.MAP -> copy(map = assignment)
+        FilterSurface.NOTIFICATIONS -> copy(notifications = assignment)
+        FilterSurface.WIDGETS -> copy(widgets = assignment)
+    }
+}
+
+/**
+ * Every filter the app applies.
+ *
+ * The top-level [feed], [map], [notifications] and [widgets] are the *active*
+ * filter set, so everything that reads a surface keeps reading it directly.
+ * [sets] stores every set; the active one's entry there is refreshed from the
+ * top level whenever sets are listed or switched ([allSets], [activateSet]).
+ * A document written before sets existed has none; [withSetsInitialized] turns
+ * its surfaces into the first set.
+ */
 @Serializable
 data class FilterStateDocument(
     val schemaVersion: Int = CURRENT_FILTER_SCHEMA_VERSION,
     val profiles: List<FilterProfile> = emptyList(),
     val feed: FilterAssignment = FilterAssignment.local(),
     val map: FilterAssignment = FilterAssignment.local(),
-    val notifications: FilterAssignment = FilterAssignment.local()
+    val notifications: FilterAssignment = FilterAssignment.local(),
+    /** What a widget that follows the active set shows. Widgets with their own filter keep it. */
+    val widgets: FilterAssignment = FilterAssignment.local(),
+    val sets: List<FilterSet> = emptyList(),
+    val activeSetId: String? = null
 ) {
     fun assignment(surface: FilterSurface): FilterAssignment = when (surface) {
         FilterSurface.FEED -> feed
         FilterSurface.MAP -> map
         FilterSurface.NOTIFICATIONS -> notifications
+        FilterSurface.WIDGETS -> widgets
     }
 
     fun withAssignment(surface: FilterSurface, assignment: FilterAssignment): FilterStateDocument = when (surface) {
         FilterSurface.FEED -> copy(feed = assignment)
         FilterSurface.MAP -> copy(map = assignment)
         FilterSurface.NOTIFICATIONS -> copy(notifications = assignment)
+        FilterSurface.WIDGETS -> copy(widgets = assignment)
     }
 
     fun consumersOf(profileId: String): Set<FilterSurface> = FilterSurface.entries
         .filterTo(linkedSetOf()) { assignment(it).mode == FilterAssignmentMode.LINKED && assignment(it).profileId == profileId }
 
-    /** Copies rules into linked consumers before removal, so deleting never resets behavior. */
+    /** How many surfaces, across every set, use [profileId]. */
+    fun consumerCount(profileId: String): Int = allSets().sumOf { set ->
+        FilterSurface.entries.count { set.assignment(it).mode == FilterAssignmentMode.LINKED && set.assignment(it).profileId == profileId }
+    }
+
+    /** Copies rules into linked consumers before removal, in every set, so deleting never resets behavior. */
     fun deleteProfilePreservingConsumers(profileId: String): FilterStateDocument {
         val profile = profiles.firstOrNull { it.id == profileId } ?: return this
-        var result = this
-        consumersOf(profileId).forEach { surface ->
-            result = result.withAssignment(surface, FilterAssignment.local(profile.definition))
+        val keep = { assignment: FilterAssignment ->
+            if (assignment.mode == FilterAssignmentMode.LINKED && assignment.profileId == profileId) FilterAssignment.local(profile.definition)
+            else assignment
         }
-        return result.copy(profiles = result.profiles.filterNot { it.id == profileId })
+        val updated = allSets().map { set ->
+            FilterSurface.entries.fold(set) { result, surface -> result.withAssignment(surface, keep(result.assignment(surface))) }
+        }
+        return copy(sets = updated, profiles = profiles.filterNot { it.id == profileId }).loadActive()
+    }
+
+    // ---------- Filter sets ----------
+
+    val activeSet: FilterSet get() = allSets().first { it.id == activeId }
+
+    private val activeId: String get() = activeSetId ?: sets.firstOrNull()?.id ?: DEFAULT_FILTER_SET_ID
+
+    /** Every set, with the active one carrying the live top-level surfaces. */
+    fun allSets(): List<FilterSet> {
+        val live = { set: FilterSet -> set.copy(feed = feed, map = map, notifications = notifications, widgets = widgets) }
+        if (sets.none { it.id == activeId }) {
+            return sets + live(FilterSet(activeId, AppText.get(R.string.filter_set_default_name)))
+        }
+        return sets.map { if (it.id == activeId) live(it) else it }
+    }
+
+    /** Copies the active set's stored surfaces to the top level. */
+    private fun loadActive(): FilterStateDocument {
+        val active = sets.firstOrNull { it.id == activeId } ?: return this
+        return copy(feed = active.feed, map = active.map, notifications = active.notifications, widgets = active.widgets)
+    }
+
+    /**
+     * Gives a document from before sets existed its first set. Its widget filter starts
+     * as a copy of the feed, the nearest thing to what a new widget showed until now.
+     */
+    fun withSetsInitialized(name: String = AppText.get(R.string.filter_set_default_name)): FilterStateDocument {
+        if (sets.isNotEmpty() && sets.any { it.id == activeSetId }) return this
+        if (sets.isNotEmpty()) return copy(activeSetId = sets.first().id).loadActive()
+        val widgetsFilter = if (widgets == FilterAssignment.local()) feed else widgets
+        val first = FilterSet(DEFAULT_FILTER_SET_ID, name, feed, map, notifications, widgetsFilter)
+        return copy(widgets = widgetsFilter, sets = listOf(first), activeSetId = first.id)
+    }
+
+    fun activateSet(id: String): FilterStateDocument {
+        val synced = allSets()
+        if (synced.none { it.id == id }) return this
+        return copy(sets = synced, activeSetId = id).loadActive()
+    }
+
+    /** Adds a set, a copy of [from] or of the active set; it does not become active. */
+    fun createSet(name: String, id: String, from: FilterSet? = activeSet, nowMillis: Long = System.currentTimeMillis()): FilterStateDocument {
+        val synced = allSets()
+        if (synced.size >= MAX_FILTER_SETS) return this
+        val base = from ?: FilterSet(id, name)
+        val created = base.copy(id = id, name = uniqueSetName(name, synced), updatedAtMillis = nowMillis)
+        return copy(sets = synced + created, activeSetId = activeId)
+    }
+
+    fun renameSet(id: String, name: String): FilterStateDocument {
+        val synced = allSets()
+        val clean = name.trim().take(MAX_FILTER_SET_NAME)
+        if (clean.isBlank()) return this
+        return copy(sets = synced.map { if (it.id == id) it.copy(name = uniqueSetName(clean, synced.filterNot { other -> other.id == id })) else it }, activeSetId = activeId)
+    }
+
+    /** Removes a set; the last one cannot go. Removing the active set activates the first remaining. */
+    fun deleteSet(id: String): FilterStateDocument {
+        val synced = allSets()
+        if (synced.size <= 1 || synced.none { it.id == id }) return this
+        val remaining = synced.filterNot { it.id == id }
+        val nextActive = if (id == activeId) remaining.first().id else activeId
+        return copy(sets = remaining, activeSetId = nextActive).loadActive()
+    }
+
+    private fun uniqueSetName(name: String, existing: List<FilterSet>): String {
+        val base = name.trim().take(MAX_FILTER_SET_NAME).ifBlank { AppText.get(R.string.filter_set_default_name) }
+        if (existing.none { it.name.equals(base, ignoreCase = true) }) return base
+        var index = 2
+        while (true) {
+            val suffix = " $index"
+            val candidate = base.take(MAX_FILTER_SET_NAME - suffix.length) + suffix
+            if (existing.none { it.name.equals(candidate, ignoreCase = true) }) return candidate
+            index++
+        }
     }
 }
 
 @Serializable
-enum class FilterSurface(val label: String) {
-    FEED(AppText.get(R.string.data_feed)), MAP(AppText.get(R.string.alerts_map)), NOTIFICATIONS(AppText.get(R.string.onboarding_notifications))
+enum class FilterSurface(private val labelRes: Int) {
+    FEED(R.string.data_feed), MAP(R.string.alerts_map), NOTIFICATIONS(R.string.onboarding_notifications), WIDGETS(R.string.settings_widgets);
+
+    val label: String get() = AppText.get(labelRes)
 }
+
+const val DEFAULT_FILTER_SET_ID = "set-default"
+const val MAX_FILTER_SETS = 8
+const val MAX_FILTER_SET_NAME = 24
 
 /**
  * 2 added [FilterDefinition.distanceOverrides]; 3 stores distances in meters (v1/v2 stored
@@ -380,6 +519,7 @@ object FilterStateCodec {
             )
         }.getOrNull()
             ?.takeIf { it.schemaVersion >= 1 }
+            ?.withSetsInitialized()
     }
 
     fun encodeAssignment(assignment: FilterAssignment): String =

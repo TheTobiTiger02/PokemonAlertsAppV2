@@ -240,7 +240,7 @@ internal class FloatingWindow(
         // A bare glyph over map tiles is invisible against half the places you might stand.
         background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
         elevation = dp(2).toFloat()
-        contentDescription = "Resize map"
+        contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_overlay_resize_map)
         setOnTouchListener(ResizeListener())
         grip = this
         applyGripColors(colors)

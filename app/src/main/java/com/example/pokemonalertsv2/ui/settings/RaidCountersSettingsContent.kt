@@ -177,8 +177,7 @@ fun RaidCountersSettingsContent(
         }
 
         Text(
-            text = "In Poké Genie: Menu → Export/Backup → Export scan data to CSV, " +
-                "then choose Pokémon Alerts. You can also pick the file here.",
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_pokegenie_export_hint),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

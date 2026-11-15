@@ -214,7 +214,7 @@ class ManualRaidActivity : ComponentActivity() {
             val alert = createManualRaidAlert(boss)
             if (!RaidWatchController.start(applicationContext, alert)) {
                 viewModel.setStarting(null)
-                Toast.makeText(this@ManualRaidActivity, "Couldn't start Raid Live Update.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@ManualRaidActivity, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_raid_live_update_failed), Toast.LENGTH_LONG).show()
                 return@launch
             }
             startActivity(

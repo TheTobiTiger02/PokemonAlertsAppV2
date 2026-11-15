@@ -137,9 +137,12 @@ enum class SortPreference {
 }
 
 /** How feed and history rows are drawn: dense rows, or the original cards with a map preview. */
-enum class AlertCardStyle(val label: String) {
-    COMPACT(AppText.get(R.string.data_compact)),
-    LARGE(AppText.get(R.string.data_large_with_map));
+enum class AlertCardStyle(private val labelRes: Int) {
+    COMPACT(R.string.data_compact),
+    LARGE(R.string.data_large_with_map);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 
     companion object {
         fun fromStored(value: String?): AlertCardStyle = entries.firstOrNull { it.name == value } ?: COMPACT
@@ -465,7 +468,7 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
             dataStore.data
                 .distinctUntilChangedBy { preferences -> preferences[FILTER_STATE_KEY] }
                 .map { preferences ->
-                    FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) ?: migrateLegacyFilterState(preferences)
+                    FilterStateCodec.decode(preferences[FILTER_STATE_KEY]) ?: migrateLegacyFilterState(preferences).withSetsInitialized()
                 }
         )
     }
@@ -475,7 +478,7 @@ class AlertPreferences(private val dataStore: DataStore<Preferences>) : AlertPre
     ) {
         dataStore.edit { preferences ->
             val current = FilterStateCodec.decode(preferences[FILTER_STATE_KEY])
-                ?: migrateLegacyFilterState(preferences)
+                ?: migrateLegacyFilterState(preferences).withSetsInitialized()
             preferences[FILTER_STATE_KEY] = FilterStateCodec.encode(
                 transform(current).copy(schemaVersion = maxOf(current.schemaVersion, CURRENT_FILTER_SCHEMA_VERSION))
             )

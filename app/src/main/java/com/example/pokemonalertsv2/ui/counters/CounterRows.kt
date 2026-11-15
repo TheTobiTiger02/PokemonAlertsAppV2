@@ -139,8 +139,7 @@ internal fun TeamSection(
                 // whether the ranking simply rates them badly.
                 if (activeMegaId == null) {
                     Text(
-                        text = "No mega active, so none is suggested. " +
-                            "Pick yours under Active mega.",
+                        text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_counters_no_mega),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

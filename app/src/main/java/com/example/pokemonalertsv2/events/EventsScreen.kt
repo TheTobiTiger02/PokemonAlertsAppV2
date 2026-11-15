@@ -296,11 +296,14 @@ fun EventsContent(
 }
 
 /** Which slice of the event list is showing. Not persisted: it is a way of looking, not a setting. */
-private enum class EventView(val label: String) {
-    ALL(AppText.get(R.string.alerts_all)),
-    NOW(AppText.get(R.string.catchroutes_now)),
-    UPCOMING(AppText.get(R.string.events_upcoming)),
-    STARRED(AppText.get(R.string.events_starred))
+private enum class EventView(private val labelRes: Int) {
+    ALL(R.string.alerts_all),
+    NOW(R.string.catchroutes_now),
+    UPCOMING(R.string.events_upcoming),
+    STARRED(R.string.events_starred);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 @Composable

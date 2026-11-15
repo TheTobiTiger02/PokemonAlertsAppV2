@@ -116,7 +116,7 @@ internal class HuntBatterySaver(private val context: Context, private val onEsca
             isClickable = true
             isFocusable = true
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-            contentDescription = "Battery Saver. Turn the phone upright to restore the screen. Long press or activate Dismiss to turn Battery Saver off."
+            contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_hunt_battery_saver_description)
             setOnLongClickListener { escape(); true }
         }
         val params = WindowManager.LayoutParams(

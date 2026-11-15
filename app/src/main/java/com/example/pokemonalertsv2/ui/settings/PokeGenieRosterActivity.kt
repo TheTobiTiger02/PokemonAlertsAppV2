@@ -114,7 +114,7 @@ class PokeGenieRosterActivity : ComponentActivity() {
                                     IconButton(onClick = { finish() }) {
                                         Icon(
                                             Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "Back"
+                                            contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_back)
                                         )
                                     }
                                 },

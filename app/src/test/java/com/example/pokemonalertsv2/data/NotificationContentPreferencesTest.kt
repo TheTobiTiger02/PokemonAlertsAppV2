@@ -74,7 +74,7 @@ class NotificationContentPreferencesTest {
 
     @Test
     fun unknownNamesAreToleratedAndSurviveAnUnrelatedFieldEdit() {
-        val decoded = NotificationContentCodec.decode("""{"version":1,"newProperty":true,"categories":{"RAID":{"collapsed":["WEATHER","FUTURE_FIELD"]},"FUTURE_CATEGORY":{"collapsed":[]}}}""")
+        val decoded = NotificationContentCodec.decode("""{"version":2,"newProperty":true,"categories":{"RAID":{"collapsed":["WEATHER","FUTURE_FIELD"]},"FUTURE_CATEGORY":{"collapsed":[]}}}""")
         assertEquals(setOf(NotificationField.WEATHER), decoded.fields(FilterAlertType.RAID, false))
         val edited = decoded.withField(FilterAlertType.RAID, false, NotificationField.TIME_LEFT, true)
         assertTrue("FUTURE_FIELD" in edited.categories.getValue("RAID").collapsed!!)
@@ -119,5 +119,54 @@ class NotificationContentPreferencesTest {
         override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences = mutex.withLock {
             transform(state.value).also { state.value = it }
         }
+    }
+
+
+    @Test
+    fun version1MigratesToTheSameRenderedOrder() {
+        val v1 = """{"version":1,"categories":{"RAID":{"collapsed":["VENUE","WEATHER"],"expanded":["MOVES","TIME_LEFT"],"title":["SUBJECT","CATEGORY"],"image":"THUMBNAIL"}}}"""
+        val migrated = NotificationContentCodec.decode(v1)
+        assertEquals(NotificationContentPreferences.VERSION, migrated.version)
+        // Version 1 rendered in declaration order, so the migration writes that order down.
+        assertEquals(listOf(NotificationField.WEATHER, NotificationField.VENUE), migrated.collapsedOrder(FilterAlertType.RAID))
+        assertEquals(listOf(listOf(NotificationField.TIME_LEFT), listOf(NotificationField.MOVES)), migrated.expandedLines(FilterAlertType.RAID))
+        assertEquals(listOf(NotificationTitlePart.CATEGORY, NotificationTitlePart.SUBJECT), migrated.titleOrder(FilterAlertType.RAID))
+        assertEquals(NotificationImageStyle.THUMBNAIL, migrated.imageStyle(FilterAlertType.RAID))
+        assertEquals(migrated, NotificationContentCodec.decode(NotificationContentCodec.encode(migrated)))
+    }
+
+    @Test
+    fun ordersLinesAndStylesArePerTypeAndInheritTheSharedLayout() {
+        val shared = NotificationContentPreferences()
+            .withCollapsedOrder(null, listOf(NotificationField.TIME_LEFT, NotificationField.IV, NotificationField.DISTANCE))
+            .withStyle(null, NotificationField.IV, NotificationFieldStyle.ICON)
+        // A type without its own layout follows the shared one, minus what it does not offer.
+        assertEquals(listOf(NotificationField.TIME_LEFT, NotificationField.IV, NotificationField.DISTANCE), shared.collapsedOrder(FilterAlertType.HUNDO))
+        assertEquals(listOf(NotificationField.TIME_LEFT, NotificationField.DISTANCE), shared.collapsedOrder(FilterAlertType.RAID))
+        assertEquals(NotificationFieldStyle.ICON, shared.style(FilterAlertType.HUNDO, NotificationField.IV))
+        assertFalse(shared.isCustomized(FilterAlertType.HUNDO))
+
+        val own = shared.withCollapsedOrder(FilterAlertType.HUNDO, listOf(NotificationField.CP))
+        assertEquals(listOf(NotificationField.CP), own.collapsedOrder(FilterAlertType.HUNDO))
+        assertEquals(shared.collapsedOrder(FilterAlertType.PVP), own.collapsedOrder(FilterAlertType.PVP))
+        assertEquals(shared.collapsedOrder(FilterAlertType.HUNDO), own.reset(FilterAlertType.HUNDO).collapsedOrder(FilterAlertType.HUNDO))
+
+        val grouped = own.withExpandedLines(FilterAlertType.HUNDO, listOf(listOf(NotificationField.CP, NotificationField.IV), listOf(NotificationField.TIME_LEFT)))
+        assertEquals(listOf(listOf(NotificationField.CP, NotificationField.IV), listOf(NotificationField.TIME_LEFT)), grouped.expandedLines(FilterAlertType.HUNDO))
+        assertTrue(grouped.hasCustomExpandedOrder(FilterAlertType.HUNDO))
+        // Hiding details keeps the built-in order.
+        assertFalse(NotificationContentPreferences().withField(FilterAlertType.RAID, true, NotificationField.MOVES, false).hasCustomExpandedOrder(FilterAlertType.RAID))
+    }
+
+    @Test
+    fun copyingALayoutDropsWhatTheTargetDoesNotOffer() {
+        val raid = NotificationContentPreferences()
+            .withCollapsedOrder(FilterAlertType.RAID, listOf(NotificationField.CATCH_CP, NotificationField.TIME_LEFT, NotificationField.VENUE))
+            .withImageStyle(FilterAlertType.RAID, NotificationImageStyle.NONE)
+        val copied = raid.copyLayout(FilterAlertType.RAID, listOf(FilterAlertType.QUEST, null))
+        assertEquals(listOf(NotificationField.TIME_LEFT, NotificationField.VENUE), copied.collapsedOrder(FilterAlertType.QUEST))
+        assertEquals(NotificationImageStyle.NONE, copied.imageStyle(FilterAlertType.QUEST))
+        assertTrue(copied.isCustomized(null))
+        assertEquals(raid.collapsedOrder(FilterAlertType.RAID), copied.collapsedOrder(FilterAlertType.RAID))
     }
 }

@@ -75,7 +75,29 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         initStep("filter topic resync") { resyncPushTopicsOnFilterChanges() }
         initStep("tracking topic resync") { resyncPushTopicsOnTrackingChanges() }
         initStep("widget updates") { WidgetUpdateCoordinator.start(this) }
+        initStep("game text") { com.example.pokemonalertsv2.data.gametext.GameTextRepository.get(this).refreshAsync() }
+        lastLanguage = resources.configuration.locales[0]?.language
     }
+
+    /**
+     * A language switch (Settings → Appearance → Language, or Android's per-app setting) lands
+     * here. Activities recreate themselves; everything that outlives them is redrawn by hand:
+     * notification channel names, widgets and the game-name dictionary.
+     */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        com.example.pokemonalertsv2.util.AppText.init(this)
+        val language = newConfig.locales[0]?.language
+        if (language == lastLanguage) return
+        lastLanguage = language
+        initStep("notification channel") { AlertNotifier.ensureChannel(this) }
+        initStep("event reminder channel") { com.example.pokemonalertsv2.work.EventReminderNotifyWorker.ensureChannel(this) }
+        initStep("widget redraw") { com.example.pokemonalertsv2.widget.AlertsWidgetProvider.requestUpdate(this) }
+        initStep("raid watch redraw") { applicationScope.launch { runCatching { RaidWatchController.refresh(this@PokemonAlertsApplication) } } }
+        initStep("game text") { com.example.pokemonalertsv2.data.gametext.GameTextRepository.get(this).refreshAsync() }
+    }
+
+    private var lastLanguage: String? = null
 
     private inline fun initStep(name: String, step: () -> Unit) {
         try {
@@ -105,6 +127,8 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
                     .collect {
                         runCatching { PokemonAlertsRepository.create(this@PokemonAlertsApplication).markCachedAlertsAsSeen() }
                         PushTopicSyncWorker.triggerSync(this@PokemonAlertsApplication)
+                        // Switching filter sets changes what widgets that follow the set show.
+                        com.example.pokemonalertsv2.widget.AlertsWidgetProvider.requestUpdate(this@PokemonAlertsApplication)
                     }
             }
         }

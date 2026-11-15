@@ -29,24 +29,33 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 /** How far back to look. Kept short: these are the windows worth walking on. */
-enum class InsightsRange(val label: String, val days: Long) {
-    LAST_7(AppText.get(R.string.history_7_days), 7),
-    LAST_30(AppText.get(R.string.history_30_days), 30),
-    LAST_90(AppText.get(R.string.history_90_days), 90)
+enum class InsightsRange(private val labelRes: Int, val days: Long) {
+    LAST_7(R.string.history_7_days, 7),
+    LAST_30(R.string.history_30_days, 30),
+    LAST_90(R.string.history_90_days, 90);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 /** Insights has two tabs: a species' alert history, and what the live scanner saw spawn. */
-enum class InsightsTab(val label: String) {
-    ALERTS(AppText.get(R.string.history_alerts)),
-    SPAWNS(AppText.get(R.string.history_spawns))
+enum class InsightsTab(private val labelRes: Int) {
+    ALERTS(R.string.history_alerts),
+    SPAWNS(R.string.history_spawns);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 /** Spawn-tab windows; the server keeps sightings for 30 days. */
-enum class SpawnRange(val label: String, val days: Int) {
-    TODAY(AppText.get(R.string.alerts_today), 1),
-    LAST_7(AppText.get(R.string.history_7_days), 7),
-    LAST_14(AppText.get(R.string.history_14_days), 14),
-    LAST_30(AppText.get(R.string.history_30_days), 30)
+enum class SpawnRange(private val labelRes: Int, val days: Int) {
+    TODAY(R.string.alerts_today, 1),
+    LAST_7(R.string.history_7_days, 7),
+    LAST_14(R.string.history_14_days, 14),
+    LAST_30(R.string.history_30_days, 30);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 @Immutable

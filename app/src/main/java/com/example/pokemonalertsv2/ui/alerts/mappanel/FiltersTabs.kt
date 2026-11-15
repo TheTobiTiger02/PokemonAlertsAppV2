@@ -44,14 +44,17 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.unit.dp
 
 /** The Filters tabs, in the order PogoMapper-style mappers use: where, then what. */
-private enum class FiltersTab(val label: String) {
-    NEARBY(AppText.get(R.string.alerts_nearby)),
-    TYPES(AppText.get(R.string.alerts_types)),
-    POKEMON(AppText.get(R.string.alerts_pok_mon)),
-    RAIDS(AppText.get(R.string.data_raids)),
-    ROCKET(AppText.get(R.string.alerts_rocket)),
-    QUESTS(AppText.get(R.string.data_quests)),
-    TAPPABLES(AppText.get(R.string.data_tappables))
+private enum class FiltersTab(private val labelRes: Int) {
+    NEARBY(R.string.alerts_nearby),
+    TYPES(R.string.alerts_types),
+    POKEMON(R.string.alerts_pok_mon),
+    RAIDS(R.string.data_raids),
+    ROCKET(R.string.alerts_rocket),
+    QUESTS(R.string.data_quests),
+    TAPPABLES(R.string.data_tappables);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 /**

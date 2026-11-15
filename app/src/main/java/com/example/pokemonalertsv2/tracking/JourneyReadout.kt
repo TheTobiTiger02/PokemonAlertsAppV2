@@ -127,8 +127,9 @@ fun alertDetailLines(
     iv?.takeIf { it.isNotBlank() }?.let { add("IV $it") }
     alert.pokemonForm?.takeIf { it.isNotBlank() }?.let(::add)
     if (alert.hasTypeContaining("quest")) {
-        alert.questTask?.takeIf { it.isNotBlank() }?.let(::add)
-        alert.questReward?.takeIf { it.isNotBlank() }?.let(::add)
+        val quest = com.example.pokemonalertsv2.ui.alerts.questAlertPresentation(alert)
+        (quest?.task ?: alert.questTask)?.takeIf { it.isNotBlank() }?.let(::add)
+        (quest?.reward ?: alert.questReward)?.takeIf { it.isNotBlank() }?.let(::add)
     }
     TimeUtils.parseEndTimeToMillis(alert.endTime)
         ?.minus(nowMillis)

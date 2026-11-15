@@ -78,7 +78,9 @@ internal class FiltersState(
     /** Opens the full editor from the Nearby tab; null where this already is the full editor. */
     val openFilterStudio: (() -> Unit)? = null,
     /** What the Nearby tab adds below distance, such as Filter Studio's areas and profiles. */
-    val nearbyExtras: (@Composable () -> Unit)? = null
+    val nearbyExtras: (@Composable () -> Unit)? = null,
+    /** The map sheet can switch filter sets; Filter Studio edits one set and cannot. */
+    val showSetSwitcher: Boolean = false
 )
 
 /**
@@ -123,7 +125,8 @@ internal fun MapFiltersSheet(
                     onDefinitionChange = onDefinitionChange,
                     openQuests = { showQuests = true },
                     openDistanceOverrides = { showDistanceOverrides = true },
-                    openFilterStudio = onOpenFilterStudio
+                    openFilterStudio = onOpenFilterStudio,
+                    showSetSwitcher = true
                 )
             )
         }
@@ -174,6 +177,7 @@ internal fun FiltersHeader(state: FiltersState) {
         title = stringResource(R.string.alerts_filters),
         subtitle = stringResource(R.string.alerts_x_of_x_alerts_shown, state.visibleCount, state.totalCount),
         actions = {
+            if (state.showSetSwitcher) com.example.pokemonalertsv2.ui.components.FilterSetSwitcher()
             val previous = beforeReset
             when {
                 previous != null && state.definition == FilterDefinition() ->

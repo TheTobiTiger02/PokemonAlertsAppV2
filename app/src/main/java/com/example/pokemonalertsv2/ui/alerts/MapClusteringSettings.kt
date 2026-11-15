@@ -78,8 +78,7 @@ internal fun MapGroupingEditor(modifier: Modifier = Modifier) {
 
     Column(modifier = modifier.testTag("map_clustering_settings")) {
         Text(
-            text = "Groups keep a busy map readable. Every alert stays reachable: a group opens " +
-                "into its members.",
+            text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_clustering_intro),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = Spacing.sm)

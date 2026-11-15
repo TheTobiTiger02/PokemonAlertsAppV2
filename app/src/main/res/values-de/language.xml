@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="language_title">Sprache</string>
+    <string name="language_system">Systemstandard</string>
+    <string name="language_english">English</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_unsupported">Folgt auf Android 12 und älter der Sprache des Telefons</string>
+    <string name="language_game_names">Pokémon, Attacken und Items werden ebenfalls in dieser Sprache angezeigt.</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Hell</string>
+    <string name="theme_dark">Dunkel</string>
+</resources>

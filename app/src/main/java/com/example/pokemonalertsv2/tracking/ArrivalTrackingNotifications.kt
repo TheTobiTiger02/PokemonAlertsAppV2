@@ -56,7 +56,7 @@ internal object ArrivalTrackingNotifications {
                 "Active alert journey",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows the alert currently being approached"
+                description = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_channel_ongoing)
                 setSound(null, null)
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
@@ -68,7 +68,7 @@ internal object ArrivalTrackingNotifications {
                 "Alert arrival",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notifies you when an alert is within your selected range"
+                description = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_channel_arrival)
                 enableLights(true)
                 lightColor = Color.GREEN
                 enableVibration(true)
@@ -80,8 +80,8 @@ internal object ArrivalTrackingNotifications {
     fun restoring(context: Context): Notification {
         if (Build.VERSION.SDK_INT < LIVE_NOTIFICATION_MIN_SDK) {
             return ongoingBuilder(context)
-                .setContentTitle("Restoring alert journey")
-                .setContentText("Waiting for the active destination")
+                .setContentTitle(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_restoring))
+                .setContentText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_waiting))
                 .build()
         }
         // Even this brief placeholder has to ask for promotion: it is what the shade shows
@@ -89,9 +89,9 @@ internal object ArrivalTrackingNotifications {
         // never reaches the status bar chip. BigTextStyle is the one promotion-eligible style
         // that renders without an alert to decorate.
         return liveBuilder(context, alert = null)
-            .setContentTitle("Restoring alert journey")
-            .setContentText("Waiting for the active destination")
-            .setStyle(Notification.BigTextStyle().bigText("Waiting for the active destination"))
+            .setContentTitle(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_restoring))
+            .setContentText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_waiting))
+            .setStyle(Notification.BigTextStyle().bigText(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_tracking_waiting)))
             .apply { setShortCriticalText(AppText.get(R.string.tracking_waiting)) }
             .build()
     }

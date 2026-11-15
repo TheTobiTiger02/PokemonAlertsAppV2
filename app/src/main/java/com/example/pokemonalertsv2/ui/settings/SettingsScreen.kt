@@ -78,16 +78,19 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.text.style.TextOverflow
 
 // Names are part of the pokemonalerts://settings/<name> deep-link contract; titles are free.
-internal enum class SettingsDestination(val title: String) {
-    OVERVIEW(AppText.get(R.string.events_settings)),
-    APPEARANCE_BEHAVIOR(AppText.get(R.string.settings_appearance)),
-    MAP_TRACKING(AppText.get(R.string.settings_map_tracking)),
-    ALERT_FILTERS(AppText.get(R.string.alerts_filters)),
-    GODEX(AppText.get(R.string.settings_godex_checklist)),
-    GODEX_COLLECTION(AppText.get(R.string.settings_godex_collection)),
-    RAID_COUNTERS(AppText.get(R.string.settings_raid_counters)),
-    NOTIFICATIONS(AppText.get(R.string.settings_notifications_permissions)),
-    ABOUT_UPDATES(AppText.get(R.string.settings_backup_about))
+internal enum class SettingsDestination(private val titleRes: Int) {
+    OVERVIEW(R.string.events_settings),
+    APPEARANCE_BEHAVIOR(R.string.settings_appearance),
+    MAP_TRACKING(R.string.settings_map_tracking),
+    ALERT_FILTERS(R.string.alerts_filters),
+    GODEX(R.string.settings_godex_checklist),
+    GODEX_COLLECTION(R.string.settings_godex_collection),
+    RAID_COUNTERS(R.string.settings_raid_counters),
+    NOTIFICATIONS(R.string.settings_notifications_permissions),
+    ABOUT_UPDATES(R.string.settings_backup_about);
+
+    /** Read on every access, so a language switch shows at once. */
+    val title: String get() = AppText.get(titleRes)
 }
 
 internal fun goDexDisconnectMessage(pendingCount: Int): String =
@@ -383,9 +386,9 @@ internal fun SettingsScreen(
                             append(" · ")
                             append(
                                 if (raidCounterSettings.pokeGenieCount > 0) {
-                                    "${raidCounterSettings.pokeGenieCount} of yours imported"
+                                    com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_pokegenie_imported, raidCounterSettings.pokeGenieCount)
                                 } else {
-                                    "Poke Genie not imported"
+                                    com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_pokegenie_not_imported)
                                 }
                             )
                         },
@@ -409,11 +412,12 @@ internal fun SettingsScreen(
                 if (animatedDestination == SettingsDestination.APPEARANCE_BEHAVIOR) {
                 SettingsSection(title = stringResource(R.string.settings_theme)) {
                     SegmentedSetting(
-                        options = listOf("System", "Light", "Dark"),
+                        options = listOf(stringResource(R.string.theme_system), stringResource(R.string.theme_light), stringResource(R.string.theme_dark)),
                         selectedIndex = themeMode.coerceIn(0, 2),
                         onSelected = { viewModel.updateThemeMode(it) }
                     )
                 }
+                LanguageSection()
                 SettingsSection(title = stringResource(R.string.settings_alert_list)) {
                     Text(
                         text = stringResource(R.string.settings_row_style),
@@ -481,8 +485,7 @@ internal fun SettingsScreen(
                         )
                     }
                     Text(
-                        text = "How close counts as arrived for alerts without a stop or spawn. " +
-                            "Gyms and PokéStops use 80 m; Pokémon spawns use 40 m (80 m with Spacial Rend).",
+                        text = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_arrival_radius_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -611,6 +614,38 @@ internal fun SettingsScreen(
                     Text(stringResource(R.string.mainscaffoldkt_cancel))
                 }
             }
+        )
+    }
+}
+
+/**
+ * The app's language, separate from the phone's (Android 13 and newer keep it for us).
+ * Choosing one recreates the screen in that language straight away.
+ */
+@androidx.compose.runtime.Composable
+private fun LanguageSection() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val language = com.example.pokemonalertsv2.util.AppLanguage
+    SettingsSection(title = stringResource(R.string.language_title)) {
+        if (!language.isSupported) {
+            Text(
+                stringResource(R.string.language_unsupported),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return@SettingsSection
+        }
+        val choices = com.example.pokemonalertsv2.util.AppLanguage.Choice.entries
+        val current = androidx.compose.runtime.remember { language.current(context) }
+        SegmentedSetting(
+            options = choices.map { it.label },
+            selectedIndex = choices.indexOf(current),
+            onSelected = { index -> language.set(context, choices[index]) }
+        )
+        Text(
+            stringResource(R.string.language_game_names),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }

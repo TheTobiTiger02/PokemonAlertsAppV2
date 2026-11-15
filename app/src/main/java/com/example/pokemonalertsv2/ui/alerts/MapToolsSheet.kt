@@ -87,7 +87,7 @@ internal fun MapToolsContent(
                 subtitle = stringResource(R.string.alerts_keep_the_map_on_top_of),
                 icon = { Icon(painterResource(R.drawable.ic_pip), contentDescription = null) },
                 onClick = onEnterPictureInPicture,
-                modifier = Modifier.semantics { contentDescription = "Open map in picture-in-picture" }
+                modifier = Modifier.semantics { contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_map_open_pip) }
             )
         }
         ToolRow(

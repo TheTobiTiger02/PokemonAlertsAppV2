@@ -12,8 +12,9 @@ internal data class SettingsSearchEntry(
 )
 
 /** Settings worth finding by name. Titles are what each page shows, keywords what people type. */
-internal val SETTINGS_SEARCH_INDEX = listOf(
-    SettingsSearchEntry(AppText.get(R.string.notification_content_title), SettingsDestination.NOTIFICATIONS, listOf("collapsed", "expanded", "weather", "notification details", "customize")),
+// A getter, so the entries follow a language switch.
+internal val SETTINGS_SEARCH_INDEX get() = listOf(
+    SettingsSearchEntry(AppText.get(R.string.notification_content_title), SettingsDestination.NOTIFICATIONS, listOf("collapsed", "expanded", "weather", "notification details", "customize", "order", "layout", "reihenfolge", "layout kopieren")),
     SettingsSearchEntry(AppText.get(R.string.settings_notifications_on_or_off), SettingsDestination.NOTIFICATIONS, listOf("alerts", "push")),
     SettingsSearchEntry(AppText.get(R.string.settings_quiet_hours), SettingsDestination.NOTIFICATIONS, listOf("night", "sleep", "do not disturb")),
     SettingsSearchEntry(AppText.get(R.string.settings_silence_notifications), SettingsDestination.NOTIFICATIONS, listOf("mute", "pause", "snooze")),
@@ -22,7 +23,9 @@ internal val SETTINGS_SEARCH_INDEX = listOf(
     SettingsSearchEntry(AppText.get(R.string.settings_location_permission), SettingsDestination.NOTIFICATIONS, listOf("gps", "background location")),
     SettingsSearchEntry(AppText.get(R.string.settings_floating_journey_pill), SettingsDestination.NOTIFICATIONS, listOf("overlay", "i'm going")),
     SettingsSearchEntry(AppText.get(R.string.alerts_filters), SettingsDestination.ALERT_FILTERS, listOf("filter studio", "profiles", "presets")),
+    SettingsSearchEntry(AppText.get(R.string.filter_sets_manage_title), SettingsDestination.ALERT_FILTERS, listOf("filter set", "sets", "switch", "filtersatz", "sätze", "wechseln")),
     SettingsSearchEntry(AppText.get(R.string.settings_distance_and_walking_time), SettingsDestination.ALERT_FILTERS, listOf("range", "km", "minutes")),
+    SettingsSearchEntry(AppText.get(R.string.language_title), SettingsDestination.APPEARANCE_BEHAVIOR, listOf("language", "sprache", "deutsch", "english", "german", "englisch")),
     SettingsSearchEntry(AppText.get(R.string.settings_theme), SettingsDestination.APPEARANCE_BEHAVIOR, listOf("dark mode", "light", "night mode")),
     SettingsSearchEntry(AppText.get(R.string.settings_row_style), SettingsDestination.APPEARANCE_BEHAVIOR, listOf("compact", "large", "cards")),
     SettingsSearchEntry(AppText.get(R.string.settings_default_sort), SettingsDestination.APPEARANCE_BEHAVIOR, listOf("order", "newest", "nearest")),

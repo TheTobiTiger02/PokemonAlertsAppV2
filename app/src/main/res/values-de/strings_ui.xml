@@ -842,7 +842,6 @@
     <string name="raidwatch_raid_ended">Raid beendet</string>
     <string name="raidwatch_started_manually_for_a_x_raid">Manuell für einen %1$s-Raid gestartet</string>
     <string name="settings_1_alert_type">1 Alarmtyp</string>
-    <string name="settings_1_area">1 Gebiet</string>
     <string name="settings_1_change">1 Änderung</string>
     <string name="settings_1_distance_override">1 eigene Entfernung</string>
     <string name="settings_40_m_default">Standard 40 m</string>
@@ -863,7 +862,6 @@
     <string name="settings_app_information">App-Informationen</string>
     <string name="settings_appearance">Darstellung</string>
     <string name="settings_apply">Anwenden</string>
-    <string name="settings_apply_to_all">Auf alle anwenden</string>
     <string name="settings_areas">Gebiete</string>
     <string name="settings_arrival_radius">Ankunftsradius</string>
     <string name="settings_arrival_tracking">Ankunfts-Tracking</string>
@@ -895,12 +893,10 @@
     <string name="settings_confirming_replaces_the_pending_godex_state">Bestätigen ersetzt den ausstehenden GoDex-Stand für genau diesen Eintrag.</string>
     <string name="settings_connect_your_godex_hundo_checklist_to">Verbinde deine GoDex-Hundo-Checkliste, um zu sehen, was dir noch fehlt, und Alarme für Hundos, die du hast, stumm zu halten.</string>
     <string name="settings_connecting">Wird verbunden…</string>
-    <string name="settings_copy">Kopieren</string>
     <string name="settings_copy_from">Kopieren von</string>
     <string name="settings_counter_defaults">Konter-Standards</string>
     <string name="settings_counters_go_back_to_generic_teams">Konter nutzen wieder Standard-Teams, bis du erneut eine CSV importierst.</string>
     <string name="settings_crash_report">Absturzbericht</string>
-    <string name="settings_custom_rules"> • Eigene Regeln</string>
     <string name="settings_customize">Anpassen</string>
     <string name="settings_day">Tag</string>
     <string name="settings_default_is_x_a_species_limit">Standard ist %1$s. Ein Limit pro Art gilt vor einem Limit pro Alarmtyp, das vor dem Standard gilt.</string>
@@ -916,7 +912,6 @@
     <string name="settings_distances_map">Entfernungen, Karte</string>
     <string name="settings_draft_changes_apply_together">Entwurfsänderungen gelten zusammen</string>
     <string name="settings_duplicate">Duplizieren</string>
-    <string name="settings_each_surface_has_its_own_rules">Jede Oberfläche hat eigene Regeln. Fang einfach an und passe dann nur die Alarmtypen an, die dir wichtig sind.</string>
     <string name="settings_editing_x_also_changes_x_these">Wenn du %1$s bearbeitest, ändert sich auch: %2$s. Diese Nutzer bleiben verknüpft.</string>
     <string name="settings_end_now">Jetzt beenden</string>
     <string name="settings_ending">Endet</string>
@@ -940,8 +935,6 @@
     <string name="settings_keep_these_rules_to_reuse_or">Diese Regeln zum Wiederverwenden oder Verknüpfen behalten</string>
     <string name="settings_l_x_only">Nur ab L%1$s</string>
     <string name="settings_last_push">Letzter Push</string>
-    <string name="settings_legacy_rules_migrates_when_edited">Alte Regeln • werden beim Bearbeiten umgestellt</string>
-    <string name="settings_link">Verknüpfen</string>
     <string name="settings_location_in_use">Standort in Verwendung</string>
     <string name="settings_location_permission">Standortberechtigung</string>
     <string name="settings_map_markers">Kartenmarker</string>
@@ -958,7 +951,6 @@
     <string name="settings_no_setting_matches_x">Keine Einstellung passt zu „%1$s“.</string>
     <string name="settings_no_species_limits_yet_a_species">Noch keine Limits pro Art. Ein Limit pro Art gilt überall, wo diese Art auftaucht, auch als Quest-Belohnung.</string>
     <string name="settings_no_synced_pok_mon">Keine synchronisierten Pokémon</string>
-    <string name="settings_no_widgets_placed_add_one_from">Keine Widgets platziert. Füge eins auf dem Startbildschirm hinzu, um ihm einen eigenen Filter zu geben.</string>
     <string name="settings_none_yet">noch keine</string>
     <string name="settings_not_connected">Nicht verbunden</string>
     <string name="settings_nothing_in_this_selector_will_match">Nichts in dieser Auswahl wird passen</string>
@@ -967,7 +959,6 @@
     <string name="settings_notifications_permissions">Benachrichtigungen &amp; Berechtigungen</string>
     <string name="settings_off">Aus</string>
     <string name="settings_only_notify_needed">Nur Gesuchte melden</string>
-    <string name="settings_only_this_surface">Nur diese Oberfläche</string>
     <string name="settings_other_alert_radius">Radius für andere Alarme</string>
     <string name="settings_pause_every_alert_for_a_while">Alle Alarme eine Zeit lang pausieren</string>
     <string name="settings_per_alert_type_in_android_settings">Pro Alarmtyp, in den Android-Einstellungen</string>
@@ -1040,9 +1031,7 @@
     <string name="settings_this_profile_is_not_linked_to">Dieses Profil ist mit keiner Oberfläche verknüpft.</string>
     <string name="settings_to_x">Bis %1$s</string>
     <string name="settings_unavailable_selections_are_preserved">Nicht verfügbare Auswahlen bleiben erhalten</string>
-    <string name="settings_unified_filter_instance_x">Gemeinsamer Filter • Instanz #%1$s</string>
     <string name="settings_unique_name">Eindeutiger Name</string>
-    <string name="settings_update_linked_profile">Verknüpftes Profil aktualisieren?</string>
     <string name="settings_use_a_public_link_instead">Stattdessen einen öffentlichen Link verwenden</string>
     <string name="settings_use_default">Standard verwenden</string>
     <string name="settings_use_task_reward_rule">Aufgabe-+-Belohnung-Regel verwenden</string>
@@ -1055,7 +1044,6 @@
     <string name="settings_watch_health_data">Uhr- &amp; Gesundheitsdaten</string>
     <string name="settings_what_notifies">Was benachrichtigt</string>
     <string name="settings_what_the_feed_map_widgets_and">Was Feed, Karte, Widgets und Benachrichtigungen zeigen</string>
-    <string name="settings_widget_instances">Widget-Instanzen</string>
     <string name="settings_widgets">Widgets</string>
     <string name="settings_x_advanced"> • %1$s erweitert</string>
     <string name="settings_x_advanced_rules">%1$s erweiterte Regeln</string>
@@ -1141,12 +1129,10 @@
     <string name="widget_location_unavailable">Standort nicht verfügbar</string>
     <string name="widget_location_unavailable_tap_to_retry">Standort nicht verfügbar · tippen zum Wiederholen</string>
     <string name="widget_location_updated">Standort aktualisiert</string>
-    <string name="widget_open_filter_studio">Filter-Studio öffnen</string>
     <string name="widget_refresh_failed">Aktualisierung fehlgeschlagen</string>
     <string name="widget_save_widget">Widget speichern</string>
     <string name="widget_show_these_event_types">Diese Event-Typen zeigen</string>
     <string name="widget_sorting_only_changes_the_order_never">Sortierung ändert nur die Reihenfolge, nie welche Alarme passen.</string>
-    <string name="widget_this_widget_has_independent_alert_rules">Dieses Widget hat eigene Alarmregeln. Verknüpfe ein wiederverwendbares Profil oder behalte eine lokale Kopie.</string>
     <string name="widget_today_in_x">heute, in %1$s</string>
     <string name="widget_widget_configuration">Widget-Einstellungen</string>
 </resources>

@@ -111,7 +111,7 @@ class EventReminderNotifyWorker(appContext: Context, params: WorkerParameters) :
         fun ensureChannel(context: Context) {
             context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
                 NotificationChannel(CHANNEL, "Event reminders", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Reminders before Community Days, Spotlight Hours and other events you chose"
+                    description = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_event_reminder_channel)
                 }
             )
         }

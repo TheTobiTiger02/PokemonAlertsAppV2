@@ -169,6 +169,43 @@ class NotificationContentTest {
         assertFalse(content.expanded.contains("CP 938"))
     }
 
+
+    @Test
+    fun customOrderLineGroupsAndStylesShapeTheBody() {
+        val preferences = NotificationContentPreferences()
+            .withCollapsedOrder(FilterAlertType.RAID, listOf(NotificationField.TIME_LEFT, NotificationField.VENUE))
+            .withExpandedLines(FilterAlertType.RAID, listOf(listOf(NotificationField.VENUE, NotificationField.TIME_LEFT), listOf(NotificationField.MOVES)))
+            .withStyle(FilterAlertType.RAID, NotificationField.TIME_LEFT, NotificationFieldStyle.ICON)
+        val content = render(raid, preferences)
+        assertEquals("⏱ 12 min • Central Gym", content.collapsed)
+        val lines = content.expanded.lines()
+        assertEquals("Central Gym • ⏱ 12 min", lines[0])
+        assertTrue(lines[1].contains("Confusion"))
+        assertEquals(2, lines.size)
+
+        val bare = render(raid, preferences.withStyle(FilterAlertType.RAID, NotificationField.TIME_LEFT, NotificationFieldStyle.VALUE))
+        assertTrue(bare.collapsed.startsWith("12 min • "))
+        val labelled = render(raid, preferences.withStyle(FilterAlertType.RAID, NotificationField.TIME_LEFT, NotificationFieldStyle.LABEL))
+        assertTrue(labelled.collapsed.startsWith("Left: 12 min • "))
+    }
+
+    @Test
+    fun titlePartsFollowTheChosenOrder() {
+        val preferences = NotificationContentPreferences()
+            .withTitleOrder(FilterAlertType.RAID, listOf(NotificationTitlePart.SUBJECT, NotificationTitlePart.CATEGORY))
+        assertTrue(render(raid, preferences).title.startsWith("Mewtwo · "))
+    }
+
+    @Test
+    fun raidWatchLeadsWithTheTeamUntilTheUserOrdersTheLines() {
+        assertEquals("1. Tyranitar ×2 · Bite › Brutal Swing", render(raid, raidWatch = true).expanded.lines().first())
+        val ordered = NotificationContentPreferences().withExpandedLines(
+            FilterAlertType.RAID,
+            listOf(listOf(NotificationField.VENUE), listOf(NotificationField.TIME_LEFT), listOf(NotificationField.TEAM))
+        )
+        assertEquals("Central Gym", render(raid, ordered, raidWatch = true).expanded.lines().first())
+    }
+
     private fun render(
         alert: PokemonAlert,
         preferences: NotificationContentPreferences = NotificationContentPreferences(),

@@ -59,10 +59,13 @@ import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
 import kotlinx.coroutines.launch
 
-internal enum class GoDexCatchTargetKind(val label: String) {
-    DIRECT(AppText.get(R.string.alerts_this_pok_mon)),
-    EVOLUTION(AppText.get(R.string.alerts_evolution)),
-    FORM_CHANGE(AppText.get(R.string.alerts_form_change))
+internal enum class GoDexCatchTargetKind(private val labelRes: Int) {
+    DIRECT(R.string.alerts_this_pok_mon),
+    EVOLUTION(R.string.alerts_evolution),
+    FORM_CHANGE(R.string.alerts_form_change);
+
+    /** Read on every access, so a language switch shows at once. */
+    val label: String get() = AppText.get(labelRes)
 }
 
 internal data class GoDexCatchOption(
@@ -159,7 +162,7 @@ fun GoDexCatchTargetDialog(
                 onClick = { selectedKey?.let(onConfirm) },
                 enabled = selectedKey != null,
                 modifier = Modifier.semantics {
-                    contentDescription = "Confirm GoDex caught change"
+                    contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_godex_confirm_caught)
                 }
             ) {
                 Text(stringResource(R.string.alerts_mark_caught))
@@ -215,7 +218,7 @@ fun GoDexUncatchTargetDialog(
                 onClick = { selectedKey?.let(onConfirm) },
                 enabled = selectedKey != null,
                 modifier = Modifier.semantics {
-                    contentDescription = "Confirm GoDex needed change"
+                    contentDescription = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_godex_confirm_needed)
                 }
             ) {
                 Text(stringResource(R.string.alerts_mark_needed))

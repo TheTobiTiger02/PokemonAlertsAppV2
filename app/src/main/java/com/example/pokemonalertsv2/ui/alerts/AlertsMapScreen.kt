@@ -2505,11 +2505,11 @@ internal fun AlertsMapScreenContent(
                 onDismissAlert(alert.uniqueId)
                 // The marker is gone once the card closes, unless dismissed alerts are shown.
                 if (!mapShowDismissed) selectedAlertId = null
-                Toast.makeText(context, "Alert dismissed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_alert_dismissed), Toast.LENGTH_SHORT).show()
             }
             val restoreFromMap = {
                 onRestoreAlert(alert.uniqueId)
-                Toast.makeText(context, "Alert restored", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_alert_restored), Toast.LENGTH_SHORT).show()
             }
             if (useSidePanel) {
                 MapAlertSidePanel(

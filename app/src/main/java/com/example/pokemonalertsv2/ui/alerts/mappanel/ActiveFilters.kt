@@ -35,7 +35,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "types",
-                label = "Types: " + definition.alertTypes.countLabel(FilterAlertType.entries.size),
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_types, definition.alertTypes.countLabel(FilterAlertType.entries.size)),
                 clear = { it.copy(alertTypes = Defaults.alertTypes) }
             )
         )
@@ -92,7 +92,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "raid_tiers",
-                label = "Raid tiers: " + definition.raidTiers.countLabel(catalog.raidTiers.size.takeIf { it > 0 }),
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_raid_tiers, definition.raidTiers.countLabel(catalog.raidTiers.size.takeIf { it > 0 })),
                 clear = { it.copy(raidTiers = Defaults.raidTiers) }
             )
         )
@@ -101,7 +101,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "rocket",
-                label = "Rocket: " + definition.rocketTypes.countLabel(catalog.rocketTypes.size.takeIf { it > 0 }),
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_rocket, definition.rocketTypes.countLabel(catalog.rocketTypes.size.takeIf { it > 0 })),
                 clear = { it.copy(rocketTypes = Defaults.rocketTypes) }
             )
         )
@@ -110,7 +110,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "tappable",
-                label = "Tappables: " + definition.tappableSpecies.countLabel(null),
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_tappables, definition.tappableSpecies.countLabel(null)),
                 clear = { it.copy(tappableSpecies = Defaults.tappableSpecies) }
             )
         )
@@ -119,7 +119,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "quests",
-                label = "Quests: custom",
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_quests_custom),
                 clear = { it.copy(quests = Defaults.quests) }
             )
         )
@@ -129,7 +129,7 @@ internal fun activeFilterChips(
         add(
             ActiveFilterChip(
                 id = "areas",
-                label = "Areas: " + definition.areas.countLabel(catalog.areas.size.takeIf { it > 0 }),
+                label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_areas, definition.areas.countLabel(catalog.areas.size.takeIf { it > 0 })),
                 clear = { it.copy(areas = Defaults.areas) }
             )
         )
