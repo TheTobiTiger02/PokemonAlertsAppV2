@@ -46,7 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -364,7 +364,8 @@ private fun NotificationLayoutEditor(
             onInRange = { inRange = it }
         )
 
-        PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+        // Sized to the labels, so longer German words ("Eingeklappt") are never clipped.
+        PrimaryScrollableTabRow(selectedTabIndex = tab.ordinal, edgePadding = 0.dp) {
             LayoutTab.entries.forEach { entry ->
                 Tab(
                     selected = tab == entry,

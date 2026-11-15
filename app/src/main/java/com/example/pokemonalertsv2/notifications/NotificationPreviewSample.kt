@@ -66,7 +66,7 @@ internal fun notificationPreviewInput(
     return NotificationContentInput(
         alert = alert,
         distanceText = if (journey) "320 m walk" else "320 m",
-        walkingText = "4 min walk",
+        walkingText = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.walk_minutes, 4),
         inRange = inRange && !raidWatch,
         nowMillis = now,
         goDexText = "Needed in GoDex".takeIf { category == FilterAlertType.HUNDO },
