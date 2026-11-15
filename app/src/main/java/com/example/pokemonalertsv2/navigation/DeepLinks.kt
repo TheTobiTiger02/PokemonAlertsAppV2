@@ -21,6 +21,9 @@ internal sealed interface DeepLinkTarget {
 
     /** One event on the Events tab, opened in its detail view (the events widget's rows). */
     data class Event(val eventId: String) : DeepLinkTarget
+
+    /** A device sync pairing link (the QR code). Opens the join dialog; joining still needs a tap. */
+    data class SyncJoin(val code: String) : DeepLinkTarget
 }
 
 internal const val DEEP_LINK_SCHEME = "pokemonalerts"
@@ -43,11 +46,19 @@ private const val TAB_TOOLS = 5
  *  - `pokemonalerts://settings/<destination-name>` (case-insensitive, e.g. `godex`)
  *  - `pokemonalerts://alert/<id>`
  *  - `pokemonalerts://event/<id>`
+ *  - `pokemonalerts://sync/join?code=<pairing code>`
  */
 internal fun parseDeepLink(url: String?): DeepLinkTarget? {
     val raw = url?.trim().orEmpty()
     val prefix = "$DEEP_LINK_SCHEME://"
     if (!raw.startsWith(prefix, ignoreCase = true)) return null
+
+    // The one link that takes a parameter, so it is read before the query is dropped below.
+    if (raw.substring(prefix.length).startsWith("sync/join", ignoreCase = true)) {
+        val code = raw.substringAfter("code=", "").substringBefore('&').substringBefore('#')
+        return if (code.isBlank()) DeepLinkTarget.Settings(SettingsDestination.DEVICE_SYNC)
+        else DeepLinkTarget.SyncJoin(java.net.URLDecoder.decode(code, "UTF-8"))
+    }
 
     // Strip any query/fragment: none of these targets take parameters, and leaving them on
     // would make "map?foo=1" miss.
@@ -93,6 +104,7 @@ private val SETTINGS_ALIASES = mapOf(
     "filters" to SettingsDestination.ALERT_FILTERS,
     "counters" to SettingsDestination.RAID_COUNTERS,
     "collection" to SettingsDestination.GODEX_COLLECTION,
+    "sync" to SettingsDestination.DEVICE_SYNC,
 )
 
 internal fun settingsDestinationFor(name: String): SettingsDestination? =

@@ -76,6 +76,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         initStep("tracking topic resync") { resyncPushTopicsOnTrackingChanges() }
         initStep("widget updates") { WidgetUpdateCoordinator.start(this) }
         initStep("game text") { com.example.pokemonalertsv2.data.gametext.GameTextRepository.get(this).refreshAsync() }
+        initStep("device sync triggers") { com.example.pokemonalertsv2.sync.DeviceSync.startLocalChangeTriggers(this, applicationScope) }
         lastLanguage = resources.configuration.locales[0]?.language
     }
 
@@ -186,6 +187,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             warmGoogleMaps()
         }
         ArrivalTrackingService.resumeIfActive(this)
+        initStep("device sync") { com.example.pokemonalertsv2.sync.DeviceSync.onForeground(this, applicationScope) }
         applicationScope.launch {
             // Re-post the watched raid and re-arm its tick: an alarm can be dropped when
             // the process is killed, and a stale countdown is worse than none.

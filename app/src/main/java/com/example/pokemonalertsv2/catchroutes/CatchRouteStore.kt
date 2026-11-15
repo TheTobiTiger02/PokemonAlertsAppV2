@@ -10,11 +10,15 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
+// Serializable for device sync, which carries setups, areas and history rows as they are stored.
+@kotlinx.serialization.Serializable
 @Entity(tableName = "setups") data class CatchSetupEntity(@PrimaryKey val id: String, val name: String, val settings: String, val updatedAt: Long)
 @Entity(tableName = "active_session") data class CatchSessionEntity(@PrimaryKey val id: Int = 1, val payload: String)
 /** A drawn walking area kept for reuse by catch routes and hunt mode; [corners] is a JSON list of points. */
+@kotlinx.serialization.Serializable
 @Entity(tableName = "areas") data class CatchAreaEntity(@PrimaryKey val id: String, val name: String, val corners: String, val updatedAt: Long)
 /** One finished route; [payload] is a [CatchRouteSummary] as JSON. */
+@kotlinx.serialization.Serializable
 @Entity(tableName = "history") data class CatchHistoryEntity(@PrimaryKey val id: String, val endedAt: Long, val payload: String)
 @Dao interface CatchRouteDao {
     @Query("SELECT * FROM setups ORDER BY updatedAt DESC") fun setups(): Flow<List<CatchSetupEntity>>
@@ -32,6 +36,10 @@ import java.util.UUID
     @Query("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY endedAt DESC LIMIT :keep)") suspend fun trimHistory(keep: Int)
     @Query("DELETE FROM history WHERE id = :id") suspend fun deleteHistory(id: String)
     @Query("DELETE FROM history") suspend fun clearHistory()
+    // One-shot reads for device sync, which compares whole tables against what it last agreed.
+    @Query("SELECT * FROM setups") suspend fun allSetups(): List<CatchSetupEntity>
+    @Query("SELECT * FROM areas") suspend fun allAreas(): List<CatchAreaEntity>
+    @Query("SELECT * FROM history") suspend fun allHistory(): List<CatchHistoryEntity>
 }
 @Database(entities = [CatchSetupEntity::class, CatchSessionEntity::class, CatchAreaEntity::class, CatchHistoryEntity::class], version = 2, exportSchema = true)
 abstract class CatchRouteDatabase : RoomDatabase() { abstract fun routes(): CatchRouteDao }
@@ -50,7 +58,7 @@ data class SavedCatchArea(val id: String, val name: String, val corners: List<Ca
 class CatchRouteStore private constructor(context: Context) {
     private val db = Room.databaseBuilder(context.applicationContext, CatchRouteDatabase::class.java, "catch_routes.db")
         .addMigrations(CATCH_ROUTES_MIGRATION_1_2).build()
-    private val dao = db.routes()
+    internal val dao = db.routes()
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val setups: Flow<List<CatchSetupEntity>> = dao.setups()
     val session: Flow<CatchSession?> = dao.session().map { decodeSession(it) }

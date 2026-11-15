@@ -1,7 +1,4 @@
 <resources>
-    <string name="whats_new_notification_range">“In range” replaces distance and walking time, and only appears when one of them is selected.</string>
-    <string name="whats_new_notification_content">Choose collapsed and expanded details for each alert category under Notification content in notification settings. Preview your choices and reset a category at any time.</string>
-    <string name="whats_new_notification_live_cards">Your choices also apply to I’m going, Hunt and Raid Watch. Live journey cards show configurable text details, with actions and a status chip on supported phones.</string>
     <string name="notification_content_title">Notification content</string>
     <string name="notification_content_summary">Choose the details shown for each alert category</string>
     <string name="notification_content_collapsed">Collapsed</string>
@@ -65,7 +62,6 @@
     <string name="notification_test_send">Send test</string>
     <string name="notification_test_sent">Test notification sent</string>
     <string name="notification_test_no_permission">Notifications are not allowed for this app</string>
-    <string name="whats_new_notification_design">Notifications show the alert type in the title, and the map picture fills the expanded notification. Choose the title, picture and details per category, and send a test notification from Notification content.</string>
     <string name="notification_short_weather">Weather</string>
     <string name="notification_short_distance">Distance</string>
     <string name="notification_short_walking_time">Walk</string>

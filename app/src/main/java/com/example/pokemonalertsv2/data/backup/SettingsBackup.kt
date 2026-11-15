@@ -143,7 +143,8 @@ object SettingsBackup {
         return applied
     }
 
-    private fun encodeEntry(name: String, value: Any?): Pair<String, Entry>? = when (value) {
+    /** Also the item value of device sync's settings collection (sync/SyncAdapter.kt). */
+    internal fun encodeEntry(name: String, value: Any?): Pair<String, Entry>? = when (value) {
         is Boolean -> name to Entry("boolean", value.toString())
         is Int -> name to Entry("int", value.toString())
         is Long -> name to Entry("long", value.toString())
@@ -157,7 +158,7 @@ object SettingsBackup {
         else -> null
     }
 
-    private fun decodeInto(
+    internal fun decodeInto(
         target: androidx.datastore.preferences.core.MutablePreferences,
         name: String,
         entry: Entry

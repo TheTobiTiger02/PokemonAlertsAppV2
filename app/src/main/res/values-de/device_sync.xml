@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Device sync (sync/DeviceSync.kt, ui/settings/DeviceSyncSettings.kt). -->
+<resources>
+    <string name="settings_device_sync">Geräte-Sync</string>
+    <string name="device_sync_overview_off">Aus · Einstellungen auf allen Geräten gleich halten</string>
+    <string name="device_sync_intro">Hält Einstellungen, Filter, Jagden, Fangrouten, deinen Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich. Alles wird auf diesem Gerät verschlüsselt, bevor es das Gerät verlässt, der Server kann es also nicht lesen.</string>
+    <string name="device_sync_local_note">Fensterpositionen, die laufende Jagd oder Route und der Alarmverlauf bleiben auf dem jeweiligen Gerät.</string>
+    <string name="device_sync_set_up">Sync einrichten</string>
+    <string name="device_sync_join">Mit Code beitreten</string>
+    <string name="device_sync_join_title">Geräte-Sync beitreten</string>
+    <string name="device_sync_code_label">Kopplungscode</string>
+    <string name="device_sync_scan">QR-Code scannen</string>
+    <string name="device_sync_scan_failed">Scannen nicht möglich. Füge den Code stattdessen ein.</string>
+    <string name="device_sync_join_rule">Die Einstellungen auf diesem Gerät werden durch die synchronisierten ersetzt. Verläufe werden zusammengeführt.</string>
+    <string name="device_sync_join_confirm">Beitreten</string>
+    <string name="device_sync_invalid_code">Dieser Code ist ungültig. Prüfe ihn auf Tippfehler.</string>
+    <string name="device_sync_code_not_found">Für diesen Code wurde kein Sync gefunden. Er wurde vielleicht gelöscht.</string>
+    <string name="device_sync_failed">Sync fehlgeschlagen: %1$s</string>
+    <string name="device_sync_joined">Beigetreten. Dieses Gerät synchronisiert jetzt.</string>
+    <string name="device_sync_created">Sync ist eingerichtet. Füge deine anderen Geräte mit dem Code hinzu.</string>
+    <string name="device_sync_status_on">Sync ist an</string>
+    <string name="device_sync_syncing">Synchronisiere…</string>
+    <string name="device_sync_now">Jetzt synchronisieren</string>
+    <string name="device_sync_add_device">Gerät hinzufügen</string>
+    <string name="device_sync_add_device_warning">Dieser Code gewährt vollen Zugriff auf deine synchronisierten Daten, auch auf deine GoDex- und Pokebattler-Anmeldungen. Nutze ihn nur auf deinen eigenen Geräten.</string>
+    <string name="device_sync_add_device_steps">Öffne auf dem anderen Gerät Einstellungen › Geräte-Sync › Mit Code beitreten und scanne diesen QR-Code oder füge den Code ein.</string>
+    <string name="device_sync_copy_code">Code kopieren</string>
+    <string name="device_sync_code_copied">Code kopiert</string>
+    <string name="device_sync_qr_description">QR-Code zum Beitreten zum Geräte-Sync</string>
+    <string name="device_sync_devices">Geräte</string>
+    <string name="device_sync_this_device">Dieses Gerät</string>
+    <string name="device_sync_device_details">%1$s · Version %2$s · aktiv %3$s</string>
+    <string name="device_sync_data">Synchronisierte Daten</string>
+    <string name="device_sync_collection_settings">Einstellungen und Filter</string>
+    <string name="device_sync_collection_hunts">Jagden</string>
+    <string name="device_sync_collection_routes">Fangrouten und Gebiete</string>
+    <string name="device_sync_collection_pokegenie">Poké-Genie-Bestand</string>
+    <string name="device_sync_collection_signins">Anmeldungen</string>
+    <string name="device_sync_collection_devices">Geräteliste</string>
+    <string name="device_sync_just_now">gerade eben</string>
+    <string name="device_sync_never">Noch nicht synchronisiert</string>
+    <string name="device_sync_synced_at">Synchronisiert %1$s</string>
+    <string name="device_sync_update_app">Aktualisiere die App auf diesem Gerät</string>
+    <string name="device_sync_leave">Auf diesem Gerät verlassen</string>
+    <string name="device_sync_leave_message">Dieses Gerät synchronisiert nicht mehr und behält seine Daten. Deine anderen Geräte synchronisieren weiter.</string>
+    <string name="device_sync_leave_confirm">Verlassen</string>
+    <string name="device_sync_delete">Sync-Daten überall löschen</string>
+    <string name="device_sync_delete_message">Löscht die synchronisierten Daten vom Server und beendet den Sync auf allen Geräten. Jedes Gerät behält seine eigenen Daten. Nutze das, wenn ein Code in falsche Hände geraten ist, und richte den Sync danach neu ein.</string>
+    <string name="device_sync_delete_confirm">Löschen</string>
+    <string name="device_sync_deleted_elsewhere">Der Sync wurde auf einem anderen Gerät gelöscht. Dieses Gerät hat seine Daten behalten.</string>
+    <string name="whats_new_device_sync">Geräte-Sync: Einstellungen, Filter, Jagden, Fangrouten, Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich halten. Einstellungen › Geräte-Sync.</string>
+    <plurals name="device_sync_overview_on">
+        <item quantity="one">An · %1$d Gerät</item>
+        <item quantity="other">An · %1$d Geräte</item>
+    </plurals>
+</resources>

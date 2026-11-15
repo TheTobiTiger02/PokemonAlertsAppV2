@@ -87,6 +87,7 @@ internal enum class SettingsDestination(private val titleRes: Int) {
     GODEX_COLLECTION(R.string.settings_godex_collection),
     RAID_COUNTERS(R.string.settings_raid_counters),
     NOTIFICATIONS(R.string.settings_notifications_permissions),
+    DEVICE_SYNC(R.string.settings_device_sync),
     ABOUT_UPDATES(R.string.settings_backup_about);
 
     /** Read on every access, so a language switch shows at once. */
@@ -522,6 +523,10 @@ internal fun SettingsScreen(
                 
 
                 
+                if (animatedDestination == SettingsDestination.DEVICE_SYNC) {
+                    DeviceSyncSettingsContent(snackbarHostState = snackbarHostState)
+                }
+
                 if (animatedDestination == SettingsDestination.ABOUT_UPDATES) {
                 SettingsSection(title = stringResource(R.string.settings_backup)) {
                     SettingsBackupCard(snackbarHostState = snackbarHostState)

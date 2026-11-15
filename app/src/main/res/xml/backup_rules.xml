@@ -7,7 +7,10 @@
     Left out on purpose: Pokebattler credentials (Keystore-encrypted, so they
     cannot be decrypted on another device), FCM topic state (the new install
     must subscribe again), pending update installs, server caches, hunt and
-    journey sessions, and the Room databases (re-synced from the backend).
+    journey sessions, the Room databases (re-synced from the backend), and the
+    device sync state (datastore/device_sync.preferences_pb): its secret is
+    Keystore-encrypted and could not be decrypted on another phone, which would
+    leave a broken "connected" state there. Pair the new phone again instead.
     Keep in step with data_extraction_rules.xml.
 -->
 <full-backup-content>

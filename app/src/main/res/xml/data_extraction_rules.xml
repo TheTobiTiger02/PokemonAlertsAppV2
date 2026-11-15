@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12 and higher. Same set as backup_rules.xml; see the reasons there. -->
+<!-- Android 12 and higher. Same set as backup_rules.xml; see the reasons there.
+     datastore/device_sync.preferences_pb (device sync) is deliberately not included. -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="file" path="datastore/pokemon_alerts_preferences.preferences_pb"/>

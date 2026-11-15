@@ -82,6 +82,29 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         }
     }
 
+    /**
+     * Device sync: another device's session. The cookies travel decrypted inside the end-to-end
+     * encrypted sync blob and are encrypted again here with this device's Keystore key.
+     */
+    suspend fun applySyncedSession(cookies: String, writeBackUrl: String, state: GoDexSessionState) {
+        dataStore.edit { prefs ->
+            prefs[COOKIES_KEY] = GoDexSessionCipher.encrypt(cookies)
+            prefs[WRITE_BACK_URL_KEY] = writeBackUrl
+            prefs[SESSION_STATE_KEY] = state.name
+            prefs.remove(LAST_WRITE_ERROR_KEY)
+        }
+    }
+
+    /** Device sync: signed out on another device. The checklist URL and its cache are settings and stay. */
+    suspend fun clearSession() {
+        dataStore.edit { prefs ->
+            prefs.remove(COOKIES_KEY)
+            prefs.remove(WRITE_BACK_URL_KEY)
+            prefs[SESSION_STATE_KEY] = GoDexSessionState.NONE.name
+            prefs.remove(LAST_WRITE_ERROR_KEY)
+        }
+    }
+
     suspend fun setNotificationFilterEnabled(enabled: Boolean) {
         dataStore.edit { prefs -> prefs[FILTER_ENABLED_KEY] = enabled }
     }
