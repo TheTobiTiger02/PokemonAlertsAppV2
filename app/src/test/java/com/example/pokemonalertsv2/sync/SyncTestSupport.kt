@@ -40,14 +40,18 @@ internal class FakeServer {
     var groupId: String? = null
     var deleted = false
     val puts = AtomicInteger()
+    val lists = AtomicInteger()
+    val fetches = AtomicInteger()
 
     fun transport(beforePut: suspend () -> Unit = {}): SyncTransport = object : SyncTransport {
         override suspend fun list(group: SyncGroup): Map<String, Long> {
+            lists.incrementAndGet()
             if (deleted || groupId != group.groupId) throw SyncGroupGoneException()
             return blobs.mapValues { it.value.first }
         }
 
         override suspend fun fetch(group: SyncGroup, collection: String, knownVersion: Long?): FetchResult {
+            fetches.incrementAndGet()
             if (deleted || groupId != group.groupId) throw SyncGroupGoneException()
             val blob = blobs[collection] ?: return FetchResult.Empty
             return if (knownVersion == blob.first) FetchResult.NotModified else FetchResult.Blob(blob.first, blob.second)

@@ -100,23 +100,24 @@ class DeviceSyncEngine(
      * Syncs [collections] (all by default). Returns false when not connected. Network and
      * server errors are recorded per collection and rethrown as the result of the call, so a
      * worker can retry.
+     *
+     * [knownVersions] are server versions the caller already has, from an FCM ping: then the
+     * listing request is skipped, and a ping for a version this device wrote or already has
+     * costs no request at all.
      */
-    suspend fun syncNow(collections: Collection<String> = DeviceSync.COLLECTIONS): Boolean {
+    suspend fun syncNow(
+        collections: Collection<String> = DeviceSync.COLLECTIONS,
+        knownVersions: Map<String, Long>? = null
+    ): Boolean {
         val group = state.group() ?: return false
         mutex.withLock {
             if (state.group()?.groupId != group.groupId) return false
             _running.value = true
             try {
-                val versions = try {
+                val versions = knownVersions ?: try {
                     transport.list(group).also { if (!state.confirmed()) state.setConfirmed() }
                 } catch (gone: SyncGroupGoneException) {
-                    if (state.confirmed()) {
-                        // Deleted from another device (or purged after months idle): stop here
-                        // instead of re-creating it with the next upload.
-                        state.disconnect(notice = DeviceSync.NOTICE_DELETED_ELSEWHERE)
-                        onGroupChanged(group, null)
-                        return false
-                    }
+                    if (disconnectIfDeleted(group)) return false
                     emptyMap() // created here and not uploaded yet: the first upload creates it
                 }
                 var failure: Exception? = null
@@ -125,6 +126,9 @@ class DeviceSyncEngine(
                         syncCollection(group, adapter.name, versions[adapter.name] ?: 0L)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
+                    } catch (gone: SyncGroupGoneException) {
+                        if (disconnectIfDeleted(group)) return false
+                        throw gone
                     } catch (error: Exception) {
                         failure = failure ?: error
                         state.writeStatus(adapter.name, state.status(adapter.name).copy(error = error.message ?: error.javaClass.simpleName))
@@ -135,6 +139,18 @@ class DeviceSyncEngine(
                 _running.value = false
             }
         }
+        return true
+    }
+
+    /**
+     * The server does not know a group this device has already synced with: deleted from
+     * another device (or purged after months idle). Stops here instead of re-creating it with
+     * the next upload. False for a group created here and not uploaded yet.
+     */
+    private suspend fun disconnectIfDeleted(group: SyncGroup): Boolean {
+        if (!state.confirmed()) return false
+        state.disconnect(notice = DeviceSync.NOTICE_DELETED_ELSEWHERE)
+        onGroupChanged(group, null)
         return true
     }
 

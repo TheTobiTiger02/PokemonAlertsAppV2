@@ -2,7 +2,6 @@ package com.example.pokemonalertsv2.fcm
 
 import android.util.Log
 import com.example.pokemonalertsv2.sync.DeviceSync
-import com.example.pokemonalertsv2.work.DeviceSyncWorker
 import com.example.pokemonalertsv2.work.FcmAlertWorker
 import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -14,7 +13,9 @@ class PokemonFirebaseMessagingService : FirebaseMessagingService() {
         // A device sync ping is not an alert: it only says the group changed (DEVICE_SYNC.md).
         when (DeviceSync.pingAction(remoteMessage.data, DeviceSync.deviceId(applicationContext))) {
             DeviceSync.PingAction.SYNC -> {
-                DeviceSyncWorker.trigger(applicationContext)
+                // onMessageReceived runs off the main thread, and a high-priority message keeps
+                // the process awake while it does: sync right here instead of queueing work.
+                kotlinx.coroutines.runBlocking { DeviceSync.syncFromPing(applicationContext, remoteMessage.data) }
                 return
             }
             DeviceSync.PingAction.OWN_WRITE -> return

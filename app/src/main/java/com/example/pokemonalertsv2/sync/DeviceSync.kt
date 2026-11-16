@@ -39,7 +39,9 @@ import com.example.pokemonalertsv2.util.KeystoreCipher
 import com.example.pokemonalertsv2.work.DeviceSyncWorker
 import com.example.pokemonalertsv2.work.PushTopicSyncWorker
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -246,9 +248,41 @@ object DeviceSync {
     }
 
     /**
+     * The other devices' half of "instant": a ping names the collection and its new server
+     * version, so this syncs just that collection without listing the group first, right here
+     * while FCM keeps the process awake for a high-priority message. A version this device
+     * already has costs no request. Anything that fails is left to [DeviceSyncWorker].
+     */
+    suspend fun syncFromPing(context: Context, data: Map<String, String>) {
+        val app = context.applicationContext
+        val collection = data["collection"]?.takeIf { it in COLLECTIONS }
+        val version = data["version"]?.toLongOrNull()
+        if (collection == null || version == null) {
+            DeviceSyncWorker.trigger(app)
+            return
+        }
+        try {
+            withTimeout(PING_SYNC_TIMEOUT_MILLIS) {
+                engine(app).syncNow(listOf(collection), knownVersions = mapOf(collection to version))
+            }
+        } catch (cancelled: CancellationException) {
+            DeviceSyncWorker.trigger(app)
+            if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
+        } catch (error: Exception) {
+            Log.w(TAG, "Sync after a ping failed; leaving it to the worker", error)
+            DeviceSyncWorker.trigger(app)
+        }
+    }
+
+    /** FCM allows about 20 s for a high-priority message; leave room to hand over to the worker. */
+    private const val PING_SYNC_TIMEOUT_MILLIS = 15_000L
+
+    /**
      * Local-change triggers, started once from the Application: each adapter's [SyncAdapter.changes]
-     * after its first emission, debounced, schedules a sync of that collection. A change made
-     * by applying the group's data diffs empty and uploads nothing.
+     * after its first emission, debounced, syncs that collection straight away, so the server
+     * pings the other devices within a second or two. A failure (offline, server error) falls
+     * back to [DeviceSyncWorker], which waits for a network. A change made by applying the
+     * group's data diffs empty and uploads nothing.
      */
     @OptIn(FlowPreview::class)
     fun startLocalChangeTriggers(context: Context, scope: CoroutineScope) {
@@ -257,7 +291,15 @@ object DeviceSync {
             scope.launch(Dispatchers.IO) {
                 runCatching {
                     adapter.changes.drop(1).debounce(LOCAL_CHANGE_DEBOUNCE_MILLIS).collect {
-                        if (state(app).group() != null) DeviceSyncWorker.trigger(app)
+                        if (state(app).group() == null) return@collect
+                        try {
+                            engine(app).syncNow(listOf(adapter.name))
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            Log.w(TAG, "Sync of ${adapter.name} failed; leaving it to the worker", error)
+                            DeviceSyncWorker.trigger(app)
+                        }
                     }
                 }.onFailure { Log.w(TAG, "Change trigger for ${adapter.name} stopped", it) }
             }
@@ -267,7 +309,8 @@ object DeviceSync {
         }
     }
 
-    private const val LOCAL_CHANGE_DEBOUNCE_MILLIS = 5_000L
+    /** Long enough to fold a slider drag or a burst of toggles into one upload. */
+    private const val LOCAL_CHANGE_DEBOUNCE_MILLIS = 1_000L
     private const val FOREGROUND_THROTTLE_MILLIS = 60_000L
 
     @Volatile
