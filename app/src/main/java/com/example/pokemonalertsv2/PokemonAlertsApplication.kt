@@ -77,6 +77,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         initStep("widget updates") { WidgetUpdateCoordinator.start(this) }
         initStep("game text") { com.example.pokemonalertsv2.data.gametext.GameTextRepository.get(this).refreshAsync() }
         initStep("device sync triggers") { com.example.pokemonalertsv2.sync.DeviceSync.startLocalChangeTriggers(this, applicationScope) }
+        initStep("live sessions") { com.example.pokemonalertsv2.sync.live.LiveSessions.start(this) }
         lastLanguage = resources.configuration.locales[0]?.language
     }
 
@@ -177,6 +178,13 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         // thread and GPU work during feed startup, even for users who never open the map.
     }
 
+    override fun onStop(owner: LifecycleOwner) {
+        // The live sync stream stays open only while the app is visible or runs a hunt or route.
+        initStep("device sync stream") {
+            com.example.pokemonalertsv2.sync.DeviceSync.releaseLive(this, com.example.pokemonalertsv2.sync.DeviceSync.HOLDER_FOREGROUND)
+        }
+    }
+
     override fun onStart(owner: LifecycleOwner) {
         if (PendingInstallStore.hasPending(this)) return
         // Once per process, and only when the trainer opens the app: widget alarms and pushes
@@ -187,7 +195,10 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
             warmGoogleMaps()
         }
         ArrivalTrackingService.resumeIfActive(this)
-        initStep("device sync") { com.example.pokemonalertsv2.sync.DeviceSync.onForeground(this, applicationScope) }
+        initStep("device sync") {
+            com.example.pokemonalertsv2.sync.DeviceSync.holdLive(this, com.example.pokemonalertsv2.sync.DeviceSync.HOLDER_FOREGROUND)
+            com.example.pokemonalertsv2.sync.DeviceSync.onForeground(this, applicationScope)
+        }
         applicationScope.launch {
             // Re-post the watched raid and re-arm its tick: an alarm can be dropped when
             // the process is killed, and a stale countdown is worse than none.

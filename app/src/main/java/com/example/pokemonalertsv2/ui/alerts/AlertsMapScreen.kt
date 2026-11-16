@@ -170,6 +170,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 // movement under 75 m anyway, so re-ranking every alert per fix is pure waste.
 private const val MAP_ROUTE_REFRESH_METERS = 50f
 
+/** How long a mirrored hunt's first framing waits for the map's own camera restore. */
+private const val MIRROR_FRAME_DELAY_MILLIS = 1_500L
+
 @Composable
 fun AlertsMapRoute(
     viewModel: PokemonAlertsViewModel,
@@ -878,7 +881,56 @@ internal fun AlertsMapScreenContent(
     }
 
     val expirationNow = expirationClock.value
-    val huntSession by huntRepository.activeHunt.collectAsStateWithLifecycle()
+    // The running hunt, here or on another device of the group (sync/live): the map draws and
+    // drives both the same way.
+    val huntView by com.example.pokemonalertsv2.sync.live.LiveSessions.hunt.collectAsStateWithLifecycle()
+    val huntSession = huntView?.session
+    val huntMirrored = huntView?.isMirror == true
+    // A hunt mirrored from another device draws that device's position as the dot: it is the
+    // trainer walking, and this phone usually lies beside the one in their hand.
+    val displayPose = remember(userPose, huntMirrored, huntView?.ownerLatitude, huntView?.ownerLongitude, huntView?.ownerBearing) {
+        val view = huntView
+        val latitude = view?.ownerLatitude
+        val longitude = view?.ownerLongitude
+        if (view != null && view.isMirror && latitude != null && longitude != null) {
+            MapUserPose(
+                location = android.location.Location("sync").apply {
+                    this.latitude = latitude
+                    this.longitude = longitude
+                    accuracy = 10f
+                },
+                headingDegrees = view.ownerBearing,
+                headingFromSensor = false
+            )
+        } else {
+            userPose
+        }
+    }
+    /** Where the hunt is walked from: this device, or the device running a mirrored hunt. */
+    val huntOriginLocation = if (huntMirrored) displayPose?.location else userLocation
+    // A phone used as the hunt's second screen lies on the table showing the map: keep it on.
+    val rootView = androidx.compose.ui.platform.LocalView.current
+    // Tabs stay composed in the background: only while the map is the tab on screen.
+    val mapOnScreen by com.example.pokemonalertsv2.tracking.InAppMapVisibility.visible.collectAsStateWithLifecycle()
+    val hunting = huntView != null && !compactPictureInPicture && mapOnScreen
+    androidx.compose.runtime.DisposableEffect(hunting) {
+        rootView.keepScreenOn = hunting
+        onDispose { rootView.keepScreenOn = false }
+    }
+    LaunchedEffect(Unit) {
+        com.example.pokemonalertsv2.sync.live.LiveSessions.messages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
+    /** A tap on a pin of the hunt's plan walks there at once (as on the floating window); other pins open their card. */
+    fun onHuntPinTap(alert: PokemonAlert): Boolean {
+        val view = huntView ?: return false
+        if (alert.uniqueId == view.targetId) return false
+        if ((view.route + view.others + view.outside).none { it.uniqueId == alert.uniqueId }) return false
+        com.example.pokemonalertsv2.sync.live.LiveSessions.hunt(context, com.example.pokemonalertsv2.sync.live.LiveAction.RETARGET, alert.uniqueId)
+        Toast.makeText(context, context.getString(R.string.hunt_retargeted, huntTargetTitle(alert)), Toast.LENGTH_SHORT).show()
+        return true
+    }
     val filteredAlerts = rememberOffMain(
         alerts,
         selectedCategories,
@@ -905,56 +957,13 @@ internal fun AlertsMapScreenContent(
 
     // A hunt window answers to the hunt, not to whatever the map happens to be
     // filtered to: the whole point is that only the quarry is on screen.
-    // The plan is the tracking service's, published through the repository, so the map
-    // and the floating window always number the same route -- and the map no longer
-    // plans (and fetches legs) a second time inside composition.
-    val publishedHuntPlan by remember(huntRepository) { huntRepository.plan }
-        .collectAsStateWithLifecycle()
-    // Only for a hunt the service is not planning (it has not started, or is not running at
-    // all): the map plans for itself, off the main thread, from what it is showing. Once the
-    // service publishes, this goes quiet.
-    var localHuntPlan by remember { mutableStateOf(HuntPlan.Empty) }
-    val servicePlanning = publishedHuntPlan != HuntPlan.Empty
-    val currentMapAlerts by rememberUpdatedState(alerts)
-    val currentMapDismissed by rememberUpdatedState(dismissedAlertIds)
-    LaunchedEffect(huntSession?.definition, huntSession?.area, servicePlanning) {
-        val definition = huntSession?.definition
-        if (definition == null || servicePlanning) {
-            localHuntPlan = HuntPlan.Empty
-            return@LaunchedEffect
-        }
-        snapshotFlow {
-            listOf(
-                currentMapAlerts,
-                currentMapDismissed,
-                userLocation?.let { huntLegNode(it.latitude, it.longitude) },
-                arrivalTracking.activeDestination?.uniqueId,
-                expirationClock.value
-            )
-        }
-            .distinctUntilChanged()
-            .collectLatest {
-                val location = userLocation
-                val latitude = location?.latitude ?: ALSBACH_LATITUDE
-                val longitude = location?.longitude ?: ALSBACH_LONGITUDE
-                val destinationId = arrivalTracking.activeDestination?.uniqueId
-                val previous = (listOfNotNull(destinationId) + localHuntPlan.route.map { it.uniqueId }).distinct()
-                val alertsNow = currentMapAlerts
-                val dismissedNow = currentMapDismissed
-                localHuntPlan = withContext(Dispatchers.Default) {
-                    huntTargets(
-                        alerts = alertsNow,
-                        definition = definition,
-                        dismissedAlertIds = dismissedNow,
-                        originLatitude = latitude,
-                        originLongitude = longitude,
-                        previousRouteIds = previous,
-                        area = huntSession?.area.orEmpty()
-                    )
-                }
-            }
-    }
-    val shownHuntPlan = if (servicePlanning) publishedHuntPlan else localHuntPlan
+    // The plan is the tracking service's -- here, or on the device running the hunt -- so the
+    // map and the floating window always number the same route, and the map never plans a
+    // second one of its own (that used to race the service's own target choice).
+    val shownHuntPlan = huntView?.let { HuntPlan(it.route, it.others) } ?: HuntPlan.Empty
+    // The device running the hunt fills the path cache while it plans; a mirror asks for the
+    // line from where that device is.
+    val servicePlanning = huntSession != null && !huntMirrored
     val huntRoute = remember(huntSession, shownHuntPlan, dismissedAlertIds) {
         if (huntSession?.definition == null) emptyList()
         else shownHuntPlan.route.filter { it.uniqueId !in dismissedAlertIds }
@@ -974,11 +983,18 @@ internal fun AlertsMapScreenContent(
             alert.mapCoordinatesOrNull()?.let { HuntRoutePoint(alert.uniqueId, it.latitude, it.longitude) }
         }
     }
-    val huntPathLocation = userLocation?.let { huntLegNode(it.latitude, it.longitude) }
+    val huntOwnerLatitude = huntView?.ownerLatitude
+    val huntOwnerLongitude = huntView?.ownerLongitude
+    val huntPathLocation = if (huntMirrored) {
+        if (huntOwnerLatitude != null && huntOwnerLongitude != null) huntLegNode(huntOwnerLatitude, huntOwnerLongitude) else null
+    } else {
+        userLocation?.let { huntLegNode(it.latitude, it.longitude) }
+    }
     LaunchedEffect(showHuntPath, servicePlanning, huntPathStops, huntPathLocation) {
-        val location = userLocation
-        if (!showHuntPath || servicePlanning || location == null || huntPathStops.isEmpty()) return@LaunchedEffect
-        runCatching { huntPathCache.request(location.latitude, location.longitude, huntPathStops) }
+        val latitude = if (huntMirrored) huntOwnerLatitude else userLocation?.latitude
+        val longitude = if (huntMirrored) huntOwnerLongitude else userLocation?.longitude
+        if (!showHuntPath || servicePlanning || latitude == null || longitude == null || huntPathStops.isEmpty()) return@LaunchedEffect
+        runCatching { huntPathCache.request(latitude, longitude, huntPathStops) }
     }
     // Only a line through exactly these numbered stops; a path fetched for an older order is not drawn.
     val huntPath = remember(publishedHuntPath, huntPathStops, showHuntPath, huntSession?.definition) {
@@ -987,6 +1003,7 @@ internal fun AlertsMapScreenContent(
     val renderedAlerts = remember(
         filteredAlerts,
         huntTargetAlerts,
+        huntView?.target,
         huntPictureInPicture,
         arrivalTracking.activeDestination,
         compactPictureInPicture,
@@ -994,8 +1011,8 @@ internal fun AlertsMapScreenContent(
     ) {
         mapAlertsForPresentation(
             filteredAlerts = if (huntPictureInPicture) huntTargetAlerts else
-                (filteredAlerts + huntRoute.take(HUNT_ORDINAL_MAX)).distinctBy { it.uniqueId },
-            trackedAlert = arrivalTracking.activeDestination?.alert,
+                (filteredAlerts + huntRoute.take(HUNT_ORDINAL_MAX) + listOfNotNull(huntView?.target)).distinctBy { it.uniqueId },
+            trackedAlert = arrivalTracking.activeDestination?.alert ?: huntView?.target,
             compactPictureInPicture = compactPictureInPicture,
             nowMillis = expirationNow
         )
@@ -1019,12 +1036,13 @@ internal fun AlertsMapScreenContent(
     val emphasizedAlertIds = remember(
         compactPictureInPicture,
         arrivalTracking.activeDestination?.uniqueId,
+        huntView?.targetId,
         selectedAlertId,
         huntSession
     ) {
         mapPipEmphasizedAlertIds(
             compactPictureInPicture = compactPictureInPicture,
-            trackedAlertId = arrivalTracking.activeDestination?.uniqueId,
+            trackedAlertId = arrivalTracking.activeDestination?.uniqueId ?: huntView?.targetId,
             browsedAlertId = selectedAlertId,
             huntActive = huntSession != null
         )
@@ -1163,10 +1181,23 @@ internal fun AlertsMapScreenContent(
         applyTrackingInteraction(trackingInteraction().onShowAllAlerts())
         if (next == HuntMapFocus.ROUTE) fitHuntRoute()
         else {
-            val target = arrivalTracking.activeDestination?.alert ?: huntTargetAlerts.firstOrNull()
-            if (target != null) focusBrowsedAlert(target, userLocation) else fitHuntRoute()
+            val target = huntView?.target ?: arrivalTracking.activeDestination?.alert ?: huntTargetAlerts.firstOrNull()
+            if (target != null) focusBrowsedAlert(target, huntOriginLocation) else fitHuntRoute()
         }
         huntFocus = next
+    }
+
+    // A mirrored hunt is somewhere else than this phone: frame it once the other device's
+    // position is in, and again for each new target, as the floating window does.
+    val mirrorMapLoaded = if (mapSource == MapDisplaySource.GOOGLE) googleMapLoaded else openStreetMapLoaded
+    LaunchedEffect(huntMirrored, huntSession?.startedAtMillis, huntView?.ownerLatitude != null, huntView?.targetId, mirrorMapLoaded) {
+        if (!huntMirrored || compactPictureInPicture || !mirrorMapLoaded) return@LaunchedEffect
+        // After the map has put back its saved camera, which would otherwise win.
+        delay(MIRROR_FRAME_DELAY_MILLIS)
+        // Following this phone would pull the camera straight back to where it lies.
+        cameraFollowEnabled = false
+        val target = huntView?.target
+        if (target != null) focusBrowsedAlert(target, huntOriginLocation) else fitHuntRoute()
     }
 
     fun stepBrowseSelection(forward: Boolean) {
@@ -1369,35 +1400,8 @@ internal fun AlertsMapScreenContent(
         ).toFloat()
     }
 
-    // A hunt has to walk you somewhere even when the floating map is closed.
-    // Target selection used to live entirely in the window's browse cursor, so on a
-    // device that shows the status bar chip -- where the window is deliberately not
-    // opened, because it would hide the chip -- a hunt started and then just sat there.
-    val currentHuntTargets by rememberUpdatedState(huntTargetAlerts)
-    val currentTrackedId by rememberUpdatedState(arrivalTracking.activeDestination?.uniqueId)
-
-    LaunchedEffect(huntSession?.name) {
-        if (huntSession == null) return@LaunchedEffect
-        snapshotFlow { currentTrackedId to currentHuntTargets.firstOrNull()?.uniqueId }
-            .distinctUntilChanged()
-            .collectLatest { (tracked, nearestId) ->
-                if (tracked != null || nearestId == null) return@collectLatest
-                val nearest = currentHuntTargets.firstOrNull() ?: return@collectLatest
-                // Same debounce the browse driver uses: the nearest match churns as
-                // the feed refreshes, and a journey should commit to one of them.
-                delay(MAP_PIP_TRACKING_DEBOUNCE_MILLIS)
-                withContext(NonCancellable) {
-                    // Re-read the hunt rather than trusting the composition: stopping
-                    // during the debounce above used to land here anyway, and start a
-                    // journey for a hunt that no longer existed -- which is what made
-                    // a stopped hunt look like it was still running.
-                    if (!huntRepository.isHunting()) return@withContext
-                    if (browseArrivalTracker.start(nearest)) {
-                        huntRepository.setTarget(nearest.uniqueId)
-                    }
-                }
-            }
-    }
+    // Target choice is the tracking service's alone (maybeAcquireHuntTarget), with or without
+    // the floating window: the map used to pick one too, and the two raced.
 
     val pipCanStep = renderedAlerts.isNotEmpty()
     val pipHasTarget = selectedAlertId != null
@@ -1813,7 +1817,7 @@ internal fun AlertsMapScreenContent(
                 properties = mapProperties,
                 uiSettings = mapUiSettings
                 ) {
-                userPose?.let { pose ->
+                displayPose?.let { pose ->
                     val location = pose.location
                     Circle(
                         center = LatLng(location.latitude, location.longitude),
@@ -1924,8 +1928,8 @@ internal fun AlertsMapScreenContent(
                                 goDexMatchResult = goDexMatches[item.alert.uniqueId]
                                     ?: GoDexMatchResult(GoDexMatchStatus.NOT_CONFIGURED),
                                 onClick = {
-                                    if (!compactPictureInPicture) {
-                                        if (huntSession != null) focusBrowsedAlert(item.alert, userLocation)
+                                    if (!compactPictureInPicture && !onHuntPinTap(item.alert)) {
+                                        if (huntSession != null) focusBrowsedAlert(item.alert, huntOriginLocation)
                                         selectedAlertId = item.alert.uniqueId
                                     }
                                 },
@@ -2024,7 +2028,7 @@ internal fun AlertsMapScreenContent(
                     markerItems = markerItems,
                     countdownTickMillis = markerTickMillis,
                     minutePrecisionCountdown = minutePrecisionCountdown,
-                    userPose = userPose,
+                    userPose = displayPose,
                     cameraSnapshot = retainedCamera(),
                     contentInsets = openStreetMapInsets,
                     showTimeLabels = showTimeLabels,
@@ -2040,8 +2044,8 @@ internal fun AlertsMapScreenContent(
                         Toast.makeText(context, R.string.map_openstreetmap_unavailable, Toast.LENGTH_LONG).show()
                     },
                     onAlertClick = {
-                        if (!compactPictureInPicture) {
-                            if (huntSession != null) focusBrowsedAlert(it, userLocation)
+                        if (!compactPictureInPicture && !onHuntPinTap(it)) {
+                            if (huntSession != null) focusBrowsedAlert(it, huntOriginLocation)
                             selectedAlertId = it.uniqueId
                         }
                     },
@@ -2322,9 +2326,15 @@ internal fun AlertsMapScreenContent(
                 },
                 onStart = { name, definition, savedHuntId, area ->
                     val editing = huntSession != null
+                    val mirrored = huntMirrored
                     showHuntSetup = false
                     scope.launch {
-                        if (editing) {
+                        if (editing && mirrored) {
+                            com.example.pokemonalertsv2.sync.live.LiveSessions.editMirroredHunt(
+                                context,
+                                com.example.pokemonalertsv2.sync.live.LiveTargets(name, definition, savedHuntId, area)
+                            )
+                        } else if (editing) {
                             updateHunt(context, name, definition, savedHuntId, area)
                         } else {
                             startHunt(context, name, definition, savedHuntId, area)
@@ -2487,7 +2497,102 @@ internal fun AlertsMapScreenContent(
                 onLocate = ::locateUser,
                 onRefresh = onRefresh
             )
-            MapChrome(state = chromeState, actions = chromeActions)
+            val liveStreamConnectedAt by com.example.pokemonalertsv2.sync.DeviceSync.streamConnectedAt.collectAsStateWithLifecycle()
+            val livePending by com.example.pokemonalertsv2.sync.live.LiveSessions.pending.collectAsStateWithLifecycle()
+            val catchMirror by com.example.pokemonalertsv2.sync.live.LiveSessions.catchMirror.collectAsStateWithLifecycle()
+            val journeyMirror by com.example.pokemonalertsv2.sync.live.LiveSessions.journeyMirror.collectAsStateWithLifecycle()
+            val raidWatchMirror by com.example.pokemonalertsv2.sync.live.LiveSessions.raidWatchMirror.collectAsStateWithLifecycle()
+            val huntActions = com.example.pokemonalertsv2.ui.alerts.mapchrome.HuntChromeActions(
+                onOpenTarget = { huntView?.target?.let { target -> focusBrowsedAlert(target, huntOriginLocation); selectedAlertId = target.uniqueId } },
+                onAction = { action -> com.example.pokemonalertsv2.sync.live.LiveSessions.hunt(context, action) },
+                onEditTargets = { showHuntSetup = true },
+                onToggleRouteLine = onToggleHuntPath,
+                onOpenTools = { showMapTools = true },
+                onTakeOver = {
+                    scope.launch {
+                        val result = com.example.pokemonalertsv2.sync.live.LiveSessions.takeOverHunt(context)
+                        val message = when (result) {
+                            com.example.pokemonalertsv2.sync.live.LiveSessions.TakeOverResult.DONE -> R.string.live_take_over_done
+                            com.example.pokemonalertsv2.sync.live.LiveSessions.TakeOverResult.NEEDS_PERMISSION -> R.string.live_take_over_permission
+                            com.example.pokemonalertsv2.sync.live.LiveSessions.TakeOverResult.NOTHING_TO_TAKE -> null
+                        }
+                        message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+                    }
+                }
+            )
+            val hunt = huntView
+            val mirrors = buildList<@Composable () -> Unit> {
+                catchMirror?.let { route ->
+                    add {
+                        val session = route.session
+                        com.example.pokemonalertsv2.ui.alerts.mapchrome.MirroredSessionCard(
+                            title = stringResource(R.string.live_route_on_device, route.owner.deviceName.ifBlank { "?" }),
+                            detail = if (session.paused) stringResource(R.string.live_route_paused)
+                            else androidx.compose.ui.res.pluralStringResource(R.plurals.live_route_next, session.caught, session.caught,com.example.pokemonalertsv2.hunt.formatHuntDistance(route.position?.walkedMeters ?: session.walkedMeters)),
+                            actions = listOf(
+                                stringResource(if (session.paused) R.string.live_resume else R.string.live_pause) to {
+                                    com.example.pokemonalertsv2.sync.live.LiveSessions.catchRoute(
+                                        context,
+                                        if (session.paused) com.example.pokemonalertsv2.sync.live.LiveAction.RESUME else com.example.pokemonalertsv2.sync.live.LiveAction.PAUSE
+                                    )
+                                },
+                                stringResource(R.string.live_skip) to { com.example.pokemonalertsv2.sync.live.LiveSessions.catchRoute(context, com.example.pokemonalertsv2.sync.live.LiveAction.SKIP) },
+                                stringResource(R.string.live_take_over) to {
+                                    scope.launch {
+                                        val result = com.example.pokemonalertsv2.sync.live.LiveSessions.takeOverCatchRoute(context)
+                                        if (result == com.example.pokemonalertsv2.sync.live.LiveSessions.TakeOverResult.NEEDS_PERMISSION) {
+                                            Toast.makeText(context, R.string.live_take_over_permission, Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                }
+                            )
+                        )
+                    }
+                }
+                journeyMirror?.let { journey ->
+                    add {
+                        com.example.pokemonalertsv2.ui.alerts.mapchrome.MirroredSessionCard(
+                            title = stringResource(R.string.live_journey_on_device, journey.owner.deviceName.ifBlank { "?" }, huntTargetTitle(journey.alert)),
+                            detail = null,
+                            actions = listOf(stringResource(R.string.live_stop) to { com.example.pokemonalertsv2.sync.live.LiveSessions.stopJourney(context) })
+                        )
+                    }
+                }
+                raidWatchMirror?.let { watch ->
+                    add {
+                        com.example.pokemonalertsv2.ui.alerts.mapchrome.MirroredSessionCard(
+                            title = stringResource(R.string.live_raid_watch_on_device, watch.owner.deviceName.ifBlank { "?" }, huntTargetTitle(watch.alert)),
+                            detail = null,
+                            actions = listOf(stringResource(R.string.live_stop) to { com.example.pokemonalertsv2.sync.live.LiveSessions.stopRaidWatch(context) })
+                        )
+                    }
+                }
+            }
+            MapChrome(
+                state = chromeState,
+                actions = chromeActions,
+                huntBanner = hunt?.let { view ->
+                    {
+                        com.example.pokemonalertsv2.ui.alerts.mapchrome.HuntBanner(
+                            view = view,
+                            ordinal = view.targetId?.let { huntOrdinals[it] },
+                            routeLineShown = showHuntPath,
+                            streamConnectedAt = liveStreamConnectedAt,
+                            actions = huntActions
+                        )
+                    }
+                },
+                huntDock = hunt?.let { view ->
+                    {
+                        com.example.pokemonalertsv2.ui.alerts.mapchrome.HuntDock(
+                            view = view,
+                            pending = livePending.takeIf { view.isMirror },
+                            onAction = huntActions.onAction
+                        )
+                    }
+                },
+                mirroredSessions = mirrors.takeIf { it.isNotEmpty() }?.let { cards -> { cards.forEach { it() } } }
+            )
         }
 
         if (!compactPictureInPicture) selectedAlert?.let { alert ->

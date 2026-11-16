@@ -130,6 +130,11 @@ class WidgetConfigActivity : ComponentActivity() {
                         filterViewModel.setWidgetFollowsSet(appWidgetId, follow)
                     },
                     onOpenEditor = { showFilterEditor = true },
+                    onCopyFromDevice = { row ->
+                        com.example.pokemonalertsv2.sync.WidgetsSyncAdapter.copyInto(this@WidgetConfigActivity, appWidgetId, row)
+                        // Re-read everything the screen shows from the copied configuration.
+                        recreate()
+                    },
                     onConfirm = { configuration ->
                         val latest = WidgetConfigurationStore.get(this@WidgetConfigActivity, appWidgetId)
                         WidgetConfigurationStore.save(this@WidgetConfigActivity, appWidgetId, latest.copy(priority = configuration.priority))
@@ -225,6 +230,7 @@ private fun WidgetStudioConfiguration(
     followSet: Boolean,
     onFollowChange: (Boolean) -> Unit,
     onOpenEditor: () -> Unit,
+    onCopyFromDevice: (com.example.pokemonalertsv2.sync.WidgetConfigRow) -> Unit,
     onConfirm: (WidgetConfiguration) -> Unit
 ) {
     var priority by remember { mutableStateOf(initialConfiguration.priority) }
@@ -250,6 +256,7 @@ private fun WidgetStudioConfiguration(
             Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
                 Text(stringResource(if (followSet) R.string.filter_widgets_edit_set else R.string.filter_widgets_edit_own))
             }
+            CopyFromOtherDevice(onCopy = onCopyFromDevice)
             Text(stringResource(R.string.widget_display_priority), style = MaterialTheme.typography.titleMedium)
             Text(stringResource(R.string.widget_sorting_only_changes_the_order_never), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -257,6 +264,27 @@ private fun WidgetStudioConfiguration(
                     FilterChip(selected = priority == option, onClick = { priority = option }, label = { Text(when (option) { WidgetPriority.APP_DEFAULT -> "App default"; WidgetPriority.NEAREST -> "Nearest"; WidgetPriority.ENDING_SOON -> "Ending soon"; WidgetPriority.NEWEST -> stringResource(R.string.alerts_newest) }) })
                 }
             }
+        }
+    }
+}
+
+/** The group's other devices' widgets (device sync), offered as a starting point for this one. */
+@Composable
+private fun CopyFromOtherDevice(onCopy: (com.example.pokemonalertsv2.sync.WidgetConfigRow) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val offers by androidx.compose.runtime.produceState(initialValue = emptyList<com.example.pokemonalertsv2.sync.WidgetsSyncAdapter.Companion.Offer>()) {
+        value = runCatching {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.example.pokemonalertsv2.sync.WidgetsSyncAdapter.offers(context) }
+        }.getOrDefault(emptyList())
+    }
+    if (offers.isEmpty()) return
+    Text(stringResource(R.string.widget_copy_from_device), style = MaterialTheme.typography.titleMedium)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        offers.forEachIndexed { index, offer ->
+            androidx.compose.material3.AssistChip(
+                onClick = { onCopy(offer.row) },
+                label = { Text(stringResource(R.string.widget_copy_from_device_item, offer.deviceName, index + 1)) }
+            )
         }
     }
 }

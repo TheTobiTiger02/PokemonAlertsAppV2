@@ -178,6 +178,21 @@ class SyncStateStore(
         dataStore.edit { it[CONFIRMED_KEY] = true }
     }
 
+    /**
+     * Settings this device keeps to itself ("only on this device"), by item key. A choice about
+     * this device, not about the group: it survives leaving and rejoining.
+     */
+    val localOverrides: Flow<Set<String>> = dataStore.data.map { it[LOCAL_OVERRIDES_KEY] ?: emptySet() }
+
+    suspend fun localOverrides(): Set<String> = dataStore.data.first()[LOCAL_OVERRIDES_KEY] ?: emptySet()
+
+    suspend fun setLocalOverride(key: String, local: Boolean) {
+        dataStore.edit { preferences ->
+            val current = preferences[LOCAL_OVERRIDES_KEY] ?: emptySet()
+            preferences[LOCAL_OVERRIDES_KEY] = if (local) current + key else current - key
+        }
+    }
+
     suspend fun topicSubscribed(): Boolean = dataStore.data.first()[TOPIC_SUBSCRIBED_KEY] ?: false
 
     suspend fun setTopicSubscribed(subscribed: Boolean) {
@@ -195,5 +210,6 @@ class SyncStateStore(
         val HIGHEST_STAMP_KEY = longPreferencesKey("highest_stamp")
         val TOPIC_SUBSCRIBED_KEY = booleanPreferencesKey("topic_subscribed")
         val CONFIRMED_KEY = booleanPreferencesKey("confirmed")
+        val LOCAL_OVERRIDES_KEY = androidx.datastore.preferences.core.stringSetPreferencesKey("local_overrides")
     }
 }

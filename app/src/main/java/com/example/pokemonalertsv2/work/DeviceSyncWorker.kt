@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.pokemonalertsv2.sync.DeviceSync
+import com.example.pokemonalertsv2.sync.SyncPermanentException
 import com.example.pokemonalertsv2.sync.SyncTransportException
 import java.util.concurrent.TimeUnit
 
@@ -34,6 +35,10 @@ class DeviceSyncWorker(
         DeviceSync.engine(applicationContext).syncNow()
         DeviceSync.ensureTopic(applicationContext)
         Result.success()
+    } catch (error: SyncPermanentException) {
+        // A blob that does not authenticate or decode stays that way until someone writes it again.
+        Log.w(TAG, "Device sync cannot read the group's data", error)
+        Result.failure()
     } catch (error: SyncTransportException) {
         // A 4xx other than a conflict will not fix itself by retrying soon.
         Log.w(TAG, "Device sync refused: ${error.status}")

@@ -76,6 +76,32 @@ class CatchRouteController private constructor(private val context: Context) {
         // The service observes null and stops itself after fulfilling Android's foreground start.
         // Stopping a queued startForegroundService here can crash on rapid start/stop.
     }
+    /**
+     * Takes over a route another device was walking (device sync): it carries on here from the
+     * same stops and visits, as if it had been started here.
+     */
+    suspend fun adopt(session: CatchSession) = NavigationSessionGate.change { command {
+        cancelRefresh()
+        HuntRepository.getInstance(context).stop()
+        ArrivalTrackingRepository.getInstance(context).stopTracking()
+        evaluator.reset()
+        retryAfter = 0
+        resetOutOfDate()
+        mutable.value = session
+        persist()
+        armDeadline()
+        ContextCompat.startForegroundService(context, Intent(context, CatchRouteService::class.java))
+    } }
+
+    /**
+     * Another device took this route over: stop walking it here without ending it, so no
+     * history entry or summary is made for a route that goes on elsewhere.
+     */
+    suspend fun release() = command {
+        cancelRefresh(); deadlineJob?.cancel(); deadlineJob = null
+        mutable.value = null; evaluator.reset(); resetOutOfDate(); store.clear()
+    }
+
     fun pause() = scope.launch { command {
         val s = mutable.value ?: return@command
         if (s.finished) return@command
