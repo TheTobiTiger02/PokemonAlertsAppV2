@@ -70,7 +70,8 @@ class SyncAdaptersTest {
         targetStore.edit { it[intPreferencesKey("floating_map_x")] = 400 }
         val snapshot = roundTrip(SettingsSyncAdapter(source), SettingsSyncAdapter(targetStore))
         assertTrue("filters travel", "filter_state_v1" in snapshot)
-        listOf("godex_session_cookies", "silence_until", "floating_map_x", "onboarding_completed", "seen_alert_ids", "poke_genie_count")
+        assertTrue("a snooze applies everywhere", "silence_until" in snapshot)
+        listOf("godex_session_cookies", "floating_map_x", "onboarding_completed", "seen_alert_ids", "poke_genie_count")
             .forEach { assertFalse("$it must not sync", it in snapshot) }
         val target = targetStore.data.first()
         assertEquals(1500, target[intPreferencesKey("max_distance")])
@@ -81,6 +82,49 @@ class SyncAdaptersTest {
         SettingsSyncAdapter(targetStore).apply(emptyMap(), setOf("selected_area", "floating_map_x"))
         assertNull(targetStore.data.first()[stringPreferencesKey("selected_area")])
         assertEquals("a local-only key is never deleted by sync", 400, targetStore.data.first()[intPreferencesKey("floating_map_x")])
+    }
+
+    @Test
+    fun settingsKeptToThisDeviceAreHeld() = runBlocking {
+        val store = testDataStore(folder.root, "settings-local")
+        store.edit {
+            it[booleanPreferencesKey("notifications_enabled")] = false
+            it[longPreferencesKey("godex_last_successful_write")] = 5L
+        }
+        val arrival = testDataStore(folder.root, "arrival-local")
+        arrival.edit {
+            it[intPreferencesKey("arrival_radius_meters")] = 60
+            it[stringPreferencesKey("active_destination")] = "{}"
+        }
+        val adapter = SettingsSyncAdapter(
+            sources = listOf(
+                SettingsSource("", store, DeviceSync::isSyncedSetting),
+                SettingsSource(DeviceSync.ARRIVAL_PREFIX, arrival) { it == "arrival_radius_meters" }
+            ),
+            localKeys = { setOf("notifications_enabled") }
+        )
+        val snapshot = adapter.snapshot()
+        assertEquals("arrival/ preferences travel", true, "arrival/arrival_radius_meters" in snapshot)
+        assertFalse("the running journey does not", snapshot.keys.any { "active_destination" in it })
+        assertFalse("GoDex's own status stays", "godex_last_successful_write" in snapshot)
+        assertTrue(adapter.isLocal("notifications_enabled"))
+        assertTrue("a key that no longer travels is not deleted elsewhere", adapter.isLocal("godex_last_successful_write"))
+
+        fun entry(type: String, value: String? = null, values: List<String>? = null) =
+            SyncMerge.json.encodeToString(com.example.pokemonalertsv2.data.backup.SettingsBackup.Entry.serializer(),
+                com.example.pokemonalertsv2.data.backup.SettingsBackup.Entry(type, value, values))
+        val held = adapter.apply(
+            mapOf(
+                "notifications_enabled" to entry("boolean", "true"),
+                "arrival/arrival_radius_meters" to entry("int", "80"),
+                "broken" to "not json"
+            ),
+            emptySet()
+        )
+        assertEquals(setOf("notifications_enabled", "broken"), held)
+        val after = store.data.first()
+        assertEquals("kept to this device", false, after[booleanPreferencesKey("notifications_enabled")])
+        assertEquals(80, arrival.data.first()[intPreferencesKey("arrival_radius_meters")])
     }
 
     @Test
@@ -106,7 +150,7 @@ class SyncAdaptersTest {
         fun adapter(store: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>) = FunctionSyncAdapter(
             DeviceSync.HUNTS,
             { HuntRepository.huntSyncSnapshot(store.data.first()) },
-            { u, d -> store.edit { HuntRepository.applyHuntSync(it, u, d) } },
+            { u, d -> var held = emptySet<String>(); store.edit { held = HuntRepository.applyHuntSync(it, u, d) }; held },
             emptyFlow()
         )
         val snapshot = roundTrip(adapter(source), adapter(target))

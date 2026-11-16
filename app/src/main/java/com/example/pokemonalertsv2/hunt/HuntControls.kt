@@ -96,7 +96,7 @@ fun HuntControls(
                     // walking to.
                     val target = destination?.alert
                     Text(
-                        text = target?.let { "→ ${huntTargetTitle(it)}" } ?: "Waiting for a match",
+                        text = target?.let { "→ ${huntTargetTitle(it)}" } ?: stringResource(R.string.hunt_banner_waiting),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,

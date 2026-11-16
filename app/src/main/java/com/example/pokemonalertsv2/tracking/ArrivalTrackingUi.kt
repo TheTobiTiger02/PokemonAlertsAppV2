@@ -66,7 +66,7 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
             // During a hunt this is a new target for the hunt, not a second journey.
             if (com.example.pokemonalertsv2.hunt.HuntRepository.getInstance(context).isHunting()) {
                 ArrivalTrackingService.retargetHunt(context, alert)
-                message("Hunt target switched")
+                message(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.hunt_retargeted, com.example.pokemonalertsv2.hunt.huntTargetTitle(alert)))
                 return@launch
             }
             runCatching {
@@ -82,6 +82,14 @@ fun rememberArrivalTrackingUiController(onMessage: ((String) -> Unit)? = null): 
     }
 
     fun continueStart(alert: PokemonAlert) {
+        // A hunt running on another device: this device only points that hunt elsewhere. It
+        // starts nothing of its own, so it needs no location or notification permission.
+        val mirrored = com.example.pokemonalertsv2.sync.live.LiveSessions.hunt.value?.takeIf { it.isMirror }
+        if (mirrored != null) {
+            com.example.pokemonalertsv2.sync.live.LiveSessions.hunt(context, com.example.pokemonalertsv2.sync.live.LiveAction.RETARGET, alert.uniqueId)
+            message(com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.hunt_retargeted, com.example.pokemonalertsv2.hunt.huntTargetTitle(alert)))
+            return
+        }
         when {
             !hasNotificationPermission(context) -> {
                 pendingAlert = alert

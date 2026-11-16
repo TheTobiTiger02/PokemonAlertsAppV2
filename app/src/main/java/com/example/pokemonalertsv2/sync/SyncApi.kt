@@ -11,6 +11,7 @@ import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 
@@ -47,11 +48,22 @@ interface SyncService {
     suspend fun delete(
         @Path("groupId") groupId: String,
         @Header("X-Sync-Auth") auth: String,
+        @Header("X-Sync-Device") device: String?,
+        @Header("X-App-Key") appKey: String? = appKey()
+    ): Response<ResponseBody>
+
+    /** Relayed to the group's live streams, never stored (DEVICE_SYNC.md, "Presence"). */
+    @POST("api/sync/{groupId}/presence")
+    suspend fun presence(
+        @Path("groupId") groupId: String,
+        @Header("X-Sync-Auth") auth: String,
+        @Header("X-Sync-Device") device: String,
+        @Body body: RequestBody,
         @Header("X-App-Key") appKey: String? = appKey()
     ): Response<ResponseBody>
 }
 
-private fun appKey(): String? = BuildConfig.APP_API_KEY.takeIf { it.isNotBlank() }
+internal fun appKey(): String? = BuildConfig.APP_API_KEY.takeIf { it.isNotBlank() }
 
 @Serializable
 data class SyncCollectionList(val collections: List<SyncCollectionInfo> = emptyList())
@@ -85,7 +97,7 @@ interface SyncTransport {
     suspend fun delete(group: SyncGroup)
 }
 
-class RetrofitSyncTransport(private val service: SyncService) : SyncTransport {
+class RetrofitSyncTransport(private val service: SyncService, private val deviceId: String? = null) : SyncTransport {
     private val octets = "application/octet-stream".toMediaType()
 
     override suspend fun list(group: SyncGroup): Map<String, Long> {
@@ -126,12 +138,15 @@ class RetrofitSyncTransport(private val service: SyncService) : SyncTransport {
         return when {
             response.code() == 412 && version != null -> PutResult.Conflict(version)
             response.isSuccessful && version != null -> PutResult.Stored(version)
+            // A write expecting a later version to a group the server no longer knows: deleted.
+            response.code() == 404 && "SYNC_GROUP_NOT_FOUND" in response.errorBody()?.string().orEmpty() ->
+                throw SyncGroupGoneException()
             else -> throw failure(response)
         }
     }
 
     override suspend fun delete(group: SyncGroup) {
-        val response = service.delete(group.groupId, group.authToken)
+        val response = service.delete(group.groupId, group.authToken, deviceId)
         // Already gone counts as deleted.
         if (!response.isSuccessful && response.code() != 404) throw failure(response)
     }

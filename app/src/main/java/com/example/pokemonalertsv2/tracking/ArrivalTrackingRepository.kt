@@ -28,7 +28,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 private const val ARRIVAL_TRACKING_STORE = "arrival_tracking"
-private val Context.arrivalTrackingDataStore: DataStore<Preferences> by preferencesDataStore(
+
+/** Also read by device sync for the two journey preferences ([ArrivalTrackingRepository.SYNCED_KEYS]). */
+internal val Context.arrivalTrackingDataStore: DataStore<Preferences> by preferencesDataStore(
     name = ARRIVAL_TRACKING_STORE
 )
 
@@ -234,6 +236,9 @@ class ArrivalTrackingRepository private constructor(context: Context) {
         private val ACTIVE_DESTINATION_KEY = stringPreferencesKey("active_destination")
         private val ARRIVAL_RADIUS_KEY = intPreferencesKey("arrival_radius_meters")
         private val SHOW_GOING_MAP_KEY = booleanPreferencesKey("show_going_map")
+
+        /** Preferences device sync carries; the running journey travels in the live collection. */
+        val SYNCED_KEYS: Set<String> = setOf(ARRIVAL_RADIUS_KEY.name, SHOW_GOING_MAP_KEY.name)
 
         @Volatile
         private var instance: ArrivalTrackingRepository? = null

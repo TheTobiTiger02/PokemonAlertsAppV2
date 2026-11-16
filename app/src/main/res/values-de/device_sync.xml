@@ -3,8 +3,25 @@
 <resources>
     <string name="settings_device_sync">Geräte-Sync</string>
     <string name="device_sync_overview_off">Aus · Einstellungen auf allen Geräten gleich halten</string>
-    <string name="device_sync_intro">Hält Einstellungen, Filter, Jagden, Fangrouten, deinen Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich. Alles wird auf diesem Gerät verschlüsselt, bevor es das Gerät verlässt, der Server kann es also nicht lesen.</string>
-    <string name="device_sync_local_note">Fensterpositionen, die laufende Jagd oder Route und der Alarmverlauf bleiben auf dem jeweiligen Gerät.</string>
+    <string name="device_sync_intro">Hält Einstellungen, Filter, Jagden, Fangrouten, deinen Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich. Eine Jagd oder Route, die auf einem Gerät läuft, siehst du auf den anderen und kannst sie dort steuern. Alles wird auf diesem Gerät verschlüsselt, bevor es das Gerät verlässt, der Server kann es also nicht lesen.</string>
+    <string name="device_sync_local_note">Fensterpositionen und der Alarmverlauf bleiben auf dem jeweiligen Gerät. Benachrichtigungs- und Anzeigeeinstellungen kannst du auf einem Gerät für sich behalten.</string>
+    <string name="device_sync_live">Live · Änderungen kommen sofort an</string>
+    <string name="device_sync_collection_live">Laufende Jagd, Route und Raid-Beobachtung</string>
+    <string name="device_sync_collection_godex">Noch nicht gespeicherte GoDex-Markierungen</string>
+    <string name="device_sync_collection_widgets">Widget-Einrichtungen</string>
+    <string name="device_sync_this_device_settings">Nur auf diesem Gerät</string>
+    <string name="device_sync_this_device_settings_hint">Hier eingeschaltete Einstellungen bleiben auf diesem Gerät: Änderst du sie hier, ändern sich deine anderen Geräte nicht, und deren Änderungen ändern dieses Gerät nicht. Den Wert selbst änderst du an seiner gewohnten Stelle in den Einstellungen.</string>
+    <string name="device_sync_override_notifications">Alarm-Benachrichtigungen an oder aus</string>
+    <string name="device_sync_override_vibrate">Vibration</string>
+    <string name="device_sync_override_content">Aufbau und Inhalt der Benachrichtigungen</string>
+    <string name="device_sync_override_quiet_hours">Ruhezeiten</string>
+    <string name="device_sync_override_silence">Eine Weile stummschalten</string>
+    <string name="device_sync_override_theme">Design</string>
+    <string name="device_sync_override_pip">Karte als Bild-im-Bild</string>
+    <string name="device_sync_override_journey_overlay">Reise-Anzeige über anderen Apps</string>
+    <string name="device_sync_override_watch">Uhr-Daten aus Health Connect</string>
+    <string name="widget_copy_from_device">Von einem anderen Gerät übernehmen</string>
+    <string name="widget_copy_from_device_item">%1$s · Widget %2$d</string>
     <string name="device_sync_set_up">Sync einrichten</string>
     <string name="device_sync_join">Mit Code beitreten</string>
     <string name="device_sync_join_title">Geräte-Sync beitreten</string>

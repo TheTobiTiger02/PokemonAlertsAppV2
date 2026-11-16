@@ -12,7 +12,7 @@ class PokemonFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         // A device sync ping is not an alert: it only says the group changed (DEVICE_SYNC.md).
         when (DeviceSync.pingAction(remoteMessage.data, DeviceSync.deviceId(applicationContext))) {
-            DeviceSync.PingAction.SYNC -> {
+            DeviceSync.PingAction.SYNC, DeviceSync.PingAction.DELETED -> {
                 // onMessageReceived runs off the main thread, and a high-priority message keeps
                 // the process awake while it does: sync right here instead of queueing work.
                 kotlinx.coroutines.runBlocking { DeviceSync.syncFromPing(applicationContext, remoteMessage.data) }

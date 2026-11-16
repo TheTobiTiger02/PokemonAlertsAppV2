@@ -143,7 +143,7 @@ internal fun fitDescription(hunt: MapChromeHunt?): String = when {
     else -> stringResource(R.string.alerts_focus_hunt_target)
 }
 
-internal fun MapChromeHunt.title(): String = target?.let(::huntTargetTitle) ?: "Hunting $name"
+internal fun MapChromeHunt.title(): String = target?.let(::huntTargetTitle) ?: AppText.get(R.string.hunt_banner_hunting, name)
 
 internal fun MapChromeHunt.detail(): String =
-    target?.let { huntTargetDetail(it, distanceMeters) } ?: "Waiting for a match"
+    target?.let { huntTargetDetail(it, distanceMeters) } ?: AppText.get(R.string.hunt_banner_waiting)

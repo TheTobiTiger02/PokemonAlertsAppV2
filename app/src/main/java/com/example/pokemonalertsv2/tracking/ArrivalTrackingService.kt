@@ -141,6 +141,9 @@ class ArrivalTrackingService : Service() {
     }
     private var huntJob: Job? = null
 
+    /** Hunt actions from the in-app map and from the group's other devices (sync/live). */
+    private var huntOrdersJob: Job? = null
+
     /**
      * Set when the target changes, consumed by the next [focusFloatingMap].
      *
@@ -492,6 +495,11 @@ class ArrivalTrackingService : Service() {
                 }
             }
         }
+        if (huntOrdersJob == null) {
+            huntOrdersJob = serviceScope.launch {
+                com.example.pokemonalertsv2.sync.live.LiveSessions.huntOrders.collect(::carryOut)
+            }
+        }
         if (huntJob == null) {
             huntJob = serviceScope.launch {
                 huntRepository.sessionFlow.collect { session ->
@@ -518,6 +526,7 @@ class ArrivalTrackingService : Service() {
                         }
                     }
                     huntActive = active
+                    if (!active) reportReadout()
                     if (changed) updateGoingPathLoop()
                     val pausedChanged = huntPaused != (session?.paused == true)
                     huntPaused = session?.paused == true
@@ -615,6 +624,8 @@ class ArrivalTrackingService : Service() {
         chipRefreshJob?.cancel()
         walkingRouteJob?.cancel()
         huntJob?.cancel()
+        huntOrdersJob?.cancel()
+        com.example.pokemonalertsv2.sync.live.LiveSessions.reportOwnerReadout(null)
         acquireJob?.cancel()
         mapAlertsJob?.cancel()
         overlayPreferenceJob?.cancel()
@@ -900,7 +911,10 @@ class ArrivalTrackingService : Service() {
             }
         }
         if (destination == null) {
-            if (huntActive) maybeAcquireHuntTarget()
+            if (huntActive) {
+                reportReadout()
+                maybeAcquireHuntTarget()
+            }
             return
         }
         val distance = floatArrayOf(directDistanceMeters(location, destination))
@@ -1057,6 +1071,63 @@ class ArrivalTrackingService : Service() {
         }
     }
 
+    /**
+     * A hunt action from the in-app map or another device of the group, carried out exactly as
+     * the floating window's button would. Got it / Next / Previous name the target they were
+     * pressed for: a press for a target that has already changed is dropped.
+     */
+    private suspend fun carryOut(order: com.example.pokemonalertsv2.sync.live.LiveSessions.HuntOrder) {
+        if (!huntActive) return
+        val targeted = order.action in setOf(
+            com.example.pokemonalertsv2.sync.live.LiveAction.GOT_IT,
+            com.example.pokemonalertsv2.sync.live.LiveAction.NEXT,
+            com.example.pokemonalertsv2.sync.live.LiveAction.PREVIOUS
+        )
+        if (targeted && order.expectedTargetId != huntTargetId) return
+        when (order.action) {
+            com.example.pokemonalertsv2.sync.live.LiveAction.GOT_IT -> catchTargetAndAdvance()
+            com.example.pokemonalertsv2.sync.live.LiveAction.NEXT -> { stopFollowing(); stepHuntTarget(forward = true) }
+            com.example.pokemonalertsv2.sync.live.LiveAction.PREVIOUS -> { stopFollowing(); stepHuntTarget(forward = false) }
+            com.example.pokemonalertsv2.sync.live.LiveAction.RETARGET -> {
+                val id = order.alertId ?: return
+                val alert = liveAlerts.firstOrNull { it.uniqueId == id }
+                    ?: huntPlan.ordered.firstOrNull { it.uniqueId == id }
+                    ?: huntOutsideMatches.firstOrNull { it.uniqueId == id }
+                    ?: return
+                retargetHuntTo(alert)
+            }
+            com.example.pokemonalertsv2.sync.live.LiveAction.PAUSE -> pauseHuntRoute()
+            com.example.pokemonalertsv2.sync.live.LiveAction.RESUME,
+            com.example.pokemonalertsv2.sync.live.LiveAction.RECALCULATE -> recalculateHuntRoute()
+            else -> Unit
+        }
+    }
+
+    /**
+     * What this hunt's readout says, for the in-app map and the group's other devices: the
+     * same figures the chip, the pill and the window show.
+     */
+    private fun reportReadout() {
+        if (!huntActive) {
+            com.example.pokemonalertsv2.sync.live.LiveSessions.reportOwnerReadout(null)
+            return
+        }
+        val location = lastAcceptedLocation
+        com.example.pokemonalertsv2.sync.live.LiveSessions.reportOwnerReadout(
+            com.example.pokemonalertsv2.sync.live.LiveSessions.OwnerReadout(
+                latitude = location?.latitude,
+                longitude = location?.longitude,
+                accuracyMeters = location?.takeIf { it.hasAccuracy() }?.accuracy,
+                bearing = location?.takeIf { it.hasBearing() }?.bearing,
+                targetId = currentDestination?.uniqueId,
+                distanceMeters = lastDirectDistanceMeters,
+                inRange = lastInRange,
+                waiting = lastWaitingForPreciseLocation,
+                endedNote = endedNote()
+            )
+        )
+    }
+
     /** What to call a caught target in the undo button. */
     private fun caughtDisplayName(destination: TrackedDestination): String =
         huntTargetTitle(destination.alert)
@@ -1131,6 +1202,7 @@ class ArrivalTrackingService : Service() {
         inRange: Boolean,
         waiting: Boolean
     ) {
+        reportReadout()
         if (!floatingMap.isShowing) return
         floatingMap.setBubbleReadout(
             floatingBubbleReadout(
@@ -1658,6 +1730,7 @@ class ArrivalTrackingService : Service() {
         huntPlanLongitude = null
         pinnedHuntTargetId = null
         huntRepository.publishPlan(HuntPlan.Empty)
+        huntRepository.publishOutside(emptyList())
     }
 
     /**
@@ -1728,6 +1801,7 @@ class ArrivalTrackingService : Service() {
         if (!huntActive) return
         huntPlan = plan
         huntRepository.publishPlan(plan)
+        huntRepository.publishOutside(huntOutsideMatches)
         refreshFloatingMapAlerts()
         // The line has to follow the new order now, not at the next matrix pass.
         val stopIds = plan.route.map { it.uniqueId }

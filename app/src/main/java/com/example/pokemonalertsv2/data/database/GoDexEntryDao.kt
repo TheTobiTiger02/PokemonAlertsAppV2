@@ -63,6 +63,24 @@ interface GoDexEntryDao {
     @Query("DELETE FROM godex_pending_updates")
     suspend fun clearPendingUpdates()
 
+    /** Device sync: every pending mark, to notice a change of an existing one too. */
+    @Query("SELECT * FROM godex_pending_updates ORDER BY entryKey")
+    fun observePendingUpdates(): Flow<List<GoDexPendingUpdateEntity>>
+
+    @Query("DELETE FROM godex_pending_updates WHERE entryKey = :entryKey")
+    suspend fun deletePendingUpdate(entryKey: String)
+
+    /**
+     * Device sync: a mark made on another device. Kept as pending here too, so the entry shows
+     * caught at once and either device can write it back (writing the same state twice is
+     * answered "already applied").
+     */
+    @Transaction
+    suspend fun applySyncedPending(entryKey: String, caught: Boolean, revision: Long, timestamp: Long) {
+        updateNeeded(entryKey, !caught)
+        insertPendingUpdate(GoDexPendingUpdateEntity(entryKey = entryKey, caught = caught, revision = revision, timestamp = timestamp))
+    }
+
     @Transaction
     suspend fun setDesiredState(entryKey: String, caught: Boolean, now: Long) {
         val current = getPendingUpdate(entryKey)

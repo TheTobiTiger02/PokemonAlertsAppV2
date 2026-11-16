@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Running sessions across devices and the in-app hunt controls (sync/live, ui/alerts/mapchrome/HuntChrome.kt). -->
+<resources>
+    <string name="live_owner_not_reachable">%1$s did not answer. Check that the app is running there.</string>
+    <string name="live_on_device">On %1$s</string>
+    <string name="live_owner_offline">%1$s is offline</string>
+    <string name="live_take_over">Take over here</string>
+    <string name="live_take_over_permission">Allow location and notifications to run it on this device.</string>
+    <string name="live_take_over_done">Now running on this device.</string>
+    <string name="hunt_banner_hunting">Hunting %1$s</string>
+    <string name="hunt_banner_waiting">Waiting for a match</string>
+    <string name="hunt_banner_locating">Locating…</string>
+    <string name="hunt_banner_in_range">In range</string>
+    <plurals name="hunt_banner_stats">
+        <item quantity="one">%1$d caught · %2$s · %3$s</item>
+        <item quantity="other">%1$d caught · %2$s · %3$s</item>
+    </plurals>
+    <string name="hunt_banner_undo">Caught %1$s</string>
+    <string name="hunt_banner_undo_action">Undo</string>
+    <string name="hunt_dock_previous">Previous target</string>
+    <string name="hunt_dock_got_it">Got it</string>
+    <string name="hunt_dock_next">Next target</string>
+    <string name="hunt_dock_looking">Looking for targets</string>
+    <string name="hunt_menu">Hunt options</string>
+    <string name="hunt_menu_pause">Pause route</string>
+    <string name="hunt_menu_resume">Resume route</string>
+    <string name="hunt_menu_recalculate">Recalculate route</string>
+    <string name="hunt_menu_edit">Edit targets</string>
+    <string name="hunt_menu_route_line">Route line</string>
+    <string name="hunt_menu_map_tools">Map tools</string>
+    <string name="hunt_menu_stop">Stop hunt</string>
+    <string name="hunt_stop_confirm_title">Stop the hunt?</string>
+    <string name="hunt_stop_confirm_message">The hunt ends on all your devices and its summary is kept.</string>
+    <string name="hunt_retargeted">Now heading to %1$s</string>
+    <string name="live_route_on_device">Catch route on %1$s</string>
+    <plurals name="live_route_next">
+        <item quantity="one">%1$d visited · %2$s walked</item>
+        <item quantity="other">%1$d visited · %2$s walked</item>
+    </plurals>
+    <string name="live_route_paused">Route paused</string>
+    <string name="live_journey_on_device">%1$s is walking to %2$s</string>
+    <string name="live_raid_watch_on_device">%1$s watches %2$s</string>
+    <string name="live_stop">Stop</string>
+    <string name="live_skip">Skip</string>
+    <string name="live_pause">Pause</string>
+    <string name="live_resume">Resume</string>
+</resources>

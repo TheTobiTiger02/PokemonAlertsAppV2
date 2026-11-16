@@ -25,12 +25,22 @@ internal object PlainSealer : SecretSealer {
 internal class MapAdapter(override val name: String, initial: Map<String, String> = emptyMap()) : SyncAdapter {
     val data = LinkedHashMap(initial)
     var applyCount = 0
+    /** Values this device cannot read: apply reports them held. */
+    val unreadable = HashSet<String>()
+    /** Keys kept to this device ("only on this device"). */
+    val local = HashSet<String>()
+    /** Schema this device writes per key. */
+    val schemas = HashMap<String, Int>()
     override suspend fun snapshot(): Map<String, String> = LinkedHashMap(data)
-    override suspend fun apply(upserts: Map<String, String>, deletes: Set<String>) {
+    override suspend fun apply(upserts: Map<String, String>, deletes: Set<String>): Set<String> {
         applyCount++
-        deletes.forEach { data.remove(it) }
-        data.putAll(upserts)
+        deletes.filterNot { it in local }.forEach { data.remove(it) }
+        val held = upserts.keys.filterTo(HashSet()) { it in unreadable || it in local }
+        data.putAll(upserts.filterKeys { it !in held })
+        return held
     }
+    override fun isLocal(key: String): Boolean = key in local
+    override fun schemaOf(key: String): Int = schemas[key] ?: 0
     override val changes: Flow<Unit> = emptyFlow()
 }
 
@@ -59,7 +69,8 @@ internal class FakeServer {
 
         override suspend fun put(group: SyncGroup, collection: String, sealed: ByteArray, expectedVersion: Long, deviceId: String): PutResult {
             beforePut()
-            if (deleted) throw SyncTransportException(403, "gone")
+            // As the server: only a first write may create a group.
+            if (deleted || (groupId == null && expectedVersion > 0)) throw SyncGroupGoneException()
             if (groupId == null) groupId = group.groupId
             check(groupId == group.groupId)
             val current = blobs[collection]?.first ?: 0L
@@ -91,5 +102,6 @@ internal class FakeDevice(
     val adapters = collections.map { MapAdapter(it) }
     val adapter get() = adapters.first()
     val state = SyncStateStore(testDataStore(folder, "state-$id"), PlainSealer)
-    val engine = DeviceSyncEngine(server.transport(beforePut), state, adapters, id, clock = { now })
+    var appVersion = 1L
+    val engine = DeviceSyncEngine(server.transport(beforePut), state, adapters, id, clock = { now }, appVersion = { appVersion })
 }

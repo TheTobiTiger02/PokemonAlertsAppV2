@@ -118,8 +118,10 @@ class HuntRepository private constructor(context: Context) {
      */
     suspend fun syncSnapshot(): Map<String, String> = huntSyncSnapshot(dataStore.data.first())
 
-    suspend fun applySync(upserts: Map<String, String>, deletes: Set<String>) {
-        dataStore.edit { applyHuntSync(it, upserts, deletes) }
+    suspend fun applySync(upserts: Map<String, String>, deletes: Set<String>): Set<String> {
+        var held: Set<String> = emptySet()
+        dataStore.edit { held = applyHuntSync(it, upserts, deletes) }
+        return held
     }
 
     val syncChanges: Flow<Map<String, String>> = dataStore.data.map { huntSyncSnapshot(it) }.distinctUntilChanged()
@@ -146,6 +148,29 @@ class HuntRepository private constructor(context: Context) {
     internal fun publishPlan(plan: HuntPlan) {
         publishedPlan.value = plan
     }
+
+    private val publishedOutside = MutableStateFlow<List<com.example.pokemonalertsv2.data.PokemonAlert>>(emptyList())
+
+    /** Matches outside the hunt's area the service draws dimmed; published like [plan]. */
+    internal val outside: StateFlow<List<com.example.pokemonalertsv2.data.PokemonAlert>> = publishedOutside.asStateFlow()
+
+    internal fun publishOutside(alerts: List<com.example.pokemonalertsv2.data.PokemonAlert>) {
+        publishedOutside.value = alerts
+    }
+
+    /**
+     * Takes over a hunt another device was running (device sync): its session and what it
+     * has done so far become this device's, exactly as if the hunt had been started here.
+     */
+    suspend fun adopt(session: HuntSession, stats: HuntStats): HuntSession =
+        com.example.pokemonalertsv2.tracking.NavigationSessionGate.change {
+            com.example.pokemonalertsv2.catchroutes.CatchRouteController.get(appContext).stop()
+            dataStore.edit { preferences ->
+                preferences[ACTIVE_HUNT_KEY] = json.encodeToString(HuntSession.serializer(), session)
+                preferences[HUNT_STATS_KEY] = stats.encode()
+            }
+            session
+        }
 
     suspend fun currentSession(): HuntSession? =
         dataStore.data.first()[ACTIVE_HUNT_KEY]?.decodeSession()
@@ -480,12 +505,16 @@ class HuntRepository private constructor(context: Context) {
             return items
         }
 
-        /** Writes synced items back in the stored layout; items that do not decode are skipped. */
+        /**
+         * Writes synced items back in the stored layout. Returns the items that do not decode:
+         * device sync keeps the group's copy of those instead of deleting it everywhere.
+         */
         internal fun applyHuntSync(
             preferences: androidx.datastore.preferences.core.MutablePreferences,
             upserts: Map<String, String>,
             deletes: Set<String>
-        ) {
+        ): Set<String> {
+            val held = LinkedHashSet<String>()
             val touched = upserts.keys + deletes
             if (touched.any { it.startsWith(SAVED_PREFIX) }) {
                 val saved = preferences[SAVED_HUNTS_KEY]
@@ -493,7 +522,8 @@ class HuntRepository private constructor(context: Context) {
                     .orEmpty().associateBy { SAVED_PREFIX + it.id }.toMutableMap()
                 deletes.forEach { saved.remove(it) }
                 upserts.filterKeys { it.startsWith(SAVED_PREFIX) }.forEach { (key, value) ->
-                    runCatching { syncJson.decodeFromString(SavedHunt.serializer(), value) }.getOrNull()?.let { saved[key] = it }
+                    val hunt = runCatching { syncJson.decodeFromString(SavedHunt.serializer(), value) }.getOrNull()
+                    if (hunt == null) held += key else saved[key] = hunt
                 }
                 preferences[SAVED_HUNTS_KEY] = syncJson.encodeToString(
                     ListSerializer(SavedHunt.serializer()),
@@ -506,7 +536,8 @@ class HuntRepository private constructor(context: Context) {
                     .orEmpty().associateBy { HISTORY_PREFIX + it.startedAtMillis }.toMutableMap()
                 deletes.forEach { history.remove(it) }
                 upserts.filterKeys { it.startsWith(HISTORY_PREFIX) }.forEach { (key, value) ->
-                    runCatching { syncJson.decodeFromString(HuntSummary.serializer(), value) }.getOrNull()?.let { history[key] = it }
+                    val summary = runCatching { syncJson.decodeFromString(HuntSummary.serializer(), value) }.getOrNull()
+                    if (summary == null) held += key else history[key] = summary
                 }
                 preferences[HUNT_HISTORY_KEY] = syncJson.encodeToString(
                     ListSerializer(HuntSummary.serializer()),
@@ -515,8 +546,12 @@ class HuntRepository private constructor(context: Context) {
             }
             listOf(BATTERY_SAVER_ITEM to BATTERY_SAVER_KEY, SHOW_OUTSIDE_AREA_ITEM to SHOW_OUTSIDE_AREA_KEY).forEach { (item, key) ->
                 if (item in deletes) preferences.remove(key)
-                upserts[item]?.toBooleanStrictOrNull()?.let { preferences[key] = it }
+                upserts[item]?.let { value ->
+                    val enabled = value.toBooleanStrictOrNull()
+                    if (enabled == null) held += item else preferences[key] = enabled
+                }
             }
+            return held
         }
 
         @Volatile

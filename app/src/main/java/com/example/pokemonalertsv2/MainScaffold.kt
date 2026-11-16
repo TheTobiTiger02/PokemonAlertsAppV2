@@ -255,6 +255,8 @@ internal fun MainScaffold(
         if (!isUndoOfferLive(caught, System.currentTimeMillis())) return@LaunchedEffect
         if (caught.id == lastOfferedCatchId) return@LaunchedEffect
         lastOfferedCatchId = caught.id
+        // On the map the hunt banner's strip offers it already, without covering the Got it dock.
+        if (selectedTab == MAP_TAB_INDEX && huntSession != null) return@LaunchedEffect
         val result = snackbarHostState.showSnackbar(
             message = AppText.get(R.string.mainscaffoldkt_caught_x, caught.displayName),
             actionLabel = AppText.get(R.string.mainscaffoldkt_undo),
@@ -270,6 +272,13 @@ internal fun MainScaffold(
         com.example.pokemonalertsv2.hunt.HuntSummarySheet(summary) {
             com.example.pokemonalertsv2.tracking.ArrivalTrackingNotifications.cancelHuntSummary(context)
             scope.launch { huntRepository.clearLastSummary() }
+        }
+    }
+    // A hunt that ran on another device of the group and ended there (device sync).
+    val mirroredSummary by com.example.pokemonalertsv2.sync.live.LiveSessions.mirrorSummary.collectAsStateWithLifecycle()
+    if (!pictureInPictureMode && lastHuntSummary == null) mirroredSummary?.let { live ->
+        com.example.pokemonalertsv2.hunt.HuntSummarySheet(live.summary) {
+            com.example.pokemonalertsv2.sync.live.LiveSessions.markMirrorSummarySeen(context, live.summary)
         }
     }
 

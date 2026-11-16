@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Running sessions across devices and the in-app hunt controls (sync/live, ui/alerts/mapchrome/HuntChrome.kt). -->
+<resources>
+    <string name="live_owner_not_reachable">%1$s hat nicht geantwortet. Prüfe, ob die App dort läuft.</string>
+    <string name="live_on_device">Auf %1$s</string>
+    <string name="live_owner_offline">%1$s ist offline</string>
+    <string name="live_take_over">Hier übernehmen</string>
+    <string name="live_take_over_permission">Erlaube Standort und Benachrichtigungen, um es auf diesem Gerät auszuführen.</string>
+    <string name="live_take_over_done">Läuft jetzt auf diesem Gerät.</string>
+    <string name="hunt_banner_hunting">Jagd auf %1$s</string>
+    <string name="hunt_banner_waiting">Warte auf einen Treffer</string>
+    <string name="hunt_banner_locating">Standort wird ermittelt…</string>
+    <string name="hunt_banner_in_range">In Reichweite</string>
+    <plurals name="hunt_banner_stats">
+        <item quantity="one">%1$d gefangen · %2$s · %3$s</item>
+        <item quantity="other">%1$d gefangen · %2$s · %3$s</item>
+    </plurals>
+    <string name="hunt_banner_undo">%1$s gefangen</string>
+    <string name="hunt_banner_undo_action">Rückgängig</string>
+    <string name="hunt_dock_previous">Vorheriges Ziel</string>
+    <string name="hunt_dock_got_it">Erledigt</string>
+    <string name="hunt_dock_next">Nächstes Ziel</string>
+    <string name="hunt_dock_looking">Suche nach Zielen</string>
+    <string name="hunt_menu">Jagd-Optionen</string>
+    <string name="hunt_menu_pause">Route pausieren</string>
+    <string name="hunt_menu_resume">Route fortsetzen</string>
+    <string name="hunt_menu_recalculate">Route neu berechnen</string>
+    <string name="hunt_menu_edit">Ziele bearbeiten</string>
+    <string name="hunt_menu_route_line">Routenlinie</string>
+    <string name="hunt_menu_map_tools">Karten-Werkzeuge</string>
+    <string name="hunt_menu_stop">Jagd beenden</string>
+    <string name="hunt_stop_confirm_title">Jagd beenden?</string>
+    <string name="hunt_stop_confirm_message">Die Jagd endet auf allen deinen Geräten, die Zusammenfassung bleibt erhalten.</string>
+    <string name="hunt_retargeted">Jetzt unterwegs zu %1$s</string>
+    <string name="live_route_on_device">Fangroute auf %1$s</string>
+    <plurals name="live_route_next">
+        <item quantity="one">%1$d besucht · %2$s gelaufen</item>
+        <item quantity="other">%1$d besucht · %2$s gelaufen</item>
+    </plurals>
+    <string name="live_route_paused">Route pausiert</string>
+    <string name="live_journey_on_device">%1$s ist unterwegs zu %2$s</string>
+    <string name="live_raid_watch_on_device">%1$s beobachtet %2$s</string>
+    <string name="live_stop">Beenden</string>
+    <string name="live_skip">Überspringen</string>
+    <string name="live_pause">Pausieren</string>
+    <string name="live_resume">Fortsetzen</string>
+</resources>

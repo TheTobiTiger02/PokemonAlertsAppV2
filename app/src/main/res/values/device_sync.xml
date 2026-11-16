@@ -3,8 +3,25 @@
 <resources>
     <string name="settings_device_sync">Device sync</string>
     <string name="device_sync_overview_off">Off · keep settings the same on all your devices</string>
-    <string name="device_sync_intro">Keeps settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. Everything is encrypted on this device before it leaves, so the server cannot read it.</string>
-    <string name="device_sync_local_note">Window positions, the running hunt or route and the alert history stay on each device.</string>
+    <string name="device_sync_intro">Keeps settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. A hunt or route running on one device shows on the others, and you can control it from there. Everything is encrypted on this device before it leaves, so the server cannot read it.</string>
+    <string name="device_sync_local_note">Window positions and the alert history stay on each device. You can keep notification and display settings to one device.</string>
+    <string name="device_sync_live">Live · changes arrive instantly</string>
+    <string name="device_sync_collection_live">Running hunt, route and Raid Watch</string>
+    <string name="device_sync_collection_godex">GoDex marks not yet saved</string>
+    <string name="device_sync_collection_widgets">Widget setups</string>
+    <string name="device_sync_this_device_settings">Only on this device</string>
+    <string name="device_sync_this_device_settings_hint">Settings switched on here stay on this device: changing them here does not change your other devices, and their changes do not change this one. Change the value itself in its usual place in Settings.</string>
+    <string name="device_sync_override_notifications">Alert notifications on or off</string>
+    <string name="device_sync_override_vibrate">Vibration</string>
+    <string name="device_sync_override_content">Notification layout and content</string>
+    <string name="device_sync_override_quiet_hours">Quiet hours</string>
+    <string name="device_sync_override_silence">Silence for a while</string>
+    <string name="device_sync_override_theme">Theme</string>
+    <string name="device_sync_override_pip">Map picture-in-picture</string>
+    <string name="device_sync_override_journey_overlay">Journey pill over other apps</string>
+    <string name="device_sync_override_watch">Watch stats from Health Connect</string>
+    <string name="widget_copy_from_device">Copy from another device</string>
+    <string name="widget_copy_from_device_item">%1$s · widget %2$d</string>
     <string name="device_sync_set_up">Set up sync</string>
     <string name="device_sync_join">Join with code</string>
     <string name="device_sync_join_title">Join device sync</string>

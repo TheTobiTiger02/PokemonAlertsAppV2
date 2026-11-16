@@ -4,6 +4,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -48,7 +49,16 @@ import com.example.pokemonalertsv2.ui.theme.Spacing
  * button on the left and the camera on the right.
  */
 @Composable
-internal fun BoxScope.MapChrome(state: MapChromeState, actions: MapChromeActions) {
+internal fun BoxScope.MapChrome(
+    state: MapChromeState,
+    actions: MapChromeActions,
+    /** During a hunt: the hunt's banner, in place of the chip rail (the hunt picks what is on the map). */
+    huntBanner: (@Composable () -> Unit)? = null,
+    /** During a hunt: the Got it dock, in place of the Tools pill (Tools moves into the banner's menu). */
+    huntDock: (@Composable () -> Unit)? = null,
+    /** Sessions running on another device of the group, under the top bar. */
+    mirroredSessions: (@Composable () -> Unit)? = null
+) {
     Column(
         modifier = Modifier
             .align(Alignment.TopCenter)
@@ -58,32 +68,41 @@ internal fun BoxScope.MapChrome(state: MapChromeState, actions: MapChromeActions
         verticalArrangement = Arrangement.spacedBy(Spacing.sm)
     ) {
         MapTopBar(state, actions, Modifier.padding(start = Spacing.lg, end = state.controlsEndPadding))
-        // No hunt banner: the Tools pill below already names the target, and the fit button
-        // frames it.
-        MapCategoryRail(
-            mutedCategories = state.mutedCategories,
-            categoryCounts = state.categoryCounts,
-            visibleAlertCount = state.visibleCount,
-            showBackButton = state.showBackButton,
-            onBack = actions.onBack,
-            onMutedCategoriesChange = actions.onCategoriesChange,
-            contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = 2.dp, bottom = Spacing.xxs)
-        )
+        if (huntBanner != null) {
+            Box(Modifier.padding(start = Spacing.lg, end = state.controlsEndPadding)) { huntBanner() }
+        } else {
+            MapCategoryRail(
+                mutedCategories = state.mutedCategories,
+                categoryCounts = state.categoryCounts,
+                visibleAlertCount = state.visibleCount,
+                showBackButton = state.showBackButton,
+                onBack = actions.onBack,
+                onMutedCategoriesChange = actions.onCategoriesChange,
+                contentPadding = PaddingValues(start = Spacing.lg, end = Spacing.lg, top = 2.dp, bottom = Spacing.xxs)
+            )
+        }
+        if (mirroredSessions != null) {
+            Column(Modifier.padding(start = Spacing.lg, end = state.controlsEndPadding), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                mirroredSessions()
+            }
+        }
     }
 
-    AnimatedVisibility(
-        visible = state.floatingControlsVisible,
-        enter = appFadeIn(),
-        exit = appFadeOut(),
-        modifier = Modifier.align(Alignment.BottomStart)
-    ) {
-        MapToolsPill(
-            state = state,
-            onClick = actions.onOpenTools,
-            modifier = Modifier
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(start = Spacing.lg, bottom = Spacing.xxl)
-        )
+    if (huntDock == null) {
+        AnimatedVisibility(
+            visible = state.floatingControlsVisible,
+            enter = appFadeIn(),
+            exit = appFadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart)
+        ) {
+            MapToolsPill(
+                state = state,
+                onClick = actions.onOpenTools,
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = Spacing.lg, bottom = Spacing.xxl)
+            )
+        }
     }
 
     AnimatedVisibility(
@@ -94,13 +113,15 @@ internal fun BoxScope.MapChrome(state: MapChromeState, actions: MapChromeActions
     ) {
         Column(
             modifier = Modifier
+                .fillMaxWidth()
                 .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(end = state.controlsEndPadding, bottom = Spacing.xxl),
+                .padding(start = Spacing.lg, end = state.controlsEndPadding, bottom = if (huntDock != null) Spacing.lg else Spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
             horizontalAlignment = Alignment.End
         ) {
             MapFitButton(contentDescription = fitDescription(state.hunt), onClick = actions.onFit)
             MapLocateButton(state = state.locate, onClick = actions.onLocate)
+            huntDock?.invoke()
         }
     }
 }

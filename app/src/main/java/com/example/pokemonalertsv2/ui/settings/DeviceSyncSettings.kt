@@ -231,13 +231,18 @@ private fun Connected(
 ) {
     SettingsSection(title = stringResource(R.string.settings_device_sync)) {
         val lastSync = state.statuses.values.maxOfOrNull { it.lastSyncAtMillis } ?: 0L
+        val live by DeviceSync.streamConnected.collectAsState()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.device_sync_status_on), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text(
-                    if (syncing) stringResource(R.string.device_sync_syncing) else syncedLabel(lastSync),
+                    when {
+                        syncing -> stringResource(R.string.device_sync_syncing)
+                        live -> stringResource(R.string.device_sync_live)
+                        else -> syncedLabel(lastSync)
+                    },
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (live && !syncing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (syncing) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -259,6 +264,10 @@ private fun Connected(
             if (index > 0) HorizontalDivider()
             DeviceRowItem(row, isSelf)
         }
+    }
+
+    SettingsSection(title = stringResource(R.string.device_sync_this_device_settings)) {
+        LocalOverrides()
     }
 
     SettingsSection(title = stringResource(R.string.device_sync_data)) {
@@ -293,6 +302,42 @@ private fun DeviceRowItem(row: DeviceRow, isSelf: Boolean) {
     }
 }
 
+/** "Only on this device" switches, one per group of [DeviceSync.OVERRIDE_GROUPS]. */
+@Composable
+private fun LocalOverrides() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val overrides by remember(context) { DeviceSync.state(context).localOverrides }.collectAsStateWithLifecycle(initialValue = emptySet())
+    Text(
+        stringResource(R.string.device_sync_this_device_settings_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    DeviceSync.OVERRIDE_GROUPS.forEach { (group, keys) ->
+        val label = when (group) {
+            "notifications" -> R.string.device_sync_override_notifications
+            "vibrate" -> R.string.device_sync_override_vibrate
+            "content" -> R.string.device_sync_override_content
+            "quiet_hours" -> R.string.device_sync_override_quiet_hours
+            "silence" -> R.string.device_sync_override_silence
+            "theme" -> R.string.device_sync_override_theme
+            "pip" -> R.string.device_sync_override_pip
+            "journey_overlay" -> R.string.device_sync_override_journey_overlay
+            else -> R.string.device_sync_override_watch
+        }
+        val local = keys.all { it in overrides }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(label), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+            androidx.compose.material3.Switch(
+                checked = local,
+                onCheckedChange = { checked ->
+                    scope.launch { runCatching { DeviceSync.setLocalOverride(context, group, checked) } }
+                }
+            )
+        }
+    }
+}
+
 @Composable
 private fun CollectionRow(name: String, status: CollectionStatus) {
     val label = when (name) {
@@ -301,6 +346,9 @@ private fun CollectionRow(name: String, status: CollectionStatus) {
         DeviceSync.ROUTES -> R.string.device_sync_collection_routes
         DeviceSync.POKEGENIE -> R.string.device_sync_collection_pokegenie
         DeviceSync.SIGNINS -> R.string.device_sync_collection_signins
+        DeviceSync.LIVE -> R.string.device_sync_collection_live
+        DeviceSync.GODEX -> R.string.device_sync_collection_godex
+        DeviceSync.WIDGETS -> R.string.device_sync_collection_widgets
         else -> R.string.device_sync_collection_devices
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
