@@ -167,6 +167,43 @@ class DeviceSyncEngineTest {
     }
 
     @Test
+    fun pingWithKnownVersionSkipsTheListingAndPullsOnlyThatCollection() = runBlocking {
+        val a = FakeDevice(folder.root, "A", server, now = 1_000)
+        a.adapter.data["x"] = "1"
+        val group = a.engine.create()
+        val b = FakeDevice(folder.root, "B", server, now = 2_000)
+        b.engine.join(group.pairingCode)
+
+        a.now = 5_000
+        a.adapter.data["x"] = "2"
+        a.engine.syncNow(listOf(DeviceSync.SETTINGS))
+        val version = server.blobs.getValue(DeviceSync.SETTINGS).first
+        val lists = server.lists.get()
+        assertTrue(b.engine.syncNow(listOf(DeviceSync.SETTINGS), knownVersions = mapOf(DeviceSync.SETTINGS to version)))
+        assertEquals("applied from the ping", "2", b.adapter.data["x"])
+        assertEquals("no listing request", lists, server.lists.get())
+
+        // A ping for a version this device already has (its own write, or a repeat) costs nothing.
+        val fetches = server.fetches.get()
+        b.engine.syncNow(listOf(DeviceSync.SETTINGS), knownVersions = mapOf(DeviceSync.SETTINGS to version))
+        assertEquals(fetches, server.fetches.get())
+        assertEquals(lists, server.lists.get())
+    }
+
+    @Test
+    fun pingForADeletedGroupDisconnects() = runBlocking {
+        val a = FakeDevice(folder.root, "A", server, now = 1_000)
+        a.adapter.data["x"] = "1"
+        val group = a.engine.create()
+        val b = FakeDevice(folder.root, "B", server, now = 2_000)
+        b.engine.join(group.pairingCode)
+        a.engine.deleteEverywhere()
+        assertFalse(b.engine.syncNow(listOf(DeviceSync.SETTINGS), knownVersions = mapOf(DeviceSync.SETTINGS to 9L)))
+        assertNull(b.state.group())
+        assertTrue("nothing was recreated", server.blobs.isEmpty())
+    }
+
+    @Test
     fun pingActionBranchesOnOrigin() {
         assertEquals(DeviceSync.PingAction.NOT_A_PING, DeviceSync.pingAction(mapOf("pushKey" to "1"), "me"))
         assertEquals(DeviceSync.PingAction.OWN_WRITE, DeviceSync.pingAction(mapOf("devsync" to "1", "origin" to "me"), "me"))
