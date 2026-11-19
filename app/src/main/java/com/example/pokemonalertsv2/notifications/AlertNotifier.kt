@@ -57,6 +57,7 @@ object AlertNotifier {
     const val CHANNEL_PVP = "pokemon_alerts_pvp"
     const val CHANNEL_ROCKET = "pokemon_alerts_rocket"
     const val CHANNEL_KECLEON = "pokemon_alerts_kecleon"
+    const val CHANNEL_MAX_BATTLES = "pokemon_alerts_max_battles"
 
     /** Beyond this the inbox style truncates anyway; the rest becomes a "+N more". */
     private const val MAX_SUMMARY_LINES = 5
@@ -151,6 +152,7 @@ object AlertNotifier {
             Triple(CHANNEL_PVP, R.string.notification_channel_pvp_name, R.string.notification_channel_pvp_description),
             Triple(CHANNEL_ROCKET, R.string.notification_channel_rocket_name, R.string.notification_channel_rocket_description),
             Triple(CHANNEL_KECLEON, R.string.notification_channel_kecleon_name, R.string.notification_channel_kecleon_description),
+            Triple(CHANNEL_MAX_BATTLES, R.string.notification_channel_max_battles_name, R.string.notification_channel_max_battles_description),
         ).forEach { (id, nameRes, descriptionRes) ->
             notificationManager.createNotificationChannel(
                 NotificationChannel(id, context.getString(nameRes), NotificationManager.IMPORTANCE_HIGH).apply {
@@ -469,6 +471,7 @@ object AlertNotifier {
 
     /** Channel grouping, shared by the posting loop and the burst-cap overflow tally. */
     internal fun notificationChannelFor(alert: PokemonAlert): String = when {
+        alert.isMaxBattle -> CHANNEL_MAX_BATTLES
         alert.hasTypeContaining("raid") -> CHANNEL_RAIDS
         alert.hasTypeContaining("hundo") || alert.hasTypeContaining("nundo") -> CHANNEL_HUNDOS
         alert.hasTypeContaining("pvp") -> CHANNEL_PVP
@@ -563,6 +566,7 @@ object AlertNotifier {
     internal fun groupLabel(channelId: String, count: Int): String {
         val noun = when (channelId) {
             CHANNEL_RAIDS -> if (count == 1) "raid" else "raids"
+            CHANNEL_MAX_BATTLES -> if (count == 1) "Max Battle" else "Max Battles"
             CHANNEL_SPAWNS -> if (count == 1) "spawn" else "spawns"
             CHANNEL_QUESTS -> if (count == 1) "quest" else "quests"
             else -> if (count == 1) "alert" else "alerts"

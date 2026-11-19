@@ -534,6 +534,7 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
     val categories = alert.alertCategories()
     return when {
         AlertCategory.RAID in categories -> AlertCategory.RAID
+        AlertCategory.MAX_BATTLE in categories -> AlertCategory.MAX_BATTLE
         AlertCategory.QUEST in categories -> AlertCategory.QUEST
         AlertCategory.HUNDO in categories -> AlertCategory.HUNDO
         AlertCategory.NUNDO in categories -> AlertCategory.NUNDO
@@ -549,7 +550,7 @@ internal fun categoryForMapAlert(alert: PokemonAlert): AlertCategory {
 
 private fun mapAlertCategoryRank(categories: Set<AlertCategory>): Int = when {
     AlertCategory.HUNDO in categories || AlertCategory.NUNDO in categories || AlertCategory.PVP in categories -> 0
-    AlertCategory.RAID in categories -> 1
+    AlertCategory.RAID in categories || AlertCategory.MAX_BATTLE in categories -> 1
     AlertCategory.COMMON in categories -> 2
     AlertCategory.ROCKET in categories -> 3
     categories.size == 1 && AlertCategory.QUEST in categories -> 5

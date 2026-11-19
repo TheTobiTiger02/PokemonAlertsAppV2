@@ -27,6 +27,7 @@ internal enum class TypeEditor(val type: FilterAlertType) {
     NUNDO(FilterAlertType.NUNDO),
     COMMON(FilterAlertType.COMMON),
     RAIDS(FilterAlertType.RAID),
+    MAX_BATTLES(FilterAlertType.MAX_BATTLE),
     ROCKET(FilterAlertType.ROCKET),
     QUESTS(FilterAlertType.QUEST),
     TAPPABLES(FilterAlertType.TAPPABLE)
@@ -75,6 +76,7 @@ internal fun TypeEditorBody(editor: TypeEditor, state: FiltersState, modifier: M
                 targets = listOf(target)
             )
             editor == TypeEditor.RAIDS -> RaidsTab(state)
+            editor == TypeEditor.MAX_BATTLES -> MaxBattlesTab(state)
             editor == TypeEditor.ROCKET -> RocketTab(state)
             editor == TypeEditor.TAPPABLES -> TappablesTab(state)
             else -> QuestsTab(state)

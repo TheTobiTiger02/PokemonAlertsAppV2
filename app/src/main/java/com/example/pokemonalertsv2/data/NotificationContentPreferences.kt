@@ -300,6 +300,8 @@ fun notificationFields(category: FilterAlertType?, expanded: Boolean): Set<Notif
     val specific = when (category) {
         FilterAlertType.RAID -> setOf(NotificationField.CATCH_CP, NotificationField.MOVES) +
             if (expanded) setOf(NotificationField.TEAM) else emptySet()
+        // No suggested team: Max Battle counters are not simulated.
+        FilterAlertType.MAX_BATTLE -> setOf(NotificationField.CATCH_CP, NotificationField.MOVES)
         FilterAlertType.QUEST, FilterAlertType.TAPPABLE ->
             setOf(NotificationField.TASK, NotificationField.REWARD, NotificationField.AR)
         FilterAlertType.ROCKET -> setOf(NotificationField.GRUNT)
@@ -330,6 +332,7 @@ private fun defaultNotificationFields(category: FilterAlertType?, expanded: Bool
         addAll(listOf(NotificationField.DISTANCE, NotificationField.TIME_LEFT, NotificationField.CP))
         when (type) {
             FilterAlertType.RAID -> addAll(listOf(NotificationField.WEATHER, NotificationField.CATCH_CP, NotificationField.VENUE))
+            FilterAlertType.MAX_BATTLE -> addAll(listOf(NotificationField.CATCH_CP, NotificationField.VENUE))
             FilterAlertType.QUEST, FilterAlertType.ROCKET -> add(NotificationField.VENUE)
             in IV_CATEGORIES -> add(NotificationField.IV)
             else -> Unit
@@ -340,6 +343,7 @@ private fun defaultNotificationFields(category: FilterAlertType?, expanded: Bool
 
 /** Semantic alert kinds win over incidental IV data on, for example, a raid. */
 fun notificationContentCategory(alert: PokemonAlert): FilterAlertType = when {
+    alert.isMaxBattle -> FilterAlertType.MAX_BATTLE
     alert.hasTypeContaining("raid") -> FilterAlertType.RAID
     alert.hasTypeContaining("quest") -> FilterAlertType.QUEST
     alert.hasTypeContaining("rocket") || alert.gruntType != null -> FilterAlertType.ROCKET

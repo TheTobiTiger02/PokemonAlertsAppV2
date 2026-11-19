@@ -101,7 +101,7 @@ internal fun alertNumbersLine(alert: PokemonAlert, distanceInfo: AlertDistanceIn
             add("L" + if (level == level.toLong().toDouble()) level.toLong().toString() else level.toString())
         }
     }
-    if (alert.hasTypeContaining("raid")) {
+    if (alert.hasTypeContaining("raid") || alert.isMaxBattle) {
         val hundo = listOfNotNull(
             alert.hundoCP?.level20?.takeIf { it > 0 }?.let { "$it" },
             alert.hundoCP?.level25?.takeIf { it > 0 }?.let { "$it boosted" }

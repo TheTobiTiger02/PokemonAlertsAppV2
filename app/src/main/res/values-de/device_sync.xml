@@ -65,7 +65,6 @@
     <string name="device_sync_delete_message">Löscht die synchronisierten Daten vom Server und beendet den Sync auf allen Geräten. Jedes Gerät behält seine eigenen Daten. Nutze das, wenn ein Code in falsche Hände geraten ist, und richte den Sync danach neu ein.</string>
     <string name="device_sync_delete_confirm">Löschen</string>
     <string name="device_sync_deleted_elsewhere">Der Sync wurde auf einem anderen Gerät gelöscht. Dieses Gerät hat seine Daten behalten.</string>
-    <string name="whats_new_device_sync">Geräte-Sync: Einstellungen, Filter, Jagden, Fangrouten, Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich halten. Einstellungen › Geräte-Sync.</string>
     <plurals name="device_sync_overview_on">
         <item quantity="one">An · %1$d Gerät</item>
         <item quantity="other">An · %1$d Geräte</item>

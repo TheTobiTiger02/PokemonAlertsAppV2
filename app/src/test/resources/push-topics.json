@@ -63,6 +63,10 @@
       "topic": "alerts-t-tappable"
     },
     {
+      "value": "MaxBattle",
+      "topic": "alerts-t-maxbattle"
+    },
+    {
       "value": "Common",
       "topic": "alerts-t-common"
     },
@@ -143,6 +147,11 @@
     },
     {
       "area": "Alsbach",
+      "type": "MaxBattle",
+      "topic": "alerts-a-alsbach-t-maxbattle"
+    },
+    {
+      "area": "Alsbach",
       "type": "Common",
       "topic": "alerts-a-alsbach-t-common"
     },
@@ -190,6 +199,11 @@
       "area": "Darmstadt",
       "type": "Tappable",
       "topic": "alerts-a-darmstadt-t-tappable"
+    },
+    {
+      "area": "Darmstadt",
+      "type": "MaxBattle",
+      "topic": "alerts-a-darmstadt-t-maxbattle"
     },
     {
       "area": "Darmstadt",
@@ -243,6 +257,11 @@
     },
     {
       "area": "Darmstadt-North",
+      "type": "MaxBattle",
+      "topic": "alerts-a-darmstadt-north-t-maxbattle"
+    },
+    {
+      "area": "Darmstadt-North",
       "type": "Common",
       "topic": "alerts-a-darmstadt-north-t-common"
     },
@@ -293,6 +312,11 @@
     },
     {
       "area": "Darmstadt-South",
+      "type": "MaxBattle",
+      "topic": "alerts-a-darmstadt-south-t-maxbattle"
+    },
+    {
+      "area": "Darmstadt-South",
       "type": "Common",
       "topic": "alerts-a-darmstadt-south-t-common"
     },
@@ -340,6 +364,11 @@
       "area": "Unknown",
       "type": "Tappable",
       "topic": "alerts-a-unknown-t-tappable"
+    },
+    {
+      "area": "Unknown",
+      "type": "MaxBattle",
+      "topic": "alerts-a-unknown-t-maxbattle"
     },
     {
       "area": "Unknown",

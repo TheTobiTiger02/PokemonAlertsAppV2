@@ -234,7 +234,7 @@ internal fun HuntTargetSheet(
 }
 
 // Mirrors TypeEditor by name: a chosen type opens its editor through HuntPage.valueOf(editor.name).
-private enum class HuntPage { ROOT, SPAWN, HUNDO, PVP, NUNDO, COMMON, RAIDS, ROCKET, QUESTS, TAPPABLES }
+private enum class HuntPage { ROOT, SPAWN, HUNDO, PVP, NUNDO, COMMON, RAIDS, MAX_BATTLES, ROCKET, QUESTS, TAPPABLES }
 
 /** What a hunt narrows a type to, where "nothing picked" means "any of them". */
 private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = when (this) {
@@ -248,6 +248,8 @@ private fun FilterAlertType.huntSummary(definition: FilterDefinition): String = 
     FilterAlertType.ROCKET -> definition.rocketTypes.summary()
     FilterAlertType.QUEST -> definition.quests.summary()
     FilterAlertType.TAPPABLE -> definition.tappableSpecies.summary()
+    FilterAlertType.MAX_BATTLE -> if (definition.maxBattleTiers.mode != FilterSelectionMode.ONLY && definition.maxBattleSpecies.mode != FilterSelectionMode.ONLY) AppText.get(R.string.hunt_any)
+        else "Levels: ${definition.maxBattleTiers.summary()} · bosses: ${definition.maxBattleSpecies.summary()}"
     else -> AppText.get(R.string.hunt_any)
 }
 

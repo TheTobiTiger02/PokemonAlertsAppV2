@@ -29,7 +29,7 @@ val PokemonAlert.displayCp: Int?
 
 /** Compact CP metadata for the 16:9 picture-in-picture overlay. */
 internal fun buildPipCpText(alert: PokemonAlert): String? {
-    if (!alert.hasTypeContaining("raid")) {
+    if (!alert.hasTypeContaining("raid") && !alert.isMaxBattle) {
         return alert.displayCp?.let { "CP $it" }
     }
 

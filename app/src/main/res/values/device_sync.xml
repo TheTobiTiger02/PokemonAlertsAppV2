@@ -65,7 +65,6 @@
     <string name="device_sync_delete_message">Deletes the synced data from the server and stops sync on all devices. Each device keeps its own data. Use this if a code got into the wrong hands, then set up sync again.</string>
     <string name="device_sync_delete_confirm">Delete</string>
     <string name="device_sync_deleted_elsewhere">Sync was deleted on another device. This device kept its data.</string>
-    <string name="whats_new_device_sync">Device sync: keep settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. Settings › Device sync.</string>
     <plurals name="device_sync_overview_on">
         <item quantity="one">On · %1$d device</item>
         <item quantity="other">On · %1$d devices</item>

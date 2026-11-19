@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.data.FilterDefinition
 import com.example.pokemonalertsv2.data.FilterSelection
 import com.example.pokemonalertsv2.data.FilterSelectionMode
 import com.example.pokemonalertsv2.data.distanceLabel
+import com.example.pokemonalertsv2.ui.alerts.MapSelectorTarget
 import com.example.pokemonalertsv2.ui.alerts.SPECIES_TARGETS
 import com.example.pokemonalertsv2.ui.alerts.selectionFor
 import com.example.pokemonalertsv2.ui.alerts.withSelection
@@ -112,6 +113,25 @@ internal fun activeFilterChips(
                 id = "tappable",
                 label = com.example.pokemonalertsv2.util.AppText.get(com.example.pokemonalertsv2.R.string.i18n_active_tappables, definition.tappableSpecies.countLabel(null)),
                 clear = { it.copy(tappableSpecies = Defaults.tappableSpecies) }
+            )
+        )
+    }
+    if (definition.maxBattleSpecies.mode != FilterSelectionMode.ALL) {
+        add(
+            ActiveFilterChip(
+                id = "max_battle_species",
+                label = MapSelectorTarget.MAX_BATTLE_SPECIES.title + ": " + definition.maxBattleSpecies.countLabel(total = null),
+                clear = { it.copy(maxBattleSpecies = Defaults.maxBattleSpecies) }
+            )
+        )
+    }
+    if (definition.maxBattleTiers.mode != FilterSelectionMode.ALL) {
+        add(
+            ActiveFilterChip(
+                id = "max_battle_tiers",
+                label = MapSelectorTarget.MAX_BATTLE_TIERS.title + ": " +
+                    definition.maxBattleTiers.countLabel(catalog.maxBattleTiers.size.takeIf { it > 0 }),
+                clear = { it.copy(maxBattleTiers = Defaults.maxBattleTiers) }
             )
         )
     }

@@ -27,6 +27,7 @@ val FILTERABLE_ALERT_CATEGORIES: List<AlertCategory> = listOf(
     AlertCategory.PVP,
     AlertCategory.COMMON,
     AlertCategory.TAPPABLE,
+    AlertCategory.MAX_BATTLE,
     AlertCategory.WEATHER
 )
 
@@ -43,6 +44,7 @@ val AlertCategory.filterLabel: String
         AlertCategory.PVP -> AppText.get(R.string.alerts_pvp)
         AlertCategory.COMMON -> AppText.get(R.string.alerts_common)
         AlertCategory.TAPPABLE -> AppText.get(R.string.data_tappables)
+        AlertCategory.MAX_BATTLE -> AppText.get(R.string.data_max_battles)
         AlertCategory.WEATHER -> AppText.get(R.string.alerts_weather)
         AlertCategory.GENERIC -> AppText.get(R.string.data_other)
     }
@@ -105,6 +107,7 @@ fun legacyWidgetTokenToCategory(token: String): AlertCategory? {
         "pvp" -> AlertCategory.PVP
         "rare", "common" -> AlertCategory.COMMON
         "tappable", "tappables" -> AlertCategory.TAPPABLE
+        "maxbattle", "max battle", "max battles" -> AlertCategory.MAX_BATTLE
         "weather" -> AlertCategory.WEATHER
         else -> null
     }

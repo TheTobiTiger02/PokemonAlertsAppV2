@@ -86,6 +86,8 @@ enum class FilterAlertType(private val labelRes: Int) {
     COMMON(R.string.alerts_common),
     /** Event Tappables: Pokémon they spawn and the loot they drop, filtered by species or item. */
     TAPPABLE(R.string.data_tappables),
+    /** Dynamax and Gigantamax Max Battles at Power Spots, filtered by boss and level. */
+    MAX_BATTLE(R.string.data_max_battles),
     WEATHER(R.string.alerts_weather),
     OTHER(R.string.data_other);
 
@@ -105,6 +107,7 @@ val FilterAlertType.interactionRadiusMeters: Float
         FilterAlertType.PVP,
         FilterAlertType.TAPPABLE -> SPAWN_INTERACTION_RANGE_METERS
         FilterAlertType.RAID,
+        FilterAlertType.MAX_BATTLE,
         FilterAlertType.ROCKET,
         FilterAlertType.KECLEON,
         FilterAlertType.QUEST -> STOP_OR_GYM_INTERACTION_RANGE_METERS
@@ -200,6 +203,8 @@ private const val LEGACY_RARE_TOKEN = "rare"
 private const val COMMON_TOKEN = "common"
 private const val OTHER_TOKEN = "other"
 private const val TAPPABLE_TOKEN = "tappable"
+private const val RAID_TOKEN = "raid"
+private const val MAX_BATTLE_TOKEN = "max battle"
 
 /**
  * Types a filter only shows once asked to: Common sightings are thousands an hour, and an event
@@ -232,6 +237,10 @@ data class FilterDefinition(
     val rocketTypes: FilterSelection = FilterSelection.All,
     /** One list for both kinds of Tappable: species ("Gengar") and loot items ("Rare Candy"). */
     val tappableSpecies: FilterSelection = FilterSelection.All,
+    /** Max Battle bosses by species ("Charizard"), whether Dynamax or Gigantamax. */
+    val maxBattleSpecies: FilterSelection = FilterSelection.All,
+    /** Max Battle levels as numbers ("1" to "6"), see [maxBattleTierToken]. */
+    val maxBattleTiers: FilterSelection = FilterSelection.All,
     val quests: QuestFilterRules = QuestFilterRules(),
     /** Minimum IV, CP and level for Pokémon alerts; off by default and absent from older documents. */
     val stats: StatFilterRules = StatFilterRules.None,
@@ -242,7 +251,7 @@ data class FilterDefinition(
     val advancedRuleCount: Int
         get() = listOf(
             spawnSpecies, commonSpecies, hundoSpecies, nundoSpecies, pvpSpecies,
-            raidSpecies, raidTiers, rocketTypes, tappableSpecies
+            raidSpecies, raidTiers, rocketTypes, tappableSpecies, maxBattleSpecies, maxBattleTiers
         ).count { it.mode != FilterSelectionMode.ALL } +
             (if (quests.exactMode != FilterSelectionMode.ALL || quests.facetEnabled) 1 else 0) +
             distanceOverrides.ruleCount + stats.ruleCount
@@ -465,10 +474,10 @@ const val MAX_FILTER_SET_NAME = 24
 
 /**
  * 2 added [FilterDefinition.distanceOverrides]; 3 stores distances in meters (v1/v2 stored
- * kilometers); 4 renamed Rare to Common and made Common opt-in; 5 added Tappables. Older
- * documents still decode: [FilterStateCodec] rewrites them on read.
+ * kilometers); 4 renamed Rare to Common and made Common opt-in; 5 added Tappables; 6 added Max
+ * Battles. Older documents still decode: [FilterStateCodec] rewrites them on read.
  */
-const val CURRENT_FILTER_SCHEMA_VERSION = 5
+const val CURRENT_FILTER_SCHEMA_VERSION = 6
 const val MAX_FILTER_PROFILE_NAME = 40
 const val MAX_FILTER_DISTANCE_METERS = 50_000
 
@@ -554,6 +563,7 @@ object FilterStateCodec {
         if (version < 3) migrated = rescaleDistanceNode(migrated)
         if (version < 4) migrated = commonOptInNode(migrated)
         if (version < 5) migrated = tappableNode(migrated)
+        if (version < 6) migrated = maxBattleNode(migrated)
         return stampVersion(migrated)
     }
 
@@ -628,6 +638,36 @@ object FilterStateCodec {
             JsonObject(children)
         }
         is JsonArray -> JsonArray(element.map { tappableNode(it, notifications) })
+        else -> element
+    }
+
+    /**
+     * Schema 6: Max Battles became their own type. They are fought at Power Spots like raids at
+     * gyms, so wherever Raid is listed (notifications included, as raids push by default), Max
+     * Battle joins it. Every definition gets `maxBattleSpecies` and `maxBattleTiers` = All.
+     */
+    private fun maxBattleNode(element: JsonElement): JsonElement = when (element) {
+        is JsonObject -> {
+            val children = element.mapValues { (_, value) -> maxBattleNode(value) }.toMutableMap()
+            if ("alertTypes" in children) {
+                val types = children["alertTypes"] as? JsonObject
+                val mode = (types?.get("mode") as? JsonPrimitive)?.content
+                val values = (types?.get("values") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }
+                if (mode == FilterSelectionMode.ONLY.name &&
+                    values.any { normalizeFilterToken(it) == RAID_TOKEN } &&
+                    values.none { normalizeFilterToken(it) == MAX_BATTLE_TOKEN }
+                ) {
+                    children["alertTypes"] = json.encodeToJsonElement(
+                        FilterSelection.serializer(),
+                        FilterSelection.only(values + FilterAlertType.MAX_BATTLE.name)
+                    )
+                }
+                children["maxBattleSpecies"] = json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.All)
+                children["maxBattleTiers"] = json.encodeToJsonElement(FilterSelection.serializer(), FilterSelection.All)
+            }
+            JsonObject(children)
+        }
+        is JsonArray -> JsonArray(element.map(::maxBattleNode))
         else -> element
     }
 
@@ -787,6 +827,8 @@ object AlertFilterMatcher {
         FilterAlertType.ROCKET -> definition.rocketTypes.contains(alert.gruntType)
         FilterAlertType.QUEST -> matchesQuest(alert, definition.quests)
         FilterAlertType.TAPPABLE -> definition.tappableSpecies.contains(alert.tappableToken())
+        FilterAlertType.MAX_BATTLE -> definition.maxBattleSpecies.contains(alert.filterSpecies()) &&
+            definition.maxBattleTiers.contains(alert.maxBattleTierToken())
         FilterAlertType.KECLEON, FilterAlertType.WEATHER, FilterAlertType.OTHER -> true
     }
 
@@ -830,6 +872,9 @@ fun FilterAlertType.matchTokenFor(alert: PokemonAlert): String? = when (this) {
  */
 fun PokemonAlert.tappableToken(): String? = pokemon?.takeIf { it.isNotBlank() }
     ?: questReward?.substringBefore(" ×")?.trim()?.takeIf { it.isNotBlank() }
+
+/** What a Max Battle level rule keys on: the level as a number ("6"), or null when unknown. */
+fun PokemonAlert.maxBattleTierToken(): String? = raidLevel?.takeIf { it > 0 }?.toString()
 
 fun PokemonAlert.filterSpecies(): String = pokemon
     ?.takeIf { it.isNotBlank() }

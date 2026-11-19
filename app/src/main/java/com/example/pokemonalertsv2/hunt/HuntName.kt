@@ -39,6 +39,10 @@ internal fun huntName(definition: FilterDefinition, catalog: FilterCatalog): Str
         FilterAlertType.PVP -> definition.pvpSpecies.singleLabel()?.let { "$it PvP" } ?: "PvP"
         FilterAlertType.COMMON -> definition.commonSpecies.singleLabel() ?: "Common spawns"
         FilterAlertType.TAPPABLE -> definition.tappableSpecies.singleLabel()?.let { "$it Tappables" } ?: "Tappables"
+        FilterAlertType.MAX_BATTLE ->
+            definition.maxBattleSpecies.singleLabel()?.let { "$it Max Battles" }
+                ?: definition.maxBattleTiers.singleLabel()?.let { "Level $it Max Battles" }
+                ?: "Max Battles"
 
         // Several types at once, or none narrowed: name the breadth honestly
         // rather than picking one of them and implying the others are excluded.

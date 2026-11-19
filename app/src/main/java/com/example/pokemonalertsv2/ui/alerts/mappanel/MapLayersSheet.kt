@@ -356,6 +356,7 @@ private val LEGEND_ENTRIES = listOf(
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.NUNDO to "Nundo",
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.PVP to "PvP",
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.RAID to "Raid",
+    com.example.pokemonalertsv2.ui.alerts.AlertCategory.MAX_BATTLE to "Max Battle",
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.QUEST to "Quest",
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.SPAWN to "Spawn",
     com.example.pokemonalertsv2.ui.alerts.AlertCategory.COMMON to "Common",

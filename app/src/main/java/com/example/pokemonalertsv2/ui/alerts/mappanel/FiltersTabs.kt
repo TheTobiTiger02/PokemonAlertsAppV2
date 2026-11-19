@@ -49,6 +49,7 @@ private enum class FiltersTab(private val labelRes: Int) {
     TYPES(R.string.alerts_types),
     POKEMON(R.string.alerts_pok_mon),
     RAIDS(R.string.data_raids),
+    MAX_BATTLES(R.string.data_max_battles),
     ROCKET(R.string.alerts_rocket),
     QUESTS(R.string.data_quests),
     TAPPABLES(R.string.data_tappables);
@@ -132,6 +133,7 @@ internal fun FiltersTabs(
                     targets = SPECIES_TARGETS - MapSelectorTarget.RAID_SPECIES
                 )
                 FiltersTab.RAIDS -> RaidsTab(state)
+                FiltersTab.MAX_BATTLES -> MaxBattlesTab(state)
                 FiltersTab.ROCKET -> RocketTab(state)
                 FiltersTab.QUESTS -> QuestsTab(state)
                 FiltersTab.TAPPABLES -> TappablesTab(state)
@@ -234,6 +236,51 @@ internal fun RaidsTab(state: FiltersState) {
                         look = ::raidTierLook
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Max Battles: the levels as badges, or the bosses as the species grid, one at a time. */
+@Composable
+internal fun MaxBattlesTab(state: FiltersState) {
+    var bosses by rememberSaveable { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxSize()) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().panelGutter().padding(bottom = Spacing.sm)) {
+            listOf(false to R.string.max_battle_levels_short, true to R.string.max_battle_bosses_short).forEachIndexed { index, (value, label) ->
+                SegmentedButton(
+                    selected = bosses == value,
+                    onClick = { bosses = value },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = 2),
+                    modifier = Modifier.testTag(if (value) "map_max_battles_bosses" else "map_max_battles_levels")
+                ) { Text(stringResource(label)) }
+            }
+        }
+        if (bosses) {
+            SpeciesPickerContent(
+                target = MapSelectorTarget.MAX_BATTLE_SPECIES,
+                onTargetChange = {},
+                definition = state.definition,
+                catalog = state.catalog,
+                artwork = state.artwork,
+                onDefinitionChange = state.onDefinitionChange,
+                modifier = Modifier.fillMaxSize().padding(horizontal = PanelGutter),
+                showTitle = false,
+                targets = listOf(MapSelectorTarget.MAX_BATTLE_SPECIES)
+            )
+        } else {
+            ScrollingTab {
+                AllNoneRow(
+                    onAll = { state.onDefinitionChange(state.definition.copy(maxBattleTiers = FilterSelection.All)) },
+                    onNone = { state.onDefinitionChange(state.definition.copy(maxBattleTiers = FilterSelection.None)) }
+                )
+                TokenGridOrNote(
+                    tokens = state.catalog.maxBattleTiers,
+                    selection = state.definition.maxBattleTiers,
+                    onSelectionChange = { state.onDefinitionChange(state.definition.copy(maxBattleTiers = it)) },
+                    perRow = 3,
+                    look = ::maxBattleTierLook
+                )
             }
         }
     }

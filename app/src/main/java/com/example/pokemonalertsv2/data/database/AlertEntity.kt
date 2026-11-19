@@ -191,7 +191,7 @@ fun AlertEntity.toDomain(): PokemonAlert {
     ).let { alert ->
         val ids = gameIdsJson?.let { raw -> runCatching { Json.decodeFromString<com.example.pokemonalertsv2.data.AlertGameIds>(raw) }.getOrNull() }
             ?: return@let alert
-        alert.copy(formId = ids.formId, raidLevel = ids.raidLevel, moveIds = ids.moveIds, gruntTypeId = ids.gruntTypeId, i18n = ids.i18n)
+        alert.copy(formId = ids.formId, raidLevel = ids.raidLevel, moveIds = ids.moveIds, gruntTypeId = ids.gruntTypeId, i18n = ids.i18n, breadMode = ids.breadMode)
     }
 }
 
@@ -259,7 +259,7 @@ fun PokemonAlert.toEntity(): AlertEntity {
         expiryVerified = expiryVerified,
         replacesAlertId = replacesAlertId,
         live = live,
-        gameIdsJson = com.example.pokemonalertsv2.data.AlertGameIds(formId, raidLevel, moveIds, gruntTypeId, i18n)
+        gameIdsJson = com.example.pokemonalertsv2.data.AlertGameIds(formId, raidLevel, moveIds, gruntTypeId, i18n, breadMode)
             .takeUnless { it.isEmpty }?.let { Json.encodeToString(it) }
     )
 }

@@ -53,7 +53,8 @@ enum class RaidTier(val displayLabel: String, val pokebattlerRaidLevel: String) 
  */
 object RaidTierParser {
 
-    fun isRaid(alert: PokemonAlert): Boolean = isRaid(alert.type, alert.name)
+    /** A Max Battle is never a raid, even at a Power Spot whose name says "raid". */
+    fun isRaid(alert: PokemonAlert): Boolean = !alert.isMaxBattle && isRaid(alert.type, alert.name)
 
     fun parse(alert: PokemonAlert): RaidTier? = parse(alert.type, alert.name)
 

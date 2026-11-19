@@ -417,6 +417,14 @@ internal fun formatAlertTitleRaw(alert: PokemonAlert): String {
     val baseName = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.pokemon ?: alert.cleanPokemonName, alert.pokedexId)
         ?: alert.cleanPokemonName
     
+    // "Gigantamax Charizard Max Battle"
+    if (alert.isMaxBattle) {
+        return AppText.get(
+            R.string.notification_content_max_battle_title,
+            AppText.get(if (alert.isGigantamax) R.string.max_battle_gigantamax_x else R.string.max_battle_dynamax_x, baseName)
+        )
+    }
+
     // Handle raids - just show "Pokemon Raid"
     if (alert.hasTypeContaining("raid")) {
         return "$baseName Raid"
