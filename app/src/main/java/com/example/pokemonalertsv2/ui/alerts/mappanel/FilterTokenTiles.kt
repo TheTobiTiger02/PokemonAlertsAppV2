@@ -173,6 +173,14 @@ internal fun raidTierLook(token: String): TokenLook {
 }
 
 /** A grunt type in its type colour with its initial; "Mixed", leaders and the unknown get Rocket's R. */
+private val MaxBattleMagenta = Color(0xFFD946EF)
+
+/** A Max Battle level ("1" to "6") as a magenta badge with its number. */
+internal fun maxBattleTierLook(token: String): TokenLook {
+    val level = token.trim()
+    return TokenLook(AppText.get(R.string.max_battle_level_x, level), MaxBattleMagenta, level.take(2))
+}
+
 internal fun rocketTypeLook(token: String): TokenLook {
     val hue = typeColor(token)
     return if (hue != null) {

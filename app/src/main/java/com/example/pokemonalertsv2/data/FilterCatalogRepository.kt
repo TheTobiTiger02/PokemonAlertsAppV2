@@ -36,9 +36,15 @@ class FilterCatalogRepository private constructor(context: Context) {
     }
 }
 
+/** The Max Battle levels offered before the backend's catalogue arrives: 1 to 6. */
+internal val DEFAULT_MAX_BATTLE_TIERS: List<String> = (1..6).map(Int::toString)
+
 /** Pure offline merge also keeps observed quest pairs available before a catalog refresh. */
 internal fun mergeFilterCatalog(cached: FilterCatalog?, localSpecies: List<String>, currentAlerts: List<PokemonAlert>): FilterCatalog {
-        val observedSpecies = currentAlerts.mapNotNull { it.pokemon?.trim()?.takeIf(String::isNotEmpty) }
+        val observedSpecies = currentAlerts.filterNot { it.isMaxBattle }.mapNotNull { it.pokemon?.trim()?.takeIf(String::isNotEmpty) }
+        val maxBattles = currentAlerts.filter { it.isMaxBattle }
+        val observedMaxBattleSpecies = maxBattles.mapNotNull { it.filterSpecies().trim().takeIf(String::isNotEmpty) }
+        val observedMaxBattleTiers = maxBattles.mapNotNull { it.maxBattleTierToken() }
         val observedRaidSpecies = currentAlerts
             .filter { FilterAlertType.RAID in it.filterAlertTypes() }
             .mapNotNull { it.filterSpecies().trim().takeIf(String::isNotEmpty) }
@@ -73,6 +79,9 @@ internal fun mergeFilterCatalog(cached: FilterCatalog?, localSpecies: List<Strin
                 .distinctBy(::normalizeFilterToken),
             tappableRewardIcons = observedTappables.mapNotNull { (name, url) -> url?.let { name to it } }.toMap() +
                 cached?.tappableRewardIcons.orEmpty(),
+            maxBattleSpecies = (cached?.maxBattleSpecies.orEmpty() + observedMaxBattleSpecies).distinctBy(::normalizeFilterToken),
+            maxBattleTiers = (cached?.maxBattleTiers.orEmpty() + DEFAULT_MAX_BATTLE_TIERS + observedMaxBattleTiers)
+                .distinct().sortedBy { it.toIntOrNull() ?: Int.MAX_VALUE },
             quests = (observedQuests + cached?.quests.orEmpty()).distinctBy { it.key }
         )
 }

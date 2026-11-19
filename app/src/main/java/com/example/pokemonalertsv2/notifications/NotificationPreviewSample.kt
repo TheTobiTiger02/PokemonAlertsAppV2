@@ -26,12 +26,14 @@ internal fun notificationPreviewInput(
         name = if (encounter) "Rookidee" else category.label,
         pokemon = when {
             category == FilterAlertType.RAID -> "Mewtwo"
+            category == FilterAlertType.MAX_BATTLE -> "Charizard"
             encounter || category == FilterAlertType.WEATHER -> "Rookidee"
             else -> null
         },
         type = listOf(when (category) {
             FilterAlertType.OTHER -> "Other"
             FilterAlertType.WEATHER -> "WeatherChange"
+            FilterAlertType.MAX_BATTLE -> "MaxBattle"
             else -> category.name
         }) + listOfNotNull("5".takeIf { category == FilterAlertType.RAID }),
         cp = if (encounter) 419 else null,
@@ -44,11 +46,25 @@ internal fun notificationPreviewInput(
         pokemonForm = if (encounter) "Normal" else null,
         currentWeather = "Windy",
         isWeatherBoosted = category == FilterAlertType.RAID,
-        gym = if (category == FilterAlertType.RAID) "Central Gym" else null,
+        gym = when (category) {
+            FilterAlertType.RAID -> "Central Gym"
+            FilterAlertType.MAX_BATTLE -> "Fountain Power Spot"
+            else -> null
+        },
         pokestop = if (category in setOf(FilterAlertType.QUEST, FilterAlertType.ROCKET, FilterAlertType.KECLEON)) "Library Stop" else null,
         area = "Alsbach",
-        moves = if (category == FilterAlertType.RAID) PokemonMoves("Confusion", "Psystrike") else null,
-        hundoCP = if (category == FilterAlertType.RAID) HundoCP(2387, 2984) else null,
+        moves = when (category) {
+            FilterAlertType.RAID -> PokemonMoves("Confusion", "Psystrike")
+            FilterAlertType.MAX_BATTLE -> PokemonMoves("Fire Spin", "Blast Burn")
+            else -> null
+        },
+        hundoCP = when (category) {
+            FilterAlertType.RAID -> HundoCP(2387, 2984)
+            FilterAlertType.MAX_BATTLE -> HundoCP(1635, 2044)
+            else -> null
+        },
+        raidLevel = if (category == FilterAlertType.MAX_BATTLE) 6 else null,
+        breadMode = if (category == FilterAlertType.MAX_BATTLE) 2 else null,
         pvpRankings = if (category == FilterAlertType.PVP) listOf(PvpRanking(league = "Great League", rank = 1)) else null,
         questTask = if (category == FilterAlertType.QUEST) "Make 3 Great Throws" else null,
         questReward = if (category in setOf(FilterAlertType.QUEST, FilterAlertType.TAPPABLE)) "Rare Candy ×3" else null,

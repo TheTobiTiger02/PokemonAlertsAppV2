@@ -194,6 +194,8 @@
     <string name="notification_channel_pvp_description">Top-gerankte Pokémon für Super- und Hyperliga</string>
     <string name="notification_channel_rocket_name">Team GO Rocket</string>
     <string name="notification_channel_rocket_description">Rüpel und Bosse an PokéStops</string>
+    <string name="notification_channel_max_battles_name">Max-Kämpfe</string>
+    <string name="notification_channel_max_battles_description">Dynamax- und Gigadynamax-Max-Kämpfe an Kraftquellen</string>
     <string name="notification_channel_kecleon_name">Kecleon</string>
     <string name="notification_channel_kecleon_description">Kecleon versteckt an PokéStops</string>
     <string name="tile_silence_label">Alarme stummschalten</string>

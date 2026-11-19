@@ -21,6 +21,7 @@ enum class AlertCategory(val accentArgb: Long) {
     ROCKET(0xFFE5484D),
     KECLEON(0xFF22B8A7),
     TAPPABLE(0xFFF2A93B),
+    MAX_BATTLE(0xFFD946EF),
     WEATHER(0xFF4CB7F5),
     GENERIC(0xFF8793A6)
 }
@@ -30,6 +31,8 @@ fun resolveAlertVisualStyle(type: String?): AlertVisualStyle {
     return when {
         "weather" in normalized -> AlertVisualStyle("Weather", "WX", AlertCategory.WEATHER)
         "tappable" in normalized -> AlertVisualStyle("Tappable", "TAP", AlertCategory.TAPPABLE)
+        "maxbattle" in normalized || "max battle" in normalized ->
+            AlertVisualStyle("Max Battle", "MAX", AlertCategory.MAX_BATTLE)
         "raid" in normalized -> AlertVisualStyle("Raid", "RD", AlertCategory.RAID)
         "quest" in normalized -> AlertVisualStyle("Quest", "QS", AlertCategory.QUEST)
         "hundo" in normalized -> AlertVisualStyle("Hundo", "100", AlertCategory.HUNDO)

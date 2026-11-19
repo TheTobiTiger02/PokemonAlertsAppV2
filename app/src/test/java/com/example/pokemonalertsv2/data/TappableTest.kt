@@ -134,10 +134,11 @@ class TappableTest {
             "commonSpecies":{"mode":"ONLY","values":["gible"]}}}}"""
         val document = requireNotNull(FilterStateCodec.decode(v4))
 
-        assertEquals(5, document.schemaVersion)
+        assertEquals(CURRENT_FILTER_SCHEMA_VERSION, document.schemaVersion)
         assertEquals(setOf("hundo", "other", "tappable"), document.profiles.single().definition.alertTypes.normalizedValues)
-        assertEquals(setOf("raid", "other", "tappable"), document.feed.resolve(document).alertTypes.normalizedValues)
-        assertEquals("no Other, no Tappable", setOf("raid"), document.map.resolve(document).alertTypes.normalizedValues)
+        // Schema 6 then adds Max Battles wherever raids are shown.
+        assertEquals(setOf("raid", "other", "tappable", "max battle"), document.feed.resolve(document).alertTypes.normalizedValues)
+        assertEquals("no Other, no Tappable", setOf("raid", "max battle"), document.map.resolve(document).alertTypes.normalizedValues)
         val notifications = document.notifications.resolve(document)
         assertEquals("notifications are opt-in", setOf("hundo", "other"), notifications.alertTypes.normalizedValues)
         assertEquals("schema 4 rules are not re-applied", setOf("gible"), notifications.commonSpecies.normalizedValues)

@@ -2,7 +2,9 @@ package com.example.pokemonalertsv2.data
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
+import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.ui.alerts.AlertCategory
+import com.example.pokemonalertsv2.util.AppText
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.Locale
@@ -36,9 +38,11 @@ data class AlertGameIds(
     val raidLevel: Int? = null,
     val moveIds: MoveIds? = null,
     val gruntTypeId: Int? = null,
-    val i18n: Map<String, AlertTranslation>? = null
+    val i18n: Map<String, AlertTranslation>? = null,
+    val breadMode: Int? = null
 ) {
-    val isEmpty: Boolean get() = formId == null && raidLevel == null && moveIds == null && gruntTypeId == null && i18n.isNullOrEmpty()
+    val isEmpty: Boolean get() = formId == null && raidLevel == null && moveIds == null && gruntTypeId == null &&
+        i18n.isNullOrEmpty() && breadMode == null
 }
 
 /**
@@ -233,7 +237,9 @@ data class PokemonAlert(
     val moveIds: MoveIds? = null,
     val gruntTypeId: Int? = null,
     /** Text the backend rendered in other languages, keyed by language ("de"). */
-    val i18n: Map<String, AlertTranslation>? = null
+    val i18n: Map<String, AlertTranslation>? = null,
+    /** A Max Battle boss's Dynamax kind: 1 Dynamax, 2 Gigantamax, 3 Eternamax. */
+    val breadMode: Int? = null
 ) {
     /**
      * Stable local identity used as the Room primary key. Prefers the server id
@@ -302,6 +308,7 @@ data class PokemonAlert(
     /** Returns label "Gym" or "PokéStop" depending on which venue is set */
     val venueTypeLabel: String?
         get() = when {
+            isMaxBattle && gym?.isNotBlank() == true -> AppText.get(R.string.max_battle_power_spot)
             gym?.isNotBlank() == true -> "Gym"
             pokestop?.isNotBlank() == true -> "PokéStop"
             else -> null
@@ -317,7 +324,7 @@ data class PokemonAlert(
      * Cached: the filter matcher consults this for every alert on every pass. */
     val isSpawnAlert: Boolean by lazy {
         if (hasType("Raid") || hasType("Rocket") || hasType("Quest") ||
-            hasType("Kecleon") || hasType("WeatherChange") || isTappable
+            hasType("Kecleon") || hasType("WeatherChange") || isTappable || isMaxBattle
         ) {
             false
         } else {
@@ -328,6 +335,7 @@ data class PokemonAlert(
 
     val isStopOrGymAlert: Boolean by lazy {
         hasType("Raid") ||
+            isMaxBattle ||
             hasType("Quest") ||
             hasType("Kecleon") ||
             hasTypeContaining("Rocket") ||
@@ -344,8 +352,19 @@ data class PokemonAlert(
      */
     val isTappable: Boolean by lazy { hasType("Tappable") }
 
+    /**
+     * A Dynamax or Gigantamax Max Battle at a Power Spot. The backend reuses the raid fields:
+     * [gym] is the Power Spot, [raidLevel] the Max Battle level. It is only ever a Max Battle,
+     * never also a raid or a spawn, although it names a Pokémon.
+     */
+    val isMaxBattle: Boolean by lazy { hasType("MaxBattle") }
+
+    /** Gigantamax (or Eternamax) rather than Dynamax. */
+    val isGigantamax: Boolean get() = (breadMode ?: 0) >= 2
+
     val cachedFilterAlertTypes: Set<FilterAlertType> by lazy {
         if (isTappable) return@lazy java.util.EnumSet.of(FilterAlertType.TAPPABLE)
+        if (isMaxBattle) return@lazy java.util.EnumSet.of(FilterAlertType.MAX_BATTLE)
         val set = java.util.EnumSet.noneOf(FilterAlertType::class.java)
         if (hasType("Raid")) set.add(FilterAlertType.RAID)
         if (hasType("Quest")) set.add(FilterAlertType.QUEST)
@@ -365,6 +384,7 @@ data class PokemonAlert(
 
     val cachedAlertCategories: Set<AlertCategory> by lazy {
         if (isTappable) return@lazy java.util.EnumSet.of(AlertCategory.TAPPABLE)
+        if (isMaxBattle) return@lazy java.util.EnumSet.of(AlertCategory.MAX_BATTLE)
         val set = java.util.EnumSet.noneOf(AlertCategory::class.java)
         if (hasType("Raid")) set.add(AlertCategory.RAID)
         if (hasType("Quest")) set.add(AlertCategory.QUEST)

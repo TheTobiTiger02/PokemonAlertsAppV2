@@ -109,6 +109,7 @@ internal fun huntInRangeLines(
  */
 private fun PokemonAlert.isVenueAlert(categories: Set<AlertCategory>): Boolean =
     AlertCategory.QUEST in categories ||
+        AlertCategory.MAX_BATTLE in categories ||
         AlertCategory.ROCKET in categories ||
         AlertCategory.KECLEON in categories
 

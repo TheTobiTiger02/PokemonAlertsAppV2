@@ -8,6 +8,7 @@ import com.example.pokemonalertsv2.data.NotificationFieldStyle
 import com.example.pokemonalertsv2.data.NotificationTitlePart
 import com.example.pokemonalertsv2.data.RaidTierParser
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.maxBattleTierToken
 import com.example.pokemonalertsv2.data.notificationContentCategory
 import com.example.pokemonalertsv2.data.godex.GoDexMatchResult
 import com.example.pokemonalertsv2.data.godex.GoDexMatchStatus
@@ -102,6 +103,7 @@ internal fun notificationIdentity(alert: PokemonAlert): String {
     val name = com.example.pokemonalertsv2.data.gametext.GameNames.pokemon(alert.pokemon.clean() ?: alert.cleanPokemonName.clean(), alert.pokedexId).clean() ?: category.label
     return when (category) {
         FilterAlertType.RAID -> AppText.get(R.string.notification_content_raid_title, name)
+        FilterAlertType.MAX_BATTLE -> AppText.get(R.string.notification_content_max_battle_title, maxBattleBossName(alert, name))
         FilterAlertType.QUEST -> AppText.get(R.string.notification_content_research)
         FilterAlertType.ROCKET -> AppText.get(R.string.alerts_team_go_rocket)
         FilterAlertType.KECLEON -> "Kecleon"
@@ -155,6 +157,9 @@ internal fun notificationCategoryTag(alert: PokemonAlert, category: FilterAlertT
         FilterAlertType.PVP -> AppText.get(R.string.notification_tag_pvp)
         FilterAlertType.COMMON -> AppText.get(R.string.notification_tag_common)
         FilterAlertType.TAPPABLE -> AppText.get(R.string.notification_tag_tappable)
+        FilterAlertType.MAX_BATTLE -> alert.maxBattleTierToken()
+            ?.let { AppText.get(R.string.notification_tag_max_battle_level, it) }
+            ?: AppText.get(R.string.notification_tag_max_battle)
         FilterAlertType.WEATHER -> AppText.get(R.string.notification_tag_weather)
         FilterAlertType.OTHER -> AppText.get(R.string.notification_tag_other)
     }
@@ -175,9 +180,14 @@ private fun notificationSubject(alert: PokemonAlert, category: FilterAlertType):
             ?: AppText.get(R.string.alerts_team_go_rocket)
         FilterAlertType.KECLEON -> "Kecleon"
         FilterAlertType.TAPPABLE -> name ?: alert.questReward.clean()
+        FilterAlertType.MAX_BATTLE -> name?.let { maxBattleBossName(alert, it) }
         else -> name
     }
 }
+
+/** "Gigantamax Charizard" or "Dynamax Charizard": the boss as the game names it. */
+internal fun maxBattleBossName(alert: PokemonAlert, species: String): String =
+    AppText.get(if (alert.isGigantamax) R.string.max_battle_gigantamax_x else R.string.max_battle_dynamax_x, species)
 
 private val TITLE_FIELDS = mapOf(
     NotificationTitlePart.IV to NotificationField.IV,

@@ -181,6 +181,10 @@ data class FilterCatalog(
     val tappableRewards: List<String> = emptyList(),
     /** Icon per [tappableRewards] name. */
     val tappableRewardIcons: Map<String, String> = emptyMap(),
+    /** Max Battle bosses seen lately, by species. */
+    val maxBattleSpecies: List<String> = emptyList(),
+    /** Max Battle levels as numbers ("1" to "6"). */
+    val maxBattleTiers: List<String> = emptyList(),
     val quests: List<FilterCatalogQuest> = emptyList()
 )
 

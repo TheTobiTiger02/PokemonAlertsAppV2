@@ -49,7 +49,9 @@ internal enum class MapSelectorTarget(private val titleRes: Int, val shortLabel:
     RAID_SPECIES(R.string.alerts_raid_species, "Raid Bosses"),
     RAID_TIERS(R.string.alerts_raid_tiers, "Tiers"),
     ROCKET(R.string.alerts_rocket_types, "Rockets"),
-    TAPPABLE(R.string.alerts_tappable_species_and_loot, "Tappables");
+    TAPPABLE(R.string.alerts_tappable_species_and_loot, "Tappables"),
+    MAX_BATTLE_SPECIES(R.string.max_battle_bosses, "Max Battle bosses"),
+    MAX_BATTLE_TIERS(R.string.max_battle_levels, "Max Battle levels");
 
     /** Read on every access, so a language switch shows at once. */
     val title: String get() = AppText.get(titleRes)
@@ -502,6 +504,8 @@ internal fun FilterDefinition.selectionFor(target: MapSelectorTarget): FilterSel
     MapSelectorTarget.RAID_TIERS -> raidTiers
     MapSelectorTarget.ROCKET -> rocketTypes
     MapSelectorTarget.TAPPABLE -> tappableSpecies
+    MapSelectorTarget.MAX_BATTLE_SPECIES -> maxBattleSpecies
+    MapSelectorTarget.MAX_BATTLE_TIERS -> maxBattleTiers
 }
 
 internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection: FilterSelection): FilterDefinition = when (target) {
@@ -514,6 +518,8 @@ internal fun FilterDefinition.withSelection(target: MapSelectorTarget, selection
     MapSelectorTarget.RAID_TIERS -> copy(raidTiers = selection)
     MapSelectorTarget.ROCKET -> copy(rocketTypes = selection)
     MapSelectorTarget.TAPPABLE -> copy(tappableSpecies = selection)
+    MapSelectorTarget.MAX_BATTLE_SPECIES -> copy(maxBattleSpecies = selection)
+    MapSelectorTarget.MAX_BATTLE_TIERS -> copy(maxBattleTiers = selection)
 }
 
 internal fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> = when (this) {
@@ -522,6 +528,8 @@ internal fun MapSelectorTarget.candidates(catalog: FilterCatalog): List<String> 
     MapSelectorTarget.ROCKET -> catalog.rocketTypes
     // Only what Tappables have given lately, never the whole Pokédex. Edited in the Tappables tab.
     MapSelectorTarget.TAPPABLE -> catalog.tappableRewards
+    MapSelectorTarget.MAX_BATTLE_SPECIES -> catalog.maxBattleSpecies
+    MapSelectorTarget.MAX_BATTLE_TIERS -> catalog.maxBattleTiers
     else -> catalog.spawnSpecies
 }
 
@@ -536,6 +544,7 @@ internal fun FilterAlertType.mapCategory(): AlertCategory = when (this) {
     FilterAlertType.PVP -> AlertCategory.PVP
     FilterAlertType.COMMON -> AlertCategory.COMMON
     FilterAlertType.TAPPABLE -> AlertCategory.TAPPABLE
+    FilterAlertType.MAX_BATTLE -> AlertCategory.MAX_BATTLE
     FilterAlertType.WEATHER -> AlertCategory.WEATHER
     FilterAlertType.OTHER -> AlertCategory.GENERIC
 }

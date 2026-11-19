@@ -226,7 +226,7 @@ internal fun MapMarker(
     val questQuantity = remember(alert.questReward) { extractQuestQuantity(alert.questReward) }
     val isRocket = visualStyle.category == AlertCategory.ROCKET || alert.gruntType != null || alert.type?.contains("Rocket") == true
     val isKecleon = alert.pokemon?.contains("Kecleon", ignoreCase = true) == true
-    val raidTier = remember(visualStyle.category, alert.pokemonForm, alert.type) {
+    val raidTier = remember(visualStyle.category, alert.pokemonForm, alert.type, alert.raidLevel) {
         resolveRaidTier(alert, visualStyle.category)
     }
 
@@ -397,6 +397,10 @@ internal fun extractQuestQuantity(questReward: String?): String? {
 }
 
 internal fun resolveRaidTier(alert: PokemonAlert, category: AlertCategory): String? {
+    // A Max Battle shows its level the way a raid shows its tier; "G" marks Gigantamax.
+    if (category == AlertCategory.MAX_BATTLE) {
+        return if (alert.isGigantamax) "G" else alert.raidLevel?.takeIf { it > 0 }?.let { "$it★" } ?: "MAX"
+    }
     if (category != AlertCategory.RAID) return null
     if (alert.pokemonForm?.contains("Mega", ignoreCase = true) == true) return "Mega"
     val tierMatch = alert.type?.firstNotNullOfOrNull { typeStr ->
@@ -769,6 +773,19 @@ internal fun renderMapMarkerToCanvas(
             val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = sizePx * 0.02f }
             canvas.drawOval(centerX - discRadiusX, groundY - discRadiusY, centerX + discRadiusX, groundY + discRadiusY, rimPaint)
         }
+        request.category == AlertCategory.MAX_BATTLE -> {
+            // A Power Spot: a red-magenta disc with a pink rim, unlike the grey gym base.
+            val spotRadiusX = sizePx * 0.26f
+            val spotRadiusY = sizePx * 0.09f
+            val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.BLACK; alpha = 50 }
+            canvas.drawOval(centerX - spotRadiusX * 1.1f, groundY - spotRadiusY * 0.3f, centerX + spotRadiusX * 1.1f, groundY + spotRadiusY * 1.6f, shadowPaint)
+            val spotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(134, 25, 143) }
+            canvas.drawOval(centerX - spotRadiusX, groundY - spotRadiusY, centerX + spotRadiusX, groundY + spotRadiusY, spotPaint)
+            val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(244, 114, 182); style = Paint.Style.STROKE; strokeWidth = sizePx * 0.025f }
+            canvas.drawOval(centerX - spotRadiusX, groundY - spotRadiusY, centerX + spotRadiusX, groundY + spotRadiusY, rimPaint)
+            val corePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(217, 70, 239) }
+            canvas.drawOval(centerX - spotRadiusX * 0.6f, groundY - spotRadiusY * 0.6f, centerX + spotRadiusX * 0.6f, groundY + spotRadiusY * 0.6f, corePaint)
+        }
         request.category == AlertCategory.RAID || request.raidTier != null -> {
             val gymRadiusX = sizePx * 0.26f
             val gymRadiusY = sizePx * 0.09f
@@ -946,7 +963,7 @@ internal fun renderMapMarkerToCanvas(
             tierX + tierHalfWidth, tierY + tierRadius
         )
         val tierBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.rgb(255, 179, 0)
+            color = if (request.category == AlertCategory.MAX_BATTLE) AndroidColor.rgb(217, 70, 239) else AndroidColor.rgb(255, 179, 0)
         }
         val tierStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = AndroidColor.WHITE

@@ -618,6 +618,16 @@
     <string name="data_quiet_essentials">Quiet essentials</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Same-location stacks</string>
+    <string name="whats_new_max_battles">Max Battles: Dynamax and Gigantamax battles at Power Spots now show on the feed and map, with their own Filters tab, hunts and notifications.</string>
+    <string name="data_max_battles">Max Battles</string>
+    <string name="max_battle_power_spot">Power Spot</string>
+    <string name="max_battle_bosses">Max Battle bosses</string>
+    <string name="max_battle_levels">Max Battle levels</string>
+    <string name="max_battle_bosses_short">Bosses</string>
+    <string name="max_battle_levels_short">Levels</string>
+    <string name="max_battle_level_x">Level %1$s</string>
+    <string name="max_battle_dynamax_x">Dynamax %1$s</string>
+    <string name="max_battle_gigantamax_x">Gigantamax %1$s</string>
     <string name="data_tappables">Tappables</string>
     <string name="data_unlimited">Unlimited</string>
     <string name="data_x_x_km">%1$s.%2$s km</string>

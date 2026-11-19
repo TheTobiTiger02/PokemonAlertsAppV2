@@ -52,6 +52,9 @@
     <string name="notification_tag_nundo">Nundo</string>
     <string name="notification_tag_pvp">PvP</string>
     <string name="notification_tag_common">Spawn</string>
+    <string name="notification_content_max_battle_title">%1$s-Max-Kampf</string>
+    <string name="notification_tag_max_battle">Max-Kampf</string>
+    <string name="notification_tag_max_battle_level">%1$s★-Max-Kampf</string>
     <string name="notification_tag_tappable">Tappable</string>
     <string name="notification_tag_weather">Wetter</string>
     <string name="notification_tag_other">Alarm</string>
