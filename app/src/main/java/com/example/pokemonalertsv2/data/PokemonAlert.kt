@@ -411,5 +411,5 @@ data class PokemonAlert(
     
     /** Returns the type list as a formatted string (e.g., "Hundo, PvP") */
     val typeDisplay: String?
-        get() = type?.takeIf { it.isNotEmpty() }?.joinToString(", ")
+        get() = type?.takeIf { it.isNotEmpty() }?.joinToString(", ") { if (it.equals("MaxBattle", ignoreCase = true)) "Max Battle" else it }
 }

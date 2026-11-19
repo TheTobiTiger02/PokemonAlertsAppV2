@@ -118,8 +118,8 @@ fun alertDetailLines(
 ): List<String> = buildList {
     val exactCp = if (alert.isWeatherChange) alert.newCp else alert.cp
     exactCp?.takeIf { it > 0 }?.let { add("CP $it") }
-    // A raid boss has no CP until you beat it, so the catch-screen numbers stand in.
-    if (exactCp == null && alert.hasTypeContaining("raid")) {
+    // A raid or Max Battle boss has no CP until you beat it, so the catch-screen numbers stand in.
+    if (exactCp == null && (alert.hasTypeContaining("raid") || alert.isMaxBattle)) {
         alert.hundoCP?.level20?.takeIf { it > 0 }?.let { add("100% L20 $it") }
         alert.hundoCP?.level25?.takeIf { it > 0 }?.let { add("100% L25 $it") }
     }

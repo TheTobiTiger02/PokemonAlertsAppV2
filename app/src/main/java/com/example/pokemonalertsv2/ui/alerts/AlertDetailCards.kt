@@ -867,7 +867,7 @@ fun AlertMetaRow(
             alert.hasType("Hundo") -> Icons.Filled.Star
             alert.hasType("PvP") -> Icons.Filled.Star
             alert.hasType("Nundo") -> Icons.Filled.Close
-            alert.hasType("Raid") -> Icons.Filled.Warning
+            alert.hasType("Raid") || alert.isMaxBattle -> Icons.Filled.Warning
             alert.hasType("Quest") -> Icons.Filled.Star
             alert.hasType("Rocket") -> Icons.Filled.Warning
             alert.hasType("Kecleon") -> Icons.Filled.LocationOn
