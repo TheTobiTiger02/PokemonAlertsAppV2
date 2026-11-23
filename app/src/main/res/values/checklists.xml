@@ -80,4 +80,10 @@
     <string name="checklists_add_pokemon">Add Pokémon</string>
     <string name="checklists_remove_selected">Remove from this checklist</string>
     <string name="checklists_add_selected">Add %1$d</string>
+    <string name="dextracker_title">Dex Tracker</string>
+    <string name="dextracker_connect_body">Show your Dex Tracker collections here and add catches with +1. Sign in with the Google account you use there.</string>
+    <string name="dextracker_connect">Connect Dex Tracker</string>
+    <string name="dextracker_sign_out">Disconnect Dex Tracker</string>
+    <string name="dextracker_entry_count">%1$d of %2$d</string>
+    <string name="dextracker_plus_one">+1</string>
 </resources>
