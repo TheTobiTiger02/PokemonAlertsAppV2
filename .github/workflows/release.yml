@@ -74,6 +74,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           APP_API_KEY: ${{ secrets.APP_API_KEY }}
+          # Dex Tracker's Firebase project; empty values hide the Dex Tracker source.
+          DEX_TRACKER_PROJECT_ID: ${{ secrets.DEX_TRACKER_PROJECT_ID }}
+          DEX_TRACKER_APP_ID: ${{ secrets.DEX_TRACKER_APP_ID }}
+          DEX_TRACKER_API_KEY: ${{ secrets.DEX_TRACKER_API_KEY }}
+          DEX_TRACKER_WEB_CLIENT_ID: ${{ secrets.DEX_TRACKER_WEB_CLIENT_ID }}
         run: |
           echo "storeFile=keystore/pokemon-alerts-release.jks" > keystore.properties
           echo "storePassword=$STORE_PASSWORD" >> keystore.properties
@@ -82,6 +87,10 @@ jobs:
           
           echo "GOOGLE_MAPS_API_KEY=$GOOGLE_MAPS_API_KEY" > local.properties
           echo "APP_API_KEY=$APP_API_KEY" >> local.properties
+          echo "DEX_TRACKER_PROJECT_ID=$DEX_TRACKER_PROJECT_ID" >> local.properties
+          echo "DEX_TRACKER_APP_ID=$DEX_TRACKER_APP_ID" >> local.properties
+          echo "DEX_TRACKER_API_KEY=$DEX_TRACKER_API_KEY" >> local.properties
+          echo "DEX_TRACKER_WEB_CLIENT_ID=$DEX_TRACKER_WEB_CLIENT_ID" >> local.properties
 
       - name: Test and build release APK
         if: steps.tag_check.outputs.exists == 'false'
