@@ -5,6 +5,8 @@ import android.os.Build
 import android.util.Log
 import androidx.datastore.preferences.core.edit
 import com.example.pokemonalertsv2.BuildConfig
+import com.example.pokemonalertsv2.account.AccountRepository
+import com.example.pokemonalertsv2.account.AccountSync
 import com.example.pokemonalertsv2.catchroutes.CatchRouteStore
 import com.example.pokemonalertsv2.data.CATCH_WINDOW_HEIGHT_KEY
 import com.example.pokemonalertsv2.data.CATCH_WINDOW_WIDTH_KEY
@@ -34,7 +36,6 @@ import com.example.pokemonalertsv2.data.counters.RaidCounterPreferences
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.godex.GoDexPreferences
 import com.example.pokemonalertsv2.data.godex.GoDexSessionState
-import com.example.pokemonalertsv2.data.net.Http
 import com.example.pokemonalertsv2.fcm.FcmTopicSubscriptionManager
 import com.example.pokemonalertsv2.hunt.HuntRepository
 import com.example.pokemonalertsv2.tracking.ArrivalTrackingRepository
@@ -58,6 +59,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -72,9 +74,10 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * Device sync: settings, filters, hunt and catch-route data, running sessions, the Poke Genie
- * roster and sign-ins kept the same on every device of one owner, through the backend as an
- * end-to-end encrypted relay. This object wires the engine to the app; the cycle itself is
- * [DeviceSyncEngine], the server protocol DEVICE_SYNC.md in the backend repo.
+ * roster and sign-ins kept the same on every device signed in to one account, through the
+ * backend as an encrypted relay. This object wires the engine to the app; the cycle itself is
+ * [DeviceSyncEngine], accounts [com.example.pokemonalertsv2.account.AccountSync], the server
+ * protocol DEVICE_SYNC.md in the backend repo.
  *
  * Changes reach the other devices two ways: the live stream ([SyncEventStream]) while the app
  * is open or runs a hunt or route, usually within a fraction of a second, and an FCM ping for a
@@ -166,9 +169,6 @@ object DeviceSync {
         if (!local) keys.forEach { engine(context).adoptGroupValue(SETTINGS, it) }
     }
 
-    /** A `pokemonalerts://sync/join?code=…` link waiting for the sync page to confirm it. */
-    val pendingJoinCode = MutableStateFlow<String?>(null)
-
     /** What an FCM data message means for sync. */
     enum class PingAction { NOT_A_PING, OWN_WRITE, SYNC, DELETED }
 
@@ -254,7 +254,8 @@ object DeviceSync {
                 groupChanged.value = new?.groupId
             },
             onDeferredSync = { DeviceSyncWorker.trigger(app) },
-            appVersion = { BuildConfig.VERSION_CODE.toLong() }
+            appVersion = { BuildConfig.VERSION_CODE.toLong() },
+            onAccountRejected = { AccountSync.onSyncRejected(app, it) }
         )
         return Wiring(engine, state, adapters, service)
     }
@@ -515,7 +516,7 @@ object DeviceSync {
 
     /** Runs for the life of the process once started: idle while nothing holds the stream. */
     private suspend fun runStream(app: Context) {
-        val stream = SyncEventStream(Http.base, BuildConfig.ALERTS_API_BASE_URL)
+        val stream = SyncEventStream(PokemonAlertsApi.syncHttpClient, BuildConfig.ALERTS_API_BASE_URL)
         val self = deviceId(app)
         var failures = 0
         while (true) {
@@ -533,6 +534,15 @@ object DeviceSync {
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (rejected: SyncAccountException) {
+                AccountSync.onSyncRejected(app, rejected)
+                // Signed out of (or removed from) the account the group is linked to: retrying
+                // cannot help until the account or the group changes. Signed in, it was a token
+                // problem: the backoff below retries with a fresh one.
+                if (AccountRepository.account.value == null) {
+                    merge(groupChanged.drop(1).map { }, AccountRepository.account.drop(1).map { }).first()
+                    continue
+                }
             } catch (gone: SyncGroupGoneException) {
                 // Also what a group created here answers until its first upload lands, so the
                 // stream decides nothing: a full sync lists the group and tells a deleted group

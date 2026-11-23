@@ -21,6 +21,7 @@ interface SyncService {
     suspend fun list(
         @Path("groupId") groupId: String,
         @Header("X-Sync-Auth") auth: String,
+        @Header("X-Sync-Device") device: String?,
         @Header("X-App-Key") appKey: String? = appKey()
     ): Response<SyncCollectionList>
 
@@ -30,6 +31,7 @@ interface SyncService {
         @Path("collection") collection: String,
         @Header("X-Sync-Auth") auth: String,
         @Header("If-None-Match") ifNoneMatch: String?,
+        @Header("X-Sync-Device") device: String?,
         @Header("X-App-Key") appKey: String? = appKey()
     ): Response<ResponseBody>
 
@@ -80,6 +82,30 @@ class SyncCollectionUnknownException(val collection: String) : Exception("Server
 /** Anything else the server refused or could not answer. */
 class SyncTransportException(val status: Int, message: String) : Exception(message)
 
+/**
+ * The group is linked to an account and the server refused this device for it
+ * (DEVICE_SYNC.md, "Accounts"): signed out ([SIGN_IN_REQUIRED], [TOKEN_INVALID]), signed in to
+ * another account ([MISMATCH]) or removed from it ([DEVICE_REVOKED]).
+ */
+class SyncAccountException(val code: String) : Exception(code) {
+    val revoked: Boolean get() = code == DEVICE_REVOKED
+
+    companion object {
+        const val SIGN_IN_REQUIRED = "ACCOUNT_SIGN_IN_REQUIRED"
+        const val TOKEN_INVALID = "ACCOUNT_TOKEN_INVALID"
+        const val MISMATCH = "ACCOUNT_MISMATCH"
+        const val DEVICE_REVOKED = "DEVICE_REVOKED"
+        private val CODES = setOf(SIGN_IN_REQUIRED, TOKEN_INVALID, MISMATCH, DEVICE_REVOKED)
+
+        /** The account refusal in a 401 or 403 body, or null for any other answer. */
+        fun fromResponse(status: Int, body: String?): SyncAccountException? {
+            if (status != 401 && status != 403) return null
+            val code = CODES.firstOrNull { body.orEmpty().contains("\"$it\"") } ?: return null
+            return SyncAccountException(code)
+        }
+    }
+}
+
 sealed interface FetchResult {
     data object NotModified : FetchResult
     data object Empty : FetchResult
@@ -104,7 +130,7 @@ class RetrofitSyncTransport(private val service: SyncService, private val device
     private val octets = "application/octet-stream".toMediaType()
 
     override suspend fun list(group: SyncGroup): Map<String, Long> {
-        val response = service.list(group.groupId, group.authToken)
+        val response = service.list(group.groupId, group.authToken, deviceId)
         if (response.code() == 404) throw SyncGroupGoneException()
         val body = response.body()
         if (!response.isSuccessful || body == null) throw failure(response)
@@ -112,7 +138,7 @@ class RetrofitSyncTransport(private val service: SyncService, private val device
     }
 
     override suspend fun fetch(group: SyncGroup, collection: String, knownVersion: Long?): FetchResult {
-        val response = service.fetch(group.groupId, collection, group.authToken, knownVersion?.let { "\"$it\"" })
+        val response = service.fetch(group.groupId, collection, group.authToken, knownVersion?.let { "\"$it\"" }, deviceId)
         return when {
             response.code() == 304 -> FetchResult.NotModified
             response.code() == 404 -> {
@@ -160,8 +186,9 @@ class RetrofitSyncTransport(private val service: SyncService, private val device
         if (!response.isSuccessful && response.code() != 404) throw failure(response)
     }
 
-    private fun failure(response: Response<*>) =
-        SyncTransportException(response.code(), "HTTP ${response.code()}")
+    private fun failure(response: Response<*>): Exception =
+        SyncAccountException.fromResponse(response.code(), runCatching { response.errorBody()?.string() }.getOrNull())
+            ?: SyncTransportException(response.code(), "HTTP ${response.code()}")
 
     private fun parseVersion(etag: String?): Long? =
         etag?.removePrefix("W/")?.trim('"')?.toLongOrNull()

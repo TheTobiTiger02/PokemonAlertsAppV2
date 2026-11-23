@@ -24,9 +24,6 @@ internal sealed interface DeepLinkTarget {
 
     /** The Checklists tab, with [checklistId] open in the editor when given. */
     data class Checklist(val checklistId: String?) : DeepLinkTarget
-
-    /** A device sync pairing link (the QR code). Opens the join dialog; joining still needs a tap. */
-    data class SyncJoin(val code: String) : DeepLinkTarget
 }
 
 internal const val DEEP_LINK_SCHEME = "pokemonalerts"
@@ -50,18 +47,15 @@ private const val TAB_TOOLS = 5
  *  - `pokemonalerts://alert/<id>`
  *  - `pokemonalerts://event/<id>`
  *  - `pokemonalerts://checklists[/<id>]`; `settings/collection` (the old GoDex collection page) opens `godex`
- *  - `pokemonalerts://sync/join?code=<pairing code>`
+ *  - `pokemonalerts://sync/join?…`: an old pairing QR code; opens the sync page (devices sign in now)
  */
 internal fun parseDeepLink(url: String?): DeepLinkTarget? {
     val raw = url?.trim().orEmpty()
     val prefix = "$DEEP_LINK_SCHEME://"
     if (!raw.startsWith(prefix, ignoreCase = true)) return null
 
-    // The one link that takes a parameter, so it is read before the query is dropped below.
     if (raw.substring(prefix.length).startsWith("sync/join", ignoreCase = true)) {
-        val code = raw.substringAfter("code=", "").substringBefore('&').substringBefore('#')
-        return if (code.isBlank()) DeepLinkTarget.Settings(SettingsDestination.DEVICE_SYNC)
-        else DeepLinkTarget.SyncJoin(java.net.URLDecoder.decode(code, "UTF-8"))
+        return DeepLinkTarget.Settings(SettingsDestination.DEVICE_SYNC)
     }
 
     // Strip any query/fragment: none of these targets take parameters, and leaving them on

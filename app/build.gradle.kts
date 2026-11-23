@@ -253,20 +253,17 @@ dependencies {
     implementation(libs.google.maps.compose)
     implementation(libs.maplibre.android)
     implementation(libs.google.play.services.location)
-    // Device sync pairing: QR code shown on one device (zxing, pure Java) and scanned on the
-    // other with the Play services scanner, which needs no camera permission.
-    implementation(libs.zxing.core)
-    implementation(libs.google.play.services.code.scanner)
+    // App accounts: Google sign-in through Credential Manager, then Firebase Auth (device sync).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.identity.googleid)
     // Heart rate, steps and calories a watch synced to Health Connect (e.g. Galaxy Watch via Samsung Health).
     implementation(libs.androidx.health.connect.client)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
-    // Dex Tracker: its Firestore and its Google sign-in (Credential Manager, Firebase Auth).
-    implementation(libs.firebase.firestore)
     implementation(libs.firebase.auth)
-    implementation(libs.androidx.credentials)
-    implementation(libs.androidx.credentials.play.services.auth)
-    implementation(libs.google.identity.googleid)
+    // Dex Tracker's Firestore (its Google sign-in uses the Credential Manager libraries above).
+    implementation(libs.firebase.firestore)
     
     // Room
     implementation(libs.androidx.room.runtime)

@@ -1,28 +1,20 @@
 package com.example.pokemonalertsv2.ui.settings
 
-import android.content.ClipData
-import android.content.ClipboardManager
+import android.app.Activity
 import android.content.Context
-import android.graphics.Bitmap
+import android.content.ContextWrapper
 import android.text.format.DateUtils
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,35 +31,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.pokemonalertsv2.R
+import com.example.pokemonalertsv2.account.Account
+import com.example.pokemonalertsv2.account.AccountApiException
+import com.example.pokemonalertsv2.account.AccountDeviceDto
+import com.example.pokemonalertsv2.account.AccountRepository
+import com.example.pokemonalertsv2.account.AccountSync
 import com.example.pokemonalertsv2.sync.CollectionStatus
 import com.example.pokemonalertsv2.sync.DeviceRow
 import com.example.pokemonalertsv2.sync.DeviceSync
-import com.example.pokemonalertsv2.sync.SyncCrypto
-import com.example.pokemonalertsv2.sync.SyncGroup
-import com.example.pokemonalertsv2.sync.SyncJoinException
 import com.example.pokemonalertsv2.sync.SyncStateSnapshot
 import com.example.pokemonalertsv2.util.AppText
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-/** The "Device sync" settings page: set up, join, the group's devices and per-collection status. */
+/** The "Device sync" settings page: the account, the group's devices and per-collection status. */
 @Composable
 internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
     val context = LocalContext.current
@@ -75,20 +59,19 @@ internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
     val stateStore = remember(context) { DeviceSync.state(context) }
     val snapshot by stateStore.snapshots.collectAsStateWithLifecycle(initialValue = null)
     val running by engine.running.collectAsState()
-    val pendingLink by DeviceSync.pendingJoinCode.collectAsState()
+    val account by AccountRepository.account.collectAsState()
+    val accountDevices by AccountSync.devices.collectAsState()
+    val paused by AccountSync.paused.collectAsState()
+    val signInAvailable = remember(context) { AccountRepository.isAvailable(context) }
     var busy by remember { mutableStateOf(false) }
-    var joinCode by rememberSaveable { mutableStateOf<String?>(null) }
-    var showCode by remember { mutableStateOf<SyncGroup?>(null) }
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
+    var confirmSignOut by rememberSaveable { mutableStateOf(false) }
+    // 1: what deleting the account does; 2: the final "cannot be undone".
+    var deleteAccountStep by rememberSaveable { mutableIntStateOf(0) }
+    var removeTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-    // A pokemonalerts://sync/join link opens the join dialog pre-filled; it never joins by itself.
-    LaunchedEffect(pendingLink) {
-        pendingLink?.let {
-            joinCode = it
-            DeviceSync.pendingJoinCode.value = null
-        }
-    }
+    LaunchedEffect(account?.uid) { AccountSync.refresh(context) }
 
     fun run(action: suspend () -> String?) {
         if (busy) return
@@ -98,13 +81,9 @@ internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
                 action()
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (error: SyncJoinException) {
-                AppText.get(
-                    if (error.reason == SyncJoinException.Reason.NOT_FOUND) R.string.device_sync_code_not_found
-                    else R.string.device_sync_invalid_code
-                )
             } catch (error: Exception) {
-                AppText.get(R.string.device_sync_failed, error.message ?: error.javaClass.simpleName)
+                val reason = (error as? AccountApiException)?.code ?: error.message ?: error.javaClass.simpleName
+                AppText.get(R.string.device_sync_failed, reason)
             } finally {
                 busy = false
             }
@@ -114,56 +93,40 @@ internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
 
     val state = snapshot ?: return
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (!state.connected) {
-            NotConnected(
-                state = state,
-                busy = busy,
-                onSetUp = {
-                    run {
-                        val group = engine.create()
-                        showCode = group
-                        AppText.get(R.string.device_sync_created)
-                    }
-                },
-                onJoin = { joinCode = "" }
-            )
-        } else {
+        AccountSection(
+            account = account,
+            state = state,
+            paused = paused,
+            busy = busy,
+            signInAvailable = signInAvailable,
+            onSignIn = {
+                run {
+                    AccountSync.signIn(context.findActivity() ?: context) ?: return@run null
+                    AppText.get(R.string.device_sync_signed_in)
+                }
+            },
+            onTurnOn = {
+                run {
+                    AccountSync.turnOn(context)
+                    AppText.get(R.string.device_sync_signed_in)
+                }
+            },
+            onSignOut = { confirmSignOut = true },
+            onDeleteAccount = { deleteAccountStep = 1 }
+        )
+        if (state.connected) {
             Connected(
                 state = state,
                 syncing = running || busy,
+                signedIn = account != null,
+                accountDevices = accountDevices,
                 onSyncNow = { run { engine.syncNow(); null } },
-                onAddDevice = {
-                    scope.launch { showCode = stateStore.group() }
-                },
+                onRemove = { id, name -> removeTarget = id to name },
                 onLeave = { confirmLeave = true },
                 onDelete = { confirmDelete = true }
             )
         }
     }
-
-    joinCode?.let { code ->
-        JoinDialog(
-            initialCode = code,
-            busy = busy,
-            onDismiss = { joinCode = null },
-            onScanFailed = { scope.launch { snackbarHostState.showSnackbar(AppText.get(R.string.device_sync_scan_failed)) } },
-            onJoin = { entered ->
-                if (SyncCrypto.decodePairingCode(entered) == null) {
-                    scope.launch { snackbarHostState.showSnackbar(AppText.get(R.string.device_sync_invalid_code)) }
-                } else {
-                    joinCode = null
-                    run {
-                        engine.join(entered)
-                        AppText.get(R.string.device_sync_joined)
-                    }
-                }
-            }
-        )
-    }
-
-    showCode?.let { group -> PairingCodeDialog(group, onDismiss = { showCode = null }, onCopied = {
-        scope.launch { snackbarHostState.showSnackbar(AppText.get(R.string.device_sync_code_copied)) }
-    }) }
 
     if (confirmLeave) {
         ConfirmDialog(
@@ -190,30 +153,138 @@ internal fun DeviceSyncSettingsContent(snackbarHostState: SnackbarHostState) {
             }
         )
     }
+    if (confirmSignOut) {
+        ConfirmDialog(
+            title = stringResource(R.string.device_sync_sign_out),
+            message = stringResource(R.string.device_sync_sign_out_message),
+            confirm = stringResource(R.string.device_sync_sign_out),
+            onDismiss = { confirmSignOut = false },
+            onConfirm = {
+                confirmSignOut = false
+                run { AccountSync.signOut(context); null }
+            }
+        )
+    }
+    removeTarget?.let { (id, name) ->
+        ConfirmDialog(
+            title = stringResource(R.string.device_sync_remove_device_title, name),
+            message = stringResource(R.string.device_sync_remove_device_message),
+            confirm = stringResource(R.string.device_sync_remove_device),
+            destructive = true,
+            onDismiss = { removeTarget = null },
+            onConfirm = {
+                removeTarget = null
+                run {
+                    AccountSync.removeDevice(context, id)
+                    AppText.get(R.string.device_sync_device_removed)
+                }
+            }
+        )
+    }
+    if (deleteAccountStep == 1) {
+        ConfirmDialog(
+            title = stringResource(R.string.device_sync_delete_account),
+            message = stringResource(R.string.device_sync_delete_account_message),
+            confirm = stringResource(R.string.device_sync_continue),
+            destructive = true,
+            onDismiss = { deleteAccountStep = 0 },
+            onConfirm = { deleteAccountStep = 2 }
+        )
+    }
+    if (deleteAccountStep == 2) {
+        ConfirmDialog(
+            title = stringResource(R.string.device_sync_delete_account_final_title),
+            message = stringResource(R.string.device_sync_delete_account_final_message),
+            confirm = stringResource(R.string.device_sync_delete_account),
+            destructive = true,
+            onDismiss = { deleteAccountStep = 0 },
+            onConfirm = {
+                deleteAccountStep = 0
+                run {
+                    AccountSync.deleteAccount(context)
+                    AppText.get(R.string.device_sync_account_deleted)
+                }
+            }
+        )
+    }
+}
+
+/** Credential Manager shows Google's picker over an Activity. */
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 @Composable
-private fun NotConnected(state: SyncStateSnapshot, busy: Boolean, onSetUp: () -> Unit, onJoin: () -> Unit) {
+private fun AccountSection(
+    account: Account?,
+    state: SyncStateSnapshot,
+    paused: Boolean,
+    busy: Boolean,
+    signInAvailable: Boolean,
+    onSignIn: () -> Unit,
+    onTurnOn: () -> Unit,
+    onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit
+) {
     SettingsSection(title = stringResource(R.string.settings_device_sync)) {
-        if (state.notice == DeviceSync.NOTICE_DELETED_ELSEWHERE) {
-            Text(
-                stringResource(R.string.device_sync_deleted_elsewhere),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
-            )
+        val notice = when (state.notice) {
+            DeviceSync.NOTICE_DELETED_ELSEWHERE -> R.string.device_sync_deleted_elsewhere
+            AccountSync.NOTICE_REMOVED -> R.string.device_sync_removed_notice
+            else -> null
         }
-        Text(stringResource(R.string.device_sync_intro), style = MaterialTheme.typography.bodyMedium)
-        Text(
-            stringResource(R.string.device_sync_local_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = onSetUp, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.device_sync_set_up))
+        if (notice != null && !state.connected) {
+            Text(stringResource(notice), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        }
+        if (account == null) {
+            if (state.connected) {
+                Text(
+                    stringResource(if (paused) R.string.device_sync_paused_banner else R.string.device_sync_legacy_banner),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (paused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(stringResource(R.string.device_sync_intro), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    stringResource(R.string.device_sync_local_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            OutlinedButton(onClick = onJoin, enabled = !busy, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.device_sync_join))
+            if (signInAvailable) {
+                Button(onClick = onSignIn, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.device_sync_sign_in))
+                }
+            } else {
+                Text(
+                    stringResource(R.string.device_sync_sign_in_unavailable),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            Text(
+                stringResource(R.string.device_sync_signed_in_as, account.email ?: account.displayName ?: account.uid),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            if (!state.connected) {
+                Text(stringResource(R.string.device_sync_off_signed_in), style = MaterialTheme.typography.bodyMedium)
+                Button(onClick = onTurnOn, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.device_sync_turn_on))
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(onClick = onSignOut, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.device_sync_sign_out))
+                }
+                TextButton(onClick = onDeleteAccount, enabled = !busy, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.device_sync_delete_account), color = MaterialTheme.colorScheme.error)
+                }
             }
         }
         if (busy) CircularProgressIndicator(modifier = Modifier.size(24.dp))
@@ -224,12 +295,14 @@ private fun NotConnected(state: SyncStateSnapshot, busy: Boolean, onSetUp: () ->
 private fun Connected(
     state: SyncStateSnapshot,
     syncing: Boolean,
+    signedIn: Boolean,
+    accountDevices: List<AccountDeviceDto>,
     onSyncNow: () -> Unit,
-    onAddDevice: () -> Unit,
+    onRemove: (id: String, name: String) -> Unit,
     onLeave: () -> Unit,
     onDelete: () -> Unit
 ) {
-    SettingsSection(title = stringResource(R.string.settings_device_sync)) {
+    SettingsSection(title = stringResource(R.string.device_sync_status)) {
         val lastSync = state.statuses.values.maxOfOrNull { it.lastSyncAtMillis } ?: 0L
         val live by DeviceSync.streamConnected.collectAsState()
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -247,22 +320,27 @@ private fun Connected(
             }
             if (syncing) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onSyncNow, enabled = !syncing, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.device_sync_now))
-            }
-            OutlinedButton(onClick = onAddDevice, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.device_sync_add_device))
-            }
+        Button(onClick = onSyncNow, enabled = !syncing, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.device_sync_now))
         }
     }
 
     SettingsSection(title = stringResource(R.string.device_sync_devices)) {
-        val rows = listOfNotNull(state.ownRow?.let { it to true }) +
-            state.devices.values.sortedBy { it.name }.map { it to false }
-        rows.forEachIndexed { index, (row, isSelf) ->
+        val removable = if (signedIn) accountDevices.filterNot { it.self }.map { it.deviceId }.toSet() else emptySet()
+        // Signed in on the account but not synced yet: no row in the devices collection.
+        val waiting = if (signedIn) {
+            accountDevices.filter { !it.self && it.deviceId !in state.devices }
+                .map { it.deviceId to DeviceRow(name = it.name ?: it.deviceId, model = it.model.orEmpty()) }
+        } else {
+            emptyList()
+        }
+        val rows = listOfNotNull(state.ownRow?.let { Triple("", it, true) }) +
+            (state.devices.entries.map { it.key to it.value } + waiting)
+                .sortedBy { it.second.name }
+                .map { (id, row) -> Triple(id, row, false) }
+        rows.forEachIndexed { index, (id, row, isSelf) ->
             if (index > 0) HorizontalDivider()
-            DeviceRowItem(row, isSelf)
+            DeviceRowItem(row, isSelf, onRemove = if (id in removable) ({ onRemove(id, row.name) }) else null)
         }
     }
 
@@ -277,8 +355,11 @@ private fun Connected(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.device_sync_leave))
+        // Signed in, signing out is how this device stops; leaving stays for groups without an account.
+        if (!signedIn) {
+            OutlinedButton(onClick = onLeave, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.device_sync_leave))
+            }
         }
         TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.device_sync_delete), color = MaterialTheme.colorScheme.error)
@@ -287,18 +368,25 @@ private fun Connected(
 }
 
 @Composable
-private fun DeviceRowItem(row: DeviceRow, isSelf: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            if (isSelf) "${row.name} · ${stringResource(R.string.device_sync_this_device)}" else row.name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = if (isSelf) FontWeight.Bold else FontWeight.Normal
-        )
-        Text(
-            stringResource(R.string.device_sync_device_details, row.model.ifBlank { row.name }, row.appVersion.ifBlank { "?" }, relative(row.seenAtMillis)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+private fun DeviceRowItem(row: DeviceRow, isSelf: Boolean, onRemove: (() -> Unit)?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.weight(1f)) {
+            Text(
+                if (isSelf) "${row.name} · ${stringResource(R.string.device_sync_this_device)}" else row.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isSelf) FontWeight.Bold else FontWeight.Normal
+            )
+            Text(
+                stringResource(R.string.device_sync_device_details, row.model.ifBlank { row.name }, row.appVersion.ifBlank { "?" }, relative(row.seenAtMillis)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (onRemove != null) {
+            TextButton(onClick = onRemove) {
+                Text(stringResource(R.string.device_sync_remove_device), color = MaterialTheme.colorScheme.error)
+            }
+        }
     }
 }
 
@@ -377,107 +465,6 @@ private fun relative(millis: Long): String {
     if (now - millis < DateUtils.MINUTE_IN_MILLIS) return AppText.get(R.string.device_sync_just_now)
     val text = DateUtils.getRelativeTimeSpanString(millis, now, DateUtils.MINUTE_IN_MILLIS).toString()
     return if (java.util.Locale.getDefault().language == "de" && text.startsWith("Vor ")) text.replaceFirstChar { it.lowercase() } else text
-}
-
-@Composable
-private fun JoinDialog(
-    initialCode: String,
-    busy: Boolean,
-    onDismiss: () -> Unit,
-    onScanFailed: () -> Unit,
-    onJoin: (String) -> Unit
-) {
-    val context = LocalContext.current
-    var code by rememberSaveable(initialCode) { mutableStateOf(initialCode) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.device_sync_join_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(stringResource(R.string.device_sync_join_rule), style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it },
-                    label = { Text(stringResource(R.string.device_sync_code_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedButton(onClick = { scanCode(context, onScanned = { code = it }, onFailed = onScanFailed) }) {
-                    Text(stringResource(R.string.device_sync_scan))
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onJoin(code) }, enabled = code.isNotBlank() && !busy) {
-                Text(stringResource(R.string.device_sync_join_confirm))
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
-    )
-}
-
-/** Google's code scanner runs in Play services: no camera permission, nothing to bundle. */
-private fun scanCode(context: Context, onScanned: (String) -> Unit, onFailed: () -> Unit) {
-    val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-    runCatching {
-        GmsBarcodeScanning.getClient(context, options).startScan()
-            .addOnSuccessListener { barcode -> barcode.rawValue?.let(onScanned) ?: onFailed() }
-            .addOnFailureListener { onFailed() }
-    }.onFailure { onFailed() }
-}
-
-@Composable
-private fun PairingCodeDialog(group: SyncGroup, onDismiss: () -> Unit, onCopied: () -> Unit) {
-    val context = LocalContext.current
-    val link = remember(group) { SyncCrypto.joinLink(group) }
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(link) { bitmap = withContext(Dispatchers.Default) { qrBitmap(link) } }
-    val description = stringResource(R.string.device_sync_qr_description)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.device_sync_add_device)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    stringResource(R.string.device_sync_add_device_warning),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Text(stringResource(R.string.device_sync_add_device_steps), style = MaterialTheme.typography.bodySmall)
-                bitmap?.let {
-                    Image(
-                        bitmap = it.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .size(220.dp)
-                            .background(Color.White)
-                            .padding(8.dp)
-                            .semantics { contentDescription = description }
-                    )
-                }
-                SelectionContainer {
-                    Text(group.pairingCode, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                val clipboard = context.getSystemService(ClipboardManager::class.java)
-                clipboard?.setPrimaryClip(ClipData.newPlainText(AppText.get(R.string.device_sync_code_label), group.pairingCode))
-                onCopied()
-            }) { Text(stringResource(R.string.device_sync_copy_code)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } }
-    )
-}
-
-private fun qrBitmap(text: String, size: Int = 512): Bitmap {
-    val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size)
-    val pixels = IntArray(size * size) { index ->
-        if (matrix.get(index % size, index / size)) android.graphics.Color.BLACK else android.graphics.Color.WHITE
-    }
-    return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
 }
 
 @Composable
