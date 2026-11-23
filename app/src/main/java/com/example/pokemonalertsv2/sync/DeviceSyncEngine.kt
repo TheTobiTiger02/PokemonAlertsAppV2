@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** Why a join did not happen. */
 class SyncJoinException(val reason: Reason) : Exception(reason.name) {
-    enum class Reason { INVALID_CODE, NOT_FOUND }
+    enum class Reason { NOT_FOUND }
 }
 
 /**
@@ -42,7 +42,12 @@ class DeviceSyncEngine(
     /** A sync right after creating the group failed (offline): the app retries it in the background. */
     private val onDeferredSync: () -> Unit = {},
     /** This app's version: items an older version could not apply are tried again after an update. */
-    private val appVersion: () -> Long = { 0L }
+    private val appVersion: () -> Long = { 0L },
+    /**
+     * The server refused this device for the account the group is linked to (signed out,
+     * removed from the account): a sync cannot fix that, so the cycle stops and reports it.
+     */
+    private val onAccountRejected: suspend (SyncAccountException) -> Unit = {}
 ) {
     private val locks: Map<String, Mutex> = adapters.associate { it.name to Mutex() }
     private val active = AtomicInteger()
@@ -74,14 +79,13 @@ class DeviceSyncEngine(
     /**
      * Creates a group from this device's data: every item is stamped now, so it all uploads.
      * The group exists here once this returns; a first upload that fails (offline) is left
-     * to [onDeferredSync] instead of reporting the set-up as failed.
+     * to [onDeferredSync] instead of reporting the set-up as failed. [group] is a fresh secret
+     * unless the account already linked one for it on the server.
      */
-    suspend fun create(): SyncGroup {
-        val group = withAllLocks {
-            val group = SyncCrypto.newGroup()
+    suspend fun create(group: SyncGroup = SyncCrypto.newGroup()): SyncGroup {
+        withAllLocks {
             state.connect(group, shadows = emptyMap())
             onGroupChanged(null, group)
-            group
         }
         try {
             syncNow()
@@ -94,12 +98,11 @@ class DeviceSyncEngine(
     }
 
     /**
-     * Joins the group behind [code]. The join rule: everything already here is recorded at
+     * Joins the group of [secret]. The join rule: everything already here is recorded at
      * `t = 0`, so the group's values win where both exist and items only this device has are
      * uploaded and kept.
      */
-    suspend fun join(code: String): SyncGroup {
-        val secret = SyncCrypto.decodePairingCode(code) ?: throw SyncJoinException(SyncJoinException.Reason.INVALID_CODE)
+    suspend fun join(secret: ByteArray): SyncGroup {
         val group = SyncGroup(secret)
         withAllLocks {
             try {
@@ -118,8 +121,11 @@ class DeviceSyncEngine(
         return group
     }
 
-    /** Leaves on this device only: local data stays, this device's row is removed from the group. */
-    suspend fun leave() {
+    /**
+     * Leaves on this device only: local data stays, this device's row is removed from the group.
+     * [notice] stays on the sync page (removed from the account).
+     */
+    suspend fun leave(notice: String? = null) {
         val group = state.group() ?: return
         withAllLocks {
             leaving = true
@@ -128,7 +134,7 @@ class DeviceSyncEngine(
             } finally {
                 leaving = false
             }
-            state.disconnect()
+            state.disconnect(notice)
             onGroupChanged(group, null)
         }
     }
@@ -178,6 +184,9 @@ class DeviceSyncEngine(
         try {
             val versions = knownVersions ?: try {
                 transport.list(group).also { if (!state.confirmed()) state.setConfirmed() }
+            } catch (rejected: SyncAccountException) {
+                onAccountRejected(rejected)
+                return false
             } catch (gone: SyncGroupGoneException) {
                 if (disconnectIfDeleted(group)) return false
                 emptyMap() // created here and not uploaded yet: the first upload creates it
@@ -191,6 +200,9 @@ class DeviceSyncEngine(
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (rejected: SyncAccountException) {
+                    onAccountRejected(rejected)
+                    return false
                 } catch (gone: SyncGroupGoneException) {
                     if (disconnectIfDeleted(group)) return false
                     throw gone

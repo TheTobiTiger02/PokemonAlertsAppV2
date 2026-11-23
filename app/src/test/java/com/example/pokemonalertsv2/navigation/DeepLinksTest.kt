@@ -92,7 +92,7 @@ class DeepLinksTest {
 
     @Test
     fun syncJoinLinkCarriesTheCodeAndSyncPageIsReachable() {
-        assertEquals(DeepLinkTarget.SyncJoin("P1abc-_9xyz"), parseDeepLink("pokemonalerts://sync/join?code=P1abc-_9xyz"))
+        assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.DEVICE_SYNC), parseDeepLink("pokemonalerts://sync/join?code=P1abc-_9xyz"))
         assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.DEVICE_SYNC), parseDeepLink("pokemonalerts://sync/join"))
         assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.DEVICE_SYNC), parseDeepLink("pokemonalerts://settings/sync"))
         assertEquals(DeepLinkTarget.Settings(com.example.pokemonalertsv2.ui.settings.SettingsDestination.DEVICE_SYNC), parseDeepLink("pokemonalerts://settings/device_sync"))

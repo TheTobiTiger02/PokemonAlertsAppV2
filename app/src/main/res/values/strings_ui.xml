@@ -618,7 +618,7 @@
     <string name="data_quiet_essentials">Quiet essentials</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Same-location stacks</string>
-    <string name="whats_new_max_battles">Max Battles: Dynamax and Gigantamax battles at Power Spots now show on the feed and map, with their own Filters tab, hunts and notifications.</string>
+    <string name="whats_new_accounts">Device sync now uses your Google account: sign in on each device in Settings › Device sync instead of scanning a pairing code. Devices that already sync move to your account when one of them signs in.</string>
     <string name="data_max_battles">Max Battles</string>
     <string name="max_battle_power_spot">Power Spot</string>
     <string name="max_battle_bosses">Max Battle bosses</string>

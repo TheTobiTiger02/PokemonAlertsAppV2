@@ -62,13 +62,22 @@ class SyncCryptoTest {
         expectFailure { SyncCrypto.open(sealed, group.encKey, aad) }
     }
 
+    /** The same vector is asserted by the backend (src/sync_crypto.test.js), which derives these for accounts. */
     @Test
-    fun pairingCodeRoundTripsAndCatchesTypos() {
+    fun derivationMatchesTheBackend() {
+        val fixed = SyncGroup(ByteArray(32) { it.toByte() })
+        assertEquals("AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8", SyncCrypto.base64Url(fixed.secret))
+        assertEquals("b51013189306b062e3359f4ea6e69b76", fixed.groupId)
+        assertEquals("1uL66wwD7ge0nIloifOOuUQ6eOju0WG-GjWIUm-Vy9g", fixed.authToken)
+    }
+
+    /** The stored form of the secret (SyncStateStore), unchanged so existing installs keep their group. */
+    @Test
+    fun storedCodeRoundTripsAndCatchesTypos() {
         val code = group.pairingCode
         assertTrue(code.startsWith("P1"))
         assertArrayEquals(group.secret, SyncCrypto.decodePairingCode(code))
         assertArrayEquals("whitespace is ignored", group.secret, SyncCrypto.decodePairingCode("  ${code.chunked(8).joinToString(" ")}\n"))
-        assertArrayEquals("a join link works too", group.secret, SyncCrypto.decodePairingCode(SyncCrypto.joinLink(group)))
 
         val typo = code.substring(0, 10) + (if (code[10] == 'A') 'B' else 'A') + code.substring(11)
         assertNull("a changed character fails the checksum", SyncCrypto.decodePairingCode(typo))

@@ -25,7 +25,7 @@ class DeviceSyncEngineTest {
 
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
         b.adapter.data += mapOf("theme" to "light", "onlyOnB" to "kept")
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
         assertEquals("the group's value wins", "dark", b.adapter.data["theme"])
         assertEquals("Alsbach", b.adapter.data["area"])
         assertEquals("B's own item survives", "kept", b.adapter.data["onlyOnB"])
@@ -41,7 +41,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 1_500)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         // C writes between A's fetch and A's upload, so A's first PUT gets a 412.
         var interfered = false
@@ -54,8 +54,8 @@ class DeviceSyncEngineTest {
             }
         })
         c = FakeDevice(folder.root, "C", server, now = 2_000)
-        c.engine.join(group.pairingCode)
-        racingA.engine.join(group.pairingCode)
+        c.engine.join(group.secret)
+        racingA.engine.join(group.secret)
         racingA.adapter.data["fromA"] = "a"
         val putsBefore = server.puts.get()
         racingA.engine.syncNow()
@@ -74,7 +74,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.now = 5_000
         a.adapter.data["x"] = "2"
@@ -95,7 +95,7 @@ class DeviceSyncEngineTest {
         a.adapter.data += mapOf("area/1" to "home", "area/2" to "park")
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
         assertEquals("park", b.adapter.data["area/2"])
 
         a.now = 3_000
@@ -112,7 +112,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["toggle"] = "off"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 1_100)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.now = 10_000; a.adapter.data["toggle"] = "on-A"
         b.now = 20_000; b.adapter.data["toggle"] = "on-B"
@@ -146,7 +146,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.engine.deleteEverywhere()
         assertNull(a.state.group())
@@ -160,10 +160,8 @@ class DeviceSyncEngineTest {
     fun joinWithUnknownOrInvalidCodeFails() = runBlocking {
         val b = FakeDevice(folder.root, "B", server, now = 1_000)
         val unknown = SyncCrypto.newGroup()
-        val reason = runCatching { b.engine.join(unknown.pairingCode) }.exceptionOrNull() as? SyncJoinException
+        val reason = runCatching { b.engine.join(unknown.secret) }.exceptionOrNull() as? SyncJoinException
         assertEquals(SyncJoinException.Reason.NOT_FOUND, reason?.reason)
-        val invalid = runCatching { b.engine.join("P1nope") }.exceptionOrNull() as? SyncJoinException
-        assertEquals(SyncJoinException.Reason.INVALID_CODE, invalid?.reason)
         assertNull(b.state.group())
     }
 
@@ -173,7 +171,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.now = 5_000
         a.adapter.data["x"] = "2"
@@ -197,7 +195,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
         a.engine.deleteEverywhere()
         assertFalse(b.engine.syncNow(listOf(DeviceSync.SETTINGS), knownVersions = mapOf(DeviceSync.SETTINGS to 9L)))
         assertNull(b.state.group())
@@ -220,7 +218,7 @@ class DeviceSyncEngineTest {
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
         b.adapter.unreadable += "saved/2"
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.now = 3_000
         a.adapter.data["saved/2"] = "written by a newer app"
@@ -257,7 +255,7 @@ class DeviceSyncEngineTest {
 
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
         b.adapter.data["filters"] = "{old}"
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
         assertEquals("not applied by the older schema", "{old}", b.adapter.data["filters"])
 
         b.now = 3_000
@@ -274,7 +272,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["notifications"] = "on"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
         assertEquals("on", b.adapter.data["notifications"])
 
         // B keeps notifications to itself and turns them off.
@@ -314,7 +312,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         val lists = server.lists.get()
         val fetches = server.fetches.get()
@@ -337,7 +335,7 @@ class DeviceSyncEngineTest {
         a.adapter.data["x"] = "1"
         val group = a.engine.create()
         val b = FakeDevice(folder.root, "B", server, now = 2_000)
-        b.engine.join(group.pairingCode)
+        b.engine.join(group.secret)
 
         a.now = 5_000
         a.adapter.data["x"] = "2"

@@ -372,5 +372,16 @@ object PokemonAlertsApi {
     val liveSpeciesService: com.example.pokemonalertsv2.megaboost.LiveSpeciesService by lazy { retrofit.create() }
     val goRoutesService: com.example.pokemonalertsv2.catchroutes.GoRoutesService by lazy { retrofit.create() }
     val gameTextService: com.example.pokemonalertsv2.data.gametext.GameTextService by lazy { retrofit.create() }
-    val syncService: com.example.pokemonalertsv2.sync.SyncService by lazy { retrofit.create() }
+    /**
+     * Device sync and accounts: the same client plus the signed-in account's ID token
+     * ([com.example.pokemonalertsv2.account.AccountAuthInterceptor]).
+     */
+    val syncHttpClient: OkHttpClient by lazy {
+        client.newBuilder().addInterceptor(com.example.pokemonalertsv2.account.AccountAuthInterceptor).build()
+    }
+
+    private val syncRetrofit: Retrofit by lazy { retrofit.newBuilder().client(syncHttpClient).build() }
+
+    val syncService: com.example.pokemonalertsv2.sync.SyncService by lazy { syncRetrofit.create() }
+    val accountService: com.example.pokemonalertsv2.account.AccountService by lazy { syncRetrofit.create() }
 }
