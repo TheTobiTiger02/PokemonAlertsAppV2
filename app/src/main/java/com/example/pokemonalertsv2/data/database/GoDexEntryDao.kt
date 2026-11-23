@@ -30,6 +30,9 @@ interface GoDexEntryDao {
     @Query("UPDATE godex_entries SET needed = :needed WHERE entryKey = :entryKey")
     suspend fun updateNeeded(entryKey: String, needed: Boolean)
 
+    @Query("SELECT needed FROM godex_entries WHERE entryKey = :entryKey")
+    suspend fun neededOf(entryKey: String): Boolean?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPendingUpdate(update: GoDexPendingUpdateEntity)
 
@@ -94,6 +97,38 @@ interface GoDexEntryDao {
                 timestamp = now
             )
         )
+    }
+
+    /**
+     * Marks every entry of [entryKeys] caught or needed, as [setDesiredState] does one. Returns
+     * what each entry was before, for [undoDesiredStates]. Entries already in that state are
+     * left alone and not returned.
+     */
+    @Transaction
+    suspend fun setDesiredStates(entryKeys: Collection<String>, caught: Boolean, now: Long): List<GoDexMarkUndo> =
+        entryKeys.mapNotNull { entryKey ->
+            val neededBefore = neededOf(entryKey) ?: return@mapNotNull null
+            if (neededBefore == !caught) return@mapNotNull null
+            val previous = getPendingUpdate(entryKey)
+            setDesiredState(entryKey, caught, now)
+            GoDexMarkUndo(entryKey, neededBefore, previous)
+        }
+
+    /**
+     * Puts entries back as they were before [setDesiredStates]. A mark not sent to GoDex yet is
+     * simply dropped (or the earlier queued one restored), so an undone tap costs no request. A
+     * mark already sent is reversed with a new one.
+     */
+    @Transaction
+    suspend fun undoDesiredStates(changes: List<GoDexMarkUndo>, now: Long) {
+        changes.forEach { change ->
+            if (getPendingUpdate(change.entryKey) == null) {
+                setDesiredState(change.entryKey, caught = !change.neededBefore, now = now)
+            } else {
+                updateNeeded(change.entryKey, change.neededBefore)
+                if (change.previous == null) deletePendingUpdate(change.entryKey) else insertPendingUpdate(change.previous)
+            }
+        }
     }
 
     @Transaction

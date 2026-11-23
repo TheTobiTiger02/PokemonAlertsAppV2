@@ -5,10 +5,12 @@ import android.os.Build
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Star
@@ -41,11 +43,13 @@ internal const val EVENTS_TAB_INDEX = 3
 /** Settings is a full-screen destination the gear opens, not a bottom-bar tab. */
 internal const val SETTINGS_TAB_INDEX = 4
 internal const val TOOLS_TAB_INDEX = 5
+internal const val CHECKLISTS_TAB_INDEX = 6
 
 internal val NAV_DESTINATIONS = listOf(
     NavDestination(ALERTS_TAB_INDEX, R.string.navigation_alerts, Icons.Filled.Notifications, Icons.Outlined.Notifications),
     NavDestination(MAP_TAB_INDEX, R.string.navigation_map, Icons.Filled.LocationOn, Icons.Outlined.LocationOn),
     NavDestination(EVENTS_TAB_INDEX, R.string.navigation_events, Icons.Filled.Star, Icons.Outlined.Star),
+    NavDestination(CHECKLISTS_TAB_INDEX, R.string.navigation_checklists, Icons.Filled.CheckCircle, Icons.Outlined.CheckCircle),
     NavDestination(TOOLS_TAB_INDEX, R.string.navigation_tools, Icons.Filled.Build, Icons.Outlined.Build)
 )
 
@@ -53,7 +57,7 @@ internal val NAV_DESTINATIONS = listOf(
 internal val ROOT_ROUTE_INDICES = NAV_DESTINATIONS.map { it.screen } + SETTINGS_TAB_INDEX
 
 internal fun rootTabIndexOrNull(index: Int): Int? =
-    index.takeIf { it in ALERTS_TAB_INDEX..TOOLS_TAB_INDEX }
+    index.takeIf { it in ALERTS_TAB_INDEX..CHECKLISTS_TAB_INDEX }
 
 /**
  * Whether a bottom-bar item shows as selected. Settings is not a tab, so while it is open the

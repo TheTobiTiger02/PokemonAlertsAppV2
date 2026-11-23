@@ -460,6 +460,10 @@ class MainActivity : ComponentActivity() {
                 com.example.pokemonalertsv2.events.EventDeepLink.open(target.eventId)
                 requestedRootTab.value = EVENTS_TAB_INDEX
             }
+            is DeepLinkTarget.Checklist -> {
+                target.checklistId?.let { com.example.pokemonalertsv2.ui.checklists.ChecklistDeepLink.open(it) }
+                requestedRootTab.value = CHECKLISTS_TAB_INDEX
+            }
             is DeepLinkTarget.Settings -> {
                 requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
                 requestedSettingsDestination.value = target.destination

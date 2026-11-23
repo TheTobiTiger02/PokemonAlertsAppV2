@@ -617,7 +617,7 @@
     <string name="data_quiet_essentials">Ruhiges Wesentliches</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Stapel am gleichen Ort</string>
-    <string name="whats_new_max_battles">Max-Kämpfe: Dynamax- und Gigadynamax-Kämpfe an Kraftquellen erscheinen jetzt im Feed und auf der Karte, mit eigenem Filter-Tab, Jagden und Benachrichtigungen.</string>
+    <string name="whats_new_checklists">Checklisten haben einen eigenen Tab: Tippe auf ein Pokémon, um es als gefangen zu markieren (mit Rückgängig), drücke lange, um mehrere oder eine ganze Familie auszuwählen, und filtere nach Generation, Typ und Form.</string>
     <string name="data_max_battles">Max-Kämpfe</string>
     <string name="max_battle_power_spot">Kraftquelle</string>
     <string name="max_battle_bosses">Max-Kampf-Bosse</string>
@@ -900,7 +900,6 @@
     <string name="settings_complete_x_caught">Vollständig · %1$s gefangen</string>
     <string name="settings_confirm">Bestätigen</string>
     <string name="settings_confirming_replaces_the_current_x_pok">Bestätigen ersetzt den aktuellen Bestand von %1$s Pokémon.</string>
-    <string name="settings_confirming_replaces_the_pending_godex_state">Bestätigen ersetzt den ausstehenden GoDex-Stand für genau diesen Eintrag.</string>
     <string name="settings_connect_your_godex_hundo_checklist_to">Verbinde deine GoDex-Hundo-Checkliste, um zu sehen, was dir noch fehlt, und Alarme für Hundos, die du hast, stumm zu halten.</string>
     <string name="settings_connecting">Wird verbunden…</string>
     <string name="settings_copy_from">Kopieren von</string>

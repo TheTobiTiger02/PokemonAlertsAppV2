@@ -41,6 +41,14 @@ class DeepLinksTest {
     }
 
     @Test
+    fun `checklists open the tab and the old collection page opens the goDex checklist`() {
+        assertEquals(DeepLinkTarget.Checklist(null), parseDeepLink("pokemonalerts://checklists"))
+        assertEquals(DeepLinkTarget.Checklist("godex"), parseDeepLink("pokemonalerts://checklists/godex"))
+        assertEquals(DeepLinkTarget.Checklist("godex"), parseDeepLink("pokemonalerts://settings/collection"))
+        assertEquals(DeepLinkTarget.Checklist("godex"), parseDeepLink("pokemonalerts://settings/GODEX_COLLECTION"))
+    }
+
+    @Test
     fun `unknown settings page falls back to the settings tab rather than failing`() {
         assertEquals(
             DeepLinkTarget.RootTab(4),

@@ -14,7 +14,8 @@ class MainNavigationTest {
         assertEquals(SETTINGS_TAB_INDEX, rootTabIndexOrNull(SETTINGS_TAB_INDEX))
         assertEquals(TOOLS_TAB_INDEX, rootTabIndexOrNull(TOOLS_TAB_INDEX))
         assertEquals(null, rootTabIndexOrNull(-1))
-        assertEquals(null, rootTabIndexOrNull(TOOLS_TAB_INDEX + 1))
+        assertEquals(CHECKLISTS_TAB_INDEX, rootTabIndexOrNull(CHECKLISTS_TAB_INDEX))
+        assertEquals(null, rootTabIndexOrNull(CHECKLISTS_TAB_INDEX + 1))
     }
 
     @Test

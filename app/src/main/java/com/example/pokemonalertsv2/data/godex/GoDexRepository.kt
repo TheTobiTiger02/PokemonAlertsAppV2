@@ -5,6 +5,7 @@ import com.example.pokemonalertsv2.data.PokemonAlert
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
+import com.example.pokemonalertsv2.data.database.GoDexMarkUndo
 import com.example.pokemonalertsv2.work.GoDexSyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,9 @@ class GoDexRepository private constructor(private val appContext: Context) {
     private val formChangeGraph = GoDexFormChangeGraph.load(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val syncMutex = Mutex()
+
+    /** Evolution edges, for the checklist editor's families. */
+    val evolutionEdges: List<GoDexEvolutionEdge> get() = evolutionGraph.edges
     @Volatile private var lastRefreshAttemptMillis = 0L
 
     val entries: StateFlow<List<GoDexEntryEntity>> = dao.observeAll()
@@ -200,6 +204,21 @@ class GoDexRepository private constructor(private val appContext: Context) {
     suspend fun markAsCaught(entryKey: String, caught: Boolean) = withContext(Dispatchers.IO) {
         dao.setDesiredState(entryKey, caught, System.currentTimeMillis())
         GoDexWriteWorker.enqueue(appContext)
+    }
+
+    /**
+     * The checklist editor's marks: applied here at once, sent to GoDex after the undo window
+     * ([GoDexWriteWorker.UNDO_WINDOW_SECONDS]). Returns what [undo] needs.
+     */
+    suspend fun setCaught(entryKeys: Collection<String>, caught: Boolean): List<GoDexMarkUndo> = withContext(Dispatchers.IO) {
+        dao.setDesiredStates(entryKeys, caught, System.currentTimeMillis()).also {
+            if (it.isNotEmpty()) GoDexWriteWorker.enqueue(appContext, afterUndoWindow = true)
+        }
+    }
+
+    suspend fun undo(changes: List<GoDexMarkUndo>) = withContext(Dispatchers.IO) {
+        dao.undoDesiredStates(changes, System.currentTimeMillis())
+        GoDexWriteWorker.enqueue(appContext, afterUndoWindow = true)
     }
 
     suspend fun persistRefreshedCookies(cookies: String) {

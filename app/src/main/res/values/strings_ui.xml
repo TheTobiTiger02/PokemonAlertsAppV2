@@ -618,7 +618,7 @@
     <string name="data_quiet_essentials">Quiet essentials</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Same-location stacks</string>
-    <string name="whats_new_max_battles">Max Battles: Dynamax and Gigantamax battles at Power Spots now show on the feed and map, with their own Filters tab, hunts and notifications.</string>
+    <string name="whats_new_checklists">Checklists have their own tab: tap a Pokémon to mark it caught (with Undo), long-press to select several or a whole family, and filter by generation, type and form.</string>
     <string name="data_max_battles">Max Battles</string>
     <string name="max_battle_power_spot">Power Spot</string>
     <string name="max_battle_bosses">Max Battle bosses</string>
@@ -901,7 +901,6 @@
     <string name="settings_complete_x_caught">Complete · %1$s caught</string>
     <string name="settings_confirm">Confirm</string>
     <string name="settings_confirming_replaces_the_current_x_pok">Confirming replaces the current %1$s-Pokémon roster.</string>
-    <string name="settings_confirming_replaces_the_pending_godex_state">Confirming replaces the pending GoDex state for this exact entry.</string>
     <string name="settings_connect_your_godex_hundo_checklist_to">Connect your GoDex Hundo checklist to see what you still need and keep alerts for Hundos you have quiet.</string>
     <string name="settings_connecting">Connecting…</string>
     <string name="settings_copy_from">Copy from</string>

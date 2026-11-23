@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Checklists tab (ui/checklists/). -->
+<resources>
+    <string name="navigation_checklists">Checklists</string>
+    <string name="checklists_source_godex">goDex</string>
+    <string name="checklists_open">Open checklist</string>
+    <string name="checklists_empty_title">No checklists yet</string>
+    <string name="checklists_empty_body">Connect your goDex collection to track what you still need here. Alerts for Pokémon you still need get a badge.</string>
+    <string name="checklists_connect_godex">Connect goDex</string>
+    <string name="checklists_hint">Tap a Pokémon to mark it caught or needed. Long-press to select several.</string>
+    <string name="checklists_marked_caught">%1$s marked caught</string>
+    <string name="checklists_marked_needed">%1$s marked needed</string>
+    <plurals name="checklists_marked_many_caught">
+        <item quantity="one">%1$d Pokémon marked caught</item>
+        <item quantity="other">%1$d Pokémon marked caught</item>
+    </plurals>
+    <plurals name="checklists_marked_many_needed">
+        <item quantity="one">%1$d Pokémon marked needed</item>
+        <item quantity="other">%1$d Pokémon marked needed</item>
+    </plurals>
+    <plurals name="checklists_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="checklists_undo">Undo</string>
+    <string name="checklists_select_family">Family</string>
+    <string name="checklists_select_all">All shown</string>
+    <string name="checklists_clear_selection">Cancel selection</string>
+    <string name="checklists_clear_search">Clear search</string>
+    <string name="checklists_generation_any">All generations</string>
+    <string name="checklists_generation">Gen %1$d</string>
+    <string name="checklists_type_any">All types</string>
+    <string name="checklists_forms_only">Forms only</string>
+    <string name="checklists_sort">Sort: %1$s</string>
+    <string name="checklists_sort_dex">Dex number</string>
+    <string name="checklists_sort_name">Name</string>
+    <string name="checklists_sort_family">Family</string>
+    <string name="checklists_read_only">Read-only</string>
+    <string name="checklists_tap_to_mark_caught">Tap to mark caught</string>
+    <string name="checklists_tap_to_mark_needed">Tap to mark needed</string>
+    <string name="checklists_tap_to_select">Tap to select</string>
+    <string name="checklists_tap_to_unselect">Tap to unselect</string>
+</resources>

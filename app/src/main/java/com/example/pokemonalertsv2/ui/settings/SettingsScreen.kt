@@ -84,7 +84,6 @@ internal enum class SettingsDestination(private val titleRes: Int) {
     MAP_TRACKING(R.string.settings_map_tracking),
     ALERT_FILTERS(R.string.alerts_filters),
     GODEX(R.string.settings_godex_checklist),
-    GODEX_COLLECTION(R.string.settings_godex_collection),
     RAID_COUNTERS(R.string.settings_raid_counters),
     NOTIFICATIONS(R.string.settings_notifications_permissions),
     DEVICE_SYNC(R.string.settings_device_sync),
@@ -120,7 +119,9 @@ internal fun SettingsScreen(
      * A page Settings was opened straight onto from outside, such as GoDex from the Tools tab.
      * Back from that page closes Settings rather than detouring through the overview.
      */
-    closeFrom: SettingsDestination? = null
+    closeFrom: SettingsDestination? = null,
+    /** The GoDex page's collection row: the checklist opens in the Checklists tab. */
+    onOpenChecklists: () -> Unit = {}
 ) {
     var destinationName by rememberSaveable { mutableStateOf(SettingsDestination.OVERVIEW.name) }
     val destination = SettingsDestination.entries.firstOrNull { it.name == destinationName }
@@ -132,11 +133,7 @@ internal fun SettingsScreen(
             onRequestedDestinationConsumed()
         }
     }
-    val parentDestination = if (destination == SettingsDestination.GODEX_COLLECTION) {
-        SettingsDestination.GODEX
-    } else {
-        SettingsDestination.OVERVIEW
-    }
+    val parentDestination = SettingsDestination.OVERVIEW
 
     val closesSettings = onClose != null && destination == closeFrom
     val goBack: () -> Unit = {
@@ -221,8 +218,7 @@ internal fun SettingsScreen(
     LaunchedEffect(destination, goDexConfig.isConnected) {
         if (
             goDexConfig.isConnected &&
-            (destination == SettingsDestination.GODEX ||
-                destination == SettingsDestination.GODEX_COLLECTION)
+            destination == SettingsDestination.GODEX
         ) {
             viewModel.refreshGoDexForPageEntry()
         }
@@ -280,31 +276,12 @@ internal fun SettingsScreen(
                 targetState = destination,
                 transitionSpec = {
                     val movingDeeper = targetState != SettingsDestination.OVERVIEW &&
-                        (initialState == SettingsDestination.OVERVIEW ||
-                            targetState == SettingsDestination.GODEX_COLLECTION)
+                        initialState == SettingsDestination.OVERVIEW
                     appSharedAxisX(forward = movingDeeper)
                 },
                 contentKey = { it.name },
                 label = "settings_destination"
             ) { animatedDestination ->
-            if (animatedDestination == SettingsDestination.GODEX_COLLECTION) {
-                GoDexCollectionContent(
-                    entries = goDexEntries,
-                    pendingEntryKeys = goDexPendingEntryKeys,
-                    canEdit = goDexConfig.hasWriteBackUrl,
-                    sessionState = goDexSyncUiState.sessionState,
-                    isSyncing = goDexSyncUiState.isSyncing,
-                    syncError = goDexSyncUiState.errorMessage,
-                    pendingCount = goDexSyncUiState.pendingCount,
-                    onSetCaught = viewModel::setGoDexEntryCaught,
-                    onSignIn = {
-                        context.startActivity(
-                            com.example.pokemonalertsv2.ui.godex.GoDexLoginActivity.createIntent(context)
-                        )
-                    },
-                    modifier = Modifier.padding(padding)
-                )
-            } else {
             Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             val designedPage = animatedDestination == SettingsDestination.NOTIFICATIONS ||
                 animatedDestination == SettingsDestination.GODEX
@@ -336,7 +313,7 @@ internal fun SettingsScreen(
                         viewModel = viewModel,
                         urlInput = goDexUrlInput,
                         onUrlInputChange = { goDexUrlInput = it },
-                        onOpenCollection = { navigateTo(SettingsDestination.GODEX_COLLECTION) },
+                        onOpenCollection = onOpenChecklists,
                         onDisconnect = { showGoDexDisconnectConfirmation = true }
                     )
                 }
@@ -594,7 +571,7 @@ internal fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
             }
-            }
+            
             }
         }
     }

@@ -512,6 +512,11 @@ internal fun MainScaffold(
                         EVENTS_TAB_INDEX -> {
                             com.example.pokemonalertsv2.events.EventsRoute(onOpenSettings = { openSettings() })
                         }
+                        CHECKLISTS_TAB_INDEX -> {
+                            com.example.pokemonalertsv2.ui.checklists.ChecklistsRoute(
+                                onOpenGoDexSettings = { openSettings(SettingsDestination.GODEX, fromTools = true) }
+                            )
+                        }
                         TOOLS_TAB_INDEX -> {
                             com.example.pokemonalertsv2.ui.tools.ToolsScreen(
                                 onOpen = { id ->
@@ -558,6 +563,11 @@ internal fun MainScaffold(
                                     selectedTab = settingsOrigin
                                 },
                                 closeFrom = settingsCloseFrom,
+                                onOpenChecklists = {
+                                    com.example.pokemonalertsv2.ui.checklists.ChecklistDeepLink.open()
+                                    settingsCloseFrom = null
+                                    selectedTab = CHECKLISTS_TAB_INDEX
+                                },
                                 onManageLocationPermissions = onManageLocationPermissions,
                                 requestedDestination = localSettingsDestination ?: requestedSettingsDestination,
                                 onRequestedDestinationConsumed = {

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Checklists tab (ui/checklists/). -->
+<resources>
+    <string name="navigation_checklists">Checklisten</string>
+    <string name="checklists_source_godex">goDex</string>
+    <string name="checklists_open">Checkliste öffnen</string>
+    <string name="checklists_empty_title">Noch keine Checklisten</string>
+    <string name="checklists_empty_body">Verbinde deine goDex-Sammlung, um hier zu sehen, was dir noch fehlt. Alarme für Pokémon, die dir fehlen, bekommen eine Markierung.</string>
+    <string name="checklists_connect_godex">goDex verbinden</string>
+    <string name="checklists_hint">Tippe auf ein Pokémon, um es als gefangen oder benötigt zu markieren. Lange drücken, um mehrere auszuwählen.</string>
+    <string name="checklists_marked_caught">%1$s als gefangen markiert</string>
+    <string name="checklists_marked_needed">%1$s als benötigt markiert</string>
+    <plurals name="checklists_marked_many_caught">
+        <item quantity="one">%1$d Pokémon als gefangen markiert</item>
+        <item quantity="other">%1$d Pokémon als gefangen markiert</item>
+    </plurals>
+    <plurals name="checklists_marked_many_needed">
+        <item quantity="one">%1$d Pokémon als benötigt markiert</item>
+        <item quantity="other">%1$d Pokémon als benötigt markiert</item>
+    </plurals>
+    <plurals name="checklists_selected_count">
+        <item quantity="one">%1$d ausgewählt</item>
+        <item quantity="other">%1$d ausgewählt</item>
+    </plurals>
+    <string name="checklists_undo">Rückgängig</string>
+    <string name="checklists_select_family">Familie</string>
+    <string name="checklists_select_all">Alle angezeigten</string>
+    <string name="checklists_clear_selection">Auswahl aufheben</string>
+    <string name="checklists_clear_search">Suche löschen</string>
+    <string name="checklists_generation_any">Alle Generationen</string>
+    <string name="checklists_generation">Gen. %1$d</string>
+    <string name="checklists_type_any">Alle Typen</string>
+    <string name="checklists_forms_only">Nur Formen</string>
+    <string name="checklists_sort">Sortierung: %1$s</string>
+    <string name="checklists_sort_dex">Dex-Nummer</string>
+    <string name="checklists_sort_name">Name</string>
+    <string name="checklists_sort_family">Familie</string>
+    <string name="checklists_read_only">Nur lesen</string>
+    <string name="checklists_tap_to_mark_caught">Tippen, um als gefangen zu markieren</string>
+    <string name="checklists_tap_to_mark_needed">Tippen, um als benötigt zu markieren</string>
+    <string name="checklists_tap_to_select">Tippen, um auszuwählen</string>
+    <string name="checklists_tap_to_unselect">Tippen, um die Auswahl aufzuheben</string>
+</resources>

@@ -32,7 +32,6 @@ internal val SETTINGS_SEARCH_INDEX get() = listOf(
     SettingsSearchEntry(AppText.get(R.string.alerts_marker_grouping), SettingsDestination.MAP_TRACKING, listOf("cluster", "map")),
     SettingsSearchEntry(AppText.get(R.string.settings_arrival_radius), SettingsDestination.MAP_TRACKING, listOf("arrived", "journey")),
     SettingsSearchEntry(AppText.get(R.string.settings_godex_checklist), SettingsDestination.GODEX, listOf("dex", "needed", "sign in")),
-    SettingsSearchEntry(AppText.get(R.string.settings_godex_collection), SettingsDestination.GODEX_COLLECTION, listOf("caught", "collection")),
     SettingsSearchEntry(AppText.get(R.string.settings_raid_counters), SettingsDestination.RAID_COUNTERS, listOf("pokebattler", "counters", "trainer level")),
     SettingsSearchEntry(AppText.get(R.string.settings_pok_genie_import), SettingsDestination.RAID_COUNTERS, listOf("poke genie", "roster", "csv")),
     SettingsSearchEntry(AppText.get(R.string.settings_device_sync), SettingsDestination.DEVICE_SYNC, listOf("sync", "devices", "tablet", "second phone", "pair", "qr", "geräte", "synchronisieren", "koppeln")),

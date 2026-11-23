@@ -88,8 +88,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 127
-        versionName = "1.33.0"
+        versionCode = 129
+        versionName = "1.35.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
