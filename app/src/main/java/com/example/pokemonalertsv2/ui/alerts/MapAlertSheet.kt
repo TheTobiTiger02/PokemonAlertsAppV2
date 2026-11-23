@@ -293,5 +293,6 @@ internal fun AlertSheetHeader(
             Text(task, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (goDexStatus.status != GoDexMatchStatus.NOT_CONFIGURED) GoDexStatusPill(goDexStatus)
+        ChecklistBadgePills(rememberChecklistBadges(alert))
     }
 }

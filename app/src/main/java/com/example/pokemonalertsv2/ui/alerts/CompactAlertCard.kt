@@ -205,6 +205,15 @@ internal fun CompactAlertCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    checklistBadgeLine(rememberChecklistBadges(alert))?.let { badgeLine ->
+                        Text(
+                            text = badgeLine,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 Column(
                     horizontalAlignment = Alignment.End,

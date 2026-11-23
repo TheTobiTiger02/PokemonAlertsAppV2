@@ -75,6 +75,13 @@ val appApiKey: String =
         ?: providers.environmentVariable("APP_API_KEY").orNull?.takeIf { it.isNotBlank() }
         ?: ""
 
+// Dex Tracker (the PokemonGoChecklist web app) lives in its own Firebase project; the app reads and
+// writes its Firestore as a second Firebase app. Empty values hide the Dex Tracker source.
+fun dexTrackerSetting(name: String): String =
+    localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+        ?: ""
+
 val pokebattlerApiBaseUrl: String =
     localProperties.getProperty("POKEBATTLER_API_BASE_URL")?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable("POKEBATTLER_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
@@ -88,8 +95,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 129
-        versionName = "1.35.0"
+        versionCode = 131
+        versionName = "1.37.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -97,6 +104,9 @@ android {
         buildConfigField("String", "OSM_TILE_URL", "\"$osmTileUrl\"")
         buildConfigField("String", "POKEBATTLER_API_BASE_URL", "\"${pokebattlerApiBaseUrl.trimEnd('/')}/\"")
         buildConfigField("String", "APP_API_KEY", "\"$appApiKey\"")
+        listOf("DEX_TRACKER_PROJECT_ID", "DEX_TRACKER_APP_ID", "DEX_TRACKER_API_KEY", "DEX_TRACKER_WEB_CLIENT_ID").forEach { name ->
+            buildConfigField("String", name, "\"${dexTrackerSetting(name)}\"")
+        }
     }
 
     signingConfigs {
@@ -144,6 +154,10 @@ android {
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
         // Timber arrives transitively and brings this check, but the app does not use Timber.
         disable += "LogNotTimber"
+        // AppCompat arrives transitively with Credential Manager's Play services provider. The app
+        // has no AppCompat views: the widget layouts are RemoteViews (no app:tint there) and the
+        // overlays use framework views on purpose.
+        disable += setOf("UseAppTint", "UseSwitchCompatOrMaterialCode", "UseCompatLoadingForDrawables")
     }
 
     compileOptions {
@@ -247,6 +261,12 @@ dependencies {
     implementation(libs.androidx.health.connect.client)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    // Dex Tracker: its Firestore and its Google sign-in (Credential Manager, Firebase Auth).
+    implementation(libs.firebase.firestore)
+    implementation(libs.firebase.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.identity.googleid)
     
     // Room
     implementation(libs.androidx.room.runtime)

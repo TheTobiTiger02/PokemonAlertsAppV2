@@ -617,6 +617,8 @@
     <string name="data_quiet_essentials">Ruhiges Wesentliches</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Stapel am gleichen Ort</string>
+    <string name="whats_new_dex_tracker">Dex Tracker in den Checklisten: Verbinde dich mit deinem Google-Konto, um deine Sammlungen zu sehen und Fänge mit +1 einzutragen (mit Rückgängig). Sie erscheinen auch in der Dex-Tracker-Aktivität.</string>
+    <string name="whats_new_more_checklists">Mehr Checklisten: Füge deine anderen goDex-Sammlungen (Shiny, Glücks, Crypto, Dynamax und mehr) per Link hinzu oder erstelle eigene in der App. Jede kann Alarme für Pokémon markieren, die ihr noch fehlen, auf Wunsch auch für Entwicklungen.</string>
     <string name="whats_new_checklists">Checklisten haben einen eigenen Tab: Tippe auf ein Pokémon, um es als gefangen zu markieren (mit Rückgängig), drücke lange, um mehrere oder eine ganze Familie auszuwählen, und filtere nach Generation, Typ und Form.</string>
     <string name="data_max_battles">Max-Kämpfe</string>
     <string name="max_battle_power_spot">Kraftquelle</string>

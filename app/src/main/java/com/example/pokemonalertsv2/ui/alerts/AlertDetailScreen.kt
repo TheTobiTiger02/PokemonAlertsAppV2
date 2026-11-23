@@ -389,6 +389,7 @@ fun AlertDetailScreen(
                                     )
                                 }
                                 GoDexStatusPill(goDexStatus)
+                                ChecklistBadgePills(rememberChecklistBadges(alert))
                                 goDexStatus.evolutionTargets.forEach { target ->
                                     Text(
                                         text = stringResource(R.string.alerts_evolution_needed_x, target.displayName),

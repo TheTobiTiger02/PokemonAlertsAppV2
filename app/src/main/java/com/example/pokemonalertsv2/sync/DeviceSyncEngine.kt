@@ -194,6 +194,9 @@ class DeviceSyncEngine(
                 } catch (gone: SyncGroupGoneException) {
                     if (disconnectIfDeleted(group)) return false
                     throw gone
+                } catch (unknown: SyncCollectionUnknownException) {
+                    // The backend predates this collection: the rest syncs, this one waits for a server update.
+                    state.writeStatus(adapter.name, state.status(adapter.name).copy(error = SERVER_LACKS_COLLECTION))
                 } catch (error: Exception) {
                     failure = failure ?: error
                     state.writeStatus(adapter.name, state.status(adapter.name).copy(error = error.message ?: error.javaClass.simpleName))
@@ -371,5 +374,8 @@ class DeviceSyncEngine(
 
     companion object {
         const val MAX_ROUNDS = 3
+
+        /** A collection's error while the server does not carry it yet (the sync page says so). */
+        const val SERVER_LACKS_COLLECTION = "server_lacks_collection"
     }
 }

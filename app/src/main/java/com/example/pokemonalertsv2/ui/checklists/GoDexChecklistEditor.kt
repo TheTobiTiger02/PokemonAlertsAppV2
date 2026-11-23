@@ -133,8 +133,11 @@ internal fun GoDexChecklistEditor(
     typesByDexAndRegion: Map<Pair<Int, String?>, List<String>>,
     onSetCaught: suspend (keys: Set<String>, caught: Boolean) -> List<GoDexMarkUndo>,
     onUndo: suspend (List<GoDexMarkUndo>) -> Unit,
-    onSignIn: () -> Unit,
-    modifier: Modifier = Modifier
+    /** Null for a checklist sign-in cannot make editable (a goDex collection added by link). */
+    onSignIn: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    /** Set for a checklist made in the app: selected entries can be taken out of it. */
+    onRemove: ((Set<String>) -> Unit)? = null
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var debouncedQuery by remember { mutableStateOf(query) }
@@ -337,7 +340,13 @@ internal fun GoDexChecklistEditor(
                     mark(selection, caught = false, label = "")
                     selection = emptySet()
                 },
-                onClear = { selection = emptySet() }
+                onClear = { selection = emptySet() },
+                onRemove = onRemove?.let { remove ->
+                    {
+                        remove(selection)
+                        selection = emptySet()
+                    }
+                }
             )
         }
         SnackbarHost(
@@ -385,7 +394,8 @@ private fun SelectionBar(
     onAllShown: () -> Unit,
     onCaught: () -> Unit,
     onNeeded: () -> Unit,
-    onClear: () -> Unit
+    onClear: () -> Unit,
+    onRemove: (() -> Unit)?
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -411,6 +421,11 @@ private fun SelectionBar(
                 }
                 Button(onClick = onCaught, modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.alerts_mark_caught), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (onRemove != null) {
+                TextButton(onClick = onRemove, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.checklists_remove_selected), color = MaterialTheme.colorScheme.error)
                 }
             }
         }
@@ -467,7 +482,7 @@ private fun GoDexAccessBanner(
     isSyncing: Boolean,
     syncError: String?,
     pendingCount: Int,
-    onSignIn: () -> Unit
+    onSignIn: (() -> Unit)?
 ) {
     val presentation = when {
         sessionState == GoDexSessionState.REAUTH_REQUIRED ->
@@ -496,7 +511,8 @@ private fun GoDexAccessBanner(
             Triple(
                 MaterialTheme.colorScheme.secondaryContainer,
                 MaterialTheme.colorScheme.onSecondaryContainer,
-                "Read-only collection. Sign in from GoDex settings to mark entries caught here."
+                if (onSignIn == null) stringResource(R.string.checklists_read_only_link)
+                else "Read-only collection. Sign in from GoDex settings to mark entries caught here."
             )
         pendingCount > 0 ->
             Triple(
@@ -518,7 +534,7 @@ private fun GoDexAccessBanner(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(text = presentation.third, style = MaterialTheme.typography.bodyMedium)
-            if (!canEdit || sessionState == GoDexSessionState.REAUTH_REQUIRED) {
+            if (onSignIn != null && (!canEdit || sessionState == GoDexSessionState.REAUTH_REQUIRED)) {
                 Button(onClick = onSignIn) {
                     Text(
                         if (sessionState == GoDexSessionState.REAUTH_REQUIRED) "Sign in again to resume sync" else "Sign in for two-way sync"

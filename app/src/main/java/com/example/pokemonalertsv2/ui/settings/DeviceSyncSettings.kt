@@ -349,12 +349,15 @@ private fun CollectionRow(name: String, status: CollectionStatus) {
         DeviceSync.LIVE -> R.string.device_sync_collection_live
         DeviceSync.GODEX -> R.string.device_sync_collection_godex
         DeviceSync.WIDGETS -> R.string.device_sync_collection_widgets
+        DeviceSync.CHECKLISTS -> R.string.device_sync_collection_checklists
         else -> R.string.device_sync_collection_devices
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(label), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
         val (text, color) = when {
             status.unsupported -> stringResource(R.string.device_sync_update_app) to MaterialTheme.colorScheme.error
+            status.error == com.example.pokemonalertsv2.sync.DeviceSyncEngine.SERVER_LACKS_COLLECTION ->
+                stringResource(R.string.device_sync_server_update) to MaterialTheme.colorScheme.onSurfaceVariant
             status.error != null -> stringResource(R.string.device_sync_failed, status.error) to MaterialTheme.colorScheme.error
             else -> syncedLabel(status.lastSyncAtMillis) to MaterialTheme.colorScheme.onSurfaceVariant
         }

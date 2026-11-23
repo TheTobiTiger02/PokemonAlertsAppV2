@@ -354,6 +354,7 @@ internal fun AlertCard(
                     maxLines = 2
                 ) {
                     GoDexStatusPill(goDexStatus)
+                    ChecklistBadgePills(rememberChecklistBadges(alert))
                     // The one row in a feed of hundreds that the hunt is walking to.
                     if (huntTarget) {
                         AlertPill(

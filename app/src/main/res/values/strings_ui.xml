@@ -618,6 +618,8 @@
     <string name="data_quiet_essentials">Quiet essentials</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Same-location stacks</string>
+    <string name="whats_new_dex_tracker">Dex Tracker in Checklists: connect with your Google account to see your collections and add catches with +1 (with Undo). They also show in the Dex Tracker activity log.</string>
+    <string name="whats_new_more_checklists">More checklists: add your other goDex collections (Shiny, Lucky, Shadow, Dynamax and more) by link, or make your own in the app. Each one can badge the alerts for Pokémon it still needs, and evolutions too if you like.</string>
     <string name="whats_new_checklists">Checklists have their own tab: tap a Pokémon to mark it caught (with Undo), long-press to select several or a whole family, and filter by generation, type and form.</string>
     <string name="data_max_battles">Max Battles</string>
     <string name="max_battle_power_spot">Power Spot</string>
