@@ -1,0 +1,13 @@
+package com.example.pokemonalertsv2.data.database
+
+/** As Room exports them in schemas/26.json; MIGRATION_25_26 creates them. */
+internal val CHECKLIST_TABLES_SQL = listOf(
+    "CREATE TABLE IF NOT EXISTS `checklists` (`id` TEXT NOT NULL, `source` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+        "`kind` TEXT NOT NULL, `url` TEXT, `useForAlerts` INTEGER NOT NULL, `includeEvolutions` INTEGER NOT NULL, " +
+        "`sortOrder` INTEGER NOT NULL, `lastSyncMillis` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+        "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+    "CREATE TABLE IF NOT EXISTS `checklist_entries` (`checklistId` TEXT NOT NULL, `entryKey` TEXT NOT NULL, " +
+        "`pokedexId` INTEGER NOT NULL, `formSlug` TEXT, `gender` TEXT NOT NULL, `displayName` TEXT NOT NULL, " +
+        "`needed` INTEGER NOT NULL, `spriteUrl` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`checklistId`, `entryKey`))",
+    "CREATE INDEX IF NOT EXISTS `index_checklist_entries_pokedexId` ON `checklist_entries` (`pokedexId`)"
+)

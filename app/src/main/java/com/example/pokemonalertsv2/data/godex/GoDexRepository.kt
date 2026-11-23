@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.data.godex
 
 import android.content.Context
 import com.example.pokemonalertsv2.data.PokemonAlert
+import com.example.pokemonalertsv2.data.checklists.ChecklistKind
 import com.example.pokemonalertsv2.data.alertPreferencesDataStore
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
@@ -25,7 +26,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
     private val dao = AppDatabase.getDatabase(appContext).goDexEntryDao()
     private val preferences = GoDexPreferences(appContext.alertPreferencesDataStore)
     private val importer = GoDexImporter()
-    private val evolutionGraph = GoDexEvolutionGraph.load(appContext)
+    val evolutionGraph: GoDexEvolutionGraph = GoDexEvolutionGraph.load(appContext)
     private val formChangeGraph = GoDexFormChangeGraph.load(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val syncMutex = Mutex()
@@ -61,7 +62,14 @@ class GoDexRepository private constructor(private val appContext: Context) {
         lastRefreshAttemptMillis = System.currentTimeMillis()
         syncOperationState.value = GoDexSyncUiState(isSyncing = true)
         val cookies = preferences.config.first().sessionCookies
-        runCatching { importer.import(url, cookies) }
+        runCatching {
+            importer.import(url, cookies).also { result ->
+                // This collection feeds hundo badges and "only notify needed"; other kinds are added in Checklists.
+                require(result.kind == ChecklistKind.HUNDO) {
+                    "This is not a Hundo collection. Add it in the Checklists tab instead."
+                }
+            }
+        }
             .onSuccess { result ->
                 dao.replaceAllPreservingPending(result.entries)
                 persistRefreshedCookies(result.refreshedCookies)

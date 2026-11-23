@@ -350,6 +350,28 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate25To26_addsChecklistTablesAndKeepsGoDexEntries() {
+        helper.createDatabase(TEST_DATABASE, 25).apply {
+            execSQL("INSERT INTO godex_entries (entryKey, pokedexId, formSlug, gender, displayName, needed, spriteUrl) VALUES ('0025-none', 25, NULL, 'none', 'Pikachu', 1, NULL)")
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 26, true, AppDatabase.MIGRATION_25_26).apply {
+            query("SELECT displayName FROM godex_entries WHERE entryKey = '0025-none'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Pikachu", cursor.getString(0))
+            }
+            execSQL("INSERT INTO checklists (id, source, title, kind, url, useForAlerts, includeEvolutions, sortOrder, lastSyncMillis, createdAt, updatedAt) VALUES ('c1', 'LOCAL', 'Shinies', 'SHINY', NULL, 0, 0, 0, 0, 1, 1)")
+            execSQL("INSERT INTO checklist_entries (checklistId, entryKey, pokedexId, formSlug, gender, displayName, needed, spriteUrl, updatedAt) VALUES ('c1', '0025-none', 25, NULL, 'none', 'Pikachu', 1, NULL, 0)")
+            query("SELECT COUNT(*) FROM checklist_entries").use { cursor ->
+                cursor.moveToFirst()
+                assertEquals("the same key in another checklist does not clash", 1, cursor.getInt(0))
+            }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }

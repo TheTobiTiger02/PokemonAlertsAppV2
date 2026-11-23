@@ -1,5 +1,6 @@
 package com.example.pokemonalertsv2.data.godex
 
+import com.example.pokemonalertsv2.data.checklists.ChecklistKind
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -28,12 +29,14 @@ data class GoDexImportResult(
     val normalizedUrl: String,
     val collectionTitle: String,
     val entries: List<GoDexEntryEntity>,
-    val refreshedCookies: String = ""
+    val refreshedCookies: String = "",
+    val kind: ChecklistKind = ChecklistKind.HUNDO
 )
 
 internal data class GoDexInitialPage(
     val csrfToken: String,
     val collectionTitle: String,
+    val kind: ChecklistKind,
     val lazyComponents: List<GoDexLazyComponent>,
     val expectedTotalCount: Int,
     val expectedCollectedCount: Int
@@ -73,7 +76,8 @@ class GoDexImporter(
             normalizedUrl,
             initialPage.collectionTitle,
             entries,
-            session.cookieHeader()
+            session.cookieHeader(),
+            initialPage.kind
         )
     }
 
@@ -86,10 +90,8 @@ class GoDexImporter(
             ?: throw IllegalStateException("GoDex did not provide a synchronization token")
         val collectionImage = document.selectFirst("img[src*='/images/collections/']")
             ?: throw IllegalStateException("This does not appear to be a GoDex collection")
-        require(collectionImage.attr("src").contains("hundo", ignoreCase = true)) {
-            "The selected GoDex collection is not a Hundo collection"
-        }
-        val title = collectionImage.attr("alt").ifBlank { "GoDex Hundo collection" }
+        val kind = ChecklistKind.fromGoDexImage(collectionImage.attr("src"))
+        val title = collectionImage.attr("alt").ifBlank { "GoDex collection" }
         val lazyComponents = document.getAllElements().mapNotNull { element ->
             val snapshot = element.attr("wire:snapshot").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val init = element.attr("x-init")
@@ -116,6 +118,7 @@ class GoDexImporter(
         return GoDexInitialPage(
             csrfToken = csrfToken,
             collectionTitle = title,
+            kind = kind,
             lazyComponents = lazyComponents,
             expectedTotalCount = collectionCounts.first,
             expectedCollectedCount = collectionCounts.second
