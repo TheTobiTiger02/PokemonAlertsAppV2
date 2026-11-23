@@ -1,10 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Device sync (sync/DeviceSync.kt, ui/settings/DeviceSyncSettings.kt). -->
+<!-- Device sync and accounts (sync/DeviceSync.kt, account/, ui/settings/DeviceSyncSettings.kt). -->
 <resources>
     <string name="settings_device_sync">Device sync</string>
     <string name="device_sync_overview_off">Off · keep settings the same on all your devices</string>
-    <string name="device_sync_intro">Keeps settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on all your devices. A hunt or route running on one device shows on the others, and you can control it from there. Everything is encrypted on this device before it leaves, so the server cannot read it.</string>
+    <string name="device_sync_intro">Keeps settings, filters, hunts, catch routes, your Poké Genie roster and sign-ins the same on every device signed in to your account. A hunt or route running on one device shows on the others, and you can control it from there. You can use the app without an account.</string>
     <string name="device_sync_local_note">Window positions and the alert history stay on each device. You can keep notification and display settings to one device.</string>
+    <string name="device_sync_sign_in">Sign in with Google</string>
+    <string name="device_sync_sign_in_unavailable">Sign-in is not set up in this build.</string>
+    <string name="device_sync_signed_in">Signed in. This device now syncs.</string>
+    <string name="device_sync_signed_in_as">Signed in as %1$s</string>
+    <string name="device_sync_off_signed_in">Sync is off on this device.</string>
+    <string name="device_sync_turn_on">Turn sync on</string>
+    <string name="device_sync_legacy_banner">Sign in to add more devices. This device\'s sync then moves to your account; pairing codes are no longer used.</string>
+    <string name="device_sync_paused_banner">Sync is paused on this device: it belongs to an account. Sign in to resume it.</string>
+    <string name="device_sync_removed_notice">This device was removed from your account. It kept its data. Sign in to sync it again.</string>
+    <string name="device_sync_status">Status</string>
+    <string name="device_sync_sign_out">Sign out</string>
+    <string name="device_sync_sign_out_message">This device stops syncing and keeps its data. Your other devices keep syncing.</string>
+    <string name="device_sync_remove_device">Remove</string>
+    <string name="device_sync_remove_device_title">Remove %1$s?</string>
+    <string name="device_sync_remove_device_message">That device is signed out and stops syncing. It keeps its data and can sign in again.</string>
+    <string name="device_sync_device_removed">Device removed</string>
+    <string name="device_sync_delete_account">Delete account</string>
+    <string name="device_sync_delete_account_message">Deletes your account and all synced data on the server, and signs out every device. Each device keeps its own data.</string>
+    <string name="device_sync_continue">Continue</string>
+    <string name="device_sync_delete_account_final_title">Delete your account for good?</string>
+    <string name="device_sync_delete_account_final_message">This cannot be undone.</string>
+    <string name="device_sync_account_deleted">Account deleted</string>
     <string name="device_sync_live">Live · changes arrive instantly</string>
     <string name="device_sync_collection_live">Running hunt, route and Raid Watch</string>
     <string name="device_sync_collection_godex">GoDex marks not yet saved</string>
@@ -22,28 +44,10 @@
     <string name="device_sync_override_watch">Watch stats from Health Connect</string>
     <string name="widget_copy_from_device">Copy from another device</string>
     <string name="widget_copy_from_device_item">%1$s · widget %2$d</string>
-    <string name="device_sync_set_up">Set up sync</string>
-    <string name="device_sync_join">Join with code</string>
-    <string name="device_sync_join_title">Join device sync</string>
-    <string name="device_sync_code_label">Pairing code</string>
-    <string name="device_sync_scan">Scan QR code</string>
-    <string name="device_sync_scan_failed">Could not scan. Paste the code instead.</string>
-    <string name="device_sync_join_rule">Settings on this device are replaced by the synced ones. Histories are combined.</string>
-    <string name="device_sync_join_confirm">Join</string>
-    <string name="device_sync_invalid_code">That code is not valid. Check it for typos.</string>
-    <string name="device_sync_code_not_found">No sync was found for this code. It may have been deleted.</string>
     <string name="device_sync_failed">Sync failed: %1$s</string>
-    <string name="device_sync_joined">Joined. This device now syncs.</string>
-    <string name="device_sync_created">Sync is set up. Add your other devices with the code.</string>
     <string name="device_sync_status_on">Sync is on</string>
     <string name="device_sync_syncing">Syncing…</string>
     <string name="device_sync_now">Sync now</string>
-    <string name="device_sync_add_device">Add a device</string>
-    <string name="device_sync_add_device_warning">This code gives full access to your synced data, including your GoDex and Pokebattler sign-ins. Only use it on your own devices.</string>
-    <string name="device_sync_add_device_steps">On the other device open Settings › Device sync › Join with code, then scan this QR code or paste the code.</string>
-    <string name="device_sync_copy_code">Copy code</string>
-    <string name="device_sync_code_copied">Code copied</string>
-    <string name="device_sync_qr_description">QR code for joining device sync</string>
     <string name="device_sync_devices">Devices</string>
     <string name="device_sync_this_device">This device</string>
     <string name="device_sync_device_details">%1$s · version %2$s · active %3$s</string>
@@ -62,7 +66,7 @@
     <string name="device_sync_leave_message">This device stops syncing and keeps its data. Your other devices keep syncing.</string>
     <string name="device_sync_leave_confirm">Leave</string>
     <string name="device_sync_delete">Delete sync data everywhere</string>
-    <string name="device_sync_delete_message">Deletes the synced data from the server and stops sync on all devices. Each device keeps its own data. Use this if a code got into the wrong hands, then set up sync again.</string>
+    <string name="device_sync_delete_message">Deletes the synced data from the server and stops sync on all devices. Each device keeps its own data. Your account stays: turn sync on again to start over.</string>
     <string name="device_sync_delete_confirm">Delete</string>
     <string name="device_sync_deleted_elsewhere">Sync was deleted on another device. This device kept its data.</string>
     <plurals name="device_sync_overview_on">

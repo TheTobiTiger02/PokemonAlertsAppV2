@@ -15,8 +15,8 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * One sync group: the shared 32-byte secret and everything derived from it.
  *
- * The server sees [groupId] and [authToken] only. [encKey] seals every blob, so the server
- * can neither read nor alter what it relays (DEVICE_SYNC.md in the backend repo).
+ * [encKey] seals every blob. For a group linked to an account the server also keeps the
+ * secret, sealed, to hand it to the account's devices (DEVICE_SYNC.md in the backend repo).
  */
 class SyncGroup(val secret: ByteArray) {
     init {
@@ -30,7 +30,8 @@ class SyncGroup(val secret: ByteArray) {
     /** The FCM topic the server pings after each write. */
     val topic: String get() = "devsync-$groupId"
 
-    val pairingCode: String get() = SyncCrypto.encodePairingCode(secret)
+    /** How the secret is stored on this device (SyncStateStore). */
+    internal val pairingCode: String get() = SyncCrypto.encodePairingCode(secret)
 }
 
 internal fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
@@ -103,10 +104,7 @@ object SyncCrypto {
         return body + checksum(body)
     }
 
-    /**
-     * The secret in [input], which may be a bare code or a `pokemonalerts://sync/join?code=…`
-     * link (what the QR code holds). Null when it is not a valid code.
-     */
+    /** The secret in [input], a stored code ([encodePairingCode]). Null when it is not a valid code. */
     fun decodePairingCode(input: String): ByteArray? {
         val code = extractCode(input) ?: return null
         if (!code.startsWith(CODE_PREFIX) || code.length <= CODE_PREFIX.length + CHECKSUM_CHARS) return null
@@ -133,7 +131,4 @@ object SyncCrypto {
     fun fingerprint(value: String): String =
         MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).copyOf(12).toHex()
 
-    const val JOIN_LINK_PREFIX = "pokemonalerts://sync/join?code="
-
-    fun joinLink(group: SyncGroup): String = JOIN_LINK_PREFIX + group.pairingCode
 }

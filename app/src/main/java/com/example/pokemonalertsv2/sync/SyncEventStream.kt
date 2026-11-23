@@ -114,7 +114,10 @@ class SyncEventStream(client: OkHttpClient, private val baseUrl: String) {
             try {
                 call.execute().use { response ->
                     if (response.code == 404) throw SyncGroupGoneException()
-                    if (!response.isSuccessful) throw SyncTransportException(response.code, "HTTP ${response.code}")
+                    if (!response.isSuccessful) {
+                        throw SyncAccountException.fromResponse(response.code, runCatching { response.body?.string() }.getOrNull())
+                            ?: SyncTransportException(response.code, "HTTP ${response.code}")
+                    }
                     val source = response.body?.source() ?: throw IOException("empty stream")
                     val frames = SseFrameReader()
                     while (true) {

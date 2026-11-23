@@ -88,8 +88,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 127
-        versionName = "1.33.0"
+        versionCode = 128
+        versionName = "1.34.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -144,6 +144,10 @@ android {
         disable += setOf("GradleDependency", "NewerVersionAvailable", "AndroidGradlePluginVersion", "OldTargetApi")
         // Timber arrives transitively and brings this check, but the app does not use Timber.
         disable += "LogNotTimber"
+        // AppCompat arrives transitively with Credential Manager's Play services provider. The app
+        // has no AppCompat views: the widget layouts are RemoteViews (no app:tint there) and the
+        // overlays use framework views on purpose.
+        disable += setOf("UseAppTint", "UseSwitchCompatOrMaterialCode", "UseCompatLoadingForDrawables")
     }
 
     compileOptions {
@@ -239,14 +243,15 @@ dependencies {
     implementation(libs.google.maps.compose)
     implementation(libs.maplibre.android)
     implementation(libs.google.play.services.location)
-    // Device sync pairing: QR code shown on one device (zxing, pure Java) and scanned on the
-    // other with the Play services scanner, which needs no camera permission.
-    implementation(libs.zxing.core)
-    implementation(libs.google.play.services.code.scanner)
+    // App accounts: Google sign-in through Credential Manager, then Firebase Auth (device sync).
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.identity.googleid)
     // Heart rate, steps and calories a watch synced to Health Connect (e.g. Galaxy Watch via Samsung Health).
     implementation(libs.androidx.health.connect.client)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.auth)
     
     // Room
     implementation(libs.androidx.room.runtime)

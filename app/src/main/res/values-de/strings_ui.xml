@@ -617,7 +617,7 @@
     <string name="data_quiet_essentials">Ruhiges Wesentliches</string>
     <string name="data_raids">Raids</string>
     <string name="data_same_location_stacks">Stapel am gleichen Ort</string>
-    <string name="whats_new_max_battles">Max-Kämpfe: Dynamax- und Gigadynamax-Kämpfe an Kraftquellen erscheinen jetzt im Feed und auf der Karte, mit eigenem Filter-Tab, Jagden und Benachrichtigungen.</string>
+    <string name="whats_new_accounts">Der Geräte-Sync nutzt jetzt dein Google-Konto: Melde dich auf jedem Gerät unter Einstellungen › Geräte-Sync an, statt einen Kopplungscode zu scannen. Geräte, die schon synchronisieren, wechseln zu deinem Konto, sobald sich eines davon anmeldet.</string>
     <string name="data_max_battles">Max-Kämpfe</string>
     <string name="max_battle_power_spot">Kraftquelle</string>
     <string name="max_battle_bosses">Max-Kampf-Bosse</string>

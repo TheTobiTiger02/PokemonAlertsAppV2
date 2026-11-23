@@ -464,11 +464,6 @@ class MainActivity : ComponentActivity() {
                 requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
                 requestedSettingsDestination.value = target.destination
             }
-            is DeepLinkTarget.SyncJoin -> {
-                com.example.pokemonalertsv2.sync.DeviceSync.pendingJoinCode.value = target.code
-                requestedRootTab.value = NAV_SETTINGS_TAB_INDEX
-                requestedSettingsDestination.value = SettingsDestination.DEVICE_SYNC
-            }
             is DeepLinkTarget.Alert -> {
                 // The alert has to be resolved from the repository before the detail screen
                 // can flatten it into extras; fall back to the feed when it is gone

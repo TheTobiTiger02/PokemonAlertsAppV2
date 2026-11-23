@@ -1,10 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Device sync (sync/DeviceSync.kt, ui/settings/DeviceSyncSettings.kt). -->
+<!-- Device sync and accounts (sync/DeviceSync.kt, account/, ui/settings/DeviceSyncSettings.kt). -->
 <resources>
     <string name="settings_device_sync">Geräte-Sync</string>
     <string name="device_sync_overview_off">Aus · Einstellungen auf allen Geräten gleich halten</string>
-    <string name="device_sync_intro">Hält Einstellungen, Filter, Jagden, Fangrouten, deinen Poké-Genie-Bestand und Anmeldungen auf allen deinen Geräten gleich. Eine Jagd oder Route, die auf einem Gerät läuft, siehst du auf den anderen und kannst sie dort steuern. Alles wird auf diesem Gerät verschlüsselt, bevor es das Gerät verlässt, der Server kann es also nicht lesen.</string>
+    <string name="device_sync_intro">Hält Einstellungen, Filter, Jagden, Fangrouten, deinen Poké-Genie-Bestand und Anmeldungen auf allen Geräten gleich, die mit deinem Konto angemeldet sind. Eine Jagd oder Route, die auf einem Gerät läuft, siehst du auf den anderen und kannst sie dort steuern. Die App funktioniert auch ohne Konto.</string>
     <string name="device_sync_local_note">Fensterpositionen und der Alarmverlauf bleiben auf dem jeweiligen Gerät. Benachrichtigungs- und Anzeigeeinstellungen kannst du auf einem Gerät für sich behalten.</string>
+    <string name="device_sync_sign_in">Mit Google anmelden</string>
+    <string name="device_sync_sign_in_unavailable">Die Anmeldung ist in diesem Build nicht eingerichtet.</string>
+    <string name="device_sync_signed_in">Angemeldet. Dieses Gerät synchronisiert jetzt.</string>
+    <string name="device_sync_signed_in_as">Angemeldet als %1$s</string>
+    <string name="device_sync_off_signed_in">Der Sync ist auf diesem Gerät aus.</string>
+    <string name="device_sync_turn_on">Sync einschalten</string>
+    <string name="device_sync_legacy_banner">Melde dich an, um weitere Geräte hinzuzufügen. Der Sync dieses Geräts wechselt dann zu deinem Konto; Kopplungscodes gibt es nicht mehr.</string>
+    <string name="device_sync_paused_banner">Der Sync ist auf diesem Gerät pausiert: Er gehört zu einem Konto. Melde dich an, um ihn fortzusetzen.</string>
+    <string name="device_sync_removed_notice">Dieses Gerät wurde aus deinem Konto entfernt. Es hat seine Daten behalten. Melde dich an, um es wieder zu synchronisieren.</string>
+    <string name="device_sync_status">Status</string>
+    <string name="device_sync_sign_out">Abmelden</string>
+    <string name="device_sync_sign_out_message">Dieses Gerät synchronisiert nicht mehr und behält seine Daten. Deine anderen Geräte synchronisieren weiter.</string>
+    <string name="device_sync_remove_device">Entfernen</string>
+    <string name="device_sync_remove_device_title">%1$s entfernen?</string>
+    <string name="device_sync_remove_device_message">Das Gerät wird abgemeldet und synchronisiert nicht mehr. Es behält seine Daten und kann sich wieder anmelden.</string>
+    <string name="device_sync_device_removed">Gerät entfernt</string>
+    <string name="device_sync_delete_account">Konto löschen</string>
+    <string name="device_sync_delete_account_message">Löscht dein Konto und alle synchronisierten Daten auf dem Server und meldet alle Geräte ab. Jedes Gerät behält seine eigenen Daten.</string>
+    <string name="device_sync_continue">Weiter</string>
+    <string name="device_sync_delete_account_final_title">Konto endgültig löschen?</string>
+    <string name="device_sync_delete_account_final_message">Das lässt sich nicht rückgängig machen.</string>
+    <string name="device_sync_account_deleted">Konto gelöscht</string>
     <string name="device_sync_live">Live · Änderungen kommen sofort an</string>
     <string name="device_sync_collection_live">Laufende Jagd, Route und Raid-Beobachtung</string>
     <string name="device_sync_collection_godex">Noch nicht gespeicherte GoDex-Markierungen</string>
@@ -22,28 +44,10 @@
     <string name="device_sync_override_watch">Uhr-Daten aus Health Connect</string>
     <string name="widget_copy_from_device">Von einem anderen Gerät übernehmen</string>
     <string name="widget_copy_from_device_item">%1$s · Widget %2$d</string>
-    <string name="device_sync_set_up">Sync einrichten</string>
-    <string name="device_sync_join">Mit Code beitreten</string>
-    <string name="device_sync_join_title">Geräte-Sync beitreten</string>
-    <string name="device_sync_code_label">Kopplungscode</string>
-    <string name="device_sync_scan">QR-Code scannen</string>
-    <string name="device_sync_scan_failed">Scannen nicht möglich. Füge den Code stattdessen ein.</string>
-    <string name="device_sync_join_rule">Die Einstellungen auf diesem Gerät werden durch die synchronisierten ersetzt. Verläufe werden zusammengeführt.</string>
-    <string name="device_sync_join_confirm">Beitreten</string>
-    <string name="device_sync_invalid_code">Dieser Code ist ungültig. Prüfe ihn auf Tippfehler.</string>
-    <string name="device_sync_code_not_found">Für diesen Code wurde kein Sync gefunden. Er wurde vielleicht gelöscht.</string>
     <string name="device_sync_failed">Sync fehlgeschlagen: %1$s</string>
-    <string name="device_sync_joined">Beigetreten. Dieses Gerät synchronisiert jetzt.</string>
-    <string name="device_sync_created">Sync ist eingerichtet. Füge deine anderen Geräte mit dem Code hinzu.</string>
     <string name="device_sync_status_on">Sync ist an</string>
     <string name="device_sync_syncing">Synchronisiere…</string>
     <string name="device_sync_now">Jetzt synchronisieren</string>
-    <string name="device_sync_add_device">Gerät hinzufügen</string>
-    <string name="device_sync_add_device_warning">Dieser Code gewährt vollen Zugriff auf deine synchronisierten Daten, auch auf deine GoDex- und Pokebattler-Anmeldungen. Nutze ihn nur auf deinen eigenen Geräten.</string>
-    <string name="device_sync_add_device_steps">Öffne auf dem anderen Gerät Einstellungen › Geräte-Sync › Mit Code beitreten und scanne diesen QR-Code oder füge den Code ein.</string>
-    <string name="device_sync_copy_code">Code kopieren</string>
-    <string name="device_sync_code_copied">Code kopiert</string>
-    <string name="device_sync_qr_description">QR-Code zum Beitreten zum Geräte-Sync</string>
     <string name="device_sync_devices">Geräte</string>
     <string name="device_sync_this_device">Dieses Gerät</string>
     <string name="device_sync_device_details">%1$s · Version %2$s · aktiv %3$s</string>
@@ -62,7 +66,7 @@
     <string name="device_sync_leave_message">Dieses Gerät synchronisiert nicht mehr und behält seine Daten. Deine anderen Geräte synchronisieren weiter.</string>
     <string name="device_sync_leave_confirm">Verlassen</string>
     <string name="device_sync_delete">Sync-Daten überall löschen</string>
-    <string name="device_sync_delete_message">Löscht die synchronisierten Daten vom Server und beendet den Sync auf allen Geräten. Jedes Gerät behält seine eigenen Daten. Nutze das, wenn ein Code in falsche Hände geraten ist, und richte den Sync danach neu ein.</string>
+    <string name="device_sync_delete_message">Löscht die synchronisierten Daten vom Server und beendet den Sync auf allen Geräten. Jedes Gerät behält seine eigenen Daten. Dein Konto bleibt: Schalte den Sync wieder ein, um neu zu beginnen.</string>
     <string name="device_sync_delete_confirm">Löschen</string>
     <string name="device_sync_deleted_elsewhere">Der Sync wurde auf einem anderen Gerät gelöscht. Dieses Gerät hat seine Daten behalten.</string>
     <plurals name="device_sync_overview_on">
