@@ -80,4 +80,10 @@
     <string name="checklists_add_pokemon">Pokémon hinzufügen</string>
     <string name="checklists_remove_selected">Aus dieser Checkliste entfernen</string>
     <string name="checklists_add_selected">%1$d hinzufügen</string>
+    <string name="dextracker_title">Dex Tracker</string>
+    <string name="dextracker_connect_body">Zeige deine Dex-Tracker-Sammlungen hier und trage Fänge mit +1 ein. Melde dich mit dem Google-Konto an, das du dort nutzt.</string>
+    <string name="dextracker_connect">Dex Tracker verbinden</string>
+    <string name="dextracker_sign_out">Dex Tracker trennen</string>
+    <string name="dextracker_entry_count">%1$d von %2$d</string>
+    <string name="dextracker_plus_one">+1</string>
 </resources>

@@ -98,6 +98,7 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
     val snackbarHostState = remember { SnackbarHostState() }
     var openId by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsFor by remember { mutableStateOf<ChecklistEntity?>(null) }
+    var dexTrackerOpen by remember { mutableStateOf<com.example.pokemonalertsv2.data.dextracker.DexTrackerCollection?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
@@ -111,6 +112,7 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
     val openOther = others.firstOrNull { it.id == openId }
     val editingGoDex = openId == ChecklistDeepLink.GODEX && config.isConnected
     BackHandler(enabled = editingGoDex || openOther != null) { openId = null }
+    BackHandler(enabled = dexTrackerOpen != null) { dexTrackerOpen = null }
 
     fun run(action: suspend () -> String?) {
         if (busy) return
@@ -131,6 +133,7 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         when {
+            dexTrackerOpen != null -> DexTrackerCollectionScreen(dexTrackerOpen!!, onBack = { dexTrackerOpen = null })
             editingGoDex -> GoDexHundoEditor(goDex, goDexEntries, config.collectionTitle, onBack = { openId = null })
             openOther != null -> OtherChecklistEditor(checklistRepository, openOther, onBack = { openId = null })
             else -> ChecklistList(
@@ -145,7 +148,13 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
                 onSettings = { settingsFor = it },
                 onAddGoDex = { adding = true },
                 onNewChecklist = { creating = true },
-                onOpenGoDexSettings = onOpenGoDexSettings
+                onOpenGoDexSettings = onOpenGoDexSettings,
+                extra = {
+                    DexTrackerSection(
+                        onOpen = { dexTrackerOpen = it },
+                        onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
+                    )
+                }
             )
         }
         SnackbarHost(snackbarHostState, Modifier.align(Alignment.BottomCenter).padding(16.dp))
@@ -210,7 +219,9 @@ private fun ChecklistList(
     onSettings: (ChecklistEntity) -> Unit,
     onAddGoDex: () -> Unit,
     onNewChecklist: () -> Unit,
-    onOpenGoDexSettings: () -> Unit
+    onOpenGoDexSettings: () -> Unit,
+    /** Other sources (Dex Tracker), under the app's own checklists. */
+    extra: @Composable () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -260,6 +271,7 @@ private fun ChecklistList(
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Text(stringResource(R.string.checklists_add_godex), modifier = Modifier.padding(start = 8.dp))
         }
+        extra()
         if (!goDexConnected && others.isNotEmpty()) {
             androidx.compose.material3.TextButton(onClick = onOpenGoDexSettings, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.checklists_connect_godex))
