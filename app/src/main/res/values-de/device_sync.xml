@@ -30,6 +30,8 @@
     <string name="device_sync_live">Live · Änderungen kommen sofort an</string>
     <string name="device_sync_collection_live">Laufende Jagd, Route und Raid-Beobachtung</string>
     <string name="device_sync_collection_godex">Noch nicht gespeicherte GoDex-Markierungen</string>
+    <string name="device_sync_collection_checklists">Checklisten</string>
+    <string name="device_sync_server_update">Wartet auf ein Server-Update</string>
     <string name="device_sync_collection_widgets">Widget-Einrichtungen</string>
     <string name="device_sync_this_device_settings">Nur auf diesem Gerät</string>
     <string name="device_sync_this_device_settings_hint">Hier eingeschaltete Einstellungen bleiben auf diesem Gerät: Änderst du sie hier, ändern sich deine anderen Geräte nicht, und deren Änderungen ändern dieses Gerät nicht. Den Wert selbst änderst du an seiner gewohnten Stelle in den Einstellungen.</string>

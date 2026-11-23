@@ -75,6 +75,13 @@ val appApiKey: String =
         ?: providers.environmentVariable("APP_API_KEY").orNull?.takeIf { it.isNotBlank() }
         ?: ""
 
+// Dex Tracker (the PokemonGoChecklist web app) lives in its own Firebase project; the app reads and
+// writes its Firestore as a second Firebase app. Empty values hide the Dex Tracker source.
+fun dexTrackerSetting(name: String): String =
+    localProperties.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: providers.environmentVariable(name).orNull?.takeIf { it.isNotBlank() }
+        ?: ""
+
 val pokebattlerApiBaseUrl: String =
     localProperties.getProperty("POKEBATTLER_API_BASE_URL")?.takeIf { it.isNotBlank() }
         ?: providers.environmentVariable("POKEBATTLER_API_BASE_URL").orNull?.takeIf { it.isNotBlank() }
@@ -88,8 +95,8 @@ android {
         applicationId = "com.example.pokemonalertsv2"
         minSdk = 26
         targetSdk = 35
-        versionCode = 128
-        versionName = "1.34.0"
+        versionCode = 131
+        versionName = "1.37.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resValue("string", "maps_api_key", googleMapsApiKey)
@@ -97,6 +104,9 @@ android {
         buildConfigField("String", "OSM_TILE_URL", "\"$osmTileUrl\"")
         buildConfigField("String", "POKEBATTLER_API_BASE_URL", "\"${pokebattlerApiBaseUrl.trimEnd('/')}/\"")
         buildConfigField("String", "APP_API_KEY", "\"$appApiKey\"")
+        listOf("DEX_TRACKER_PROJECT_ID", "DEX_TRACKER_APP_ID", "DEX_TRACKER_API_KEY", "DEX_TRACKER_WEB_CLIENT_ID").forEach { name ->
+            buildConfigField("String", name, "\"${dexTrackerSetting(name)}\"")
+        }
     }
 
     signingConfigs {
@@ -252,6 +262,8 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.auth)
+    // Dex Tracker's Firestore (its Google sign-in uses the Credential Manager libraries above).
+    implementation(libs.firebase.firestore)
     
     // Room
     implementation(libs.androidx.room.runtime)

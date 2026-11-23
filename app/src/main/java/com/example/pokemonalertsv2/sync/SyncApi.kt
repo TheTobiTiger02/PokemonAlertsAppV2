@@ -76,6 +76,9 @@ data class SyncCollectionInfo(val name: String, val version: Long = 0, val updat
 /** The server no longer knows the group: deleted from another device, or purged when idle. */
 class SyncGroupGoneException : Exception("Sync group not found")
 
+/** The server does not carry this collection yet (an older backend): skipped, not a failure. */
+class SyncCollectionUnknownException(val collection: String) : Exception("Server does not know $collection")
+
 /** Anything else the server refused or could not answer. */
 class SyncTransportException(val status: Int, message: String) : Exception(message)
 
@@ -164,9 +167,15 @@ class RetrofitSyncTransport(private val service: SyncService, private val device
         return when {
             response.code() == 412 && version != null -> PutResult.Conflict(version)
             response.isSuccessful && version != null -> PutResult.Stored(version)
-            // A write expecting a later version to a group the server no longer knows: deleted.
-            response.code() == 404 && "SYNC_GROUP_NOT_FOUND" in response.errorBody()?.string().orEmpty() ->
-                throw SyncGroupGoneException()
+            response.code() == 404 -> {
+                val body = response.errorBody()?.string().orEmpty()
+                when {
+                    // A write expecting a later version to a group the server no longer knows: deleted.
+                    "SYNC_GROUP_NOT_FOUND" in body -> throw SyncGroupGoneException()
+                    "UNKNOWN_SYNC_COLLECTION" in body -> throw SyncCollectionUnknownException(collection)
+                    else -> throw failure(response)
+                }
+            }
             else -> throw failure(response)
         }
     }

@@ -13,6 +13,7 @@ import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.godex.GoDexLivewireClient
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.data.godex.GoDexWriteResult
+import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 
 class GoDexWriteWorker(appContext: Context, params: WorkerParameters) :
@@ -49,6 +50,8 @@ class GoDexWriteWorker(appContext: Context, params: WorkerParameters) :
                     // A newer local action uses a newer revision and is not deleted here.
                     dao.deletePendingUpdateIfRevision(update.entryKey, update.revision)
                     repository.recordWriteSuccess()
+                    // A bulk mark sends one request per entry: keep a gap so godex.site is not flooded.
+                    if (dao.getNextPendingUpdate() != null) delay(WRITE_GAP_MILLIS)
                 }
 
                 is GoDexWriteResult.ReauthenticationRequired -> {
@@ -83,13 +86,18 @@ class GoDexWriteWorker(appContext: Context, params: WorkerParameters) :
     companion object {
         private const val UNIQUE_WORK_NAME = "godex_write_sync"
         private const val MAX_RETRIES = 5
+        private const val WRITE_GAP_MILLIS = 300L
+
+        /** Longer than the editor's Undo snackbar, so an undone mark is never sent. */
+        const val UNDO_WINDOW_SECONDS = 12L
         private val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        fun enqueue(context: Context) {
+        fun enqueue(context: Context, afterUndoWindow: Boolean = false) {
             val request = OneTimeWorkRequestBuilder<GoDexWriteWorker>()
                 .setConstraints(constraints)
+                .apply { if (afterUndoWindow) setInitialDelay(UNDO_WINDOW_SECONDS, TimeUnit.SECONDS) }
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 10, TimeUnit.SECONDS)
                 .build()
             WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(

@@ -98,7 +98,9 @@ object DeviceSync {
     const val GODEX = "godex"
     /** Each device's home screen widget configurations, to copy from. */
     const val WIDGETS = "widgets"
-    val COLLECTIONS = listOf(SETTINGS, HUNTS, ROUTES, POKEGENIE, SIGNINS, DEVICES, LIVE, GODEX, WIDGETS)
+    /** Checklists besides the GoDex Hundo collection: goDex links and checklists made in the app. */
+    const val CHECKLISTS = "checklists"
+    val COLLECTIONS = listOf(SETTINGS, HUNTS, ROUTES, POKEGENIE, SIGNINS, DEVICES, LIVE, GODEX, WIDGETS, CHECKLISTS)
 
     /** Presence is relayed, not stored; it has an AAD of its own (DEVICE_SYNC.md, "Presence"). */
     const val PRESENCE = "presence"
@@ -222,6 +224,9 @@ object DeviceSync {
             DevicesSyncAdapter(deviceId, state) { if (engine.leaving) null else ownRow(state) },
             GoDexSyncAdapter(AppDatabase.getDatabase(app).goDexEntryDao()),
             WidgetsSyncAdapter(app, deviceId),
+            ChecklistsSyncAdapter(AppDatabase.getDatabase(app).checklistDao()) {
+                com.example.pokemonalertsv2.work.ChecklistRefreshWorker.refreshNow(app)
+            },
             com.example.pokemonalertsv2.sync.live.LiveSyncAdapter(com.example.pokemonalertsv2.sync.live.LiveStore.get(app))
         )
         val service = PokemonAlertsApi.syncService

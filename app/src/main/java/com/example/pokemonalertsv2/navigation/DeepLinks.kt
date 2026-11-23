@@ -21,6 +21,9 @@ internal sealed interface DeepLinkTarget {
 
     /** One event on the Events tab, opened in its detail view (the events widget's rows). */
     data class Event(val eventId: String) : DeepLinkTarget
+
+    /** The Checklists tab, with [checklistId] open in the editor when given. */
+    data class Checklist(val checklistId: String?) : DeepLinkTarget
 }
 
 internal const val DEEP_LINK_SCHEME = "pokemonalerts"
@@ -43,6 +46,7 @@ private const val TAB_TOOLS = 5
  *  - `pokemonalerts://settings/<destination-name>` (case-insensitive, e.g. `godex`)
  *  - `pokemonalerts://alert/<id>`
  *  - `pokemonalerts://event/<id>`
+ *  - `pokemonalerts://checklists[/<id>]`; `settings/collection` (the old GoDex collection page) opens `godex`
  *  - `pokemonalerts://sync/join?…`: an old pairing QR code; opens the sync page (devices sign in now)
  */
 internal fun parseDeepLink(url: String?): DeepLinkTarget? {
@@ -72,9 +76,13 @@ internal fun parseDeepLink(url: String?): DeepLinkTarget? {
         "map" -> DeepLinkTarget.RootTab(TAB_MAP)
         "events" -> DeepLinkTarget.RootTab(TAB_EVENTS)
         "tools" -> DeepLinkTarget.RootTab(TAB_TOOLS)
+        "checklists" -> DeepLinkTarget.Checklist(tail.firstOrNull()?.lowercase())
         "settings" -> {
             val name = tail.firstOrNull()
                 ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
+            if (name.equals("collection", ignoreCase = true) || name.equals("godex_collection", ignoreCase = true)) {
+                return DeepLinkTarget.Checklist(com.example.pokemonalertsv2.ui.checklists.ChecklistDeepLink.GODEX)
+            }
             val destination = settingsDestinationFor(name)
                 ?: return DeepLinkTarget.RootTab(TAB_SETTINGS)
             DeepLinkTarget.Settings(destination)
@@ -97,7 +105,6 @@ private val SETTINGS_ALIASES = mapOf(
     "map" to SettingsDestination.MAP_TRACKING,
     "filters" to SettingsDestination.ALERT_FILTERS,
     "counters" to SettingsDestination.RAID_COUNTERS,
-    "collection" to SettingsDestination.GODEX_COLLECTION,
     "sync" to SettingsDestination.DEVICE_SYNC,
 )
 

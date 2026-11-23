@@ -179,6 +179,29 @@ class GameMasterRepository @VisibleForTesting internal constructor(
         }
 
     /**
+     * Types per dex number and regional form (`alola`, `galar`, `hisui`, `paldea`; null for the
+     * species itself), as bare names (`FIRE`), for the checklist editor's type filter. Empty
+     * before the game master is downloaded.
+     */
+    suspend fun typesByDexAndRegion(dex: Collection<Int>): Map<Pair<Int, String?>, List<String>> =
+        withContext(Dispatchers.IO) {
+            if (dex.isEmpty()) return@withContext emptyMap()
+            val rows = dex.distinct().chunked(500).flatMap { dao.speciesByDex(it) }
+                .filter { it.dexNumber != null && !it.pokemonId.isMegaOrPrimalId() && it.megaEvoId == null }
+                .filter { it.type1 != null || it.type2 != null }
+            val bare = { row: SpeciesLookupRow -> listOfNotNull(row.type1, row.type2).map { it.uppercase().removePrefix("POKEMON_TYPE_") } }
+            buildMap {
+                rows.groupBy { it.dexNumber!! }.forEach { (number, forms) ->
+                    val default = forms.firstOrNull { it.formId == null } ?: forms.minBy { it.pokemonId.length }
+                    put(number to null, bare(default))
+                    forms.sortedBy { it.pokemonId.length }.forEach { row ->
+                        REGIONS.firstOrNull { row.pokemonId.contains(it.uppercase()) }?.let { putIfAbsent(number to it, bare(row)) }
+                    }
+                }
+            }
+        }
+
+    /**
      * National dex number per Pokebattler id.
      *
      * Rides on [speciesLookup] like [typesFor], so a shadow form resolves to its base
@@ -261,6 +284,7 @@ class GameMasterRepository @VisibleForTesting internal constructor(
 
     companion object {
         private const val TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
+        private val REGIONS = listOf("alola", "galar", "hisui", "paldea")
 
         @Volatile
         private var INSTANCE: GameMasterRepository? = null

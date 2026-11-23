@@ -76,6 +76,7 @@ class PokemonAlertsApplication : Application(), Configuration.Provider, ImageLoa
         initStep("tracking topic resync") { resyncPushTopicsOnTrackingChanges() }
         initStep("widget updates") { WidgetUpdateCoordinator.start(this) }
         initStep("game text") { com.example.pokemonalertsv2.data.gametext.GameTextRepository.get(this).refreshAsync() }
+        initStep("checklist refresh") { applicationScope.launch { runCatching { com.example.pokemonalertsv2.data.checklists.ChecklistRepository.getInstance(this@PokemonAlertsApplication).scheduleRefresh() } } }
         initStep("account") { com.example.pokemonalertsv2.account.AccountRepository.init() }
         initStep("device sync triggers") { com.example.pokemonalertsv2.sync.DeviceSync.startLocalChangeTriggers(this, applicationScope) }
         initStep("live sessions") { com.example.pokemonalertsv2.sync.live.LiveSessions.start(this) }
