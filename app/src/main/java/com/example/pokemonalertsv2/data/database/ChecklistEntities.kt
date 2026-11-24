@@ -36,6 +36,11 @@ data class ChecklistEntity(
     companion object {
         const val SOURCE_GODEX = "GODEX"
         const val SOURCE_LOCAL = "LOCAL"
+        /**
+         * A Dex Tracker collection's settings in the app (kind, badges); its Pokémon stay in Dex
+         * Tracker. Id `dextracker-{collection id}`.
+         */
+        const val SOURCE_DEXTRACKER = "DEXTRACKER"
     }
 }
 

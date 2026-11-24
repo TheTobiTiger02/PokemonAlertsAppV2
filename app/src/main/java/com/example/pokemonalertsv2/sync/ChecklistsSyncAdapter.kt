@@ -2,6 +2,7 @@ package com.example.pokemonalertsv2.sync
 
 import com.example.pokemonalertsv2.data.database.ChecklistDao
 import com.example.pokemonalertsv2.data.database.ChecklistEntity
+import com.example.pokemonalertsv2.data.checklists.ChecklistRepository
 import com.example.pokemonalertsv2.data.database.ChecklistEntryEntity
 import com.example.pokemonalertsv2.data.database.ChecklistPendingDao
 import com.example.pokemonalertsv2.data.database.ChecklistPendingEntity
@@ -44,6 +45,7 @@ data class ChecklistItem(val dex: Int, val name: String, val sprite: String? = n
  * answered "already applied"). Marks are schema 1: an app from before them would drop them.
  * Settings are schema 2 (alert types, XXL/XXS kinds, the account's own collections): an older
  * app would re-encode them without the alert types, or import an owner link without the session.
+ * Dex Tracker collections' settings (`m/dextracker-…`) are schema 3.
  */
 class ChecklistsSyncAdapter(
     private val dao: ChecklistDao,
@@ -71,6 +73,8 @@ class ChecklistsSyncAdapter(
     }
 
     override fun schemaOf(key: String): Int = when {
+        // An app before Dex Tracker settings would list them as a broken goDex checklist.
+        key.startsWith(META + ChecklistRepository.DEXTRACKER_ID_PREFIX) -> 3
         key.startsWith(META) -> 2
         key.startsWith(MARK) -> 1
         else -> 0

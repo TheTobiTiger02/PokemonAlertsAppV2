@@ -21,7 +21,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import com.example.pokemonalertsv2.data.dextracker.DexTrackerCollection
+import com.example.pokemonalertsv2.data.dextracker.DexTrackerRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
@@ -54,13 +60,45 @@ class ChecklistRepository private constructor(private val appContext: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** The checklists that badge alerts with their entries, kept ready for the alert cards. */
-    val alertData: StateFlow<ChecklistAlertData> = combine(
-        dao.observeChecklists().map { all -> all.filter { it.useForAlerts } },
-        dao.observeAlertEntries()
-    ) { checklists, rows ->
-        ChecklistAlertData(checklists, rows.groupBy({ it.checklistId }, { it.asGoDexEntry() }))
-    }.stateIn(scope, SharingStarted.Eagerly, ChecklistAlertData())
+    /**
+     * The checklists that badge alerts with their entries, for the alert cards. Dex Tracker
+     * collections are read from Dex Tracker; their listeners run only while a screen shows
+     * badges, so a background start (a notification) opens none.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val alertData: StateFlow<ChecklistAlertData> = dao.observeChecklists()
+        .map { all -> all.filter { it.useForAlerts } }
+        .distinctUntilChanged()
+        .flatMapLatest { checklists ->
+            val dexTrackerIds = checklists.filter { it.source == ChecklistEntity.SOURCE_DEXTRACKER }
+                .mapTo(LinkedHashSet()) { it.id.removePrefix(DEXTRACKER_ID_PREFIX) }
+            val dexTracker = if (dexTrackerIds.isEmpty() || !DexTrackerRepository.isConfigured) flowOf(emptyMap())
+            else DexTrackerRepository.getInstance(appContext).alertEntries(dexTrackerIds)
+            combine(dao.observeAlertEntries(), dexTracker) { rows, fromDexTracker ->
+                ChecklistAlertData(
+                    checklists,
+                    rows.groupBy({ it.checklistId }, { it.asGoDexEntry() }) +
+                        fromDexTracker.mapKeys { (collectionId, _) -> dexTrackerChecklistId(collectionId) }
+                )
+            }
+        }
+        .stateIn(scope, SharingStarted.WhileSubscribed(5_000), ChecklistAlertData())
+
+    /** A Dex Tracker collection's settings row, made the first time they are opened. */
+    suspend fun dexTrackerSettings(collection: DexTrackerCollection): ChecklistEntity = withContext(Dispatchers.IO) {
+        val id = dexTrackerChecklistId(collection.id)
+        dao.checklist(id)?.let { existing ->
+            if (existing.title == collection.title) existing
+            else existing.copy(title = collection.title).also { dao.upsertChecklist(it) }
+        } ?: ChecklistEntity(
+            id = id,
+            source = ChecklistEntity.SOURCE_DEXTRACKER,
+            title = collection.title,
+            kind = ChecklistKind.ANY.name,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        ).also { dao.upsertChecklist(it) }
+    }
 
     /**
      * Adds a goDex collection by its link and imports it. Its kind comes from the collection
@@ -254,6 +292,9 @@ class ChecklistRepository private constructor(private val appContext: Context) {
     companion object {
         /** The national dex so far; the species list also holds alternate forms above 10000. */
         const val MAX_DEX = 1025
+
+        const val DEXTRACKER_ID_PREFIX = "dextracker-"
+        fun dexTrackerChecklistId(collectionId: String) = "$DEXTRACKER_ID_PREFIX$collectionId"
 
         /** The same on every device, so two devices adding one collection make one checklist. */
         const val ACCOUNT_ID_PREFIX = "godex-own-"

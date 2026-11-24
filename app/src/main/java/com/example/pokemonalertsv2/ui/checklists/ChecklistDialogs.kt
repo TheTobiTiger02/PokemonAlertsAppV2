@@ -129,8 +129,11 @@ internal fun ChecklistSettingsSheet(
                     Text(stringResource(R.string.checklists_refresh))
                 }
             }
-            TextButton(onClick = { confirmRemove = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.checklists_remove), color = MaterialTheme.colorScheme.error)
+            // A Dex Tracker collection is removed in Dex Tracker itself.
+            if (checklist.source != ChecklistEntity.SOURCE_DEXTRACKER) {
+                TextButton(onClick = { confirmRemove = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.checklists_remove), color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
