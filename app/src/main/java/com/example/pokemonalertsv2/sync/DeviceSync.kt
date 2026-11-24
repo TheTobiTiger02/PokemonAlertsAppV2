@@ -224,7 +224,7 @@ object DeviceSync {
             DevicesSyncAdapter(deviceId, state) { if (engine.leaving) null else ownRow(state) },
             GoDexSyncAdapter(AppDatabase.getDatabase(app).goDexEntryDao()),
             WidgetsSyncAdapter(app, deviceId),
-            ChecklistsSyncAdapter(AppDatabase.getDatabase(app).checklistDao()) {
+            ChecklistsSyncAdapter(AppDatabase.getDatabase(app).checklistDao(), AppDatabase.getDatabase(app).checklistPendingDao()) {
                 com.example.pokemonalertsv2.work.ChecklistRefreshWorker.refreshNow(app)
             },
             com.example.pokemonalertsv2.sync.live.LiveSyncAdapter(com.example.pokemonalertsv2.sync.live.LiveStore.get(app))

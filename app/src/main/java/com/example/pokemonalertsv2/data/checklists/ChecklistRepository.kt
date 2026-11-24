@@ -4,9 +4,15 @@ import android.content.Context
 import com.example.pokemonalertsv2.data.database.AppDatabase
 import com.example.pokemonalertsv2.data.database.ChecklistEntity
 import com.example.pokemonalertsv2.data.database.ChecklistEntryEntity
+import com.example.pokemonalertsv2.data.database.isGoDexAccount
+import com.example.pokemonalertsv2.data.godex.GoDexAccountCollection
+import com.example.pokemonalertsv2.data.godex.GoDexAccountCollections
+import com.example.pokemonalertsv2.data.godex.GoDexAuthenticationException
+import com.example.pokemonalertsv2.data.godex.GoDexImportResult
 import com.example.pokemonalertsv2.data.godex.GoDexImporter
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.work.ChecklistRefreshWorker
+import com.example.pokemonalertsv2.work.GoDexWriteWorker
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.database.GoDexMarkUndo
 import kotlinx.coroutines.CoroutineScope
@@ -18,22 +24,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
  * Checklists besides the GoDex Hundo collection ([GoDexRepository] keeps that one): other goDex
- * collections added by their public link, read-only and refreshed from goDex, and checklists
- * made in the app.
+ * collections, refreshed from goDex (read-only when added by share link, marked and written
+ * back when they belong to the signed-in account), and checklists made in the app.
  */
 class ChecklistRepository private constructor(private val appContext: Context) {
     private val dao = AppDatabase.getDatabase(appContext).checklistDao()
     private val speciesDao = AppDatabase.getDatabase(appContext).pokemonSpeciesDao()
+    private val pendingDao = AppDatabase.getDatabase(appContext).checklistPendingDao()
     private val importer = GoDexImporter()
-    // One import at a time: each already sends about a dozen requests to godex.site at once.
-    private val importMutex = Mutex()
+    private val accountCollections = GoDexAccountCollections()
+    private val goDex get() = GoDexRepository.getInstance(appContext)
+
+    /** checklistId -> entry keys with a mark not yet written back to goDex. */
+    val pendingEntryKeys: Flow<Map<String, Set<String>>> =
+        pendingDao.observeAll().map { rows -> rows.groupBy({ it.checklistId }, { it.entryKey }).mapValues { it.value.toSet() } }
 
     val checklists: Flow<List<ChecklistEntity>> = dao.observeChecklists()
 
@@ -56,49 +65,122 @@ class ChecklistRepository private constructor(private val appContext: Context) {
     /**
      * Adds a goDex collection by its link and imports it. Its kind comes from the collection
      * image; the user can change it. Throws with a readable message when the link is not a
-     * collection, is already added, or goDex refuses.
+     * collection, is already added, or goDex refuses. A link to one of the account's own
+     * collections is read with the session, as [addGoDexAccount] does.
      */
     suspend fun addGoDex(url: String): ChecklistEntity = withContext(Dispatchers.IO) {
         val normalized = GoDexImporter.validateAnyCollectionUrl(url)
-        val primary = GoDexRepository.getInstance(appContext).currentConfig()
+        val primary = goDex.currentConfig()
         require(normalized != primary.url && normalized != primary.writeBackUrl && dao.checklists().none { it.url == normalized }) {
             "This collection is already in your checklists"
         }
-        val result = importMutex.withLock { importer.import(normalized) }
+        val result = importGoDex(normalized)
+        val accountId = GoDexAccountCollections.collectionIdOf(result.normalizedUrl)
+        save(accountId?.let(::accountChecklistId) ?: "godex-${UUID.randomUUID()}", settingsFrom = null, result = result)
+    }
+
+    /**
+     * Adds a collection of the signed-in account: imported with the session, and marks made in
+     * the editor are written back to goDex. One already added by its share link becomes this
+     * one, keeping its settings.
+     */
+    suspend fun addGoDexAccount(collection: GoDexAccountCollection): ChecklistEntity = withContext(Dispatchers.IO) {
+        val primary = goDex.currentConfig()
+        require(collection.url != primary.writeBackUrl && collection.url != primary.url && (collection.publicUrl == null || collection.publicUrl != primary.url)) {
+            "This is your Hundo collection"
+        }
+        val existing = dao.checklists().firstOrNull { it.url == collection.url || (collection.publicUrl != null && it.url == collection.publicUrl) }
+        val result = importGoDex(collection.url)
+        val id = accountChecklistId(collection.collectionId)
+        if (existing != null && existing.id != id) {
+            pendingDao.clear(existing.id)
+            dao.deleteChecklist(existing.id)
+        }
+        save(id, existing, result)
+    }
+
+    private suspend fun save(id: String, settingsFrom: ChecklistEntity?, result: GoDexImportResult): ChecklistEntity {
         val now = System.currentTimeMillis()
-        val checklist = ChecklistEntity(
-            id = "godex-${UUID.randomUUID()}",
+        val checklist = (settingsFrom ?: ChecklistEntity(
+            id = id,
             source = ChecklistEntity.SOURCE_GODEX,
             title = result.collectionTitle,
             kind = result.kind.name,
-            url = result.normalizedUrl,
             sortOrder = (dao.checklists().maxOfOrNull { it.sortOrder } ?: 0) + 1,
-            lastSyncMillis = now,
-            createdAt = now,
-            updatedAt = now
-        )
+            createdAt = now
+        )).copy(id = id, url = result.normalizedUrl, lastSyncMillis = now, updatedAt = now)
         dao.upsertChecklist(checklist)
-        dao.replaceEntries(checklist.id, result.entries.map { it.toChecklistEntry(checklist.id) })
+        pendingDao.replaceEntriesPreservingPending(id, result.entries.map { it.toChecklistEntry(id) })
         ChecklistRefreshWorker.schedule(appContext)
-        checklist
+        return checklist
+    }
+
+    /** The signed-in account's collections, as goDex lists them. */
+    suspend fun goDexAccountCollections(): List<GoDexAccountCollection> = withContext(Dispatchers.IO) {
+        val cookies = goDex.currentConfig().sessionCookies
+        check(cookies.isNotBlank()) { "Sign in to goDex first" }
+        withSessionHandling {
+            accountCollections.fetch(cookies).also { goDex.persistRefreshedCookies(it.refreshedCookies) }.collections
+        }
     }
 
     /** Imports a goDex checklist again. */
     suspend fun refresh(checklistId: String) = withContext(Dispatchers.IO) {
         val checklist = dao.checklist(checklistId) ?: return@withContext
         val url = checklist.url?.takeIf { checklist.source == ChecklistEntity.SOURCE_GODEX } ?: return@withContext
-        val result = importMutex.withLock { importer.import(url) }
-        dao.replaceEntries(checklistId, result.entries.map { it.toChecklistEntry(checklistId) })
+        val result = importGoDex(url)
+        pendingDao.replaceEntriesPreservingPending(checklistId, result.entries.map { it.toChecklistEntry(checklistId) })
         dao.upsertChecklist(checklist.copy(lastSyncMillis = System.currentTimeMillis()))
     }
 
-    /** Every goDex checklist, one after another. Returns how many failed. */
+    /**
+     * Every goDex checklist, one after another. The account's collections wait while signed
+     * out, and refreshing stops at the first expired session. Returns how many failed.
+     */
     suspend fun refreshAll(): Int {
         var failed = 0
-        dao.checklists().filter { it.source == ChecklistEntity.SOURCE_GODEX }.forEach { checklist ->
-            runCatching { refresh(checklist.id) }.onFailure { failed++ }
+        val signedIn = goDex.currentConfig().hasSession
+        for (checklist in dao.checklists().filter { it.source == ChecklistEntity.SOURCE_GODEX }) {
+            if (checklist.isGoDexAccount && !signedIn) continue
+            val error = runCatching { refresh(checklist.id) }.exceptionOrNull() ?: continue
+            failed++
+            if (error is GoDexAuthenticationException) break
         }
         return failed
+    }
+
+    /** One goDex import, with the session for the account's own collections. */
+    private suspend fun importGoDex(url: String): GoDexImportResult {
+        if (GoDexAccountCollections.collectionIdOf(url) == null) return goDex.withImportLock { importer.import(url) }
+        val config = goDex.currentConfig()
+        check(config.hasSession) { "Sign in to goDex to read this collection" }
+        return withSessionHandling {
+            goDex.withImportLock { importer.import(url, config.sessionCookies) }
+                .also { goDex.persistRefreshedCookies(it.refreshedCookies) }
+        }
+    }
+
+    private suspend fun <T> withSessionHandling(block: suspend () -> T): T = try {
+        block()
+    } catch (expired: GoDexAuthenticationException) {
+        goDex.persistRefreshedCookies(expired.refreshedCookies)
+        goDex.markReauthenticationRequired(expired.message ?: "Your GoDex session expired.")
+        throw expired
+    }
+
+    /**
+     * Marks entries of one of the account's goDex checklists: shown at once, written back to
+     * goDex after the undo window. Returns what [undoGoDex] needs.
+     */
+    suspend fun setGoDexCaught(checklistId: String, entryKeys: Collection<String>, caught: Boolean): List<GoDexMarkUndo> = withContext(Dispatchers.IO) {
+        pendingDao.setDesiredStates(checklistId, entryKeys, caught, System.currentTimeMillis()).also {
+            if (it.isNotEmpty()) GoDexWriteWorker.enqueue(appContext, afterUndoWindow = true)
+        }
+    }
+
+    suspend fun undoGoDex(checklistId: String, changes: List<GoDexMarkUndo>) = withContext(Dispatchers.IO) {
+        pendingDao.undoDesiredStates(checklistId, changes, System.currentTimeMillis())
+        GoDexWriteWorker.enqueue(appContext, afterUndoWindow = true)
     }
 
     /** Keeps refreshing while any goDex checklist exists; called at app start. */
@@ -161,6 +243,7 @@ class ChecklistRepository private constructor(private val appContext: Context) {
     }
 
     suspend fun delete(checklistId: String) = withContext(Dispatchers.IO) {
+        pendingDao.clear(checklistId)
         dao.deleteChecklist(checklistId)
         scheduleRefresh()
     }
@@ -171,6 +254,10 @@ class ChecklistRepository private constructor(private val appContext: Context) {
     companion object {
         /** The national dex so far; the species list also holds alternate forms above 10000. */
         const val MAX_DEX = 1025
+
+        /** The same on every device, so two devices adding one collection make one checklist. */
+        const val ACCOUNT_ID_PREFIX = "godex-own-"
+        fun accountChecklistId(goDexCollectionId: String) = "$ACCOUNT_ID_PREFIX$goDexCollectionId"
 
         internal fun localEntry(checklistId: String, dex: Int, name: String, spriteUrl: String?, now: Long) =
             ChecklistEntryEntity(checklistId, "%04d-none".format(dex), dex, null, "none", name, needed = true, spriteUrl = spriteUrl, updatedAt = now)

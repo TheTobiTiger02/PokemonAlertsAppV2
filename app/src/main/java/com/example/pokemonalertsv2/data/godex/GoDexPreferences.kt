@@ -46,11 +46,13 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun saveAuthenticatedSession(cookies: String, writeBackUrl: String) {
+    /**
+     * A goDex sign-in. Only the session changes: which collection is the Hundo one stays as it
+     * is, so signing in again after the session expired keeps it.
+     */
+    suspend fun saveSession(cookies: String) {
         dataStore.edit { prefs ->
             prefs[COOKIES_KEY] = GoDexSessionCipher.encrypt(cookies)
-            prefs[WRITE_BACK_URL_KEY] = writeBackUrl
-            prefs[URL_KEY] = writeBackUrl
             prefs[SESSION_STATE_KEY] = GoDexSessionState.AUTHENTICATED.name
             prefs.remove(LAST_WRITE_ERROR_KEY)
         }
@@ -84,12 +86,13 @@ class GoDexPreferences(private val dataStore: DataStore<Preferences>) {
 
     /**
      * Device sync: another device's session. The cookies travel decrypted inside the end-to-end
-     * encrypted sync blob and are encrypted again here with this device's Keystore key.
+     * encrypted sync blob and are encrypted again here with this device's Keystore key. A device
+     * signed in without a Hundo collection sends no link; this device keeps its own then.
      */
     suspend fun applySyncedSession(cookies: String, writeBackUrl: String, state: GoDexSessionState) {
         dataStore.edit { prefs ->
             prefs[COOKIES_KEY] = GoDexSessionCipher.encrypt(cookies)
-            prefs[WRITE_BACK_URL_KEY] = writeBackUrl
+            if (writeBackUrl.isNotBlank()) prefs[WRITE_BACK_URL_KEY] = writeBackUrl
             prefs[SESSION_STATE_KEY] = state.name
             prefs.remove(LAST_WRITE_ERROR_KEY)
         }

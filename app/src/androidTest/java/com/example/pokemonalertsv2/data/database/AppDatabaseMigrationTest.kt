@@ -372,6 +372,27 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate26To27_addsPendingChecklistMarksAndKeepsChecklists() {
+        helper.createDatabase(TEST_DATABASE, 26).apply {
+            execSQL("INSERT INTO checklists (id, source, title, kind, url, useForAlerts, includeEvolutions, sortOrder, lastSyncMillis, createdAt, updatedAt) VALUES ('g1', 'GODEX', 'Lucky Dex', 'LUCKY', 'https://godex.site/collection/766', 1, 0, 0, 0, 1, 1)")
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 27, true, AppDatabase.MIGRATION_26_27).apply {
+            query("SELECT title FROM checklists WHERE id = 'g1'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Lucky Dex", cursor.getString(0))
+            }
+            execSQL("INSERT INTO checklist_pending (checklistId, entryKey, caught, revision, timestamp, attemptCount, lastError) VALUES ('g1', '0025-none', 1, 5, 5, 0, NULL)")
+            query("SELECT caught FROM checklist_pending WHERE checklistId = 'g1'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+            }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }

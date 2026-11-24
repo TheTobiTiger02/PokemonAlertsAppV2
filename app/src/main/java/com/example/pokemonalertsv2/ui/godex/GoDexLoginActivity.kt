@@ -53,20 +53,14 @@ import com.example.pokemonalertsv2.data.PokemonAlertsRepository
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
 import com.example.pokemonalertsv2.ui.theme.PokemonAlertsV2Theme
 import com.example.pokemonalertsv2.ui.motion.appFadeThrough
-import com.example.pokemonalertsv2.ui.motion.appSharedAxisX
 import com.example.pokemonalertsv2.util.GoogleAccountLoginHint
 import kotlinx.coroutines.launch
 
 /**
- * Two-step login + checklist picker flow:
- *
- * Step 1 – LOGIN: User signs in via Google/Discord OAuth. Detected when the
- *   WebView navigates away from /login to a godex.site page.
- *
- * Step 2 – PICK CHECKLIST: After login the user is prompted to navigate to
- *   the checklist they want to sync. When they open a collection page
- *   (URL contains "/collection/" but not "/public-collection/") the app
- *   captures that URL and stores it alongside the session cookies.
+ * goDex sign-in: the user signs in with Google or Discord in a WebView. Once a godex.site page
+ * shows the signed-in account (its profile link), the session cookies are saved and the screen
+ * closes. Which collections the app uses is chosen afterwards in the app, from the account's
+ * collection list; signing in again never changes it.
  */
 class GoDexLoginActivity : ComponentActivity() {
 
@@ -79,9 +73,8 @@ class GoDexLoginActivity : ComponentActivity() {
             PokemonAlertsV2Theme(darkTheme = darkTheme) {
             val scope = rememberCoroutineScope()
             val repository = GoDexRepository.getInstance(applicationContext)
-            val startAtPicker = intent.getBooleanExtra("EXTRA_START_AT_PICKER", false)
-            var step by remember { mutableStateOf(if (startAtPicker) Step.PICK_CHECKLIST else Step.LOGIN) }
-            var statusText by remember { mutableStateOf(if (startAtPicker) AppText.get(R.string.godex_select_your_checklist) else AppText.get(R.string.godex_sign_in_with_google_or_discord)) }
+            var statusText by remember { mutableStateOf(AppText.get(R.string.godex_sign_in_with_google_or_discord)) }
+            var saving by remember { mutableStateOf(false) }
             var webView by remember { mutableStateOf<WebView?>(null) }
             // The Google account picked from the device, applied to Google's sign-in page
             // as login_hint. Session-only on purpose: this screen promises the app never
@@ -94,10 +87,8 @@ class GoDexLoginActivity : ComponentActivity() {
                 val email = result.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)
                 if (!email.isNullOrBlank() && email != googleAccount) {
                     googleAccount = email
-                    if (step == Step.LOGIN) {
-                        // Restart the hand-off so Google sees the hint from the first hop.
-                        webView?.loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
-                    }
+                    // Restart the hand-off so Google sees the hint from the first hop.
+                    webView?.loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
                 }
             }
             // The chooser intent is "deprecated" in favor of Credential Manager, but
@@ -131,7 +122,7 @@ class GoDexLoginActivity : ComponentActivity() {
                             }
                         },
                         actions = {
-                            if (!startAtPicker) {
+                            run {
                                 IconButton(onClick = { pickGoogleAccount() }) {
                                     Icon(
                                         Icons.Filled.AccountCircle,
@@ -142,7 +133,6 @@ class GoDexLoginActivity : ComponentActivity() {
                                     onClick = {
                                         GoDexWebSessionCookies.clearAllWebViewCookies {
                                             runOnUiThread {
-                                                step = Step.LOGIN
                                                 statusText = AppText.get(R.string.godex_sign_in_with_google_or_discord)
                                                 webView?.loadUrl(
                                                     GoDexWebSessionCookies.GODEX_LOGIN_URL
@@ -163,51 +153,22 @@ class GoDexLoginActivity : ComponentActivity() {
                         .fillMaxSize()
                         .padding(padding)
                 ) {
-                    AnimatedContent(
-                        targetState = step,
-                        transitionSpec = { appSharedAxisX(forward = targetState == Step.PICK_CHECKLIST) },
-                        label = "godex_login_step"
-                    ) { currentStep ->
-                        val pickingChecklist = currentStep == Step.PICK_CHECKLIST
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (pickingChecklist) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    }
-                                )
-                                .padding(horizontal = 16.dp, vertical = 12.dp)
-                        ) {
-                            Text(
-                                text = if (pickingChecklist) {
-                                    "Signed in — open the checklist you want to sync."
-                                } else {
-                                    "Google or Discord may remember your account for faster reauthentication."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (pickingChecklist) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                            Text(
-                                text = if (pickingChecklist) {
-                                    "Tap one of your collections below."
-                                } else {
-                                    "Pokémon Alerts never stores your email or password."
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (pickingChecklist) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = "Google or Discord may remember your account for faster reauthentication.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Pokémon Alerts never stores your email or password.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     Box(modifier = Modifier.weight(1f)) {
@@ -223,8 +184,6 @@ class GoDexLoginActivity : ComponentActivity() {
                                         userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                                     }
                                     webViewClient = object : WebViewClient() {
-                                        private var loginCaptured = false
-
                                         override fun shouldOverrideUrlLoading(
                                             view: WebView?,
                                             request: WebResourceRequest?
@@ -260,56 +219,28 @@ class GoDexLoginActivity : ComponentActivity() {
                                         override fun onPageFinished(view: WebView?, url: String?) {
                                             super.onPageFinished(view, url)
                                             val currentUrl = url ?: return
-                                            when (step) {
-                                                Step.LOGIN -> {
-                                                    val isOnGoDex = currentUrl.contains("godex.site")
-                                                    val isLoginPage = currentUrl.contains("/login")
-                                                    val isAuthCallback = currentUrl.contains("/auth/") || currentUrl.contains("/callback")
-
-                                                    if (isOnGoDex && !isLoginPage && !isAuthCallback) {
-                                                        step = Step.PICK_CHECKLIST
-                                                        statusText = AppText.get(R.string.godex_select_your_checklist)
-                                                    }
-                                                }
-
-                                                Step.PICK_CHECKLIST -> {
-                                                    val isOnGoDex = currentUrl.contains("godex.site")
-                                                    if (isOnGoDex && isCollectionUrl(currentUrl)) {
-                                                        val cookies = CookieManager.getInstance().getCookie("https://godex.site")
-                                                        if (!cookies.isNullOrBlank()) {
-                                                             scope.launch {
-                                                                 repository.saveAuthenticatedSession(cookies, currentUrl)
-                                                                 Toast.makeText(
-                                                                     context,
-                                                                     "Checklist selected! Two-way sync is ready.",
-                                                                     Toast.LENGTH_LONG
-                                                                 ).show()
-                                                                 setResult(Activity.RESULT_OK)
-                                                                 finish()
-                                                             }
-                                                        }
-                                                    }
+                                            if (saving || view == null || !currentUrl.contains("godex.site")) return
+                                            if (currentUrl.contains("/login") || currentUrl.contains("/auth/") || currentUrl.contains("/callback")) return
+                                            // goDex answers its pages signed out too; only the
+                                            // account's profile link shows the sign-in worked.
+                                            view.evaluateJavascript(SIGNED_IN_CHECK) { answer ->
+                                                if (answer != "true" || saving) return@evaluateJavascript
+                                                val cookies = CookieManager.getInstance().getCookie("https://godex.site")
+                                                if (cookies.isNullOrBlank()) return@evaluateJavascript
+                                                saving = true
+                                                scope.launch {
+                                                    repository.saveSession(cookies)
+                                                    Toast.makeText(context, AppText.get(R.string.godex_signed_in), Toast.LENGTH_LONG).show()
+                                                    setResult(Activity.RESULT_OK)
+                                                    finish()
                                                 }
                                             }
                                         }
                                     }
 
-                                    if (startAtPicker) {
-                                        val sessionCookies = repository.config.value.sessionCookies
-                                        if (sessionCookies.isNotBlank()) {
-                                            val cookieManager = CookieManager.getInstance()
-                                            cookieManager.setAcceptCookie(true)
-                                            sessionCookies.split(";").forEach { cookie ->
-                                                cookieManager.setCookie("https://godex.site", cookie.trim())
-                                            }
-                                            cookieManager.flush()
-                                        }
-                                        loadUrl("https://godex.site")
-                                    } else {
-                                        // Preserve Google/Discord WebView cookies so reauthentication
-                                        // can reuse the provider session without storing credentials.
-                                        loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
-                                    }
+                                    // Preserve Google/Discord WebView cookies so reauthentication
+                                    // can reuse the provider session without storing credentials.
+                                    loadUrl(GoDexWebSessionCookies.GODEX_LOGIN_URL)
                                 }
                             },
                             modifier = Modifier.fillMaxSize()
@@ -321,27 +252,10 @@ class GoDexLoginActivity : ComponentActivity() {
         }
     }
 
-    private enum class Step { LOGIN, PICK_CHECKLIST }
-
     companion object {
-        fun createIntent(context: Context, startAtPicker: Boolean = false): Intent =
-            Intent(context, GoDexLoginActivity::class.java).apply {
-                putExtra("EXTRA_START_AT_PICKER", startAtPicker)
-            }
+        private const val SIGNED_IN_CHECK =
+            "!!document.querySelector('[dusk=desktop-profile],[dusk=mobile-profile],[dusk=collections-container]')"
 
-        /**
-         * Checks if a URL looks like an authenticated collection page on GoDex.
-         * Public collection URLs (/public-collection/) are excluded since those
-         * are read-only. We accept any URL that looks like it could be a
-         * user's own collection view.
-         */
-        private fun isCollectionUrl(url: String): Boolean {
-            val path = android.net.Uri.parse(url).path ?: return false
-            // Match paths like /collection/ID, /c/ID, /collections/ID, etc.
-            // but NOT /public-collection/
-            if (path.contains("public-collection", ignoreCase = true)) return false
-            // Accept if it looks like a collection page with a path segment after it
-            return path.matches(Regex("^/(?:collection|collections|c)/[A-Za-z0-9_\\-]+.*$", RegexOption.IGNORE_CASE))
-        }
+        fun createIntent(context: Context): Intent = Intent(context, GoDexLoginActivity::class.java)
     }
 }

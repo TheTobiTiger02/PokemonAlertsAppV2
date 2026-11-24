@@ -33,6 +33,15 @@ data class ChecklistEntity(
     }
 }
 
+/**
+ * A collection of the signed-in goDex account (`/collection/{id}`), read and marked with the
+ * session, as opposed to one added by its share link (`/public-collection/...`), which is
+ * read-only.
+ */
+val ChecklistEntity.isGoDexAccount: Boolean
+    get() = source == ChecklistEntity.SOURCE_GODEX &&
+        com.example.pokemonalertsv2.data.godex.GoDexAccountCollections.collectionIdOf(url) != null
+
 /** One Pokémon of a [ChecklistEntity], in goDex's entry key format (`0026_alola-female`). */
 @Entity(
     tableName = "checklist_entries",
@@ -53,4 +62,22 @@ data class ChecklistEntryEntity(
 ) {
     /** The shape the goDex matcher and editor work on. */
     fun asGoDexEntry() = GoDexEntryEntity(entryKey, pokedexId, formSlug, gender, displayName, needed, spriteUrl)
+}
+
+/**
+ * A mark on a goDex collection of the signed-in account, waiting to be written back to goDex
+ * ([com.example.pokemonalertsv2.work.GoDexWriteWorker]); as `godex_pending_updates` for the
+ * Hundo collection.
+ */
+@Entity(tableName = "checklist_pending", primaryKeys = ["checklistId", "entryKey"])
+data class ChecklistPendingEntity(
+    val checklistId: String,
+    val entryKey: String,
+    val caught: Boolean,
+    val revision: Long,
+    val timestamp: Long,
+    val attemptCount: Int = 0,
+    val lastError: String? = null
+) {
+    fun asGoDexPending() = GoDexPendingUpdateEntity(entryKey, caught, revision, timestamp, attemptCount, lastError)
 }
