@@ -65,12 +65,13 @@ class GoDexAccountCollections(private val client: OkHttpClient = Http.base) {
                 val image = link.selectFirst("img[src*=/images/collections/]") ?: return@mapNotNull null
                 val src = image.absUrl("src")
                 val counts = link.select("span").firstNotNullOfOrNull { COUNTS.find(it.text()) }
+                val title = link.selectFirst("div.text-xl")?.text()?.trim()?.ifBlank { null } ?: image.attr("alt").ifBlank { "GoDex collection" }
                 GoDexAccountCollection(
                     collectionId = id,
                     url = url,
-                    title = link.selectFirst("div.text-xl")?.text()?.trim()?.ifBlank { null } ?: image.attr("alt").ifBlank { "GoDex collection" },
+                    title = title,
                     image = src,
-                    kind = ChecklistKind.fromGoDexImage(src),
+                    kind = ChecklistKind.fromGoDexCollection(src, title),
                     caught = counts?.groupValues?.get(1)?.toIntOrNull() ?: 0,
                     total = counts?.groupValues?.get(2)?.toIntOrNull() ?: 0,
                     publicUrl = document.selectFirst("input[dusk=public-link-$id]")?.attr("value")

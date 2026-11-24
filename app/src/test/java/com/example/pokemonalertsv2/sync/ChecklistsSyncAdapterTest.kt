@@ -88,8 +88,9 @@ class ChecklistsSyncAdapterTest {
         val snapshot = adapterA.snapshot()
         assertEquals(setOf("m/godex-own-766", "p/godex-own-766/0025-none"), snapshot.keys)
         assertEquals("older apps leave them alone", 1, adapterA.schemaOf("p/godex-own-766/0025-none"))
-        assertEquals(1, adapterA.schemaOf("m/godex-own-766"))
-        assertEquals(0, adapterA.schemaOf("m/local-1"))
+        assertEquals("settings carry alert types", 2, adapterA.schemaOf("m/godex-own-766"))
+        assertEquals(2, adapterA.schemaOf("m/local-1"))
+        assertEquals(0, adapterA.schemaOf("c/local-1/0001-none"))
 
         val b = FakeChecklistDao()
         val bMarks = FakePendingDao(b)
@@ -121,7 +122,7 @@ class ChecklistsSyncAdapterTest {
         assertEquals("a fresh import keeps the unsent mark", false, lists.entries("g").single().needed)
     }
 
-    private fun local(id: String) = ChecklistEntity(id = id, source = ChecklistEntity.SOURCE_LOCAL, title = "Shinies", kind = "SHINY", useForAlerts = true)
+    private fun local(id: String) = ChecklistEntity(id = id, source = ChecklistEntity.SOURCE_LOCAL, title = "Shinies", kind = "SHINY", useForAlerts = true, alertTypes = "QUEST,RAID")
     private fun item(id: String, dex: Int, needed: Boolean) =
         ChecklistEntryEntity(id, "%04d-none".format(dex), dex, null, "none", "#$dex", needed)
 
@@ -140,6 +141,7 @@ class ChecklistsSyncAdapterTest {
         val held = ChecklistsSyncAdapter(b) { imports++ }.apply(snapshot, emptySet())
         assertTrue(held.isEmpty())
         assertEquals("Shinies", b.checklist("l1")?.title)
+        assertEquals("alert types travel", "QUEST,RAID", b.checklist("l1")?.alertTypes)
         assertEquals(listOf(true, false), b.entries("l1").map { it.needed })
         assertEquals("a goDex link is imported on the device itself", 1, imports)
         assertEquals(0L, b.checklist("g1")?.lastSyncMillis)

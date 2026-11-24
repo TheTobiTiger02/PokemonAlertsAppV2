@@ -24,7 +24,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChecklistEntryEntity::class,
         ChecklistPendingEntity::class
     ],
-    version = 27,
+    version = 28,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -636,6 +636,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Alert size (XXL/XXS checklists) and the alert types each checklist badges. */
+        internal val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `alerts` ADD COLUMN `size` TEXT")
+                db.execSQL("ALTER TABLE `history_alerts` ADD COLUMN `size` TEXT")
+                db.execSQL("ALTER TABLE `checklists` ADD COLUMN `alertTypes` TEXT")
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -676,7 +685,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_23_24,
                     MIGRATION_24_25,
                     MIGRATION_25_26,
-                    MIGRATION_26_27
+                    MIGRATION_26_27,
+                    MIGRATION_27_28
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

@@ -669,8 +669,8 @@
     <string name="events_upcoming">Demnächst</string>
     <string name="events_you_ll_be_reminded_x_min">Du wirst %1$s Min. vor Beginn erinnert</string>
     <string name="godex_choose_google_account">Google-Konto wählen</string>
-    <string name="whats_new_godex_collections">Wenn du bei goDex angemeldet bist, zeigt der Checklisten-Tab alle deine goDex-Sammlungen: Hake die gewünschten an und füge sie auf einmal hinzu. Markierungen in der App gehen zurück an goDex, wie bei deiner Hundo-Sammlung.</string>
-    <string name="whats_new_godex_sign_in">Die goDex-Anmeldung nimmt nicht mehr die geöffnete Seite als Hundo-Sammlung. Wähle sie in Einstellungen › goDex aus deiner Sammlungsliste.</string>
+    <string name="whats_new_checklist_alert_types">Wähle, welche Alarme jede Checkliste markiert: Öffne die Einstellungen einer Checkliste und hake Spawns, Raids, Quests, Max-Kämpfe und mehr an. Ihre Art gibt sinnvolle Vorgaben, auf die du zurücksetzen kannst.</string>
+    <string name="whats_new_checklist_sizes">Neue Checklisten-Arten XXL und XXS: Sie markieren Alarme, die diese Größe zeigen, und deine goDex-Dexe für XXL und XXS werden am Namen erkannt. Eine schillernde Quest zeigt jetzt Shiny ✨ fehlt.</string>
     <string name="godex_signed_in">Bei goDex angemeldet</string>
     <string name="godex_collections_title">Deine goDex-Sammlungen</string>
     <string name="godex_collections_hint">Hake die Sammlungen an, die du hinzufügen willst. Markierungen in der App gehen zurück an goDex.</string>

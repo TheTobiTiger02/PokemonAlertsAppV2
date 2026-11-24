@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.checklists.ChecklistKind
+import com.example.pokemonalertsv2.data.checklists.ChecklistMatcher
 import com.example.pokemonalertsv2.data.database.ChecklistEntity
 
 @Composable
@@ -98,7 +99,8 @@ internal fun ChecklistSettingsSheet(
                 ChecklistKind.entries.forEach { kind ->
                     FilterChip(
                         selected = checklist.kind == kind.name,
-                        onClick = { onChange(checklist.copy(kind = kind.name)) },
+                        // A new kind brings its own default alert types.
+                        onClick = { onChange(checklist.copy(kind = kind.name, alertTypes = null)) },
                         label = { Text(kindLabel(kind)) }
                     )
                 }
@@ -114,6 +116,7 @@ internal fun ChecklistSettingsSheet(
                 checked = checklist.useForAlerts,
                 onChange = { onChange(checklist.copy(useForAlerts = it)) }
             )
+            if (checklist.useForAlerts) AlertTypesSection(checklist, onChange)
             SwitchRow(
                 title = stringResource(R.string.checklists_include_evolutions),
                 subtitle = stringResource(R.string.checklists_include_evolutions_hint),
@@ -152,6 +155,47 @@ internal fun ChecklistSettingsSheet(
             },
             dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text(stringResource(R.string.mainscaffoldkt_cancel)) } }
         )
+    }
+}
+
+/** Which alert types the checklist badges, and what its kind needs of those alerts. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AlertTypesSection(checklist: ChecklistEntity, onChange: (ChecklistEntity) -> Unit) {
+    val kind = ChecklistKind.fromName(checklist.kind)
+    val chosen = ChecklistMatcher.alertTypes(checklist)
+    Text(stringResource(R.string.checklists_alert_types), style = MaterialTheme.typography.titleSmall)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChecklistMatcher.selectableAlertTypes.forEach { type ->
+            FilterChip(
+                selected = type in chosen,
+                onClick = {
+                    val next = if (type in chosen) chosen - type else chosen + type
+                    onChange(checklist.copy(alertTypes = ChecklistMatcher.storeAlertTypes(kind, next)))
+                },
+                label = { Text(type.label) }
+            )
+        }
+    }
+    Text(
+        stringResource(
+            when (kind) {
+                ChecklistKind.HUNDO -> R.string.checklists_condition_hundo
+                ChecklistKind.XXL -> R.string.checklists_condition_xxl
+                ChecklistKind.XXS -> R.string.checklists_condition_xxs
+                ChecklistKind.SHADOW -> R.string.checklists_condition_shadow
+                ChecklistKind.DYNAMAX -> R.string.checklists_condition_dynamax
+                ChecklistKind.SHINY -> R.string.checklists_condition_shiny
+                ChecklistKind.LUCKY, ChecklistKind.COSTUME, ChecklistKind.ANY -> R.string.checklists_condition_species
+            }
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    if (checklist.alertTypes != null) {
+        TextButton(onClick = { onChange(checklist.copy(alertTypes = null)) }) {
+            Text(stringResource(R.string.checklists_alert_types_reset))
+        }
     }
 }
 

@@ -5,7 +5,6 @@ import com.example.pokemonalertsv2.data.database.ChecklistEntity
 import com.example.pokemonalertsv2.data.database.ChecklistEntryEntity
 import com.example.pokemonalertsv2.data.database.ChecklistPendingDao
 import com.example.pokemonalertsv2.data.database.ChecklistPendingEntity
-import com.example.pokemonalertsv2.data.checklists.ChecklistRepository
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -23,7 +22,9 @@ data class ChecklistMeta(
     val useForAlerts: Boolean = false,
     val includeEvolutions: Boolean = false,
     val sortOrder: Int = 0,
-    val createdAt: Long = 0
+    val createdAt: Long = 0,
+    /** Since schema 2: the alert types it badges; null for its kind's defaults. */
+    val alertTypes: String? = null
 )
 
 /** A mark on one of the goDex account's collections, not yet written back to goDex. */
@@ -40,8 +41,9 @@ data class ChecklistItem(val dex: Int, val name: String, val sprite: String? = n
  * ([onGoDexAdded]). `c/<id>/<entryKey>` is one Pokémon of a checklist made in the app.
  * `p/<id>/<entryKey>` is a mark on one of the goDex account's collections that goDex has not
  * got yet: the other device shows it at once and either may send it (sending it twice is
- * answered "already applied"). The account's collections and their marks are schema 1: an app
- * from before them would import the owner link without the session.
+ * answered "already applied"). Marks are schema 1: an app from before them would drop them.
+ * Settings are schema 2 (alert types, XXL/XXS kinds, the account's own collections): an older
+ * app would re-encode them without the alert types, or import an owner link without the session.
  */
 class ChecklistsSyncAdapter(
     private val dao: ChecklistDao,
@@ -68,8 +70,11 @@ class ChecklistsSyncAdapter(
         }
     }
 
-    override fun schemaOf(key: String): Int =
-        if (key.startsWith(MARK) || key.startsWith(META + ChecklistRepository.ACCOUNT_ID_PREFIX)) 1 else 0
+    override fun schemaOf(key: String): Int = when {
+        key.startsWith(META) -> 2
+        key.startsWith(MARK) -> 1
+        else -> 0
+    }
 
     override suspend fun apply(upserts: Map<String, String>, deletes: Set<String>): Set<String> {
         val held = LinkedHashSet<String>()
@@ -87,7 +92,7 @@ class ChecklistsSyncAdapter(
             dao.upsertChecklist(
                 ChecklistEntity(
                     id = id, source = meta.source, title = meta.title, kind = meta.kind, url = meta.url,
-                    useForAlerts = meta.useForAlerts, includeEvolutions = meta.includeEvolutions, sortOrder = meta.sortOrder,
+                    useForAlerts = meta.useForAlerts, includeEvolutions = meta.includeEvolutions, alertTypes = meta.alertTypes, sortOrder = meta.sortOrder,
                     lastSyncMillis = current?.lastSyncMillis ?: 0, createdAt = meta.createdAt, updatedAt = System.currentTimeMillis()
                 )
             )
@@ -133,7 +138,7 @@ class ChecklistsSyncAdapter(
         .distinctUntilChanged()
         .map { }
 
-    private fun ChecklistEntity.meta() = ChecklistMeta(source, title, kind, url, useForAlerts, includeEvolutions, sortOrder, createdAt)
+    private fun ChecklistEntity.meta() = ChecklistMeta(source, title, kind, url, useForAlerts, includeEvolutions, sortOrder, createdAt, alertTypes)
 
     companion object {
         private const val META = "m/"

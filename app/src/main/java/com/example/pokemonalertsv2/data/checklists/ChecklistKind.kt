@@ -1,11 +1,12 @@
 package com.example.pokemonalertsv2.data.checklists
 
 /**
- * What a checklist collects. It decides which alerts a checklist can badge: a Hundo checklist
- * matches hundo alerts only, a Shadow one shadow raids, the rest any alert of the species.
+ * What a checklist collects. It sets which alerts a checklist badges by default and what those
+ * alerts must show ([ChecklistMatcher]): a Hundo checklist hundo alerts, XXL and XXS that size,
+ * a Shadow one shadow raids, the rest any alert of the species.
  */
 enum class ChecklistKind {
-    HUNDO, SHINY, COSTUME, LUCKY, SHADOW, DYNAMAX, ANY;
+    HUNDO, SHINY, XXL, XXS, COSTUME, LUCKY, SHADOW, DYNAMAX, ANY;
 
     companion object {
         /**
@@ -26,6 +27,21 @@ enum class ChecklistKind {
                 "event" in name -> COSTUME
                 "shiny" in name -> SHINY
                 "lucky" in name -> LUCKY
+                else -> ANY
+            }
+        }
+
+        /**
+         * A goDex collection's kind from its image and title. An XXL or XXS dex has the plain
+         * living-dex image, so only its name tells ("XXL Dex").
+         */
+        fun fromGoDexCollection(image: String, title: String): ChecklistKind {
+            val kind = fromGoDexImage(image)
+            if (kind != ANY) return kind
+            val words = title.uppercase().split(Regex("[^A-Z0-9]+"))
+            return when {
+                "XXL" in words -> XXL
+                "XXS" in words -> XXS
                 else -> ANY
             }
         }

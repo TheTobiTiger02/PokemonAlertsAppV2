@@ -90,8 +90,8 @@ class GoDexImporter(
             ?: throw IllegalStateException("GoDex did not provide a synchronization token")
         val collectionImage = document.selectFirst("img[src*='/images/collections/']")
             ?: throw IllegalStateException("This does not appear to be a GoDex collection")
-        val kind = ChecklistKind.fromGoDexImage(collectionImage.attr("src"))
         val title = collectionImage.attr("alt").ifBlank { "GoDex collection" }
+        val kind = ChecklistKind.fromGoDexCollection(collectionImage.attr("src"), title)
         val lazyComponents = document.getAllElements().mapNotNull { element ->
             val snapshot = element.attr("wire:snapshot").takeIf { it.isNotBlank() } ?: return@mapNotNull null
             val init = element.attr("x-init")

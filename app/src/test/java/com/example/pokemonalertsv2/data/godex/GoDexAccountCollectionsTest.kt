@@ -58,7 +58,7 @@ class GoDexAccountCollectionsTest {
 
         assertEquals(ChecklistKind.LUCKY, collections[1].kind)
         assertNull("not public", collections[1].publicUrl)
-        assertEquals(ChecklistKind.ANY, collections[2].kind)
+        assertEquals("XXL by its name", ChecklistKind.XXL, collections[2].kind)
         assertEquals(ChecklistKind.HUNDO, collections[3].kind)
         assertFalse("megas only", collections[3].isHundoDex)
     }
