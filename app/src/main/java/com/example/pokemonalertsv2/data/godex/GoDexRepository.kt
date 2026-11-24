@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.example.pokemonalertsv2.work.ChecklistRefreshWorker
 import com.example.pokemonalertsv2.work.GoDexWriteWorker
 
 class GoDexRepository private constructor(private val appContext: Context) {
@@ -58,7 +59,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
 
     suspend fun connect(url: String) = synchronize(url, schedulePeriodicRefresh = true)
 
-    private suspend fun synchronize(url: String, schedulePeriodicRefresh: Boolean) = syncMutex.withLock {
+    private suspend fun synchronize(url: String, schedulePeriodicRefresh: Boolean, clearPending: Boolean = false) = syncMutex.withLock {
         lastRefreshAttemptMillis = System.currentTimeMillis()
         syncOperationState.value = GoDexSyncUiState(isSyncing = true)
         val cookies = preferences.config.first().sessionCookies
@@ -71,6 +72,7 @@ class GoDexRepository private constructor(private val appContext: Context) {
             }
         }
             .onSuccess { result ->
+                if (clearPending) dao.clearPendingUpdates()
                 dao.replaceAllPreservingPending(result.entries)
                 persistRefreshedCookies(result.refreshedCookies)
                 preferences.saveSuccessfulSync(
@@ -130,17 +132,36 @@ class GoDexRepository private constructor(private val appContext: Context) {
         }
     }
 
-    suspend fun saveAuthenticatedSession(cookies: String, writeBackUrl: String) {
-        preferences.saveAuthenticatedSession(cookies, writeBackUrl)
+    /** A goDex sign-in: marks waiting for the session are sent, and the collections refresh with it. */
+    suspend fun saveSession(cookies: String) {
+        preferences.saveSession(cookies)
         syncOperationState.value = GoDexSyncUiState()
         GoDexWriteWorker.enqueue(appContext)
-        GoDexSyncWorker.enqueueImmediate(appContext)
-        GoDexSyncWorker.schedule(appContext)
+        if (preferences.config.first().isConnected) {
+            GoDexSyncWorker.enqueueImmediate(appContext)
+            GoDexSyncWorker.schedule(appContext)
+        }
+        ChecklistRefreshWorker.refreshNow(appContext)
     }
 
-    suspend fun saveWriteBackUrl(url: String) {
-        preferences.saveWriteBackUrl(url)
+    /**
+     * Makes [collection] of the signed-in account the Hundo collection: imported with the
+     * session, then marks are written back to it. Marks still waiting for another collection
+     * are dropped, so they never land in this one.
+     */
+    suspend fun chooseHundo(collection: GoDexAccountCollection) {
+        require(collection.isHundoDex) { "This is not a Hundo collection." }
+        val before = preferences.config.first()
+        val switching = before.writeBackUrl.ifBlank { before.url } != collection.url
+        synchronize(collection.url, schedulePeriodicRefresh = true, clearPending = switching)
+        preferences.saveWriteBackUrl(collection.url)
     }
+
+    /**
+     * One goDex import at a time, the Hundo one and the other checklists alike: each already
+     * sends about a dozen requests to godex.site at once.
+     */
+    suspend fun <T> withImportLock(block: suspend () -> T): T = syncMutex.withLock { block() }
 
     suspend fun disconnect() = syncMutex.withLock {
         dao.clearGoDexData()
@@ -201,7 +222,8 @@ class GoDexRepository private constructor(private val appContext: Context) {
         if (current.isConnected) {
             GoDexSyncWorker.schedule(appContext)
         }
-        if (current.hasSession && dao.getNextPendingUpdate() != null) {
+        val checklistMarksWaiting = AppDatabase.getDatabase(appContext).checklistPendingDao().next() != null
+        if (current.hasSession && (dao.getNextPendingUpdate() != null || checklistMarksWaiting)) {
             GoDexWriteWorker.enqueue(appContext)
         }
         if (current.isConnected && nowMillis - current.lastSuccessfulSyncMillis >= STALE_REFRESH_MILLIS) {

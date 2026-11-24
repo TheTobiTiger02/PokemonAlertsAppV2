@@ -11,3 +11,9 @@ internal val CHECKLIST_TABLES_SQL = listOf(
         "`needed` INTEGER NOT NULL, `spriteUrl` TEXT, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`checklistId`, `entryKey`))",
     "CREATE INDEX IF NOT EXISTS `index_checklist_entries_pokedexId` ON `checklist_entries` (`pokedexId`)"
 )
+
+/** As Room exports it in schemas/27.json; MIGRATION_26_27 creates it. */
+internal const val CHECKLIST_PENDING_TABLE_SQL =
+    "CREATE TABLE IF NOT EXISTS `checklist_pending` (`checklistId` TEXT NOT NULL, `entryKey` TEXT NOT NULL, " +
+        "`caught` INTEGER NOT NULL, `revision` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, " +
+        "`attemptCount` INTEGER NOT NULL, `lastError` TEXT, PRIMARY KEY(`checklistId`, `entryKey`))"

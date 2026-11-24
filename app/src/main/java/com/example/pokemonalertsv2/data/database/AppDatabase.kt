@@ -21,9 +21,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         PokebattlerMoveEntity::class,
         PokebattlerRaidTierEntity::class,
         ChecklistEntity::class,
-        ChecklistEntryEntity::class
+        ChecklistEntryEntity::class,
+        ChecklistPendingEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -32,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pokemonSpeciesDao(): PokemonSpeciesDao
     abstract fun goDexEntryDao(): GoDexEntryDao
     abstract fun checklistDao(): ChecklistDao
+    abstract fun checklistPendingDao(): ChecklistPendingDao
     abstract fun raidCounterDao(): RaidCounterDao
     abstract fun pokeGenieDao(): PokeGenieDao
     abstract fun gameMasterDao(): GameMasterDao
@@ -627,6 +629,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Marks on the account's goDex checklists waiting to be written back; a new table only. */
+        internal val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(CHECKLIST_PENDING_TABLE_SQL)
+            }
+        }
+
         private fun createPerformanceIndexes(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_endTime` ON `alerts` (`endTime`)")
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_alerts_type` ON `alerts` (`type`)")
@@ -666,7 +675,8 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_22_23,
                     MIGRATION_23_24,
                     MIGRATION_24_25,
-                    MIGRATION_25_26
+                    MIGRATION_25_26,
+                    MIGRATION_26_27
                 )
                 .fallbackToDestructiveMigrationFrom(1, 2)
                 .build()

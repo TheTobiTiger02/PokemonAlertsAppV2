@@ -51,6 +51,7 @@ import com.example.pokemonalertsv2.R
 import com.example.pokemonalertsv2.data.checklists.ChecklistKind
 import com.example.pokemonalertsv2.data.checklists.ChecklistRepository
 import com.example.pokemonalertsv2.data.database.ChecklistEntity
+import com.example.pokemonalertsv2.data.database.isGoDexAccount
 import com.example.pokemonalertsv2.data.database.GoDexEntryEntity
 import com.example.pokemonalertsv2.data.gamemaster.GameMasterRepository
 import com.example.pokemonalertsv2.data.godex.GoDexRepository
@@ -100,6 +101,7 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
     var settingsFor by remember { mutableStateOf<ChecklistEntity?>(null) }
     var dexTrackerOpen by remember { mutableStateOf<com.example.pokemonalertsv2.data.dextracker.DexTrackerCollection?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
+    var accountCollections by rememberSaveable { mutableStateOf(false) }
     var creating by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
 
@@ -147,6 +149,7 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
                 onOpen = { openId = it },
                 onSettings = { settingsFor = it },
                 onAddGoDex = { adding = true },
+                onAccountCollections = if (config.sessionCookies.isNotBlank()) ({ accountCollections = true }) else null,
                 onNewChecklist = { creating = true },
                 onOpenGoDexSettings = onOpenGoDexSettings,
                 extra = {
@@ -171,6 +174,13 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
                     AppText.get(R.string.checklists_added, added.title)
                 }
             }
+        )
+    }
+    if (accountCollections) {
+        GoDexCollectionsSheet(
+            mode = GoDexCollectionsMode.ADD,
+            onDismiss = { accountCollections = false },
+            onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
         )
     }
     if (creating) {
@@ -218,6 +228,8 @@ private fun ChecklistList(
     onOpen: (String) -> Unit,
     onSettings: (ChecklistEntity) -> Unit,
     onAddGoDex: () -> Unit,
+    /** Signed in to goDex: lists the account's collections to add. */
+    onAccountCollections: (() -> Unit)?,
     onNewChecklist: () -> Unit,
     onOpenGoDexSettings: () -> Unit,
     /** Other sources (Dex Tracker), under the app's own checklists. */
@@ -266,6 +278,12 @@ private fun ChecklistList(
         Button(onClick = onNewChecklist, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Text(stringResource(R.string.checklists_new), modifier = Modifier.padding(start = 8.dp))
+        }
+        if (onAccountCollections != null) {
+            OutlinedButton(onClick = onAccountCollections, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text(stringResource(R.string.godex_collections_title), modifier = Modifier.padding(start = 8.dp))
+            }
         }
         OutlinedButton(onClick = onAddGoDex, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -320,15 +338,22 @@ private fun GoDexHundoEditor(goDex: GoDexRepository, entries: List<GoDexEntryEnt
 }
 
 /**
- * A goDex collection added by link (read-only here, refreshed from goDex) or a checklist made
- * in the app (marked here, Pokémon added and removed here).
+ * A goDex collection (read-only when added by link; marked here and written back when it is the
+ * signed-in account's own) or a checklist made in the app (marked here, Pokémon added and
+ * removed here).
  */
 @Composable
 private fun OtherChecklistEditor(repository: ChecklistRepository, checklist: ChecklistEntity, onBack: () -> Unit) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val rows by remember(checklist.id) { repository.entries(checklist.id) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val entries = remember(rows) { rows.map { it.asGoDexEntry() } }
     val local = checklist.source == ChecklistEntity.SOURCE_LOCAL
+    val account = checklist.isGoDexAccount
+    val goDex = remember(context) { GoDexRepository.getInstance(context) }
+    val sync by goDex.syncUiState.collectAsStateWithLifecycle()
+    val pendingByChecklist by repository.pendingEntryKeys.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val pending = pendingByChecklist[checklist.id].orEmpty()
     var addingSpecies by rememberSaveable { mutableStateOf(false) }
     EditorFrame(
         checklist.title,
@@ -344,17 +369,19 @@ private fun OtherChecklistEditor(repository: ChecklistRepository, checklist: Che
     ) { families, types ->
         GoDexChecklistEditor(
             entries = entries,
-            pendingEntryKeys = emptySet(),
-            canEdit = local,
-            sessionState = GoDexSessionState.NONE,
+            pendingEntryKeys = pending,
+            canEdit = local || account,
+            sessionState = if (account) sync.sessionState else GoDexSessionState.NONE,
             isSyncing = false,
-            syncError = null,
-            pendingCount = 0,
+            syncError = if (account) sync.errorMessage else null,
+            pendingCount = pending.size,
             families = families,
             typesByDexAndRegion = types,
-            onSetCaught = { keys, caught -> repository.setLocalCaught(checklist.id, keys, caught) },
-            onUndo = { repository.undoLocal(checklist.id, it) },
-            onSignIn = null,
+            onSetCaught = { keys, caught ->
+                if (account) repository.setGoDexCaught(checklist.id, keys, caught) else repository.setLocalCaught(checklist.id, keys, caught)
+            },
+            onUndo = { if (account) repository.undoGoDex(checklist.id, it) else repository.undoLocal(checklist.id, it) },
+            onSignIn = if (account) ({ context.startActivity(GoDexLoginActivity.createIntent(context)) }) else null,
             onRemove = if (local) ({ keys -> scope.launch { repository.removeEntries(checklist.id, keys) } }) else null
         )
     }

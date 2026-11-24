@@ -3,6 +3,8 @@ package com.example.pokemonalertsv2.sync
 import com.example.pokemonalertsv2.data.database.ChecklistDao
 import com.example.pokemonalertsv2.data.database.ChecklistEntity
 import com.example.pokemonalertsv2.data.database.ChecklistEntryEntity
+import com.example.pokemonalertsv2.data.database.ChecklistPendingDao
+import com.example.pokemonalertsv2.data.database.ChecklistPendingEntity
 import com.example.pokemonalertsv2.data.database.ChecklistProgressRow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +48,77 @@ class ChecklistsSyncAdapterTest {
             }
             return changed
         }
+    }
+
+    /** The pending marks in memory, over [FakeChecklistDao]'s entries. */
+    private class FakePendingDao(private val lists: FakeChecklistDao) : ChecklistPendingDao {
+        val rows = MutableStateFlow<Map<Pair<String, String>, ChecklistPendingEntity>>(emptyMap())
+        override suspend fun insert(update: ChecklistPendingEntity) { rows.value = rows.value + ((update.checklistId to update.entryKey) to update) }
+        override suspend fun get(checklistId: String, entryKey: String) = rows.value[checklistId to entryKey]
+        override suspend fun next() = rows.value.values.minByOrNull { it.timestamp }
+        override suspend fun forChecklist(checklistId: String) = rows.value.values.filter { it.checklistId == checklistId }
+        override fun observeAll() = rows.map { it.values.sortedBy { row -> row.checklistId + row.entryKey } }
+        override suspend fun all() = rows.value.values.sortedBy { it.checklistId + it.entryKey }
+        override suspend fun deleteIfRevision(checklistId: String, entryKey: String, revision: Long): Int {
+            if (rows.value[checklistId to entryKey]?.revision != revision) return 0
+            rows.value = rows.value - (checklistId to entryKey)
+            return 1
+        }
+        override suspend fun delete(checklistId: String, entryKey: String) { rows.value = rows.value - (checklistId to entryKey) }
+        override suspend fun clear(checklistId: String) { rows.value = rows.value.filterKeys { it.first != checklistId } }
+        override suspend fun recordFailure(checklistId: String, entryKey: String, revision: Long, error: String) = 0
+        override suspend fun neededOf(checklistId: String, entryKey: String) = lists.rows.value[checklistId to entryKey]?.needed
+        override suspend fun updateNeeded(checklistId: String, entryKey: String, needed: Boolean, now: Long) {
+            lists.setNeeded(checklistId, listOf(entryKey), needed, now)
+        }
+        override suspend fun clearEntries(checklistId: String) = lists.clearEntries(checklistId)
+        override suspend fun insertEntries(entries: List<ChecklistEntryEntity>) = lists.upsertEntries(entries)
+    }
+
+    private fun account(id: String) = ChecklistEntity(id = id, source = ChecklistEntity.SOURCE_GODEX, title = "Lucky Dex", kind = "LUCKY", url = "https://godex.site/collection/766")
+
+    @Test
+    fun marksOnTheAccountsCollectionsTravelUntilWrittenBack() = runBlocking {
+        val a = FakeChecklistDao()
+        val aMarks = FakePendingDao(a)
+        a.upsertChecklist(account("godex-own-766"))
+        a.upsertEntries(listOf(item("godex-own-766", 25, needed = true)))
+        aMarks.setDesiredState("godex-own-766", "0025-none", caught = true, now = 50)
+        val adapterA = ChecklistsSyncAdapter(a, aMarks)
+        val snapshot = adapterA.snapshot()
+        assertEquals(setOf("m/godex-own-766", "p/godex-own-766/0025-none"), snapshot.keys)
+        assertEquals("older apps leave them alone", 1, adapterA.schemaOf("p/godex-own-766/0025-none"))
+        assertEquals(1, adapterA.schemaOf("m/godex-own-766"))
+        assertEquals(0, adapterA.schemaOf("m/local-1"))
+
+        val b = FakeChecklistDao()
+        val bMarks = FakePendingDao(b)
+        b.upsertChecklist(account("godex-own-766"))
+        b.upsertEntries(listOf(item("godex-own-766", 25, needed = true)))
+        val held = ChecklistsSyncAdapter(b, bMarks).apply(snapshot, emptySet())
+        assertTrue(held.isEmpty())
+        assertEquals("shown caught at once", false, b.entries("godex-own-766").single().needed)
+        assertEquals(true, bMarks.get("godex-own-766", "0025-none")?.caught)
+
+        ChecklistsSyncAdapter(b, bMarks).apply(emptyMap(), setOf("p/godex-own-766/0025-none"))
+        assertNull("sent by the other device", bMarks.get("godex-own-766", "0025-none"))
+    }
+
+    @Test
+    fun aMarkIsUndoneBeforeItIsSent() = runBlocking {
+        val lists = FakeChecklistDao()
+        val marks = FakePendingDao(lists)
+        lists.upsertChecklist(account("g"))
+        lists.upsertEntries(listOf(item("g", 25, needed = true), item("g", 26, needed = false)))
+        val undo = marks.setDesiredStates("g", listOf("0025-none", "0026-none"), caught = true, now = 10)
+        assertEquals("the caught one is left alone", listOf("0025-none"), undo.map { it.entryKey })
+        marks.undoDesiredStates("g", undo, now = 11)
+        assertNull("nothing to send", marks.get("g", "0025-none"))
+        assertEquals(true, lists.entries("g").first { it.entryKey == "0025-none" }.needed)
+
+        marks.setDesiredState("g", "0025-none", caught = true, now = 20)
+        marks.replaceEntriesPreservingPending("g", listOf(item("g", 25, needed = true)))
+        assertEquals("a fresh import keeps the unsent mark", false, lists.entries("g").single().needed)
     }
 
     private fun local(id: String) = ChecklistEntity(id = id, source = ChecklistEntity.SOURCE_LOCAL, title = "Shinies", kind = "SHINY", useForAlerts = true)

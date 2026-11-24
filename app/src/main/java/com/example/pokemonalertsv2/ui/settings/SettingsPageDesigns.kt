@@ -581,7 +581,15 @@ internal fun GoDexPageContent(
     LaunchedEffect(config.isConnected) { if (page != GoDexPage.ROOT) back() }
 
     val signIn = { context.startActivity(GoDexLoginActivity.createIntent(context)) }
-    val pickChecklist = { context.startActivity(GoDexLoginActivity.createIntent(context, startAtPicker = true)) }
+    var choosingHundo by rememberSaveable { mutableStateOf(false) }
+    val pickChecklist = { choosingHundo = true }
+    if (choosingHundo) {
+        com.example.pokemonalertsv2.ui.checklists.GoDexCollectionsSheet(
+            mode = com.example.pokemonalertsv2.ui.checklists.GoDexCollectionsMode.HUNDO,
+            onDismiss = { choosingHundo = false },
+            onMessage = { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+        )
+    }
     val syncLine = goDexSyncLine(config, sync, now)
     val account = goDexAccountLine(config, sync)
 
@@ -618,7 +626,9 @@ internal fun GoDexPageContent(
             when (shown) {
                 GoDexPage.ROOT -> when {
                     !config.isConnected -> GoDexNotConnected(
+                        signedIn = config.hasSession,
                         onSignIn = signIn,
+                        onChooseHundo = pickChecklist,
                         onPublicLink = { open(GoDexPage.PUBLIC_LINK) }
                     )
 
@@ -685,7 +695,7 @@ internal fun GoDexPageContent(
 }
 
 @Composable
-private fun GoDexNotConnected(onSignIn: () -> Unit, onPublicLink: () -> Unit) {
+private fun GoDexNotConnected(signedIn: Boolean, onSignIn: () -> Unit, onChooseHundo: () -> Unit, onPublicLink: () -> Unit) {
     Column(
         modifier = Modifier.panelGutter().padding(top = Spacing.lg, bottom = Spacing.sm),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -696,8 +706,9 @@ private fun GoDexNotConnected(onSignIn: () -> Unit, onPublicLink: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Button(onClick = onSignIn, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text(stringResource(R.string.settings_sign_in_to_godex), maxLines = 1)
+        // Signed in already (here or on another device): only the Hundo collection is missing.
+        Button(onClick = if (signedIn) onChooseHundo else onSignIn, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text(stringResource(if (signedIn) R.string.settings_choose_checklist else R.string.settings_sign_in_to_godex), maxLines = 1)
         }
     }
     PanelNavRow(
@@ -755,7 +766,7 @@ private fun GoDexAccountRows(
     if (config.hasSession) {
         ActionRow(
             title = if (config.hasWriteBackUrl) stringResource(R.string.settings_change_checklist) else stringResource(R.string.settings_choose_checklist),
-            summary = if (config.hasWriteBackUrl) "Sending catches to ${config.writeBackUrl.substringAfterLast("/")}"
+            summary = if (config.hasWriteBackUrl) "Sending catches to ${config.collectionTitle.ifBlank { config.writeBackUrl.substringAfterLast("/") }}"
             else stringResource(R.string.settings_signed_in_but_no_checklist_is),
             problem = !config.hasWriteBackUrl,
             onClick = onPickChecklist,
