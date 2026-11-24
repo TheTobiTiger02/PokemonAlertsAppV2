@@ -669,8 +669,8 @@
     <string name="events_upcoming">Demnächst</string>
     <string name="events_you_ll_be_reminded_x_min">Du wirst %1$s Min. vor Beginn erinnert</string>
     <string name="godex_choose_google_account">Google-Konto wählen</string>
-    <string name="whats_new_checklist_alert_types">Wähle, welche Alarme jede Checkliste markiert: Öffne die Einstellungen einer Checkliste und hake Spawns, Raids, Quests, Max-Kämpfe und mehr an. Ihre Art gibt sinnvolle Vorgaben, auf die du zurücksetzen kannst.</string>
-    <string name="whats_new_checklist_sizes">Neue Checklisten-Arten XXL und XXS: Sie markieren Alarme, die diese Größe zeigen, und deine goDex-Dexe für XXL und XXS werden am Namen erkannt. Eine schillernde Quest zeigt jetzt Shiny ✨ fehlt.</string>
+    <string name="whats_new_dex_tracker_look">Dex-Tracker-Sammlungen sehen jetzt aus wie die Web-App und funktionieren auch so: Übersicht mit Summen, Suche, Sortierung, Filter und Gruppen, und Karten, deren Stufen du antippst, um einen Fang, ein nicht zugeordnetes Exemplar oder einen Tausch abzuhaken. Tippe auf eine Karte für Zähler, Ersatz und letzte Aktivität.</string>
+    <string name="whats_new_dex_tracker_badges">Dex-Tracker-Sammlungen können jetzt auch Alarme markieren: Öffne die Einstellungen einer Sammlung, wähle ihre Art und schalte Alarme markieren ein.</string>
     <string name="godex_signed_in">Bei goDex angemeldet</string>
     <string name="godex_collections_title">Deine goDex-Sammlungen</string>
     <string name="godex_collections_hint">Hake die Sammlungen an, die du hinzufügen willst. Markierungen in der App gehen zurück an goDex.</string>

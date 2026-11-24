@@ -91,6 +91,7 @@ class ChecklistsSyncAdapterTest {
         assertEquals("settings carry alert types", 2, adapterA.schemaOf("m/godex-own-766"))
         assertEquals(2, adapterA.schemaOf("m/local-1"))
         assertEquals(0, adapterA.schemaOf("c/local-1/0001-none"))
+        assertEquals("Dex Tracker settings", 3, adapterA.schemaOf("m/dextracker-abc"))
 
         val b = FakeChecklistDao()
         val bMarks = FakePendingDao(b)

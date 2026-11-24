@@ -93,7 +93,9 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
     val checklistRepository = remember(context) { ChecklistRepository.getInstance(context) }
     val goDexEntries by goDex.entries.collectAsStateWithLifecycle()
     val config by goDex.config.collectAsStateWithLifecycle()
-    val others by checklistRepository.checklists.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allChecklists by checklistRepository.checklists.collectAsStateWithLifecycle(initialValue = emptyList())
+    // Dex Tracker collections keep only their settings here and are listed in their own section.
+    val others = allChecklists.filter { it.source != ChecklistEntity.SOURCE_DEXTRACKER }
     val progress by checklistRepository.progress.collectAsStateWithLifecycle(initialValue = emptyMap())
     val requested by ChecklistDeepLink.pending.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -135,7 +137,11 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         when {
-            dexTrackerOpen != null -> DexTrackerCollectionScreen(dexTrackerOpen!!, onBack = { dexTrackerOpen = null })
+            dexTrackerOpen != null -> com.example.pokemonalertsv2.ui.checklists.dextracker.DexTrackerCollectionScreen(
+                dexTrackerOpen!!,
+                onBack = { dexTrackerOpen = null },
+                onSettings = { scope.launch { settingsFor = checklistRepository.dexTrackerSettings(dexTrackerOpen!!) } }
+            )
             editingGoDex -> GoDexHundoEditor(goDex, goDexEntries, config.collectionTitle, onBack = { openId = null })
             openOther != null -> OtherChecklistEditor(checklistRepository, openOther, onBack = { openId = null })
             else -> ChecklistList(
@@ -155,6 +161,8 @@ internal fun ChecklistsRoute(onOpenGoDexSettings: () -> Unit) {
                 extra = {
                     DexTrackerSection(
                         onOpen = { dexTrackerOpen = it },
+                        onSettings = { collection -> scope.launch { settingsFor = checklistRepository.dexTrackerSettings(collection) } },
+                        badging = allChecklists.filter { it.source == ChecklistEntity.SOURCE_DEXTRACKER && it.useForAlerts }.mapTo(HashSet()) { it.id },
                         onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } }
                     )
                 }

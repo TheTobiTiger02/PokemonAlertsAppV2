@@ -670,8 +670,8 @@
     <string name="events_upcoming">Upcoming</string>
     <string name="events_you_ll_be_reminded_x_min">You\'ll be reminded %1$s min before it starts</string>
     <string name="godex_choose_google_account">Choose Google account</string>
-    <string name="whats_new_checklist_alert_types">Choose which alerts each checklist badges: open a checklist\'s settings and tick Spawns, Raids, Quests, Max Battles and more. Its kind sets sensible defaults, and you can reset to them.</string>
-    <string name="whats_new_checklist_sizes">New XXL and XXS checklist kinds: they badge alerts that show that size, and your goDex XXL and XXS dexes are recognised by name. A shiny quest now says Shiny ✨ needed.</string>
+    <string name="whats_new_dex_tracker_look">Dex Tracker collections now look and work like the web app: the overview with its totals, search, sorting, filters and groups, and cards whose stages you tap to tick a catch, an unassigned copy or a trade. Tap a card for its counters, spares and recent activity.</string>
+    <string name="whats_new_dex_tracker_badges">Dex Tracker collections can badge alerts too: open a collection\'s settings, pick its kind and switch on Badge alerts.</string>
     <string name="godex_signed_in">Signed in to goDex</string>
     <string name="godex_collections_title">Your goDex collections</string>
     <string name="godex_collections_hint">Tick the collections to add. Marks you make in the app are sent back to goDex.</string>

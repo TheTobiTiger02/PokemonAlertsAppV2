@@ -28,18 +28,32 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.withContext
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
-/** Undoes one "+1 caught". */
-data class DexTrackerUndo(val collectionId: String, val entryId: String, val gained: Int, val eventId: String, val day: String)
+/** Undoes one quick edit: [before] → [after] of an entry, logged as [event]. */
+data class DexTrackerUndo(
+    val collectionId: String,
+    val before: DexTrackerEntry,
+    val after: DexTrackerEntry,
+    val event: DexTrackerEvent?
+)
 
 /**
  * Dex Tracker (the PokemonGoChecklist web app) as a checklist source. It has its own Firebase
  * project, used here as a second Firebase app named "dextracker": Google sign-in to it, live
- * collections and entries from its Firestore, and "+1 caught" written the way the web app writes it.
- * Firestore's offline cache queues writes made without a connection.
+ * collections, entries and alt accounts from its Firestore, and the web app's quick edits written
+ * the way it writes them (store.ts quickEdit: increments, the day's counter and an activity
+ * event in one batch). Firestore's offline cache queues writes made without a connection.
  */
 class DexTrackerRepository private constructor(private val appContext: Context) {
     private val app: FirebaseApp? = runCatching {
@@ -96,73 +110,124 @@ class DexTrackerRepository private constructor(private val appContext: Context) 
         runCatching { CredentialManager.create(context).clearCredentialState(ClearCredentialStateRequest()) }
     }
 
-    fun collections(uid: String): Flow<List<DexTrackerCollection>> {
+    fun collections(uid: String): Flow<List<DexTrackerCollection>> =
+        listen("users/$uid/collections") { docs -> docs.mapNotNull(::toCollection).sortedBy { it.createdAt } }
+
+    fun accounts(uid: String): Flow<List<DexTrackerAccount>> =
+        listen("users/$uid/accounts") { docs -> docs.mapNotNull(::toAccount).sortedBy { it.order } }
+
+    /**
+     * The entries of a collection. The latest snapshot is also kept for [apply] and [undo], so
+     * an action always starts from the entry as it is now, not as a screen last drew it.
+     */
+    fun entries(uid: String, collectionId: String): Flow<List<DexTrackerEntry>> =
+        listen("users/$uid/collections/$collectionId/entries") { docs ->
+            docs.mapNotNull(::toEntry).sortedBy { it.order }.also { list -> latest[collectionId] = list.associateBy { it.id } }
+        }
+
+    /** The last few activity events of one entry, newest first. */
+    fun events(uid: String, collectionId: String, entryId: String, limit: Int = 5): Flow<List<DexTrackerEvent>> {
         val db = firestore ?: return emptyFlow()
         return callbackFlow {
-            val registration = db.collection("users/$uid/collections").addSnapshotListener { snapshot, error ->
+            // Sorted here: an equality filter with an order on another field needs an index.
+            val registration = db.collection("users/$uid/collections/$collectionId/events")
+                .whereEqualTo("entryId", entryId)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        close(error)
+                        return@addSnapshotListener
+                    }
+                    trySend(snapshot?.documents.orEmpty().mapNotNull(::toEvent).sortedByDescending { it.at }.take(limit))
+                }
+            awaitClose { registration.remove() }
+        }
+    }
+
+    private fun <T> listen(path: String, map: (List<DocumentSnapshot>) -> T): Flow<T> {
+        val db = firestore ?: return emptyFlow()
+        return callbackFlow {
+            val registration = db.collection(path).addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     close(error)
                     return@addSnapshotListener
                 }
-                trySend(snapshot?.documents.orEmpty().mapNotNull(::toCollection).sortedBy { it.createdAt })
+                trySend(map(snapshot?.documents.orEmpty()))
             }
             awaitClose { registration.remove() }
         }
     }
 
-    fun entries(uid: String, collectionId: String): Flow<List<DexTrackerEntry>> {
-        val db = firestore ?: return emptyFlow()
-        return callbackFlow {
-            val registration = db.collection("users/$uid/collections/$collectionId/entries").addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    close(error)
-                    return@addSnapshotListener
+    /**
+     * Badge entries ([DexTrackerAlertIndex]) of the given collections, keyed by collection id,
+     * while signed in. A listener that fails (offline, permissions) tries again later.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun alertEntries(collectionIds: Set<String>): Flow<Map<String, List<com.example.pokemonalertsv2.data.database.GoDexEntryEntity>>> {
+        if (firestore == null || collectionIds.isEmpty()) return flowOf(emptyMap())
+        val catalog = DexTrackerCatalog.get(appContext)
+        return uid.flatMapLatest { user ->
+            if (user == null) return@flatMapLatest flowOf(emptyMap())
+            combine(
+                collectionIds.map { id ->
+                    entries(user, id)
+                        .retryWhen { _, attempt ->
+                            delay(minOf(RETRY_MAX_MILLIS, RETRY_BASE_MILLIS shl attempt.toInt().coerceAtMost(4)))
+                            true
+                        }
+                        .map { id to DexTrackerAlertIndex.entries(it, catalog) }
                 }
-                trySend(snapshot?.documents.orEmpty().mapNotNull(::toEntry).sortedBy { it.order })
-            }
-            awaitClose { registration.remove() }
+            ) { pairs -> pairs.toMap() }
         }
     }
 
-    /** One more caught copy on the main account, as an unassigned copy (the web app's quick +1). */
-    suspend fun plusOne(collectionId: String, entry: DexTrackerEntry): DexTrackerUndo {
-        val db = firestore ?: error("Dex Tracker is not set up")
-        val uid = _uid.value ?: error("Not signed in to Dex Tracker")
-        val change = DexTrackerDomain.plusOne(entry, System.currentTimeMillis(), UUID.randomUUID().toString())
+    private val latest = ConcurrentHashMap<String, Map<String, DexTrackerEntry>>()
+
+    private fun current(collectionId: String, entryId: String): DexTrackerEntry =
+        latest[collectionId]?.get(entryId) ?: throw DexTrackerException("This entry was removed.")
+
+    private fun remember(collectionId: String, entry: DexTrackerEntry) {
+        latest.compute(collectionId) { _, entries -> entries.orEmpty() + (entry.id to entry) }
+    }
+
+    /**
+     * One quick edit, as the web app's quickEdit: atomic increments on the entry, the day's
+     * credited count and an activity event, in one batch. Not awaited: offline, the write waits in
+     * Firestore's queue and the snapshot shows it at once. Throws [DexTrackerException] with the
+     * web app's message when the action does not fit the entry.
+     */
+    fun apply(collectionId: String, entryId: String, action: DexTrackerAction): DexTrackerUndo {
+        val before = current(collectionId, entryId)
+        val patch = DexTrackerDomain.actionPatch(before, action)
+        val event = DexTrackerDomain.describeChange(before, patch.next, System.currentTimeMillis(), UUID.randomUUID().toString())
+        write(collectionId, entryId, patch, addEvent = event, removeEvent = null)
+        remember(collectionId, patch.next)
+        return DexTrackerUndo(collectionId, before, patch.next, event)
+    }
+
+    /** Takes a quick edit back on the entry as it is now, and drops its activity event. */
+    fun undo(undo: DexTrackerUndo) {
+        val now = current(undo.collectionId, undo.after.id)
+        val patch = DexTrackerDomain.revertPatch(now, undo.before, undo.after)
+        write(undo.collectionId, undo.after.id, patch, addEvent = null, removeEvent = undo.event?.id)
+        remember(undo.collectionId, patch.next)
+    }
+
+    private fun write(collectionId: String, entryId: String, patch: DexTrackerPatch, addEvent: DexTrackerEvent?, removeEvent: String?) {
+        val db = firestore ?: throw DexTrackerException("Dex Tracker is not set up")
+        val uid = _uid.value ?: throw DexTrackerException("Not signed in to Dex Tracker")
         val collection = db.document("users/$uid/collections/$collectionId")
         val batch = db.batch()
-        batch.update(collection.collection("entries").document(entry.id), change.increments.mapValues { FieldValue.increment(it.value) })
-        if (change.gained != 0) {
+        batch.update(collection.collection("entries").document(entryId), patch.increments.mapValues { FieldValue.increment(it.value) })
+        if (patch.gained != 0) {
+            val day = DexTrackerDomain.dayKey()
             batch.set(
-                collection.collection("activity").document(change.day),
-                mapOf("date" to change.day, "gained" to FieldValue.increment(change.gained.toLong())),
+                collection.collection("activity").document(day),
+                mapOf("date" to day, "gained" to FieldValue.increment(patch.gained.toLong())),
                 SetOptions.merge()
             )
         }
-        batch.set(collection.collection("events").document(change.event["id"] as String), change.event)
-        // Not awaited: offline, the write waits in Firestore's queue and the snapshot shows it at once.
-        batch.commit()
-        return DexTrackerUndo(collectionId, entry.id, change.gained, change.event["id"] as String, change.day)
-    }
-
-    /** Takes a "+1 caught" back, as the web app's Undo does (revertPatch, `undoes`). */
-    fun undo(undo: DexTrackerUndo) {
-        val db = firestore ?: return
-        val uid = _uid.value ?: return
-        val collection = db.document("users/$uid/collections/${undo.collectionId}")
-        val batch = db.batch()
-        batch.update(
-            collection.collection("entries").document(undo.entryId),
-            mapOf("unassigned" to FieldValue.increment(-1), "revision" to FieldValue.increment(1))
-        )
-        if (undo.gained != 0) {
-            batch.set(
-                collection.collection("activity").document(undo.day),
-                mapOf("date" to undo.day, "gained" to FieldValue.increment(-undo.gained.toLong())),
-                SetOptions.merge()
-            )
-        }
-        batch.delete(collection.collection("events").document(undo.eventId))
+        addEvent?.let { batch.set(collection.collection("events").document(it.id), it.toMap()) }
+        removeEvent?.let { batch.delete(collection.collection("events").document(it)) }
         batch.commit()
     }
 
@@ -175,19 +240,46 @@ class DexTrackerRepository private constructor(private val appContext: Context) 
         )
     }.getOrNull()
 
+    private fun toAccount(doc: DocumentSnapshot): DexTrackerAccount? = runCatching {
+        DexTrackerAccount(doc.id, doc.getString("name") ?: return null, doc.getLong("order")?.toInt() ?: 0)
+    }.getOrNull()
+
+    /** Counts per key; zero counts are dropped, as the web app's own reads treat them. */
+    private fun counts(value: Any?): Map<String, Int> =
+        (value as? Map<*, *>).orEmpty().entries
+            .mapNotNull { (key, count) -> (key as? String)?.let { it to ((count as? Number)?.toInt() ?: 0) } }
+            .filter { it.second > 0 }
+            .toMap()
+
     private fun toEntry(doc: DocumentSnapshot): DexTrackerEntry? = runCatching {
-        @Suppress("UNCHECKED_CAST")
-        val owned = (doc.get("owned") as? Map<String, Any?>).orEmpty()
-            .mapValues { (it.value as? Number)?.toInt() ?: 0 }
-            .filterValues { it > 0 }
         DexTrackerEntry(
             id = doc.id,
             pokemonId = doc.getLong("pokemonId")?.toInt() ?: return null,
             name = doc.getString("name") ?: return null,
+            label = doc.getString("label").orEmpty(),
             target = doc.getLong("target")?.toInt() ?: 1,
-            owned = owned,
+            targets = (doc.get("targets") as? List<*>).orEmpty().mapNotNull { (it as? Number)?.toInt() },
+            owned = counts(doc.get("owned")),
             unassigned = doc.getLong("unassigned")?.toInt() ?: 0,
-            order = doc.getLong("order")?.toInt() ?: 0
+            // Entries saved before alt accounts existed have no alts map.
+            extras = doc.getLong("extras")?.toInt() ?: 0,
+            alts = counts(doc.get("alts")),
+            order = doc.getLong("order")?.toInt() ?: 0,
+            revision = doc.getLong("revision") ?: 0
+        )
+    }.getOrNull()
+
+    private fun toEvent(doc: DocumentSnapshot): DexTrackerEvent? = runCatching {
+        DexTrackerEvent(
+            id = doc.id,
+            at = doc.getLong("at") ?: return null,
+            entryId = doc.getString("entryId") ?: return null,
+            entryName = doc.getString("entryName").orEmpty(),
+            pokemonId = doc.getLong("pokemonId")?.toInt() ?: return null,
+            kind = doc.getString("kind") ?: return null,
+            count = doc.getLong("count")?.toInt() ?: 0,
+            change = doc.getLong("change")?.toInt() ?: 0,
+            account = if (doc.contains("account")) DexTrackerPool(doc.getString("account")) else null
         )
     }.getOrNull()
 
@@ -195,6 +287,8 @@ class DexTrackerRepository private constructor(private val appContext: Context) 
 
     companion object {
         private const val APP_NAME = "dextracker"
+        private const val RETRY_BASE_MILLIS = 5_000L
+        private const val RETRY_MAX_MILLIS = 60_000L
 
         /** Whether this build has Dex Tracker's Firebase settings (local.properties DEX_TRACKER_*). */
         val isConfigured: Boolean
