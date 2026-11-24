@@ -22,6 +22,12 @@ data class ChecklistEntity(
     val useForAlerts: Boolean = false,
     /** Also badge an alert whose evolution is still needed here. */
     val includeEvolutions: Boolean = false,
+    /**
+     * The alert types this checklist badges, as comma-separated
+     * [com.example.pokemonalertsv2.data.filters.FilterAlertType] names; null means its kind's
+     * defaults ([com.example.pokemonalertsv2.data.checklists.ChecklistMatcher.defaultAlertTypes]).
+     */
+    val alertTypes: String? = null,
     val sortOrder: Int = 0,
     val lastSyncMillis: Long = 0,
     val createdAt: Long = 0,

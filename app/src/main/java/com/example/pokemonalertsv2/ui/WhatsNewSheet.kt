@@ -32,11 +32,11 @@ import kotlinx.coroutines.launch
 import com.example.pokemonalertsv2.ui.components.keepScrollInSheet
 
 /** The release the notes below describe. Bump it together with the notes. */
-internal const val WHATS_NEW_RELEASE = "1.38.0"
+internal const val WHATS_NEW_RELEASE = "1.39.0"
 
 private val WHATS_NEW_POINTS = listOf(
-    R.string.whats_new_godex_collections,
-    R.string.whats_new_godex_sign_in
+    R.string.whats_new_checklist_alert_types,
+    R.string.whats_new_checklist_sizes
 )
 
 /**

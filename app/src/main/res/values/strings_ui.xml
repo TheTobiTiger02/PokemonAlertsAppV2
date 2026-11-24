@@ -670,8 +670,8 @@
     <string name="events_upcoming">Upcoming</string>
     <string name="events_you_ll_be_reminded_x_min">You\'ll be reminded %1$s min before it starts</string>
     <string name="godex_choose_google_account">Choose Google account</string>
-    <string name="whats_new_godex_collections">Signed in to goDex, the Checklists tab now lists all your goDex collections: tick the ones you want and add them in one go. Marks you make on them in the app are sent back to goDex, as for your Hundo collection.</string>
-    <string name="whats_new_godex_sign_in">Signing in to goDex no longer picks your Hundo collection from the page you open. Choose it from your collection list in Settings › goDex.</string>
+    <string name="whats_new_checklist_alert_types">Choose which alerts each checklist badges: open a checklist\'s settings and tick Spawns, Raids, Quests, Max Battles and more. Its kind sets sensible defaults, and you can reset to them.</string>
+    <string name="whats_new_checklist_sizes">New XXL and XXS checklist kinds: they badge alerts that show that size, and your goDex XXL and XXS dexes are recognised by name. A shiny quest now says Shiny ✨ needed.</string>
     <string name="godex_signed_in">Signed in to goDex</string>
     <string name="godex_collections_title">Your goDex collections</string>
     <string name="godex_collections_hint">Tick the collections to add. Marks you make in the app are sent back to goDex.</string>

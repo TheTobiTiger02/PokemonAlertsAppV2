@@ -55,6 +55,7 @@ data class AlertEntity(
     val isWeatherBoosted: Boolean? = null,
     val currentWeather: String? = null,
     val currentWeatherConfirmed: Boolean? = null,
+    val size: String? = null,
     
     // Location details
     val pokemonLocation: String? = null,
@@ -138,6 +139,7 @@ fun AlertEntity.toDomain(): PokemonAlert {
         isWeatherBoosted = isWeatherBoosted,
         currentWeather = currentWeather,
         currentWeatherConfirmed = currentWeatherConfirmed,
+        size = size,
         pokemonLocation = pokemonLocation,
         gym = gym,
         pokestop = pokestop,
@@ -223,6 +225,7 @@ fun PokemonAlert.toEntity(): AlertEntity {
         isWeatherBoosted = isWeatherBoosted,
         currentWeather = currentWeather,
         currentWeatherConfirmed = currentWeatherConfirmed,
+        size = size,
         pokemonLocation = pokemonLocation,
         gym = gym,
         pokestop = pokestop,

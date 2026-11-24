@@ -181,6 +181,9 @@ data class PokemonAlert(
     val isWeatherBoosted: Boolean? = null,
     val currentWeather: String? = null,
     val currentWeatherConfirmed: Boolean? = null,
+
+    /** Size class (XXS, XS, M, XL, XXL) when the source shows it; XXL/XXS checklists match on it. */
+    val size: String? = null,
     
     // Location details
     val pokemonLocation: String? = null,

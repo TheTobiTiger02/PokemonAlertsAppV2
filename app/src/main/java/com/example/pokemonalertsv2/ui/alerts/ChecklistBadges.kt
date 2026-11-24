@@ -36,7 +36,12 @@ internal fun rememberChecklistBadges(alert: PokemonAlert): List<ChecklistBadge> 
 
 @Composable
 private fun badgeText(badge: ChecklistBadge): String {
-    val name = if (badge.kind == ChecklistKind.ANY) badge.title else kindLabel(badge.kind)
+    val name = when {
+        badge.kind == ChecklistKind.ANY -> badge.title
+        // The alert itself says it is shiny: the Shiny checklist's strongest reason.
+        badge.shinySeen -> "${kindLabel(badge.kind)} ✨"
+        else -> kindLabel(badge.kind)
+    }
     return stringResource(if (badge.viaEvolution) R.string.checklists_badge_evolution else R.string.checklists_badge_needed, name)
 }
 

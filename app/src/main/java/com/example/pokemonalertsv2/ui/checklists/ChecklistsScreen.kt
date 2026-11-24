@@ -303,6 +303,8 @@ internal fun kindLabel(kind: ChecklistKind): String = stringResource(
     when (kind) {
         ChecklistKind.HUNDO -> R.string.checklists_kind_hundo
         ChecklistKind.SHINY -> R.string.checklists_kind_shiny
+        ChecklistKind.XXL -> R.string.checklists_kind_xxl
+        ChecklistKind.XXS -> R.string.checklists_kind_xxs
         ChecklistKind.COSTUME -> R.string.checklists_kind_costume
         ChecklistKind.LUCKY -> R.string.checklists_kind_lucky
         ChecklistKind.SHADOW -> R.string.checklists_kind_shadow

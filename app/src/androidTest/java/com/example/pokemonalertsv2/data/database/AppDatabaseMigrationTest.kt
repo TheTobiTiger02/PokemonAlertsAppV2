@@ -393,6 +393,24 @@ class AppDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun migrate27To28_addsAlertSizeAndChecklistAlertTypes() {
+        helper.createDatabase(TEST_DATABASE, 27).apply {
+            execSQL("INSERT INTO checklists (id, source, title, kind, url, useForAlerts, includeEvolutions, sortOrder, lastSyncMillis, createdAt, updatedAt) VALUES ('l1', 'LOCAL', 'XXL', 'XXL', NULL, 1, 0, 0, 0, 1, 1)")
+            close()
+        }
+
+        helper.runMigrationsAndValidate(TEST_DATABASE, 28, true, AppDatabase.MIGRATION_27_28).apply {
+            query("SELECT alertTypes FROM checklists WHERE id = 'l1'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertNull("an existing checklist keeps its kind's defaults", cursor.getString(0))
+            }
+            query("SELECT size FROM alerts").use { cursor -> assertEquals(0, cursor.count) }
+            query("SELECT size FROM history_alerts").use { cursor -> assertEquals(0, cursor.count) }
+            close()
+        }
+    }
+
     private companion object {
         const val TEST_DATABASE = "weather-change-migration-test"
     }
